@@ -106,6 +106,12 @@ if (args is ["functions"] or ["functions-write"] or ["functions-read"])
     return;
 }
 
+if (args is ["mappings"] or ["mappings-write"] or ["mappings-read"])
+{
+    await MappingDomainProbe.RunAsync(args[0], redis);
+    return;
+}
+
 if (args is ["compose"])
 {
     await CompositionProbe.RunAsync(redis, payload);

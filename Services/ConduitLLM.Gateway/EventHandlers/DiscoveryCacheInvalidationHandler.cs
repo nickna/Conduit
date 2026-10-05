@@ -14,13 +14,15 @@ namespace ConduitLLM.Gateway.EventHandlers
     {
         private readonly IDiscoveryCacheService _discoveryCacheService;
         private readonly ILogger<DiscoveryCacheInvalidationHandler> _logger;
+        private readonly IModelMappingCacheInvalidator? _mappings;
 
         public DiscoveryCacheInvalidationHandler(
             IDiscoveryCacheService discoveryCacheService,
-            ILogger<DiscoveryCacheInvalidationHandler> logger)
+            ILogger<DiscoveryCacheInvalidationHandler> logger, IModelMappingCacheInvalidator? mappings = null)
         {
             _discoveryCacheService = discoveryCacheService ?? throw new ArgumentNullException(nameof(discoveryCacheService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _mappings = mappings;
         }
 
         /// <summary>
@@ -34,6 +36,7 @@ namespace ConduitLLM.Gateway.EventHandlers
                 message.RequestedBy);
 
             // Invalidate all discovery cache entries
+            if (_mappings is not null) await _mappings.InvalidateAsync(context.CancellationToken);
             await _discoveryCacheService.InvalidateAllDiscoveryAsync(context.CancellationToken);
 
             _logger.LogInformation(

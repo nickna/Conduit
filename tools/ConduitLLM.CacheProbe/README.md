@@ -74,3 +74,9 @@ domain service, coalescing, nested schema ownership, generation invalidation and
 L2 JSON with reflection disabled. They use a fixed enabled-setting fixture; repository mutation
 and MCP business behavior are covered by the service tests rather than emulated in this probe.
 Use the same CONDUIT_CACHE_PROBE_ENVIRONMENT for the write/read pair.
+
+The `mappings`, `mappings-write` and `mappings-read` modes exercise the actual mapping
+decorator with a complete fixture graph, caller ownership, one factory for 32 misses and
+independent-process Redis capability/series/cost reads without a repair loader. The JIT
+PostgreSQL fixture additionally compares the real repository: Fusion mapping cold/L1/L2
+query counts must be 1/0/0, versus the legacy 1/0/1 repair path.

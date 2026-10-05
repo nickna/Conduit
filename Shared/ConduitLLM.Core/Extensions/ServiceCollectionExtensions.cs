@@ -161,10 +161,18 @@ namespace ConduitLLM.Core.Extensions
             services.AddScoped<IProviderService, ProviderService>();
 
             // Model provider mapping with caching decorator
+            services.AddSingleton<IModelMappingCacheInvalidator>(provider =>
+                provider.GetService<ConduitLLM.Core.Caching.ApplicationCacheOptions>()?.UsesFusionCache(
+                    ConduitLLM.Core.Caching.ApplicationCacheDomain.Mappings) == true
+                    ? ActivatorUtilities.CreateInstance<ConduitLLM.Core.Caching.ModelMappingCacheInvalidator>(provider)
+                    : ActivatorUtilities.CreateInstance<ConduitLLM.Core.Caching.LegacyMappingCacheInvalidator>(provider));
             services.AddScoped<ModelProviderMappingService>();
             services.AddScoped<IModelProviderMappingService>(provider =>
             {
                 var innerService = provider.GetRequiredService<ModelProviderMappingService>();
+                if (provider.GetService<ConduitLLM.Core.Caching.ApplicationCacheOptions>()?.UsesFusionCache(
+                    ConduitLLM.Core.Caching.ApplicationCacheDomain.Mappings) == true)
+                    return ActivatorUtilities.CreateInstance<FusionModelProviderMappingService>(provider, innerService);
                 var cacheManager = provider.GetRequiredService<ICacheManager>();
                 var logger = provider.GetRequiredService<ILogger<CachedModelProviderMappingService>>();
                 return new CachedModelProviderMappingService(innerService, cacheManager, logger);

@@ -1,6 +1,6 @@
 # FusionCache application caching (epic #1396)
 
-Status: FC-1 through FC-5 validated; migrated domains remain opt-in until deployment review.
+Status: FC-1 through FC-6 validated; migrated domains remain opt-in until deployment review.
 Baseline: `e8355b606a6b0885db8642d6bc41c5cd6b83760f`, refreshed against the checkout on 2026-10-04.
 Implementation branch: `codex/epic-1396-fusioncache`. FC-1 issue: #1397.
 
@@ -229,6 +229,31 @@ legacy workload; explain fixed tag/backplane overhead and connection count expli
 freshness is a hard gate independent of performance. Re-measure on matching hardware at FC-8.
 
 ## Retirement inventory and effort
+
+FC-6 uses a versioned explicit mapping snapshot containing all routing/provider/association/model
+and series-default fields plus detached cost scalars. Credentials and cyclic EF navigation collections
+are excluded. It reconstructs independent mutable domain graphs on every read, so a complete L2
+hit avoids the legacy navigation-repair query. ID, alias, alias-list and aggregate keys share a
+generation; mapping writes/events expire them all, including old aliases on rename. Provider,
+model/association, cost, series-default and catalog changes also expire routing dependencies. The series
+endpoint now publishes the existing discovery invalidation event after persistence; its handler
+expires mapping dependencies as well. Handler cancellation and required failure propagation remain
+visible to the persisted retry policy. The mapping business interface still has no cancellation token.
+
+Routing payload/generation L1 durations are at most 100ms. Observed storage failures quarantine
+strict-domain generation reads; successful recovery rotates the namespace before accepting cache
+hits, forcing a current business load even before a pending invalidation retries. No stale serving
+or background completion is enabled. The tested mapping convergence bound is one second after
+successful invalidation. FC-7 must exercise this stricter policy through the actual billing path too.
+
+FC-6 evidence: **81 focused tests passed, zero skipped**. Redis/PostgreSQL regressions cover ownership and 32 misses/one factory,
+complete independent L2, renamed aliases/lists/deletion, provider/model/association dependencies,
+late mapping factories, outage fallback and reconnection before retry, actual host selections and
+series endpoint publication. The analyzer ratchet passed with **0 first-party diagnostics**;
+published win-x64 NativeAOT local/Redis/separate-process mapping checks passed. Real repository
+query counts are **1/0/0** for cold/L1/restarted L2, versus legacy **1/0/1**. The first complete L2
+read allocates generated metadata during first use; these single samples are not steady-state
+performance claims. FC-8 compares warmed matching workloads against the predeclared thresholds.
 
 FC-5 migrates scoped function discovery policy, loader and invalidation callers. Normalized
 configuration sets use one factory/configuration query, retaining minimum configured TTL,

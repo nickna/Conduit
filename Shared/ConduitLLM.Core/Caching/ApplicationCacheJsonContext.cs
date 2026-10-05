@@ -10,6 +10,8 @@ namespace ConduitLLM.Core.Caching;
 [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(DiscoveryModelsResult))]
 [JsonSerializable(typeof(List<Tool>))]
+[JsonSerializable(typeof(List<MappingCacheSnapshot>))]
+[JsonSerializable(typeof(FusionCacheDistributedEntry<List<MappingCacheSnapshot>>))]
 [JsonSerializable(typeof(ModelCost))]
 [JsonSerializable(typeof(List<ModelCost>))]
 [JsonSerializable(typeof(PricingRulesConfig))]

@@ -1,7 +1,7 @@
 # Shared application cache
 
 Implementation: [epic #1396 design record](../decisions/0007-fusion-cache.md).
-Discovery and Functions selectors are available; defaults still select the legacy implementation.
+Discovery, Functions and Mappings selectors are available; defaults still select the legacy implementation.
 Other per-domain selectors take effect as each gated migration lands. Authentication, tasks,
 spending, provider credentials, ephemeral keys, Data Protection and other Redis stores
 keep their existing registration and namespaces.
@@ -171,3 +171,27 @@ pre-change result. Required errors propagate through the same durable retry poli
 An old schema factory stays in its captured generation. Tools and nested schemas are detached
 before publication and cloned on every cache read. Authentication remains before endpoint cache
 access; the function loader receives the caller's already selected configuration IDs.
+
+## Mapping graphs
+
+`ApplicationCache:Implementations:Mappings=FusionCache` uses the complete versioned routing
+snapshot. It contains mapping fields, non-secret provider settings, association overrides, model
+capabilities, series parameter defaults and the attached cost fields. It deliberately excludes
+provider credentials, tracked EF entities and cyclic navigation collections. Every return rebuilds
+an independent domain graph; a complete Redis L2 hit performs no repair query.
+
+The positive TTL remains ten minutes, capped by ModelMetadata MaxTTL. ModelMetadata Enabled
+disables reads and writes. Payload L1 and generation L1 are capped at 100 milliseconds. Mapping
+create/update/delete, provider changes, model/association and cost changes, series defaults and catalog
+refreshes expire the complete domain, covering ID, alias, old/new aliases, alias lists and all lists.
+Required failures reach durable retry. The tested cross-node freshness bound is one second after
+successful invalidation; it excludes queue latency and requests that already captured an older
+generation. The existing mapping interface has no cancellation token; request cancellation cannot
+be passed to that business loader without an interface change outside this migration.
+
+After an observed strict-domain Redis/storage failure, mapping/cost/rule reads remain in recovery:
+the first successful coalesced metadata operation rotates the domain generation before allowing
+cached payloads again. This forces a current business load and makes the old L2 namespace
+unreachable even if a pending invalidation has not retried yet. Failed recovery keeps database
+fallback active. A restart during disconnection also follows this policy. Metadata connections
+use fail-fast backlog handling; writes and invalidations remain awaited, never detached.

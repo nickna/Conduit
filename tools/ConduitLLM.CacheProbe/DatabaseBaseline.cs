@@ -105,10 +105,28 @@ internal static class DatabaseBaseline
         });
         await MeasureAsync("FusionCache discovery cold", FusionDiscoveryAsync, queries, expectedQueries: 1);
         await MeasureAsync("FusionCache discovery L1", FusionDiscoveryAsync, queries, expectedQueries: 0);
+        var fusionMapping = MappingDomainProbe.Service(fusionHost, inner);
+        async Task<ModelProviderMapping?> FusionMappingAsync()
+        {
+            var result = await fusionMapping.GetMappingByModelAliasAsync("cache-probe");
+            if (result?.ModelProviderTypeAssociation.Model?.SupportsImageGeneration != true)
+                throw new InvalidOperationException("Fusion mapping capability contract failed.");
+            return result;
+        }
+        await MeasureAsync("FusionCache mapping cold", FusionMappingAsync, queries, expectedQueries: 1);
+        await MeasureAsync("FusionCache mapping L1", FusionMappingAsync, queries, expectedQueries: 0);
         if (!string.IsNullOrEmpty(redis))
         {
             using var restartedHost = DiscoveryDomainProbe.Host(redis, environment);
             var restarted = restartedHost.GetRequiredService<IDiscoveryCacheService>();
+            var restartedMapping = MappingDomainProbe.Service(restartedHost, inner);
+            await MeasureAsync("FusionCache mapping restarted complete L2", async () =>
+            {
+                var result = await restartedMapping.GetMappingByModelAliasAsync("cache-probe");
+                if (result?.ModelProviderTypeAssociation.Model?.SupportsImageGeneration != true)
+                    throw new InvalidOperationException("Restarted mapping capability contract failed.");
+                return result;
+            }, queries, expectedQueries: 0);
             await MeasureAsync("FusionCache discovery restarted L2", () => restarted.GetOrLoadAsync("all:with_pricing",
                 _ => throw new InvalidOperationException("Healthy L2 must not query the database.")), queries, expectedQueries: 0);
         }

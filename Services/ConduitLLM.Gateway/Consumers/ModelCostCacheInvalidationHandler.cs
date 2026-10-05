@@ -18,6 +18,7 @@ namespace ConduitLLM.Gateway.Consumers
         private readonly ICachedPricingRulesService? _pricingRulesCache;
         private readonly IDiscoveryCacheService _discoveryCacheService;
         private readonly ILogger<ModelCostCacheInvalidationHandler> _logger;
+        private readonly IModelMappingCacheInvalidator? _mappings;
 
         /// <summary>
         /// Initializes a new instance of the ModelCostCacheInvalidationHandler
@@ -30,12 +31,13 @@ namespace ConduitLLM.Gateway.Consumers
             ConfigurationModelCostService modelCostService,
             ICachedPricingRulesService? pricingRulesCache,
             IDiscoveryCacheService discoveryCacheService,
-            ILogger<ModelCostCacheInvalidationHandler> logger)
+            ILogger<ModelCostCacheInvalidationHandler> logger, IModelMappingCacheInvalidator? mappings = null)
         {
             _modelCostService = modelCostService ?? throw new ArgumentNullException(nameof(modelCostService));
             _pricingRulesCache = pricingRulesCache;
             _discoveryCacheService = discoveryCacheService ?? throw new ArgumentNullException(nameof(discoveryCacheService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _mappings = mappings;
         }
 
         /// <summary>
@@ -75,6 +77,7 @@ namespace ConduitLLM.Gateway.Consumers
             // the database cost ID, while lookups are also cached by provider model identifier,
             // so the whole region must be invalidated to cover every affected mapping.
             await _modelCostService.ClearCacheAsync(context.CancellationToken);
+            if (_mappings is not null) await _mappings.InvalidateAsync(context.CancellationToken);
             _logger.LogInformation("Billing model cost cache invalidated for ModelCostId: {ModelCostId}", @event.ModelCostId);
 
             // Discovery responses embed pricing from ModelCost, so a repricing must also
@@ -85,7 +88,7 @@ namespace ConduitLLM.Gateway.Consumers
             // Invalidate pricing rules cache if available
             if (_pricingRulesCache != null && @event.ModelCostId > 0)
             {
-                await _pricingRulesCache.InvalidateCacheAsync(@event.ModelCostId);
+                await _pricingRulesCache.InvalidateCacheAsync(@event.ModelCostId, context.CancellationToken);
                 _logger.LogInformation(
                     "Pricing rules cache invalidated for ModelCostId: {ModelCostId}",
                     @event.ModelCostId);

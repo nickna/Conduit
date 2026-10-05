@@ -1,5 +1,6 @@
 using ConduitLLM.Core.Caching;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,7 +27,11 @@ public sealed class HostApplicationCacheCompositionTests
         Resolve(gateway, redis);
     }
 
-    private static void Resolve(bool gateway, string? redis)
+    [Theory]
+    [InlineData(true)] [InlineData(false)]
+    public void MigratedDomainSelectionsResolveActualHostServices(bool gateway) => Resolve(gateway, null, migrated: true);
+
+    private static void Resolve(bool gateway, string? redis, bool migrated = false)
     {
         var originals = new[] { "DATABASE_URL", "REDIS_URL", "CONDUIT_REDIS_CONNECTION_STRING" }
             .ToDictionary(name => name, Environment.GetEnvironmentVariable);
@@ -41,13 +46,29 @@ public sealed class HostApplicationCacheCompositionTests
                 EnvironmentName = "Testing"
             });
             builder.Configuration["ApplicationCache:Environment"] = $"probe-{Guid.NewGuid():N}";
-            if (gateway) global::Program.ConfigureCachingServices(builder);
+            if (migrated)
+                foreach (var domain in new[] { "Discovery", "Functions", "Mappings" })
+                    builder.Configuration[$"ApplicationCache:Implementations:{domain}"] = "FusionCache";
+            if (gateway)
+            {
+                if (migrated) global::Program.ConfigureCoreServices(builder);
+                global::Program.ConfigureCachingServices(builder);
+            }
             else ConduitLLM.Admin.Program.ConfigureCoreServices(builder, NullLogger.Instance);
             using var provider = builder.Services.BuildServiceProvider(validateScopes: true);
             var cache = provider.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey);
             Assert.Equal(redis is not null, cache.HasDistributedCache);
             Assert.Equal(redis is not null, cache.HasBackplane);
             Assert.NotNull(provider.GetRequiredService<ICacheManager>());
+            if (migrated)
+            {
+                using var scope = provider.CreateScope();
+                if (gateway) Assert.IsType<FusionDiscoveryCacheService>(provider.GetRequiredService<IDiscoveryCacheService>());
+                else Assert.Null(provider.GetService<IDiscoveryCacheService>()); // Admin discovery is intentionally optional.
+                Assert.IsType<FusionFunctionDiscoveryCacheService>(scope.ServiceProvider.GetRequiredService<IFunctionDiscoveryCacheService>());
+                Assert.IsType<FusionModelProviderMappingService>(scope.ServiceProvider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IModelProviderMappingService>());
+                Assert.IsType<ModelMappingCacheInvalidator>(provider.GetRequiredService<IModelMappingCacheInvalidator>());
+            }
             if (redis is null) Assert.IsType<MemoryDistributedCache>(provider.GetRequiredService<IDistributedCache>());
             else Assert.IsAssignableFrom<Microsoft.Extensions.Caching.StackExchangeRedis.RedisCache>(provider.GetRequiredService<IDistributedCache>());
         }
