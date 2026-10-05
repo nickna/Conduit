@@ -195,6 +195,22 @@ freshness is a hard gate independent of performance. Re-measure on matching hard
 
 ## Retirement inventory and effort
 
+FC-3 routes discovery requests and warming through one wire projection and a domain factory
+method. Discovery's selector is reversible and remains Legacy by default. The FusionCache
+service preserves variant keys and TTL caps, detaches incoming JsonElements and copies mutable
+containers on reads, bypasses disabled caches, and rethrows required invalidation failures.
+Storage fallback never retries a failed business load or repeats a successful load after a
+failed write. Broad discovery dependencies replace region/pattern scans. FC-4 remains the
+mandatory distributed race/outage/mixed-version gate before further domain migration.
+
+FC-3 evidence: **52 focused tests passed, zero skipped**, with real Redis L2/restart,
+32 same-key concurrent misses/one factory, mutable ownership, disabled reads, TTL caps,
+business/cache failure separation, cancellation, denied-key access, wire equality and pricing
+visibility. The production discovery probe passed as published win-x64 NativeAOT in local
+and Redis modes, including separate-process write/read and persistent invalidation recovery.
+The real PostgreSQL probe reported discovery cold/L1/restarted-L2 query counts **1/0/0**.
+The analyzer ratchet again passed with **0 first-party diagnostics**, without baseline changes.
+
 FC-2 evidence: 34 focused tests passed with Redis host composition enabled (zero skips),
 including scope-validated Gateway/Admin local and Redis graphs, legacy regressions,
 invalid policy rejection and observable Redis failures. The registered `compose` probe

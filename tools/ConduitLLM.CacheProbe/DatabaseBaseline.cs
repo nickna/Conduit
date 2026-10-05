@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ConduitLLM.CacheProbe;
 
@@ -90,6 +91,27 @@ internal static class DatabaseBaseline
         await MeasureAsync("legacy mapping L2 repair", MappingAsync, queries, expectedQueries: 1);
         await cache.RemoveAsync(key, CacheRegion.ModelMetadata);
         await cache.RemoveAsync("baseline:discovery", CacheRegion.ModelDiscovery);
+
+        var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_PROBE_REDIS");
+        var environment = $"probe-{Guid.NewGuid():N}";
+        using var fusionHost = DiscoveryDomainProbe.Host(redis, environment);
+        var fusion = fusionHost.GetRequiredService<IDiscoveryCacheService>();
+        async Task<DiscoveryModelsResult> FusionDiscoveryAsync() => await fusion.GetOrLoadAsync("all:with_pricing", async token =>
+        {
+            await using var context = await factory.CreateDbContextAsync(token);
+            var projected = await DiscoveryModelProjector.ProjectAsync(context, "chat", true, NullLogger.Instance, token);
+            if (projected.Count != 1) throw new InvalidOperationException("Unexpected discovery fixture shape.");
+            return new DiscoveryModelsResult { Count = projected.Count, Data = [] };
+        });
+        await MeasureAsync("FusionCache discovery cold", FusionDiscoveryAsync, queries, expectedQueries: 1);
+        await MeasureAsync("FusionCache discovery L1", FusionDiscoveryAsync, queries, expectedQueries: 0);
+        if (!string.IsNullOrEmpty(redis))
+        {
+            using var restartedHost = DiscoveryDomainProbe.Host(redis, environment);
+            var restarted = restartedHost.GetRequiredService<IDiscoveryCacheService>();
+            await MeasureAsync("FusionCache discovery restarted L2", () => restarted.GetOrLoadAsync("all:with_pricing",
+                _ => throw new InvalidOperationException("Healthy L2 must not query the database.")), queries, expectedQueries: 0);
+        }
     }
 
     private static async Task MeasureAsync<T>(string label, Func<Task<T>> action, QueryCounter queries, int expectedQueries)

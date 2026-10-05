@@ -51,3 +51,20 @@ Stop/remove only these task-owned containers when finished:
 ```powershell
 docker rm -f conduit-1396-redis conduit-1396-postgres
 ```
+
+## Discovery domain pilot
+
+`discovery` exercises the production discovery registration and its 32-request/one-load
+bound. `discovery-write` and `discovery-read` exercise separate-process L2 and invalidation
+marker recovery. Set the same isolated environment for both processes:
+
+```powershell
+$env:CONDUIT_CACHE_PROBE_REDIS = '127.0.0.1:16396'
+$env:CONDUIT_CACHE_PROBE_ENVIRONMENT = 'discovery-restart-fixture'
+./artifacts/cache-probe/native/ConduitLLM.CacheProbe.exe discovery-write
+./artifacts/cache-probe/native/ConduitLLM.CacheProbe.exe discovery-read
+```
+
+The ordinary JIT probe also compares real PostgreSQL discovery query counts when
+`CONDUIT_CACHE_PROBE_POSTGRES` is set: cold load one query, healthy L1 and restarted L2
+zero queries. The PostgreSQL schema fixture is excluded from the native executable.

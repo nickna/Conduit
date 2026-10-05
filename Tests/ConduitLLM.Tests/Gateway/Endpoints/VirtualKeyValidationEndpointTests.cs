@@ -98,7 +98,8 @@ public class VirtualKeyValidationEndpointTests
             }));
         var discoveryCache = new Mock<IDiscoveryCacheService>();
         discoveryCache
-            .Setup(cache => cache.GetDiscoveryResultsAsync(It.IsAny<string>(), default))
+            .Setup(cache => cache.GetOrLoadAsync(It.IsAny<string>(),
+                It.IsAny<Func<CancellationToken, Task<DiscoveryModelsResult>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DiscoveryModelsResult());
 
         var endpoints = new DiscoveryEndpoints(
@@ -132,6 +133,25 @@ public class VirtualKeyValidationEndpointTests
         };
         context.Items["VirtualKey"] = key;
         return context;
+    }
+
+    [Fact]
+    public async Task Discovery_RevokedKeyCannotReadCachedPayloadOrInvokeLoader()
+    {
+        var httpContext = CreateAuthenticatedContext("revoked");
+        var keys = new Mock<IVirtualKeyService>();
+        keys.Setup(service => service.ValidateVirtualKeyForAuthenticationAsync("revoked", null))
+            .ReturnsAsync(VirtualKeyValidationOutcome.Failure(VirtualKeyValidationFailureCodes.KeyDisabled, 401, "Disabled"));
+        var cache = new Mock<IDiscoveryCacheService>(MockBehavior.Strict);
+        var factory = new Mock<IDbContextFactory<ConduitDbContext>>(MockBehavior.Strict);
+        var endpoints = new DiscoveryEndpoints(factory.Object, Mock.Of<IModelCapabilityService>(), keys.Object,
+            cache.Object, GatewayJsonOptions.Create(), Options.Create(new DiscoveryCacheOptions()),
+            Mock.Of<IHttpContextAccessor>(accessor => accessor.HttpContext == httpContext),
+            Mock.Of<ILogger<DiscoveryEndpoints>>());
+        var result = await endpoints.GetModels();
+        Assert.Equal(401, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+        cache.VerifyNoOtherCalls();
+        factory.VerifyNoOtherCalls();
     }
 
     private sealed class TestEndpointFilterInvocationContext : EndpointFilterInvocationContext

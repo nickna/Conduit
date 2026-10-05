@@ -94,6 +94,12 @@ var payload = new DiscoveryModelsResult
     CapabilityFilter = "chat"
 };
 
+if (args is ["discovery"] or ["discovery-write"] or ["discovery-read"])
+{
+    await DiscoveryDomainProbe.RunAsync(args[0], redis, payload);
+    return;
+}
+
 if (args is ["compose"])
 {
     await CompositionProbe.RunAsync(redis, payload);

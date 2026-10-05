@@ -9,6 +9,7 @@ using ConduitLLM.Configuration.DTOs;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using ConduitLLM.Gateway.DTOs;
+using ConduitLLM.Gateway.Services;
 using ConduitLLM.Functions.Utilities;
 using ConduitLLM.Functions.DTOs;
 using GatewayDiscoveredModelDto = ConduitLLM.Configuration.DTOs.DiscoveredModelDto;
@@ -97,44 +98,12 @@ namespace ConduitLLM.Gateway.Endpoints
             var exposePricing = _discoveryOptions.ExposePricing;
             var cacheKey = DiscoveryCacheService.BuildCacheKey(capability, includePricing: exposePricing);
 
-            // Try to get from cache first
-            var cachedResult = await _discoveryCacheService.GetDiscoveryResultsAsync(cacheKey);
-            if (cachedResult != null)
-            {
-                Logger.LogDebug("Returning cached discovery results for capability: {Capability}", LoggingSanitizer.S(capability ?? "all"));
-                var cachedModels = cachedResult.Data
-                    .Select(element => element.Deserialize(
-                        GatewayJsonTypeInfo.Require<GatewayDiscoveredModelDto>(_wireJsonOptions)))
-                    .Where(model => model is not null)
-                    .Cast<GatewayDiscoveredModelDto>()
-                    .ToList();
-                return Ok(new DiscoveryModelsResponse(cachedModels, cachedModels.Count));
-            }
-
-            using var context = await _dbContextFactory.CreateDbContextAsync(HttpContext.RequestAborted);
-            var models = await DiscoveryModelProjector.ProjectAsync(
-                context,
-                capability,
-                exposePricing,
-                Logger,
+            var result = await _discoveryCacheService.GetOrLoadAsync(cacheKey, token =>
+                DiscoveryCacheLoader.LoadAsync(_dbContextFactory, capability, exposePricing, _wireJsonOptions, Logger, token),
                 HttpContext.RequestAborted);
-
-            // Cache the results for future requests
-            var discoveryResult = new DiscoveryModelsResult
-            {
-                Data = models.Select(model =>
-                    JsonSerializer.SerializeToElement(
-                        model,
-                        GatewayJsonTypeInfo.Require<GatewayDiscoveredModelDto>(_wireJsonOptions))).ToList(),
-                Count = models.Count,
-                CapabilityFilter = capability
-            };
-
-            await _discoveryCacheService.SetDiscoveryResultsAsync(cacheKey, discoveryResult);
-
-            Logger.LogInformation("Cached discovery results for capability: {Capability} with {Count} models",
-                LoggingSanitizer.S(capability ?? "all"), models.Count);
-
+            var models = result.Data.Select(element => element.Deserialize(
+                    GatewayJsonTypeInfo.Require<GatewayDiscoveredModelDto>(_wireJsonOptions)))
+                .Where(model => model is not null).Cast<GatewayDiscoveredModelDto>().ToList();
             return Ok(new DiscoveryModelsResponse(models, models.Count));
         }
 

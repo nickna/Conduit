@@ -1,8 +1,8 @@
 # Shared application cache
 
 Implementation: [epic #1396 design record](../decisions/0007-fusion-cache.md).
-FC-2 adds composition; all production domains still select their legacy implementations.
-Per-domain selectors take effect as each gated migration lands. Authentication, tasks,
+FC-3 makes Discovery's selector available; defaults still select the legacy implementation.
+Other per-domain selectors take effect as each gated migration lands. Authentication, tasks,
 spending, provider credentials, ephemeral keys, Data Protection and other Redis stores
 keep their existing registration and namespaces.
 
@@ -59,7 +59,9 @@ awaited, serialization/distributed/backplane exceptions are rethrown, and the di
 backplane circuit breakers have zero duration. Domain services decide which reads can fall
 back to the database. Required invalidation failures must reach durable Wolverine retry.
 
-Auto-cloning prevents callers from mutating cached results on read. Domain loaders must
+Auto-cloning prevents callers from mutating cached results on read. Discovery instead
+detaches immutable JsonElements once when publishing and copies their mutable container
+on every read, avoiding full JSON round-trips on L1 hits. Domain loaders must
 also detach mutable values before publishing them. Singleton cache composition receives
 loaders as per-call delegates; it never captures repositories or DbContexts.
 
@@ -98,3 +100,25 @@ graphs, source-generated L2 reads, caller ownership, backplane invalidation and 
 telemetry. It does not claim FC-4's full PostgreSQL/Wolverine process topology.
 Never flush shared Redis to recover this cache; only this application namespace is eligible
 for an operational cleanup, and logical tag expiration normally needs no physical cleanup.
+
+## Discovery pilot
+
+`ApplicationCache:Implementations:Discovery=FusionCache` selects the factory-oriented
+discovery service. The endpoint authenticates before cache access. Requests and the warmer
+use the same projection, keys, pricing visibility and factory path. Capability, virtual-key,
+and priced/unpriced variants remain separate; the shared discovery tag deliberately covers
+all variants and the discovery endpoint's function catalog/parameter payloads. Existing
+pattern invalidations invalidate this dependency broadly, without enumerating Redis keys.
+
+`Discovery:EnableCaching` and the existing
+`CacheManager:RegionConfigs:ModelDiscovery:Enabled` disable both reads and writes.
+`Discovery:CacheDurationMinutes` sets the positive L2 TTL (default 360); the region MaxTTL
+caps it. The explicit discovery TTL takes precedence over region DefaultTTL, as before.
+Invalidation remains active even while caching is disabled. Cache storage/serialization
+failures allow current database results to serve; business loader failures and cancellation
+propagate. A successful load followed by a failed cache write runs the loader only once.
+Required invalidations propagate failures for durable retry.
+
+Do not enable broad production cutover before the FC-4 topology, race and rollback gate.
+The discovery pilot alone does not prove that an in-flight older factory cannot publish
+after a mutation, or that serving legacy instances converge on a rollout flag switch.

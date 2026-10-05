@@ -108,7 +108,11 @@ namespace ConduitLLM.Core.Extensions
                 configuration.GetSection("Discovery"));
 
             // Register discovery cache service as singleton for better performance
-            services.AddSingleton<IDiscoveryCacheService, DiscoveryCacheService>();
+            services.AddSingleton<IDiscoveryCacheService>(provider =>
+                provider.GetService<ConduitLLM.Core.Caching.ApplicationCacheOptions>()?.UsesFusionCache(
+                    ConduitLLM.Core.Caching.ApplicationCacheDomain.Discovery) == true
+                    ? ActivatorUtilities.CreateInstance<FusionDiscoveryCacheService>(provider)
+                    : ActivatorUtilities.CreateInstance<DiscoveryCacheService>(provider));
 
             // Ensure memory cache is registered
             services.AddMemoryCache();

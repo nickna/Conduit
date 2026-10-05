@@ -11,6 +11,7 @@ using ConduitLLM.Gateway.Options;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Tests.Helpers;
 using ConduitLLM.Tests.TestInfrastructure;
+using ConduitLLM.Tests.Core.Caching;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -36,6 +37,14 @@ public sealed class DiscoveryEndpointsPricingTests : IDisposable
         _cache
             .Setup(cache => cache.GetDiscoveryResultsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((DiscoveryModelsResult?)null);
+        _cache.Setup(cache => cache.GetOrLoadAsync(It.IsAny<string>(),
+                It.IsAny<Func<CancellationToken, Task<DiscoveryModelsResult>>>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string key, Func<CancellationToken, Task<DiscoveryModelsResult>> load, CancellationToken token) =>
+            {
+                var result = await load(token);
+                await _cache.Object.SetDiscoveryResultsAsync(key, result, token);
+                return result;
+            });
     }
 
     public void Dispose() => _database.Dispose();
@@ -189,6 +198,31 @@ public sealed class DiscoveryEndpointsPricingTests : IDisposable
             It.IsAny<CancellationToken>()));
     }
 
+    [Fact]
+    public async Task FusionCache_WarmedAndColdPayloadsMatchAndPricingVisibilityRemainsSeparate()
+    {
+        SeedMapping(new ModelCost
+        {
+            CostName = "fusion priced model", InputCostPerMillionTokens = 0.25m,
+            IsActive = true, EffectiveDate = DateTime.UtcNow.AddDays(-1)
+        });
+        using var host = FusionDiscoveryCacheTests.Host();
+        var cache = host.GetRequiredService<IDiscoveryCacheService>();
+        var priced = CreateEndpoints(cache: cache);
+        var cold = await RenderAsync(await priced.GetModels("speech_to_text"));
+        var warm = await RenderAsync(await priced.GetModels("speech_to_text"));
+        Assert.Equal(cold, warm);
+        var warmer = new DiscoveryCacheWarmingService(Mock.Of<IServiceProvider>(), cache,
+            Options.Create(new DiscoveryCacheOptions()), GatewayJsonOptions.Create(),
+            Mock.Of<ILogger<DiscoveryCacheWarmingService>>());
+        await cache.InvalidateAllDiscoveryAsync();
+        await warmer.WarmCacheForCapability(_database.CreateDbContextFactory(), "speech_to_text", CancellationToken.None);
+        Assert.Equal(cold, await RenderAsync(await priced.GetModels("speech_to_text")));
+        var unpriced = await GetSingleModelAsync(CreateEndpoints(exposePricing: false, cache: cache), "speech_to_text");
+        Assert.False(unpriced.TryGetProperty("pricing", out _));
+        Assert.True((await GetSingleModelAsync(priced, "speech_to_text")).TryGetProperty("pricing", out _));
+    }
+
     private void SeedMapping(ModelCost? cost)
     {
         _database.Seed(context =>
@@ -231,7 +265,7 @@ public sealed class DiscoveryEndpointsPricingTests : IDisposable
         });
     }
 
-    private DiscoveryEndpoints CreateEndpoints(bool exposePricing = true)
+    private DiscoveryEndpoints CreateEndpoints(bool exposePricing = true, IDiscoveryCacheService? cache = null)
     {
         var httpContext = new DefaultHttpContext
         {
@@ -253,7 +287,7 @@ public sealed class DiscoveryEndpointsPricingTests : IDisposable
             _database.CreateDbContextFactory(),
             Mock.Of<IModelCapabilityService>(),
             virtualKeyService.Object,
-            _cache.Object,
+            cache ?? _cache.Object,
             GatewayJsonOptions.Create(),
             Options.Create(new DiscoveryCacheOptions { ExposePricing = exposePricing }),
             Mock.Of<IHttpContextAccessor>(accessor => accessor.HttpContext == httpContext),
