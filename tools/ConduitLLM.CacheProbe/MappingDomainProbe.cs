@@ -14,7 +14,7 @@ internal static class MappingDomainProbe
 {
     internal static FusionModelProviderMappingService Service(ServiceProvider host, IModelProviderMappingService inner) => new(inner,
         host.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey), host.GetRequiredService<ApplicationCacheOptions>(),
-        host.GetRequiredService<ApplicationCacheGeneration>(), Invalidator(host), Options.Create(new CacheManagerOptions()),
+        host.GetRequiredService<ApplicationCacheGeneration>(), Invalidator(host),
         NullLogger<FusionModelProviderMappingService>.Instance);
     private static ModelMappingCacheInvalidator Invalidator(ServiceProvider host) => new(
         host.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey), host.GetRequiredService<ApplicationCacheGeneration>());

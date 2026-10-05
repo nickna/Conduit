@@ -23,12 +23,10 @@ public sealed class FusionDiscoveryCacheTests
     {
         var values = settings ?? [];
         values["ApplicationCache:Environment"] = environment ?? $"test-{Guid.NewGuid():N}";
-        values["ApplicationCache:Implementations:Discovery"] = "FusionCache";
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         var services = new ServiceCollection().AddLogging();
         if (clock is not null) services.AddSingleton(clock);
         if (storage is not null) services.AddKeyedSingleton(ApplicationCacheOptions.ServiceKey, storage);
-        services.Configure<CacheManagerOptions>(configuration.GetSection("CacheManager"));
         services.AddConduitApplicationCache(configuration, "test", redis ?? "");
         services.AddDiscoveryCache(configuration);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
@@ -104,9 +102,9 @@ public sealed class FusionDiscoveryCacheTests
     {
         using var host = Host();
         var service = host.GetRequiredService<IDiscoveryCacheService>();
-        var keys = new[] { DiscoveryCacheService.BuildCacheKey(), DiscoveryCacheService.BuildCacheKey(includePricing: true),
-            DiscoveryCacheService.BuildCacheKey("chat"), DiscoveryCacheService.BuildCacheKey("chat", 1),
-            DiscoveryCacheService.BuildCacheKey("chat", 2, true) };
+        var keys = new[] { DiscoveryCacheKeys.Build(), DiscoveryCacheKeys.Build(includePricing: true),
+            DiscoveryCacheKeys.Build("chat"), DiscoveryCacheKeys.Build("chat", 1),
+            DiscoveryCacheKeys.Build("chat", 2, true) };
         foreach (var key in keys) await service.SetDiscoveryResultsAsync(key, Payload(key.EndsWith("with_pricing")));
         foreach (var key in keys)
             Assert.Equal(key.EndsWith("with_pricing"), (await service.GetDiscoveryResultsAsync(key))!.Data[0].TryGetProperty("pricing", out _));
@@ -116,7 +114,7 @@ public sealed class FusionDiscoveryCacheTests
 
     [Theory]
     [InlineData("Discovery:EnableCaching")]
-    [InlineData("CacheManager:RegionConfigs:ModelDiscovery:Enabled")]
+    [InlineData("ApplicationCache:Domains:Discovery:Enabled")]
     public async Task DisabledCacheBypassesExistingEntriesAndLoadsEachRequest(string setting)
     {
         using var host = Host(settings: new() { [setting] = "false" });
@@ -163,7 +161,7 @@ public sealed class FusionDiscoveryCacheTests
         cache.SetupDistributedCache(storage.Object, serializer);
         using var generation = new ApplicationCacheGeneration(cache, options, null);
         var service = new FusionDiscoveryCacheService(cache, options, generation,
-            Options.Create(new DiscoveryCacheOptions()), Options.Create(new CacheManagerOptions()),
+            Options.Create(new DiscoveryCacheOptions()),
             NullLogger<FusionDiscoveryCacheService>.Instance);
         var loads = 0;
         var result = await service.GetOrLoadAsync("all", _ => { loads++; return Task.FromResult(Payload()); });
@@ -175,9 +173,9 @@ public sealed class FusionDiscoveryCacheTests
     }
 
     [Fact]
-    public async Task RegionMaximumTtlCapsExplicitDiscoveryDuration()
+    public async Task DomainMaximumTtlCapsExplicitDiscoveryDuration()
     {
-        using var host = Host(settings: new() { ["CacheManager:RegionConfigs:ModelDiscovery:MaxTTL"] = "00:00:00.050" });
+        using var host = Host(settings: new() { ["ApplicationCache:Domains:Discovery:MaximumDuration"] = "00:00:00.050" });
         var service = host.GetRequiredService<IDiscoveryCacheService>();
         await service.SetDiscoveryResultsAsync("all", Payload());
         Assert.NotNull(await service.GetDiscoveryResultsAsync("all"));

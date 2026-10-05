@@ -1,16 +1,63 @@
 # FusionCache application caching (epic #1396)
 
-Status: FC-1 through FC-7 validated; migrated domains remain opt-in until deployment review.
+Status: FC-1 through FC-8 implemented and validated in isolated fixtures; all five domains now
+register FusionCache directly. Production deployment/observation remains an operator action.
 Baseline: `e8355b606a6b0885db8642d6bc41c5cd6b83760f`, refreshed against the checkout on 2026-10-04.
 Implementation branch: `codex/epic-1396-fusioncache`. FC-1 issue: #1397.
+
+## Final retirement result
+
+Both hosts share the application cache composition; the five domain registrations use
+FusionCache directly. Admin's discovery service remains optional, as before. Temporary implementation
+selectors, the four manager partials, manager/registry contracts, region/entry/event models,
+attributes, timers, key inventories, compatibility adapters and their mechanism-only tests
+are removed. Thirteen Configuration cache-management DTOs (441 lines) had no references in
+production, generated OpenAPI/client contracts or tests and are also removed. Live
+Configuration.CacheStats remains for Admin statistics, global settings and independent
+Redis/auth consumers. Shared Core JSON helpers remain for webhooks, context and media.
+
+Against `e8355b606a6b0885db8642d6bc41c5cd6b83760f`, `git diff --numstat` for production
+`.cs` files under Shared/Services records **1,971 additions / 4,272 deletions**, a net
+**2,301-line reduction**. This includes required complete snapshots, invalidation dependency
+fixes and domain policy, and excludes tests/docs/tools. The original 4,800-line investigation
+footprint was not treated as a promised deletion count.
+
+Remaining infrastructure adapters are the small generated-only ApplicationCacheSerializer
+and owned/bounded ApplicationRedisCache. ApplicationCacheGeneration holds five domain
+tokens and five recovery markers, never a request-key inventory or second payload cache.
+Domain services retain business TTL, validity, ownership and invalidation policy. Dependencies
+add only FusionCache and its RedisBackplane, both pinned MIT release 2.9.0; existing Redis,
+PostgreSQL, Wolverine and Prometheus remain. No new service, upstream reflection serializer,
+distributed locker, OpenTelemetry package or parallel cache-management facade was added.
+
+Final validation includes full unit/domain coverage, real distributed retry/restart/outage
+and recovery-publication races, generated native local/Redis/separate-process round trips,
+and the production analyzer ratchet. Current policies and binary rollback are documented in
+[operations](../operations/application-cache.md); archived selectors are not current settings.
+RedisCacheServiceBase, BufferedStatsRedisCacheBase, DistributedCachePopulator,
+HybridCacheAccessor, global-settings caching, auth/tasks/spend and other independent stores
+remain separate follow-up candidates.
+
+FC-8 final Release validation: **3,707 tests passed, 10 existing skips**, with Redis/PostgreSQL
+configured; all **75 cache contracts** ran without skips. Additional gates passed: **123 billing invariants**
+(one existing baseline-emitter skip), **4 billing durability faults**, **14 generated
+serialization tests**, and **40 self-contained SignalR integration tests**. The complete
+solution builds with existing warnings. Published win-x64 native local/Redis and all four
+independent-process write/read pairs pass with reflection disabled. The production analyzer
+audit reports **0 first-party diagnostics**, without updating its baseline; full-link EF
+warnings remain outside the focused cache slice. Final PostgreSQL query counts remain
+discovery **1/0/0**, mappings **1/0/0**, billing **2/0/0**. Recovery-marker regressions hold
+the real metadata factory before L1 publication for each strict domain, and malformed
+independent Redis tool/schema payloads fall back to one current business load.
 
 ## Sequence and gates
 
 Complete and commit FC-1, FC-2, FC-3, FC-4, FC-5, FC-6, FC-7, then FC-8.
 FC-4's distributed failure and rollback gate precedes every migration beyond discovery.
 FC-8 requires a demonstrated rollback and comparison with the thresholds below before
-deleting compatibility code. None of the probe's passing assertions constitutes a
-production rollout, a durable messaging test, or evidence of linearizable invalidation.
+deleting compatibility code. Passing probes do not constitute a production rollout or evidence
+of linearizable invalidation. Durable messaging evidence comes from the real PostgreSQL
+three-host test, separately from probes.
 
 ### FC-8 pre-retirement rollout gate
 
@@ -20,7 +67,7 @@ actual host graphs in Discovery → Functions → Mappings → Costs → Pricing
 three-host fixture repeats Admin repricing, restarts with the original message pending, lost
 backplane delivery and the controlled two-legacy-process bypass/clear/re-enable rollback.
 This is fixture rollout evidence. No production deployment or observation window is claimed.
-The pre-retirement Git commit preserves the temporary benchmark and mixed-version reproducer.
+Commit `e7057ce5` preserves the temporary benchmark and mixed-version reproducer.
 
 Release JIT, .NET 10.0.12 on Windows, Redis 7.4.2 loopback: 200 samples after 20 warmups, same
 one-model discovery, one schema, complete mapping, one cost and one rule payload. L2 measurements
@@ -94,7 +141,11 @@ Native win-x64 pricing modes passed local, Redis and separate-process positive/l
 round trips with JSON reflection disabled. Full-link EF diagnostics remain outside this cache
 slice; the production analyzer ratchet passed with **0 first-party diagnostics**, without baseline relaxation.
 
-## Inventory
+## Historical baseline inventory
+
+The inventory and policy matrix below describe the pinned pre-migration baseline, not current
+registrations. FC-2 through FC-7 gate descriptions preserve the temporary selectors used at
+those commits. The final configuration is documented in [operations](../operations/application-cache.md).
 
 Five production storage consumers use `ICacheManager`: `DiscoveryCacheService`,
 `FunctionDiscoveryCacheService`, `CachedModelProviderMappingService`,
@@ -127,7 +178,7 @@ the implementation has no exact count. Logical tag expiration must not be report
 physical deleted-entry count. Configuration's cache DTOs must be audited separately
 against generated OpenAPI/client contracts before deleting them.
 
-## Effective policy matrix
+## Historical effective policy matrix
 
 Logical keys below gain `{CacheRegion}:` and the host's distributed prefix today.
 The default manager uses memory and, if supplied, distributed caching in all five domains.
@@ -310,7 +361,7 @@ must be measured separately. Redis operations and resident entry memory <= 2x th
 legacy workload; explain fixed tag/backplane overhead and connection count explicitly. Failure
 freshness is a hard gate independent of performance. Re-measure on matching hardware at FC-8.
 
-## Retirement inventory and effort
+## Retirement inventory and gate history
 
 FC-6 uses a versioned explicit mapping snapshot containing all routing/provider/association/model
 and series-default fields plus detached cost scalars. Credentials and cyclic EF navigation collections

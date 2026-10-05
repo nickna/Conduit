@@ -37,22 +37,24 @@ public class ApplicationCacheCompositionTests
     }
 
     [Fact]
-    public void Options_DefaultToLegacyAndSelectDomainsIndependently()
+    public void Options_ConfigureDomainsIndependentlyWithoutImplementationSelectors()
     {
         var services = new ServiceCollection();
         services.AddConduitApplicationCache(Configuration(new()
         {
             ["ApplicationCache:Environment"] = "Shared-Test",
-            ["ApplicationCache:Implementations:Discovery"] = "FusionCache"
+            ["ApplicationCache:Domains:Functions:Enabled"] = "false",
+            ["ApplicationCache:Domains:Costs:Duration"] = "00:20:00"
         }), "Admin", "");
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         var options = provider.GetRequiredService<ApplicationCacheOptions>();
         Assert.Equal("conduit:app-cache:shared-test:v1:", options.Prefix);
-        Assert.True(options.UsesFusionCache(ApplicationCacheDomain.Discovery));
-        Assert.False(options.UsesFusionCache(ApplicationCacheDomain.Functions));
-        Assert.False(options.UsesFusionCache(ApplicationCacheDomain.Mappings));
-        Assert.False(options.UsesFusionCache(ApplicationCacheDomain.Costs));
-        Assert.False(options.UsesFusionCache(ApplicationCacheDomain.PricingRules));
+        Assert.True(options.Discovery.Enabled);
+        Assert.False(options.Functions.Enabled);
+        Assert.True(options.Mappings.Enabled);
+        Assert.True(options.Costs.Enabled);
+        Assert.Equal(TimeSpan.FromMinutes(20), options.Costs.Duration);
+        Assert.True(options.PricingRules.Enabled);
         var entry = options.Entry(TimeSpan.FromHours(12));
         Assert.Equal(TimeSpan.FromSeconds(5), entry.Duration);
         Assert.Equal(TimeSpan.FromHours(12), entry.DistributedCacheDuration);
@@ -73,10 +75,21 @@ public class ApplicationCacheCompositionTests
     [InlineData("MaximumDuration", "00:01:00")]
     [InlineData("DistributedReadTimeout", "00:00:02")]
     [InlineData("Implementations:Costs", "999")]
+    [InlineData("Domains:Functions:Duration", "00:01:00")]
+    [InlineData("Domains:Costs:Duration", "00:00:00")]
+    [InlineData("Domains:Mappings:MaximumDuration", "-00:00:01")]
     public void InvalidPoliciesFailBeforeCacheResolution(string key, string value)
     {
         Assert.Throws<InvalidOperationException>(() => new ServiceCollection().AddConduitApplicationCache(
             Configuration(new() { [$"ApplicationCache:{key}"] = value }), "Test", ""));
+    }
+
+    [Fact]
+    public void RetiredRegionPolicyFailsRatherThanSilentlyLosingDisabledSetting()
+    {
+        var failure = Assert.Throws<InvalidOperationException>(() => new ServiceCollection().AddConduitApplicationCache(
+            Configuration(new() { ["CacheManager:RegionConfigs:ModelCosts:Enabled"] = "false" }), "Test", ""));
+        Assert.Contains("ApplicationCache:Domains", failure.Message);
     }
 
     [Fact]

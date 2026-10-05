@@ -72,12 +72,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAdminVirtualKeyService, AdminVirtualKeyService>();
         // Register AdminModelProviderMappingService (optional deps use default parameter values)
         services.AddScoped<IAdminModelProviderMappingService, AdminModelProviderMappingService>();
-        
+
         // Register Analytics services
         services.AddSingleton<IAnalyticsMetrics, AnalyticsMetricsService>();
         services.AddSingleton<AnalyticsCacheInvalidator>();
         services.AddScoped<IAnalyticsService, AnalyticsService>();
-        
+
         // Register AdminIpFilterService (optional deps use default parameter values)
         services.AddScoped<IAdminIpFilterService, AdminIpFilterService>();
         services.AddScoped<IAdminSystemInfoService, AdminSystemInfoService>();
@@ -154,7 +154,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ConduitLLM.Core.Services.IPricingRulesEvaluator, ConduitLLM.Core.Services.PricingRulesEvaluator>();
         services.AddScoped<ConduitLLM.Core.Services.IPricingRulesValidator, ConduitLLM.Core.Services.PricingRulesValidator>();
 
-        // Register cached pricing rules service for parsed configuration caching (uses ICacheManager)
+        // Register cached pricing rules service for parsed configuration caching (uses the shared application FusionCache)
         services.AddPricingRulesCache();
 
         // Register pricing audit service for rules-based pricing event tracking - with leader election
@@ -186,24 +186,24 @@ public static class ServiceCollectionExtensions
         {
             var redis = serviceProvider.GetService<StackExchange.Redis.IConnectionMultiplexer>();
             var logger = serviceProvider.GetRequiredService<ILogger<ConduitLLM.Core.Services.RedisErrorStore>>();
-            
+
             if (redis == null)
             {
                 logger.LogError("[ConduitLLM.Admin] Redis connection not available. Redis error store will not function.");
                 throw new InvalidOperationException("Redis error store requires Redis. Ensure REDIS_URL or CONDUIT_REDIS_CONNECTION_STRING is configured.");
             }
-            
+
             logger.LogInformation("[ConduitLLM.Admin] Redis error store initialized");
             return new ConduitLLM.Core.Services.RedisErrorStore(redis, logger);
         });
-        
+
         // Register provider error tracking service
         services.AddSingleton<ConduitLLM.Core.Interfaces.IProviderErrorTrackingService>(serviceProvider =>
         {
             var errorStore = serviceProvider.GetRequiredService<ConduitLLM.Core.Interfaces.IRedisErrorStore>();
             var scopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
             var logger = serviceProvider.GetRequiredService<ILogger<ConduitLLM.Core.Services.ProviderErrorTrackingService>>();
-            
+
             logger.LogInformation("[ConduitLLM.Admin] Provider error tracking service initialized with Redis backend");
             return new ConduitLLM.Core.Services.ProviderErrorTrackingService(errorStore, scopeFactory, logger);
         });

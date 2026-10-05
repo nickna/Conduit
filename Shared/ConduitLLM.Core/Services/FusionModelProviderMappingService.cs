@@ -7,7 +7,6 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using ZiggyCreatures.Caching.Fusion;
 
@@ -28,13 +27,11 @@ public sealed class FusionModelProviderMappingService : IModelProviderMappingSer
     public FusionModelProviderMappingService(IModelProviderMappingService inner,
         [FromKeyedServices(ApplicationCacheOptions.ServiceKey)] IFusionCache cache,
         ApplicationCacheOptions options, ApplicationCacheGeneration generation, IModelMappingCacheInvalidator invalidation,
-        IOptions<CacheManagerOptions> legacyOptions, ILogger<FusionModelProviderMappingService> logger)
+        ILogger<FusionModelProviderMappingService> logger)
     {
         _inner = inner; _cache = cache; _generation = generation; _invalidation = invalidation; _logger = logger;
-        var region = legacyOptions.Value.RegionConfigs?.GetValueOrDefault(CacheRegion.ModelMetadata);
-        _enabled = region?.Enabled ?? true;
-        var duration = TimeSpan.FromMinutes(10);
-        if (region?.MaxTTL is { } maximum && duration > maximum) duration = maximum;
+        _enabled = options.Mappings.Enabled;
+        var duration = options.Limit(Domain, options.Mappings.Duration ?? TimeSpan.FromMinutes(10));
         _entry = options.Entry(duration);
         _entry.Duration = TimeSpan.FromMilliseconds(100) < _entry.Duration ? TimeSpan.FromMilliseconds(100) : _entry.Duration;
         _entry.EnableAutoClone = false; // immutable detached snapshots are reconstructed as owned graphs on every return

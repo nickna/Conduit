@@ -9,8 +9,6 @@ using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,7 +17,7 @@ namespace ConduitLLM.CacheProbe;
 // Uses a dedicated empty fixture database. No production data or schema is touched.
 internal static class DatabaseBaseline
 {
-    public static async Task RunAsync(string connectionString, IDistributedCache distributed)
+    public static async Task RunAsync(string connectionString)
     {
         var queries = new QueryCounter();
         var options = new DbContextOptionsBuilder<ConduitDbContext>()
@@ -52,46 +50,6 @@ internal static class DatabaseBaseline
             }
         }
 
-        using var memory = new MemoryCache(new MemoryCacheOptions());
-        using var cache = new CacheManager(memory, distributed, NullLogger<CacheManager>.Instance);
-        await cache.RemoveAsync("baseline:discovery", CacheRegion.ModelDiscovery);
-        async Task<DiscoveryModelsResult> DiscoveryAsync()
-        {
-            return await cache.GetOrCreateAsync("baseline:discovery", async () =>
-            {
-                await using var context = await factory.CreateDbContextAsync();
-                var projected = await DiscoveryModelProjector.ProjectAsync(context, "chat", true, NullLogger.Instance);
-                if (projected.Count != 1) throw new InvalidOperationException("Unexpected discovery fixture shape.");
-                // The production loader performs its host-specific wire projection after this query.
-                // We measure the real shared query, with a minimal stable cache payload.
-                return new DiscoveryModelsResult { Count = projected.Count, Data = [] };
-            }, CacheRegion.ModelDiscovery);
-        }
-        await MeasureAsync("legacy discovery cold", DiscoveryAsync, queries, expectedQueries: 1);
-        await MeasureAsync("legacy discovery L1", DiscoveryAsync, queries, expectedQueries: 0);
-        memory.Remove("ModelDiscovery:baseline:discovery");
-        await MeasureAsync("legacy discovery L2", DiscoveryAsync, queries, expectedQueries: 0);
-
-        var mappings = new ModelProviderMappingRepository(factory, NullLogger<ModelProviderMappingRepository>.Instance);
-        var providers = new ProviderRepository(factory, NullLogger<ProviderRepository>.Instance);
-        var inner = new ModelProviderMappingService(NullLogger<ModelProviderMappingService>.Instance, mappings, providers);
-        var service = new CachedModelProviderMappingService(inner, cache, NullLogger<CachedModelProviderMappingService>.Instance);
-        var key = ConduitLLM.Configuration.Constants.CacheKeys.ModelMapping.ByAlias("cache-probe");
-        await cache.RemoveAsync(key, CacheRegion.ModelMetadata);
-        async Task<ModelProviderMapping?> MappingAsync()
-        {
-            var result = await service.GetMappingByModelAliasAsync("cache-probe");
-            if (result?.ModelProviderTypeAssociation.Model?.SupportsImageGeneration != true)
-                throw new InvalidOperationException("Mapping capability contract failed.");
-            return result;
-        }
-        await MeasureAsync("legacy mapping cold", MappingAsync, queries, expectedQueries: 1);
-        await MeasureAsync("legacy mapping L1", MappingAsync, queries, expectedQueries: 0);
-        memory.Remove($"ModelMetadata:{key}");
-        await MeasureAsync("legacy mapping L2 repair", MappingAsync, queries, expectedQueries: 1);
-        await cache.RemoveAsync(key, CacheRegion.ModelMetadata);
-        await cache.RemoveAsync("baseline:discovery", CacheRegion.ModelDiscovery);
-
         var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_PROBE_REDIS");
         var environment = $"probe-{Guid.NewGuid():N}";
         using var fusionHost = DiscoveryDomainProbe.Host(redis, environment);
@@ -105,6 +63,9 @@ internal static class DatabaseBaseline
         });
         await MeasureAsync("FusionCache discovery cold", FusionDiscoveryAsync, queries, expectedQueries: 1);
         await MeasureAsync("FusionCache discovery L1", FusionDiscoveryAsync, queries, expectedQueries: 0);
+        var mappings = new ModelProviderMappingRepository(factory, NullLogger<ModelProviderMappingRepository>.Instance);
+        var providers = new ProviderRepository(factory, NullLogger<ProviderRepository>.Instance);
+        var inner = new ModelProviderMappingService(NullLogger<ModelProviderMappingService>.Instance, mappings, providers);
         var fusionMapping = MappingDomainProbe.Service(fusionHost, inner);
         async Task<ModelProviderMapping?> FusionMappingAsync()
         {
@@ -118,11 +79,6 @@ internal static class DatabaseBaseline
         var costRepository = new ModelCostRepository(factory, NullLogger<ModelCostRepository>.Instance);
         var costInner = new ConduitLLM.Configuration.Services.ModelCostService(costRepository, mappings,
             NullLogger<ConduitLLM.Configuration.Services.ModelCostService>.Instance);
-        var legacyCosts = new CachedModelCostService(costInner, cache, NullLogger<CachedModelCostService>.Instance);
-        await MeasureAsync("legacy billing cold", () => legacyCosts.GetCostForModelAsync("cache-probe"), queries, expectedQueries: 2);
-        await MeasureAsync("legacy billing L1", () => legacyCosts.GetCostForModelAsync("cache-probe"), queries, expectedQueries: 0);
-        memory.Remove($"ModelCosts:{ConduitLLM.Configuration.Constants.CacheKeys.ModelCost.ByModelId("cache-probe")}");
-        await MeasureAsync("legacy billing L2", () => legacyCosts.GetCostForModelAsync("cache-probe"), queries, expectedQueries: 0);
         var fusionCosts = PricingDomainProbe.Service(fusionHost, costInner);
         await MeasureAsync("FusionCache billing cold", () => fusionCosts.GetCostForModelAsync("cache-probe"), queries, expectedQueries: 2);
         await MeasureAsync("FusionCache billing L1", () => fusionCosts.GetCostForModelAsync("cache-probe"), queries, expectedQueries: 0);

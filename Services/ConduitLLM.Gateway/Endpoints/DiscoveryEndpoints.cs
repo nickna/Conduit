@@ -1,3 +1,4 @@
+using ConduitLLM.Core.Caching;
 using System.Text.Json;
 using ConduitLLM.Gateway.Serialization;
 using ConduitLLM.Configuration;
@@ -98,7 +99,7 @@ namespace ConduitLLM.Gateway.Endpoints
             // cached under a distinct key so toggling ExposePricing never serves the
             // wrong shape from a stale entry.
             var exposePricing = _discoveryOptions.ExposePricing;
-            var cacheKey = DiscoveryCacheService.BuildCacheKey(capability, includePricing: exposePricing);
+            var cacheKey = DiscoveryCacheKeys.Build(capability, includePricing: exposePricing);
 
             var result = await _discoveryCacheService.GetOrLoadAsync(cacheKey, token =>
                 DiscoveryCacheLoader.LoadAsync(_dbContextFactory, capability, exposePricing, _wireJsonOptions, Logger, token, _clock),

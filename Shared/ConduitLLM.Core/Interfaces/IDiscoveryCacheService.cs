@@ -12,15 +12,8 @@ namespace ConduitLLM.Core.Interfaces
     public interface IDiscoveryCacheService
     {
         /// <summary>Loads one discovery variant, coalescing healthy misses in the selected cache implementation.</summary>
-        async Task<DiscoveryModelsResult> GetOrLoadAsync(string cacheKey,
-            Func<CancellationToken, Task<DiscoveryModelsResult>> load, CancellationToken cancellationToken = default)
-        {
-            var cached = await GetDiscoveryResultsAsync(cacheKey, cancellationToken);
-            if (cached is not null) return cached;
-            var result = await load(cancellationToken);
-            await SetDiscoveryResultsAsync(cacheKey, result, cancellationToken);
-            return result;
-        }
+        Task<DiscoveryModelsResult> GetOrLoadAsync(string cacheKey,
+            Func<CancellationToken, Task<DiscoveryModelsResult>> load, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets cached discovery results for models

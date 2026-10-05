@@ -4,7 +4,6 @@ using ConduitLLM.Core.Caching;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace ConduitLLM.Core.Extensions;
 
@@ -16,18 +15,13 @@ public static class ApplicationPricingCacheExtensions
         services.AddScoped<IModelCostService>(provider =>
         {
             var inner = provider.GetRequiredService<ModelCostService>();
-            if (provider.GetService<ApplicationCacheOptions>()?.UsesFusionCache(ApplicationCacheDomain.Costs) == true)
-                return ActivatorUtilities.CreateInstance<FusionModelCostService>(provider, inner);
-            return new CachedModelCostService(inner, provider.GetRequiredService<ICacheManager>(), provider.GetRequiredService<ILogger<CachedModelCostService>>());
+            return ActivatorUtilities.CreateInstance<FusionModelCostService>(provider, inner);
         });
         return services;
     }
     public static IServiceCollection AddPricingRulesCache(this IServiceCollection services)
     {
-        services.AddSingleton<ICachedPricingRulesService>(provider =>
-            provider.GetService<ApplicationCacheOptions>()?.UsesFusionCache(ApplicationCacheDomain.PricingRules) == true
-                ? ActivatorUtilities.CreateInstance<FusionPricingRulesService>(provider)
-                : ActivatorUtilities.CreateInstance<CachedPricingRulesService>(provider));
+        services.AddSingleton<ICachedPricingRulesService, FusionPricingRulesService>();
         return services;
     }
 }

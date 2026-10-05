@@ -18,6 +18,7 @@ public static class ApplicationCacheExtensions
     {
         var options = ApplicationCacheOptions.Read(configuration, hostEnvironment);
         var redis = redisConnectionString ?? RedisUrlParser.ResolveConnectionString();
+        services.AddMemoryCache(); // existing host-local consumers keep their independently registered cache
         services.TryAddSingleton(options);
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ApplicationCacheSerializer>();

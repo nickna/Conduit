@@ -42,7 +42,7 @@ namespace ConduitLLM.Core.Extensions
                 {
                     client.Timeout = TimeSpan.FromSeconds(30); // Reasonable timeout for image dimension checks
                 });
-            
+
             // Register usage estimation service for streaming responses without usage data
             services.AddScoped<IUsageEstimationService, UsageEstimationService>();
 
@@ -76,20 +76,20 @@ namespace ConduitLLM.Core.Extensions
         /// <param name="configuration">The configuration instance.</param>
         /// <returns>The service collection for chaining.</returns>
         public static IServiceCollection AddBatchCacheInvalidation(
-            this IServiceCollection services, 
+            this IServiceCollection services,
             IConfiguration configuration)
         {
             // Register configuration options
             services.Configure<BatchInvalidationOptions>(
                 configuration.GetSection("CacheInvalidation"));
-            
+
             // Register batch service as singleton and hosted service
             services.AddSingleton<BatchCacheInvalidationService>();
-            services.AddSingleton<IBatchCacheInvalidationService>(provider => 
+            services.AddSingleton<IBatchCacheInvalidationService>(provider =>
                 provider.GetRequiredService<BatchCacheInvalidationService>());
-            services.AddHostedService(provider => 
+            services.AddHostedService(provider =>
                 provider.GetRequiredService<BatchCacheInvalidationService>());
-            
+
             return services;
         }
 
@@ -108,11 +108,7 @@ namespace ConduitLLM.Core.Extensions
                 configuration.GetSection("Discovery"));
 
             // Register discovery cache service as singleton for better performance
-            services.AddSingleton<IDiscoveryCacheService>(provider =>
-                provider.GetService<ConduitLLM.Core.Caching.ApplicationCacheOptions>()?.UsesFusionCache(
-                    ConduitLLM.Core.Caching.ApplicationCacheDomain.Discovery) == true
-                    ? ActivatorUtilities.CreateInstance<FusionDiscoveryCacheService>(provider)
-                    : ActivatorUtilities.CreateInstance<DiscoveryCacheService>(provider));
+            services.AddSingleton<IDiscoveryCacheService, FusionDiscoveryCacheService>();
 
             // Ensure memory cache is registered
             services.AddMemoryCache();
@@ -131,13 +127,8 @@ namespace ConduitLLM.Core.Extensions
             this IServiceCollection services,
             IConfiguration configuration)
         {
-            services.Configure<CacheManagerOptions>(configuration.GetSection("CacheManager"));
             // Register function discovery cache service as scoped (depends on scoped repositories)
-            services.AddScoped<IFunctionDiscoveryCacheService>(provider =>
-                provider.GetService<ConduitLLM.Core.Caching.ApplicationCacheOptions>()?.UsesFusionCache(
-                    ConduitLLM.Core.Caching.ApplicationCacheDomain.Functions) == true
-                    ? ActivatorUtilities.CreateInstance<FusionFunctionDiscoveryCacheService>(provider)
-                    : ActivatorUtilities.CreateInstance<FunctionDiscoveryCacheService>(provider));
+            services.AddScoped<IFunctionDiscoveryCacheService, FusionFunctionDiscoveryCacheService>();
 
             // Ensure memory cache is registered
             services.AddMemoryCache();
@@ -161,21 +152,12 @@ namespace ConduitLLM.Core.Extensions
             services.AddScoped<IProviderService, ProviderService>();
 
             // Model provider mapping with caching decorator
-            services.AddSingleton<IModelMappingCacheInvalidator>(provider =>
-                provider.GetService<ConduitLLM.Core.Caching.ApplicationCacheOptions>()?.UsesFusionCache(
-                    ConduitLLM.Core.Caching.ApplicationCacheDomain.Mappings) == true
-                    ? ActivatorUtilities.CreateInstance<ConduitLLM.Core.Caching.ModelMappingCacheInvalidator>(provider)
-                    : ActivatorUtilities.CreateInstance<ConduitLLM.Core.Caching.LegacyMappingCacheInvalidator>(provider));
+            services.AddSingleton<IModelMappingCacheInvalidator, ConduitLLM.Core.Caching.ModelMappingCacheInvalidator>();
             services.AddScoped<ModelProviderMappingService>();
             services.AddScoped<IModelProviderMappingService>(provider =>
             {
                 var innerService = provider.GetRequiredService<ModelProviderMappingService>();
-                if (provider.GetService<ConduitLLM.Core.Caching.ApplicationCacheOptions>()?.UsesFusionCache(
-                    ConduitLLM.Core.Caching.ApplicationCacheDomain.Mappings) == true)
-                    return ActivatorUtilities.CreateInstance<FusionModelProviderMappingService>(provider, innerService);
-                var cacheManager = provider.GetRequiredService<ICacheManager>();
-                var logger = provider.GetRequiredService<ILogger<CachedModelProviderMappingService>>();
-                return new CachedModelProviderMappingService(innerService, cacheManager, logger);
+                return ActivatorUtilities.CreateInstance<FusionModelProviderMappingService>(provider, innerService);
             });
 
             return services;

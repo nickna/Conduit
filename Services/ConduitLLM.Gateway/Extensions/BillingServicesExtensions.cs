@@ -68,7 +68,7 @@ public static class BillingServicesExtensions
         services.AddScoped<IPricingRulesEvaluator, PricingRulesEvaluator>();
         services.AddScoped<IPricingRulesValidator, PricingRulesValidator>();
 
-        // Cached pricing rules service for parsed configuration caching (uses ICacheManager)
+        // Cached pricing rules service for parsed configuration caching (uses the shared application FusionCache)
         services.AddPricingRulesCache();
 
         // Pricing audit service for rules-based pricing evaluation tracking - with leader election

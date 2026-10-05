@@ -24,9 +24,8 @@ public sealed class FusionMappingCacheTests
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         { ["ApplicationCache:Environment"] = environment ?? $"test-{Guid.NewGuid():N}",
-            ["CacheManager:RegionConfigs:ModelMetadata:Enabled"] = enabled.ToString() }).Build();
+            ["ApplicationCache:Domains:Mappings:Enabled"] = enabled.ToString() }).Build();
         var services = new ServiceCollection().AddLogging();
-        services.Configure<CacheManagerOptions>(configuration.GetSection("CacheManager"));
         services.AddConduitApplicationCache(configuration, "test", redis ?? "");
         services.AddSingleton<IModelMappingCacheInvalidator, ModelMappingCacheInvalidator>();
         services.AddScoped<IModelProviderMappingService>(provider => ActivatorUtilities.CreateInstance<FusionModelProviderMappingService>(provider, inner));

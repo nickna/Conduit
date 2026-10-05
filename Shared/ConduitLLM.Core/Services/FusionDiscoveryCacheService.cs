@@ -28,18 +28,15 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
         [FromKeyedServices(ApplicationCacheOptions.ServiceKey)] IFusionCache cache,
         ApplicationCacheOptions applicationOptions,
         ApplicationCacheGeneration generation,
-        IOptions<DiscoveryCacheOptions> options, IOptions<CacheManagerOptions> legacyOptions,
+        IOptions<DiscoveryCacheOptions> options,
         ILogger<FusionDiscoveryCacheService> logger, TimeProvider? clock = null)
     {
         _cache = cache;
         _generation = generation;
         _logger = logger;
         _clock = clock ?? TimeProvider.System;
-        CacheRegionConfig? region = null;
-        legacyOptions.Value.RegionConfigs?.TryGetValue(CacheRegion.ModelDiscovery, out region);
-        _enabled = options.Value.EnableCaching && (region?.Enabled ?? true);
-        var duration = TimeSpan.FromMinutes(options.Value.CacheDurationMinutes);
-        if (region?.MaxTTL is { } maximum && duration > maximum) duration = maximum;
+        _enabled = options.Value.EnableCaching && applicationOptions.Discovery.Enabled;
+        var duration = applicationOptions.Limit(Domain, applicationOptions.Discovery.Duration ?? TimeSpan.FromMinutes(options.Value.CacheDurationMinutes));
         _entry = applicationOptions.Entry(duration);
         // JsonElement is immutable. Detach incoming documents once, then copy the mutable list on reads.
         // This preserves ownership without serializing the complete discovery response on every L1 hit.

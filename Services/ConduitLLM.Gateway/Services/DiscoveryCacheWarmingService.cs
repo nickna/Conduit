@@ -1,3 +1,4 @@
+using ConduitLLM.Core.Caching;
 using System.Diagnostics;
 using System.Text.Json;
 using ConduitLLM.Configuration;
@@ -96,8 +97,8 @@ namespace ConduitLLM.Gateway.Services
                 var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ConduitDbContext>>();
 
                 // Warm cache for common capability filters
-                var commonCapabilities = _options.WarmupCapabilities ?? new List<string> 
-                { 
+                var commonCapabilities = _options.WarmupCapabilities ?? new List<string>
+                {
                     "chat", "image_input", "video_input", "audio_input", "file_input",
                     "image_generation", "video_generation"
                 };
@@ -112,7 +113,7 @@ namespace ConduitLLM.Gateway.Services
                         break;
 
                     await WarmCacheForCapability(dbContextFactory, capability, stoppingToken);
-                    
+
                     // Small delay between cache warming operations
                     await Task.Delay(100, stoppingToken);
                 }
@@ -141,13 +142,13 @@ namespace ConduitLLM.Gateway.Services
         {
             try
             {
-                var cacheKey = DiscoveryCacheService.BuildCacheKey(
+                var cacheKey = DiscoveryCacheKeys.Build(
                     capability,
                     includePricing: _options.ExposePricing);
                 var result = await _discoveryCacheService.GetOrLoadAsync(cacheKey, token =>
                     DiscoveryCacheLoader.LoadAsync(dbContextFactory, capability, _options.ExposePricing,
                         _wireJsonOptions, _logger, token, _clock), cancellationToken);
-                
+
                 _logger.LogInformation(
                     "Warmed discovery cache for capability '{Capability}' with {Count} models",
                     capability ?? "all",

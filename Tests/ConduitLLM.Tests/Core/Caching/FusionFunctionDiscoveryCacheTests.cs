@@ -19,6 +19,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using StackExchange.Redis;
+using ZiggyCreatures.Caching.Fusion;
 
 namespace ConduitLLM.Tests.Core.Caching;
 
@@ -30,7 +31,6 @@ public sealed class FusionFunctionDiscoveryCacheTests
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ApplicationCache:Environment"] = environment ?? $"test-{Guid.NewGuid():N}",
-            ["ApplicationCache:Implementations:Functions"] = "FusionCache"
         }).Build();
         var services = new ServiceCollection().AddLogging();
         services.AddScoped(_ => settings.Object);
@@ -53,6 +53,30 @@ public sealed class FusionFunctionDiscoveryCacheTests
         Parameters = JsonNode.Parse("""{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}""")!.AsObject()
     } }];
     private static Task<FunctionDiscoveryLoad> Load(CancellationToken _) => Task.FromResult(new FunctionDiscoveryLoad(Tools(), 2));
+
+    [SkippableTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task IncompleteIndependentRedisPayloadFallsBackToOneCurrentBusinessLoad(bool nullFunction)
+    {
+        var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
+        Skip.If(string.IsNullOrEmpty(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
+        var environment = $"test-{Guid.NewGuid():N}";
+        using var writer = Host(Settings(), redis: redis, environment: environment);
+        var generation = await writer.GetRequiredService<ApplicationCacheGeneration>().GetAsync(ApplicationCacheDomain.Functions);
+        List<Tool> incomplete = nullFunction ? [new() { Function = null! }] : [null!];
+        await writer.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey)
+            .SetAsync($"functions:{generation}:configs:1", incomplete, tags: ["functions"]);
+        using var reader = Host(Settings(), redis: redis, environment: environment);
+        using var scope = reader.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IFunctionDiscoveryCacheService>();
+        Assert.Null(await service.GetCachedToolsAsync([1]));
+        var loads = 0;
+        var result = await service.GetOrLoadAsync([1], _ =>
+        { loads++; return Task.FromResult(new FunctionDiscoveryLoad(Tools("current"), 2)); });
+        Assert.Equal(1, loads);
+        Assert.Equal("current", Assert.Single(result).Function.Description);
+    }
 
     [Fact]
     public async Task ConcurrentNormalizedSetsLoadOnceAndDetachSchemas()

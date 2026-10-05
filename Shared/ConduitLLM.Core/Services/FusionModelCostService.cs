@@ -7,7 +7,6 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using ZiggyCreatures.Caching.Fusion;
 
@@ -32,17 +31,15 @@ public sealed class FusionModelCostService : IModelCostService
     public FusionModelCostService(IModelCostService inner,
         [FromKeyedServices(ApplicationCacheOptions.ServiceKey)] IFusionCache cache,
         ApplicationCacheOptions options, ApplicationCacheGeneration generation, TimeProvider clock,
-        IOptions<CacheManagerOptions> legacyOptions, ILogger<FusionModelCostService> logger,
+        ILogger<FusionModelCostService> logger,
         IModelMappingCacheInvalidator? mappings = null, ICachedPricingRulesService? rules = null,
         IDiscoveryCacheService? discovery = null)
     {
         _inner = inner; _cache = cache; _options = options; _generation = generation; _clock = clock; _logger = logger;
         _mappings = mappings; _rules = rules; _discovery = discovery;
-        var region = legacyOptions.Value.RegionConfigs?.GetValueOrDefault(CacheRegion.ModelCosts);
-        _enabled = region?.Enabled ?? true;
-        _positive = region?.DefaultTTL ?? TimeSpan.FromHours(12);
-        _negative = TimeSpan.FromMinutes(1);
-        if (region?.MaxTTL is { } maximum) { if (_positive > maximum) _positive = maximum; if (_negative > maximum) _negative = maximum; }
+        _enabled = options.Costs.Enabled;
+        _positive = options.Limit(Domain, options.Costs.Duration ?? TimeSpan.FromHours(12));
+        _negative = options.Limit(Domain, TimeSpan.FromMinutes(1));
         _positiveEntry = Entry(_positive); _ = Entry(_negative);
         _localEntry = _positiveEntry.Duplicate(); _localEntry.SkipDistributedCacheRead = true;
     }

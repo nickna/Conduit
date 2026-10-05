@@ -1,220 +1,160 @@
 # Shared application cache
 
-Implementation: [epic #1396 design record](../decisions/0007-fusion-cache.md).
-Discovery, Functions and Mappings selectors are available; defaults still select the legacy implementation.
-Other per-domain selectors take effect as each gated migration lands. Authentication, tasks,
-spending, provider credentials, ephemeral keys, Data Protection and other Redis stores
-keep their existing registration and namespaces.
+Gateway and Admin share the application cache composition. Discovery, Functions, Mappings,
+Costs and PricingRules use FusionCache directly; Admin's discovery service remains optional.
+See [the design and validation record](../decisions/0007-fusion-cache.md).
+Authentication, tasks, spending, provider credentials, Data Protection and other Redis
+stores retain their existing registrations and namespaces.
 
-## Configuration
+## Configuration and upgrade
 
-Both Gateway and Admin use the existing `RedisUrlParser` resolver (`REDIS_URL`, then
-`CONDUIT_REDIS_CONNECTION_STRING`). They independently own a dedicated application
-RedisCache connection, Redis backplane connection and lazy generation-metadata connection. None is the host's shared
-IConnectionMultiplexer. DI disposes the RedisCache; FusionCache unsubscribes and disposes
-its backplane and dedicated L1. The application store is a keyed IDistributedCache and
-does not replace the normal host-wide IDistributedCache.
+Both hosts resolve Redis through the existing RedisUrlParser: REDIS_URL, then
+CONDUIT_REDIS_CONNECTION_STRING. Without Redis, FusionCache uses its dedicated L1.
+Each warmed Redis cache owns three multiplexers: payload storage, backplane and generation
+metadata. These do not reuse the host multiplexer or replace its IDistributedCache.
+DI disposes the storage, backplane, metadata connection and dedicated L1.
 
-```json
+~~~json
 {
   "ApplicationCache": {
     "Environment": "production",
     "LocalDuration": "00:00:05",
     "DistributedReadTimeout": "00:00:00.250",
     "MaximumDuration": "7.00:00:00",
-    "Implementations": {
-      "Discovery": "Legacy",
-      "Functions": "Legacy",
-      "Mappings": "Legacy",
-      "Costs": "Legacy",
-      "PricingRules": "Legacy"
+    "Domains": {
+      "Discovery": { "Enabled": true },
+      "Functions": { "Enabled": true, "MaximumDuration": "06:00:00" },
+      "Mappings": { "Enabled": true, "Duration": "00:10:00" },
+      "Costs": { "Enabled": true, "Duration": "12:00:00" },
+      "PricingRules": { "Enabled": true, "Duration": "00:15:00" }
     }
   }
 }
-```
+~~~
 
-Environment defaults to the host environment name in lowercase. Set it identically
-in both hosts in a deployment; isolate every environment. It accepts 1–64 ASCII
-letters, numbers, underscores and hyphens. Keys use
-`conduit:app-cache:{environment}:v1:`; the backplane uses the same versioned namespace.
-The hosted services' existing distributed-cache prefixes remain unchanged.
+Remove ApplicationCache:Implementations and CacheManager settings before upgrading.
+Startup rejects either retired section, including an old disabled-region setting, rather
+than silently dropping its policy. Translate old region Enabled and MaxTTL settings
+to domain Enabled and MaximumDuration respectively:
 
-LocalDuration must be positive and at most five seconds. A domain's configured TTL
-remains its L2 lifetime; L1 uses the smaller TTL/LocalDuration, and L2 promotion respects
-remaining logical lifetime. MaximumDuration must be between 12 hours and 30 days.
-Domain writes with a longer duration fail validation; tag markers live MaximumDuration
-plus one day so obsolete payloads cannot outlive their invalidation markers. Tag markers
-use a one-second L1 duration. DistributedReadTimeout must be positive and at most one second;
-it bounds storage/metadata reads, never detaches a write or required invalidation.
+| Former region | Domain |
+| --- | --- |
+| ModelDiscovery | Discovery |
+| FunctionDiscovery | Functions |
+| ModelMetadata | Mappings |
+| ModelCosts | Costs |
+| PricingRules | PricingRules |
 
-Legacy/FusionCache selections are per-process startup settings; they are temporary rollout
-controls. Change them only at the domain's documented gate, and exercise the FC-4
-mixed-instance/rollback procedure. A flag switch alone is not a cache freshness guarantee.
-The final retirement removes selectors after the rollback window closes.
+Preserve effective cost/rule DefaultTTL overrides using Duration. Discovery retains
+Discovery:CacheDurationMinutes (360 by default) unless its domain Duration is explicit.
+Mapping duration defaults to ten minutes. Function duration still comes from the minimum
+participating CacheTtlMinutes or an explicit request override; its domain accepts only
+a maximum cap, not a fixed Duration. No configured function TTL means no cache write.
+Functions.DiscoveryCacheEnabled is checked on every access: absent, blank, failed lookup
+and false bypass caching; true/1/yes/enabled permit it. Cancellation propagates.
+Discovery:EnableCaching=false also bypasses discovery. Domain Enabled=false bypasses
+both reads and writes while required invalidation remains available.
 
-## Failure and freshness contracts
+Old Priority/EvictionPolicy settings have no domain equivalent; the dedicated L1 uses
+FusionCache policies. Ignored manager/statistics options and cache tier switches are retired.
+Migration preserves effective business TTL/enable contracts, not ignored configuration.
 
-Fail-safe stale reads, eager refresh, timed-out factory completion and background distributed
-and backplane operations are disabled for both payloads and tag markers. Invalidation is
-awaited, serialization/distributed/backplane exceptions are rethrown, and the distributed and
-backplane circuit breakers have zero duration. Domain services decide which reads can fall
-back to the database. Required invalidation failures must reach durable Wolverine retry.
+Use the same Environment in both hosts of a deployment and isolate environments. It
+defaults to the lowercase host environment and accepts 1–64 ASCII letters, digits,
+underscores and hyphens. Payloads and backplane use conduit:app-cache:{environment}:v1:.
+The old host-specific application prefixes are not read by this version.
 
-Auto-cloning prevents callers from mutating cached results on read. Discovery instead
-detaches immutable JsonElements once when publishing and copies their mutable container
-on every read, avoiding full JSON round-trips on L1 hits. Domain loaders must
-also detach mutable values before publishing them. Singleton cache composition receives
-loaders as per-call delegates; it never captures repositories or DbContexts.
+LocalDuration must be positive and at most five seconds; mappings, costs and rules further
+cap payload L1 at 100ms. DistributedReadTimeout is positive and at most one second and
+bounds storage/metadata reads. MaximumDuration is 12 hours–30 days (seven days by default).
+Domain durations/caps must be positive and within that global maximum. L1 uses the smaller
+local/domain duration; L2 promotion respects remaining lifetime. Tag markers last global
+MaximumDuration plus one day, with a one-second L1. Five persistent generation keys have
+no TTL. Do not expire their metadata manually as an operational invalidation procedure.
 
-JSON uses generated metadata for the payload **and** FusionCacheDistributedEntry envelope,
-including the long tag-marker contract. Unknown types fail closed. Never enable JSON
-reflection to make a new cache payload work; add its concrete generated metadata and test
-it through Redis. Mappings need a complete explicit projection at FC-6, rather than the
-legacy tracked entity graph.
+## Freshness and failure behavior
 
-## Monitoring and validation
+Fail-safe, eager refresh, timed-out factory completion and background storage/backplane
+operations are disabled. Writes and invalidations are awaited; required errors are rethrown
+as ApplicationCacheInvalidationException and scheduled through persisted Wolverine
+retries at 1/5/30 seconds indefinitely. Monitor the retry backlog before declaring recovery.
+Cancellation and business-loader errors retain their own contracts. A storage failure falls
+back to the current business loader; a successful load is not repeated after a failed write.
 
-`conduit_application_cache_operations_total` joins the existing Prometheus registry.
-Labels are bounded domain, operation and result values, never raw keys, model names,
-configuration IDs, virtual keys or per-run environment names. High-level events report
-hits/misses, factory successes/business errors, serialization errors and tag invalidations.
-Backplane receive/publish events use the shared domain. Redis adapter failures report
-`result="redis_error"`; required domain invalidation failures report `operation="invalidate"`
-with `result="error"`. Tag invalidation counts operations, not removed physical entries.
+Every factory captures a domain generation before loading. Invalidation changes that
+persistent, clock-independent token, so a late old factory cannot repopulate the current
+namespace. Missing metadata initializes a new token atomically. Discovery/functions refresh
+local generation metadata within one second; mappings/costs/rules within 100ms. Tests verify
+two-second discovery/function and one-second strict-domain convergence after successful
+invalidation, including missed backplane delivery. Queue latency, outages and requests already
+in flight are outside those bounds; this is not linearizable coordination.
 
-Run the registered composition probe from the repository root:
+Detected Redis disconnection bypasses cached generation metadata. After a strict-domain
+storage failure, reads remain fenced until successful metadata recovery publishes a newly
+rotated token. This forces a current business load even before a pending invalidation retries.
+A later failure cannot be acknowledged by an earlier recovery. Failed recovery continues
+database fallback. No detached writes or timestamp-based namespace resurrection are used.
 
-```powershell
-$env:CONDUIT_CACHE_PROBE_REDIS = '127.0.0.1:16396'
-dotnet run --project tools/ConduitLLM.CacheProbe -c Release -- compose
-$env:CONDUIT_CACHE_TEST_REDIS = '127.0.0.1:16396'
-dotnet test Tests/ConduitLLM.Tests --filter 'FullyQualifiedName~ApplicationCacheCompositionTests'
-```
+Caller results are owned copies: discovery detaches JsonElements and copies containers;
+functions copy tool/schema graphs; mappings/costs reconstruct complete versioned snapshots;
+rules copy mutable collections. Redis mapping hits need no navigation-repair query. Provider
+credentials and tracked/cyclic EF graphs are excluded from payloads. JSON uses generated
+payload and FusionCache-envelope metadata with no reflection fallback. Add generated metadata
+and real Redis/native coverage when introducing a new payload type.
 
-Without a Redis probe connection, `compose` explicitly tests cache-local composition.
-Redis host tests report skipped unless CONDUIT_CACHE_TEST_REDIS is set. Both host roots
-are exercised with scope validation. Cache-local composition does not repair unrelated
-host dependencies described in #1366.
+Usable costs default to 12-hour L2 storage, shortened by expiry. Missing/unusable costs have
+a one-minute negative contract, shortened by a known future effective date. Reads validate
+active/effective/expiry even on a hit; missing costs preserve billing reconciliation errors
+and configured zero rates remain valid. Administrative cost lists retain all rows. Rules
+default to 15 minutes and use cost ID plus SHA-256 of configuration content; invalid JSON
+returns null and is not written. Priced discovery has an internal transition deadline that
+refreshes at effective/expiry boundaries without exposing metadata in HTTP responses.
 
-The probe's `compose` mode demonstrates compatible independent Admin/Gateway cache
-graphs, source-generated L2 reads, caller ownership, backplane invalidation and bounded
-telemetry. It does not claim FC-4's full PostgreSQL/Wolverine process topology.
-Never flush shared Redis to recover this cache; only this application namespace is eligible
-for an operational cleanup, and logical tag expiration normally needs no physical cleanup.
+Repricing expires costs, mappings, rules and discovery. The billing decorator is
+Configuration.IModelCostService; IModelCostCache/RedisModelCostCache is an independent
+auxiliary store. Batch cost requests await actual billing/dependent expiration before queue
+acceptance; only that auxiliary store's expiration stays batched.
 
-## Discovery pilot
+## Rollout and rollback
 
-`ApplicationCache:Implementations:Discovery=FusionCache` selects the factory-oriented
-discovery service. The endpoint authenticates before cache access. Requests and the warmer
-use the same projection, keys, pricing visibility and factory path. Capability, virtual-key,
-and priced/unpriced variants remain separate; the shared discovery tag deliberately covers
-all variants and the discovery endpoint's function catalog/parameter payloads. Existing
-pattern invalidations invalidate this dependency broadly, without enumerating Redis keys.
+The serial isolated gates and the two-legacy-process bypass/clear/re-enable reproducer are
+preserved at commit e7057ce5. They used real Redis, PostgreSQL durable transport, Admin
+repricing, Gateway restarts and missed backplane delivery. They establish fixture evidence;
+no production deployment or operator observation window was performed by this change.
 
-`Discovery:EnableCaching` and the existing
-`CacheManager:RegionConfigs:ModelDiscovery:Enabled` disable both reads and writes.
-`Discovery:CacheDurationMinutes` sets the positive L2 TTL (default 360); the region MaxTTL
-caps it. The explicit discovery TTL takes precedence over region DefaultTTL, as before.
-Invalidation remains active even while caching is disabled. Cache storage/serialization
-failures allow current database results to serve; business loader failures and cancellation
-propagate. A successful load followed by a failed cache write runs the loader only once.
-Required invalidations propagate failures for durable retry.
+This final version has no implementation selector. To bypass a domain, set its Enabled
+to false on every serving process and restart. To return to the old engine, deploy the old
+binary with its old configuration. Drain or suspend affected requests while clearing caches:
+a binary switch alone can expose stale legacy prefixes left behind before the upgrade.
 
-## Distributed recovery and rollback
+Before legacy reads resume, inventory every serving legacy process and its complete old
+application-domain keyspace. Bypass legacy reads where supported (for discovery,
+Discovery:EnableCaching=false); an old region write-disable setting alone does not prove
+read bypass. Keep traffic drained where a read bypass is unavailable. Clear the entire
+affected legacy application domain on every instance and its verified distributed keys,
+restart those processes to discard old L1, and only then resume reads. Cover all variants,
+not sampled keys. Never flush shared Redis or remove a generic host prefix containing auth,
+tasks or other stores. Drain/replay pending durable invalidations against the selected binary.
+The archived fixture proves discovery rollback on its complete known legacy keyspace;
+operators must validate their actual topology and all domains being rolled back.
 
-Each domain has one persistent random generation key under the application prefix. Payload
-factories capture it before loading; invalidation replaces it before expiring tags. Clock skew
-and late factories therefore cannot place an old result in the current generation. Missing
-metadata initializes a new generation atomically. Do not assign a TTL to generation keys.
-Discovery/functions refresh their local generation within one second; mappings/costs/rules
-use 100 milliseconds and require the stricter domain tests before rollout.
+## Monitoring and reproduction
 
-Discovery convergence was tested within two seconds **after successful event processing**,
-including lost backplane delivery. This excludes database/transport outage duration and queue
-latency. Detected Redis disconnection serves current DB results; a factory already running
-may return its earlier snapshot to that request. Recovery alone does not certify freshness:
-wait for pending invalidations to succeed. Required invalidation failures throw
-ApplicationCacheInvalidationException and use persisted Wolverine retries at 1/5/30 seconds
-indefinitely. Monitor retry backlog and invalidate-domain errors during recovery.
+conduit_application_cache_operations_total uses bounded domain/operation/result labels.
+Watch hits/misses, factory business errors, Redis/serialization errors, invalidation failures
+and durable retries. These count cache operations, not HTTP requests or exact resident entries;
+the statistics contract does not enumerate L1 or scan Redis.
 
-Before a rollback, disable discovery caching on every serving legacy process, including both
-Gateway and Admin graphs that serve the domain. Drain pending durable invalidations, clear
-the complete legacy ModelDiscovery region on every such instance (or replace those processes
-while reads remain disabled and remove only their verified old application domain keys), then
-enable the legacy selection. Cover every legacy instance and the full old domain namespace;
-partial sampled-key cleanup or a selector switch alone can resurrect stale old-prefix values.
-Other shared Redis stores must remain intact. The fixture proves this procedure on its complete
-known keyspace; operators must inventory the actual deployment's processes/prefixes.
+A warmed node adds three multiplexers/six sockets. The matched five-payload fixture occupied
+6768 Redis bytes including five generation keys versus 4128 legacy bytes (1.64×). Old
+generation payloads and tag markers expire naturally; repeated invalidation can temporarily
+increase resident memory across the maximum payload TTL. Monitor memory and connection
+counts under deployment load. L1 allocation remains 2.6–4.2KB per fixture call and exceeds
+the original allocation target; the design record documents this explicit review tradeoff.
 
-Reproduce FC-4 against isolated fixtures by setting CONDUIT_CACHE_TEST_REDIS and
-CONDUIT_CACHE_TEST_POSTGRES, then running DistributedDiscoveryCacheTests and
-FusionDiscoveryCacheTests. The former creates and removes its own uniquely named database;
-the PostgreSQL fixture login must permit database creation. It starts Admin and two independent
-Gateway hosts using the real persisted transport, interrupts only their proxy connections,
-restarts both gateways with a scheduled retry pending, and verifies the original message ID.
-This is integration evidence, not a production rollout or a claim of linearizable coordination.
-
-## Function discovery
-
-`ApplicationCache:Implementations:Functions=FusionCache` selects scoped function policy and
-factory loading. The singleton cache never captures its scoped repositories. ID sets are sorted
-and deduplicated; tools retain the existing MCP expansion/names and JsonObject schemas. The
-loader validates requested configurations and computes the minimum configured CacheTtlMinutes
-from its single configuration query. Explicit TTL overrides take precedence, with the existing
-FunctionDiscovery region MaxTTL cap. No configured TTL means no cache write.
-
-Functions.DiscoveryCacheEnabled is checked on every access: absent, blank, failed lookup or
-false disables reads/writes; true/1/yes/enabled enables them. Cancellation propagates. Configuration
-events invalidate all combinations, plus the discovery endpoint's function catalog/schema domain.
-Enable-setting events invalidate combinations even while disabled, so re-enable cannot recover a
-pre-change result. Required errors propagate through the same durable retry policy as discovery.
-An old schema factory stays in its captured generation. Tools and nested schemas are detached
-before publication and cloned on every cache read. Authentication remains before endpoint cache
-access; the function loader receives the caller's already selected configuration IDs.
-
-## Mapping graphs
-
-`ApplicationCache:Implementations:Mappings=FusionCache` uses the complete versioned routing
-snapshot. It contains mapping fields, non-secret provider settings, association overrides, model
-capabilities, series parameter defaults and the attached cost fields. It deliberately excludes
-provider credentials, tracked EF entities and cyclic navigation collections. Every return rebuilds
-an independent domain graph; a complete Redis L2 hit performs no repair query.
-
-The positive TTL remains ten minutes, capped by ModelMetadata MaxTTL. ModelMetadata Enabled
-disables reads and writes. Payload L1 and generation L1 are capped at 100 milliseconds. Mapping
-create/update/delete, provider changes, model/association and cost changes, series defaults and catalog
-refreshes expire the complete domain, covering ID, alias, old/new aliases, alias lists and all lists.
-Required failures reach durable retry. The tested cross-node freshness bound is one second after
-successful invalidation; it excludes queue latency and requests that already captured an older
-generation. The existing mapping interface has no cancellation token; request cancellation cannot
-be passed to that business loader without an interface change outside this migration.
-
-After an observed strict-domain Redis/storage failure, mapping/cost/rule reads remain in recovery:
-the first successful coalesced metadata operation rotates the domain generation before allowing
-cached payloads again. This forces a current business load and makes the old L2 namespace
-unreachable even if a pending invalidation has not retried yet. Failed recovery keeps database
-fallback active. A restart during disconnection also follows this policy. Metadata connections
-use fail-fast backlog handling; writes and invalidations remain awaited, never detached.
-
-## Billing costs and parsed rules
-
-Costs and PricingRules are separately selectable FusionCache domains. Cost model-ID, cost-ID
-and list variants share domain expiration. Usable positive costs have a 12-hour default L2 TTL;
-the actual expiry date shortens it. Missing/unusable costs have an explicit one-minute contract,
-shortened by a known future effective date. Every read rechecks validity. The administrative
-list retains all rows. Missing prices preserve billing reconciliation errors; configured zero
-prices are valid. Neither billing nor rules uses fail-safe stale serving. Both payload and
-generation L1 are at most 100ms, with the same strict recovery fence as mapping reads.
-
-PricingRules uses 15-minute L2 storage and keys configurations by cost ID plus SHA-256 content.
-Invalid JSON is parsed under the existing null/error contract and never cached. Rule conditions,
-constraints and cost graphs are copied for the caller. Repricing expires cost, mapping, rule and
-discovery domains, including previously missing prices. Discovery's internal deadline refreshes
-priced payloads at effective/expiry times without an event and is never exposed in HTTP responses.
-
-The calculator's Configuration.IModelCostService decorator is the billing cache to monitor.
-The separately registered IModelCostCache/RedisModelCostCache is an auxiliary Redis store;
-clearing only it cannot refresh billing. Batch cost requests now await billing and dependent
-expiration before queue acceptance, while preserving batching of that auxiliary store.
-Required errors remain visible to the durable event handler. Monitor retry backlog and the
-costs/rules invalidation error labels before declaring recovery complete.
+Follow [the probe README](../../tools/ConduitLLM.CacheProbe/README.md) for local, Redis,
+NativeAOT and independent-process probes. Set CONDUIT_CACHE_TEST_REDIS and
+CONDUIT_CACHE_TEST_POSTGRES to isolated fixtures for distributed tests. The durable
+test creates/removes only its uniquely named database and interrupts only its own proxy
+connections; its PostgreSQL login must permit database creation. Production must never be
+used as a fault-injection fixture.

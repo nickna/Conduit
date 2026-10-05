@@ -17,7 +17,6 @@ internal static class CompositionProbe
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ApplicationCache:Environment"] = environment,
-            ["ApplicationCache:Implementations:Discovery"] = "FusionCache"
         }).Build();
         ServiceProvider Host(string host)
         {

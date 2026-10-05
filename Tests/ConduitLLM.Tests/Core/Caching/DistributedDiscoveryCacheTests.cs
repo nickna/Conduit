@@ -72,12 +72,6 @@ public sealed class DistributedDiscoveryCacheTests
             await AssertVariantsAsync(gateway1, factory, 0.25m);
             await AssertVariantsAsync(gateway2, factory, 0.25m);
 
-            // Both legacy nodes warm the old namespace before the rolling upgrade begins.
-            using var legacy1 = LegacyHost(redis, environment, enabled: true);
-            using var legacy2 = LegacyHost(redis, environment, enabled: true);
-            await AssertVariantsAsync(legacy1, factory, 0.25m);
-            await AssertVariantsAsync(legacy2, factory, 0.25m);
-
             // Disconnect actual L2 and pub/sub TCP sockets below the domain, retaining PostgreSQL transport.
             proxy.Disconnect();
             using (var scope = admin.Services.CreateScope())
@@ -108,7 +102,7 @@ public sealed class DistributedDiscoveryCacheTests
             }, TimeSpan.FromSeconds(10), "Required failure must be persisted as a scheduled transport retry.");
             await UntilAsync(async () => await VariantsMatchAsync(gateway1.Services, factory, 0.5m) && await VariantsMatchAsync(gateway2.Services, factory, 0.5m),
                 TimeSpan.FromSeconds(5), "Disconnected caches must fall back to current PostgreSQL results within the discovery outage bound.");
-            using (var cold = FusionDiscoveryCacheTests.Host(proxy.ConnectionString, environment))
+            using (var cold = ColdHost(proxy.ConnectionString, environment, factory))
                 await UntilAsync(() => VariantsMatchAsync(cold, factory, 0.5m), TimeSpan.FromSeconds(5),
                     "A new cache instance starting during the Redis outage must serve current database results.");
             await gateway1.StopAsync();
@@ -151,21 +145,6 @@ public sealed class DistributedDiscoveryCacheTests
             await AssertVariantsAsync(gateway1, factory, 0.75m);
             await AssertVariantsAsync(gateway2, factory, 0.75m);
 
-            // A selector switch alone demonstrably leaves legacy data stale. Bypass every legacy reader
-            // before the rolling cutover/rollback, then clear the complete fixture's known legacy keyspace.
-            Assert.False(await VariantsMatchAsync(legacy1, factory, 0.75m));
-            Assert.False(await VariantsMatchAsync(legacy2, factory, 0.75m));
-            using var bypass1 = LegacyHost(redis, environment, enabled: false);
-            using var bypass2 = LegacyHost(redis, environment, enabled: false);
-            await AssertVariantsAsync(bypass1, factory, 0.75m);
-            await AssertVariantsAsync(bypass2, factory, 0.75m);
-            await AssertVariantsAsync(gateway1, factory, 0.75m);
-            await legacy1.GetRequiredService<ICacheManager>().ClearRegionAsync(ConduitLLM.Core.Models.CacheRegion.ModelDiscovery);
-            await legacy2.GetRequiredService<ICacheManager>().ClearRegionAsync(ConduitLLM.Core.Models.CacheRegion.ModelDiscovery);
-            using var rollback1 = LegacyHost(redis, environment, enabled: true);
-            using var rollback2 = LegacyHost(redis, environment, enabled: true);
-            await AssertVariantsAsync(rollback1, factory, 0.75m);
-            await AssertVariantsAsync(rollback2, factory, 0.75m);
         }
         finally
         {
@@ -188,9 +167,6 @@ public sealed class DistributedDiscoveryCacheTests
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ApplicationCache:Environment"] = environment,
-            ["ApplicationCache:Implementations:Discovery"] = "FusionCache",
-            ["ApplicationCache:Implementations:Costs"] = "FusionCache",
-            ["ApplicationCache:Implementations:PricingRules"] = "FusionCache",
             [WolverineMessagingExtensions.SchemaNameKey] = role == "gateway" ? gatewaySchema : gatewaySchema.Replace("gateway_", "admin_"),
             [WolverineMessagingExtensions.AutoProvisionKey] = "true"
         }).Build();
@@ -233,6 +209,21 @@ public sealed class DistributedDiscoveryCacheTests
             }).Build();
     }
 
+    private static ServiceProvider ColdHost(string redis, string environment, IDbContextFactory<ConduitDbContext> factory)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            { ["ApplicationCache:Environment"] = environment }).Build();
+        var services = new ServiceCollection().AddLogging();
+        services.AddSingleton(factory);
+        services.AddScoped<IModelCostRepository, ModelCostRepository>();
+        services.AddScoped<IModelProviderMappingRepository, ModelProviderMappingRepository>();
+        services.AddConduitApplicationCache(configuration, "gateway", redis);
+        services.AddDiscoveryCache(configuration);
+        services.AddModelCostCache();
+        services.AddPricingRulesCache();
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+    }
+
     private static async Task<int> SeedAsync(IDbContextFactory<ConduitDbContext> factory)
     {
         await using var context = await factory.CreateDbContextAsync();
@@ -261,27 +252,9 @@ public sealed class DistributedDiscoveryCacheTests
         return document.RootElement.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone());
     }
 
-    private static ServiceProvider LegacyHost(string redis, string environment, bool enabled)
-    {
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:Redis"] = redis,
-            ["Discovery:EnableCaching"] = enabled.ToString(),
-            ["ApplicationCache:Environment"] = environment
-        }).Build();
-        var services = new ServiceCollection().AddLogging();
-        services.AddCacheManager(configuration);
-        // Isolate the otherwise legacy host-wide prefix in this test; the engine and logical keys are real.
-        services.AddStackExchangeRedisCache(options => options.InstanceName = $"conduit:legacy-gate:{environment}:");
-        services.AddConduitApplicationCache(configuration, "fixture", redis);
-        services.AddDiscoveryCache(configuration);
-        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
-    }
-
     private static async Task<bool> VariantsMatchAsync(IServiceProvider provider, IDbContextFactory<ConduitDbContext> factory, decimal price)
     {
         // Requests read this exact decorator; failure must propagate from it to Wolverine retry.
-        if (provider.GetService<ApplicationCacheOptions>()?.UsesFusionCache(ApplicationCacheDomain.Costs) == true)
         {
             using var scope = provider.CreateScope();
             var costs = scope.ServiceProvider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IModelCostService>();
@@ -295,7 +268,7 @@ public sealed class DistributedDiscoveryCacheTests
         var service = provider.GetRequiredService<IDiscoveryCacheService>();
         foreach (var variant in Variants)
         {
-            var result = await service.GetOrLoadAsync(ConduitLLM.Core.Services.DiscoveryCacheService.BuildCacheKey(variant.Capability, variant.Key, variant.Pricing),
+            var result = await service.GetOrLoadAsync(ConduitLLM.Core.Caching.DiscoveryCacheKeys.Build(variant.Capability, variant.Key, variant.Pricing),
                 token => DiscoveryCacheLoader.LoadAsync(factory, variant.Capability, variant.Pricing, GatewayJsonOptions.Create(), NullLogger.Instance, token));
             if (result.Data.Count != 1) return false;
             if (variant.Pricing)

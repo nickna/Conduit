@@ -20,7 +20,7 @@ internal static class FunctionDomainProbe
         using var host = DiscoveryDomainProbe.Host(redis, environment);
         var cache = new FusionFunctionDiscoveryCacheService(host.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey),
             host.GetRequiredService<ApplicationCacheOptions>(), host.GetRequiredService<ApplicationCacheGeneration>(),
-            null!, new EnabledSetting(), Options.Create(new CacheManagerOptions()), NullLogger<FusionFunctionDiscoveryCacheService>.Instance);
+            new EnabledSetting(),  NullLogger<FusionFunctionDiscoveryCacheService>.Instance);
         Task<FunctionDiscoveryLoad> Load(CancellationToken _) => Task.FromResult(new FunctionDiscoveryLoad(
             [new Tool { Function = new FunctionDefinition { Name = "mcp__search", Parameters = JsonNode.Parse("""{"type":"object","required":["query"]}""")!.AsObject() } }], 2));
         if (mode == "functions-read")

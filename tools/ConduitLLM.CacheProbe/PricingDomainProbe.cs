@@ -15,7 +15,7 @@ internal static class PricingDomainProbe
 {
     internal static FusionModelCostService Service(ServiceProvider host, IModelCostService inner) => new(inner,
         host.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey), host.GetRequiredService<ApplicationCacheOptions>(),
-        host.GetRequiredService<ApplicationCacheGeneration>(), TimeProvider.System, Options.Create(new CacheManagerOptions()),
+        host.GetRequiredService<ApplicationCacheGeneration>(), TimeProvider.System,
         NullLogger<FusionModelCostService>.Instance);
     public static async Task RunAsync(string mode, string? redis)
     {
@@ -24,10 +24,10 @@ internal static class PricingDomainProbe
         var fusion = host.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey);
         var options = host.GetRequiredService<ApplicationCacheOptions>();
         var generation = host.GetRequiredService<ApplicationCacheGeneration>();
-        var policy = Options.Create(new CacheManagerOptions());
-        var rules = new FusionPricingRulesService(fusion, options, generation, policy, NullLogger<FusionPricingRulesService>.Instance);
+
+        var rules = new FusionPricingRulesService(fusion, options, generation, NullLogger<FusionPricingRulesService>.Instance);
         var inner = new FixtureCostService();
-        var costs = new FusionModelCostService(inner, fusion, options, generation, TimeProvider.System, policy,
+        var costs = new FusionModelCostService(inner, fusion, options, generation, TimeProvider.System,
             NullLogger<FusionModelCostService>.Instance, rules: rules);
         const string json = """{"defaultRate":0.25,"rules":[{"rate":0.5,"conditions":{"resolution":"1024x1024"}}]}""";
         if (mode == "pricing-read")

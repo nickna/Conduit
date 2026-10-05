@@ -21,9 +21,3 @@ public sealed class ModelMappingCacheInvalidator(
         { ApplicationCacheMetrics.InvalidationFailed(domain); throw new ApplicationCacheInvalidationException(domain, ex); }
     }
 }
-
-// Rollout-only adapter; removed with the legacy selection in FC-8.
-internal sealed class LegacyMappingCacheInvalidator(ICacheManager cache) : IModelMappingCacheInvalidator
-{
-    public Task InvalidateAsync(CancellationToken cancellationToken = default) => cache.ClearRegionAsync(CacheRegion.ModelMetadata, cancellationToken);
-}

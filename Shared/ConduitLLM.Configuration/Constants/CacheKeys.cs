@@ -86,7 +86,7 @@ public static class CacheKeys
 
     /// <summary>
     /// Cache keys for parsed pricing rules configurations.
-    /// Used by CachedPricingRulesService for deserialized PricingRulesConfig caching.
+    /// Used by FusionPricingRulesService for deserialized PricingRulesConfig caching.
     /// </summary>
     public static class PricingRules
     {
@@ -283,7 +283,7 @@ public static class CacheKeys
 
     /// <summary>
     /// Cache keys for model-to-provider mapping lookups.
-    /// Used by CachedModelProviderMappingService and ModelMappingCacheInvalidationHandler.
+    /// Used by FusionModelProviderMappingService and ModelMappingCacheInvalidationHandler.
     /// </summary>
     public static class ModelMapping
     {

@@ -27,11 +27,10 @@ public sealed class FusionPricingCacheTests
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         { ["ApplicationCache:Environment"] = environment ?? $"test-{Guid.NewGuid():N}",
-            ["CacheManager:RegionConfigs:ModelCosts:Enabled"] = enabled.ToString(),
-            ["CacheManager:RegionConfigs:PricingRules:Enabled"] = enabled.ToString() }).Build();
+            ["ApplicationCache:Domains:Costs:Enabled"] = enabled.ToString(),
+            ["ApplicationCache:Domains:PricingRules:Enabled"] = enabled.ToString() }).Build();
         var services = new ServiceCollection().AddLogging();
         services.AddSingleton<TimeProvider>(clock ?? new Clock());
-        services.Configure<CacheManagerOptions>(configuration.GetSection("CacheManager"));
         services.AddConduitApplicationCache(configuration, "test", redis ?? "");
         services.AddSingleton<ICachedPricingRulesService, FusionPricingRulesService>();
         services.AddScoped<IModelCostService>(provider => ActivatorUtilities.CreateInstance<FusionModelCostService>(provider, inner));

@@ -149,6 +149,15 @@ public sealed class DiscoveryEndpointsCacheShapeTests : IDisposable
 
         public int Hits { get; private set; }
 
+        public async Task<DiscoveryModelsResult> GetOrLoadAsync(string cacheKey,
+            Func<CancellationToken, Task<DiscoveryModelsResult>> load, CancellationToken cancellationToken = default)
+        {
+            var cached = await GetDiscoveryResultsAsync(cacheKey, cancellationToken);
+            if (cached is not null) return cached;
+            var value = await load(cancellationToken); await SetDiscoveryResultsAsync(cacheKey, value, cancellationToken);
+            return value;
+        }
+
         public Task<DiscoveryModelsResult?> GetDiscoveryResultsAsync(
             string cacheKey, CancellationToken cancellationToken = default)
         {

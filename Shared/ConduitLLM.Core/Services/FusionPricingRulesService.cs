@@ -8,7 +8,6 @@ using ConduitLLM.Core.Models.Pricing;
 using ConduitLLM.Core.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using ZiggyCreatures.Caching.Fusion;
 
@@ -26,14 +25,12 @@ public sealed class FusionPricingRulesService : ICachedPricingRulesService
     private static readonly CorePricingJsonContext JsonContext = new(new JsonSerializerOptions
     { PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     public FusionPricingRulesService([FromKeyedServices(ApplicationCacheOptions.ServiceKey)] IFusionCache cache,
-        ApplicationCacheOptions options, ApplicationCacheGeneration generation, IOptions<CacheManagerOptions> legacyOptions,
+        ApplicationCacheOptions options, ApplicationCacheGeneration generation,
         ILogger<FusionPricingRulesService> logger)
     {
         _cache = cache; _generation = generation; _logger = logger;
-        var region = legacyOptions.Value.RegionConfigs?.GetValueOrDefault(CacheRegion.PricingRules);
-        _enabled = region?.Enabled ?? true;
-        var duration = region?.DefaultTTL ?? TimeSpan.FromMinutes(15);
-        if (region?.MaxTTL is { } maximum && duration > maximum) duration = maximum;
+        _enabled = options.PricingRules.Enabled;
+        var duration = options.Limit(Domain, options.PricingRules.Duration ?? TimeSpan.FromMinutes(15));
         _entry = options.Entry(duration);
         _entry.Duration = TimeSpan.FromMilliseconds(100) < _entry.Duration ? TimeSpan.FromMilliseconds(100) : _entry.Duration;
         _entry.EnableAutoClone = false;

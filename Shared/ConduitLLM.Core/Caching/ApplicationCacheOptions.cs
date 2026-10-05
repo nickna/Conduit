@@ -3,8 +3,14 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace ConduitLLM.Core.Caching;
 
-public enum ApplicationCacheImplementation { Legacy, FusionCache }
 public enum ApplicationCacheDomain { Discovery, Functions, Mappings, Costs, PricingRules }
+
+public sealed class ApplicationCachePolicy
+{
+    public bool Enabled { get; init; } = true;
+    public TimeSpan? Duration { get; init; }
+    public TimeSpan? MaximumDuration { get; init; }
+}
 
 /// <summary>Explicit application cache policies; independent of auth, tasks and other Redis stores.</summary>
 public sealed class ApplicationCacheOptions
@@ -15,13 +21,13 @@ public sealed class ApplicationCacheOptions
     public TimeSpan LocalDuration { get; init; } = TimeSpan.FromSeconds(5);
     public TimeSpan DistributedReadTimeout { get; init; } = TimeSpan.FromMilliseconds(250);
     public TimeSpan MaximumDuration { get; init; } = TimeSpan.FromDays(7);
-    public ApplicationCacheImplementation Discovery { get; init; }
-    public ApplicationCacheImplementation Functions { get; init; }
-    public ApplicationCacheImplementation Mappings { get; init; }
-    public ApplicationCacheImplementation Costs { get; init; }
-    public ApplicationCacheImplementation PricingRules { get; init; }
+    public ApplicationCachePolicy Discovery { get; init; } = new();
+    public ApplicationCachePolicy Functions { get; init; } = new();
+    public ApplicationCachePolicy Mappings { get; init; } = new();
+    public ApplicationCachePolicy Costs { get; init; } = new();
+    public ApplicationCachePolicy PricingRules { get; init; } = new();
 
-    public bool UsesFusionCache(ApplicationCacheDomain domain) => (domain switch
+    public ApplicationCachePolicy Policy(ApplicationCacheDomain domain) => domain switch
     {
         ApplicationCacheDomain.Discovery => Discovery,
         ApplicationCacheDomain.Functions => Functions,
@@ -29,7 +35,9 @@ public sealed class ApplicationCacheOptions
         ApplicationCacheDomain.Costs => Costs,
         ApplicationCacheDomain.PricingRules => PricingRules,
         _ => throw new ArgumentOutOfRangeException(nameof(domain))
-    }) == ApplicationCacheImplementation.FusionCache;
+    };
+
+    public TimeSpan Limit(ApplicationCacheDomain domain, TimeSpan duration) => Policy(domain).MaximumDuration is { } maximum && maximum < duration ? maximum : duration;
 
     public static string Tag(ApplicationCacheDomain domain) => domain switch
     {
@@ -88,6 +96,8 @@ public sealed class ApplicationCacheOptions
     internal static ApplicationCacheOptions Read(IConfiguration configuration, string hostEnvironment)
     {
         var section = configuration.GetSection("ApplicationCache");
+        if (configuration.GetSection("CacheManager").Exists() || section.GetSection("Implementations").Exists())
+            throw new InvalidOperationException("Legacy CacheManager/implementation selectors were retired. Move domain policy to ApplicationCache:Domains before starting this version.");
         var environment = (section["Environment"] ?? hostEnvironment).ToLowerInvariant();
         if (environment.Length is < 1 or > 64 || environment.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not '-' and not '_'))
             throw new InvalidOperationException("ApplicationCache:Environment must have 1–64 ASCII letters, digits, hyphens or underscores.");
@@ -97,19 +107,29 @@ public sealed class ApplicationCacheOptions
             LocalDuration = section.GetValue("LocalDuration", TimeSpan.FromSeconds(5)),
             DistributedReadTimeout = section.GetValue("DistributedReadTimeout", TimeSpan.FromMilliseconds(250)),
             MaximumDuration = section.GetValue("MaximumDuration", TimeSpan.FromDays(7)),
-            Discovery = section.GetValue<ApplicationCacheImplementation>("Implementations:Discovery"),
-            Functions = section.GetValue<ApplicationCacheImplementation>("Implementations:Functions"),
-            Mappings = section.GetValue<ApplicationCacheImplementation>("Implementations:Mappings"),
-            Costs = section.GetValue<ApplicationCacheImplementation>("Implementations:Costs"),
-            PricingRules = section.GetValue<ApplicationCacheImplementation>("Implementations:PricingRules")
+            Discovery = ReadPolicy(section, "Discovery"), Functions = ReadPolicy(section, "Functions"),
+            Mappings = ReadPolicy(section, "Mappings"), Costs = ReadPolicy(section, "Costs"),
+            PricingRules = ReadPolicy(section, "PricingRules")
         };
         if (result.LocalDuration <= TimeSpan.Zero || result.LocalDuration > TimeSpan.FromSeconds(5) ||
             result.DistributedReadTimeout <= TimeSpan.Zero || result.DistributedReadTimeout > TimeSpan.FromSeconds(1) ||
             result.MaximumDuration < TimeSpan.FromHours(12) || result.MaximumDuration > TimeSpan.FromDays(30))
             throw new InvalidOperationException("Application cache L1 duration must be >0 and <=5s, read timeout >0 and <=1s, and maximum L2 duration 12h–30d.");
-        if (!Enum.IsDefined(result.Discovery) || !Enum.IsDefined(result.Functions) || !Enum.IsDefined(result.Mappings) ||
-            !Enum.IsDefined(result.Costs) || !Enum.IsDefined(result.PricingRules))
-            throw new InvalidOperationException("Application cache implementation must be Legacy or FusionCache.");
+        foreach (var domain in Enum.GetValues<ApplicationCacheDomain>())
+        {
+            var policy = result.Policy(domain);
+            if (policy.Duration <= TimeSpan.Zero || policy.Duration > result.MaximumDuration ||
+                policy.MaximumDuration <= TimeSpan.Zero || policy.MaximumDuration > result.MaximumDuration)
+                throw new InvalidOperationException("Domain durations must be positive and within ApplicationCache:MaximumDuration.");
+        }
+        if (result.Functions.Duration.HasValue)
+            throw new InvalidOperationException("Functions TTL comes from participating configurations/explicit overrides. Configure only its MaximumDuration cap.");
         return result;
+    }
+    private static ApplicationCachePolicy ReadPolicy(IConfiguration section, string domain)
+    {
+        var policy = section.GetSection($"Domains:{domain}");
+        return new() { Enabled = policy.GetValue("Enabled", true), Duration = policy.GetValue<TimeSpan?>("Duration"),
+            MaximumDuration = policy.GetValue<TimeSpan?>("MaximumDuration") };
     }
 }

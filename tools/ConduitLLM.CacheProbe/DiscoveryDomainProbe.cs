@@ -12,7 +12,6 @@ internal static class DiscoveryDomainProbe
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ApplicationCache:Environment"] = environment,
-            ["ApplicationCache:Implementations:Discovery"] = "FusionCache"
         }).Build();
         var services = new ServiceCollection().AddLogging();
         services.AddConduitApplicationCache(configuration, "probe", redis ?? "");
