@@ -174,6 +174,8 @@ jobs:
         env:
           TEST_REDIS_CONNECTION: localhost:6379
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
+          CONDUIT_CACHE_TEST_REDIS: localhost:6379
+          CONDUIT_CACHE_TEST_POSTGRES: Host=localhost;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
 
       - name: Admin media request-delegate generation guard
         shell: pwsh

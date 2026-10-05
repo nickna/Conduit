@@ -74,6 +74,8 @@ backplane delivery, duplicate events, current discovery/billing fallback and str
 It creates/removes only its uniquely named database; the fixture login must permit creation.
 Other cache suites cover late loaders, metadata loss, recovery publication races, mutable
 ownership, effective/expiry transitions, dependency routing and request cancellation.
+The CI validation job supplies these variables from its isolated service fixtures, so the
+distributed contracts run on pull requests instead of silently skipping.
 
 ## Archived rollout comparison
 
