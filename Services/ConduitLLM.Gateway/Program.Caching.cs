@@ -21,6 +21,7 @@ public partial class Program
 
         // Configure Redis connection for all Redis-dependent services
         var redisConnectionString = ConduitLLM.Configuration.Utilities.RedisUrlParser.ResolveConnectionString();
+        builder.Services.AddConduitApplicationCache(builder.Configuration, builder.Environment.EnvironmentName, redisConnectionString);
 
         // Configure CacheOptions with the parsed Redis connection string for cache services.
         builder.Services.Configure<ConduitLLM.Configuration.Options.CacheOptions>(options =>

@@ -27,6 +27,9 @@ The DB fixture creates schema and seeds one mapping if absent; it must be a dedi
 empty database. The probe never deletes a database or flushes Redis. Its default unique
 cache namespace expires naturally. INFO and MEMORY instrumentation is read-only.
 Connection strings are never printed. Omit PostgreSQL to run only Redis scenarios.
+Use `dotnet run --project tools/ConduitLLM.CacheProbe -c Release -- compose` to validate
+the production registered composition, generated serializer, telemetry, ownership and shared
+Admin/Gateway namespace instead of the standalone compatibility scenario.
 
 Publish and test the native cache/serialization path (EF baseline code is excluded):
 

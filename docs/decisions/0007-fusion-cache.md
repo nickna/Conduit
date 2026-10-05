@@ -1,6 +1,6 @@
 # FusionCache application caching (epic #1396)
 
-Status: FC-1 compatibility gate; production implementation remains legacy.
+Status: FC-1 completed in `1a6b6809`; FC-2 composition validated. Production implementation remains legacy.
 Baseline: `e8355b606a6b0885db8642d6bc41c5cd6b83760f`, refreshed against the checkout on 2026-10-04.
 Implementation branch: `codex/epic-1396-fusioncache`. FC-1 issue: #1397.
 
@@ -194,6 +194,15 @@ legacy workload; explain fixed tag/backplane overhead and connection count expli
 freshness is a hard gate independent of performance. Re-measure on matching hardware at FC-8.
 
 ## Retirement inventory and effort
+
+FC-2 evidence: 34 focused tests passed with Redis host composition enabled (zero skips),
+including scope-validated Gateway/Admin local and Redis graphs, legacy regressions,
+invalid policy rejection and observable Redis failures. The registered `compose` probe
+passed in JIT and published win-x64 NativeAOT, with both Redis and cache-local graphs;
+it checked shared namespaces, actual generated metadata, cloning, tag propagation and
+bounded telemetry. The repository analyzer ratchet passed with **0 first-party diagnostics**,
+without updating its baseline. Gateway's duplicate registry/manager registration was removed;
+the ordinary legacy manager remains the sole production selection at this gate.
 
 The four manager partials are **806 production lines** (303/167/149/187). Additional candidates:
 manager interface and embedded stats/events (259), registry (255), registry interface/contracts

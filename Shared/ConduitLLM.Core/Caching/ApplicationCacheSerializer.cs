@@ -3,12 +3,13 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using ZiggyCreatures.Caching.Fusion.Serialization;
 
-namespace ConduitLLM.CacheProbe;
+namespace ConduitLLM.Core.Caching;
 
-// The upstream SystemTextJson adapter calls the reflection-capable generic overloads,
-// producing IL2026/IL3050 even with a generated resolver. Use the metadata overloads.
-internal sealed class SourceGeneratedSerializer(JsonSerializerContext context) : IFusionCacheSerializer
+/// <summary>Serializes only generated contracts, including FusionCache envelopes and tag markers.</summary>
+public sealed class ApplicationCacheSerializer(JsonSerializerContext context) : IFusionCacheSerializer
 {
+    public ApplicationCacheSerializer() : this(ApplicationCacheJsonContext.Default) { }
+
     private JsonTypeInfo<T> Metadata<T>() => (JsonTypeInfo<T>)(context.GetTypeInfo(typeof(T))
         ?? throw new NotSupportedException($"Unregistered application cache contract: {typeof(T)}"));
 

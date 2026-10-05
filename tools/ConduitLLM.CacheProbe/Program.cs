@@ -7,6 +7,7 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Models.Pricing;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Core.Caching;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
@@ -22,7 +23,7 @@ if (JsonSerializer.IsReflectionEnabledByDefault)
 var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_PROBE_REDIS");
 var prefix = Environment.GetEnvironmentVariable("CONDUIT_CACHE_PROBE_PREFIX")
     ?? $"conduit:cache-probe:{Guid.NewGuid():N}:";
-var serializer = new SourceGeneratedSerializer(ProbeJsonContext.Default);
+var serializer = new ApplicationCacheSerializer(ProbeJsonContext.Default);
 
 FusionCacheEntryOptions EntryOptions() => new()
 {
@@ -92,6 +93,12 @@ var payload = new DiscoveryModelsResult
     CachedAt = DateTime.UtcNow,
     CapabilityFilter = "chat"
 };
+
+if (args is ["compose"])
+{
+    await CompositionProbe.RunAsync(redis, payload);
+    return;
+}
 
 if (args is ["write"] or ["read"])
 {
