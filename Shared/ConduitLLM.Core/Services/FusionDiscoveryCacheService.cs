@@ -15,6 +15,7 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
 {
     private const ApplicationCacheDomain Domain = ApplicationCacheDomain.Discovery;
     private readonly IFusionCache _cache;
+    private readonly ApplicationCacheGeneration _generation;
     private readonly FusionCacheEntryOptions _entry;
     private readonly ILogger<FusionDiscoveryCacheService> _logger;
     private readonly bool _enabled;
@@ -24,10 +25,12 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
     public FusionDiscoveryCacheService(
         [FromKeyedServices(ApplicationCacheOptions.ServiceKey)] IFusionCache cache,
         ApplicationCacheOptions applicationOptions,
+        ApplicationCacheGeneration generation,
         IOptions<DiscoveryCacheOptions> options, IOptions<CacheManagerOptions> legacyOptions,
         ILogger<FusionDiscoveryCacheService> logger)
     {
         _cache = cache;
+        _generation = generation;
         _logger = logger;
         CacheRegionConfig? region = null;
         legacyOptions.Value.RegionConfigs?.TryGetValue(CacheRegion.ModelDiscovery, out region);
@@ -40,7 +43,8 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
         _entry.EnableAutoClone = false;
     }
 
-    private static string Key(string key) => $"discovery:{key}";
+    private async ValueTask<string> KeyAsync(string key, CancellationToken token) =>
+        $"discovery:{await _generation.GetAsync(Domain, token)}:{key}";
     private static DiscoveryModelsResult Copy(DiscoveryModelsResult value, bool detach = false) => new()
     {
         Count = value.Count, CapabilityFilter = value.CapabilityFilter,
@@ -49,7 +53,7 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
     };
 
     private static bool CacheFailure(Exception exception) => exception is RedisException or JsonException
-        or FusionCacheDistributedCacheException or FusionCacheSerializationException or FusionCacheBackplaneException;
+        or TimeoutException or FusionCacheDistributedCacheException or FusionCacheSerializationException or FusionCacheBackplaneException;
 
     public async Task<DiscoveryModelsResult> GetOrLoadAsync(string cacheKey,
         Func<CancellationToken, Task<DiscoveryModelsResult>> load, CancellationToken cancellationToken = default)
@@ -64,7 +68,8 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
         var factoryFailed = false;
         try
         {
-            var result = await _cache.GetOrSetAsync<DiscoveryModelsResult>(Key(cacheKey), async (_, token) =>
+            var key = await KeyAsync(cacheKey, cancellationToken);
+            var result = await _cache.GetOrSetAsync<DiscoveryModelsResult>(key, async (_, token) =>
             {
                 try { loaded = await load(token); }
                 catch { factoryFailed = true; throw; }
@@ -90,7 +95,8 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
         if (!_enabled) return null;
         try
         {
-            var result = await _cache.TryGetAsync<DiscoveryModelsResult>(Key(cacheKey), _entry, cancellationToken);
+            var key = await KeyAsync(cacheKey, cancellationToken);
+            var result = await _cache.TryGetAsync<DiscoveryModelsResult>(key, _entry, cancellationToken);
             if (result.HasValue) Interlocked.Increment(ref _hits);
             else Interlocked.Increment(ref _misses);
             return result.HasValue ? Copy(result.Value) : null;
@@ -110,7 +116,8 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
         if (!_enabled) return;
         try
         {
-            await _cache.SetAsync(Key(cacheKey), Copy(results, detach: true), _entry, [ApplicationCacheOptions.Tag(Domain)], cancellationToken);
+            var key = await KeyAsync(cacheKey, cancellationToken);
+            await _cache.SetAsync(key, Copy(results, detach: true), _entry, [ApplicationCacheOptions.Tag(Domain)], cancellationToken);
         }
         catch (Exception exception) when (CacheFailure(exception))
         {
@@ -123,14 +130,15 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
         try
         {
             // Invalidation remains active when reads are disabled, and failures reach durable message retry.
+            await _generation.InvalidateAsync(Domain, cancellationToken);
             await _cache.RemoveByTagAsync(ApplicationCacheOptions.Tag(Domain), token: cancellationToken);
             Interlocked.Increment(ref _invalidations);
             Interlocked.Exchange(ref _lastInvalidationTicks, DateTime.UtcNow.Ticks);
         }
-        catch
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             ApplicationCacheMetrics.InvalidationFailed(Domain);
-            throw;
+            throw new ApplicationCacheInvalidationException(Domain, exception);
         }
     }
 

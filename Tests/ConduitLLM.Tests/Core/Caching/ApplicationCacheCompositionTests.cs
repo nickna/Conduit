@@ -71,6 +71,7 @@ public class ApplicationCacheCompositionTests
     [InlineData("Environment", "bad:namespace")]
     [InlineData("LocalDuration", "00:00:06")]
     [InlineData("MaximumDuration", "00:01:00")]
+    [InlineData("DistributedReadTimeout", "00:00:02")]
     [InlineData("Implementations:Costs", "999")]
     public void InvalidPoliciesFailBeforeCacheResolution(string key, string value)
     {
@@ -93,7 +94,8 @@ public class ApplicationCacheCompositionTests
     public async Task RedisFailure_IsVisibleAndDistinctFromBusinessLoadFailure()
     {
         using var adapter = new ApplicationRedisCache("127.0.0.1:1,abortConnect=false,connectTimeout=100,asyncTimeout=100,syncTimeout=100,connectRetry=0");
-        await Assert.ThrowsAnyAsync<RedisException>(() => adapter.GetAsync("discovery:unavailable").WaitAsync(TimeSpan.FromSeconds(5)));
+        var failure = await Record.ExceptionAsync(() => adapter.GetAsync("discovery:unavailable").WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.True(failure is RedisException or TimeoutException);
         using var output = new MemoryStream();
         await Prometheus.Metrics.DefaultRegistry.CollectAndExportAsTextAsync(output);
         var metrics = Encoding.UTF8.GetString(output.ToArray());

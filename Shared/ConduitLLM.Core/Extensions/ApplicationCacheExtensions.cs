@@ -20,9 +20,11 @@ public static class ApplicationCacheExtensions
         var redis = redisConnectionString ?? RedisUrlParser.ResolveConnectionString();
         services.TryAddSingleton(options);
         services.TryAddSingleton<ApplicationCacheSerializer>();
+        services.TryAddSingleton(provider => new ApplicationCacheGeneration(
+            provider.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey), options, redis));
         if (!string.IsNullOrWhiteSpace(redis))
             services.TryAddKeyedSingleton<IDistributedCache>(ApplicationCacheOptions.ServiceKey,
-                (_, _) => new ApplicationRedisCache(redis));
+                (_, _) => new ApplicationRedisCache(redis, options.DistributedReadTimeout));
 
         services.TryAddKeyedSingleton<IFusionCache>(ApplicationCacheOptions.ServiceKey, (provider, _) =>
         {

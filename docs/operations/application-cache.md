@@ -10,7 +10,7 @@ keep their existing registration and namespaces.
 
 Both Gateway and Admin use the existing `RedisUrlParser` resolver (`REDIS_URL`, then
 `CONDUIT_REDIS_CONNECTION_STRING`). They independently own a dedicated application
-RedisCache connection and Redis backplane connection. Neither is the host's shared
+RedisCache connection, Redis backplane connection and lazy generation-metadata connection. None is the host's shared
 IConnectionMultiplexer. DI disposes the RedisCache; FusionCache unsubscribes and disposes
 its backplane and dedicated L1. The application store is a keyed IDistributedCache and
 does not replace the normal host-wide IDistributedCache.
@@ -20,6 +20,7 @@ does not replace the normal host-wide IDistributedCache.
   "ApplicationCache": {
     "Environment": "production",
     "LocalDuration": "00:00:05",
+    "DistributedReadTimeout": "00:00:00.250",
     "MaximumDuration": "7.00:00:00",
     "Implementations": {
       "Discovery": "Legacy",
@@ -43,8 +44,8 @@ remains its L2 lifetime; L1 uses the smaller TTL/LocalDuration, and L2 promotion
 remaining logical lifetime. MaximumDuration must be between 12 hours and 30 days.
 Domain writes with a longer duration fail validation; tag markers live MaximumDuration
 plus one day so obsolete payloads cannot outlive their invalidation markers. Tag markers
-use a one-second L1 duration. Short local lifetimes alone are not a complete outage/race
-policy; FC-4 must prove bypass, fencing and rollback before broad cutover.
+use a one-second L1 duration. DistributedReadTimeout must be positive and at most one second;
+it bounds storage/metadata reads, never detaches a write or required invalidation.
 
 Legacy/FusionCache selections are per-process startup settings; they are temporary rollout
 controls. Change them only at the domain's documented gate, and exercise the FC-4
@@ -119,6 +120,36 @@ failures allow current database results to serve; business loader failures and c
 propagate. A successful load followed by a failed cache write runs the loader only once.
 Required invalidations propagate failures for durable retry.
 
-Do not enable broad production cutover before the FC-4 topology, race and rollback gate.
-The discovery pilot alone does not prove that an in-flight older factory cannot publish
-after a mutation, or that serving legacy instances converge on a rollout flag switch.
+## Distributed recovery and rollback
+
+Each domain has one persistent random generation key under the application prefix. Payload
+factories capture it before loading; invalidation replaces it before expiring tags. Clock skew
+and late factories therefore cannot place an old result in the current generation. Missing
+metadata initializes a new generation atomically. Do not assign a TTL to generation keys.
+Discovery/functions refresh their local generation within one second; mappings/costs/rules
+use 100 milliseconds and require the stricter domain tests before rollout.
+
+Discovery convergence was tested within two seconds **after successful event processing**,
+including lost backplane delivery. This excludes database/transport outage duration and queue
+latency. Detected Redis disconnection serves current DB results; a factory already running
+may return its earlier snapshot to that request. Recovery alone does not certify freshness:
+wait for pending invalidations to succeed. Required invalidation failures throw
+ApplicationCacheInvalidationException and use persisted Wolverine retries at 1/5/30 seconds
+indefinitely. Monitor retry backlog and invalidate-domain errors during recovery.
+
+Before a rollback, disable discovery caching on every serving legacy process, including both
+Gateway and Admin graphs that serve the domain. Drain pending durable invalidations, clear
+the complete legacy ModelDiscovery region on every such instance (or replace those processes
+while reads remain disabled and remove only their verified old application domain keys), then
+enable the legacy selection. Cover every legacy instance and the full old domain namespace;
+partial sampled-key cleanup or a selector switch alone can resurrect stale old-prefix values.
+Other shared Redis stores must remain intact. The fixture proves this procedure on its complete
+known keyspace; operators must inventory the actual deployment's processes/prefixes.
+
+Reproduce FC-4 against isolated fixtures by setting CONDUIT_CACHE_TEST_REDIS and
+CONDUIT_CACHE_TEST_POSTGRES, then running DistributedDiscoveryCacheTests and
+FusionDiscoveryCacheTests. The former creates and removes its own uniquely named database;
+the PostgreSQL fixture login must permit database creation. It starts Admin and two independent
+Gateway hosts using the real persisted transport, interrupts only their proxy connections,
+restarts both gateways with a scheduled retry pending, and verifies the original message ID.
+This is integration evidence, not a production rollout or a claim of linearizable coordination.

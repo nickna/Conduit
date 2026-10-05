@@ -34,7 +34,7 @@ namespace ConduitLLM.Gateway.EventHandlers
                 message.RequestedBy);
 
             // Invalidate all discovery cache entries
-            await _discoveryCacheService.InvalidateAllDiscoveryAsync();
+            await _discoveryCacheService.InvalidateAllDiscoveryAsync(context.CancellationToken);
 
             _logger.LogInformation(
                 "Successfully invalidated all discovery cache entries. Reason: {Reason}",

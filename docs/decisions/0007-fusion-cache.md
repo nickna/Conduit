@@ -1,6 +1,6 @@
 # FusionCache application caching (epic #1396)
 
-Status: FC-1 completed in `1a6b6809`; FC-2 composition validated. Production implementation remains legacy.
+Status: FC-1 through FC-4 validated; discovery remains opt-in until deployment review.
 Baseline: `e8355b606a6b0885db8642d6bc41c5cd6b83760f`, refreshed against the checkout on 2026-10-04.
 Implementation branch: `codex/epic-1396-fusioncache`. FC-1 issue: #1397.
 
@@ -97,8 +97,9 @@ EF/compiled-model linker diagnostics remain visible in the probe log, without ad
 to production or changing the service warning baselines.
 
 FusionCache's Redis backplane and Microsoft's RedisCache **both dispose factory-supplied
-multiplexers**. Give each its own dedicated owned connection (two multiplexers per host for
-one named application cache) rather than handing them the host auth/spending/task connection.
+multiplexers**. Give each its own dedicated owned connection rather than handing them the
+host auth/spending/task connection. FC-4 adds a third, lazily owned metadata connection for
+clock-independent generation tokens; all three are isolated from other host stores.
 Use the common RedisUrlParser result. Register the application RedisCache only inside the
 FusionCache composition, not as the host-wide IDistributedCache. Existing Gateway
 `conduit-tasks:` and Admin `conduit:` consumers retain their composition/prefixes.
@@ -126,9 +127,43 @@ reconciliation/bypass during disconnection must be decided and exercised in FC-4
 need stricter freshness than discovery. Existing durable Wolverine events remain authoritative.
 Backplane messages and local factory locks are neither business locks nor exactly-once delivery.
 
-FC-4 must prove an in-flight result cannot republish old data after invalidation, missed messages,
-disconnect/reconnect, duplicates, mixed implementations, and rollback. Tags alone have not yet
-proved that race. Keep broad cutover off until a minimal fencing strategy passes those tests.
+FC-4 found a reproducible tag-only failure: a payload written by a node whose clock is 30 seconds
+ahead survived invalidation and restart. Payload keys now include one persistent random generation
+per domain. Capture that generation before running a factory; invalidation atomically replaces it
+before expiring the tag. An old factory can finish for its original caller but cannot publish into
+the current namespace. Atomic SET NX initialization preserves concurrent invalidations. Lost generation
+metadata creates a new namespace instead of resurrecting old payloads. There are at most five
+persistent metadata keys, without payload-key tracking or Redis scans. Discovery/functions cache
+generation reads locally for one second; routing/billing/rules will use 100 milliseconds and require
+their own outage-reconciliation tests before selection.
+
+The registered domain tests use a dedicated PostgreSQL database, actual Admin cost mutation,
+Admin plus two independent Gateway IHost/cache graphs, and the existing persisted Wolverine
+transport. A TCP proxy interrupts only fixture Redis connections. A required invalidation failure
+is observed in Wolverine's scheduled-message table; both Gateway hosts are disposed and restarted,
+and the same message ID retries successfully after reconnection. ApplicationCacheInvalidationException
+uses indefinite persisted retries with 1/5/30-second delays; this is idempotent domain expiration,
+not a retry policy for business mutations. Default transport polling adds delivery latency.
+
+After successful event processing, all five pilot variants converge within the tested two-second
+bound, including a disconnected backplane. Detected Redis disconnection bypasses discovery cache;
+reads are bounded by DistributedReadTimeout (250ms default, <=1s), including initialization.
+During recovery, failed invalidations must be retried before freshness is claimed. A connection
+recovery alone is not reconciliation. In-flight requests may return their earlier snapshot, and
+no linearizability or exactly-once delivery is claimed. Cache-local mode has process-local generations.
+
+Mixed-version rollback was exercised: old-prefix legacy payloads remain stale after Fusion-only
+invalidation. Disable discovery reads on **every** legacy process, serve current DB results,
+clear each legacy process's complete application domain, then re-enable only after queued changes
+are processed. Switching only the selector is unsafe; never flush shared Redis. FC-8 must exercise
+and record this procedure before compatibility retirement.
+
+FC-4 evidence: **79 focused tests passed, zero skipped**, including deterministic late-factory
+barriers, future-dated payloads, atomic generation initialization, generation-metadata loss,
+durable retry across host restarts, duplicate delivery, missed backplane, actual Redis network
+interruption and mixed-version rollback. The analyzer ratchet passed with **0 first-party diagnostics**.
+The published win-x64 NativeAOT domain probe also passed local/Redis factory checks and separate
+write/read processes with generation metadata and persistent invalidation, without new cache linker diagnostics.
 
 ## Compatibility and baseline evidence
 

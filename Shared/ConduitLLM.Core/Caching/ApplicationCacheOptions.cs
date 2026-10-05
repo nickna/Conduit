@@ -13,6 +13,7 @@ public sealed class ApplicationCacheOptions
     public string Environment { get; init; } = "development";
     public string Prefix => $"conduit:app-cache:{Environment}:v1:";
     public TimeSpan LocalDuration { get; init; } = TimeSpan.FromSeconds(5);
+    public TimeSpan DistributedReadTimeout { get; init; } = TimeSpan.FromMilliseconds(250);
     public TimeSpan MaximumDuration { get; init; } = TimeSpan.FromDays(7);
     public ApplicationCacheImplementation Discovery { get; init; }
     public ApplicationCacheImplementation Functions { get; init; }
@@ -94,6 +95,7 @@ public sealed class ApplicationCacheOptions
         {
             Environment = environment,
             LocalDuration = section.GetValue("LocalDuration", TimeSpan.FromSeconds(5)),
+            DistributedReadTimeout = section.GetValue("DistributedReadTimeout", TimeSpan.FromMilliseconds(250)),
             MaximumDuration = section.GetValue("MaximumDuration", TimeSpan.FromDays(7)),
             Discovery = section.GetValue<ApplicationCacheImplementation>("Implementations:Discovery"),
             Functions = section.GetValue<ApplicationCacheImplementation>("Implementations:Functions"),
@@ -102,8 +104,9 @@ public sealed class ApplicationCacheOptions
             PricingRules = section.GetValue<ApplicationCacheImplementation>("Implementations:PricingRules")
         };
         if (result.LocalDuration <= TimeSpan.Zero || result.LocalDuration > TimeSpan.FromSeconds(5) ||
+            result.DistributedReadTimeout <= TimeSpan.Zero || result.DistributedReadTimeout > TimeSpan.FromSeconds(1) ||
             result.MaximumDuration < TimeSpan.FromHours(12) || result.MaximumDuration > TimeSpan.FromDays(30))
-            throw new InvalidOperationException("Application cache L1 duration must be >0 and <=5s, and maximum L2 duration must be 12h–30d.");
+            throw new InvalidOperationException("Application cache L1 duration must be >0 and <=5s, read timeout >0 and <=1s, and maximum L2 duration 12h–30d.");
         if (!Enum.IsDefined(result.Discovery) || !Enum.IsDefined(result.Functions) || !Enum.IsDefined(result.Mappings) ||
             !Enum.IsDefined(result.Costs) || !Enum.IsDefined(result.PricingRules))
             throw new InvalidOperationException("Application cache implementation must be Legacy or FusionCache.");

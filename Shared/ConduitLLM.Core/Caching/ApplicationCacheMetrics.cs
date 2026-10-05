@@ -30,7 +30,11 @@ public static class ApplicationCacheMetrics
         cache.Events.Hit += (_, args) => Operations.WithLabels(Domain(args.Key, prefix), "read", "hit").Inc();
         cache.Events.Miss += (_, args) => Operations.WithLabels(Domain(args.Key, prefix), "read", "miss").Inc();
         cache.Events.FactorySuccess += (_, args) => Operations.WithLabels(Domain(args.Key, prefix), "load", "success").Inc();
-        cache.Events.FactoryError += (_, args) => Operations.WithLabels(Domain(args.Key, prefix), "load", "business_error").Inc();
+        cache.Events.FactoryError += (_, args) =>
+        {
+            var domain = Domain(args.Key, prefix);
+            Operations.WithLabels(domain, "load", domain == "internal" ? "metadata_error" : "business_error").Inc();
+        };
         cache.Events.RemoveByTag += (_, args) => Operations.WithLabels(Domain(args.Tag, ""), "invalidate", "success").Inc();
         cache.Events.Distributed.SerializationError += (_, args) => Operations.WithLabels(Domain(args.Key, prefix), "serialize", "error").Inc();
         cache.Events.Distributed.DeserializationError += (_, args) => Operations.WithLabels(Domain(args.Key, prefix), "deserialize", "error").Inc();

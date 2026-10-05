@@ -5,9 +5,10 @@ using Microsoft.Extensions.Options;
 namespace ConduitLLM.Core.Caching;
 
 // Storage adapter only: records Redis errors without swallowing them or owning cache policy.
-internal sealed class ApplicationRedisCache(string connectionString) : IDistributedCache, IDisposable
+internal sealed class ApplicationRedisCache(string connectionString, TimeSpan? readTimeout = null) : IDistributedCache, IDisposable
 {
     private readonly RedisCache _inner = new(Microsoft.Extensions.Options.Options.Create(new RedisCacheOptions { Configuration = connectionString }));
+    private readonly TimeSpan _readTimeout = readTimeout ?? TimeSpan.FromMilliseconds(250);
 
     private static T Observe<T>(Func<T> operation, string name)
     {
@@ -30,8 +31,12 @@ internal sealed class ApplicationRedisCache(string connectionString) : IDistribu
     }
 
     private static Task ObserveAsync(Func<Task> operation, string name) => ObserveAsync(async () => { await operation().ConfigureAwait(false); return true; }, name);
-    public byte[]? Get(string key) => Observe(() => _inner.Get(key), "redis_read");
-    public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => ObserveAsync(() => _inner.GetAsync(key, token), "redis_read");
+    // Return a real storage timeout. FusionCache's synthetic read timeout can fall through to
+    // the default tag factory (zero), which must not conceal a lost invalidation during an outage.
+    // A late network read has no payload/cache side effects; its result is discarded.
+    public byte[]? Get(string key) => Observe(() => _inner.GetAsync(key).WaitAsync(_readTimeout).GetAwaiter().GetResult(), "redis_read");
+    public Task<byte[]?> GetAsync(string key, CancellationToken token = default) =>
+        ObserveAsync(() => _inner.GetAsync(key, token).WaitAsync(_readTimeout, token), "redis_read");
     public void Set(string key, byte[] value, DistributedCacheEntryOptions options) => Observe(() => { _inner.Set(key, value, options); return true; }, "redis_write");
     public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default) => ObserveAsync(() => _inner.SetAsync(key, value, options, token), "redis_write");
     public void Remove(string key) => Observe(() => { _inner.Remove(key); return true; }, "redis_remove");

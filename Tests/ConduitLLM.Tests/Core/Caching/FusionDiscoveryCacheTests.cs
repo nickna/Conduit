@@ -12,6 +12,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using StackExchange.Redis;
 using ZiggyCreatures.Caching.Fusion;
+using ZiggyCreatures.Caching.Fusion.Internals.Distributed;
 
 namespace ConduitLLM.Tests.Core.Caching;
 
@@ -127,14 +128,17 @@ public sealed class FusionDiscoveryCacheTests
         var serializer = new ApplicationCacheSerializer();
         using var cache = new FusionCache(options.FusionOptions());
         cache.SetupDistributedCache(storage.Object, serializer);
-        var service = new FusionDiscoveryCacheService(cache, options,
+        using var generation = new ApplicationCacheGeneration(cache, options, null);
+        var service = new FusionDiscoveryCacheService(cache, options, generation,
             Options.Create(new DiscoveryCacheOptions()), Options.Create(new CacheManagerOptions()),
             NullLogger<FusionDiscoveryCacheService>.Instance);
         var loads = 0;
         var result = await service.GetOrLoadAsync("all", _ => { loads++; return Task.FromResult(Payload()); });
         Assert.Equal(1, loads);
         Assert.Single(result.Data);
-        await Assert.ThrowsAnyAsync<Exception>(() => service.InvalidateAllDiscoveryAsync());
+        var failure = await Assert.ThrowsAsync<ApplicationCacheInvalidationException>(() => service.InvalidateAllDiscoveryAsync());
+        Assert.Equal(ApplicationCacheDomain.Discovery, failure.Domain);
+        Assert.NotNull(failure.InnerException);
     }
 
     [Fact]
@@ -165,5 +169,115 @@ public sealed class FusionDiscoveryCacheTests
         }
         using var restart = Host(redis, environment);
         Assert.Null(await restart.GetRequiredService<IDiscoveryCacheService>().GetDiscoveryResultsAsync("all:with_pricing"));
+    }
+
+    [Fact]
+    public async Task LoadRacingInvalidationCannotRemainCurrent()
+    {
+        using var host = Host();
+        var service = host.GetRequiredService<IDiscoveryCacheService>();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var oldRequest = service.GetOrLoadAsync("race", async token =>
+        {
+            var snapshot = Payload();
+            entered.SetResult();
+            await release.Task.WaitAsync(token);
+            return snapshot;
+        });
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await service.InvalidateAllDiscoveryAsync();
+        release.SetResult();
+        await oldRequest;
+        var current = await service.GetOrLoadAsync("race", _ => Task.FromResult(new DiscoveryModelsResult { Count = 2 }));
+        Assert.Equal(2, current.Count);
+    }
+
+    [SkippableFact]
+    public async Task RedisLoadRacingRemoteInvalidationCannotRemainCurrentAfterRestart()
+    {
+        var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
+        Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS to run real Redis contracts.");
+        var environment = $"test-{Guid.NewGuid():N}";
+        using var admin = Host(redis, environment);
+        using var gateway = Host(redis, environment);
+        var writer = admin.GetRequiredService<IDiscoveryCacheService>();
+        var reader = gateway.GetRequiredService<IDiscoveryCacheService>();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var request = reader.GetOrLoadAsync("race", async token =>
+        {
+            entered.SetResult();
+            await release.Task.WaitAsync(token);
+            return Payload();
+        });
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await writer.InvalidateAllDiscoveryAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        release.SetResult();
+        await request.WaitAsync(TimeSpan.FromSeconds(5));
+        using var restart = Host(redis, environment);
+        var current = await restart.GetRequiredService<IDiscoveryCacheService>().GetOrLoadAsync("race",
+            _ => Task.FromResult(new DiscoveryModelsResult { Count = 2 }));
+        Assert.Equal(2, current.Count);
+    }
+
+    [SkippableFact]
+    public async Task RedisInvalidationRejectsEntryWrittenByClockAheadNode()
+    {
+        var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
+        Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS to run real Redis contracts.");
+        var environment = $"test-{Guid.NewGuid():N}";
+        using var writer = Host(redis, environment);
+        var service = writer.GetRequiredService<IDiscoveryCacheService>();
+        await service.SetDiscoveryResultsAsync("clock", Payload());
+        var configuration = ConfigurationOptions.Parse(redis);
+        configuration.AllowAdmin = true;
+        using var observer = await ConnectionMultiplexer.ConnectAsync(configuration);
+        var key = observer.GetServer(observer.GetEndPoints()[0]).Keys(pattern: $"*{environment}*clock*").Single().ToString();
+        var storage = writer.GetRequiredKeyedService<IDistributedCache>(ApplicationCacheOptions.ServiceKey);
+        var serializer = writer.GetRequiredService<ApplicationCacheSerializer>();
+        var envelope = serializer.Deserialize<FusionCacheDistributedEntry<DiscoveryModelsResult>>((await storage.GetAsync(key))!)!;
+        // Reproduce the persisted timestamp from a different node whose clock runs ahead.
+        envelope.Timestamp = DateTime.UtcNow.AddSeconds(30).Ticks;
+        await storage.SetAsync(key, serializer.Serialize(envelope), new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) });
+        await service.InvalidateAllDiscoveryAsync();
+        using var restart = Host(redis, environment);
+        Assert.Null(await restart.GetRequiredService<IDiscoveryCacheService>().GetDiscoveryResultsAsync("clock"));
+    }
+
+    [SkippableFact]
+    public async Task RedisGenerationInitializationIsAtomicAcrossIndependentNodes()
+    {
+        var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
+        Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS to run real Redis contracts.");
+        var environment = $"test-{Guid.NewGuid():N}";
+        var hosts = Enumerable.Range(0, 8).Select(_ => Host(redis, environment)).ToArray();
+        try
+        {
+            var generations = await Task.WhenAll(hosts.Select(host => host.GetRequiredService<ApplicationCacheGeneration>()
+                .GetAsync(ApplicationCacheDomain.Discovery).AsTask()));
+            Assert.Single(generations.Distinct());
+        }
+        finally { foreach (var host in hosts) host.Dispose(); }
+    }
+
+    [SkippableFact]
+    public async Task RedisGenerationMetadataLossCannotResurrectPreviousPayloads()
+    {
+        var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
+        Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS to run real Redis contracts.");
+        var environment = $"test-{Guid.NewGuid():N}";
+        using var writer = Host(redis, environment);
+        var service = writer.GetRequiredService<IDiscoveryCacheService>();
+        await service.SetDiscoveryResultsAsync("all", Payload());
+        using var observer = await ConnectionMultiplexer.ConnectAsync(redis);
+        var metadataKey = writer.GetRequiredService<ApplicationCacheOptions>().Prefix + "generation:discovery";
+        Assert.True(await observer.GetDatabase().KeyDeleteAsync(metadataKey));
+        using var restart = Host(redis, environment);
+        Assert.Null(await restart.GetRequiredService<IDiscoveryCacheService>().GetDiscoveryResultsAsync("all"));
+        var deadline = System.Diagnostics.Stopwatch.StartNew();
+        while (await service.GetDiscoveryResultsAsync("all") is not null && deadline.Elapsed < TimeSpan.FromSeconds(2))
+            await Task.Delay(20);
+        Assert.Null(await service.GetDiscoveryResultsAsync("all"));
     }
 }

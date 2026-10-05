@@ -9,6 +9,8 @@ using System.Reflection;
 
 using Wolverine;
 using Wolverine.Postgresql;
+using Wolverine.ErrorHandling;
+using ConduitLLM.Core.Caching;
 
 namespace ConduitLLM.Configuration.Messaging.Wolverine
 {
@@ -182,6 +184,11 @@ namespace ConduitLLM.Configuration.Messaging.Wolverine
                 // Dispatch goes exclusively through the explicit bridge registrations
                 // added in I2.2/#925.
                 opts.Discovery.DisableConventionalDiscovery();
+
+                // Acknowledging a failed invalidation leaves every other cache node stale.
+                // Keep these idempotent operations durable across an extended Redis outage.
+                opts.Policies.OnException<ApplicationCacheInvalidationException>()
+                    .ScheduleRetryIndefinitely(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30));
 
                 configure?.Invoke(opts);
             }, ExtensionDiscovery.ManualOnly);
