@@ -85,6 +85,8 @@ namespace ConduitLLM.Core.Interfaces
         /// Optional capability filter that was applied
         /// </summary>
         public string? CapabilityFilter { get; set; }
+        /// <summary>Internal cache deadline for scheduled price activation/expiry; never part of endpoint wire JSON.</summary>
+        public DateTime? PricingRefreshAt { get; set; }
     }
 
 }

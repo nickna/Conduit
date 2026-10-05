@@ -1,6 +1,6 @@
 # FusionCache application caching (epic #1396)
 
-Status: FC-1 through FC-6 validated; migrated domains remain opt-in until deployment review.
+Status: FC-1 through FC-7 validated; migrated domains remain opt-in until deployment review.
 Baseline: `e8355b606a6b0885db8642d6bc41c5cd6b83760f`, refreshed against the checkout on 2026-10-04.
 Implementation branch: `codex/epic-1396-fusioncache`. FC-1 issue: #1397.
 
@@ -11,6 +11,39 @@ FC-4's distributed failure and rollback gate precedes every migration beyond dis
 FC-8 requires a demonstrated rollback and comparison with the thresholds below before
 deleting compatibility code. None of the probe's passing assertions constitutes a
 production rollout, a durable messaging test, or evidence of linearizable invalidation.
+
+FC-7 replaces the billing decorator and parsed-rule service with explicit cost snapshots,
+positive/missing lookup contracts and factory access. Cost ID and model-ID reads validate
+active/effective/expiry on cold and warm returns. This also corrects the legacy decorator's
+unchecked cold return: an inactive repository row no longer masquerades as usable billing data.
+Administrative lists still include inactive/expired rows. A real configured zero rate remains
+valid; a missing/unusable cost returns null and the existing calculator throws for reconciliation.
+Positive costs retain the effective 12-hour region default, capped by expiry and MaxTTL;
+negative results last one minute, shortened by a known future effective time. Rules retain
+the effective 15-minute policy, keyed by cost ID and SHA-256 of current configuration.
+No invalid JSON result is written. Detached cost associations/model/series and rule conditions
+remain owned by each caller, including native Redis round trips.
+
+Cost writes/events expire positive, negative, ID, model-ID and list variants plus the mapping,
+rules and priced-discovery dependencies. Strict billing/rule metadata and payload L1 are capped
+at 100ms, with outage reconciliation already proved in FC-6. Discovery carries an internal
+earliest pricing transition deadline, omitted from HTTP DTOs; both requests and the warmer use
+the same clock/projector and refresh at effective/expiry boundaries without a mutation event.
+Late loads retain their captured generation, and expired prices cannot be returned or published
+as valid. This does not serialize requests already in progress with Admin transactions.
+
+The actual calculator reads Configuration.IModelCostService, not the independently registered
+IModelCostCache/RedisModelCostCache. Those auxiliary stores remain for their separate consumers.
+BatchCacheInvalidationService now awaits billing/dependent expiration before accepting a cost
+request into its in-memory queue; only auxiliary Redis expiration remains batched. A failure
+is visible at the event boundary rather than acknowledged into a non-durable billing queue.
+
+FC-7 evidence: 222 focused tests plus the obsolete-payload fallback test passed with zero skipped (Redis/PostgreSQL configured), including
+price/missing/expiry/ownership/concurrency, real below-service outages, recovery before retry,
+durable Admin mutation and Gateway restarts, batch routing, billing errors and scheduled discovery.
+Native win-x64 pricing modes passed local, Redis and separate-process positive/list/missing/rule
+round trips with JSON reflection disabled. Full-link EF diagnostics remain outside this cache
+slice; the production analyzer ratchet passed with **0 first-party diagnostics**, without baseline relaxation.
 
 ## Inventory
 

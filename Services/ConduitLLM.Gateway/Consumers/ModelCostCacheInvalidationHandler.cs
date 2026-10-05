@@ -27,6 +27,7 @@ namespace ConduitLLM.Gateway.Consumers
         /// <param name="pricingRulesCache">Optional pricing rules cache</param>
         /// <param name="discoveryCacheService">Discovery cache holding pricing-bearing model payloads</param>
         /// <param name="logger">Logger for diagnostics</param>
+        /// <param name="mappings">Routing cache holding attached cost snapshots</param>
         public ModelCostCacheInvalidationHandler(
             ConfigurationModelCostService modelCostService,
             ICachedPricingRulesService? pricingRulesCache,

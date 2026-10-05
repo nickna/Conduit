@@ -88,14 +88,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAdminModelCostService, AdminModelCostService>();
 
         // Register cost calculation dependencies with caching decorator pattern
-        services.AddScoped<ConduitLLM.Configuration.Services.ModelCostService>();
-        services.AddScoped<ConduitLLM.Configuration.Interfaces.IModelCostService>(provider =>
-        {
-            var innerService = provider.GetRequiredService<ConduitLLM.Configuration.Services.ModelCostService>();
-            var cacheManager = provider.GetRequiredService<ConduitLLM.Core.Interfaces.ICacheManager>();
-            var logger = provider.GetRequiredService<ILogger<ConduitLLM.Core.Services.CachedModelCostService>>();
-            return new ConduitLLM.Core.Services.CachedModelCostService(innerService, cacheManager, logger);
-        });
+        services.AddModelCostCache();
         services.AddScoped<ConduitLLM.Core.Interfaces.ICostCalculationService, ConduitLLM.Core.Services.CostCalculationService>();
 
         services.AddOptions<BillingCostCanaryOptions>()
@@ -162,7 +155,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ConduitLLM.Core.Services.IPricingRulesValidator, ConduitLLM.Core.Services.PricingRulesValidator>();
 
         // Register cached pricing rules service for parsed configuration caching (uses ICacheManager)
-        services.AddSingleton<ConduitLLM.Core.Interfaces.ICachedPricingRulesService, ConduitLLM.Core.Services.CachedPricingRulesService>();
+        services.AddPricingRulesCache();
 
         // Register pricing audit service for rules-based pricing event tracking - with leader election
         services.AddSingleton<ConduitLLM.Configuration.Interfaces.IPricingAuditService, ConduitLLM.Configuration.Services.PricingAuditService>();

@@ -19,13 +19,14 @@ namespace ConduitLLM.Tests.Core.Caching;
 public sealed class FusionDiscoveryCacheTests
 {
     internal static ServiceProvider Host(string? redis = null, string? environment = null,
-        Dictionary<string, string?>? settings = null, IDistributedCache? storage = null)
+        Dictionary<string, string?>? settings = null, IDistributedCache? storage = null, TimeProvider? clock = null)
     {
         var values = settings ?? [];
         values["ApplicationCache:Environment"] = environment ?? $"test-{Guid.NewGuid():N}";
         values["ApplicationCache:Implementations:Discovery"] = "FusionCache";
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         var services = new ServiceCollection().AddLogging();
+        if (clock is not null) services.AddSingleton(clock);
         if (storage is not null) services.AddKeyedSingleton(ApplicationCacheOptions.ServiceKey, storage);
         services.Configure<CacheManagerOptions>(configuration.GetSection("CacheManager"));
         services.AddConduitApplicationCache(configuration, "test", redis ?? "");
@@ -37,6 +38,38 @@ public sealed class FusionDiscoveryCacheTests
     {
         Count = 1, Data = [JsonDocument.Parse(pricing ? """{"id":"model","pricing":{"input_cost":0.25}}""" : """{"id":"model"}""").RootElement.Clone()]
     };
+
+    [Fact]
+    public async Task ExpiredPricingFromLateLoaderIsRejectedAndDeadlineSurvivesIndependentL2()
+    {
+        var clock = new FusionPricingCacheTests.Clock();
+        using var host = Host(clock: clock);
+        var service = host.GetRequiredService<IDiscoveryCacheService>();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var old = Payload(pricing: true); old.PricingRefreshAt = clock.Now.AddSeconds(10).UtcDateTime;
+        var request = service.GetOrLoadAsync("priced", async _ => { entered.TrySetResult(); await release.Task; return old; });
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); clock.Now = clock.Now.AddSeconds(11); release.SetResult();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => request);
+        Assert.Null(await service.GetDiscoveryResultsAsync("priced"));
+        Assert.False((await service.GetOrLoadAsync("priced", _ => Task.FromResult(Payload()))).Data[0].TryGetProperty("pricing", out _));
+    }
+
+    [SkippableFact]
+    public async Task PricingDeadlineSurvivesIndependentRedisL2AndRejectsExpiredWarmSnapshot()
+    {
+        var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
+        Skip.If(string.IsNullOrEmpty(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
+        var clock = new FusionPricingCacheTests.Clock(); var environment = $"test-{Guid.NewGuid():N}";
+        using var first = Host(redis, environment, clock: clock); using var second = Host(redis, environment, clock: clock);
+        var old = Payload(pricing: true); old.PricingRefreshAt = clock.Now.AddSeconds(10).UtcDateTime;
+        await first.GetRequiredService<IDiscoveryCacheService>().SetDiscoveryResultsAsync("priced", old);
+        var reader = second.GetRequiredService<IDiscoveryCacheService>();
+        Assert.Equal(old.PricingRefreshAt, (await reader.GetDiscoveryResultsAsync("priced"))!.PricingRefreshAt);
+        clock.Now = clock.Now.AddSeconds(11);
+        Assert.Null(await reader.GetDiscoveryResultsAsync("priced"));
+        Assert.False((await reader.GetOrLoadAsync("priced", _ => Task.FromResult(Payload()))).Data[0].TryGetProperty("pricing", out _));
+    }
 
     [Fact]
     public async Task HealthyConcurrentMisses_LoadOnceAndProtectReturnedAndInputOwnership()

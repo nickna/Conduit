@@ -13,6 +13,7 @@ using ConduitLLM.Core.Caching;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Services;
 using ConduitLLM.Core.Messaging;
 using ConduitLLM.Gateway.Consumers;
 using ConduitLLM.Gateway.Options;
@@ -82,7 +83,7 @@ public sealed class DistributedDiscoveryCacheTests
             using (var scope = admin.Services.CreateScope())
             {
                 var result = await scope.ServiceProvider.GetRequiredService<AdminModelCostService>()
-                    .UpdateModelCostAsync(costId, new UpdateModelCostDto { InputCostPerMillionTokens = 0.5m });
+                    .UpdateModelCostAsync(costId, new UpdateModelCostDto { InputCostPerMillionTokens = 0.5m, PricingConfiguration = Pricing("""{"defaultRate":0.5,"rules":[]}""") });
                 Assert.Equal(0.5m, result!.InputCostPerMillionTokens);
             }
             var failedMessage = await state.FirstFailure.Task.WaitAsync(TimeSpan.FromSeconds(30));
@@ -132,7 +133,7 @@ public sealed class DistributedDiscoveryCacheTests
             var before = state.Succeeded.Count;
             using (var scope = admin.Services.CreateScope())
                 await scope.ServiceProvider.GetRequiredService<AdminModelCostService>()
-                    .UpdateModelCostAsync(costId, new UpdateModelCostDto { InputCostPerMillionTokens = 0.75m });
+                    .UpdateModelCostAsync(costId, new UpdateModelCostDto { InputCostPerMillionTokens = 0.75m, PricingConfiguration = Pricing("""{"defaultRate":0.75,"rules":[]}""") });
             await UntilAsync(() => Task.FromResult(state.Succeeded.Count > before), TimeSpan.FromSeconds(15), "Admin mutation must reach a Gateway handler.");
             await UntilAsync(async () => await VariantsMatchAsync(gateway1.Services, factory, 0.75m) && await VariantsMatchAsync(gateway2.Services, factory, 0.75m),
                 TimeSpan.FromSeconds(2), "Every warmed variant must converge within two seconds after event completion, even without backplane.");
@@ -188,6 +189,8 @@ public sealed class DistributedDiscoveryCacheTests
         {
             ["ApplicationCache:Environment"] = environment,
             ["ApplicationCache:Implementations:Discovery"] = "FusionCache",
+            ["ApplicationCache:Implementations:Costs"] = "FusionCache",
+            ["ApplicationCache:Implementations:PricingRules"] = "FusionCache",
             [WolverineMessagingExtensions.SchemaNameKey] = role == "gateway" ? gatewaySchema : gatewaySchema.Replace("gateway_", "admin_"),
             [WolverineMessagingExtensions.AutoProvisionKey] = "true"
         }).Build();
@@ -200,16 +203,19 @@ public sealed class DistributedDiscoveryCacheTests
                 services.AddScoped<IModelCostRepository, ModelCostRepository>();
                 services.AddScoped<IModelProviderMappingRepository, ModelProviderMappingRepository>();
                 services.AddScoped<IRequestLogRepository, RequestLogRepository>();
-                services.AddScoped<ConduitLLM.Configuration.Interfaces.IModelCostService, ModelCostService>();
                 services.AddScoped<AdminModelCostService>();
                 services.AddWolverineEventBus();
                 services.AddConduitApplicationCache(configuration, role, redis);
                 services.AddDiscoveryCache(configuration);
+                services.AddSingleton<IModelMappingCacheInvalidator, ModelMappingCacheInvalidator>();
+                services.AddModelCostCache();
+                services.AddPricingRulesCache();
                 if (role == "gateway")
                 {
                     services.AddScoped<ModelCostCacheInvalidationHandler>(provider => new(
-                        provider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IModelCostService>(), null,
-                        provider.GetRequiredService<IDiscoveryCacheService>(), provider.GetRequiredService<ILogger<ModelCostCacheInvalidationHandler>>()));
+                        provider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IModelCostService>(), provider.GetRequiredService<ICachedPricingRulesService>(),
+                        provider.GetRequiredService<IDiscoveryCacheService>(), provider.GetRequiredService<ILogger<ModelCostCacheInvalidationHandler>>(),
+                        provider.GetRequiredService<IModelMappingCacheInvalidator>()));
                     services.AddScoped<IEventHandler<ModelCostChanged>, ObservingCostHandler>();
                 }
             })
@@ -232,7 +238,8 @@ public sealed class DistributedDiscoveryCacheTests
         await using var context = await factory.CreateDbContextAsync();
         await context.Database.EnsureCreatedAsync();
         var cost = new ModelCost { CostName = "Gate price", ModelType = "chat", IsActive = true,
-            EffectiveDate = DateTime.UtcNow.AddDays(-1), InputCostPerMillionTokens = 0.25m };
+            EffectiveDate = DateTime.UtcNow.AddDays(-1), InputCostPerMillionTokens = 0.25m,
+            PricingConfiguration = """{"defaultRate":0.25,"rules":[]}""" };
         context.ModelProviderMappings.Add(new ModelProviderMapping
         {
             ModelAlias = "cache-gate", ProviderModelId = "cache-gate", IsEnabled = true,
@@ -246,6 +253,12 @@ public sealed class DistributedDiscoveryCacheTests
         });
         await context.SaveChangesAsync();
         return cost.Id;
+    }
+
+    private static Dictionary<string, System.Text.Json.JsonElement> Pricing(string json)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        return document.RootElement.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone());
     }
 
     private static ServiceProvider LegacyHost(string redis, string environment, bool enabled)
@@ -267,6 +280,18 @@ public sealed class DistributedDiscoveryCacheTests
 
     private static async Task<bool> VariantsMatchAsync(IServiceProvider provider, IDbContextFactory<ConduitDbContext> factory, decimal price)
     {
+        // Requests read this exact decorator; failure must propagate from it to Wolverine retry.
+        if (provider.GetService<ApplicationCacheOptions>()?.UsesFusionCache(ApplicationCacheDomain.Costs) == true)
+        {
+            using var scope = provider.CreateScope();
+            var costs = scope.ServiceProvider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IModelCostService>();
+            var cost = await costs.GetCostForModelAsync("cache-gate");
+            if (cost?.InputCostPerMillionTokens != price) return false;
+            var rules = await provider.GetRequiredService<ICachedPricingRulesService>().GetConfigAsync(cost.Id, cost.PricingConfiguration!);
+            if (rules?.DefaultRate != price) return false;
+            var billing = new CostCalculationService(costs, NullLogger<CostCalculationService>.Instance);
+            if (await billing.CalculateCostAsync("cache-gate", new ConduitLLM.Core.Models.Usage { PromptTokens = 1_000_000 }) != price) return false;
+        }
         var service = provider.GetRequiredService<IDiscoveryCacheService>();
         foreach (var variant in Variants)
         {

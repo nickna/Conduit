@@ -19,6 +19,7 @@ public static class ApplicationCacheExtensions
         var options = ApplicationCacheOptions.Read(configuration, hostEnvironment);
         var redis = redisConnectionString ?? RedisUrlParser.ResolveConnectionString();
         services.TryAddSingleton(options);
+        services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ApplicationCacheSerializer>();
         services.TryAddSingleton(provider => new ApplicationCacheGeneration(
             provider.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey), options, redis));

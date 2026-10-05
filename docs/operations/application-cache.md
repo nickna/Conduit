@@ -195,3 +195,26 @@ cached payloads again. This forces a current business load and makes the old L2 
 unreachable even if a pending invalidation has not retried yet. Failed recovery keeps database
 fallback active. A restart during disconnection also follows this policy. Metadata connections
 use fail-fast backlog handling; writes and invalidations remain awaited, never detached.
+
+## Billing costs and parsed rules
+
+Costs and PricingRules are separately selectable FusionCache domains. Cost model-ID, cost-ID
+and list variants share domain expiration. Usable positive costs have a 12-hour default L2 TTL;
+the actual expiry date shortens it. Missing/unusable costs have an explicit one-minute contract,
+shortened by a known future effective date. Every read rechecks validity. The administrative
+list retains all rows. Missing prices preserve billing reconciliation errors; configured zero
+prices are valid. Neither billing nor rules uses fail-safe stale serving. Both payload and
+generation L1 are at most 100ms, with the same strict recovery fence as mapping reads.
+
+PricingRules uses 15-minute L2 storage and keys configurations by cost ID plus SHA-256 content.
+Invalid JSON is parsed under the existing null/error contract and never cached. Rule conditions,
+constraints and cost graphs are copied for the caller. Repricing expires cost, mapping, rule and
+discovery domains, including previously missing prices. Discovery's internal deadline refreshes
+priced payloads at effective/expiry times without an event and is never exposed in HTTP responses.
+
+The calculator's Configuration.IModelCostService decorator is the billing cache to monitor.
+The separately registered IModelCostCache/RedisModelCostCache is an auxiliary Redis store;
+clearing only it cannot refresh billing. Batch cost requests now await billing and dependent
+expiration before queue acceptance, while preserving batching of that auxiliary store.
+Required errors remain visible to the durable event handler. Monitor retry backlog and the
+costs/rules invalidation error labels before declaring recovery complete.

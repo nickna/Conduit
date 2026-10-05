@@ -28,6 +28,7 @@ namespace ConduitLLM.Gateway.Endpoints
         private readonly IDiscoveryCacheService _discoveryCacheService;
         private readonly JsonSerializerOptions _wireJsonOptions;
         private readonly DiscoveryCacheOptions _discoveryOptions;
+        private readonly TimeProvider _clock;
 
         /// <summary>
         /// Initializes the Discovery endpoint handler.
@@ -40,13 +41,14 @@ namespace ConduitLLM.Gateway.Endpoints
             JsonSerializerOptions wireJsonOptions,
             IOptions<DiscoveryCacheOptions> discoveryOptions,
             IHttpContextAccessor httpContextAccessor,
-            ILogger<DiscoveryEndpoints> logger)
+            ILogger<DiscoveryEndpoints> logger, TimeProvider? clock = null)
             : base(null, httpContextAccessor, logger)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _modelCapabilityService = modelCapabilityService ?? throw new ArgumentNullException(nameof(modelCapabilityService));
             _virtualKeyService = virtualKeyService ?? throw new ArgumentNullException(nameof(virtualKeyService));
             _discoveryCacheService = discoveryCacheService ?? throw new ArgumentNullException(nameof(discoveryCacheService));
+            _clock = clock ?? TimeProvider.System;
             _wireJsonOptions = wireJsonOptions ?? throw new ArgumentNullException(nameof(wireJsonOptions));
             _discoveryOptions = (discoveryOptions ?? throw new ArgumentNullException(nameof(discoveryOptions))).Value;
         }
@@ -99,7 +101,7 @@ namespace ConduitLLM.Gateway.Endpoints
             var cacheKey = DiscoveryCacheService.BuildCacheKey(capability, includePricing: exposePricing);
 
             var result = await _discoveryCacheService.GetOrLoadAsync(cacheKey, token =>
-                DiscoveryCacheLoader.LoadAsync(_dbContextFactory, capability, exposePricing, _wireJsonOptions, Logger, token),
+                DiscoveryCacheLoader.LoadAsync(_dbContextFactory, capability, exposePricing, _wireJsonOptions, Logger, token, _clock),
                 HttpContext.RequestAborted);
             var models = result.Data.Select(element => element.Deserialize(
                     GatewayJsonTypeInfo.Require<GatewayDiscoveredModelDto>(_wireJsonOptions)))

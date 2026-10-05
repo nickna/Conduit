@@ -265,7 +265,30 @@ public sealed class DiscoveryEndpointsPricingTests : IDisposable
         });
     }
 
-    private DiscoveryEndpoints CreateEndpoints(bool exposePricing = true, IDiscoveryCacheService? cache = null)
+    [Fact]
+    public async Task WarmedDiscoveryRefreshesAtEffectiveAndExpiryTimesWithoutMutation()
+    {
+        var clock = new FusionPricingCacheTests.Clock();
+        SeedMapping(new ModelCost { CostName = "scheduled", IsActive = true,
+            InputCostPerMillionTokens = 0.25m, EffectiveDate = clock.Now.AddSeconds(10).UtcDateTime,
+            ExpiryDate = clock.Now.AddSeconds(20).UtcDateTime });
+        using var host = FusionDiscoveryCacheTests.Host(clock: clock);
+        var cache = host.GetRequiredService<IDiscoveryCacheService>();
+        var endpoints = CreateEndpoints(cache: cache, clock: clock);
+        var warmer = new DiscoveryCacheWarmingService(Mock.Of<IServiceProvider>(), cache,
+            Options.Create(new DiscoveryCacheOptions()), GatewayJsonOptions.Create(),
+            Mock.Of<ILogger<DiscoveryCacheWarmingService>>(), clock);
+        await warmer.WarmCacheForCapability(_database.CreateDbContextFactory(), null, CancellationToken.None);
+        Assert.False((await GetSingleModelAsync(endpoints)).TryGetProperty("pricing", out _));
+        clock.Now = clock.Now.AddSeconds(10);
+        Assert.True((await GetSingleModelAsync(endpoints)).TryGetProperty("pricing", out _));
+        clock.Now = clock.Now.AddSeconds(10);
+        Assert.False((await GetSingleModelAsync(endpoints)).TryGetProperty("pricing", out _));
+        Assert.False((await GetSingleModelAsync(endpoints)).TryGetProperty("pricing_refresh_at", out _));
+        Assert.False((await GetSingleModelAsync(CreateEndpoints(exposePricing: false, cache: cache, clock: clock))).TryGetProperty("pricing", out _));
+    }
+
+    private DiscoveryEndpoints CreateEndpoints(bool exposePricing = true, IDiscoveryCacheService? cache = null, TimeProvider? clock = null)
     {
         var httpContext = new DefaultHttpContext
         {
@@ -291,7 +314,7 @@ public sealed class DiscoveryEndpointsPricingTests : IDisposable
             GatewayJsonOptions.Create(),
             Options.Create(new DiscoveryCacheOptions { ExposePricing = exposePricing }),
             Mock.Of<IHttpContextAccessor>(accessor => accessor.HttpContext == httpContext),
-            Mock.Of<ILogger<DiscoveryEndpoints>>());
+            Mock.Of<ILogger<DiscoveryEndpoints>>(), clock);
     }
 
     private static async Task<JsonElement> GetSingleModelAsync(

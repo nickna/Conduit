@@ -47,7 +47,7 @@ public sealed class HostApplicationCacheCompositionTests
             });
             builder.Configuration["ApplicationCache:Environment"] = $"probe-{Guid.NewGuid():N}";
             if (migrated)
-                foreach (var domain in new[] { "Discovery", "Functions", "Mappings" })
+                foreach (var domain in new[] { "Discovery", "Functions", "Mappings", "Costs", "PricingRules" })
                     builder.Configuration[$"ApplicationCache:Implementations:{domain}"] = "FusionCache";
             if (gateway)
             {
@@ -68,6 +68,9 @@ public sealed class HostApplicationCacheCompositionTests
                 Assert.IsType<FusionFunctionDiscoveryCacheService>(scope.ServiceProvider.GetRequiredService<IFunctionDiscoveryCacheService>());
                 Assert.IsType<FusionModelProviderMappingService>(scope.ServiceProvider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IModelProviderMappingService>());
                 Assert.IsType<ModelMappingCacheInvalidator>(provider.GetRequiredService<IModelMappingCacheInvalidator>());
+                Assert.IsType<FusionModelCostService>(scope.ServiceProvider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IModelCostService>());
+                Assert.IsType<FusionPricingRulesService>(provider.GetRequiredService<ICachedPricingRulesService>());
+                Assert.IsType<CostCalculationService>(scope.ServiceProvider.GetRequiredService<ICostCalculationService>());
             }
             if (redis is null) Assert.IsType<MemoryDistributedCache>(provider.GetRequiredService<IDistributedCache>());
             else Assert.IsAssignableFrom<Microsoft.Extensions.Caching.StackExchangeRedis.RedisCache>(provider.GetRequiredService<IDistributedCache>());

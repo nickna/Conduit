@@ -20,19 +20,21 @@ namespace ConduitLLM.Gateway.Services
         private readonly DiscoveryCacheOptions _options;
         private readonly JsonSerializerOptions _wireJsonOptions;
         private readonly ILogger<DiscoveryCacheWarmingService> _logger;
+        private readonly TimeProvider _clock;
 
         public DiscoveryCacheWarmingService(
             IServiceProvider serviceProvider,
             IDiscoveryCacheService discoveryCacheService,
             IOptions<DiscoveryCacheOptions> options,
             JsonSerializerOptions wireJsonOptions,
-            ILogger<DiscoveryCacheWarmingService> logger)
+            ILogger<DiscoveryCacheWarmingService> logger, TimeProvider? clock = null)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _discoveryCacheService = discoveryCacheService ?? throw new ArgumentNullException(nameof(discoveryCacheService));
             _options = options.Value ?? throw new ArgumentNullException(nameof(options));
             _wireJsonOptions = wireJsonOptions ?? throw new ArgumentNullException(nameof(wireJsonOptions));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _clock = clock ?? TimeProvider.System;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -144,7 +146,7 @@ namespace ConduitLLM.Gateway.Services
                     includePricing: _options.ExposePricing);
                 var result = await _discoveryCacheService.GetOrLoadAsync(cacheKey, token =>
                     DiscoveryCacheLoader.LoadAsync(dbContextFactory, capability, _options.ExposePricing,
-                        _wireJsonOptions, _logger, token), cancellationToken);
+                        _wireJsonOptions, _logger, token, _clock), cancellationToken);
                 
                 _logger.LogInformation(
                     "Warmed discovery cache for capability '{Capability}' with {Count} models",

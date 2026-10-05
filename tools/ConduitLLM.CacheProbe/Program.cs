@@ -118,6 +118,12 @@ if (args is ["compose"])
     return;
 }
 
+if (args is ["pricing"] or ["pricing-write"] or ["pricing-read"])
+{
+    await PricingDomainProbe.RunAsync(args[0], redis);
+    return;
+}
+
 if (args is ["write"] or ["read"])
 {
     if (string.IsNullOrEmpty(redis)) throw new InvalidOperationException("Process round trips require Redis.");

@@ -19,6 +19,7 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
     private readonly FusionCacheEntryOptions _entry;
     private readonly ILogger<FusionDiscoveryCacheService> _logger;
     private readonly bool _enabled;
+    private readonly TimeProvider _clock;
     private long _hits, _misses, _invalidations;
     private long _lastInvalidationTicks;
 
@@ -27,11 +28,12 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
         ApplicationCacheOptions applicationOptions,
         ApplicationCacheGeneration generation,
         IOptions<DiscoveryCacheOptions> options, IOptions<CacheManagerOptions> legacyOptions,
-        ILogger<FusionDiscoveryCacheService> logger)
+        ILogger<FusionDiscoveryCacheService> logger, TimeProvider? clock = null)
     {
         _cache = cache;
         _generation = generation;
         _logger = logger;
+        _clock = clock ?? TimeProvider.System;
         CacheRegionConfig? region = null;
         legacyOptions.Value.RegionConfigs?.TryGetValue(CacheRegion.ModelDiscovery, out region);
         _enabled = options.Value.EnableCaching && (region?.Enabled ?? true);
@@ -47,10 +49,19 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
         $"discovery:{await _generation.GetAsync(Domain, token)}:{key}";
     private static DiscoveryModelsResult Copy(DiscoveryModelsResult value, bool detach = false) => new()
     {
-        Count = value.Count, CapabilityFilter = value.CapabilityFilter,
+        Count = value.Count, CapabilityFilter = value.CapabilityFilter, PricingRefreshAt = value.PricingRefreshAt,
         CachedAt = detach ? DateTime.UtcNow : value.CachedAt,
         Data = detach ? value.Data.Select(element => element.Clone()).ToList() : [.. value.Data]
     };
+    private bool NeedsPriceRefresh(DiscoveryModelsResult value) => value.PricingRefreshAt <= _clock.GetUtcNow().UtcDateTime;
+    private void BoundPriceLifetime(FusionCacheEntryOptions entry, DiscoveryModelsResult value)
+    {
+        if (value.PricingRefreshAt is not { } refresh) return;
+        var remaining = refresh - _clock.GetUtcNow().UtcDateTime;
+        if (remaining <= TimeSpan.Zero) { entry.SkipMemoryCacheWrite = entry.SkipDistributedCacheWrite = true; entry.SkipBackplaneNotifications = true; return; }
+        if (entry.Duration > remaining) entry.Duration = remaining;
+        if (entry.DistributedCacheDuration > remaining) entry.DistributedCacheDuration = remaining;
+    }
 
     private static bool CacheFailure(Exception exception) => exception is RedisException or JsonException
         or TimeoutException or FusionCacheDistributedCacheException or FusionCacheSerializationException or FusionCacheBackplaneException;
@@ -69,15 +80,22 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
         try
         {
             var key = await KeyAsync(cacheKey, cancellationToken);
-            var result = await _cache.GetOrSetAsync<DiscoveryModelsResult>(key, async (_, token) =>
+            for (var attempt = 0; attempt < 2; attempt++)
             {
-                try { loaded = await load(token); }
-                catch { factoryFailed = true; throw; }
-                return Copy(loaded, detach: true);
-            }, options: _entry, tags: [ApplicationCacheOptions.Tag(Domain)], token: cancellationToken);
-            if (loaded is null) Interlocked.Increment(ref _hits);
-            else Interlocked.Increment(ref _misses);
-            return Copy(result);
+                var result = await _cache.GetOrSetAsync<DiscoveryModelsResult>(key, async (context, token) =>
+                {
+                    try { loaded = await load(token); }
+                    catch { factoryFailed = true; throw; }
+                    BoundPriceLifetime(context.Options, loaded);
+                    return Copy(loaded, detach: true);
+                }, options: _entry, tags: [ApplicationCacheOptions.Tag(Domain)], token: cancellationToken);
+                if (result is null || result.Data is null) throw new JsonException("Missing discovery cache contract.");
+                if (NeedsPriceRefresh(result)) { await _cache.RemoveAsync(key, _entry, cancellationToken); continue; }
+                if (loaded is null) Interlocked.Increment(ref _hits);
+                else Interlocked.Increment(ref _misses);
+                return Copy(result);
+            }
+            throw new InvalidOperationException("Discovery loader repeatedly returned a superseded pricing snapshot.");
         }
         catch (Exception exception) when (!factoryFailed && CacheFailure(exception))
         {
@@ -85,7 +103,9 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
             _logger.LogWarning(exception, "Discovery cache unavailable; serving the current load");
             ApplicationCacheMetrics.Bypassed(Domain);
             Interlocked.Increment(ref _misses);
-            return loaded ?? await load(cancellationToken);
+            var value = loaded ?? await load(cancellationToken);
+            if (NeedsPriceRefresh(value)) throw new InvalidOperationException("Discovery loader returned a superseded pricing snapshot.");
+            return value;
         }
     }
 
@@ -99,7 +119,7 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
             var result = await _cache.TryGetAsync<DiscoveryModelsResult>(key, _entry, cancellationToken);
             if (result.HasValue) Interlocked.Increment(ref _hits);
             else Interlocked.Increment(ref _misses);
-            return result.HasValue ? Copy(result.Value) : null;
+            return result.HasValue && !NeedsPriceRefresh(result.Value) ? Copy(result.Value) : null;
         }
         catch (Exception exception) when (CacheFailure(exception))
         {
@@ -117,7 +137,10 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
         try
         {
             var key = await KeyAsync(cacheKey, cancellationToken);
-            await _cache.SetAsync(key, Copy(results, detach: true), _entry, [ApplicationCacheOptions.Tag(Domain)], cancellationToken);
+            if (NeedsPriceRefresh(results)) { await _cache.RemoveAsync(key, _entry, cancellationToken); return; }
+            var entry = _entry.Duplicate();
+            BoundPriceLifetime(entry, results);
+            await _cache.SetAsync(key, Copy(results, detach: true), entry, [ApplicationCacheOptions.Tag(Domain)], cancellationToken);
         }
         catch (Exception exception) when (CacheFailure(exception))
         {
