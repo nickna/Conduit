@@ -68,3 +68,9 @@ $env:CONDUIT_CACHE_PROBE_ENVIRONMENT = 'discovery-restart-fixture'
 The ordinary JIT probe also compares real PostgreSQL discovery query counts when
 `CONDUIT_CACHE_PROBE_POSTGRES` is set: cold load one query, healthy L1 and restarted L2
 zero queries. The PostgreSQL schema fixture is excluded from the native executable.
+
+The `functions`, `functions-write` and `functions-read` modes exercise the actual function
+domain service, coalescing, nested schema ownership, generation invalidation and separate-process
+L2 JSON with reflection disabled. They use a fixed enabled-setting fixture; repository mutation
+and MCP business behavior are covered by the service tests rather than emulated in this probe.
+Use the same CONDUIT_CACHE_PROBE_ENVIRONMENT for the write/read pair.

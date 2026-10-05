@@ -1,7 +1,7 @@
 # Shared application cache
 
 Implementation: [epic #1396 design record](../decisions/0007-fusion-cache.md).
-FC-3 makes Discovery's selector available; defaults still select the legacy implementation.
+Discovery and Functions selectors are available; defaults still select the legacy implementation.
 Other per-domain selectors take effect as each gated migration lands. Authentication, tasks,
 spending, provider credentials, ephemeral keys, Data Protection and other Redis stores
 keep their existing registration and namespaces.
@@ -153,3 +153,21 @@ the PostgreSQL fixture login must permit database creation. It starts Admin and 
 Gateway hosts using the real persisted transport, interrupts only their proxy connections,
 restarts both gateways with a scheduled retry pending, and verifies the original message ID.
 This is integration evidence, not a production rollout or a claim of linearizable coordination.
+
+## Function discovery
+
+`ApplicationCache:Implementations:Functions=FusionCache` selects scoped function policy and
+factory loading. The singleton cache never captures its scoped repositories. ID sets are sorted
+and deduplicated; tools retain the existing MCP expansion/names and JsonObject schemas. The
+loader validates requested configurations and computes the minimum configured CacheTtlMinutes
+from its single configuration query. Explicit TTL overrides take precedence, with the existing
+FunctionDiscovery region MaxTTL cap. No configured TTL means no cache write.
+
+Functions.DiscoveryCacheEnabled is checked on every access: absent, blank, failed lookup or
+false disables reads/writes; true/1/yes/enabled enables them. Cancellation propagates. Configuration
+events invalidate all combinations, plus the discovery endpoint's function catalog/schema domain.
+Enable-setting events invalidate combinations even while disabled, so re-enable cannot recover a
+pre-change result. Required errors propagate through the same durable retry policy as discovery.
+An old schema factory stays in its captured generation. Tools and nested schemas are detached
+before publication and cloned on every cache read. Authentication remains before endpoint cache
+access; the function loader receives the caller's already selected configuration IDs.

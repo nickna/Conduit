@@ -131,8 +131,13 @@ namespace ConduitLLM.Core.Extensions
             this IServiceCollection services,
             IConfiguration configuration)
         {
+            services.Configure<CacheManagerOptions>(configuration.GetSection("CacheManager"));
             // Register function discovery cache service as scoped (depends on scoped repositories)
-            services.AddScoped<IFunctionDiscoveryCacheService, FunctionDiscoveryCacheService>();
+            services.AddScoped<IFunctionDiscoveryCacheService>(provider =>
+                provider.GetService<ConduitLLM.Core.Caching.ApplicationCacheOptions>()?.UsesFusionCache(
+                    ConduitLLM.Core.Caching.ApplicationCacheDomain.Functions) == true
+                    ? ActivatorUtilities.CreateInstance<FusionFunctionDiscoveryCacheService>(provider)
+                    : ActivatorUtilities.CreateInstance<FunctionDiscoveryCacheService>(provider));
 
             // Ensure memory cache is registered
             services.AddMemoryCache();

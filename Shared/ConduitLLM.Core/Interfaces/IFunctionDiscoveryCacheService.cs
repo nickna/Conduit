@@ -7,6 +7,18 @@ namespace ConduitLLM.Core.Interfaces;
 /// </summary>
 public interface IFunctionDiscoveryCacheService
 {
+    // Temporary legacy adapter during rollout; the factory owns configuration loading and TTL calculation.
+    async Task<List<Tool>> GetOrLoadAsync(List<int> ids,
+        Func<CancellationToken, Task<FunctionDiscoveryLoad>> load, int? ttlMinutes = null,
+        CancellationToken cancellationToken = default)
+    {
+        var cached = await GetCachedToolsAsync(ids, cancellationToken);
+        if (cached is not null) return cached;
+        var result = await load(cancellationToken);
+        if ((ttlMinutes ?? result.TtlMinutes) is { } ttl)
+            await SetCachedToolsAsync(ids, result.Tools, ttl, cancellationToken);
+        return result.Tools;
+    }
     /// <summary>
     /// Gets cached tool definitions for a set of function configuration IDs
     /// </summary>
@@ -60,3 +72,5 @@ public interface IFunctionDiscoveryCacheService
     /// <returns>Cache statistics</returns>
     Task<CacheStats> GetStatisticsAsync(CancellationToken cancellationToken = default);
 }
+
+public sealed record FunctionDiscoveryLoad(List<Tool> Tools, int? TtlMinutes);

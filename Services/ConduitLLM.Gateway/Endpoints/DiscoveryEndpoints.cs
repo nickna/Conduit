@@ -222,15 +222,15 @@ namespace ConduitLLM.Gateway.Endpoints
             // "v4" entries use the canonical configuration shape with structured parameter schemas.
             var cacheKey = $"functions_discovery_v4_{purpose ?? "all"}_{providerType ?? "all"}";
 
-            // Try to get from cache first
-            var cachedResult = await _discoveryCacheService.GetDiscoveryResultsAsync(cacheKey);
-            if (cachedResult is { Data.Count: > 0 })
-            {
-                Logger.LogDebug("Returning cached function discovery results");
-                return Ok(cachedResult.Data[0]);
-            }
+            var value = await _discoveryCacheService.GetOrLoadAsync(cacheKey,
+                token => LoadFunctionCatalogAsync(purpose, providerType, token), HttpContext.RequestAborted);
+            return Ok(value.Data[0]);
+        }
 
-            using var context = await _dbContextFactory.CreateDbContextAsync();
+        private async Task<DiscoveryModelsResult> LoadFunctionCatalogAsync(string? purpose, string? providerType,
+            CancellationToken token)
+        {
+            using var context = await _dbContextFactory.CreateDbContextAsync(token);
 
             // Get all enabled function configurations
             var query = context.FunctionConfigurations
@@ -253,7 +253,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 }
             }
 
-            var configurations = await query.AsNoTracking().ToListAsync();
+            var configurations = await query.AsNoTracking().ToListAsync(token);
 
             var result = new ConduitLLM.Functions.DTOs.FunctionDiscoveryResponse
             {
@@ -285,11 +285,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 CapabilityFilter = purpose
             };
 
-            await _discoveryCacheService.SetDiscoveryResultsAsync(cacheKey, discoveryResult);
-
-            Logger.LogInformation("Cached function discovery results with {Count} functions", result.Count);
-
-            return Ok(result);
+            return discoveryResult;
         }
 
         /// <summary>
@@ -308,25 +304,32 @@ namespace ConduitLLM.Gateway.Endpoints
             // "v4" entries use function_id and structured parameter/example objects.
             var cacheKey = $"function_parameters_v4_{functionConfigurationId}";
 
-            // Try to get from cache first
-            var cachedResult = await _discoveryCacheService.GetDiscoveryResultsAsync(cacheKey);
-            if (cachedResult is { Data.Count: > 0 })
+            try
             {
-                Logger.LogDebug("Returning cached function parameter schema for config {ConfigId}", functionConfigurationId);
-                return Ok(cachedResult.Data[0]);
+                var value = await _discoveryCacheService.GetOrLoadAsync(cacheKey,
+                    token => LoadFunctionParametersAsync(functionConfigurationId, token), HttpContext.RequestAborted);
+                return Ok(value.Data[0]);
             }
+            catch (FunctionConfigurationNotFoundException)
+            {
+                return OpenAIError(404, $"Function configuration {functionConfigurationId} not found or is disabled", "not_found");
+            }
+        }
 
-            using var context = await _dbContextFactory.CreateDbContextAsync();
+        private sealed class FunctionConfigurationNotFoundException : Exception;
+        private async Task<DiscoveryModelsResult> LoadFunctionParametersAsync(int functionConfigurationId, CancellationToken token)
+        {
+            using var context = await _dbContextFactory.CreateDbContextAsync(token);
 
             // Find the function configuration
             var configuration = await context.FunctionConfigurations
                 .AsNoTracking()
                 .Where(fc => fc.Id == functionConfigurationId && fc.IsEnabled)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(token);
 
             if (configuration == null)
             {
-                return OpenAIError(404, $"Function configuration {functionConfigurationId} not found or is disabled", "not_found");
+                throw new FunctionConfigurationNotFoundException();
             }
 
             // Parse the parameter schema
@@ -364,11 +367,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 Count = 1
             };
 
-            await _discoveryCacheService.SetDiscoveryResultsAsync(cacheKey, discoveryResult);
-
-            Logger.LogInformation("Cached function parameter schema for config {ConfigId}", functionConfigurationId);
-
-            return Ok(result);
+            return discoveryResult;
         }
 
         private static JsonElement EmptyJsonObject()

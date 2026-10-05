@@ -100,6 +100,12 @@ if (args is ["discovery"] or ["discovery-write"] or ["discovery-read"])
     return;
 }
 
+if (args is ["functions"] or ["functions-write"] or ["functions-read"])
+{
+    await FunctionDomainProbe.RunAsync(args[0], redis);
+    return;
+}
+
 if (args is ["compose"])
 {
     await CompositionProbe.RunAsync(redis, payload);

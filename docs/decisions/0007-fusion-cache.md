@@ -1,6 +1,6 @@
 # FusionCache application caching (epic #1396)
 
-Status: FC-1 through FC-4 validated; discovery remains opt-in until deployment review.
+Status: FC-1 through FC-5 validated; migrated domains remain opt-in until deployment review.
 Baseline: `e8355b606a6b0885db8642d6bc41c5cd6b83760f`, refreshed against the checkout on 2026-10-04.
 Implementation branch: `codex/epic-1396-fusioncache`. FC-1 issue: #1397.
 
@@ -229,6 +229,21 @@ legacy workload; explain fixed tag/backplane overhead and connection count expli
 freshness is a hard gate independent of performance. Re-measure on matching hardware at FC-8.
 
 ## Retirement inventory and effort
+
+FC-5 migrates scoped function discovery policy, loader and invalidation callers. Normalized
+configuration sets use one factory/configuration query, retaining minimum configured TTL,
+explicit overrides, global toggle interpretations and no-write behavior without a TTL.
+Configuration changes expire every combination and discovery catalog/schema payloads;
+toggle events expire combinations while disabled. Endpoint catalog/schema loads also use
+generation-captured factories, preserving authentication and missing-configuration errors.
+Mutable tool/schema state is detached and cloned; MCP expansion and names are unchanged.
+
+FC-5 evidence: **62 focused tests passed, zero skipped**, including real Redis two-node
+overlapping combinations, configured/override TTL, MCP cold/L1/L2 parity, one factory for 32
+normalized concurrent requests, late schemas, cancellation, toggle recovery, scope validation,
+and service-level storage failure through the handler. The analyzer ratchet passed with
+**0 first-party diagnostics**. Published win-x64 NativeAOT function modes passed local/Redis
+coalescing and independent-process schema/invalidation round trips with reflection disabled.
 
 FC-3 routes discovery requests and warming through one wire projection and a domain factory
 method. Discovery's selector is reversible and remains Legacy by default. The FusionCache
