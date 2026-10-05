@@ -15,11 +15,13 @@ public sealed class ApplicationCacheGeneration : IDisposable
     private readonly object _gate = new();
     private Task<ConnectionMultiplexer>? _connection;
     private bool _disposed;
+    private readonly Dictionary<ApplicationCacheDomain, FusionCacheEntryOptions> _reads;
 
     public ApplicationCacheGeneration(IFusionCache cache, ApplicationCacheOptions options, string? redis)
     {
         _cache = cache;
         _options = options;
+        _reads = Enum.GetValues<ApplicationCacheDomain>().ToDictionary(domain => domain, domain => Entry(domain));
         if (!string.IsNullOrWhiteSpace(redis))
         {
             _redis = ConfigurationOptions.Parse(redis);
@@ -46,7 +48,7 @@ public sealed class ApplicationCacheGeneration : IDisposable
         return entry;
     }
 
-    private async Task<IConnectionMultiplexer> ConnectionAsync(CancellationToken token)
+    private async ValueTask<IConnectionMultiplexer> ConnectionAsync(CancellationToken token)
     {
         Task<ConnectionMultiplexer> connection;
         lock (_gate)
@@ -67,9 +69,16 @@ public sealed class ApplicationCacheGeneration : IDisposable
         {
             // Never use a cached generation once this connection has observed a disconnect.
             if (_redis is not null) connection = await ConnectionAsync(token).ConfigureAwait(false);
-            var entry = Entry(domain);
+            var entry = _reads[domain];
             // After a strict-domain storage failure, never accept the old locally cached token on reconnect.
-            entry.SkipMemoryCacheRead = _reconcile.ContainsKey(domain);
+            if (_reconcile.ContainsKey(domain)) { entry = entry.Duplicate(); entry.SkipMemoryCacheRead = true; }
+            else
+            {
+                // This is FusionCache's own bounded L1, after checking the dedicated connection.
+                // No additional local cache, key inventory or bypass of recovery is introduced.
+                var cached = _cache.TryGet<string>(Key(domain), entry, token);
+                if (cached.HasValue) return cached.Value;
+            }
             return await _cache.GetOrSetAsync<string>(Key(domain), async (context, cancellation) =>
             {
                 if (connection is null) return _local.GetOrAdd(domain, _ => Guid.NewGuid().ToString("N"));

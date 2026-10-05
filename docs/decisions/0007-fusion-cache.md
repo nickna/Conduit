@@ -12,6 +12,55 @@ FC-8 requires a demonstrated rollback and comparison with the thresholds below b
 deleting compatibility code. None of the probe's passing assertions constitutes a
 production rollout, a durable messaging test, or evidence of linearizable invalidation.
 
+### FC-8 pre-retirement rollout gate
+
+The isolated rollout/rollback window was exercised and closed before removing compatibility.
+95 tests passed, zero skipped, with real Redis/PostgreSQL configured: stages 0–5 resolve both
+actual host graphs in Discovery → Functions → Mappings → Costs → PricingRules order; the durable
+three-host fixture repeats Admin repricing, restarts with the original message pending, lost
+backplane delivery and the controlled two-legacy-process bypass/clear/re-enable rollback.
+This is fixture rollout evidence. No production deployment or observation window is claimed.
+The pre-retirement Git commit preserves the temporary benchmark and mixed-version reproducer.
+
+Release JIT, .NET 10.0.12 on Windows, Redis 7.4.2 loopback: 200 samples after 20 warmups, same
+one-model discovery, one schema, complete mapping, one cost and one rule payload. L2 measurements
+evict only payload L1, keeping storage and bounded generation/tag checks real. INFO observer
+contributes one command to each batch. Counters include process-wide allocation, including Redis
+background work; these fixture measurements are not production throughput or capacity estimates.
+
+| Domain | Legacy L1 median/p95 µs | Fusion L1 median/p95 µs | Legacy/Fusion L1 bytes per call | Legacy L2 median/p95 µs | Fusion L2 median/p95 µs | Legacy/Fusion L2 bytes per call | Legacy/Fusion L2 commands |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Discovery | 1.4/3.7 | 3.9/8.0 | 440/2600 | 425.3/515.5 | 467.8/548.9 | 18676/8818 | 201/201 |
+| Functions | 2.0/5.2 | 4.6/8.9 | 1224/3216 | 443.8/554.6 | 425.6/516.3 | 19545/9526 | 201/201 |
+| Mappings | 1.7/2.2 | 5.0/5.7 | 704/4181 | 1070.6/1222.8 | 446.7/522.1 | 194840/14446 | 601/202 |
+| Costs | 322.6/400.4 | 4.6/5.3 | 2120/3436 | 793.6/906.6 | 426.8/486.5 | 47806/12850 | 401/201 |
+| Rules | 1.6/2.1 | 5.5/6.0 | 528/3288 | 432.6/579.1 | 456.2/538.1 | 34285/9945 | 201/202 |
+
+All latency targets and L2 allocation/traffic targets pass. **Recorded allocation exception:**
+L1 exceeds the original `legacy × 1.25 + 512 bytes` target for every domain. This change retains
+the 2.6–4.2 KB fixture allocation to preserve owned mutable graphs/schemas, per-read pricing
+validation and generation fencing; reverting to shared mutable results would violate correctness
+gates. This exception is explicit for PR review, not a claim of full performance-target parity.
+Measured optimizations reuse immutable policy objects, use FusionCache's bounded L1 before
+factory access, avoid JSON auto-cloning of tool schemas, and prebind bounded metric children.
+No secondary application cache or unbounded key tracking was added.
+
+Five matched legacy payloads occupied 4128 Redis bytes; five compact complete Fusion payloads
+plus five persistent generation keys occupied 6768 bytes (**1.64×**, under 2×). Null optional
+properties are omitted by generated JSON; old and new payloads remain readable. Invalidation
+adds at most five tag markers, independent of request-key cardinality. Retired generations and
+tagged payloads expire physically at their TTLs; repeated broad expiration can temporarily raise
+resident memory, so monitor it across the maximum payload TTL. A warmed cache uses three owned
+Redis multiplexers/six sockets (L2, backplane, generation); this benchmark added eight sockets
+including the two legacy storage sockets. Single first-use samples include initialization/JIT
+and are intentionally not interpreted as steady-state regression or capacity numbers.
+
+Real PostgreSQL cold/L1/restarted-L2 query counts: discovery **1/0/0**, mappings **1/0/0**
+(legacy L2 required one repair query), model-identifier billing **2/0/0** (legacy also 2/0/0;
+the existing paginated cost loader executes count plus data queries). Healthy 32-caller misses
+retain one business load per instance in the contract/native probes. Global-settings enable
+lookup and per-instance coalescing remain subject to their documented contracts.
+
 FC-7 replaces the billing decorator and parsed-rule service with explicit cost snapshots,
 positive/missing lookup contracts and factory access. Cost ID and model-ID reads validate
 active/effective/expiry on cold and warm returns. This also corrects the legacy decorator's

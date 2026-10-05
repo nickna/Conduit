@@ -17,6 +17,7 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
     private readonly IFusionCache _cache;
     private readonly ApplicationCacheGeneration _generation;
     private readonly FusionCacheEntryOptions _entry;
+    private readonly FusionCacheEntryOptions _localEntry;
     private readonly ILogger<FusionDiscoveryCacheService> _logger;
     private readonly bool _enabled;
     private readonly TimeProvider _clock;
@@ -43,6 +44,7 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
         // JsonElement is immutable. Detach incoming documents once, then copy the mutable list on reads.
         // This preserves ownership without serializing the complete discovery response on every L1 hit.
         _entry.EnableAutoClone = false;
+        _localEntry = _entry.Duplicate(); _localEntry.SkipDistributedCacheRead = true;
     }
 
     private async ValueTask<string> KeyAsync(string key, CancellationToken token) =>
@@ -82,7 +84,8 @@ public sealed class FusionDiscoveryCacheService : IDiscoveryCacheService
             var key = await KeyAsync(cacheKey, cancellationToken);
             for (var attempt = 0; attempt < 2; attempt++)
             {
-                var result = await _cache.GetOrSetAsync<DiscoveryModelsResult>(key, async (context, token) =>
+                var local = await _cache.TryGetAsync<DiscoveryModelsResult>(key, _localEntry, cancellationToken);
+                var result = local.HasValue ? local.Value : await _cache.GetOrSetAsync<DiscoveryModelsResult>(key, async (context, token) =>
                 {
                     try { loaded = await load(token); }
                     catch { factoryFailed = true; throw; }

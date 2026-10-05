@@ -21,6 +21,7 @@ public sealed class FusionPricingRulesService : ICachedPricingRulesService
     private readonly ApplicationCacheGeneration _generation;
     private readonly ILogger<FusionPricingRulesService> _logger;
     private readonly FusionCacheEntryOptions _entry;
+    private readonly FusionCacheEntryOptions _localEntry;
     private readonly bool _enabled;
     private static readonly CorePricingJsonContext JsonContext = new(new JsonSerializerOptions
     { PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
@@ -36,6 +37,7 @@ public sealed class FusionPricingRulesService : ICachedPricingRulesService
         _entry = options.Entry(duration);
         _entry.Duration = TimeSpan.FromMilliseconds(100) < _entry.Duration ? TimeSpan.FromMilliseconds(100) : _entry.Duration;
         _entry.EnableAutoClone = false;
+        _localEntry = _entry.Duplicate(); _localEntry.SkipDistributedCacheRead = true;
     }
     private static string Fingerprint(string json)
     {
@@ -82,7 +84,8 @@ public sealed class FusionPricingRulesService : ICachedPricingRulesService
         try
         {
             var key = $"rules:{await _generation.GetAsync(Domain, cancellationToken)}:{modelCostId}:{Fingerprint(pricingConfiguration)}";
-            var result = await _cache.GetOrSetAsync<PricingRulesConfig?>(key, (context, _) =>
+            var local = await _cache.TryGetAsync<PricingRulesConfig?>(key, _localEntry, cancellationToken);
+            var result = local.HasValue ? local.Value : await _cache.GetOrSetAsync<PricingRulesConfig?>(key, (context, _) =>
             {
                 parsed = Parse(pricingConfiguration); didParse = true;
                 if (parsed is null)

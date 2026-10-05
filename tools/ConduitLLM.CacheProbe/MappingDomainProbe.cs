@@ -58,7 +58,7 @@ internal static class MappingDomainProbe
             || !value.ModelProviderTypeAssociation.Model.Parameters!.Contains("temperature", StringComparison.Ordinal))
             throw new InvalidOperationException("Mapping graph lost routing, pricing or inherited parameters.");
     }
-    private sealed class FixtureMappingService : IModelProviderMappingService
+    internal sealed class FixtureMappingService : IModelProviderMappingService
     {
         public int Loads;
         public bool FailReads;

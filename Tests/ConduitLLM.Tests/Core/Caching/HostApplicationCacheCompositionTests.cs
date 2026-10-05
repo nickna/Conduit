@@ -31,7 +31,15 @@ public sealed class HostApplicationCacheCompositionTests
     [InlineData(true)] [InlineData(false)]
     public void MigratedDomainSelectionsResolveActualHostServices(bool gateway) => Resolve(gateway, null, migrated: true);
 
-    private static void Resolve(bool gateway, string? redis, bool migrated = false)
+    [Theory]
+    [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)] [InlineData(4)] [InlineData(5)]
+    public void IncrementalRolloutResolvesBothHostsInDomainOrder(int stage)
+    {
+        var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
+        Resolve(true, redis, stage: stage); Resolve(false, redis, stage: stage);
+    }
+
+    private static void Resolve(bool gateway, string? redis, bool migrated = false, int? stage = null)
     {
         var originals = new[] { "DATABASE_URL", "REDIS_URL", "CONDUIT_REDIS_CONNECTION_STRING" }
             .ToDictionary(name => name, Environment.GetEnvironmentVariable);
@@ -46,12 +54,12 @@ public sealed class HostApplicationCacheCompositionTests
                 EnvironmentName = "Testing"
             });
             builder.Configuration["ApplicationCache:Environment"] = $"probe-{Guid.NewGuid():N}";
-            if (migrated)
-                foreach (var domain in new[] { "Discovery", "Functions", "Mappings", "Costs", "PricingRules" })
+            if (migrated || stage.HasValue)
+                foreach (var domain in new[] { "Discovery", "Functions", "Mappings", "Costs", "PricingRules" }.Take(stage ?? 5))
                     builder.Configuration[$"ApplicationCache:Implementations:{domain}"] = "FusionCache";
             if (gateway)
             {
-                if (migrated) global::Program.ConfigureCoreServices(builder);
+                if (migrated || stage.HasValue) global::Program.ConfigureCoreServices(builder);
                 global::Program.ConfigureCachingServices(builder);
             }
             else ConduitLLM.Admin.Program.ConfigureCoreServices(builder, NullLogger.Instance);
@@ -60,6 +68,15 @@ public sealed class HostApplicationCacheCompositionTests
             Assert.Equal(redis is not null, cache.HasDistributedCache);
             Assert.Equal(redis is not null, cache.HasBackplane);
             Assert.NotNull(provider.GetRequiredService<ICacheManager>());
+            if (stage is { } selected)
+            {
+                using var scope = provider.CreateScope();
+                if (gateway) Assert.Equal(selected >= 1, provider.GetRequiredService<IDiscoveryCacheService>() is FusionDiscoveryCacheService);
+                Assert.Equal(selected >= 2, scope.ServiceProvider.GetRequiredService<IFunctionDiscoveryCacheService>() is FusionFunctionDiscoveryCacheService);
+                Assert.Equal(selected >= 3, scope.ServiceProvider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IModelProviderMappingService>() is FusionModelProviderMappingService);
+                Assert.Equal(selected >= 4, scope.ServiceProvider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IModelCostService>() is FusionModelCostService);
+                Assert.Equal(selected >= 5, provider.GetRequiredService<ICachedPricingRulesService>() is FusionPricingRulesService);
+            }
             if (migrated)
             {
                 using var scope = provider.CreateScope();

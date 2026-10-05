@@ -21,6 +21,7 @@ public sealed class FusionModelProviderMappingService : IModelProviderMappingSer
     private readonly IModelMappingCacheInvalidator _invalidation;
     private readonly ILogger<FusionModelProviderMappingService> _logger;
     private readonly FusionCacheEntryOptions _entry;
+    private readonly FusionCacheEntryOptions _localEntry;
     private readonly bool _enabled;
     private const ApplicationCacheDomain Domain = ApplicationCacheDomain.Mappings;
 
@@ -37,6 +38,7 @@ public sealed class FusionModelProviderMappingService : IModelProviderMappingSer
         _entry = options.Entry(duration);
         _entry.Duration = TimeSpan.FromMilliseconds(100) < _entry.Duration ? TimeSpan.FromMilliseconds(100) : _entry.Duration;
         _entry.EnableAutoClone = false; // immutable detached snapshots are reconstructed as owned graphs on every return
+        _localEntry = _entry.Duplicate(); _localEntry.SkipDistributedCacheRead = true;
     }
     private static bool StorageFailure(Exception ex) => ex is RedisException or TimeoutException or JsonException
         or FusionCacheDistributedCacheException or FusionCacheSerializationException or FusionCacheBackplaneException;
@@ -49,7 +51,9 @@ public sealed class FusionModelProviderMappingService : IModelProviderMappingSer
         try
         {
             var generation = await _generation.GetAsync(Domain);
-            var snapshots = await _cache.GetOrSetAsync<List<MappingCacheSnapshot>>($"mappings:{generation}:{key}", async (context, _) =>
+            var cacheKey = $"mappings:{generation}:{key}";
+            var local = await _cache.TryGetAsync<List<MappingCacheSnapshot>>(cacheKey, _localEntry);
+            var snapshots = local.HasValue ? local.Value : await _cache.GetOrSetAsync<List<MappingCacheSnapshot>>(cacheKey, async (context, _) =>
             {
                 try
                 {

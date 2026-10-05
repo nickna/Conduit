@@ -22,12 +22,24 @@ public sealed class FusionFunctionDiscoveryCacheService(
 {
     private const ApplicationCacheDomain Domain = ApplicationCacheDomain.Functions;
     private long _hits, _misses, _invalidations, _lastInvalidation;
+    private readonly FusionCacheEntryOptions _baseEntry = CreateEntry(options,
+        legacyOptions.Value.RegionConfigs?.GetValueOrDefault(CacheRegion.FunctionDiscovery), 15);
+    private readonly FusionCacheEntryOptions _localEntry = LocalEntry(options,
+        legacyOptions.Value.RegionConfigs?.GetValueOrDefault(CacheRegion.FunctionDiscovery));
     private CacheRegionConfig? Region => legacyOptions.Value.RegionConfigs?.GetValueOrDefault(CacheRegion.FunctionDiscovery);
     private FusionCacheEntryOptions Entry(int minutes)
     {
+        return CreateEntry(options, Region, minutes);
+    }
+    private static FusionCacheEntryOptions LocalEntry(ApplicationCacheOptions options, CacheRegionConfig? region)
+    {
+        var entry = CreateEntry(options, region, 15); entry.SkipDistributedCacheRead = true; return entry;
+    }
+    private static FusionCacheEntryOptions CreateEntry(ApplicationCacheOptions options, CacheRegionConfig? region, int minutes)
+    {
         var duration = TimeSpan.FromMinutes(minutes);
-        if (Region?.MaxTTL is { } maximum && duration > maximum) duration = maximum;
-        return options.Entry(duration);
+        if (region?.MaxTTL is { } maximum && duration > maximum) duration = maximum;
+        var entry = options.Entry(duration); entry.EnableAutoClone = false; return entry;
     }
     private static bool StorageFailure(Exception ex) => ex is RedisException or TimeoutException or JsonException
         or FusionCacheDistributedCacheException or FusionCacheSerializationException or FusionCacheBackplaneException;
@@ -64,7 +76,8 @@ public sealed class FusionFunctionDiscoveryCacheService(
         try
         {
             var key = await KeyAsync(ids, cancellationToken);
-            var result = await cache.GetOrSetAsync<List<Tool>>(key, async (context, token) =>
+            var local = await cache.TryGetAsync<List<Tool>>(key, _localEntry, cancellationToken);
+            var result = local.HasValue ? local.Value : await cache.GetOrSetAsync<List<Tool>>(key, async (context, token) =>
             {
                 try { loaded = await load(token); }
                 catch { businessFailed = true; throw; }
@@ -74,12 +87,12 @@ public sealed class FusionFunctionDiscoveryCacheService(
                     context.Options.Duration = policy.Duration;
                     context.Options.DistributedCacheDuration = policy.DistributedCacheDuration;
                 }
-                else context.Options.SkipMemoryCacheWrite = context.Options.SkipDistributedCacheWrite = true;
+                else { context.Options.SkipMemoryCacheWrite = context.Options.SkipDistributedCacheWrite = true; context.Options.SkipBackplaneNotifications = true; }
                 return Copy(loaded.Tools);
-            }, options: Entry(15), tags: [ApplicationCacheOptions.Tag(Domain)], token: cancellationToken);
+            }, options: _baseEntry, tags: [ApplicationCacheOptions.Tag(Domain)], token: cancellationToken);
             if (loaded is null) Interlocked.Increment(ref _hits);
             else Interlocked.Increment(ref _misses);
-            return result;
+            return Copy(result);
         }
         catch (Exception ex) when (!businessFailed && StorageFailure(ex))
         {
@@ -94,8 +107,8 @@ public sealed class FusionFunctionDiscoveryCacheService(
         if (ids.Count == 0 || !await IsCachingEnabledAsync(cancellationToken)) return null;
         try
         {
-            var result = await cache.TryGetAsync<List<Tool>>(await KeyAsync(ids, cancellationToken), token: cancellationToken);
-            return result.HasValue ? result.Value : null;
+            var result = await cache.TryGetAsync<List<Tool>>(await KeyAsync(ids, cancellationToken), _baseEntry, cancellationToken);
+            return result.HasValue ? Copy(result.Value) : null;
         }
         catch (Exception ex) when (StorageFailure(ex))
         { logger.LogWarning(ex, "Function cache read failed"); return null; }

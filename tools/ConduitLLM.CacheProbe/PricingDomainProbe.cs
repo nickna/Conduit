@@ -13,6 +13,10 @@ namespace ConduitLLM.CacheProbe;
 
 internal static class PricingDomainProbe
 {
+    internal static FusionModelCostService Service(ServiceProvider host, IModelCostService inner) => new(inner,
+        host.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey), host.GetRequiredService<ApplicationCacheOptions>(),
+        host.GetRequiredService<ApplicationCacheGeneration>(), TimeProvider.System, Options.Create(new CacheManagerOptions()),
+        NullLogger<FusionModelCostService>.Instance);
     public static async Task RunAsync(string mode, string? redis)
     {
         var environment = Environment.GetEnvironmentVariable("CONDUIT_CACHE_PROBE_ENVIRONMENT") ?? $"probe-{Guid.NewGuid():N}";
@@ -63,7 +67,7 @@ internal static class PricingDomainProbe
         Console.WriteLine("PASS production pricing native 32 misses/one load/ownership/config variants/repricing");
     }
 
-    private sealed class FixtureCostService : IModelCostService
+    internal sealed class FixtureCostService : IModelCostService
     {
         public int Loads; public bool FailReads; public decimal Rate = 0.25m;
         public TaskCompletionSource? Barrier;

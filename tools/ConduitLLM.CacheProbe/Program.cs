@@ -124,6 +124,14 @@ if (args is ["pricing"] or ["pricing-write"] or ["pricing-read"])
     return;
 }
 
+#if !CONDUIT_NATIVE_AOT
+if (args is ["rollout"])
+{
+    await RolloutBenchmark.RunAsync(redis ?? throw new InvalidOperationException("Rollout gate requires Redis."), payload);
+    return;
+}
+#endif
+
 if (args is ["write"] or ["read"])
 {
     if (string.IsNullOrEmpty(redis)) throw new InvalidOperationException("Process round trips require Redis.");

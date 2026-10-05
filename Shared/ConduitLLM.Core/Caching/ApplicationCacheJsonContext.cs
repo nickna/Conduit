@@ -7,7 +7,7 @@ using ZiggyCreatures.Caching.Fusion.Internals.Distributed;
 
 namespace ConduitLLM.Core.Caching;
 
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(DiscoveryModelsResult))]
 [JsonSerializable(typeof(List<Tool>))]
 [JsonSerializable(typeof(List<MappingCacheSnapshot>))]

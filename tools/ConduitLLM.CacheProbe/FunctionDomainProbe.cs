@@ -56,7 +56,7 @@ internal static class FunctionDomainProbe
     }
 
     // Native fixture: only the enable lookup is exercised. Repository business operations are never emulated.
-    private sealed class EnabledSetting : IGlobalSettingRepository
+    internal sealed class EnabledSetting : IGlobalSettingRepository
     {
         public Task<GlobalSetting?> GetByKeyAsync(string key, CancellationToken cancellationToken = default) =>
             Task.FromResult<GlobalSetting?>(new() { Key = key, Value = "true" });

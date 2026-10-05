@@ -115,6 +115,17 @@ internal static class DatabaseBaseline
         }
         await MeasureAsync("FusionCache mapping cold", FusionMappingAsync, queries, expectedQueries: 1);
         await MeasureAsync("FusionCache mapping L1", FusionMappingAsync, queries, expectedQueries: 0);
+        var costRepository = new ModelCostRepository(factory, NullLogger<ModelCostRepository>.Instance);
+        var costInner = new ConduitLLM.Configuration.Services.ModelCostService(costRepository, mappings,
+            NullLogger<ConduitLLM.Configuration.Services.ModelCostService>.Instance);
+        var legacyCosts = new CachedModelCostService(costInner, cache, NullLogger<CachedModelCostService>.Instance);
+        await MeasureAsync("legacy billing cold", () => legacyCosts.GetCostForModelAsync("cache-probe"), queries, expectedQueries: 2);
+        await MeasureAsync("legacy billing L1", () => legacyCosts.GetCostForModelAsync("cache-probe"), queries, expectedQueries: 0);
+        memory.Remove($"ModelCosts:{ConduitLLM.Configuration.Constants.CacheKeys.ModelCost.ByModelId("cache-probe")}");
+        await MeasureAsync("legacy billing L2", () => legacyCosts.GetCostForModelAsync("cache-probe"), queries, expectedQueries: 0);
+        var fusionCosts = PricingDomainProbe.Service(fusionHost, costInner);
+        await MeasureAsync("FusionCache billing cold", () => fusionCosts.GetCostForModelAsync("cache-probe"), queries, expectedQueries: 2);
+        await MeasureAsync("FusionCache billing L1", () => fusionCosts.GetCostForModelAsync("cache-probe"), queries, expectedQueries: 0);
         if (!string.IsNullOrEmpty(redis))
         {
             using var restartedHost = DiscoveryDomainProbe.Host(redis, environment);
@@ -129,6 +140,8 @@ internal static class DatabaseBaseline
             }, queries, expectedQueries: 0);
             await MeasureAsync("FusionCache discovery restarted L2", () => restarted.GetOrLoadAsync("all:with_pricing",
                 _ => throw new InvalidOperationException("Healthy L2 must not query the database.")), queries, expectedQueries: 0);
+            var restartedCosts = PricingDomainProbe.Service(restartedHost, costInner);
+            await MeasureAsync("FusionCache billing restarted L2", () => restartedCosts.GetCostForModelAsync("cache-probe"), queries, expectedQueries: 0);
         }
     }
 

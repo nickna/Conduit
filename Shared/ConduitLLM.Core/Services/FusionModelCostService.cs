@@ -25,6 +25,7 @@ public sealed class FusionModelCostService : IModelCostService
     private readonly ILogger<FusionModelCostService> _logger;
     private readonly bool _enabled;
     private readonly TimeSpan _positive, _negative;
+    private readonly FusionCacheEntryOptions _positiveEntry, _localEntry;
     private readonly IModelMappingCacheInvalidator? _mappings;
     private readonly ICachedPricingRulesService? _rules;
     private readonly IDiscoveryCacheService? _discovery;
@@ -42,7 +43,8 @@ public sealed class FusionModelCostService : IModelCostService
         _positive = region?.DefaultTTL ?? TimeSpan.FromHours(12);
         _negative = TimeSpan.FromMinutes(1);
         if (region?.MaxTTL is { } maximum) { if (_positive > maximum) _positive = maximum; if (_negative > maximum) _negative = maximum; }
-        _ = Entry(_positive); _ = Entry(_negative);
+        _positiveEntry = Entry(_positive); _ = Entry(_negative);
+        _localEntry = _positiveEntry.Duplicate(); _localEntry.SkipDistributedCacheRead = true;
     }
     private DateTime Now => _clock.GetUtcNow().UtcDateTime;
     private bool Active(ModelCost value) => value.IsActive && value.EffectiveDate <= Now && (value.ExpiryDate is null || value.ExpiryDate > Now);
@@ -74,7 +76,8 @@ public sealed class FusionModelCostService : IModelCostService
             var key = $"costs:{await _generation.GetAsync(Domain, token)}:{logicalKey}";
             for (var attempt = 0; attempt < 2; attempt++)
             {
-                var result = await _cache.GetOrSetAsync<CostLookupResult>(key, async (context, cancellation) =>
+                var local = await _cache.TryGetAsync<CostLookupResult>(key, _localEntry, token);
+                var result = local.HasValue ? local.Value : await _cache.GetOrSetAsync<CostLookupResult>(key, async (context, cancellation) =>
                 {
                     try { loaded = await load(cancellation); didLoad = true; }
                     catch { businessFailed = true; throw; }
@@ -83,11 +86,11 @@ public sealed class FusionModelCostService : IModelCostService
                     if (duration <= TimeSpan.Zero) context.Options.SkipMemoryCacheWrite = context.Options.SkipDistributedCacheWrite = true;
                     else { var policy = Entry(duration); context.Options.Duration = policy.Duration; context.Options.DistributedCacheDuration = policy.DistributedCacheDuration; }
                     return snapshot;
-                }, options: Entry(_positive), tags: [ApplicationCacheOptions.Tag(Domain)], token: token);
+                }, options: _positiveEntry, tags: [ApplicationCacheOptions.Tag(Domain)], token: token);
                 if (result is null) throw new JsonException("Missing cost lookup contract.");
                 var value = result.Value?.ToDomain();
                 if (result.ValidUntil > Now && (value is null || Active(value))) return value;
-                await _cache.RemoveAsync(key, Entry(_positive), token);
+                await _cache.RemoveAsync(key, _positiveEntry, token);
             }
             return loaded is not null && Active(loaded) ? loaded : null;
         }
@@ -114,11 +117,12 @@ public sealed class FusionModelCostService : IModelCostService
         try
         {
             var key = $"costs:{await _generation.GetAsync(Domain, cancellationToken)}:{CacheKeys.ModelCost.All}";
-            var result = await _cache.GetOrSetAsync<List<CostCacheSnapshot>>(key, async (_, token) =>
+            var local = await _cache.TryGetAsync<List<CostCacheSnapshot>>(key, _localEntry, cancellationToken);
+            var result = local.HasValue ? local.Value : await _cache.GetOrSetAsync<List<CostCacheSnapshot>>(key, async (_, token) =>
             {
                 try { loaded = await _inner.ListModelCostsAsync(token); return loaded.Select(CostCacheSnapshot.From).ToList(); }
                 catch { businessFailed = true; throw; }
-            }, options: Entry(_positive), tags: [ApplicationCacheOptions.Tag(Domain)], token: cancellationToken);
+            }, options: _positiveEntry, tags: [ApplicationCacheOptions.Tag(Domain)], token: cancellationToken);
             if (result is null) throw new JsonException("Missing cost list.");
             return result.Select(snapshot => snapshot.ToDomain()).ToList();
         }
