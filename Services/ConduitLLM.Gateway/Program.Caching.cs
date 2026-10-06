@@ -10,9 +10,6 @@ public partial class Program
 {
     public static void ConfigureCachingServices(WebApplicationBuilder builder)
     {
-        // Register unified cache manager (required by DiscoveryCacheService and other services)
-        builder.Services.AddCacheManager(builder.Configuration);
-
         // Configure batch spending options
         builder.Services.Configure<BatchSpendingOptions>(
             builder.Configuration.GetSection(BatchSpendingOptions.SectionName));
@@ -21,6 +18,7 @@ public partial class Program
 
         // Configure Redis connection for all Redis-dependent services
         var redisConnectionString = ConduitLLM.Configuration.Utilities.RedisUrlParser.ResolveConnectionString();
+        builder.Services.AddConduitApplicationCache(builder.Configuration, builder.Environment.EnvironmentName, redisConnectionString);
 
         // Configure CacheOptions with the parsed Redis connection string for cache services.
         builder.Services.Configure<ConduitLLM.Configuration.Options.CacheOptions>(options =>
@@ -81,7 +79,7 @@ public partial class Program
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IProviderCache, RedisProviderCache>();
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IModelCostCache, RedisModelCostCache>();
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IProviderToolCache, RedisProviderToolCache>();
-            
+
             // Register CachedApiVirtualKeyService with event publishing dependency
             builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyService>(serviceProvider =>
             {
@@ -118,17 +116,17 @@ public partial class Program
         {
             // Register the Redis tracker as the inner implementation
             builder.Services.AddSingleton<ConduitLLM.Core.Services.RedisWebhookDeliveryTracker>();
-            
+
             // Add memory caching
             builder.Services.AddMemoryCache();
-            
+
             // Register the cached wrapper as the main interface
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IWebhookDeliveryTracker>(sp =>
             {
                 var redisTracker = sp.GetRequiredService<ConduitLLM.Core.Services.RedisWebhookDeliveryTracker>();
                 var memoryCache = sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
                 var logger = sp.GetRequiredService<ILogger<ConduitLLM.Core.Services.CachedWebhookDeliveryTracker>>();
-                
+
                 return new ConduitLLM.Core.Services.CachedWebhookDeliveryTracker(redisTracker, memoryCache, logger);
             });
         }

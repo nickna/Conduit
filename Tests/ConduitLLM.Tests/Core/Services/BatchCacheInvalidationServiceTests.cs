@@ -51,6 +51,26 @@ namespace ConduitLLM.Tests.Core.Services
                 _mockLogger.Object);
         }
 
+        [Theory]
+        [InlineData(true)] [InlineData(false)]
+        public async Task ModelCostExpirationReachesActualBillingBeforeAcknowledgingQueue(bool bulk)
+        {
+            var billing = new Mock<ConduitLLM.Configuration.Interfaces.IModelCostService>();
+            _mockServiceProvider.Setup(value => value.GetService(typeof(ConduitLLM.Configuration.Interfaces.IModelCostService))).Returns(billing.Object);
+            billing.Setup(value => value.ClearCacheAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("required expiration failed"));
+            var message = new ModelCostChanged { ModelCostId = 42 };
+            await Assert.ThrowsAsync<InvalidOperationException>(() => bulk
+                ? _service.QueueBulkInvalidationAsync(["42", "43"], message, CacheType.ModelCost)
+                : _service.QueueInvalidationAsync("42", message, CacheType.ModelCost));
+            Assert.Equal(0, (await _service.GetStatsAsync()).TotalQueued);
+            billing.Setup(value => value.ClearCacheAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            if (bulk) await _service.QueueBulkInvalidationAsync(["42", "43"], message, CacheType.ModelCost);
+            else await _service.QueueInvalidationAsync("42", message, CacheType.ModelCost);
+            await _service.FlushAsync();
+            billing.Verify(value => value.ClearCacheAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+            _mockModelCostCache.Verify(value => value.InvalidateModelCostAsync(42), Times.Once);
+        }
+
         [Fact]
         public async Task QueueInvalidationAsync_Should_Queue_Request()
         {

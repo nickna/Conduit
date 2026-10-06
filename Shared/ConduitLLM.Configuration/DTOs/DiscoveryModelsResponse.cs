@@ -52,7 +52,11 @@ public sealed record DiscoveredModelDto(
     DateTime? CapabilitiesLastVerifiedAt,
     string Parameters,
     DiscoveryModelCapabilitiesDto Capabilities,
-    DiscoveryModelPricingDto? Pricing = null);
+    DiscoveryModelPricingDto? Pricing = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public DateTime? PricingRefreshAt { get; init; }
+}
 
 /// <summary>Service-neutral model discovery response projection.</summary>
 public sealed record DiscoveryModelsResponse(

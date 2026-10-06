@@ -31,7 +31,7 @@ public partial class Program
         // ========== Caching Infrastructure ==========
 
         builder.Services.AddMemoryCache();
-        builder.Services.AddCacheInfrastructure(builder.Configuration);
+        // ConfigureCachingServices registers the legacy manager once, alongside the application cache.
 
         // ========== Correlation Context ==========
 

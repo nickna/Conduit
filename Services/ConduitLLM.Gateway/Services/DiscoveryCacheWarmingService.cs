@@ -1,3 +1,4 @@
+using ConduitLLM.Core.Caching;
 using System.Diagnostics;
 using System.Text.Json;
 using ConduitLLM.Configuration;
@@ -5,8 +6,6 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Configuration.Models;
-using ConduitLLM.Gateway.Serialization;
-using GatewayDiscoveredModelDto = ConduitLLM.Configuration.DTOs.DiscoveredModelDto;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -22,19 +21,21 @@ namespace ConduitLLM.Gateway.Services
         private readonly DiscoveryCacheOptions _options;
         private readonly JsonSerializerOptions _wireJsonOptions;
         private readonly ILogger<DiscoveryCacheWarmingService> _logger;
+        private readonly TimeProvider _clock;
 
         public DiscoveryCacheWarmingService(
             IServiceProvider serviceProvider,
             IDiscoveryCacheService discoveryCacheService,
             IOptions<DiscoveryCacheOptions> options,
             JsonSerializerOptions wireJsonOptions,
-            ILogger<DiscoveryCacheWarmingService> logger)
+            ILogger<DiscoveryCacheWarmingService> logger, TimeProvider? clock = null)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _discoveryCacheService = discoveryCacheService ?? throw new ArgumentNullException(nameof(discoveryCacheService));
             _options = options.Value ?? throw new ArgumentNullException(nameof(options));
             _wireJsonOptions = wireJsonOptions ?? throw new ArgumentNullException(nameof(wireJsonOptions));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _clock = clock ?? TimeProvider.System;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -96,8 +97,8 @@ namespace ConduitLLM.Gateway.Services
                 var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ConduitDbContext>>();
 
                 // Warm cache for common capability filters
-                var commonCapabilities = _options.WarmupCapabilities ?? new List<string> 
-                { 
+                var commonCapabilities = _options.WarmupCapabilities ?? new List<string>
+                {
                     "chat", "image_input", "video_input", "audio_input", "file_input",
                     "image_generation", "video_generation"
                 };
@@ -112,7 +113,7 @@ namespace ConduitLLM.Gateway.Services
                         break;
 
                     await WarmCacheForCapability(dbContextFactory, capability, stoppingToken);
-                    
+
                     // Small delay between cache warming operations
                     await Task.Delay(100, stoppingToken);
                 }
@@ -141,38 +142,19 @@ namespace ConduitLLM.Gateway.Services
         {
             try
             {
-                using var context = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-                
-                var projectedModels = await DiscoveryModelProjector.ProjectAsync(
-                    context,
-                    capability,
-                    _options.ExposePricing,
-                    _logger,
-                    cancellationToken);
-                var models = projectedModels
-                    .Select(model => JsonSerializer.SerializeToElement(
-                        model,
-                        GatewayJsonTypeInfo.Require<GatewayDiscoveredModelDto>(_wireJsonOptions)))
-                    .ToList();
-
-                // Cache the results
-                var cacheKey = DiscoveryCacheService.BuildCacheKey(
+                var cacheKey = DiscoveryCacheKeys.Build(
                     capability,
                     includePricing: _options.ExposePricing);
-                var discoveryResult = new DiscoveryModelsResult
-                {
-                    Data = models,
-                    Count = models.Count,
-                    CapabilityFilter = capability
-                };
+                var result = await _discoveryCacheService.GetOrLoadAsync(cacheKey, token =>
+                    DiscoveryCacheLoader.LoadAsync(dbContextFactory, capability, _options.ExposePricing,
+                        _wireJsonOptions, _logger, token, _clock), cancellationToken);
 
-                await _discoveryCacheService.SetDiscoveryResultsAsync(cacheKey, discoveryResult, cancellationToken);
-                
                 _logger.LogInformation(
                     "Warmed discovery cache for capability '{Capability}' with {Count} models",
                     capability ?? "all",
-                    models.Count);
+                    result.Count);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error warming cache for capability: {Capability}", capability ?? "all");

@@ -38,6 +38,7 @@ public partial class Program
 
         // Configure Data Protection with Redis persistence
         var redisConnectionString = RedisUrlParser.ResolveConnectionString();
+        builder.Services.AddConduitApplicationCache(builder.Configuration, builder.Environment.EnvironmentName, redisConnectionString);
         builder.Services.AddRedisDataProtection(redisConnectionString, "Conduit");
 
         // Add Redis as distributed cache for ephemeral key storage

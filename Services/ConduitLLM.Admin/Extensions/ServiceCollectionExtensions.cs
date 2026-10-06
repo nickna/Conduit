@@ -72,12 +72,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAdminVirtualKeyService, AdminVirtualKeyService>();
         // Register AdminModelProviderMappingService (optional deps use default parameter values)
         services.AddScoped<IAdminModelProviderMappingService, AdminModelProviderMappingService>();
-        
+
         // Register Analytics services
         services.AddSingleton<IAnalyticsMetrics, AnalyticsMetricsService>();
         services.AddSingleton<AnalyticsCacheInvalidator>();
         services.AddScoped<IAnalyticsService, AnalyticsService>();
-        
+
         // Register AdminIpFilterService (optional deps use default parameter values)
         services.AddScoped<IAdminIpFilterService, AdminIpFilterService>();
         services.AddScoped<IAdminSystemInfoService, AdminSystemInfoService>();
@@ -88,14 +88,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAdminModelCostService, AdminModelCostService>();
 
         // Register cost calculation dependencies with caching decorator pattern
-        services.AddScoped<ConduitLLM.Configuration.Services.ModelCostService>();
-        services.AddScoped<ConduitLLM.Configuration.Interfaces.IModelCostService>(provider =>
-        {
-            var innerService = provider.GetRequiredService<ConduitLLM.Configuration.Services.ModelCostService>();
-            var cacheManager = provider.GetRequiredService<ConduitLLM.Core.Interfaces.ICacheManager>();
-            var logger = provider.GetRequiredService<ILogger<ConduitLLM.Core.Services.CachedModelCostService>>();
-            return new ConduitLLM.Core.Services.CachedModelCostService(innerService, cacheManager, logger);
-        });
+        services.AddModelCostCache();
         services.AddScoped<ConduitLLM.Core.Interfaces.ICostCalculationService, ConduitLLM.Core.Services.CostCalculationService>();
 
         services.AddOptions<BillingCostCanaryOptions>()
@@ -161,8 +154,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ConduitLLM.Core.Services.IPricingRulesEvaluator, ConduitLLM.Core.Services.PricingRulesEvaluator>();
         services.AddScoped<ConduitLLM.Core.Services.IPricingRulesValidator, ConduitLLM.Core.Services.PricingRulesValidator>();
 
-        // Register cached pricing rules service for parsed configuration caching (uses ICacheManager)
-        services.AddSingleton<ConduitLLM.Core.Interfaces.ICachedPricingRulesService, ConduitLLM.Core.Services.CachedPricingRulesService>();
+        // Register cached pricing rules service for parsed configuration caching (uses the shared application FusionCache)
+        services.AddPricingRulesCache();
 
         // Register pricing audit service for rules-based pricing event tracking - with leader election
         services.AddSingleton<ConduitLLM.Configuration.Interfaces.IPricingAuditService, ConduitLLM.Configuration.Services.PricingAuditService>();
@@ -193,24 +186,24 @@ public static class ServiceCollectionExtensions
         {
             var redis = serviceProvider.GetService<StackExchange.Redis.IConnectionMultiplexer>();
             var logger = serviceProvider.GetRequiredService<ILogger<ConduitLLM.Core.Services.RedisErrorStore>>();
-            
+
             if (redis == null)
             {
                 logger.LogError("[ConduitLLM.Admin] Redis connection not available. Redis error store will not function.");
                 throw new InvalidOperationException("Redis error store requires Redis. Ensure REDIS_URL or CONDUIT_REDIS_CONNECTION_STRING is configured.");
             }
-            
+
             logger.LogInformation("[ConduitLLM.Admin] Redis error store initialized");
             return new ConduitLLM.Core.Services.RedisErrorStore(redis, logger);
         });
-        
+
         // Register provider error tracking service
         services.AddSingleton<ConduitLLM.Core.Interfaces.IProviderErrorTrackingService>(serviceProvider =>
         {
             var errorStore = serviceProvider.GetRequiredService<ConduitLLM.Core.Interfaces.IRedisErrorStore>();
             var scopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
             var logger = serviceProvider.GetRequiredService<ILogger<ConduitLLM.Core.Services.ProviderErrorTrackingService>>();
-            
+
             logger.LogInformation("[ConduitLLM.Admin] Provider error tracking service initialized with Redis backend");
             return new ConduitLLM.Core.Services.ProviderErrorTrackingService(errorStore, scopeFactory, logger);
         });

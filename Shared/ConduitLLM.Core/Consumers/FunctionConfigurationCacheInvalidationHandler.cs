@@ -15,13 +15,16 @@ public class FunctionConfigurationCacheInvalidationHandler : ConduitLLM.Configur
 {
     private readonly IFunctionDiscoveryCacheService _cacheService;
     private readonly ILogger<FunctionConfigurationCacheInvalidationHandler> _logger;
+    private readonly IDiscoveryCacheService? _discovery;
 
     public FunctionConfigurationCacheInvalidationHandler(
         IFunctionDiscoveryCacheService cacheService,
-        ILogger<FunctionConfigurationCacheInvalidationHandler> logger)
+        ILogger<FunctionConfigurationCacheInvalidationHandler> logger,
+        IDiscoveryCacheService? discovery = null)
     {
         _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _discovery = discovery;
     }
 
     public async Task HandleAsync(FunctionConfigurationChanged message, IEventContext context)
@@ -35,7 +38,8 @@ public class FunctionConfigurationCacheInvalidationHandler : ConduitLLM.Configur
 
         // Invalidate all function discovery cache entries
         // Since we cache by lists of IDs, invalidating all is the safest approach
-        await _cacheService.InvalidateAllFunctionDiscoveryAsync();
+        await _cacheService.InvalidateAllFunctionDiscoveryAsync(context.CancellationToken);
+        if (_discovery is not null) await _discovery.InvalidateAllDiscoveryAsync(context.CancellationToken);
 
         _logger.LogInformation(
             "Successfully invalidated function discovery cache for '{ConfigName}' (ID: {ConfigId})",
@@ -68,7 +72,7 @@ public class FunctionDiscoveryCacheInvalidationRequestHandler : ConduitLLM.Confi
             message.Reason,
             message.RequestedBy);
 
-        await _cacheService.InvalidateAllFunctionDiscoveryAsync();
+        await _cacheService.InvalidateAllFunctionDiscoveryAsync(context.CancellationToken);
 
         _logger.LogInformation(
             "Successfully invalidated all function discovery cache entries. Reason: {Reason}",

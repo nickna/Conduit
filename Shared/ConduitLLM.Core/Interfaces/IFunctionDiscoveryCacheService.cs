@@ -7,6 +7,8 @@ namespace ConduitLLM.Core.Interfaces;
 /// </summary>
 public interface IFunctionDiscoveryCacheService
 {
+    Task<List<Tool>> GetOrLoadAsync(List<int> ids, Func<CancellationToken, Task<FunctionDiscoveryLoad>> load,
+        int? ttlMinutes = null, CancellationToken cancellationToken = default);
     /// <summary>
     /// Gets cached tool definitions for a set of function configuration IDs
     /// </summary>
@@ -15,19 +17,6 @@ public interface IFunctionDiscoveryCacheService
     /// <returns>Cached tool definitions or null if not found or caching is disabled</returns>
     Task<List<Tool>?> GetCachedToolsAsync(
         List<int> functionConfigurationIds,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Caches tool definitions for a set of function configuration IDs
-    /// </summary>
-    /// <param name="functionConfigurationIds">List of function configuration IDs</param>
-    /// <param name="tools">Tool definitions to cache</param>
-    /// <param name="ttlMinutes">Optional TTL override in minutes (uses per-function TTL if not provided)</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    Task SetCachedToolsAsync(
-        List<int> functionConfigurationIds,
-        List<Tool> tools,
-        int? ttlMinutes = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -60,3 +49,5 @@ public interface IFunctionDiscoveryCacheService
     /// <returns>Cache statistics</returns>
     Task<CacheStats> GetStatisticsAsync(CancellationToken cancellationToken = default);
 }
+
+public sealed record FunctionDiscoveryLoad(List<Tool> Tools, int? TtlMinutes);

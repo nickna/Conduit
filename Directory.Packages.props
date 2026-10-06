@@ -109,5 +109,8 @@
          Assert.Skip, and swallowing the condition would make the tests silently green. -->
     <PackageVersion Include="Xunit.SkippableFact" Version="1.5.23" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
+    <!-- Shared application cache: one MIT-licensed FusionCache release across integrations. -->
+    <PackageVersion Include="ZiggyCreatures.FusionCache" Version="2.9.0" />
+    <PackageVersion Include="ZiggyCreatures.FusionCache.Backplane.StackExchangeRedis" Version="2.9.0" />
   </ItemGroup>
 </Project>
