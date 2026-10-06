@@ -233,15 +233,18 @@ namespace ConduitLLM.Tests.Admin.Services
         {
             // Arrange
             var options = new MediaLifecycleOptions { Enabled = false };
-            var service = CreateService(options);
-
-            using var cts = new CancellationTokenSource();
+            using var service = CreateService(options);
 
             // Act
-            var executeTask = service.StartAsync(cts.Token);
-            await Task.Delay(100);
-            cts.Cancel();
-            await service.StopAsync(CancellationToken.None);
+            await service.StartAsync(CancellationToken.None);
+            try
+            {
+                await service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None);
+            }
 
             // Assert
             _mockLockService.Verify(
@@ -257,15 +260,18 @@ namespace ConduitLLM.Tests.Admin.Services
         {
             // Arrange
             var options = new MediaLifecycleOptions { Enabled = false };
-            var service = CreateService(options);
-
-            using var cts = new CancellationTokenSource();
+            using var service = CreateService(options);
 
             // Act
-            await service.StartAsync(cts.Token);
-            await Task.Delay(100);
-            cts.Cancel();
-            await service.StopAsync(CancellationToken.None);
+            await service.StartAsync(CancellationToken.None);
+            try
+            {
+                await service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None);
+            }
 
             // Assert
             _mockLogger.Verify(
@@ -300,14 +306,30 @@ namespace ConduitLLM.Tests.Admin.Services
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(_mockLock.Object);
 
-            var service = CreateService(options);
-            using var cts = new CancellationTokenSource();
+            var startupLogged = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            _mockLogger
+                .Setup(x => x.Log(
+                    LogLevel.Information,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((o, t) =>
+                        o.ToString()!.Contains("starting")),
+                    It.IsAny<Exception>(),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()))
+                .Callback(new InvocationAction(_ => startupLogged.TrySetResult()));
+
+            using var service = CreateService(options);
 
             // Act
-            await service.StartAsync(cts.Token);
-            await Task.Delay(200);
-            cts.Cancel();
-            await service.StopAsync(CancellationToken.None);
+            await service.StartAsync(CancellationToken.None);
+            try
+            {
+                await startupLogged.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None);
+            }
 
             // Assert
             _mockLogger.Verify(
