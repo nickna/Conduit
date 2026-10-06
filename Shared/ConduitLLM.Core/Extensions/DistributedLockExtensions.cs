@@ -7,78 +7,47 @@ public readonly record struct OptionalLockResult<T>(bool Executed, T? Value);
 
 public static class DistributedLockExtensions
 {
-    /// <summary>
-    /// Runs an operation with a distributed lock when one can be acquired and always
-    /// releases an acquired lock. Acquisition failures can either skip the operation
-    /// on timeout or run it without cross-instance coordination.
-    /// </summary>
+    /// <summary>Apply optional acquisition policy; an operation is invoked at most once.</summary>
     public static async Task<OptionalLockResult<T>> RunWithOptionalLockAsync<T>(
-        this IDistributedLockService? lockService,
-        string lockKey,
-        TimeSpan lockExpiry,
-        TimeSpan lockTimeout,
-        TimeSpan retryDelay,
-        Func<bool, Task<T>> operation,
-        ILogger logger,
-        CancellationToken cancellationToken = default,
-        bool skipOnTimeout = false)
+        this IDistributedLockProvider? lockService, string lockKey, TimeSpan acquisitionTimeout,
+        Func<bool, CancellationToken, Task<T>> operation, ILogger logger,
+        CancellationToken cancellationToken = default, bool skipOnTimeout = false)
     {
-        IDistributedLock? distributedLock = null;
+        cancellationToken.ThrowIfCancellationRequested();
+        IDistributedLockOwnership? ownership = null;
         if (lockService is not null)
         {
             try
             {
-                distributedLock = await lockService.AcquireLockWithRetryAsync(
-                    lockKey,
-                    lockExpiry,
-                    lockTimeout,
-                    retryDelay,
-                    cancellationToken);
+                ownership = await lockService.TryAcquireAsync(lockKey, acquisitionTimeout, cancellationToken);
+                if (ownership is null && skipOnTimeout) { return new(false, default); }
             }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (TimeoutException) when (skipOnTimeout)
-            {
-                return new OptionalLockResult<T>(false, default);
-            }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                logger.LogWarning(
-                    ex,
-                    "Failed to acquire distributed lock {LockKey}; proceeding without coordination",
-                    lockKey);
+                logger.LogWarning(ex, "Failed to acquire distributed lock {LockKey}; proceeding without coordination", lockKey);
             }
         }
         else
         {
-            logger.LogWarning(
-                "Distributed lock service is unavailable for {LockKey}; proceeding without coordination",
-                lockKey);
+            logger.LogWarning("Distributed lock service is unavailable for {LockKey}; proceeding without coordination", lockKey);
         }
 
         try
         {
-            return new OptionalLockResult<T>(
-                true,
-                await operation(distributedLock is not null));
+            using var work = ownership?.CreateOperationCancellation(cancellationToken);
+            var protectedToken = work?.Token ?? cancellationToken;
+            protectedToken.ThrowIfCancellationRequested();
+            var value = await operation(ownership is not null, protectedToken);
+            protectedToken.ThrowIfCancellationRequested();
+            return new(true, value);
         }
         finally
         {
-            if (distributedLock is not null)
+            if (ownership is not null)
             {
-                try
-                {
-                    await distributedLock.ReleaseAsync();
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(
-                        ex,
-                        "Error releasing distributed lock {LockKey}",
-                        lockKey);
-                }
+                try { await ownership.DisposeAsync(); }
+                catch (Exception ex) { logger.LogWarning(ex, "Error releasing distributed lock {LockKey}", lockKey); }
             }
         }
     }

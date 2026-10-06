@@ -1,4 +1,5 @@
 using Testcontainers.PostgreSql;
+using Testcontainers.Redis;
 using Xunit;
 
 namespace ConduitLLM.IntegrationTests.Infrastructure;
@@ -15,11 +16,22 @@ public sealed class PostgresLockTestContainerFixture : IAsyncLifetime
         .WithPassword("conduitpass")
         .Build();
 
-    public string ConnectionString => _container.GetConnectionString();
+    private readonly string? _externalConnectionString = Environment.GetEnvironmentVariable("CONDUIT_LOCK_TEST_POSTGRES");
+    private readonly string? _externalRedisConnectionString = Environment.GetEnvironmentVariable("CONDUIT_LOCK_TEST_REDIS");
+    private readonly RedisContainer _redis = new RedisBuilder().WithImage("redis:7.4-alpine").Build();
 
-    public Task InitializeAsync() => _container.StartAsync();
+    public string ConnectionString => _externalConnectionString ?? _container.GetConnectionString();
+    public string RedisConnectionString => _externalRedisConnectionString ?? _redis.GetConnectionString();
 
-    public async Task DisposeAsync() => await _container.DisposeAsync();
+    public Task InitializeAsync() => Task.WhenAll(
+        _externalConnectionString is null ? _container.StartAsync() : Task.CompletedTask,
+        _externalRedisConnectionString is null ? _redis.StartAsync() : Task.CompletedTask);
+
+    public async Task DisposeAsync()
+    {
+        try { await _container.DisposeAsync(); }
+        finally { await _redis.DisposeAsync(); }
+    }
 }
 
 [CollectionDefinition("Postgres advisory locks")]

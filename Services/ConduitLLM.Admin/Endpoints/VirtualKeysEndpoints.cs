@@ -54,7 +54,7 @@ public partial class VirtualKeysEndpoints : AdminEndpointHandlerBase
             .WithName("VirtualKeys_Update").Produces<VirtualKeyDto>().Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden).Produces(StatusCodes.Status404NotFound)
             .RequireAuthorization("MasterKeyPolicy");
-        group.MapDelete("/{id}", ([FromServices] VirtualKeysEndpoints endpoints, int id) => endpoints.DeleteKey(id))
+        group.MapDelete("/{id}", ([FromServices] VirtualKeysEndpoints endpoints, int id, CancellationToken cancellationToken) => endpoints.DeleteKey(id, cancellationToken))
             .WithName("VirtualKeys_Delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status403Forbidden).Produces(StatusCodes.Status404NotFound).RequireAuthorization("MasterKeyPolicy");
         group.MapPost("/validate", ([FromServices] VirtualKeysEndpoints endpoints, ValidateVirtualKeyRequest request) => endpoints.ValidateKey(request))
@@ -209,10 +209,11 @@ public partial class VirtualKeysEndpoints : AdminEndpointHandlerBase
     /// Deletes a virtual key by ID
     /// </summary>
     /// <param name="id">The ID of the key to delete</param>
+    /// <param name="cancellationToken">Request/shutdown cancellation.</param>
     /// <returns>No content if successful</returns>
-    public async Task<IResult> DeleteKey(int id)
+    public async Task<IResult> DeleteKey(int id, CancellationToken cancellationToken = default)
     {
-        if (!await _virtualKeyService.DeleteVirtualKeyAsync(id))
+        if (!await _virtualKeyService.DeleteVirtualKeyAsync(id, cancellationToken))
             throw new KeyNotFoundException();
         LogAdminAudit("Deleted", "VirtualKey", id);
         AdminOperationsMetricsService.RecordVirtualKeyOperation("delete", "success");

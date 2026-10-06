@@ -43,6 +43,9 @@ public sealed class HostApplicationCacheCompositionTests
             else ConduitLLM.Admin.Program.ConfigureCoreServices(builder, NullLogger.Instance);
             using var provider = builder.Services.BuildServiceProvider(validateScopes: true);
             using var scope = provider.CreateScope();
+            var locks = provider.GetRequiredService<IDistributedLockProvider>();
+            Assert.IsType<PostgresDistributedLockProvider>(locks);
+            Assert.Same(locks, scope.ServiceProvider.GetRequiredService<IDistributedLockProvider>());
             var cache = provider.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey);
             Assert.Equal(redis is not null, cache.HasDistributedCache); Assert.Equal(redis is not null, cache.HasBackplane);
             if (gateway) Assert.IsType<FusionDiscoveryCacheService>(provider.GetRequiredService<IDiscoveryCacheService>());

@@ -1,3 +1,4 @@
+using ConduitLLM.Core.Extensions;
 using ConduitLLM.Admin.Interfaces;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Configuration;
@@ -30,12 +31,13 @@ namespace ConduitLLM.Admin.Services
         private readonly IVirtualKeyCache? _cache;
         private readonly IMediaLifecycleService? _mediaLifecycleService;
         private readonly IMediaDeletionEngine? _mediaDeletionEngine;
-        private readonly IDistributedLockService? _mediaCleanupLockService;
+        private readonly IDistributedLockProvider? _mediaCleanupLockService;
         private readonly IModelProviderMappingRepository _modelProviderMappingRepository;
         private readonly IModelCapabilityService _modelCapabilityService;
         private readonly IDbContextFactory<ConduitDbContext> _dbContextFactory;
         private readonly DiscoveryCacheOptions _discoveryOptions;
         private readonly ILogger<AdminVirtualKeyService> _logger;
+        private readonly CancellationToken _shutdownToken;
 
         /// <summary>
         /// Initializes a new instance of the AdminVirtualKeyService class
@@ -53,6 +55,7 @@ namespace ConduitLLM.Admin.Services
         /// <param name="mediaDeletionEngine">Guarded media deletion engine.</param>
         /// <param name="mediaCleanupLockService">Distributed lock shared with scheduled cleanup.</param>
         /// <param name="discoveryOptions">Shared discovery response settings.</param>
+        /// <param name="applicationLifetime">Host shutdown notification.</param>
         public AdminVirtualKeyService(
             IVirtualKeyRepository virtualKeyRepository,
             IVirtualKeySpendHistoryRepository spendHistoryRepository,
@@ -65,8 +68,9 @@ namespace ConduitLLM.Admin.Services
             IEventBus? eventBus = null,
             IMediaLifecycleService? mediaLifecycleService = null,
             IMediaDeletionEngine? mediaDeletionEngine = null,
-            IDistributedLockService? mediaCleanupLockService = null,
-            Microsoft.Extensions.Options.IOptions<DiscoveryCacheOptions>? discoveryOptions = null)
+            IDistributedLockProvider? mediaCleanupLockService = null,
+            Microsoft.Extensions.Options.IOptions<DiscoveryCacheOptions>? discoveryOptions = null,
+            Microsoft.Extensions.Hosting.IHostApplicationLifetime? applicationLifetime = null)
             : base(virtualKeyRepository, groupRepository, spendHistoryRepository, eventBus, logger)
         {
             _cache = cache;
@@ -77,6 +81,7 @@ namespace ConduitLLM.Admin.Services
             _modelCapabilityService = modelCapabilityService ?? throw new ArgumentNullException(nameof(modelCapabilityService));
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _discoveryOptions = discoveryOptions?.Value ?? new DiscoveryCacheOptions();
+            _shutdownToken = applicationLifetime?.ApplicationStopping ?? CancellationToken.None;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -85,17 +90,25 @@ namespace ConduitLLM.Admin.Services
         /// <summary>
         /// Cleans up associated media files before a virtual key is deleted.
         /// </summary>
-        protected override async Task OnBeforeVirtualKeyDeleteAsync(int keyId)
+        public Task<bool> DeleteVirtualKeyAsync(int id, CancellationToken cancellationToken)
+            => DeleteVirtualKeyCoreAsync(id, cancellationToken);
+
+        protected override Task OnBeforeVirtualKeyDeleteAsync(int keyId)
+            => OnBeforeVirtualKeyDeleteAsync(keyId, CancellationToken.None);
+
+        protected override async Task OnBeforeVirtualKeyDeleteAsync(int keyId, CancellationToken cancellationToken)
         {
+            using var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownToken);
+            cancellationToken = requestCancellation.Token;
             if (_mediaLifecycleService != null)
             {
                 await using var mediaContext =
-                    await _dbContextFactory.CreateDbContextAsync();
+                    await _dbContextFactory.CreateDbContextAsync(cancellationToken);
                 var mediaRecords = await mediaContext.MediaRecords
                     .IgnoreQueryFilters()
                     .AsNoTracking()
                     .Where(record => record.VirtualKeyId == keyId)
-                    .ToListAsync();
+                    .ToListAsync(cancellationToken);
                 if (mediaRecords.Count == 0)
                 {
                     return;
@@ -107,15 +120,19 @@ namespace ConduitLLM.Admin.Services
                         "Virtual key deletion is blocked because the guarded media deletion engine is unavailable.");
                 }
 
-                await using var lockHandle = await _mediaCleanupLockService.AcquireLockAsync(
+                await using var lockHandle = await _mediaCleanupLockService.TryAcquireAsync(
                     MediaCleanupLock.Key,
-                    MediaCleanupLock.Duration);
+                    TimeSpan.Zero, cancellationToken);
                 if (lockHandle == null)
                 {
                     throw new InvalidOperationException(
                         "Virtual key deletion is blocked while another media cleanup run is active.");
                 }
 
+                using var operationCancellation = lockHandle.CreateOperationCancellation(
+                    cancellationToken, MediaCleanupLock.OperationDeadline);
+                var protectedToken = operationCancellation.Token;
+                protectedToken.ThrowIfCancellationRequested();
                 var operation = new MediaDeletionOperationContext(
                     MediaCleanupTypes.VirtualKey,
                     "virtual-key",
@@ -126,7 +143,8 @@ namespace ConduitLLM.Admin.Services
                         new MediaDeletionRequest(
                             mediaRecords,
                             operation,
-                            Purge: true)));
+                            Purge: true), protectedToken), protectedToken);
+                protectedToken.ThrowIfCancellationRequested();
 
                 if (result.IsDryRun || result.BudgetExhausted || result.Failures > 0)
                 {

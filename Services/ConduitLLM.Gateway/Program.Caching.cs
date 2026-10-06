@@ -30,6 +30,7 @@ public partial class Program
         });
 
         builder.Services.AddRedisDataProtection(redisConnectionString, "Conduit");
+        builder.Services.AddConduitDistributedLocks();
 
         // Configure Redis connection multiplexer FIRST (shared across all Redis services)
         if (!string.IsNullOrEmpty(redisConnectionString))
@@ -68,10 +69,6 @@ public partial class Program
 
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IVirtualKeyCache, RedisVirtualKeyCache>();
 
-            // Register distributed lock service - prefer PostgreSQL for better consistency
-            // PostgreSQL advisory locks are more reliable for cache warming coordination
-            builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IDistributedLockService, PostgresDistributedLockService>();
-
             // Register cache stampede prevention service (must be registered before caches that depend on it)
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IDistributedCachePopulator, DistributedCachePopulator>();
 
@@ -106,9 +103,6 @@ public partial class Program
                 return new ConduitLLM.Gateway.Services.DirectApiVirtualKeyService(
                     virtualKeyRepository, groupRepository, spendHistoryRepository, eventBus, logger);
             });
-
-            // Register PostgreSQL distributed lock service (works even without Redis)
-            builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IDistributedLockService, ConduitLLM.Core.Services.PostgresDistributedLockService>();
         }
 
         // Register Webhook Delivery Tracker for deduplication and statistics

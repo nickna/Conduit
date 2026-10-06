@@ -7,6 +7,8 @@ namespace ConduitLLM.Core.Interfaces
     /// </summary>
     public interface IDistributedCachePopulator
     {
+        Task<T?> GetOrPopulateAsync<T>(string lockKey, Func<CancellationToken, Task<T?>> cacheCheck,
+            Func<CancellationToken, Task<T?>> factory, CancellationToken cancellationToken = default) where T : class;
         /// <summary>
         /// Gets a value from cache, or populates it using the factory function with stampede prevention.
         /// Uses hybrid locking (local + distributed) to prevent multiple instances from simultaneously

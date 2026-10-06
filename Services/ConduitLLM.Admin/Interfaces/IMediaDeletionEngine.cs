@@ -36,7 +36,7 @@ public interface IMediaDeletionEngine
 public static class MediaCleanupLock
 {
     public const string Key = "media:cleanup:leader";
-    public static readonly TimeSpan Duration = TimeSpan.FromMinutes(30);
+    public static readonly TimeSpan OperationDeadline = TimeSpan.FromMinutes(30);
 }
 
 /// <summary>

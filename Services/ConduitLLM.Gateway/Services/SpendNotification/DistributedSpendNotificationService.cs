@@ -1,3 +1,4 @@
+using ConduitLLM.Core.Extensions;
 using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
 using ConduitLLM.Configuration.DTOs.SignalR;
@@ -176,12 +177,13 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                     serviceProvider.GetRequiredService<ILogger<SpendDataRepository>>());
 
                 // Initialize budget alert manager
-                var lockService = serviceProvider.GetRequiredService<IDistributedLockService>();
+                var lockService = serviceProvider.GetRequiredService<IDistributedLockProvider>();
                 _budgetAlertManager = new BudgetAlertManager(
                     _hubContext,
                     _repository,
                     lockService,
-                    serviceProvider.GetRequiredService<ILogger<BudgetAlertManager>>());
+                    serviceProvider.GetRequiredService<ILogger<BudgetAlertManager>>(),
+                    serviceProvider.GetService<IHostApplicationLifetime>());
 
                 // Initialize pattern analyzer
                 _patternAnalyzer = new SpendPatternAnalyzer(

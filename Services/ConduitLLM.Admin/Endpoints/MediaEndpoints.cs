@@ -1,3 +1,4 @@
+using ConduitLLM.Core.Extensions;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Interfaces;
@@ -146,7 +147,7 @@ public static class MediaEndpoints
         [FromServices] IAdminMediaService mediaService,
         [FromServices] ILogger<MediaEndpointLog> logger)
     {
-        var result = await mediaService.DeleteMediaAsync(mediaId);
+        var result = await mediaService.DeleteMediaAsync(mediaId, context.RequestAborted);
         if (result == null)
             throw new KeyNotFoundException();
         AdminAudit.Log(
@@ -171,7 +172,7 @@ public static class MediaEndpoints
         [FromServices] IAdminMediaService mediaService,
         [FromServices] ILogger<MediaEndpointLog> logger)
     {
-        var outcome = await mediaService.RestoreMediaAsync(mediaId);
+        var outcome = await mediaService.RestoreMediaAsync(mediaId, context.RequestAborted);
         if (outcome == MediaRestoreOutcome.NotFound)
         {
             throw new KeyNotFoundException();
@@ -210,7 +211,7 @@ public static class MediaEndpoints
         HttpContext context,
         [FromServices] IConfigurationDbContext configurationContext,
         [FromServices] IMediaDeletionEngine deletionEngine,
-        [FromServices] IDistributedLockService lockService,
+        [FromServices] IDistributedLockProvider lockService,
         [FromServices] IMediaCleanupStatusService statusService,
         [FromServices] ILogger<MediaEndpointLog> logger,
         [FromQuery] bool force = false,
@@ -225,14 +226,14 @@ public static class MediaEndpoints
             lockService,
             statusService,
             logger,
-            operation => DeleteManualCandidatesAsync(
+            (operation, protectedToken) => DeleteManualCandidatesAsync(
                 deletionEngine,
                 operation,
                 () => configurationContext.MediaRecords
                     .AsNoTracking()
                     .Where(media => media.ExpiresAt != null && media.ExpiresAt <= DateTime.UtcNow)
-                    .ToListAsync(cancellationToken),
-                cancellationToken),
+                    .ToListAsync(protectedToken),
+                protectedToken),
             cancellationToken);
     }
 
@@ -240,7 +241,7 @@ public static class MediaEndpoints
         HttpContext context,
         [FromServices] IMediaReconciliationService reconciliationService,
         [FromServices] IMediaDeletionEngine deletionEngine,
-        [FromServices] IDistributedLockService lockService,
+        [FromServices] IDistributedLockProvider lockService,
         [FromServices] IMediaCleanupStatusService statusService,
         [FromServices] ILogger<MediaEndpointLog> logger,
         [FromQuery] bool force = false,
@@ -255,9 +256,9 @@ public static class MediaEndpoints
             lockService,
             statusService,
             logger,
-            operation => reconciliationService.ReconcileAsync(
+            (operation, protectedToken) => reconciliationService.ReconcileAsync(
                 operation,
-                cancellationToken),
+                protectedToken),
             cancellationToken);
     }
 
@@ -288,7 +289,7 @@ public static class MediaEndpoints
         HttpContext context,
         [FromServices] IConfigurationDbContext configurationContext,
         [FromServices] IMediaDeletionEngine deletionEngine,
-        [FromServices] IDistributedLockService lockService,
+        [FromServices] IDistributedLockProvider lockService,
         [FromServices] IMediaCleanupStatusService statusService,
         [FromServices] ILogger<MediaEndpointLog> logger,
         CancellationToken cancellationToken = default)
@@ -305,14 +306,14 @@ public static class MediaEndpoints
             lockService,
             statusService,
             logger,
-            operation => DeleteManualCandidatesAsync(
+            (operation, protectedToken) => DeleteManualCandidatesAsync(
                 deletionEngine,
                 operation,
                 () => QueryPruneCandidatesAsync(
                     configurationContext,
                     request.DaysToKeep.Value,
-                    cancellationToken),
-                cancellationToken),
+                    protectedToken),
+                protectedToken),
             cancellationToken);
     }
 
@@ -445,15 +446,18 @@ public static class MediaEndpoints
         bool force,
         HttpContext context,
         IMediaDeletionEngine deletionEngine,
-        IDistributedLockService lockService,
+        IDistributedLockProvider lockService,
         IMediaCleanupStatusService statusService,
         ILogger<MediaEndpointLog> logger,
-        Func<MediaDeletionOperationContext, Task<MediaDeletionEngineResult>> executeCleanup,
+        Func<MediaDeletionOperationContext, CancellationToken, Task<MediaDeletionEngineResult>> executeCleanup,
         CancellationToken cancellationToken)
     {
-        await using var lockHandle = await lockService.AcquireLockAsync(
+        using var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
+            context.RequestServices.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? CancellationToken.None);
+        cancellationToken = requestCancellation.Token;
+        await using var lockHandle = await lockService.TryAcquireAsync(
             MediaCleanupLock.Key,
-            MediaCleanupLock.Duration,
+            TimeSpan.Zero,
             cancellationToken);
         if (lockHandle == null)
         {
@@ -463,6 +467,9 @@ public static class MediaEndpoints
         }
 
         var instanceId = $"manual:{context.TraceIdentifier}";
+        using var operationCancellation = lockHandle.CreateOperationCancellation(
+            cancellationToken, MediaCleanupLock.OperationDeadline);
+        var protectedToken = operationCancellation.Token;
         var operation = new MediaDeletionOperationContext(
             cleanupType,
             "manual",
@@ -470,8 +477,9 @@ public static class MediaEndpoints
             force);
         var result = await deletionEngine.ExecuteOperationAsync(
             operation,
-            () => executeCleanup(operation),
-            cancellationToken);
+            () => executeCleanup(operation, protectedToken),
+            protectedToken);
+        protectedToken.ThrowIfCancellationRequested();
 
         await statusService.RecordRunCompletionAsync(
             result.FilesDeleted,
@@ -480,7 +488,7 @@ public static class MediaEndpoints
             result.OperationStatus ?? "Completed",
             instanceId,
             "manual",
-            cancellationToken);
+            protectedToken);
         AdminAudit.Log(
             context,
             logger,

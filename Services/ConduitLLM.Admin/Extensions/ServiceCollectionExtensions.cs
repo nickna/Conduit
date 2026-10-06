@@ -107,7 +107,7 @@ public static class ServiceCollectionExtensions
             var mediaRepository = serviceProvider.GetRequiredService<IMediaRecordRepository>();
             var mediaLifecycleService = serviceProvider.GetService<IMediaLifecycleService>();
             var configurationContext = serviceProvider.GetRequiredService<IConfigurationDbContext>();
-            var cleanupLockService = serviceProvider.GetRequiredService<IDistributedLockService>();
+            var cleanupLockService = serviceProvider.GetRequiredService<IDistributedLockProvider>();
             var deletionEngine = serviceProvider.GetRequiredService<IMediaDeletionEngine>();
             var options = serviceProvider.GetRequiredService<
                 Microsoft.Extensions.Options.IOptions<MediaLifecycleOptions>>();
@@ -126,7 +126,8 @@ public static class ServiceCollectionExtensions
                 cleanupLockService,
                 deletionEngine,
                 options,
-                logger);
+                logger,
+                applicationLifetime: serviceProvider.GetService<Microsoft.Extensions.Hosting.IHostApplicationLifetime>());
         });
 
         // ILLMClientFactory is registered via AddProviderServices() in the shared Providers extension

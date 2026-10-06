@@ -24,8 +24,8 @@ namespace ConduitLLM.Tests.Admin.Services
         private readonly Mock<ILogger<AdminVirtualKeyService>> _mockLogger;
         private readonly Mock<IMediaLifecycleService> _mockMediaLifecycleService;
         private readonly Mock<IMediaDeletionEngine> _mockMediaDeletionEngine;
-        private readonly Mock<IDistributedLockService> _mockMediaCleanupLockService;
-        private readonly Mock<IDistributedLock> _mockMediaCleanupLock;
+        private readonly Mock<IDistributedLockProvider> _mockMediaCleanupLockService;
+        private readonly Mock<IDistributedLockOwnership> _mockMediaCleanupLock;
         private readonly Mock<IModelProviderMappingRepository> _mockModelProviderMappingRepository;
         private readonly Mock<IModelCapabilityService> _mockModelCapabilityService;
         private readonly SqliteTestDatabase _database;
@@ -44,14 +44,14 @@ namespace ConduitLLM.Tests.Admin.Services
             _mockLogger = new Mock<ILogger<AdminVirtualKeyService>>();
             _mockMediaLifecycleService = new Mock<IMediaLifecycleService>();
             _mockMediaDeletionEngine = new Mock<IMediaDeletionEngine>();
-            _mockMediaCleanupLockService = new Mock<IDistributedLockService>();
-            _mockMediaCleanupLock = new Mock<IDistributedLock>();
+            _mockMediaCleanupLockService = new Mock<IDistributedLockProvider>();
+            _mockMediaCleanupLock = new Mock<IDistributedLockOwnership>();
             _mockModelProviderMappingRepository = new Mock<IModelProviderMappingRepository>();
             _mockModelCapabilityService = new Mock<IModelCapabilityService>();
             _mockMediaCleanupLockService
-                .Setup(service => service.AcquireLockAsync(
+                .Setup(service => service.TryAcquireAsync(
                     MediaCleanupLock.Key,
-                    MediaCleanupLock.Duration,
+                    TimeSpan.Zero,
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(_mockMediaCleanupLock.Object);
             _mockMediaDeletionEngine

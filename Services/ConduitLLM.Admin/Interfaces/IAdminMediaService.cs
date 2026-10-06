@@ -36,13 +36,14 @@ namespace ConduitLLM.Admin.Interfaces
         /// Deletes a specific media record.
         /// </summary>
         /// <param name="mediaId">The ID of the media record.</param>
+        /// <param name="cancellationToken">Request/shutdown cancellation.</param>
         /// <returns>The deletion result, or null when the active record was not found.</returns>
-        Task<AdminMediaDeleteResult?> DeleteMediaAsync(Guid mediaId);
+        Task<AdminMediaDeleteResult?> DeleteMediaAsync(Guid mediaId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Restores a tombstoned media record while its recovery window remains open.
         /// </summary>
-        Task<MediaRestoreOutcome> RestoreMediaAsync(Guid mediaId);
+        Task<MediaRestoreOutcome> RestoreMediaAsync(Guid mediaId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets media records by storage key pattern.

@@ -160,6 +160,32 @@ namespace ConduitLLM.Tests.Admin.Services
             db.ProviderMetadataDriftItems.Select(i => i.DriftType).Should().Contain(DriftType.MissingCost);
         }
 
+        [Fact]
+        public async Task RunSyncAsync_CancelledCatalogFetch_PersistsCancelledWithoutDriftMutations()
+        {
+            SeedOpenRouterMapping();
+            using var cancellation = new CancellationTokenSource();
+            var handler = new Mock<HttpMessageHandler>();
+            handler.Protected().Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+                .Returns(async (HttpRequestMessage _, CancellationToken token) =>
+                {
+                    cancellation.Cancel();
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                    return new HttpResponseMessage(HttpStatusCode.OK);
+                });
+            var factory = new Mock<IHttpClientFactory>();
+            factory.Setup(service => service.CreateClient(It.IsAny<string>())).Returns(() => new HttpClient(handler.Object));
+            var service = new OpenRouterDriftDetectionService(_dbFactory.Object, factory.Object,
+                Options.Create(new OpenRouterSyncOptions { ModelsEndpoint = "https://test.invalid/models" }),
+                Mock.Of<ILogger<OpenRouterDriftDetectionService>>());
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RunSyncAsync("Manual", cancellation.Token));
+            await using var verification = _database.CreateContext();
+            var run = await verification.ProviderMetadataSyncRuns.SingleAsync();
+            run.Status.Should().Be("Cancelled");
+            run.CompletedAt.Should().NotBeNull();
+            (await verification.ProviderMetadataDriftItems.CountAsync()).Should().Be(0);
+        }
+
         public void Dispose() => _database.Dispose();
     }
 }

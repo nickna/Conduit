@@ -24,7 +24,7 @@ public sealed class AdminMediaServiceSoftDeleteTests : IAsyncDisposable
     private readonly SqliteTestDatabase _database = new();
     private readonly ConduitDbContext _context;
     private readonly Mock<IMediaRecordRepository> _repository = new();
-    private readonly Mock<IDistributedLockService> _cleanupLock = new();
+    private readonly Mock<IDistributedLockProvider> _cleanupLock = new();
     private readonly Mock<IMediaDeletionEngine> _deletionEngine = new();
 
     public AdminMediaServiceSoftDeleteTests()
@@ -60,11 +60,11 @@ public sealed class AdminMediaServiceSoftDeleteTests : IAsyncDisposable
             CreatedAt = Now.UtcDateTime
         });
         _context.SaveChanges();
-        _cleanupLock.Setup(service => service.AcquireLockAsync(
+        _cleanupLock.Setup(service => service.TryAcquireAsync(
                 MediaCleanupLock.Key,
-                MediaCleanupLock.Duration,
+                TimeSpan.Zero,
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Mock.Of<IDistributedLock>());
+            .ReturnsAsync(Mock.Of<IDistributedLockOwnership>());
         _deletionEngine
             .Setup(engine => engine.ExecuteOperationAsync(
                 It.IsAny<MediaDeletionOperationContext>(),
@@ -78,7 +78,7 @@ public sealed class AdminMediaServiceSoftDeleteTests : IAsyncDisposable
     public async Task DeleteMediaAsync_WithSoftDelete_TombstonesWithoutDeletingStorage()
     {
         var record = CreateRecord();
-        _repository.Setup(repository => repository.GetByIdAsync(record.Id))
+        _repository.Setup(repository => repository.GetByIdAsync(record.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(record);
         _repository.Setup(repository => repository.TombstoneAsync(
                 record.Id,
@@ -125,7 +125,7 @@ public sealed class AdminMediaServiceSoftDeleteTests : IAsyncDisposable
     public async Task DeleteMediaAsync_WithoutSoftDelete_UsesBudgetedDeletionEngine()
     {
         var record = CreateRecord();
-        _repository.Setup(repository => repository.GetByIdAsync(record.Id))
+        _repository.Setup(repository => repository.GetByIdAsync(record.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(record);
         _deletionEngine
             .Setup(engine => engine.DeleteAsync(
@@ -147,11 +147,11 @@ public sealed class AdminMediaServiceSoftDeleteTests : IAsyncDisposable
     [Fact]
     public async Task RestoreMediaAsync_WhenCleanupOwnsLock_ReturnsRetryableOutcome()
     {
-        _cleanupLock.Setup(service => service.AcquireLockAsync(
+        _cleanupLock.Setup(service => service.TryAcquireAsync(
                 MediaCleanupLock.Key,
-                MediaCleanupLock.Duration,
+                TimeSpan.Zero,
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IDistributedLock?)null);
+            .ReturnsAsync((IDistributedLockOwnership?)null);
 
         var result = await CreateService().RestoreMediaAsync(Guid.NewGuid());
 
