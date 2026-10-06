@@ -18,6 +18,7 @@ namespace ConduitLLM.Gateway.Endpoints
     public class VideosEndpoints : GatewayEndpointHandlerBase
     {
         private readonly IAsyncTaskService _taskService;
+        private readonly IMediaTaskSubmission _mediaTaskSubmission;
         private readonly IOperationTimeoutProvider _timeoutProvider;
         private readonly ICancellableTaskRegistry _taskRegistry;
         private readonly ConduitLLM.Configuration.Interfaces.IModelProviderMappingService _modelMappingService;
@@ -32,10 +33,12 @@ namespace ConduitLLM.Gateway.Endpoints
             ILogger<VideosEndpoints> logger,
             ConduitLLM.Configuration.Interfaces.IModelProviderMappingService modelMappingService,
             IEventPublisher eventPublisher,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            IMediaTaskSubmission mediaTaskSubmission)
             : base(eventPublisher, httpContextAccessor, logger)
         {
             _taskService = taskService ?? throw new ArgumentNullException(nameof(taskService));
+            _mediaTaskSubmission = mediaTaskSubmission;
             _timeoutProvider = timeoutProvider ?? throw new ArgumentNullException(nameof(timeoutProvider));
             _taskRegistry = taskRegistry ?? throw new ArgumentNullException(nameof(taskRegistry));
             _modelMappingService = modelMappingService ?? throw new ArgumentNullException(nameof(modelMappingService));
@@ -109,9 +112,6 @@ namespace ConduitLLM.Gateway.Endpoints
                 Logger.LogWarning(ex, "Failed to get provider info for model {Model}", request.Model);
             }
 
-            // Create a linked cancellation token that can be controlled independently
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
             // Build task metadata. The orchestrator reads ExtensionData["VirtualKey"] for re-validation
             // and ExtensionData["Request"] to reconstruct the original request when consuming the event.
             var taskMetadata = new TaskMetadata(virtualKeyId)
@@ -128,22 +128,15 @@ namespace ConduitLLM.Gateway.Endpoints
                 }
             };
 
-            var taskId = await _taskService.CreateTaskAsync("video_generation", virtualKeyId, taskMetadata, cts.Token);
-
-            // Register the task for cancellation
-            _taskRegistry.RegisterTask(taskId, cts);
-
-            PublishEventFireAndForget(new VideoGenerationRequested
+            var taskId = await _mediaTaskSubmission.SubmitAsync(new VideoGenerationRequested
             {
-                RequestId = taskId,
                 Request = request,
                 VirtualKeyId = virtualKeyId.ToString(),
                 IsAsync = true,
                 RequestedAt = DateTime.UtcNow,
-                CorrelationId = taskId,
                 WebhookUrl = request.WebhookUrl,
                 WebhookHeaders = request.WebhookHeaders
-            }, "create async video generation", new { TaskId = taskId, Model = request.Model });
+            }, taskMetadata, cancellationToken);
 
             var taskResponse = new AsyncTaskResponse
             {

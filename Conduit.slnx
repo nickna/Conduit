@@ -27,6 +27,7 @@
     <Project Path="Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tools/ConduitLLM.MediaDispatchProbe/ConduitLLM.MediaDispatchProbe.csproj" />
     <Project Path="tools/ConduitLLM.CacheProbe/ConduitLLM.CacheProbe.csproj" />
     <Project Path="tools/ConduitLLM.HealthProbe/ConduitLLM.HealthProbe.csproj" />
     <Project Path="tools/ConduitLLM.Migrator/ConduitLLM.Migrator.csproj" />
