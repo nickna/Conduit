@@ -132,11 +132,14 @@ namespace ConduitLLM.Gateway.Endpoints
 
             try
             {
-                return System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(value);
+                using var document = System.Text.Json.JsonDocument.Parse(value);
+                return document.RootElement.Clone();
             }
             catch (System.Text.Json.JsonException)
             {
-                return System.Text.Json.JsonSerializer.SerializeToElement(value);
+                return System.Text.Json.JsonSerializer.SerializeToElement(
+                    value,
+                    ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.String);
             }
         }
 
@@ -152,7 +155,9 @@ namespace ConduitLLM.Gateway.Endpoints
             {
                 try
                 {
-                    return System.Text.Json.JsonSerializer.Deserialize<List<string>>(value);
+                    return System.Text.Json.JsonSerializer.Deserialize(
+                        value,
+                        ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.ListString);
                 }
                 catch (System.Text.Json.JsonException)
                 {

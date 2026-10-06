@@ -283,12 +283,16 @@ internal sealed class ImageGenerationEventRequestConverter
             }
         }
 
-        return requestObject.Deserialize<ConduitLLM.Core.Models.ImageGenerationRequest>(options);
+        return requestObject.Deserialize(
+            ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.ImageGenerationRequest);
     }
 
     public override void Write(
         Utf8JsonWriter writer,
         ConduitLLM.Core.Models.ImageGenerationRequest value,
         JsonSerializerOptions options)
-        => JsonSerializer.Serialize(writer, value, options);
+        => JsonSerializer.Serialize(
+            writer,
+            value,
+            ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.ImageGenerationRequest);
 }

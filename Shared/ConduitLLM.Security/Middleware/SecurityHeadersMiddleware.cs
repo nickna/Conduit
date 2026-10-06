@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -11,7 +12,9 @@ namespace ConduitLLM.Security.Middleware
     /// Works with any security options type that inherits from SecurityOptionsBase.
     /// </summary>
     /// <typeparam name="TOptions">The security options type (must inherit from SecurityOptionsBase)</typeparam>
-    public class SecurityHeadersMiddleware<TOptions> where TOptions : SecurityOptionsBase
+    public class SecurityHeadersMiddleware<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions>
+        where TOptions : SecurityOptionsBase
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<SecurityHeadersMiddleware<TOptions>> _logger;
@@ -116,7 +119,9 @@ namespace ConduitLLM.Security.Middleware
         /// <summary>
         /// Adds security headers middleware to the application pipeline with custom options type
         /// </summary>
-        public static IApplicationBuilder UseSecurityHeaders<TOptions>(this IApplicationBuilder builder)
+        public static IApplicationBuilder UseSecurityHeaders<
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions>(
+            this IApplicationBuilder builder)
             where TOptions : SecurityOptionsBase
         {
             return builder.UseMiddleware<SecurityHeadersMiddleware<TOptions>>();

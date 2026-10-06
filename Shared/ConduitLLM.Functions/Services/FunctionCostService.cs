@@ -1,6 +1,7 @@
 using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Functions.Utilities;
+using ConduitLLM.Functions.Serialization;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -51,8 +52,7 @@ public class FunctionCostService : IFunctionCostService
             logger,
             "FunctionCost:",
             TimeSpan.FromMinutes(15),
-            TimeSpan.FromHours(1),
-            FunctionsJsonOptions.Compact);
+            TimeSpan.FromHours(1));
     }
 
     /// <inheritdoc />
@@ -68,7 +68,10 @@ public class FunctionCostService : IFunctionCostService
         string cacheKey = $"Config:{functionConfigurationId}";
 
         // Try hybrid cache first
-        var cachedCost = await _cache.GetAsync<FunctionCost?>(cacheKey, cancellationToken);
+        var cachedCost = await _cache.GetAsync(
+            cacheKey,
+            FunctionsJsonContext.Default.FunctionCost,
+            cancellationToken);
         if (cachedCost != null)
         {
             _logger.LogDebug("Cache hit for function cost: ConfigId={ConfigId}", functionConfigurationId);
@@ -120,7 +123,11 @@ public class FunctionCostService : IFunctionCostService
 
         if (functionCost is not null)
         {
-            await _cache.SetAsync(cacheKey, functionCost, cancellationToken);
+            await _cache.SetAsync(
+                cacheKey,
+                functionCost,
+                FunctionsJsonContext.Default.FunctionCost,
+                cancellationToken);
         }
         return functionCost;
     }
@@ -136,7 +143,10 @@ public class FunctionCostService : IFunctionCostService
         string cacheKey = $"Id:{costId}";
 
         // Try hybrid cache first
-        var cachedCost = await _cache.GetAsync<FunctionCost?>(cacheKey, cancellationToken);
+        var cachedCost = await _cache.GetAsync(
+            cacheKey,
+            FunctionsJsonContext.Default.FunctionCost,
+            cancellationToken);
         if (cachedCost != null)
         {
             _logger.LogDebug("Cache hit for function cost ID: {CostId}", costId);
@@ -147,7 +157,11 @@ public class FunctionCostService : IFunctionCostService
 
         if (cost != null)
         {
-            await _cache.SetAsync(cacheKey, cost, cancellationToken);
+            await _cache.SetAsync(
+                cacheKey,
+                cost,
+                FunctionsJsonContext.Default.FunctionCost,
+                cancellationToken);
         }
 
         return cost;
@@ -159,7 +173,10 @@ public class FunctionCostService : IFunctionCostService
         string cacheKey = activeOnly ? $"{AllCostsCacheKey}_Active" : AllCostsCacheKey;
 
         // Try hybrid cache first
-        var cachedCosts = await _cache.GetAsync<List<FunctionCost>?>(cacheKey, cancellationToken);
+        var cachedCosts = await _cache.GetAsync(
+            cacheKey,
+            FunctionsJsonContext.Default.ListFunctionCost,
+            cancellationToken);
         if (cachedCosts != null)
         {
             _logger.LogDebug("Cache hit for function costs list (activeOnly={ActiveOnly})", activeOnly);
@@ -177,7 +194,11 @@ public class FunctionCostService : IFunctionCostService
                 .ToList();
         }
 
-        await _cache.SetAsync(cacheKey, costs, cancellationToken);
+        await _cache.SetAsync(
+            cacheKey,
+            costs,
+            FunctionsJsonContext.Default.ListFunctionCost,
+            cancellationToken);
         return costs;
     }
 

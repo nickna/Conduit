@@ -1,5 +1,8 @@
 namespace ConduitLLM.Functions.Providers.Exa;
 
+using ConduitLLM.Functions.Providers.Exa.Models;
+using ConduitLLM.Functions.Serialization;
+
 public partial class ExaClient
 {
     /// <inheritdoc />
@@ -8,12 +11,13 @@ public partial class ExaClient
         CancellationToken cancellationToken = default) =>
         VerifyViaProbeAsync(
             "/search",
-            new
+            new ExaSearchRequest
             {
-                query = "test",
-                numResults = 1,
-                type = "keyword"
+                Query = "test",
+                NumResults = 1,
+                Type = "keyword"
             },
+            FunctionProviderJsonContext.Default.ExaSearchRequest,
             apiKey,
             cancellationToken);
 }

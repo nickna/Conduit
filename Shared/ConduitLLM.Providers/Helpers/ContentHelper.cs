@@ -72,33 +72,6 @@ namespace ConduitLLM.Providers.Helpers
                 }
             }
 
-            // Try to serialize and then extract text parts (for collections or other objects)
-            try
-            {
-                var json = JsonSerializer.Serialize(content);
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                if (root.ValueKind == JsonValueKind.Array)
-                {
-                    // It's likely content parts
-                    foreach (var element in root.EnumerateArray())
-                    {
-                        if (element.TryGetProperty("type", out var typeElement) &&
-                            typeElement.GetString() == "text" &&
-                            element.TryGetProperty("text", out var textElement))
-                        {
-                            textParts.Add(textElement.GetString() ?? string.Empty);
-                        }
-                    }
-                    return textParts;
-                }
-            }
-            catch (Exception)
-            {
-                // If we can't process it properly, just use the string representation
-            }
-
             // Fallback: Just add the string representation
             textParts.Add(content.ToString() ?? string.Empty);
             return textParts;
@@ -173,41 +146,6 @@ namespace ConduitLLM.Providers.Helpers
                 }
             }
 
-            // Try to serialize and then extract text parts (for collections or other objects)
-            try
-            {
-                var json = JsonSerializer.Serialize(content);
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                if (root.ValueKind == JsonValueKind.Array)
-                {
-                    // It's likely content parts
-                    var sb = new StringBuilder();
-                    foreach (var element in root.EnumerateArray())
-                    {
-                        if (element.TryGetProperty("type", out var typeElement) &&
-                            typeElement.GetString() == "text" &&
-                            element.TryGetProperty("text", out var textElement))
-                        {
-                            string? text = textElement.GetString();
-                            if (!string.IsNullOrEmpty(text))
-                            {
-                                if (sb.Length > 0)
-                                    sb.AppendLine();
-
-                                sb.Append(text);
-                            }
-                        }
-                    }
-                    return sb.ToString();
-                }
-            }
-            catch (Exception)
-            {
-                // If we can't process it properly, just return the string representation
-            }
-
             // Fallback: Just return the string representation
             return content.ToString() ?? string.Empty;
         }
@@ -230,10 +168,21 @@ namespace ConduitLLM.Providers.Helpers
                     if (part is ImageUrlContentPart or VideoUrlContentPart)
                         return false;
 
-                    // Check for type property dynamically for custom implementations
-                    var type = part.GetType().GetProperty("Type")?.GetValue(part)?.ToString();
-                    if (type is "image_url" or "video_url")
+                    if (part is ProviderContentPart
+                        {
+                            Type: "image_url" or "video_url"
+                        })
+                    {
                         return false;
+                    }
+
+                    if (part is JsonElement element &&
+                        element.ValueKind == JsonValueKind.Object &&
+                        element.TryGetProperty("type", out var typeElement) &&
+                        typeElement.GetString() is "image_url" or "video_url")
+                    {
+                        return false;
+                    }
                 }
 
                 return true;
@@ -260,32 +209,8 @@ namespace ConduitLLM.Providers.Helpers
                 }
             }
 
-            // Try to serialize and check parts
-            try
-            {
-                var json = JsonSerializer.Serialize(content);
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                if (root.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var element in root.EnumerateArray())
-                    {
-                        if (element.TryGetProperty("type", out var typeElement) &&
-                            typeElement.GetString() is "image_url" or "video_url")
-                        {
-                            return false; // Found an image
-                        }
-                    }
-                }
-
-                return true; // No images found
-            }
-            catch
-            {
-                // If we can't process it, assume it's text-only
-                return true;
-            }
+            // Unknown object-shaped content has no statically identifiable media parts.
+            return true;
         }
 
         /// <summary>
@@ -310,17 +235,9 @@ namespace ConduitLLM.Providers.Helpers
             if (content is IEnumerable<object>)
                 return true;
 
-            // Handle other generic collection implementations without treating dictionaries as parts.
-            try
-            {
-                var json = JsonSerializer.Serialize(content);
-                using var doc = JsonDocument.Parse(json);
-                return doc.RootElement.ValueKind == JsonValueKind.Array;
-            }
-            catch
-            {
-                return false;
-            }
+            // Handle non-generic and value-type collections without treating dictionaries as parts.
+            return content is System.Collections.IEnumerable
+                and not System.Collections.IDictionary;
         }
 
         /// <summary>

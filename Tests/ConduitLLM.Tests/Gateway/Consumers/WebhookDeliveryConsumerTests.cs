@@ -5,6 +5,7 @@ using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Consumers;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Tests.Messaging;
+using System.Text.Json;
 
 using Microsoft.Extensions.Logging;
 
@@ -71,6 +72,27 @@ public sealed class WebhookDeliveryConsumerTests
         Assert.Equal(1, retry.RetryCount);
         fixture.Notifications.Verify(service => service.NotifyDeliveryFailureAsync(
             Fixture.Request.WebhookUrl, Fixture.Request.TaskId, It.IsAny<string>(), null, 1, false), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NullPayload_PreservesLegacyFallbackEnvelope()
+    {
+        var fixture = new Fixture();
+        object? deliveredPayload = null;
+        fixture.Webhook
+            .Setup(service => service.SendTaskCompletionWebhookAsync(
+                It.IsAny<string>(), It.IsAny<object>(), It.IsAny<Dictionary<string, string>?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, object, Dictionary<string, string>?, CancellationToken>(
+                (_, payload, _, _) => deliveredPayload = payload)
+            .ReturnsAsync(WebhookSendResult.Ok(200));
+
+        await fixture.Consumer.HandleAsync(
+            Fixture.Request with { PayloadJson = "null" },
+            fixture.Context);
+
+        var payload = Assert.IsType<JsonElement>(deliveredPayload);
+        Assert.Equal("Failed to deserialize payload", payload.GetProperty("error").GetString());
     }
 
     private sealed class Fixture

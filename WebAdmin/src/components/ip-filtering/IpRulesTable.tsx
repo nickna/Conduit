@@ -7,7 +7,6 @@ import {
   Badge,
   ActionIcon,
   Tooltip,
-  Stack,
   Box,
   Menu,
   rem,
@@ -24,18 +23,18 @@ import {
 import { modals } from '@mantine/modals';
 import { notify } from '@/lib/notifications';
 import { formatters } from '@/lib/utils/formatters';
-import type { IpRule } from '@/hooks/useSecurityApi';
+import type { FilterType, IpFilterDto } from '@/lib/admin-api';
 
 interface IpRulesTableProps {
-  data?: IpRule[];
-  selectedRules: ReadonlySet<string>;
+  data?: IpFilterDto[];
+  selectedRules: ReadonlySet<number>;
   allSelected: boolean;
   someSelected: boolean;
   onSelectAll: () => void;
-  onSelectRule: (ruleId: string) => void;
-  onEdit?: (rule: IpRule) => void;
-  onDelete?: (ruleId: string) => void;
-  onToggle?: (ruleId: string, enabled: boolean) => void;
+  onSelectRule: (ruleId: number) => void;
+  onEdit?: (rule: IpFilterDto) => void;
+  onDelete?: (ruleId: number) => void;
+  onToggle?: (ruleId: number, enabled: boolean) => void;
 }
 
 export function IpRulesTable({ 
@@ -54,60 +53,56 @@ export function IpRulesTable({
     notify.success('IP address copied to clipboard', 'Copied');
   };
 
-  const handleDelete = (rule: IpRule) => {
+  const handleDelete = (rule: IpFilterDto) => {
     modals.openConfirmModal({
       title: 'Delete IP Rule',
       children: (
         <Text size="sm">
-          Are you sure you want to delete the IP rule for &quot;{rule.ipAddress}&quot;? 
+          Are you sure you want to delete the IP rule for &quot;{rule.ipAddressOrCidr}&quot;?
           This action cannot be undone.
         </Text>
       ),
       labels: { confirm: 'Delete', cancel: 'Cancel' },
       confirmProps: { color: 'red' },
-      onConfirm: () => rule.id && onDelete?.(rule.id),
+      onConfirm: () => onDelete?.(rule.id),
     });
   };
 
-  const handleToggle = (rule: IpRule) => {
-    const newState = !(rule.isEnabled ?? true);
-    if (rule.id) {
-      onToggle?.(rule.id, newState);
-    }
+  const handleToggle = (rule: IpFilterDto) => {
+    onToggle?.(rule.id, !rule.isEnabled);
   };
 
-  const getActionBadgeColor = (action: 'allow' | 'block') => {
-    return action === 'allow' ? 'green' : 'red';
+  const getActionBadgeColor = (filterType: FilterType) => {
+    return filterType === 'whitelist' ? 'green' : 'red';
   };
 
-  const getActionIcon = (action: 'allow' | 'block') => {
-    return action === 'allow' ? '✓' : '✗';
+  const getActionIcon = (filterType: FilterType) => {
+    return filterType === 'whitelist' ? '✓' : '✗';
   };
 
   const rows = data.map((rule) => {
-    const isEnabled = rule.isEnabled ?? true;
-    const isSelected = rule.id ? selectedRules.has(rule.id) : false;
+    const isEnabled = rule.isEnabled;
+    const isSelected = selectedRules.has(rule.id);
 
     return (
       <Table.Tr key={rule.id} bg={isSelected ? 'var(--mantine-color-blue-light)' : undefined}>
         <Table.Td>
           <Checkbox
             checked={isSelected}
-            onChange={() => rule.id && onSelectRule(rule.id)}
-            disabled={!rule.id}
+            onChange={() => onSelectRule(rule.id)}
           />
         </Table.Td>
 
         <Table.Td>
           <Group gap="xs">
             <Text size="sm" style={{ fontFamily: 'monospace' }}>
-              {rule.ipAddress}
+              {rule.ipAddressOrCidr}
             </Text>
             <Tooltip label="Copy IP address">
               <ActionIcon
                 variant="subtle"
                 size="xs"
-                onClick={() => handleCopyIp(rule.ipAddress)}
+                onClick={() => handleCopyIp(rule.ipAddressOrCidr)}
               >
                 <IconCopy size={14} />
               </ActionIcon>
@@ -117,12 +112,12 @@ export function IpRulesTable({
 
         <Table.Td>
           <Badge
-            color={getActionBadgeColor(rule.action)}
+            color={getActionBadgeColor(rule.filterType)}
             variant="light"
             size="sm"
-            leftSection={getActionIcon(rule.action)}
+            leftSection={getActionIcon(rule.filterType)}
           >
-            {rule.action === 'allow' ? 'Allow' : 'Block'}
+            {rule.filterType === 'whitelist' ? 'Allow' : 'Block'}
           </Badge>
         </Table.Td>
 
@@ -144,23 +139,12 @@ export function IpRulesTable({
 
         <Table.Td>
           <Text size="sm" c="dimmed">
-            {rule.createdAt ? formatters.date(rule.createdAt) : '-'}
+            {formatters.date(rule.createdAt)}
           </Text>
         </Table.Td>
 
         <Table.Td>
-          <Stack gap={2} align="flex-end">
-            {rule.matchCount !== undefined && (
-              <Text size="xs" c="dimmed">
-                {rule.matchCount.toLocaleString()} matches
-              </Text>
-            )}
-            {rule.lastMatchedAt && (
-              <Text size="xs" c="dimmed">
-                Last: {formatters.date(rule.lastMatchedAt, { includeTime: false })}
-              </Text>
-            )}
-          </Stack>
+          <Text size="xs" c="dimmed">Not tracked</Text>
         </Table.Td>
 
         <Table.Td>

@@ -135,7 +135,7 @@ namespace ConduitLLM.Core.Models
     /// <summary>
     /// Represents a single generated video.
     /// </summary>
-    public class VideoData
+    public class VideoData : IGeneratedMediaData
     {
         /// <summary>
         /// The URL of the generated video (if response_format is "url").

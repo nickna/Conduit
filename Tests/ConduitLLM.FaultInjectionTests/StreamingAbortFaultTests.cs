@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core;
 using ConduitLLM.Core.Interfaces;
@@ -7,6 +6,7 @@ using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Endpoints;
 using ConduitLLM.Gateway.Middleware;
+using ConduitLLM.Gateway.Options;
 using ConduitLLM.Gateway.Services;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
@@ -64,7 +64,7 @@ public sealed class StreamingAbortFaultTests(BillingFaultFixture fixture)
             new Conduit(clientFactory.Object, NullLogger<Conduit>.Instance),
             NullLogger<ChatEndpoints>.Instance,
             Mock.Of<IModelProviderMappingService>(),
-            new JsonSerializerOptions(),
+            GatewayJsonOptions.Create(),
             Mock.Of<IEventPublisher>(),
             Mock.Of<IGlobalSettingsCacheService>(),
             estimator.Object,

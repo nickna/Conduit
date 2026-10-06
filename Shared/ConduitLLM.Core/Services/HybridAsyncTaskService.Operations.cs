@@ -4,6 +4,7 @@ using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Serialization;
 
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
@@ -31,7 +32,10 @@ namespace ConduitLLM.Core.Services
                 CreatedAt = now,
                 UpdatedAt = now,
                 VirtualKeyId = virtualKeyId,
-                Metadata = JsonSerializer.Serialize(metadata),
+                Metadata = JsonSerializer.Serialize(
+                    metadata,
+                    metadata.GetType(),
+                    AsyncTaskJsonContext.Default),
                 Progress = 0
             };
 
@@ -103,7 +107,10 @@ namespace ConduitLLM.Core.Services
                 CreatedAt = now,
                 UpdatedAt = now,
                 VirtualKeyId = virtualKeyId,
-                Metadata = JsonSerializer.Serialize(metadata),
+                Metadata = JsonSerializer.Serialize(
+                    metadata,
+                    metadata.GetType(),
+                    AsyncTaskJsonContext.Default),
                 Progress = 0
             };
 
@@ -190,7 +197,9 @@ namespace ConduitLLM.Core.Services
                 _logger.LogInformation("Task {TaskId} found in cache with key {CacheKey}", taskId, key);
                 try
                 {
-                    var cachedStatus = JsonSerializer.Deserialize<AsyncTaskStatus>(json);
+                    var cachedStatus = JsonSerializer.Deserialize(
+                        json,
+                        AsyncTaskJsonContext.Default.AsyncTaskStatus);
                     _logger.LogDebug("Successfully deserialized cached task {TaskId}, State: {State}", taskId, cachedStatus?.State);
                     return cachedStatus;
                 }
@@ -263,7 +272,10 @@ namespace ConduitLLM.Core.Services
             
             if (result != null)
             {
-                dbTask.Result = JsonSerializer.Serialize(result);
+                dbTask.Result = JsonSerializer.Serialize(
+                    result,
+                    result.GetType(),
+                    AsyncTaskJsonContext.Default);
             }
             
             if (!string.IsNullOrEmpty(error))

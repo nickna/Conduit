@@ -550,48 +550,48 @@ namespace ConduitLLM.Core.Services.Abstractions
         {
             // Build data array from processed media items in OpenAI-compatible format
             // This format is expected by SDKs: { created, data: [{ url, metadata }], model, usage }
-            var dataItems = new List<object>();
+            var dataItems = new List<MediaGenerationTaskResultItem>();
 
             if (media.Items.Any())
             {
                 foreach (var item in media.Items)
                 {
-                    dataItems.Add(new
+                    dataItems.Add(new MediaGenerationTaskResultItem
                     {
-                        url = item.Url,
-                        metadata = item.Metadata.Count > 0 ? item.Metadata : null
+                        Url = item.Url,
+                        Metadata = item.Metadata.Count > 0 ? item.Metadata : null
                     });
                 }
             }
             else if (!string.IsNullOrEmpty(media.Url))
             {
                 // Single item case - wrap in data array
-                dataItems.Add(new
+                dataItems.Add(new MediaGenerationTaskResultItem
                 {
-                    url = media.Url,
-                    metadata = media.Metadata.Count > 0 ? media.Metadata : null
+                    Url = media.Url,
+                    Metadata = media.Metadata.Count > 0 ? media.Metadata : null
                 });
             }
 
             // Create result in OpenAI-compatible format that SDKs expect
             // Both ImageGenerationResponse and VideoGenerationResponse share this structure
-            var result = new
+            var result = new MediaGenerationTaskResult
             {
-                created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                data = dataItems,
-                model = modelInfo.ModelId,
-                usage = new
+                Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                Data = dataItems,
+                Model = modelInfo.ModelId,
+                Usage = new MediaGenerationTaskUsage
                 {
                     // Generic usage info - specific orchestrators can override if needed
-                    count = media.Count,
-                    duration_seconds = stopwatch.Elapsed.TotalSeconds
+                    Count = media.Count,
+                    DurationSeconds = stopwatch.Elapsed.TotalSeconds
                 },
                 // Additional metadata for internal use (not part of OpenAI spec but useful)
-                _metadata = new
+                InternalMetadata = new MediaGenerationTaskInternalMetadata
                 {
-                    cost,
-                    provider = modelInfo.ProviderName,
-                    generation_duration_seconds = stopwatch.Elapsed.TotalSeconds
+                    Cost = cost,
+                    Provider = modelInfo.ProviderName,
+                    GenerationDurationSeconds = stopwatch.Elapsed.TotalSeconds
                 }
             };
 
@@ -828,7 +828,11 @@ namespace ConduitLLM.Core.Services.Abstractions
                 TaskType = GetMediaType().ToLowerInvariant(),
                 WebhookUrl = GetWebhookUrl(request)!,
                 EventType = eventType,
-                PayloadJson = System.Text.Json.JsonSerializer.Serialize(payload),
+                PayloadJson = System.Text.Json.JsonSerializer.Serialize(
+                    payload,
+                    Serialization.CoreJsonTypeInfo.Require(
+                        payload.GetType(),
+                        Serialization.ConduitJsonOptions.Compact)),
                 Headers = GetWebhookHeaders(request),
                 CorrelationId = GetCorrelationId(request) ?? Guid.NewGuid().ToString()
             });

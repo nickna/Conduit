@@ -193,7 +193,16 @@ internal static class OpenRouterMultimodalValidator
     {
         try
         {
-            return content is JsonElement element ? element : JsonSerializer.SerializeToElement(content);
+            if (content is JsonElement element)
+                return element;
+
+            var options = new JsonSerializerOptions(
+                ConduitLLM.Core.Serialization.ConduitJsonOptions.Wire);
+            var typeInfo = new ConduitLLM.Core.Serialization.CoreHttpJsonContext(options)
+                .GetTypeInfo(content.GetType())
+                ?? throw new NotSupportedException(
+                    $"Structured content contract '{content.GetType()}' is not registered.");
+            return JsonSerializer.SerializeToElement(content, typeInfo);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {

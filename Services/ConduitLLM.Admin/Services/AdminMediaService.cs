@@ -1,3 +1,4 @@
+using ConduitLLM.Core.Extensions;
 using ConduitLLM.Admin.Interfaces;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Configuration.Entities;
@@ -15,10 +16,11 @@ namespace ConduitLLM.Admin.Services
     /// </summary>
     public class AdminMediaService : IAdminMediaService
     {
+        private readonly CancellationToken _shutdownToken;
         private readonly IMediaRecordRepository _mediaRepository;
         private readonly IMediaLifecycleService _mediaLifecycleService;
         private readonly IConfigurationDbContext _configurationContext;
-        private readonly IDistributedLockService _cleanupLockService;
+        private readonly IDistributedLockProvider _cleanupLockService;
         private readonly IMediaDeletionEngine _deletionEngine;
         private readonly MediaLifecycleOptions _options;
         private readonly TimeProvider _timeProvider;
@@ -35,15 +37,17 @@ namespace ConduitLLM.Admin.Services
         /// <param name="options">Media lifecycle options.</param>
         /// <param name="logger">The logger instance.</param>
         /// <param name="timeProvider">Clock used to enforce the recovery window.</param>
+        /// <param name="applicationLifetime">Host shutdown notification.</param>
         public AdminMediaService(
             IMediaRecordRepository mediaRepository,
             IMediaLifecycleService mediaLifecycleService,
             IConfigurationDbContext configurationContext,
-            IDistributedLockService cleanupLockService,
+            IDistributedLockProvider cleanupLockService,
             IMediaDeletionEngine deletionEngine,
             IOptions<MediaLifecycleOptions> options,
             ILogger<AdminMediaService> logger,
-            TimeProvider? timeProvider = null)
+            TimeProvider? timeProvider = null,
+            Microsoft.Extensions.Hosting.IHostApplicationLifetime? applicationLifetime = null)
         {
             _mediaRepository = mediaRepository ?? throw new ArgumentNullException(nameof(mediaRepository));
             _mediaLifecycleService = mediaLifecycleService ?? throw new ArgumentNullException(nameof(mediaLifecycleService));
@@ -55,6 +59,7 @@ namespace ConduitLLM.Admin.Services
                 throw new ArgumentNullException(nameof(deletionEngine));
             _options = options.Value;
             _timeProvider = timeProvider ?? TimeProvider.System;
+            _shutdownToken = applicationLifetime?.ApplicationStopping ?? CancellationToken.None;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -93,13 +98,15 @@ namespace ConduitLLM.Admin.Services
         }
 
         /// <inheritdoc/>
-        public async Task<AdminMediaDeleteResult?> DeleteMediaAsync(Guid mediaId)
+        public async Task<AdminMediaDeleteResult?> DeleteMediaAsync(Guid mediaId, CancellationToken cancellationToken = default)
         {
+            using var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownToken);
+            cancellationToken = requestCancellation.Token;
             try
             {
                 _logger.LogDebug("Deleting media record {MediaId}", mediaId);
 
-                var mediaRecord = await _mediaRepository.GetByIdAsync(mediaId);
+                var mediaRecord = await _mediaRepository.GetByIdAsync(mediaId, cancellationToken);
                 if (mediaRecord == null)
                 {
                     _logger.LogWarning("Media record {MediaId} not found", mediaId);
@@ -109,7 +116,7 @@ namespace ConduitLLM.Admin.Services
                 if (_options.EnableSoftDelete)
                 {
                     var deletedAt = _timeProvider.GetUtcNow().UtcDateTime;
-                    if (!await _mediaRepository.TombstoneAsync(mediaId, deletedAt))
+                    if (!await _mediaRepository.TombstoneAsync(mediaId, deletedAt, cancellationToken))
                     {
                         return null;
                     }
@@ -121,14 +128,19 @@ namespace ConduitLLM.Admin.Services
                     return new AdminMediaDeleteResult(true, deletedAt);
                 }
 
-                await using var lockHandle = await _cleanupLockService.AcquireLockAsync(
+                await using var lockHandle = await _cleanupLockService.TryAcquireAsync(
                     MediaCleanupLock.Key,
-                    MediaCleanupLock.Duration);
+                    TimeSpan.Zero, cancellationToken);
                 if (lockHandle == null)
                 {
                     throw new InvalidOperationException(
                         "Media deletion is blocked while another cleanup operation is active.");
                 }
+
+                using var operationCancellation = lockHandle.CreateOperationCancellation(
+                    cancellationToken, MediaCleanupLock.OperationDeadline);
+                var protectedToken = operationCancellation.Token;
+                protectedToken.ThrowIfCancellationRequested();
 
                 var operation = new MediaDeletionOperationContext(
                     MediaCleanupTypes.Manual,
@@ -141,7 +153,8 @@ namespace ConduitLLM.Admin.Services
                         new MediaDeletionRequest(
                             new[] { mediaRecord },
                             operation,
-                            Purge: true)));
+                            Purge: true), protectedToken), protectedToken);
+                protectedToken.ThrowIfCancellationRequested();
                 if (result.BudgetExhausted || result.Failures > 0 || result.FilesDeleted != 1)
                 {
                     throw new InvalidOperationException(
@@ -162,17 +175,23 @@ namespace ConduitLLM.Admin.Services
         }
 
         /// <inheritdoc/>
-        public async Task<MediaRestoreOutcome> RestoreMediaAsync(Guid mediaId)
+        public async Task<MediaRestoreOutcome> RestoreMediaAsync(Guid mediaId, CancellationToken cancellationToken = default)
         {
-            await using var lockHandle = await _cleanupLockService.AcquireLockAsync(
+            using var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownToken);
+            cancellationToken = requestCancellation.Token;
+            await using var lockHandle = await _cleanupLockService.TryAcquireAsync(
                 MediaCleanupLock.Key,
-                MediaCleanupLock.Duration);
+                TimeSpan.Zero, cancellationToken);
             if (lockHandle == null)
             {
                 return MediaRestoreOutcome.CleanupInProgress;
             }
 
-            var mediaRecord = await _mediaRepository.GetByIdIncludingDeletedAsync(mediaId);
+            using var operationCancellation = lockHandle.CreateOperationCancellation(
+                cancellationToken, MediaCleanupLock.OperationDeadline);
+            var protectedToken = operationCancellation.Token;
+            protectedToken.ThrowIfCancellationRequested();
+            var mediaRecord = await _mediaRepository.GetByIdIncludingDeletedAsync(mediaId, protectedToken);
             if (mediaRecord == null)
             {
                 return MediaRestoreOutcome.NotFound;
@@ -184,7 +203,7 @@ namespace ConduitLLM.Admin.Services
             }
 
             var gracePeriodDays = await ResolveGracePeriodDaysAsync(
-                mediaRecord.VirtualKeyId);
+                mediaRecord.VirtualKeyId, protectedToken);
             var restoreDeadline = mediaRecord.DeletedAt.Value
                 .AddDays(gracePeriodDays);
             if (_timeProvider.GetUtcNow().UtcDateTime >= restoreDeadline)
@@ -192,12 +211,13 @@ namespace ConduitLLM.Admin.Services
                 return MediaRestoreOutcome.GracePeriodElapsed;
             }
 
-            return await _mediaRepository.RestoreAsync(mediaId)
+            protectedToken.ThrowIfCancellationRequested();
+            return await _mediaRepository.RestoreAsync(mediaId, protectedToken)
                 ? MediaRestoreOutcome.Restored
                 : MediaRestoreOutcome.NotFound;
         }
 
-        private async Task<int> ResolveGracePeriodDaysAsync(int virtualKeyId)
+        private async Task<int> ResolveGracePeriodDaysAsync(int virtualKeyId, CancellationToken cancellationToken)
         {
             var assignedGrace = await _configurationContext.VirtualKeys
                 .Where(key =>
@@ -205,7 +225,7 @@ namespace ConduitLLM.Admin.Services
                     key.VirtualKeyGroup.MediaRetentionPolicyId != null)
                 .Select(key => (int?)key.VirtualKeyGroup.MediaRetentionPolicy!
                     .SoftDeleteGracePeriodDays)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(cancellationToken);
             if (assignedGrace.HasValue)
             {
                 return Math.Max(0, assignedGrace.Value);
@@ -214,7 +234,7 @@ namespace ConduitLLM.Admin.Services
             var defaultGrace = await _configurationContext.MediaRetentionPolicies
                 .Where(policy => policy.IsDefault && policy.IsActive)
                 .Select(policy => (int?)policy.SoftDeleteGracePeriodDays)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(cancellationToken);
             return Math.Max(
                 0,
                 defaultGrace ?? _options.SoftDeleteGracePeriodDays);

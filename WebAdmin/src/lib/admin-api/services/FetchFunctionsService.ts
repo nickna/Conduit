@@ -1,5 +1,5 @@
 import type { FetchBaseApiClient } from '../client/FetchBaseApiClient';
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 import type { RequestConfig } from '../client/types';
 import { HttpMethod } from '../client/HttpMethod';
 import {
@@ -103,16 +103,16 @@ function validateCreateCost(data: CreateFunctionCostDto): void {
 export class FetchFunctionConfigurationsService {
   constructor(private readonly client: FetchBaseApiClient) {}
   async list(config?: RequestConfig): Promise<FunctionConfigurationDto[]> {
-    const data = await this.client['executeContractRead']('/v1/admin/function-configurations', (c, o) => c.GET('/v1/admin/function-configurations', o), config);
+    const data = await this.client.executeContractRead('/v1/admin/function-configurations', (c, o) => c.GET('/v1/admin/function-configurations', o), config);
     return data.data.map(configurationFromWire);
   }
   async getById(id: number, config?: RequestConfig): Promise<FunctionConfigurationDto> {
-    const data = await this.client['executeContractRead'](`/v1/admin/function-configurations/${id}`, (c, o) => c.GET('/v1/admin/function-configurations/{id}', { ...o, params: { path: { id } } }), config);
+    const data = await this.client.executeContractRead(`/v1/admin/function-configurations/${id}`, (c, o) => c.GET('/v1/admin/function-configurations/{id}', { ...o, params: { path: { id } } }), config);
     return configurationFromWire(data);
   }
   async getByProvider(providerType: FunctionProviderType, config?: RequestConfig): Promise<FunctionConfigurationDto[]> {
     const provider = providerType;
-    const data = await this.client['executeContractRead'](`/v1/admin/function-configurations/provider/${encodeURIComponent(provider)}`, (c, o) => c.GET('/v1/admin/function-configurations/provider/{providerType}', { ...o, params: { path: { providerType: provider } } }), config);
+    const data = await this.client.executeContractRead(`/v1/admin/function-configurations/provider/${encodeURIComponent(provider)}`, (c, o) => c.GET('/v1/admin/function-configurations/provider/{providerType}', { ...o, params: { path: { providerType: provider } } }), config);
     return data.data.map(configurationFromWire);
   }
   async create(data: CreateFunctionConfigurationDto, config?: RequestConfig): Promise<FunctionConfigurationDto> {
@@ -122,7 +122,7 @@ export class FetchFunctionConfigurationsService {
       providerSettings: parseStructuredJson(data.providerSettings, 'providerSettings'),
       parameterSchema: parseStructuredJson(data.parameterSchema, 'parameterSchema'),
     } as unknown as CreateConfigurationWire;
-    const result = await this.client['executeContractOperation']<ConfigurationWire, CreateConfigurationWire>('/v1/admin/function-configurations', HttpMethod.POST, (c, o) => c.POST('/v1/admin/function-configurations', { ...o, body }), config, body);
+    const result = await this.client.executeContractOperation<ConfigurationWire, CreateConfigurationWire>('/v1/admin/function-configurations', HttpMethod.POST, (c, o) => c.POST('/v1/admin/function-configurations', { ...o, body }), config, body);
     return configurationFromWire(result);
   }
   async update(id: number, data: UpdateFunctionConfigurationDto, config?: RequestConfig): Promise<FunctionConfigurationDto> {
@@ -131,40 +131,40 @@ export class FetchFunctionConfigurationsService {
       providerSettings: parseStructuredJson(data.providerSettings, 'providerSettings'),
       parameterSchema: parseStructuredJson(data.parameterSchema, 'parameterSchema'),
     } as unknown as UpdateConfigurationWire;
-    const result = await this.client['executeContractOperation']<ConfigurationWire, UpdateConfigurationWire>(`/v1/admin/function-configurations/${id}`, HttpMethod.PATCH, (c, o) => c.PATCH('/v1/admin/function-configurations/{id}', { ...o, params: { path: { id } }, body }), config, body);
+    const result = await this.client.executeContractOperation<ConfigurationWire, UpdateConfigurationWire>(`/v1/admin/function-configurations/${id}`, HttpMethod.PATCH, (c, o) => c.PATCH('/v1/admin/function-configurations/{id}', { ...o, params: { path: { id } }, body }), config, body);
     return configurationFromWire(result);
   }
   async deleteById(id: number, config?: RequestConfig): Promise<void> {
-    return this.client['executeContractOperation'](`/v1/admin/function-configurations/${id}`, HttpMethod.DELETE, (c, o) => c.DELETE('/v1/admin/function-configurations/{id}', { ...o, params: { path: { id } } }), config);
+    return this.client.executeContractOperation(`/v1/admin/function-configurations/${id}`, HttpMethod.DELETE, (c, o) => c.DELETE('/v1/admin/function-configurations/{id}', { ...o, params: { path: { id } } }), config);
   }
 }
 
 export class FetchFunctionCredentialsService {
   constructor(private readonly client: FetchBaseApiClient) {}
-  async list(config?: RequestConfig): Promise<FunctionCredentialDto[]> { const data = await this.client['executeContractRead']('/v1/admin/function-credentials', (c, o) => c.GET('/v1/admin/function-credentials', o), config); return data.data.map(credentialFromWire); }
-  async getById(id: number, config?: RequestConfig): Promise<FunctionCredentialDto> { const data = await this.client['executeContractRead'](`/v1/admin/function-credentials/${id}`, (c, o) => c.GET('/v1/admin/function-credentials/{id}', { ...o, params: { path: { id } } }), config); return credentialFromWire(data); }
-  async getByConfiguration(functionConfigurationId: number, config?: RequestConfig): Promise<FunctionCredentialDto[]> { const data = await this.client['executeContractRead'](`/v1/admin/function-credentials/configuration/${functionConfigurationId}`, (c, o) => c.GET('/v1/admin/function-credentials/configuration/{functionConfigurationId}', { ...o, params: { path: { functionConfigurationId } } }), config); return data.data.map(credentialFromWire); }
-  async create(data: CreateFunctionCredentialDto, config?: RequestConfig): Promise<FunctionCredentialDto> { validateCreateCredential(data); const body = data as unknown as CreateCredentialWire; const result = await this.client['executeContractOperation']<CredentialWire, CreateCredentialWire>('/v1/admin/function-credentials', HttpMethod.POST, (c, o) => c.POST('/v1/admin/function-credentials', { ...o, body }), config, body); return credentialFromWire(result); }
-  async update(id: number, data: UpdateFunctionCredentialDto, config?: RequestConfig): Promise<FunctionCredentialDto> { const body = data as unknown as UpdateCredentialWire; const result = await this.client['executeContractOperation']<CredentialWire, UpdateCredentialWire>(`/v1/admin/function-credentials/${id}`, HttpMethod.PATCH, (c, o) => c.PATCH('/v1/admin/function-credentials/{id}', { ...o, params: { path: { id } }, body }), config, body); return credentialFromWire(result); }
-  async deleteById(id: number, config?: RequestConfig): Promise<void> { return this.client['executeContractOperation'](`/v1/admin/function-credentials/${id}`, HttpMethod.DELETE, (c, o) => c.DELETE('/v1/admin/function-credentials/{id}', { ...o, params: { path: { id } } }), config); }
-  async testCredential(data: TestCredentialRequestDto, config?: RequestConfig): Promise<TestCredentialResponseDto> { return this.client['executeContractOperation']('/v1/admin/function-credentials/test', HttpMethod.POST, (c, o) => c.POST('/v1/admin/function-credentials/test', { ...o, body: data }), config, data) as Promise<TestCredentialResponseDto>; }
+  async list(config?: RequestConfig): Promise<FunctionCredentialDto[]> { const data = await this.client.executeContractRead('/v1/admin/function-credentials', (c, o) => c.GET('/v1/admin/function-credentials', o), config); return data.data.map(credentialFromWire); }
+  async getById(id: number, config?: RequestConfig): Promise<FunctionCredentialDto> { const data = await this.client.executeContractRead(`/v1/admin/function-credentials/${id}`, (c, o) => c.GET('/v1/admin/function-credentials/{id}', { ...o, params: { path: { id } } }), config); return credentialFromWire(data); }
+  async getByConfiguration(functionConfigurationId: number, config?: RequestConfig): Promise<FunctionCredentialDto[]> { const data = await this.client.executeContractRead(`/v1/admin/function-credentials/configuration/${functionConfigurationId}`, (c, o) => c.GET('/v1/admin/function-credentials/configuration/{functionConfigurationId}', { ...o, params: { path: { functionConfigurationId } } }), config); return data.data.map(credentialFromWire); }
+  async create(data: CreateFunctionCredentialDto, config?: RequestConfig): Promise<FunctionCredentialDto> { validateCreateCredential(data); const body = data as unknown as CreateCredentialWire; const result = await this.client.executeContractOperation<CredentialWire, CreateCredentialWire>('/v1/admin/function-credentials', HttpMethod.POST, (c, o) => c.POST('/v1/admin/function-credentials', { ...o, body }), config, body); return credentialFromWire(result); }
+  async update(id: number, data: UpdateFunctionCredentialDto, config?: RequestConfig): Promise<FunctionCredentialDto> { const body = data as unknown as UpdateCredentialWire; const result = await this.client.executeContractOperation<CredentialWire, UpdateCredentialWire>(`/v1/admin/function-credentials/${id}`, HttpMethod.PATCH, (c, o) => c.PATCH('/v1/admin/function-credentials/{id}', { ...o, params: { path: { id } }, body }), config, body); return credentialFromWire(result); }
+  async deleteById(id: number, config?: RequestConfig): Promise<void> { return this.client.executeContractOperation(`/v1/admin/function-credentials/${id}`, HttpMethod.DELETE, (c, o) => c.DELETE('/v1/admin/function-credentials/{id}', { ...o, params: { path: { id } } }), config); }
+  async testCredential(data: TestCredentialRequestDto, config?: RequestConfig): Promise<TestCredentialResponseDto> { return this.client.executeContractOperation('/v1/admin/function-credentials/test', HttpMethod.POST, (c, o) => c.POST('/v1/admin/function-credentials/test', { ...o, body: data }), config, data) as Promise<TestCredentialResponseDto>; }
 }
 
 export class FetchFunctionCostsService {
   constructor(private readonly client: FetchBaseApiClient) {}
-  async list(config?: RequestConfig): Promise<FunctionCostDto[]> { const data = await this.client['executeContractRead']('/v1/admin/function-costs', (c, o) => c.GET('/v1/admin/function-costs', o), config); return data.data.map(costFromWire); }
-  async getById(id: number, config?: RequestConfig): Promise<FunctionCostDto> { const data = await this.client['executeContractRead'](`/v1/admin/function-costs/${id}`, (c, o) => c.GET('/v1/admin/function-costs/{id}', { ...o, params: { path: { id } } }), config); return costFromWire(data); }
-  async getByConfiguration(functionConfigurationId: number, config?: RequestConfig): Promise<FunctionCostDto> { const data = await this.client['executeContractRead'](`/v1/admin/function-costs/configuration/${functionConfigurationId}`, (c, o) => c.GET('/v1/admin/function-costs/configuration/{functionConfigurationId}', { ...o, params: { path: { functionConfigurationId } } }), config); return costFromWire(data); }
-  async create(data: CreateFunctionCostDto, config?: RequestConfig): Promise<FunctionCostDto> { validateCreateCost(data); const body = { ...data, pricingConfiguration: parseStructuredJson(data.pricingConfiguration, 'pricingConfiguration') } as unknown as CreateCostWire; const result = await this.client['executeContractOperation']<CostWire, CreateCostWire>('/v1/admin/function-costs', HttpMethod.POST, (c, o) => c.POST('/v1/admin/function-costs', { ...o, body }), config, body); return costFromWire(result); }
-  async update(id: number, data: UpdateFunctionCostDto, config?: RequestConfig): Promise<FunctionCostDto> { const body = { ...data, pricingConfiguration: parseStructuredJson(data.pricingConfiguration, 'pricingConfiguration') } as unknown as UpdateCostWire; const result = await this.client['executeContractOperation']<CostWire, UpdateCostWire>(`/v1/admin/function-costs/${id}`, HttpMethod.PATCH, (c, o) => c.PATCH('/v1/admin/function-costs/{id}', { ...o, params: { path: { id } }, body }), config, body); return costFromWire(result); }
-  async deleteById(id: number, config?: RequestConfig): Promise<void> { return this.client['executeContractOperation'](`/v1/admin/function-costs/${id}`, HttpMethod.DELETE, (c, o) => c.DELETE('/v1/admin/function-costs/{id}', { ...o, params: { path: { id } } }), config); }
-  async clearCache(config?: RequestConfig): Promise<{ message: string }> { return this.client['executeContractOperation']('/v1/admin/function-costs/cache/clear', HttpMethod.POST, (c, o) => c.POST('/v1/admin/function-costs/cache/clear', o), config); }
+  async list(config?: RequestConfig): Promise<FunctionCostDto[]> { const data = await this.client.executeContractRead('/v1/admin/function-costs', (c, o) => c.GET('/v1/admin/function-costs', o), config); return data.data.map(costFromWire); }
+  async getById(id: number, config?: RequestConfig): Promise<FunctionCostDto> { const data = await this.client.executeContractRead(`/v1/admin/function-costs/${id}`, (c, o) => c.GET('/v1/admin/function-costs/{id}', { ...o, params: { path: { id } } }), config); return costFromWire(data); }
+  async getByConfiguration(functionConfigurationId: number, config?: RequestConfig): Promise<FunctionCostDto> { const data = await this.client.executeContractRead(`/v1/admin/function-costs/configuration/${functionConfigurationId}`, (c, o) => c.GET('/v1/admin/function-costs/configuration/{functionConfigurationId}', { ...o, params: { path: { functionConfigurationId } } }), config); return costFromWire(data); }
+  async create(data: CreateFunctionCostDto, config?: RequestConfig): Promise<FunctionCostDto> { validateCreateCost(data); const body = { ...data, pricingConfiguration: parseStructuredJson(data.pricingConfiguration, 'pricingConfiguration') } as unknown as CreateCostWire; const result = await this.client.executeContractOperation<CostWire, CreateCostWire>('/v1/admin/function-costs', HttpMethod.POST, (c, o) => c.POST('/v1/admin/function-costs', { ...o, body }), config, body); return costFromWire(result); }
+  async update(id: number, data: UpdateFunctionCostDto, config?: RequestConfig): Promise<FunctionCostDto> { const body = { ...data, pricingConfiguration: parseStructuredJson(data.pricingConfiguration, 'pricingConfiguration') } as unknown as UpdateCostWire; const result = await this.client.executeContractOperation<CostWire, UpdateCostWire>(`/v1/admin/function-costs/${id}`, HttpMethod.PATCH, (c, o) => c.PATCH('/v1/admin/function-costs/{id}', { ...o, params: { path: { id } }, body }), config, body); return costFromWire(result); }
+  async deleteById(id: number, config?: RequestConfig): Promise<void> { return this.client.executeContractOperation(`/v1/admin/function-costs/${id}`, HttpMethod.DELETE, (c, o) => c.DELETE('/v1/admin/function-costs/{id}', { ...o, params: { path: { id } } }), config); }
+  async clearCache(config?: RequestConfig): Promise<{ message: string }> { return this.client.executeContractOperation('/v1/admin/function-costs/cache/clear', HttpMethod.POST, (c, o) => c.POST('/v1/admin/function-costs/cache/clear', o), config); }
 }
 
 export class FetchFunctionExecutionsService {
   constructor(private readonly client: FetchBaseApiClient) {}
-  async getById(id: string, config?: RequestConfig): Promise<FunctionExecutionDto> { const data = await this.client['executeContractRead'](`/v1/admin/function-executions/${encodeURIComponent(id)}`, (c, o) => c.GET('/v1/admin/function-executions/{id}', { ...o, params: { path: { id } } }), config); return executionFromWire(data); }
-  async getByConfiguration(functionConfigurationId: number, config?: RequestConfig): Promise<FunctionExecutionDto[]> { const data = await this.client['executeContractRead'](`/v1/admin/function-executions/configuration/${functionConfigurationId}`, (c, o) => c.GET('/v1/admin/function-executions/configuration/{functionConfigurationId}', { ...o, params: { path: { functionConfigurationId } } }), config); return data.data.map(executionFromWire); }
-  async getByState(state: ExecutionState, config?: RequestConfig): Promise<FunctionExecutionDto[]> { const value = state; const data = await this.client['executeContractRead'](`/v1/admin/function-executions/state/${encodeURIComponent(value)}`, (c, o) => c.GET('/v1/admin/function-executions/state/{state}', { ...o, params: { path: { state: value } } }), config); return data.data.map(executionFromWire); }
-  async cleanup(olderThanDays = 30, config?: RequestConfig): Promise<{ deletedCount: number; message: string }> { return this.client['executeContractOperation'](`/v1/admin/function-executions/cleanup?olderThanDays=${olderThanDays}`, HttpMethod.DELETE, (c, o) => c.DELETE('/v1/admin/function-executions/cleanup', { ...o, params: { query: { olderThanDays } } }), config) as Promise<{ deletedCount: number; message: string }>; }
+  async getById(id: string, config?: RequestConfig): Promise<FunctionExecutionDto> { const data = await this.client.executeContractRead(`/v1/admin/function-executions/${encodeURIComponent(id)}`, (c, o) => c.GET('/v1/admin/function-executions/{id}', { ...o, params: { path: { id } } }), config); return executionFromWire(data); }
+  async getByConfiguration(functionConfigurationId: number, config?: RequestConfig): Promise<FunctionExecutionDto[]> { const data = await this.client.executeContractRead(`/v1/admin/function-executions/configuration/${functionConfigurationId}`, (c, o) => c.GET('/v1/admin/function-executions/configuration/{functionConfigurationId}', { ...o, params: { path: { functionConfigurationId } } }), config); return data.data.map(executionFromWire); }
+  async getByState(state: ExecutionState, config?: RequestConfig): Promise<FunctionExecutionDto[]> { const value = state; const data = await this.client.executeContractRead(`/v1/admin/function-executions/state/${encodeURIComponent(value)}`, (c, o) => c.GET('/v1/admin/function-executions/state/{state}', { ...o, params: { path: { state: value } } }), config); return data.data.map(executionFromWire); }
+  async cleanup(olderThanDays = 30, config?: RequestConfig): Promise<{ deletedCount: number; message: string }> { return this.client.executeContractOperation(`/v1/admin/function-executions/cleanup?olderThanDays=${olderThanDays}`, HttpMethod.DELETE, (c, o) => c.DELETE('/v1/admin/function-executions/cleanup', { ...o, params: { query: { olderThanDays } } }), config) as Promise<{ deletedCount: number; message: string }>; }
 }

@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "description": "Maximum first-party analyzer diagnostics by project, warning code, and source file. Counts may decrease without updating this file.",
+  "groups": []
+}

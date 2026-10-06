@@ -7,6 +7,8 @@ using ConduitLLM.Core.Models;
 using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Gateway.UsageTracking;
+using ConduitLLM.Core.Serialization;
+using ConduitLLM.Gateway.Serialization;
 using IVirtualKeyService = ConduitLLM.Core.Interfaces.IVirtualKeyService;
 
 namespace ConduitLLM.Gateway.Middleware;
@@ -148,7 +150,9 @@ public partial class UsageTrackingMiddleware
 
         var totalCost = pricingResult.Cost + (providerToolCost ?? 0m) + snapshot.FunctionExecutionCost;
         var toolCallMetadata = snapshot.StreamingToolCalls.Count > 0
-            ? JsonSerializer.Serialize(snapshot.StreamingToolCalls)
+            ? JsonSerializer.Serialize(
+                snapshot.StreamingToolCalls.ToList(),
+                CoreHttpJsonContext.Default.ListToolCall)
             : providerToolUsageJson;
 
         UsageMetrics.UsageTrackingRequests.WithLabels(endpointType, "success").Inc();
@@ -261,33 +265,29 @@ public partial class UsageTrackingMiddleware
             : "unknown";
         var usageContext = context.GetUsageContext();
         var mediaType = UsageExtractor.DetermineRequestType(context.Request.Path);
-        var metadata = snapshot.MetadataJson ?? (usageContext switch
-        {
-            ImageUsageContext image => JsonSerializer.Serialize(new
+        var metadata = snapshot.MetadataJson ?? JsonSerializer.Serialize(
+            usageContext switch
             {
-                type = "image",
-                imageCount = evidence.Usage.ImageCount,
-                quality = image.Quality,
-                size = image.Size,
-                style = image.Style
-            }),
-            VideoUsageContext video => JsonSerializer.Serialize(new
-            {
-                type = "video",
-                durationSeconds = evidence.Usage.VideoDurationSeconds,
-                resolution = evidence.Usage.VideoResolution,
-                fps = video.Fps,
-                style = video.Style,
-                pricingParametersUsed = video.PricingParameters?.Keys.ToArray()
-            }),
-            AudioUsageContext audio => JsonSerializer.Serialize(new
-            {
-                type = mediaType,
-                audioDurationSeconds = audio.AudioDurationSeconds,
-                ttsCharacters = audio.TtsCharacters
-            }),
-            _ => JsonSerializer.Serialize(new { type = mediaType })
-        });
+                ImageUsageContext image => new MediaUsageMetadata(
+                    "image",
+                    ImageCount: evidence.Usage.ImageCount,
+                    Quality: image.Quality,
+                    Size: image.Size,
+                    Style: image.Style),
+                VideoUsageContext video => new MediaUsageMetadata(
+                    "video",
+                    DurationSeconds: evidence.Usage.VideoDurationSeconds,
+                    Resolution: evidence.Usage.VideoResolution,
+                    Fps: video.Fps,
+                    Style: video.Style,
+                    PricingParametersUsed: video.PricingParameters?.Keys.ToArray()),
+                AudioUsageContext audio => new MediaUsageMetadata(
+                    mediaType,
+                    AudioDurationSeconds: audio.AudioDurationSeconds,
+                    TtsCharacters: audio.TtsCharacters),
+                _ => new MediaUsageMetadata(mediaType)
+            },
+            GatewayInternalJsonContext.Default.MediaUsageMetadata);
 
         ApplyProviderBillingPolicy(context, evidence.Usage);
         await ProcessMediaResponseAsync(context, new MediaProcessingContext

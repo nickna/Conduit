@@ -22,7 +22,7 @@ retries once.
 Components and hooks should use the WebAdmin-owned Gateway boundary:
 
 ```typescript
-import { getBrowserGatewayClient } from '@/lib/client/browserCoreClient';
+import { getBrowserGatewayClient } from '@/lib/client/browserGatewayClient';
 
 const client = await getBrowserGatewayClient();
 const models = await client.discovery.getModels();

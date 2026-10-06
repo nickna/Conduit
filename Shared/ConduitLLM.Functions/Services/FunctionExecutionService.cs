@@ -5,6 +5,7 @@ using ConduitLLM.Functions.Enums;
 using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Security;
+using ConduitLLM.Functions.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace ConduitLLM.Functions.Services;
@@ -31,7 +32,6 @@ public class FunctionExecutionService : IFunctionExecutionService
     private readonly IFunctionClientFactory _clientFactory;
     private readonly IFunctionCredentialProtector _credentialProtector;
     private readonly ILogger<FunctionExecutionService> _logger;
-    private readonly JsonSerializerOptions _jsonOptions;
 
     public FunctionExecutionService(
         IFunctionConfigurationRepository functionConfigurationRepository,
@@ -49,8 +49,6 @@ public class FunctionExecutionService : IFunctionExecutionService
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         _credentialProtector = credentialProtector ?? throw new ArgumentNullException(nameof(credentialProtector));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-        _jsonOptions = Utilities.FunctionsJsonOptions.CompactWire;
     }
 
     /// <inheritdoc />
@@ -94,11 +92,11 @@ public class FunctionExecutionService : IFunctionExecutionService
                 configuration.ConfigurationName, estimatedCost);
 
             // 3. Create execution record
-            var requestData = new
+            var requestData = new FunctionExecutionRequestData
             {
-                parameters,
-                metadata,
-                idempotencyKey
+                Parameters = parameters,
+                Metadata = metadata,
+                IdempotencyKey = idempotencyKey
             };
 
             execution = new FunctionExecution
@@ -110,7 +108,9 @@ public class FunctionExecutionService : IFunctionExecutionService
                 State = ExecutionState.Running,
                 RequestedAt = DateTime.UtcNow,
                 StartedAt = DateTime.UtcNow,
-                RequestJson = JsonSerializer.Serialize(requestData, _jsonOptions),
+                RequestJson = JsonSerializer.Serialize(
+                    requestData,
+                    FunctionsJsonContext.Default.FunctionExecutionRequestData),
                 EstimatedCost = estimatedCost,
                 RetryCount = 0,
                 Version = 1,
@@ -185,15 +185,17 @@ public class FunctionExecutionService : IFunctionExecutionService
                 estimatedCost, actualCost, stopwatch.ElapsedMilliseconds);
 
             // 7. Update execution record with results
-            var costDetails = new
+            var costDetails = new FunctionExecutionCostDetails
             {
-                usage,
-                estimatedCost,
-                actualCost,
-                httpStatusCode = result.HttpStatusCode
+                Usage = usage,
+                EstimatedCost = estimatedCost,
+                ActualCost = actualCost,
+                HttpStatusCode = result.HttpStatusCode
             };
 
-            execution.CostCalculationDetails = JsonSerializer.Serialize(costDetails, _jsonOptions);
+            execution.CostCalculationDetails = JsonSerializer.Serialize(
+                costDetails,
+                FunctionsJsonContext.Default.FunctionExecutionCostDetails);
             execution.ActualCost = actualCost;
 
             await _executionRepository.UpdateAsync(execution, cancellationToken);
@@ -213,11 +215,11 @@ public class FunctionExecutionService : IFunctionExecutionService
                 if (execution == null)
                 {
                     // Create failed execution record
-                    var requestData = new
+                    var requestData = new FunctionExecutionRequestData
                     {
-                        parameters,
-                        metadata,
-                        idempotencyKey
+                        Parameters = parameters,
+                        Metadata = metadata,
+                        IdempotencyKey = idempotencyKey
                     };
 
                     execution = new FunctionExecution
@@ -230,7 +232,9 @@ public class FunctionExecutionService : IFunctionExecutionService
                         RequestedAt = DateTime.UtcNow,
                         CompletedAt = DateTime.UtcNow,
                         Duration = stopwatch.Elapsed,
-                        RequestJson = JsonSerializer.Serialize(requestData, _jsonOptions),
+                        RequestJson = JsonSerializer.Serialize(
+                            requestData,
+                            FunctionsJsonContext.Default.FunctionExecutionRequestData),
                         ActualCost = 0m,
                         ErrorMessage = ex.Message,
                         RetryCount = 0,

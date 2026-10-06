@@ -1,319 +1,46 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Moq;
-using Xunit;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Interfaces;
-using ConduitLLM.Core.Models;
 using ConduitLLM.Gateway.Consumers;
 using ConduitLLM.Tests.Messaging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
-namespace ConduitLLM.Tests.Http.Consumers
+namespace ConduitLLM.Tests.Http.Consumers;
+
+public sealed class ModelMappingCacheInvalidationHandlerTests
 {
-    [Trait("Category", "Unit")]
-    public class ModelMappingCacheInvalidationHandlerTests
+    [Theory]
+    [InlineData("Created")] [InlineData("Updated")] [InlineData("Deleted")]
+    public async Task EveryMutationInvalidatesTheCompleteRoutingDomainThenDiscovery(string change)
     {
-        private readonly Mock<ICacheManager> _mockCacheManager;
-        private readonly Mock<IDiscoveryCacheService> _mockDiscoveryCacheService;
-        private readonly Mock<ILogger<ModelMappingCacheInvalidationHandler>> _mockLogger;
-        private readonly ModelMappingCacheInvalidationHandler _consumer;
-
-        public ModelMappingCacheInvalidationHandlerTests()
-        {
-            _mockCacheManager = new Mock<ICacheManager>();
-            _mockDiscoveryCacheService = new Mock<IDiscoveryCacheService>();
-            _mockLogger = new Mock<ILogger<ModelMappingCacheInvalidationHandler>>();
-
-            _consumer = new ModelMappingCacheInvalidationHandler(
-                _mockCacheManager.Object,
-                _mockDiscoveryCacheService.Object,
-                _mockLogger.Object);
-        }
-
-        [Fact]
-        public async Task Consume_Should_Invalidate_ModelMapping_And_Discovery_Cache_On_Created()
-        {
-            // Arrange
-            var @event = new ModelMappingChanged
-            {
-                MappingId = 123,
-                ModelAlias = "gpt-4-turbo",
-                ProviderId = 1,
-                IsEnabled = true,
-                ChangeType = "Created",
-                CorrelationId = Guid.NewGuid().ToString()
-            };
-
-            _mockCacheManager
-                .Setup(x => x.RemoveManyAsync(It.IsAny<IEnumerable<string>>(), CacheRegion.ModelMetadata, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(3);
-
-            // Act
-            await _consumer.HandleAsync(@event, new TestEventContext());
-
-            // Assert - Model mapping cache invalidation
-            _mockCacheManager.Verify(
-                x => x.RemoveManyAsync(
-                    It.Is<IEnumerable<string>>(keys =>
-                        keys.Any(k => k.Contains("model:mapping:gpt-4-turbo")) &&
-                        keys.Any(k => k.Contains("model:mapping:id:123")) &&
-                        keys.Any(k => k.Contains("model:mapping:all"))),
-                    CacheRegion.ModelMetadata,
-                    It.IsAny<CancellationToken>()),
-                Times.Once);
-
-            // Assert - Discovery cache invalidation
-            _mockDiscoveryCacheService.Verify(
-                x => x.InvalidateAllDiscoveryAsync(It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
-
-        [Fact]
-        public async Task Consume_Should_Invalidate_Both_Caches_On_Updated()
-        {
-            // Arrange
-            var @event = new ModelMappingChanged
-            {
-                MappingId = 456,
-                ModelAlias = "claude-3-opus",
-                ProviderId = 2,
-                IsEnabled = false,
-                ChangeType = "Updated",
-                CorrelationId = Guid.NewGuid().ToString()
-            };
-
-            _mockCacheManager
-                .Setup(x => x.RemoveManyAsync(It.IsAny<IEnumerable<string>>(), CacheRegion.ModelMetadata, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(3);
-
-            // Act
-            await _consumer.HandleAsync(@event, new TestEventContext());
-
-            // Assert
-            _mockCacheManager.Verify(
-                x => x.RemoveManyAsync(It.IsAny<IEnumerable<string>>(), CacheRegion.ModelMetadata, It.IsAny<CancellationToken>()),
-                Times.Once);
-
-            _mockDiscoveryCacheService.Verify(
-                x => x.InvalidateAllDiscoveryAsync(It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
-
-        [Fact]
-        public async Task Consume_Should_Invalidate_Both_Caches_On_Deleted()
-        {
-            // Arrange
-            var @event = new ModelMappingChanged
-            {
-                MappingId = 789,
-                ModelAlias = "gemini-pro",
-                ProviderId = 3,
-                IsEnabled = true,
-                ChangeType = "Deleted",
-                CorrelationId = Guid.NewGuid().ToString()
-            };
-
-            _mockCacheManager
-                .Setup(x => x.RemoveManyAsync(It.IsAny<IEnumerable<string>>(), CacheRegion.ModelMetadata, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(3);
-
-            // Act
-            await _consumer.HandleAsync(@event, new TestEventContext());
-
-            // Assert
-            _mockCacheManager.Verify(
-                x => x.RemoveManyAsync(It.IsAny<IEnumerable<string>>(), CacheRegion.ModelMetadata, It.IsAny<CancellationToken>()),
-                Times.Once);
-
-            _mockDiscoveryCacheService.Verify(
-                x => x.InvalidateAllDiscoveryAsync(It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
-
-        [Fact]
-        public async Task Consume_Should_Propagate_When_ModelMapping_Cache_Fails()
-        {
-            // Arrange
-            var @event = new ModelMappingChanged
-            {
-                MappingId = 111,
-                ModelAlias = "error-model",
-                ProviderId = 5,
-                IsEnabled = true,
-                ChangeType = "Updated",
-                CorrelationId = Guid.NewGuid().ToString()
-            };
-
-            // Simulate model mapping cache failure
-            _mockCacheManager
-                .Setup(x => x.RemoveManyAsync(It.IsAny<IEnumerable<string>>(), CacheRegion.ModelMetadata, It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new InvalidOperationException("Redis connection failed"));
-
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                _consumer.HandleAsync(@event, new TestEventContext()));
-
-            _mockDiscoveryCacheService.Verify(
-                x => x.InvalidateAllDiscoveryAsync(It.IsAny<CancellationToken>()),
-                Times.Never);
-
-            // The messaging boundary owns the failure log and retry decision.
-            _mockLogger.Verify(
-                x => x.Log(
-                    LogLevel.Error,
-                    It.IsAny<EventId>(),
-                    It.IsAny<It.IsAnyType>(),
-                    It.IsAny<Exception>(),
-                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-                Times.Never);
-        }
-
-        [Fact]
-        public async Task Consume_Should_Propagate_When_Discovery_Cache_Fails()
-        {
-            // Arrange
-            var @event = new ModelMappingChanged
-            {
-                MappingId = 222,
-                ModelAlias = "cache-error-model",
-                ProviderId = 6,
-                IsEnabled = true,
-                ChangeType = "Created",
-                CorrelationId = Guid.NewGuid().ToString()
-            };
-
-            _mockCacheManager
-                .Setup(x => x.RemoveManyAsync(It.IsAny<IEnumerable<string>>(), CacheRegion.ModelMetadata, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(3);
-
-            // Simulate discovery cache failure
-            _mockDiscoveryCacheService
-                .Setup(x => x.InvalidateAllDiscoveryAsync(It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new InvalidOperationException("Redis connection failed"));
-
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                _consumer.HandleAsync(@event, new TestEventContext()));
-
-            // Assert - Model mapping cache should have been called before the discovery failure
-            _mockCacheManager.Verify(
-                x => x.RemoveManyAsync(It.IsAny<IEnumerable<string>>(), CacheRegion.ModelMetadata, It.IsAny<CancellationToken>()),
-                Times.Once);
-
-            // The messaging boundary owns the failure log and retry decision.
-            _mockLogger.Verify(
-                x => x.Log(
-                    LogLevel.Error,
-                    It.IsAny<EventId>(),
-                    It.IsAny<It.IsAnyType>(),
-                    It.IsAny<Exception>(),
-                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-                Times.Never);
-        }
-
-        [Fact]
-        public async Task Consume_Should_Handle_Null_ModelAlias()
-        {
-            // Arrange
-            var @event = new ModelMappingChanged
-            {
-                MappingId = 444,
-                ModelAlias = null,
-                ProviderId = 8,
-                IsEnabled = true,
-                ChangeType = "Deleted",
-                CorrelationId = Guid.NewGuid().ToString()
-            };
-
-            _mockCacheManager
-                .Setup(x => x.RemoveManyAsync(It.IsAny<IEnumerable<string>>(), CacheRegion.ModelMetadata, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(2);
-
-            // Act
-            await _consumer.HandleAsync(@event, new TestEventContext());
-
-            // Assert - Should only include ID-based key and all mappings key (not alias key)
-            _mockCacheManager.Verify(
-                x => x.RemoveManyAsync(
-                    It.Is<IEnumerable<string>>(keys =>
-                        keys.Any(k => k.Contains("model:mapping:id:444")) &&
-                        keys.Any(k => k.Contains("model:mapping:all")) &&
-                        !keys.Any(k => k.StartsWith("model:mapping:") && !k.Contains("id:") && !k.Contains("all"))),
-                    CacheRegion.ModelMetadata,
-                    It.IsAny<CancellationToken>()),
-                Times.Once);
-
-            _mockDiscoveryCacheService.Verify(
-                x => x.InvalidateAllDiscoveryAsync(It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
-
-        [Theory]
-        [InlineData("Created")]
-        [InlineData("Updated")]
-        [InlineData("Deleted")]
-        public async Task Consume_Should_Handle_All_Change_Types(string changeType)
-        {
-            // Arrange
-            var @event = new ModelMappingChanged
-            {
-                MappingId = 333,
-                ModelAlias = $"model-{changeType.ToLower()}",
-                ProviderId = 7,
-                IsEnabled = true,
-                ChangeType = changeType,
-                CorrelationId = Guid.NewGuid().ToString()
-            };
-
-            _mockCacheManager
-                .Setup(x => x.RemoveManyAsync(It.IsAny<IEnumerable<string>>(), CacheRegion.ModelMetadata, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(3);
-
-            // Act
-            await _consumer.HandleAsync(@event, new TestEventContext());
-
-            // Assert
-            _mockCacheManager.Verify(
-                x => x.RemoveManyAsync(It.IsAny<IEnumerable<string>>(), CacheRegion.ModelMetadata, It.IsAny<CancellationToken>()),
-                Times.Once);
-
-            _mockDiscoveryCacheService.Verify(
-                x => x.InvalidateAllDiscoveryAsync(It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
-
-        [Fact]
-        public void Constructor_Should_Throw_ArgumentNullException_For_Null_CacheManager()
-        {
-            // Act & Assert
-            Assert.Throws<ArgumentNullException>(() =>
-                new ModelMappingCacheInvalidationHandler(
-                    null!,
-                    _mockDiscoveryCacheService.Object,
-                    _mockLogger.Object));
-        }
-
-        [Fact]
-        public void Constructor_Should_Throw_ArgumentNullException_For_Null_DiscoveryCacheService()
-        {
-            // Act & Assert
-            Assert.Throws<ArgumentNullException>(() =>
-                new ModelMappingCacheInvalidationHandler(
-                    _mockCacheManager.Object,
-                    null!,
-                    _mockLogger.Object));
-        }
-
-        [Fact]
-        public void Constructor_Should_Throw_ArgumentNullException_For_Null_Logger()
-        {
-            // Act & Assert
-            Assert.Throws<ArgumentNullException>(() =>
-                new ModelMappingCacheInvalidationHandler(
-                    _mockCacheManager.Object,
-                    _mockDiscoveryCacheService.Object,
-                    null!));
-        }
+        var mappings = new Mock<IModelMappingCacheInvalidator>();
+        var discovery = new Mock<IDiscoveryCacheService>();
+        var order = new List<string>();
+        using var cancellation = new CancellationTokenSource();
+        mappings.Setup(cache => cache.InvalidateAsync(cancellation.Token)).Callback(() => order.Add("routing")).Returns(Task.CompletedTask);
+        discovery.Setup(cache => cache.InvalidateAllDiscoveryAsync(cancellation.Token)).Callback(() => order.Add("discovery")).Returns(Task.CompletedTask);
+        var handler = new ModelMappingCacheInvalidationHandler(mappings.Object, discovery.Object, NullLogger<ModelMappingCacheInvalidationHandler>.Instance);
+        await handler.HandleAsync(new ModelMappingChanged { ChangeType = change, ModelAlias = null }, new TestEventContext { CancellationToken = cancellation.Token });
+        Assert.Equal(new[] { "routing", "discovery" }, order);
+    }
+    [Fact]
+    public async Task RoutingFailurePropagatesAndDoesNotRunDiscovery()
+    {
+        var mappings = new Mock<IModelMappingCacheInvalidator>();
+        mappings.Setup(cache => cache.InvalidateAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("store unavailable"));
+        var discovery = new Mock<IDiscoveryCacheService>();
+        var handler = new ModelMappingCacheInvalidationHandler(mappings.Object, discovery.Object, NullLogger<ModelMappingCacheInvalidationHandler>.Instance);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(new ModelMappingChanged(), new TestEventContext()));
+        discovery.Verify(cache => cache.InvalidateAllDiscoveryAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+    [Fact]
+    public async Task DiscoveryFailurePropagatesAfterRoutingExpiration()
+    {
+        var mappings = new Mock<IModelMappingCacheInvalidator>();
+        var discovery = new Mock<IDiscoveryCacheService>();
+        discovery.Setup(cache => cache.InvalidateAllDiscoveryAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("store unavailable"));
+        var handler = new ModelMappingCacheInvalidationHandler(mappings.Object, discovery.Object, NullLogger<ModelMappingCacheInvalidationHandler>.Instance);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(new ModelMappingChanged(), new TestEventContext()));
+        mappings.Verify(cache => cache.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }

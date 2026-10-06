@@ -14,7 +14,7 @@ namespace ConduitLLM.Admin.Extensions
     {
         /// <summary>
         /// Registers the OpenRouter drift-detection + apply services, the named HTTP client, and the
-        /// scheduled sync hosted service. Relies on <c>IDistributedLockService</c> being registered
+        /// scheduled sync hosted service. Relies on <c>IDistributedLockProvider</c> being registered
         /// (by AddMediaLifecycleServices).
         /// </summary>
         public static IServiceCollection AddOpenRouterSyncServices(this IServiceCollection services, IConfiguration configuration)

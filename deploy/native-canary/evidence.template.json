@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "service": "admin",
+  "candidateDigest": "sha256:replace-me",
+  "correspondingJitDigest": "sha256:replace-me",
+  "startedAt": "2026-01-01T00:00:00Z",
+  "completedAt": "2026-01-08T00:00:00Z",
+  "soakHours": 0,
+  "healthyWindows": 0,
+  "errorRate": 1.0,
+  "contractsMatchedJit": false,
+  "backingServicesMatchedJit": false,
+  "fullFeatureMatrixPassed": false,
+  "dashboardAndAlertsVerified": false,
+  "automaticRollbackTested": false,
+  "manualRollbackTested": false,
+  "criticalVulnerabilitiesResolved": false,
+  "sbomAndProvenanceVerified": false,
+  "dashboardUrl": "replace-me",
+  "alertsUrl": "replace-me",
+  "notes": "Copy this file for recorded evidence; never edit the template into a passing result."
+}

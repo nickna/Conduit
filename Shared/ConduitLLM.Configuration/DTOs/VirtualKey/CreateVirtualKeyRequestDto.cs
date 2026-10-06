@@ -9,7 +9,7 @@ namespace ConduitLLM.Configuration.DTOs.VirtualKey;
 public class CreateVirtualKeyRequestDto
 {
     [Required(ErrorMessage = "Key name is required.")]
-    [MaxLength(100, ErrorMessage = "Key name cannot exceed 100 characters.")]
+    [StringLength(100, ErrorMessage = "Key name cannot exceed 100 characters.")]
     public string KeyName { get; set; } = string.Empty;
 
     public List<string>? AllowedModels { get; set; }

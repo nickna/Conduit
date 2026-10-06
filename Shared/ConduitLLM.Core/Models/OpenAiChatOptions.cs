@@ -144,5 +144,9 @@ public sealed class StringOrStringArrayConverter : JsonConverter<List<string>>
         Utf8JsonWriter writer,
         List<string> value,
         JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, value, options);
+        JsonSerializer.Serialize(
+            writer,
+            value,
+            new Serialization.CoreHttpJsonContext(
+                new JsonSerializerOptions(options)).ListString);
 }

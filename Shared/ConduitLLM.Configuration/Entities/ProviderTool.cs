@@ -47,13 +47,13 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Unit type for billing (e.g., "requests", "hours", "searches")
         /// </summary>
-        [MaxLength(50)]
+        [StringLength(50)]
         public string? BillingUnit { get; set; }
 
         /// <summary>
         /// Optional cost description for admin reference
         /// </summary>
-        [MaxLength(200)]
+        [StringLength(200)]
         public string? CostDescription { get; set; }
 
     }

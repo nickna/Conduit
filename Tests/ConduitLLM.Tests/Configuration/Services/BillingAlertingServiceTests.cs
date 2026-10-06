@@ -15,8 +15,14 @@ public class BillingAlertingServiceTests
         var auditService = new Mock<IBillingAuditService>();
         var service = new BillingAlertingService(logger.Object, auditService.Object);
 
-        await service.SendCriticalAlertAsync("first failure", 101, new { Amount = 1.25m });
-        await service.SendCriticalAlertAsync("second failure", 202, new { Amount = 2.50m });
+        await service.SendCriticalAlertAsync(
+            "first failure",
+            101,
+            new Dictionary<string, object?> { ["Amount"] = 1.25m });
+        await service.SendCriticalAlertAsync(
+            "second failure",
+            202,
+            new Dictionary<string, object?> { ["Amount"] = 2.50m });
 
         auditService.Verify(
             audit => audit.LogBillingEventAsync(It.IsAny<BillingAuditEvent>()),

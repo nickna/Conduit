@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Providers.Serialization;
 
 using CoreModels = ConduitLLM.Core.Models;
 using ConduitLLM.Providers.Helpers;
@@ -98,7 +99,7 @@ namespace ConduitLLM.Providers.OpenRouter
                         directive,
                         out var content))
                     {
-                        messages[index] = messages[index] with { Content = content };
+                        messages[index] = messages[index].WithContent(content);
                         added++;
                     }
                 }
@@ -114,7 +115,9 @@ namespace ConduitLLM.Providers.OpenRouter
 
             try
             {
-                var parsed = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
+                var parsed = JsonSerializer.Deserialize(
+                    json,
+                    ProvidersJsonContext.Default.DictionaryStringJsonElement);
                 return parsed is { Count: > 0 } ? parsed : null;
             }
             catch (JsonException ex)

@@ -22,14 +22,7 @@ public static class BillingServicesExtensions
     public static IServiceCollection AddBillingAndPricingServices(this IServiceCollection services)
     {
         // Model costs tracking service with caching decorator pattern
-        services.AddScoped<ModelCostService>();
-        services.AddScoped<IModelCostService>(provider =>
-        {
-            var innerService = provider.GetRequiredService<ModelCostService>();
-            var cacheManager = provider.GetRequiredService<ICacheManager>();
-            var logger = provider.GetRequiredService<ILogger<CachedModelCostService>>();
-            return new CachedModelCostService(innerService, cacheManager, logger);
-        });
+        services.AddModelCostCache();
 
         // Cost calculation service
         services.AddScoped<ICostCalculationService, CostCalculationService>();
@@ -58,7 +51,13 @@ public static class BillingServicesExtensions
 
         services.AddOptions<ConduitLLM.Configuration.Options.BillingReconciliationOptions>()
             .BindConfiguration(ConduitLLM.Configuration.Options.BillingReconciliationOptions.SectionName)
-            .ValidateDataAnnotations()
+            .Validate(options =>
+                    options.WindowHours is >= 1 and <= 24 &&
+                    options.GracePeriodMinutes is >= 0 and <= 360 &&
+                    options.RelativeThreshold is >= 0m and <= 1m &&
+                    options.AbsoluteThresholdUsd is >= 0m and <= 1_000_000m &&
+                    options.MaxCatchUpWindowsPerRun is >= 1 and <= 168,
+                "BillingReconciliation settings are outside their supported ranges.")
             .ValidateOnStart();
         services.AddSingleton<BillingReconciliationService>();
         services.AddLeaderElectedHostedService<BillingReconciliationService>(
@@ -69,8 +68,8 @@ public static class BillingServicesExtensions
         services.AddScoped<IPricingRulesEvaluator, PricingRulesEvaluator>();
         services.AddScoped<IPricingRulesValidator, PricingRulesValidator>();
 
-        // Cached pricing rules service for parsed configuration caching (uses ICacheManager)
-        services.AddSingleton<ICachedPricingRulesService, CachedPricingRulesService>();
+        // Cached pricing rules service for parsed configuration caching (uses the shared application FusionCache)
+        services.AddPricingRulesCache();
 
         // Pricing audit service for rules-based pricing evaluation tracking - with leader election
         services.AddSingleton<IPricingAuditService, PricingAuditService>();

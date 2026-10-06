@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsAotCompatible>true</IsAotCompatible>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="DistributedLock.Postgres" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="prometheus-net" />
+    <Compile Include="../../Shared/ConduitLLM.Core/Services/PostgresLockIdentity.cs" Link="PostgresLockIdentity.cs" />
+    <!-- Compile the exact production lock slice without unrelated EF/Wolverine host roots. -->
+    <Compile Include="../../Shared/ConduitLLM.Core/Services/PostgresDistributedLockProvider.cs" Link="PostgresDistributedLockProvider.cs" />
+    <Compile Include="../../Shared/ConduitLLM.Core/Metrics/DistributedLockMetrics.cs" Link="DistributedLockMetrics.cs" />
+    <Compile Include="../../Shared/ConduitLLM.Core/Interfaces/IDistributedLockProvider.cs" Link="IDistributedLockProvider.cs" />
+    <Compile Include="../../Shared/ConduitLLM.Core/Interfaces/IDistributedLockOwnership.cs" Link="IDistributedLockOwnership.cs" />
+    <Compile Include="../../Shared/ConduitLLM.Core/Extensions/DistributedLockExtensions.cs" Link="DistributedLockExtensions.cs" />
+    <Compile Include="../../Shared/ConduitLLM.Core/Extensions/DistributedLockOwnershipExtensions.cs" Link="DistributedLockOwnershipExtensions.cs" />
+  </ItemGroup>
+</Project>

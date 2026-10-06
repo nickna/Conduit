@@ -7,6 +7,8 @@ using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Constants;
 using ConduitLLM.Core.Utilities;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Core.Serialization;
+using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.Endpoints
 {
@@ -116,7 +118,7 @@ namespace ConduitLLM.Gateway.Endpoints
             {
                 Model = request.Model,
                 Prompt = request.Prompt,
-                Payload = JsonSerializer.Serialize(request),
+                Payload = JsonSerializer.Serialize(request, CoreHttpJsonContext.Default.VideoGenerationRequest),
                 WebhookUrl = request.WebhookUrl,
                 WebhookHeaders = request.WebhookHeaders,
                 ExtensionData = new Dictionary<string, object>
@@ -151,16 +153,16 @@ namespace ConduitLLM.Gateway.Endpoints
                 EstimatedCompletionTime = DateTime.UtcNow.AddSeconds(60),
                 CheckStatusUrl = $"/v1/conduit/videos/generations/tasks/{taskId}"
             };
-            accounting.RecordMetadata(JsonSerializer.Serialize(new
-            {
-                type = "video",
-                taskId,
-                status = TaskStateConstants.Pending,
-                durationSeconds = request.Duration,
-                resolution = request.Size,
-                fps = request.Fps,
-                style = request.Style
-            }));
+            accounting.RecordMetadata(JsonSerializer.Serialize(
+                new MediaTaskAccountingMetadata(
+                    "video",
+                    taskId,
+                    TaskStateConstants.Pending,
+                    DurationSeconds: request.Duration,
+                    Resolution: request.Size,
+                    Fps: request.Fps,
+                    Style: request.Style),
+                GatewayInternalJsonContext.Default.MediaTaskAccountingMetadata));
 
             return Accepted(taskResponse);
         }
@@ -352,9 +354,10 @@ namespace ConduitLLM.Gateway.Endpoints
                 }
                 var json = result is JsonElement element
                     ? element.GetRawText()
-                    : JsonSerializer.Serialize(result);
-                return JsonSerializer.Deserialize<VideoGenerationResponse>(json,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    : JsonSerializer.Serialize(result, CoreHttpJsonContext.Default.Object);
+                return JsonSerializer.Deserialize(
+                    json,
+                    CoreHttpJsonContext.Default.VideoGenerationResponse);
             }
             catch (Exception ex)
             {

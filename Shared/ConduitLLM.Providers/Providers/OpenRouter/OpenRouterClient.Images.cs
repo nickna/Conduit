@@ -111,7 +111,7 @@ namespace ConduitLLM.Providers.OpenRouter
             _ => null
         };
 
-        private record OpenRouterImageResponse
+        internal record OpenRouterImageResponse
         {
             [JsonPropertyName("created")]
             public long Created { get; init; }
@@ -123,7 +123,7 @@ namespace ConduitLLM.Providers.OpenRouter
             public CoreModels.Usage? Usage { get; init; }
         }
 
-        private record OpenRouterImageData
+        internal record OpenRouterImageData
         {
             [JsonPropertyName("b64_json")]
             public string? B64Json { get; init; }

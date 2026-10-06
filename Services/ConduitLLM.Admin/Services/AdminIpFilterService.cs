@@ -434,7 +434,7 @@ public class AdminIpFilterService : EventPublishingServiceBase, IAdminIpFilterSe
     {
         try
         {
-            var endpoints = System.Text.Json.JsonSerializer.Deserialize<List<string>>(json);
+            var endpoints = AdminJson.Deserialize<List<string>>(json);
             return endpoints ?? new List<string> { "/api/v1/health" };
         }
         catch (Exception ex)
@@ -476,7 +476,7 @@ public class AdminIpFilterService : EventPublishingServiceBase, IAdminIpFilterSe
 
             await _globalSettingRepository.UpsertAsync(
                 SettingKeyExcludedEndpoints,
-                System.Text.Json.JsonSerializer.Serialize(settings.ExcludedEndpoints),
+                AdminJson.Serialize(settings.ExcludedEndpoints),
                 "List of endpoints to exclude from IP filtering");
 
             _logger.LogInformation("IP filter settings updated successfully in database");

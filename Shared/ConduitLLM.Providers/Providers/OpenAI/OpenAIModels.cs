@@ -6,7 +6,7 @@ namespace ConduitLLM.Providers.OpenAI
     // Internal models mirroring OpenAI's /v1/chat/completions structure
     // See: https://platform.openai.com/docs/api-reference/chat/create
 
-    internal record OpenAIMessage
+    internal sealed class OpenAIMessage
     {
         [JsonPropertyName("role")]
         public string? Role { get; init; } // "system", "user", "assistant", "tool"
@@ -21,7 +21,7 @@ namespace ConduitLLM.Providers.OpenAI
 
         [JsonPropertyName("tool_calls")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public List<object>? ToolCalls { get; init; }
+        public List<ConduitLLM.Core.Models.ToolCall>? ToolCalls { get; init; }
 
         [JsonPropertyName("tool_call_id")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -48,10 +48,25 @@ namespace ConduitLLM.Providers.OpenAI
         public string? Reasoning { get; init; }
 
         [JsonExtensionData]
-        public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+        public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+
+        public OpenAIMessage WithContent(object? content) => new()
+        {
+            Role = Role,
+            Content = content,
+            Name = Name,
+            ToolCalls = ToolCalls,
+            ToolCallId = ToolCallId,
+            Annotations = Annotations,
+            Audio = Audio,
+            Images = Images,
+            ReasoningDetails = ReasoningDetails,
+            Reasoning = Reasoning,
+            ExtensionData = ExtensionData
+        };
     }
 
-    internal record OpenAIChatCompletionResponse
+    internal sealed class OpenAIChatCompletionResponse
     {
         [JsonPropertyName("id")]
         public string? Id { get; init; }
@@ -88,7 +103,7 @@ namespace ConduitLLM.Providers.OpenAI
         public System.Text.Json.JsonElement? GroqExtension { get; init; }
 
         [JsonExtensionData]
-        public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+        public Dictionary<string, JsonElement>? ExtensionData { get; set; }
     }
 
     internal record OpenAIChoice
@@ -105,7 +120,7 @@ namespace ConduitLLM.Providers.OpenAI
         // Optional logprobs field
     }
 
-    internal record OpenAIUsage
+    internal sealed class OpenAIUsage
     {
         [JsonPropertyName("prompt_tokens")]
         public int PromptTokens { get; init; }
@@ -125,7 +140,7 @@ namespace ConduitLLM.Providers.OpenAI
         /// (e.g., prompt_tokens_details, cache_creation_input_tokens, prompt_cache_hit_tokens).
         /// </summary>
         [JsonExtensionData]
-        public Dictionary<string, System.Text.Json.JsonElement>? ExtensionData { get; init; }
+        public Dictionary<string, System.Text.Json.JsonElement>? ExtensionData { get; set; }
     }
 
     // --- Internal Models for Model Listing ---

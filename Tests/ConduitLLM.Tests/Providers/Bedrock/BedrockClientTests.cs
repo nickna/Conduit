@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
@@ -287,6 +288,71 @@ public class BedrockClientTests
 
         mapped.Messages.Single().Content.Single().Image!.Format.Should().Be("png");
         mapped.Messages.Single().Content.Single().Image!.Source.Bytes.Should().Be("AQID");
+    }
+
+    [Fact]
+    public void ConversePayload_PreservesGeneratedJsonBoundaryShapes()
+    {
+        var client = CreateClient(CreateHandler(HttpStatusCode.OK, "{}"));
+        var request = ChatRequest();
+        request.TopK = 42;
+        request.ToolChoice = ToolChoice.Function("get_weather");
+        request.Tools =
+        [
+            new Tool
+            {
+                Function = new FunctionDefinition
+                {
+                    Name = "get_weather",
+                    Parameters = new JsonObject
+                    {
+                        ["type"] = "object",
+                        ["properties"] = new JsonObject
+                        {
+                            ["city"] = new JsonObject { ["type"] = "string" }
+                        }
+                    }
+                }
+            }
+        ];
+        request.Messages =
+        [
+            new Message
+            {
+                Role = "user",
+                Content = new List<object> { new TextContentPart { Text = "Weather?" } }
+            },
+            new Message
+            {
+                Role = "assistant",
+                ToolCalls =
+                [
+                    new ToolCall
+                    {
+                        Id = "tool-1",
+                        Function = new FunctionCall
+                        {
+                            Name = "get_weather",
+                            Arguments = "not-json"
+                        }
+                    }
+                ]
+            }
+        ];
+
+        var payload = BedrockClient.SerializePayload(client.MapToConverseRequest(request));
+        using var document = JsonDocument.Parse(payload);
+        var root = document.RootElement;
+
+        root.GetProperty("additionalModelRequestFields").GetProperty("top_k").GetInt32()
+            .Should().Be(42);
+        root.GetProperty("toolConfig").GetProperty("toolChoice").GetProperty("tool")
+            .GetProperty("name").GetString().Should().Be("get_weather");
+        root.GetProperty("toolConfig").GetProperty("tools")[0].GetProperty("toolSpec")
+            .GetProperty("inputSchema").GetProperty("json").GetProperty("properties")
+            .GetProperty("city").GetProperty("type").GetString().Should().Be("string");
+        root.GetProperty("messages")[1].GetProperty("content")[0].GetProperty("toolUse")
+            .GetProperty("input").GetProperty("raw").GetString().Should().Be("not-json");
     }
 
     [Fact]

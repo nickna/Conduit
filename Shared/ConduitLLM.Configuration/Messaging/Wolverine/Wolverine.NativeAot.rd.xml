@@ -1,0 +1,12 @@
+<Directives>
+  <Application>
+    <Assembly Name="Wolverine">
+      <Type Name="Wolverine.Runtime.Serialization.IntrinsicSerializer`1" Dynamic="Required All" />
+      <Type Name="Wolverine.Runtime.Routing.MessageRouter`1" Dynamic="Required All" />
+      <Type Name="Wolverine.Runtime.Routing.EmptyMessageRouter`1" Dynamic="Required All" />
+    </Assembly>
+    <Assembly Name="ConduitLLM.Messaging.Wolverine">
+      <Type Name="ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge`1" Dynamic="Required All" />
+    </Assembly>
+  </Application>
+</Directives>

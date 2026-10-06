@@ -50,6 +50,7 @@ namespace ConduitLLM.Core.Services
 
         public async Task QueueInvalidationAsync<T>(string key, T eventData, CacheType cacheType) where T : DomainEvent
         {
+            if (cacheType == CacheType.ModelCost) await InvalidateBillingAsync();
             if (!_options.Enabled)
             {
                 await ProcessDirectInvalidation(key, eventData, cacheType);
@@ -82,6 +83,7 @@ namespace ConduitLLM.Core.Services
 
         public async Task QueueBulkInvalidationAsync<T>(string[] keys, T eventData, CacheType cacheType) where T : DomainEvent
         {
+            if (cacheType == CacheType.ModelCost && keys.Length > 0) await InvalidateBillingAsync();
             if (!_options.Enabled)
             {
                 foreach (var key in keys)
@@ -119,6 +121,19 @@ namespace ConduitLLM.Core.Services
             {
                 await TriggerImmediateProcessing();
             }
+        }
+
+        // Billing expiration is awaited at the event boundary. Only the separate auxiliary Redis
+        // cache remains batched; an in-memory queue cannot acknowledge required billing expiration.
+        private async Task InvalidateBillingAsync()
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var provider = scope.ServiceProvider;
+            if (provider.GetService<ConduitLLM.Configuration.Interfaces.IModelCostService>() is { } billing)
+                await billing.ClearCacheAsync();
+            if (provider.GetService<IModelMappingCacheInvalidator>() is { } mappings) await mappings.InvalidateAsync();
+            if (provider.GetService<ICachedPricingRulesService>() is { } rules) await rules.InvalidateAllAsync();
+            if (provider.GetService<IDiscoveryCacheService>() is { } discovery) await discovery.InvalidateAllDiscoveryAsync();
         }
 
         public void Configure(BatchInvalidationOptions options)

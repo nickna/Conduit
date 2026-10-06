@@ -4,6 +4,7 @@ using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Models.Pricing;
+using ConduitLLM.Core.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace ConduitLLM.Core.Services;
@@ -72,9 +73,11 @@ public class PricingRulesEvaluator : IPricingRulesEvaluator
                 ModelId = context.ModelId,
                 ModelCostId = context.ModelCostId,
                 PricingType = config.PricingType,
-                InputParameters = JsonSerializer.Serialize(parameters),
+                InputParameters = JsonSerializer.Serialize(
+                    parameters,
+                    AsyncTaskJsonContext.Default.DictionaryStringObject),
                 MatchedRule = result.MatchedRule != null
-                    ? JsonSerializer.Serialize(result.MatchedRule)
+                    ? JsonSerializer.Serialize(result.MatchedRule, CorePricingJsonContext.Default.PricingRule)
                     : null,
                 UsedDefaultRate = result.UsedDefaultRate,
                 AppliedRate = result.Rate,

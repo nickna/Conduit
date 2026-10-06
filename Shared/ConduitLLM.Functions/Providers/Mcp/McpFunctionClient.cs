@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using ConduitLLM.Functions.Serialization;
 using System.Text.Json.Nodes;
 using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Enums;
@@ -408,7 +409,9 @@ public sealed partial class McpFunctionClient : IFunctionClient, IDynamicToolPro
             payload["omittedStructuredContent"] = true;
         }
 
-        return JsonSerializer.Serialize(payload, _jsonOptions);
+        return JsonSerializer.Serialize(
+            payload,
+            FunctionsJsonContext.Default.DictionaryStringObject);
     }
 
     private static IReadOnlyList<string> TruncateTextParts(

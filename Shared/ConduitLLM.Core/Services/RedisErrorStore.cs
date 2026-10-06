@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using ConduitLLM.Configuration.Constants;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Serialization;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
@@ -66,12 +67,12 @@ namespace ConduitLLM.Core.Services
         public async Task TrackWarningAsync(int keyId, ProviderErrorInfo error)
         {
             var warningKey = CacheKeys.ProviderError.WarningsByKey(keyId);
-            var warningData = JsonSerializer.Serialize(new
-            {
-                type = error.ErrorType.ToString(),
-                message = error.ErrorMessage,
-                timestamp = error.OccurredAt
-            });
+            var warningData = JsonSerializer.Serialize(
+                new ProviderWarningEntry(
+                    error.ErrorType.ToString(),
+                    error.ErrorMessage,
+                    error.OccurredAt),
+                CoreInternalJsonContext.Default.ProviderWarningEntry);
             
             await _db.SortedSetAddAsync(warningKey, 
                 warningData, 
@@ -109,14 +110,14 @@ namespace ConduitLLM.Core.Services
         public async Task AddToGlobalFeedAsync(ProviderErrorInfo error)
         {
             var feedKey = CacheKeys.ProviderError.RecentFeed;
-            var feedEntry = JsonSerializer.Serialize(new
-            {
-                keyId = error.KeyCredentialId,
-                providerId = error.ProviderId,
-                type = error.ErrorType.ToString(),
-                message = error.ErrorMessage,
-                timestamp = error.OccurredAt
-            });
+            var feedEntry = JsonSerializer.Serialize(
+                new ProviderFeedEntry(
+                    error.KeyCredentialId,
+                    error.ProviderId,
+                    error.ErrorType.ToString(),
+                    error.ErrorMessage,
+                    error.OccurredAt),
+                CoreInternalJsonContext.Default.ProviderFeedEntry);
             
             await _db.SortedSetAddAsync(feedKey, 
                 feedEntry, 

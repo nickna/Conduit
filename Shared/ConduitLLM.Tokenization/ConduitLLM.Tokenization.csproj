@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Direct reference lifts the vulnerable version pulled transitively by the tokenizer package. -->
+    <PackageReference Include="Microsoft.Bcl.Memory" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" />
+    <PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" />
+    <PackageReference Include="Microsoft.ML.Tokenizers.Data.O200kBase" />
+    <PackageReference Include="Microsoft.ML.Tokenizers.Data.P50kBase" />
+    <PackageReference Include="Microsoft.ML.Tokenizers.Data.R50kBase" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ConduitLLM.Core\ConduitLLM.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\ConduitLLM.Core\Services\TiktokenCounter.cs"
+             Link="Services\TiktokenCounter.cs" />
+    <Compile Include="..\ConduitLLM.Core\Services\TokenizerEncodingMap.cs"
+             Link="Services\TokenizerEncodingMap.cs" />
+  </ItemGroup>
+</Project>

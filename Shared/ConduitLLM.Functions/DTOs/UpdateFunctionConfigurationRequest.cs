@@ -12,7 +12,7 @@ public class UpdateFunctionConfigurationRequest
     /// <summary>
     /// User-friendly name for this configuration
     /// </summary>
-    [MaxLength(200)]
+    [StringLength(200)]
     public string? ConfigurationName { get; set; }
 
     /// <summary>
@@ -28,7 +28,7 @@ public class UpdateFunctionConfigurationRequest
     /// <summary>
     /// Optional custom base URL
     /// </summary>
-    [MaxLength(500)]
+    [StringLength(500)]
     public string? BaseUrl { get; set; }
 
     /// <summary>
@@ -69,6 +69,6 @@ public class UpdateFunctionConfigurationRequest
     /// <summary>
     /// Optional description
     /// </summary>
-    [MaxLength(1000)]
+    [StringLength(1000)]
     public string? Description { get; set; }
 }

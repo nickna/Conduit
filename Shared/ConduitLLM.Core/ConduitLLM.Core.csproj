@@ -1,37 +1,36 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.S3" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Common" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="DistributedLock.Postgres" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Http.Polly" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-    <PackageReference Include="MessagePack" />
-    <!-- Direct reference lifts the vulnerable 9.0.4 that Microsoft.ML.Tokenizers pulls transitively
-         (GHSA-73j8-2gch-69rq); transitive pinning is not enabled centrally. -->
-    <PackageReference Include="Microsoft.Bcl.Memory" />
-    <PackageReference Include="Microsoft.ML.Tokenizers" />
-    <!-- Offline tiktoken vocabularies for every encoding TokenizerEncodingMap can resolve to. -->
-    <PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" />
-    <PackageReference Include="Microsoft.ML.Tokenizers.Data.O200kBase" />
-    <PackageReference Include="Microsoft.ML.Tokenizers.Data.P50kBase" />
-    <PackageReference Include="Microsoft.ML.Tokenizers.Data.R50kBase" />
-    <PackageReference Include="Microsoft.OpenApi" />
     <PackageReference Include="Polly" />
     <PackageReference Include="Polly.Contrib.WaitAndRetry" />
     <PackageReference Include="prometheus-net" />
     <PackageReference Include="prometheus-net.AspNetCore" />
     <PackageReference Include="StackExchange.Redis" />
+    <PackageReference Include="ZiggyCreatures.FusionCache" />
+    <PackageReference Include="ZiggyCreatures.FusionCache.Backplane.StackExchangeRedis" />
   </ItemGroup>
   
   <ItemGroup>
     <ProjectReference Include="..\ConduitLLM.Configuration\ConduitLLM.Configuration.csproj" />
+    <ProjectReference Include="..\ConduitLLM.Contracts\ConduitLLM.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Extensions\SignalRConfigurationExtensions.cs" />
+    <Compile Remove="Services\SignalRNotificationServiceBase.cs" />
+    <Compile Remove="OpenApi\*.cs" />
+    <Compile Remove="Services\TiktokenCounter.cs" />
+    <Compile Remove="Services\TokenizerEncodingMap.cs" />
+    <Compile Remove="Services\S3MediaStorageService.*.cs" />
+    <Compile Remove="Messaging\ConduitMessagingTopology.cs" />
+    <Compile Remove="Extensions\SharedCacheInvalidationMessagingExtensions.cs" />
   </ItemGroup>
 
   <ItemGroup>

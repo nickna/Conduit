@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text;
 
 using ConduitLLM.Admin.Endpoints;
+using ConduitLLM.Admin.Serialization;
 
 using AwesomeAssertions;
 
@@ -13,16 +14,18 @@ namespace ConduitLLM.Tests.Admin.Endpoints;
 public sealed class JsonMergePatchTests
 {
     private static JsonSerializerOptions Options()
+        => AdminJsonOptions.Create();
+
+    private static T Parse<T>(string json) where T : class
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-        options.Converters.Add(new JsonMergePatchRequestConverterFactory());
-        return options;
+        using var document = JsonDocument.Parse(json);
+        return JsonMergePatchState.Parse<T>(document.RootElement, Options());
     }
 
     [Fact]
-    public void Converter_PreservesAbsenceClearsNullAndMergesNestedObjects()
+    public void Parser_PreservesAbsenceClearsNullAndMergesNestedObjects()
     {
-        var request = JsonSerializer.Deserialize<UpdateProviderRequest>(
+        var request = Parse<UpdateProviderRequest>(
             """
             {
               "baseUrl": null,
@@ -31,8 +34,7 @@ public sealed class JsonMergePatchTests
                 "added": "new"
               }
             }
-            """,
-            Options())!;
+            """);
 
         request.IsDefined(nameof(request.ProviderName)).Should().BeFalse();
         request.IsDefined(nameof(request.BaseUrl)).Should().BeTrue();
@@ -61,22 +63,20 @@ public sealed class JsonMergePatchTests
     }
 
     [Fact]
-    public void Converter_RejectsUnknownProperties()
+    public void Parser_RejectsUnknownProperties()
     {
-        var act = () => JsonSerializer.Deserialize<UpdateProviderRequest>(
-            """{"notAProviderProperty":true}""",
-            Options());
+        var act = () => Parse<UpdateProviderRequest>(
+            """{"notAProviderProperty":true}""");
 
         act.Should().Throw<JsonException>()
             .WithMessage("*notAProviderProperty*not writable*");
     }
 
     [Fact]
-    public void Converter_RejectsNullForNonNullableRequestProperties()
+    public void Parser_RejectsNullForNonNullableRequestProperties()
     {
-        var act = () => JsonSerializer.Deserialize<UpdateProviderRequest>(
-            """{"isEnabled":null}""",
-            Options());
+        var act = () => Parse<UpdateProviderRequest>(
+            """{"isEnabled":null}""");
 
         act.Should().Throw<JsonException>()
             .WithMessage("*isEnabled*");

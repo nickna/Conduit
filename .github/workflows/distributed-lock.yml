@@ -1,0 +1,92 @@
+name: Distributed lock ownership
+
+on:
+  push:
+    branches: [dev, master]
+    paths:
+      - 'Shared/**'
+      - 'Services/**'
+      - 'Tests/**'
+      - 'tools/ConduitLLM.LockProbe/**'
+      - 'Directory.*'
+      - 'global.json'
+      - '.github/workflows/distributed-lock.yml'
+  pull_request:
+    branches: [dev, master]
+    paths:
+      - 'Shared/**'
+      - 'Services/**'
+      - 'Tests/**'
+      - 'tools/ConduitLLM.LockProbe/**'
+      - 'Directory.*'
+      - 'global.json'
+      - '.github/workflows/distributed-lock.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: distributed-lock-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ownership:
+    name: PostgreSQL ${{ matrix.postgres }} JIT and linux-x64 native
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['16', '17']
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}-alpine
+        ports: ['5432:5432']
+        env:
+          POSTGRES_USER: locktest
+          POSTGRES_PASSWORD: locktest
+          POSTGRES_DB: locktest
+        options: >-
+          --health-cmd "pg_isready -U locktest -d locktest"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CONDUIT_LOCK_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=locktest;Username=locktest;Password=locktest
+      CONDUIT_LOCK_TEST_REDIS: 127.0.0.1:6379
+      CONDUIT_CACHE_TEST_REDIS: 127.0.0.1:6379
+      CONDUIT_LOCK_PROBE_POSTGRES: Host=127.0.0.1;Port=5432;Database=locktest;Username=locktest;Password=locktest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Caller policy and identity unit tests
+        run: >-
+          dotnet test Tests/ConduitLLM.Tests -c Release
+          --filter 'FullyQualifiedName~DistributedLock|FullyQualifiedName~PostgresLockIdentity|FullyQualifiedName~MediaCleanup|FullyQualifiedName~MediaDeletion|FullyQualifiedName~AdminMediaServiceSoftDelete|FullyQualifiedName~AdminVirtualKeyService|FullyQualifiedName~MetadataSyncLock|FullyQualifiedName~OpenRouterDriftDetection|FullyQualifiedName~BudgetAlertManager|FullyQualifiedName~DistributedCachePopulator|FullyQualifiedName~CoordinatedConnectionPoolWarmer|FullyQualifiedName~Architecture|FullyQualifiedName~HostApplicationCacheComposition|FullyQualifiedName~MediaLifecycleExtensions'
+          --logger 'trx;LogFileName=unit.trx' --results-directory artifacts/lock-probe/test-results
+      - name: Real PostgreSQL and Redis integration gates
+        run: >-
+          dotnet test Tests/ConduitLLM.IntegrationTests -c Release --filter 'Component=DistributedLock'
+          --logger 'trx;LogFileName=integration.trx' --results-directory artifacts/lock-probe/test-results
+      - name: JIT production lock probe
+        run: dotnet run --project tools/ConduitLLM.LockProbe -c Release
+      - name: Install native toolchain
+        run: sudo apt-get update && sudo apt-get install --yes clang zlib1g-dev
+      - name: Publish exact production lock slice with reflection disabled
+        run: dotnet publish tools/ConduitLLM.LockProbe -c Release -r linux-x64 -p:PublishAot=true -o artifacts/lock-probe/native
+      - name: Native production lock probe
+        run: artifacts/lock-probe/native/ConduitLLM.LockProbe
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: distributed-lock-pg${{ matrix.postgres }}
+          path: artifacts/lock-probe/test-results
+          retention-days: 14

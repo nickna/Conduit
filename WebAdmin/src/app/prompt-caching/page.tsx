@@ -8,30 +8,25 @@ import {
 import { IconPlus, IconTrash } from '@tabler/icons-react';
 import { notify } from '@/lib/notifications';
 import { withAdminClient } from '@/lib/client/adminClient';
+import type {
+  CacheInjectionPointDto,
+  PromptCachingAnalyticsDto,
+  PromptCachingCapabilityDto,
+  PromptCachingConfigDto,
+  PromptCachingRuleDto,
+  PromptCachingStrategy,
+} from '@/lib/admin-api';
 
-type Strategy = 'Automatic' | 'Explicit';
-interface InjectionPoint { role?: 'system' | 'developer' | 'user' | 'assistant' | null; index?: number | null }
-interface Rule {
-  name: string; enabled: boolean; provider: string; modelPattern: string;
-  strategy: Strategy; ttl?: string | null; injectionPoints: InjectionPoint[];
-}
-interface Config { schemaVersion: 3; enabled: boolean; rules: Rule[] }
-interface Capability {
-  provider: string; modelPattern: string; strategies: Strategy[]; ttls: string[];
-  minimumTokens?: number | null; maxBreakpoints: number; providerManaged: boolean;
-}
-
-interface Analytics { requests: number; eligibleMisses: number; readEvents: number; writeEvents: number; cachedTokens: number; netSavings: number; writePremium: number; hitLatencyMs?: number | null; missLatencyMs?: number | null; affinityReuse: number; failovers: number }
-const emptyConfig: Config = { schemaVersion: 3, enabled: false, rules: [] };
+const emptyConfig: PromptCachingConfigDto = { schemaVersion: 3, enabled: false, rules: [] };
 
 export default function PromptCachingPage() {
-  const [config, setConfig] = useState<Config>(emptyConfig);
-  const [capabilities, setCapabilities] = useState<Capability[]>([]);
+  const [config, setConfig] = useState<PromptCachingConfigDto>(emptyConfig);
+  const [capabilities, setCapabilities] = useState<PromptCachingCapabilityDto[]>([]);
   const [snapshot, setSnapshot] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [legacyError, setLegacyError] = useState<string | null>(null);
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [configurationError, setConfigurationError] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<PromptCachingAnalyticsDto | null>(null);
   const [aliasFilter, setAliasFilter] = useState('');
   const [providerFilter, setProviderFilter] = useState('');
 
@@ -44,32 +39,21 @@ export default function PromptCachingPage() {
     try {
       const [rawConfig, rawCapabilities] = await Promise.all([
         withAdminClient(client => client.configuration.getPromptCachingConfig()),
-        withAdminClient(client => {
-          const service = client.configuration as unknown as {
-            getPromptCachingCapabilities: () => Promise<Capability[]>;
-          };
-          return service.getPromptCachingCapabilities();
-        }),
+        withAdminClient(client => client.configuration.getPromptCachingCapabilities()),
       ]);
-      const next = rawConfig as unknown as Config;
-      setConfig(next);
-      setSnapshot(JSON.stringify(next));
+      setConfig(rawConfig);
+      setSnapshot(JSON.stringify(rawConfig));
       setCapabilities(rawCapabilities);
       const analyticsResult = await withAdminClient(client => client.configuration.getPromptCachingAnalytics({ alias: aliasFilter || undefined, provider: providerFilter || undefined }));
-      setAnalytics(analyticsResult as unknown as Analytics);
-      setLegacyError(null);
+      setAnalytics(analyticsResult);
+      setConfigurationError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Stored configuration must be replaced.';
       setConfig(emptyConfig);
       setSnapshot('');
-      setLegacyError(message);
+      setConfigurationError(message);
       try {
-        const rawCapabilities = await withAdminClient(client => {
-          const service = client.configuration as unknown as {
-            getPromptCachingCapabilities: () => Promise<Capability[]>;
-          };
-          return service.getPromptCachingCapabilities();
-        });
+        const rawCapabilities = await withAdminClient(client => client.configuration.getPromptCachingCapabilities());
         setCapabilities(rawCapabilities);
       } catch { /* retain an empty catalog and surface the configuration error */ }
     } finally {
@@ -79,7 +63,7 @@ export default function PromptCachingPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const updateRule = (index: number, update: Partial<Rule>) => {
+  const updateRule = (index: number, update: Partial<PromptCachingRuleDto>) => {
     setConfig(current => ({
       ...current,
       rules: current.rules.map((rule, i) => i === index ? { ...rule, ...update } : rule),
@@ -108,12 +92,10 @@ export default function PromptCachingPage() {
   const save = async () => {
     setSaving(true);
     try {
-      const raw = await withAdminClient(client =>
-        client.configuration.updatePromptCachingConfig(config as never));
-      const next = raw as unknown as Config;
+      const next = await withAdminClient(client => client.configuration.updatePromptCachingConfig(config));
       setConfig(next);
       setSnapshot(JSON.stringify(next));
-      setLegacyError(null);
+      setConfigurationError(null);
       notify.success('Provider-aware prompt caching policy saved.', 'Saved');
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Failed to save prompt caching policy.');
@@ -151,7 +133,7 @@ export default function PromptCachingPage() {
           </Stack>
         </Paper>
 
-        {legacyError && <Alert color="red" title="Configuration replacement required">{legacyError}</Alert>}
+        {configurationError && <Alert color="red" title="Configuration replacement required">{configurationError}</Alert>}
 
         <Switch
           size="lg"
@@ -198,13 +180,13 @@ export default function PromptCachingPage() {
                 <Group grow align="end">
                   <Select label="Strategy" data={(capability?.strategies ?? []).map(s => ({ value: s, label: s === 'Automatic' ? 'Automatic conversation caching' : 'Explicit breakpoints' }))} value={rule.strategy} onChange={value => {
                     if (!value) return;
-                    let injectionPoints: InjectionPoint[] = [];
+                    let injectionPoints: CacheInjectionPointDto[] = [];
                     if (value === 'Explicit') {
                       injectionPoints = rule.injectionPoints.length > 0
                         ? rule.injectionPoints
                         : [{ role: 'system', index: 0 }];
                     }
-                    updateRule(index, { strategy: value as Strategy, injectionPoints });
+                    updateRule(index, { strategy: value as PromptCachingStrategy, injectionPoints });
                   }} />
                   <Select label="Lifetime" data={(capability?.ttls ?? []).map(ttl => ({ value: ttl, label: ttl }))} value={rule.ttl ?? null} onChange={value => updateRule(index, { ttl: value })} disabled={!capability?.ttls.length} />
                 </Group>
@@ -213,7 +195,7 @@ export default function PromptCachingPage() {
                   <Stack gap="xs">
                     <Group justify="space-between"><Text size="sm" fw={600}>Breakpoints ({rule.injectionPoints.length}/{capability?.maxBreakpoints ?? 4})</Text><Button size="xs" variant="light" disabled={rule.injectionPoints.length >= (capability?.maxBreakpoints ?? 4)} onClick={() => updateRule(index, { injectionPoints: [...rule.injectionPoints, { role: 'user', index: -1 }] })}>Add breakpoint</Button></Group>
                     {rule.injectionPoints.map((point, pointIndex) => <Group key={pointIndex} grow>
-                      <Select data={['system', 'developer', 'user', 'assistant']} value={point.role ?? null} onChange={value => updateRule(index, { injectionPoints: rule.injectionPoints.map((p, i) => i === pointIndex ? { ...p, role: value as InjectionPoint['role'] } : p) })} />
+                      <Select data={['system', 'developer', 'user', 'assistant']} value={point.role ?? null} onChange={value => updateRule(index, { injectionPoints: rule.injectionPoints.map((p, i) => i === pointIndex ? { ...p, role: value as CacheInjectionPointDto['role'] } : p) })} />
                       <NumberInput value={point.index ?? ''} placeholder="All matching" allowDecimal={false} min={-100} max={100} onChange={value => updateRule(index, { injectionPoints: rule.injectionPoints.map((p, i) => i === pointIndex ? { ...p, index: value === '' ? null : Number(value) } : p) })} />
                       <ActionIcon color="red" variant="subtle" onClick={() => updateRule(index, { injectionPoints: rule.injectionPoints.filter((pointItem, i) => pointItem && i !== pointIndex) })}><IconTrash size={16} /></ActionIcon>
                     </Group>)}

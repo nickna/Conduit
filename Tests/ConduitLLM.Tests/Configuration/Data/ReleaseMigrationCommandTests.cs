@@ -1,5 +1,6 @@
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Data;
+using ConduitLLM.Migrator;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -23,7 +24,7 @@ public sealed class ReleaseMigrationCommandTests
         await using var database = await TemporaryDatabase.CreateAsync();
         using var environment = database.UseAsMigrationTarget();
 
-        var exitCode = await MigrationCommand.RunAsync();
+        var exitCode = await MigrationRunner.RunAsync();
 
         Assert.Equal(0, exitCode);
         await AssertSchemaCurrentAsync(database.ConnectionString);
@@ -42,7 +43,7 @@ public sealed class ReleaseMigrationCommandTests
         Skip.If(migrations.Length < 2, "At least two migrations are required to test an upgrade.");
         await context.GetService<IMigrator>().MigrateAsync(migrations[^2]);
 
-        var exitCode = await MigrationCommand.RunAsync();
+        var exitCode = await MigrationRunner.RunAsync();
 
         Assert.Equal(0, exitCode);
         await AssertSchemaCurrentAsync(database.ConnectionString);
@@ -54,10 +55,10 @@ public sealed class ReleaseMigrationCommandTests
         await using var database = await TemporaryDatabase.CreateAsync();
         using var environment = database.UseAsMigrationTarget(useInMemoryTransport: true);
 
-        Assert.Equal(0, await MigrationCommand.RunAsync());
+        Assert.Equal(0, await MigrationRunner.RunAsync());
         var appliedBeforeRetry = await GetAppliedMigrationCountAsync(database.ConnectionString);
 
-        Assert.Equal(0, await MigrationCommand.RunAsync());
+        Assert.Equal(0, await MigrationRunner.RunAsync());
         Assert.Equal(
             appliedBeforeRetry,
             await GetAppliedMigrationCountAsync(database.ConnectionString));
@@ -70,8 +71,8 @@ public sealed class ReleaseMigrationCommandTests
         using var environment = database.UseAsMigrationTarget();
 
         var results = await Task.WhenAll(
-            MigrationCommand.RunAsync(),
-            MigrationCommand.RunAsync());
+            MigrationRunner.RunAsync(),
+            MigrationRunner.RunAsync());
 
         Assert.All(results, exitCode => Assert.Equal(0, exitCode));
         await AssertSchemaCurrentAsync(database.ConnectionString);
@@ -86,7 +87,7 @@ public sealed class ReleaseMigrationCommandTests
                 "Username=conduit;Password=conduit;Timeout=1;Command Timeout=1"),
             ("ConduitLLM__Messaging__Wolverine__Transport", "InMemory"));
 
-        var exitCode = await MigrationCommand.RunAsync();
+        var exitCode = await MigrationRunner.RunAsync();
 
         Assert.Equal(1, exitCode);
     }
@@ -103,6 +104,16 @@ public sealed class ReleaseMigrationCommandTests
     {
         await using var context = CreateContext(connectionString);
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
+
+        var probe = new SchemaVersionProbe(new TestContextFactory(connectionString));
+        var status = await probe.GetStatusAsync();
+        Assert.True(status.IsCurrent);
+        Assert.Equal(ConduitSchemaVersion.Current, status.AppliedVersion);
+    }
+
+    private sealed class TestContextFactory(string connectionString) : IDbContextFactory<ConduitDbContext>
+    {
+        public ConduitDbContext CreateDbContext() => ReleaseMigrationCommandTests.CreateContext(connectionString);
     }
 
     private static async Task<int> GetAppliedMigrationCountAsync(string connectionString)

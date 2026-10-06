@@ -14,6 +14,12 @@ COPY Shared/ConduitLLM.Core/*.csproj ./Shared/ConduitLLM.Core/
 COPY Shared/ConduitLLM.Security/*.csproj ./Shared/ConduitLLM.Security/
 COPY Shared/ConduitLLM.Providers/*.csproj ./Shared/ConduitLLM.Providers/
 COPY Shared/ConduitLLM.Functions/*.csproj ./Shared/ConduitLLM.Functions/
+COPY Shared/ConduitLLM.Contracts/*.csproj ./Shared/ConduitLLM.Contracts/
+COPY Shared/ConduitLLM.Media/*.csproj ./Shared/ConduitLLM.Media/
+COPY Shared/ConduitLLM.Messaging.Wolverine/*.csproj ./Shared/ConduitLLM.Messaging.Wolverine/
+COPY Shared/ConduitLLM.OpenApi/*.csproj ./Shared/ConduitLLM.OpenApi/
+COPY Shared/ConduitLLM.SignalR/*.csproj ./Shared/ConduitLLM.SignalR/
+COPY Shared/ConduitLLM.Tokenization/*.csproj ./Shared/ConduitLLM.Tokenization/
 COPY Services/ConduitLLM.Admin/*.csproj ./Services/ConduitLLM.Admin/
 COPY Tests/ConduitLLM.Tests/*.csproj ./Tests/ConduitLLM.Tests/
 COPY Tests/ConduitLLM.IntegrationTests/*.csproj ./Tests/ConduitLLM.IntegrationTests/

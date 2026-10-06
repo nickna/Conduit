@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using ConduitLLM.Configuration.Serialization;
 
 namespace ConduitLLM.Configuration.Services;
 
@@ -97,7 +98,11 @@ public class RequestLogService : BatchAuditServiceBase<RequestLog>, IRequestLogS
         ClientIp = request.ClientIp,
         RequestPath = request.RequestPath,
         StatusCode = request.StatusCode,
-        Metadata = request.Metadata is null ? null : JsonSerializer.Serialize(request.Metadata)
+        Metadata = request.Metadata is null
+            ? null
+            : JsonSerializer.Serialize(
+                request.Metadata,
+                ConfigurationJsonContext.Default.DictionaryStringJsonElement)
     };
 
     /// <inheritdoc/>

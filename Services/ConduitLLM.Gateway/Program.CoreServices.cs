@@ -31,7 +31,7 @@ public partial class Program
         // ========== Caching Infrastructure ==========
 
         builder.Services.AddMemoryCache();
-        builder.Services.AddCacheInfrastructure(builder.Configuration);
+        // ConfigureCachingServices registers the legacy manager once, alongside the application cache.
 
         // ========== Correlation Context ==========
 
@@ -155,6 +155,7 @@ public partial class Program
     /// </summary>
     public static void ConfigureContextManagementServices(WebApplicationBuilder builder)
     {
+        builder.Services.AddConduitTokenization();
         builder.Services.AddConduitContextManagement(builder.Configuration);
     }
 }

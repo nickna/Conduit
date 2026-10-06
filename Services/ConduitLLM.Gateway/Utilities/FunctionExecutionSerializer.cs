@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using ConduitLLM.Core.Models;
+using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.Utilities;
 
@@ -23,15 +24,15 @@ public static class FunctionExecutionSerializer
     {
         ArgumentNullException.ThrowIfNull(results);
 
-        return JsonSerializer.Serialize(new
-        {
-            type = "chat_with_functions",
-            functionCallCount = results.Count,
-            totalCost = results.Sum(r => r.Cost ?? 0m),
-            successCount = results.Count(r => r.Status == "completed"),
-            failedCount = results.Count(r => r.Status == "failed"),
-            functionCalls = results
-        }, DefaultOptions);
+        return JsonSerializer.Serialize(
+            new FunctionExecutionResultsMetadata(
+                "chat_with_functions",
+                results.Count,
+                results.Sum(r => r.Cost ?? 0m),
+                results.Count(r => r.Status == "completed"),
+                results.Count(r => r.Status == "failed"),
+                results.ToList()),
+            GatewayJsonTypeInfo.Require<FunctionExecutionResultsMetadata>(DefaultOptions));
     }
 
     /// <summary>
@@ -47,7 +48,9 @@ public static class FunctionExecutionSerializer
 
         try
         {
-            return JsonSerializer.Deserialize<FunctionExecutionMetadata>(json, DefaultOptions);
+            return JsonSerializer.Deserialize(
+                json,
+                GatewayJsonTypeInfo.Require<FunctionExecutionMetadata>(DefaultOptions));
         }
         catch
         {
@@ -57,7 +60,11 @@ public static class FunctionExecutionSerializer
 
     private static JsonSerializerOptions CreateOptions()
     {
-        var options = new JsonSerializerOptions { WriteIndented = false };
+        var options = new JsonSerializerOptions
+        {
+            TypeInfoResolver = GatewayInternalJsonContext.Default,
+            WriteIndented = false
+        };
         options.Converters.Add(new ToolExecutionEventMetadataConverter());
         return options;
     }

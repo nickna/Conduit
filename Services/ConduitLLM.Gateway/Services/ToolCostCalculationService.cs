@@ -4,6 +4,7 @@ using ConduitLLM.Configuration.Constants;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Gateway.Middleware;
+using ConduitLLM.Gateway.Serialization;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConduitLLM.Gateway.Services
@@ -75,6 +76,7 @@ namespace ConduitLLM.Gateway.Services
     /// </summary>
     public class ToolCostCalculationService : IToolCostCalculationService
     {
+        private static readonly JsonSerializerOptions ToolUsageJsonOptions = CreateToolUsageJsonOptions();
         private readonly IDbContextFactory<ConduitDbContext> _contextFactory;
         private readonly IProviderToolCache? _cache;
         private readonly ILogger<ToolCostCalculationService> _logger;
@@ -159,13 +161,9 @@ namespace ConduitLLM.Gateway.Services
                     return "{}";
                 }
 
-                var options = new JsonSerializerOptions
-                {
-                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-                    WriteIndented = false
-                };
-
-                return JsonSerializer.Serialize(toolUsage, options);
+                return JsonSerializer.Serialize(
+                    toolUsage,
+                    GatewayJsonTypeInfo.Require<ToolUsageData>(ToolUsageJsonOptions));
             }
             catch (Exception ex)
             {
@@ -173,6 +171,13 @@ namespace ConduitLLM.Gateway.Services
                 return "{}";
             }
         }
+
+        private static JsonSerializerOptions CreateToolUsageJsonOptions() => new()
+        {
+            TypeInfoResolver = GatewayInternalJsonContext.Default,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            WriteIndented = false
+        };
 
         /// <summary>
         /// Gets all active tools for a provider, using cache when available.

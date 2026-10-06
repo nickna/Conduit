@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Utilities;
+using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.RateLimiting;
 
@@ -55,6 +56,7 @@ public static class RateLimitResponse
 
         return Results.Json(
             RateLimitResponseContract.BuildError(scope, limit, retryAfter, message),
+            GatewayHttpJsonContext.Default.OpenAIErrorResponse,
             statusCode: StatusCodes.Status429TooManyRequests);
     }
 
@@ -71,7 +73,10 @@ public static class RateLimitResponse
         context.Response.Headers["X-RateLimit-Scope"] = scope;
         context.Response.ContentType = "application/json";
 
-        return JsonSerializer.SerializeAsync(context.Response.Body, BuildDegradedError());
+        return JsonSerializer.SerializeAsync(
+            context.Response.Body,
+            BuildDegradedError(),
+            GatewayHttpJsonContext.Default.OpenAIErrorResponse);
     }
 
     /// <summary>
@@ -84,6 +89,7 @@ public static class RateLimitResponse
 
         return Results.Json(
             BuildDegradedError(),
+            GatewayHttpJsonContext.Default.OpenAIErrorResponse,
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 

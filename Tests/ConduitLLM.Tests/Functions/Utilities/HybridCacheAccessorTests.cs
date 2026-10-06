@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using ConduitLLM.Functions.Utilities;
+using ConduitLLM.Functions.Serialization;
 
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
@@ -26,9 +27,9 @@ public sealed class HybridCacheAccessorTests
             .ThrowsAsync(new InvalidOperationException("Redis unavailable"));
         var accessor = CreateAccessor(memoryCache, distributedCache.Object, "test:");
 
-        await accessor.SetAsync("key", "value");
+        await accessor.SetAsync("key", "value", FunctionsJsonContext.Default.String);
 
-        Assert.Equal("value", await accessor.GetAsync<string>("key"));
+        Assert.Equal("value", await accessor.GetAsync("key", FunctionsJsonContext.Default.String));
     }
 
     [Fact]
@@ -38,11 +39,11 @@ public sealed class HybridCacheAccessorTests
         var first = CreateAccessor(memoryCache, distributedCache: null, "first:");
         var second = CreateAccessor(memoryCache, distributedCache: null, "second:");
 
-        await first.SetAsync("same", "one");
-        await second.SetAsync("same", "two");
+        await first.SetAsync("same", "one", FunctionsJsonContext.Default.String);
+        await second.SetAsync("same", "two", FunctionsJsonContext.Default.String);
 
-        Assert.Equal("one", await first.GetAsync<string>("same"));
-        Assert.Equal("two", await second.GetAsync<string>("same"));
+        Assert.Equal("one", await first.GetAsync("same", FunctionsJsonContext.Default.String));
+        Assert.Equal("two", await second.GetAsync("same", FunctionsJsonContext.Default.String));
     }
 
     private static HybridCacheAccessor CreateAccessor(
@@ -55,6 +56,5 @@ public sealed class HybridCacheAccessorTests
             NullLogger.Instance,
             prefix,
             TimeSpan.FromMinutes(1),
-            TimeSpan.FromMinutes(2),
-            JsonSerializerOptions.Web);
+            TimeSpan.FromMinutes(2));
 }

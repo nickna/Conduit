@@ -3,7 +3,7 @@
  *
  * The shared ContractApiClient owns the openapi-fetch, timeout, callback, and
  * retry lifecycle. This subclass only supplies Admin authentication, error
- * mapping, media type policy, and the legacy service-facing overloads.
+ * mapping and media type policy.
  */
 
 import {
@@ -12,13 +12,14 @@ import {
   type RetryStrategy,
   RetryStrategyType,
   throwApiError,
+  CONTENT_TYPES,
+  HTTP_HEADERS,
 } from "@/lib/conduit-common";
-import type { paths } from "../generated/admin-api";
+import type { paths } from "@/generated/admin-api";
 import type {
   ApiClientConfig,
   RequestConfig,
 } from "./types";
-import { CLIENT_INFO, CONTENT_TYPES, HTTP_HEADERS } from "../constants";
 import { HttpMethod } from "./HttpMethod";
 
 function normalizeRetryStrategy(config: ApiClientConfig): RetryStrategy {
@@ -62,7 +63,7 @@ export abstract class FetchBaseApiClient extends ContractApiClient<paths> {
       baseUrl: config.baseUrl,
       timeout: config.timeout ?? 30000,
       defaultHeaders: {
-        [HTTP_HEADERS.USER_AGENT]: CLIENT_INFO.USER_AGENT,
+        [HTTP_HEADERS.USER_AGENT]: "conduit-webadmin/vendored",
         ...config.defaultHeaders,
       },
       retryStrategy: normalizeRetryStrategy(config),
@@ -123,7 +124,7 @@ export abstract class FetchBaseApiClient extends ContractApiClient<paths> {
     });
   }
 
-  protected async executeContractRead<TResponse>(
+  public async executeContractRead<TResponse>(
     resolvedPath: string,
     operation: ContractOperation<paths, TResponse>,
     config?: RequestConfig,
@@ -140,7 +141,7 @@ export abstract class FetchBaseApiClient extends ContractApiClient<paths> {
     );
   }
 
-  protected async executeContractOperation<TResponse, TRequest = unknown>(
+  public async executeContractOperation<TResponse, TRequest = unknown>(
     resolvedPath: string,
     method: HttpMethod,
     operation: ContractOperation<paths, TResponse>,
@@ -155,93 +156,11 @@ export abstract class FetchBaseApiClient extends ContractApiClient<paths> {
     });
   }
 
-  protected override async get<TResponse = unknown>(
-    url: string,
-    optionsOrParams?:
-      | {
-          headers?: Record<string, string>;
-          signal?: AbortSignal;
-          timeout?: number;
-          responseType?: "json" | "text" | "blob" | "arraybuffer";
-        }
-      | Record<string, unknown>,
-    extraOptions?: {
-      headers?: Record<string, string>;
-      signal?: AbortSignal;
-      timeout?: number;
-      responseType?: "json" | "text" | "blob" | "arraybuffer";
-    },
-  ): Promise<TResponse> {
-    if (extraOptions) {
-      const urlWithParams = optionsOrParams
-        ? this.buildUrlWithParams(
-            url,
-            optionsOrParams as Record<string, unknown>,
-          )
-        : url;
-      return this.request<TResponse>(urlWithParams, {
-        ...extraOptions,
-        method: HttpMethod.GET,
-      });
-    }
-
-    const isOptions =
-      optionsOrParams &&
-      ("headers" in optionsOrParams ||
-        "signal" in optionsOrParams ||
-        "timeout" in optionsOrParams ||
-        "responseType" in optionsOrParams);
-    if (isOptions) {
-      return this.request<TResponse>(url, {
-        ...(optionsOrParams as {
-          headers?: Record<string, string>;
-          signal?: AbortSignal;
-          timeout?: number;
-          responseType?: "json" | "text" | "blob" | "arraybuffer";
-        }),
-        method: HttpMethod.GET,
-      });
-    }
-
-    const urlWithParams = optionsOrParams
-      ? this.buildUrlWithParams(url, optionsOrParams)
-      : url;
-    return this.request<TResponse>(urlWithParams, { method: HttpMethod.GET });
+  public async clearCache(): Promise<void> {
+    await this.cache?.clear();
   }
 
-  private buildUrlWithParams(
-    url: string,
-    params: Record<string, unknown>,
-  ): string {
-    const searchParams = new URLSearchParams();
-    const serialize = (value: unknown): string => {
-      if (typeof value === "string") return value;
-      if (
-        typeof value === "number" ||
-        typeof value === "boolean" ||
-        typeof value === "bigint"
-      ) {
-        return value.toString();
-      }
-      if (typeof value === "symbol") return value.description ?? "";
-      if (typeof value === "function") return value.name;
-      return JSON.stringify(value) ?? "";
-    };
-
-    Object.entries(params).forEach(([key, value]) => {
-      if (value === undefined || value === null) return;
-      if (Array.isArray(value)) {
-        value.forEach((item) => searchParams.append(key, serialize(item)));
-      } else {
-        searchParams.append(key, serialize(value));
-      }
-    });
-
-    const queryString = searchParams.toString();
-    return queryString ? `${url}?${queryString}` : url;
-  }
-
-  protected override getCacheKey(
+  public override getCacheKey(
     methodOrResource: string,
     urlOrId?: unknown,
     paramsOrId2?: Record<string, unknown> | string,

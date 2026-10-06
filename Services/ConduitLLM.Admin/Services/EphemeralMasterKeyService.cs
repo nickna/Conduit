@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Caching.Distributed;
+using System.Text.Json.Serialization;
 using ConduitLLM.Admin.Models;
 using ConduitLLM.Configuration.Constants;
 using ConduitLLM.Core.Services;
@@ -68,7 +69,7 @@ namespace ConduitLLM.Admin.Services
         public EphemeralMasterKeyService(
             IDistributedCache cache,
             ILogger<EphemeralMasterKeyService> logger)
-            : base(cache, logger)
+            : base(cache, logger, EphemeralMasterKeyJsonContext.Default.EphemeralMasterKeyData)
         {
         }
 
@@ -133,4 +134,8 @@ namespace ConduitLLM.Admin.Services
         }
 
     }
+
+    [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
+    [JsonSerializable(typeof(EphemeralMasterKeyData))]
+    internal partial class EphemeralMasterKeyJsonContext : JsonSerializerContext;
 }

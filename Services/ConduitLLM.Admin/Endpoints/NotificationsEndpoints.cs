@@ -14,7 +14,6 @@ public static class NotificationsEndpoints
         var group = app.MapGroup("/v1/admin/notifications")
             .RequireAuthorization("MasterKeyPolicy")
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
-            .AddEndpointFilter<ValidationEndpointFilter>()
             .WithTags("Notifications");
         group.MapGet("/", GetAll).WithName("Notifications_GetAll")
             .Produces<IEnumerable<NotificationDto>>(StatusCodes.Status200OK);

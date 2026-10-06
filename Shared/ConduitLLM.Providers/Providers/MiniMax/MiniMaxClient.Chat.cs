@@ -34,7 +34,9 @@ namespace ConduitLLM.Providers.MiniMax
 
                 if (Logger.IsEnabled(LogLevel.Debug))
                 {
-                    var requestJson = JsonSerializer.Serialize(miniMaxRequest);
+                    var requestJson = JsonSerializer.Serialize(
+                        miniMaxRequest,
+                        MiniMaxStreamJsonContext.Default.MiniMaxChatCompletionRequest);
                     Logger.LogDebug("MiniMax request to {Endpoint}: {Request}", endpoint, requestJson);
                 }
 
@@ -81,7 +83,9 @@ namespace ConduitLLM.Providers.MiniMax
                     GuidanceType =
                         request.ResponseFormat.Type == "json_object" ? "json_schema" : null,
                     JsonSchema =
-                        request.ResponseFormat.Type == "json_object" ? new { type = "object" } : null
+                        request.ResponseFormat.Type == "json_object"
+                            ? new Dictionary<string, string> { ["type"] = "object" }
+                            : null
                 } : null
             };
     }

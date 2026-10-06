@@ -3,6 +3,8 @@ using ConduitLLM.Configuration.Messaging;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using ConduitLLM.Gateway.Interfaces;
 namespace ConduitLLM.Gateway.EventHandlers
@@ -53,10 +55,27 @@ namespace ConduitLLM.Gateway.EventHandlers
 
             // Update task metadata with progress info
             var taskStatus = await _taskService.GetTaskStatusAsync(message.TaskId);
-            if (taskStatus != null && taskStatus.Result is IDictionary<string, object> resultDict)
+            if (taskStatus != null)
             {
-                resultDict["progress"] = progressData;
-                await _taskService.UpdateTaskStatusAsync(message.TaskId, taskStatus.State, progress: null, result: resultDict);
+                var result = taskStatus.Result is JsonElement { ValueKind: JsonValueKind.Object } element
+                    ? JsonNode.Parse(element.GetRawText()) as JsonObject ?? new JsonObject()
+                    : taskStatus.Result as JsonObject ?? new JsonObject();
+                result["progress"] = new JsonObject
+                {
+                    ["taskId"] = message.TaskId,
+                    ["status"] = message.Status,
+                    ["imagesCompleted"] = message.ImagesCompleted,
+                    ["totalImages"] = message.TotalImages,
+                    ["progressPercentage"] = message.ProgressPercentage,
+                    ["message"] = message.Message,
+                    ["lastUpdated"] = DateTime.UtcNow
+                };
+                await _taskService.UpdateTaskStatusAsync(
+                    message.TaskId,
+                    taskStatus.State,
+                    progress: null,
+                    result: result,
+                    cancellationToken: context.CancellationToken);
             }
 
             // Track generation metrics

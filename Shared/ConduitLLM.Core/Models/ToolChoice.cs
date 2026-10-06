@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -11,6 +12,7 @@ public class ToolChoice
 {
     // Internal storage for the tool choice value
     private readonly object _value;
+    private readonly string? _functionName;
 
     /// <summary>
     /// Constructor for deserialization
@@ -21,9 +23,10 @@ public class ToolChoice
     }
 
     // Private constructor for creating from an object
-    private ToolChoice(object value)
+    private ToolChoice(object value, string? functionName = null)
     {
         _value = value;
+        _functionName = functionName;
     }
 
     /// <summary>
@@ -31,6 +34,15 @@ public class ToolChoice
     /// </summary>
     /// <returns>The serialized value representing this tool choice.</returns>
     public object GetSerializedValue() => _value;
+
+    /// <summary>
+    /// Gets the explicitly selected function name without serializing the object-shaped wire value.
+    /// </summary>
+    public bool TryGetFunctionName([NotNullWhen(true)] out string? functionName)
+    {
+        functionName = _functionName;
+        return functionName is not null;
+    }
 
     /// <summary>
     /// Indicates the model should not call any functions.
@@ -64,7 +76,7 @@ public class ToolChoice
             {
                 name = functionName
             }
-        });
+        }, functionName);
     }
 
     /// <summary>
@@ -134,7 +146,10 @@ public class ToolChoiceConverter : JsonConverter<ToolChoice>
         else
         {
             // Serialize the object
-            JsonSerializer.Serialize(writer, serializedValue, options);
+            JsonSerializer.Serialize(
+                writer,
+                serializedValue,
+                options.GetTypeInfo(serializedValue.GetType()));
         }
     }
 }

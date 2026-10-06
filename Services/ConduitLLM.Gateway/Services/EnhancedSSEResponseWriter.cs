@@ -1,8 +1,15 @@
 using System.Text;
 using System.Text.Json;
+using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.Services
 {
+    public sealed record SseErrorEvent(
+        string Error,
+        ConduitLLM.Core.Interfaces.ProviderErrorDetail? ProviderError = null);
+
+    public sealed record SseReasoningEvent(string Content);
+
     /// <summary>
     /// Enhanced Server-Sent Events writer that supports multiple event types for streaming responses.
     /// </summary>
@@ -57,7 +64,7 @@ namespace ConduitLLM.Gateway.Services
             await EnsureHeadersWrittenAsync(cancellationToken);
             
             // OpenAI format uses just "data:" without event type
-            var json = JsonSerializer.Serialize(data, _jsonOptions);
+            var json = JsonSerializer.Serialize(data, GatewayJsonTypeInfo.Require<T>(_jsonOptions));
             var eventData = $"data: {json}\n\n";
             var bytes = Encoding.UTF8.GetBytes(eventData);
             await _response.Body.WriteAsync(bytes, cancellationToken);
@@ -86,7 +93,7 @@ namespace ConduitLLM.Gateway.Services
         /// </summary>
         public async Task WriteErrorEventAsync(string error, CancellationToken cancellationToken = default)
         {
-            await WriteEventAsync("error", new { error }, cancellationToken);
+            await WriteEventAsync("error", new SseErrorEvent(error), cancellationToken);
         }
 
         /// <summary>
@@ -106,7 +113,10 @@ namespace ConduitLLM.Gateway.Services
                 return;
             }
 
-            await WriteEventAsync("error", new { error, provider_error = providerError }, cancellationToken);
+            await WriteEventAsync(
+                "error",
+                new SseErrorEvent(error, providerError),
+                cancellationToken);
         }
 
         /// <summary>
@@ -115,7 +125,7 @@ namespace ConduitLLM.Gateway.Services
         /// </summary>
         public async Task WriteReasoningEventAsync(string reasoning, CancellationToken cancellationToken = default)
         {
-            await WriteEventAsync("reasoning", new { content = reasoning }, cancellationToken);
+            await WriteEventAsync("reasoning", new SseReasoningEvent(reasoning), cancellationToken);
         }
 
         /// <summary>
@@ -145,7 +155,7 @@ namespace ConduitLLM.Gateway.Services
             
             await EnsureHeadersWrittenAsync(cancellationToken);
             
-            var json = JsonSerializer.Serialize(data, _jsonOptions);
+            var json = JsonSerializer.Serialize(data, GatewayJsonTypeInfo.Require<T>(_jsonOptions));
             var eventData = new StringBuilder();
             
             // Add event type if specified

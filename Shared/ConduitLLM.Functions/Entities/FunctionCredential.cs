@@ -42,20 +42,20 @@ public class FunctionCredential : ICredentialEntity, IIdentifiableEntity<int>
     /// credentials remain plaintext until a separate encryption pass migrates them.
     /// Widened from 500 to accommodate the expansion of encrypted payloads.
     /// </summary>
-    [MaxLength(2000)]
+    [StringLength(2000)]
     public string? ApiKey { get; set; }
 
     /// <summary>
     /// Optional base URL override for this specific credential
     /// Overrides FunctionConfiguration.BaseUrl if set
     /// </summary>
-    [MaxLength(500)]
+    [StringLength(500)]
     public string? BaseUrl { get; set; }
 
     /// <summary>
     /// Optional organization identifier (if applicable to provider)
     /// </summary>
-    [MaxLength(200)]
+    [StringLength(200)]
     public string? Organization { get; set; }
 
     /// <summary>
@@ -83,7 +83,7 @@ public class FunctionCredential : ICredentialEntity, IIdentifiableEntity<int>
     /// User-friendly name for this credential (e.g., "Production Key 1")
     /// Renamed from CredentialName to align with ProviderKeyCredential.KeyName pattern
     /// </summary>
-    [MaxLength(200)]
+    [StringLength(200)]
     public string? KeyName { get; set; }
 
     /// <summary>

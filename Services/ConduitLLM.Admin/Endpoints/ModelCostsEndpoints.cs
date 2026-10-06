@@ -51,7 +51,7 @@ namespace ConduitLLM.Admin.Endpoints
 
         public static IEndpointRouteBuilder MapModelCostsEndpoints(IEndpointRouteBuilder app)
         {
-            var g = app.MapGroup("/v1/admin/model-costs").RequireAuthorization("MasterKeyPolicy").AddEndpointFilter<ValidationEndpointFilter>().AddEndpointFilter<OperationLoggingEndpointFilter>().WithTags("Model Costs");
+            var g = app.MapGroup("/v1/admin/model-costs").RequireAuthorization("MasterKeyPolicy").AddEndpointFilter<OperationLoggingEndpointFilter>().WithTags("Model Costs");
             g.MapGet("/", ([FromServices] ModelCostsEndpoints e, int? page=null, int? pageSize=null, string? modelType=null, int? providerId=null, bool? isActive=null) => e.GetAllModelCosts(page,pageSize,modelType,providerId,isActive)).WithName("ModelCosts_GetAll").Produces<PagedResult<ModelCostDto>>();
             g.MapGet("/{id:int}", ([FromServices] ModelCostsEndpoints e,int id)=>e.GetModelCostById(id)).WithName("ModelCosts_GetById").Produces<ModelCostDto>().Produces(StatusCodes.Status404NotFound);
             g.MapGet("/provider/costs/{providerId:int}", ([FromServices] ModelCostsEndpoints e,int providerId)=>e.GetModelCostsByProvider(providerId)).WithName("ModelCosts_GetByProvider").Produces<IEnumerable<ModelCostDto>>();
@@ -345,7 +345,7 @@ namespace ConduitLLM.Admin.Endpoints
             // Validate the pricing document once before adding diagnostics from every distinct
             // persisted model schema. Caller-provided schemas are intentionally ignored here:
             // the model-cost-scoped endpoint treats the database associations as authoritative.
-            var result = _pricingRulesValidator.ValidateJson(JsonSerializer.Serialize(request.PricingConfiguration));
+            var result = _pricingRulesValidator.ValidateJson(AdminJson.Serialize(request.PricingConfiguration));
             if (result.ParsedConfig == null)
             {
                 return Results.Ok(result);
@@ -481,8 +481,8 @@ namespace ConduitLLM.Admin.Endpoints
             await Task.CompletedTask;
 
             var result = _pricingRulesValidator.ValidateJson(
-                JsonSerializer.Serialize(request.PricingConfiguration),
-                request.ParameterSchema is null ? null : JsonSerializer.Serialize(request.ParameterSchema));
+                AdminJson.Serialize(request.PricingConfiguration),
+                request.ParameterSchema is null ? null : AdminJson.Serialize(request.ParameterSchema));
             return Results.Ok(result);
         }
 

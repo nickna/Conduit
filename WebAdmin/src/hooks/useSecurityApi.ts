@@ -1,29 +1,10 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { notify } from '@/lib/notifications';
 import { withAdminClient } from '@/lib/client/adminClient';
-import type {
-  IpFilterDto,
-  CreateIpFilterDto,
-  UpdateIpFilterDto,
-} from '@/lib/admin-api';
+import type { CreateIpFilterDto, IpFilterDto, UpdateIpFilterDto } from '@/lib/admin-api';
 
-// Legacy interface for backward compatibility - maps to IpFilterDto
-export interface IpRule {
-  id?: string;
-  ipAddress: string;
-  action: 'allow' | 'block';
-  description?: string;
-  createdAt?: string;
-  isEnabled?: boolean;
-  lastMatchedAt?: string;
-  matchCount?: number;
-}
-
-// Legacy statistics shape retained by the active security hook.
-// Note: blocked-request counts are not tracked server-side (removed in #1038),
-// so this shape deliberately has no blockedRequests24h field.
 export interface IpStats {
   totalRules: number;
   allowRules: number;
@@ -32,217 +13,95 @@ export interface IpStats {
   lastRuleUpdate: string | null;
 }
 
-// Helper functions to convert between legacy and new formats
-function ipFilterToLegacyRule(filter: IpFilterDto): IpRule {
-  return {
-    id: filter.id.toString(),
-    ipAddress: filter.ipAddressOrCidr,
-    action: filter.filterType === 'whitelist' ? 'allow' : 'block',
-    description: filter.description,
-    createdAt: filter.createdAt,
-    isEnabled: filter.isEnabled,
-    // lastMatchedAt/matchCount are no longer tracked server-side (removed from IpFilterDto in #1038)
-    lastMatchedAt: undefined,
-    matchCount: undefined,
-  };
-}
-
-function legacyRuleToIpFilter(rule: IpRule): CreateIpFilterDto {
-  return {
-    name: rule.description ?? `Rule for ${rule.ipAddress}`,
-    ipAddressOrCidr: rule.ipAddress,
-    filterType: rule.action === 'allow' ? 'whitelist' : 'blacklist',
-    isEnabled: rule.isEnabled ?? true,
-    description: rule.description,
-  };
-}
-
-
 export function useSecurityApi() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const getIpRules = useCallback(async (): Promise<IpRule[]> => {
+  const run = useCallback(async <T,>(operation: () => Promise<T>, failureMessage: string): Promise<T> => {
     setIsLoading(true);
     setError(null);
-    
     try {
-      const result = await withAdminClient(client =>
-        client.ipFilters.list()
-      );
-
-      // Convert IpFilterDto[] to IpRule[] for backward compatibility
-      return result.map(filter => ipFilterToLegacyRule(filter));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch IP rules';
+      return await operation();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : failureMessage;
       setError(message);
-      throw err;
+      throw cause;
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const createIpRule = useCallback(async (rule: IpRule): Promise<IpRule> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const createDto = legacyRuleToIpFilter(rule);
-      
-      const result = await withAdminClient(client =>
-        client.ipFilters.create(createDto)
-      );
+  const getIpRules = useCallback(
+    () => run(() => withAdminClient(client => client.ipFilters.list()), 'Failed to fetch IP rules'),
+    [run],
+  );
 
+  const getIpRulesForKey = useCallback(
+    (virtualKeyId: number) => run(
+      () => withAdminClient(client => client.ipFilters.listByVirtualKey(virtualKeyId)),
+      'Failed to fetch IP rules',
+    ),
+    [run],
+  );
+
+  const createIpRule = useCallback(async (rule: CreateIpFilterDto): Promise<IpFilterDto> => {
+    try {
+      const result = await run(
+        () => withAdminClient(client => client.ipFilters.create(rule)),
+        'Failed to create IP rule',
+      );
       notify.success('IP rule created successfully');
-
-      // Convert back to legacy format
-      return ipFilterToLegacyRule(result);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create IP rule';
-      setError(message);
-      notify.error(err);
-      throw err;
-    } finally {
-      setIsLoading(false);
+      return result;
+    } catch (cause) {
+      notify.error(cause);
+      throw cause;
     }
-  }, []);
-
-  const updateIpRule = useCallback(async (id: string, rule: Partial<IpRule>): Promise<IpRule> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
-        throw new Error('Invalid rule ID');
-      }
-
-      const updateDto: UpdateIpFilterDto = {
-        name: rule.description,
-        ipAddressOrCidr: rule.ipAddress,
-        filterType: rule.action === 'allow' ? 'whitelist' : 'blacklist',
-        isEnabled: rule.isEnabled,
-        description: rule.description,
-      };
-
-      await withAdminClient(client =>
-        client.ipFilters.update(numericId, updateDto)
-      );
-
-      notify.success('IP rule updated successfully');
-
-      // Return the updated rule (we need to fetch it to get the complete data)
-      const updatedFilter = await withAdminClient(client =>
-        client.ipFilters.getById(numericId)
-      );
-
-      return ipFilterToLegacyRule(updatedFilter);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update IP rule';
-      setError(message);
-      notify.error(err);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const deleteIpRule = useCallback(async (id: string): Promise<void> => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const numericId = parseInt(id, 10);
-      if (isNaN(numericId)) {
-        throw new Error('Invalid rule ID');
-      }
-
-      await withAdminClient(client =>
-        client.ipFilters.deleteById(numericId)
-      );
-
-      notify.success('IP rule deleted successfully');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete IP rule';
-      setError(message);
-      notify.error(err);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const getIpStats = useCallback(async (): Promise<IpStats> => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // The Admin API has no direct stats endpoint, so compute stats from the filters.
-      const filters = await withAdminClient(client =>
-        client.ipFilters.list()
-      );
-
-      const stats: IpStats = {
-        totalRules: filters.length,
-        allowRules: filters.filter(f => f.filterType === 'whitelist').length,
-        blockRules: filters.filter(f => f.filterType === 'blacklist').length,
-        activeRules: filters.filter(f => f.isEnabled).length,
-        lastRuleUpdate: filters.length > 0 ?
-          Math.max(...filters.map(f => new Date(f.updatedAt).getTime())).toString() :
-          null,
-      };
-
-      return stats;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch IP stats';
-      setError(message);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const getIpRulesForKey = useCallback(async (virtualKeyId: number): Promise<IpRule[]> => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const result = await withAdminClient(client =>
-        client.ipFilters.listByVirtualKey(virtualKeyId)
-      );
-      return result.map(filter => ipFilterToLegacyRule(filter));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch IP rules';
-      setError(message);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  }, [run]);
 
   const createIpRuleForKey = useCallback(
-    async (virtualKeyId: number, rule: IpRule): Promise<IpRule> => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const createDto = { ...legacyRuleToIpFilter(rule), virtualKeyId };
-        const result = await withAdminClient(client =>
-          client.ipFilters.create(createDto)
-        );
-        notify.success('IP rule created successfully');
-        return ipFilterToLegacyRule(result);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create IP rule';
-        setError(message);
-        notify.error(err);
-        throw err;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    []
+    (virtualKeyId: number, rule: CreateIpFilterDto) => createIpRule({ ...rule, virtualKeyId }),
+    [createIpRule],
   );
+
+  const updateIpRule = useCallback(async (id: number, rule: UpdateIpFilterDto): Promise<IpFilterDto> => {
+    try {
+      const result = await run(async () => {
+        await withAdminClient(client => client.ipFilters.update(id, rule));
+        return withAdminClient(client => client.ipFilters.getById(id));
+      }, 'Failed to update IP rule');
+      notify.success('IP rule updated successfully');
+      return result;
+    } catch (cause) {
+      notify.error(cause);
+      throw cause;
+    }
+  }, [run]);
+
+  const deleteIpRule = useCallback(async (id: number): Promise<void> => {
+    try {
+      await run(
+        () => withAdminClient(client => client.ipFilters.deleteById(id)),
+        'Failed to delete IP rule',
+      );
+      notify.success('IP rule deleted successfully');
+    } catch (cause) {
+      notify.error(cause);
+      throw cause;
+    }
+  }, [run]);
+
+  const getIpStats = useCallback(async (): Promise<IpStats> => {
+    const filters = await getIpRules();
+    return {
+      totalRules: filters.length,
+      allowRules: filters.filter(filter => filter.filterType === 'whitelist').length,
+      blockRules: filters.filter(filter => filter.filterType === 'blacklist').length,
+      activeRules: filters.filter(filter => filter.isEnabled).length,
+      lastRuleUpdate: filters.length > 0
+        ? new Date(Math.max(...filters.map(filter => new Date(filter.updatedAt).getTime()))).toISOString()
+        : null,
+    };
+  }, [getIpRules]);
 
   return {
     getIpRules,

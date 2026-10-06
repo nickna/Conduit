@@ -29,7 +29,7 @@ services:
       DATABASE_URL: postgresql://conduit:conduitpass@postgres:5432/conduitdb
       ASPNETCORE_ENVIRONMENT: Production
       ConduitLLM__Messaging__Wolverine__AutoProvision: "false"
-    command: ["migrate"]
+    entrypoint: ["dotnet", "/app/migrator/ConduitLLM.Migrator.dll"]
     restart: "no"
     healthcheck:
       disable: true

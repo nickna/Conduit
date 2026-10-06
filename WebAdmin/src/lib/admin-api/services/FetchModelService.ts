@@ -1,5 +1,5 @@
 import type { FetchBaseApiClient } from '../client/FetchBaseApiClient';
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 import type { RequestConfig } from '../client/types';
 import { HttpMethod } from '../client/HttpMethod';
 import {
@@ -44,7 +44,7 @@ export class FetchModelService {
    * Get all models with their capabilities
    */
   async list(config?: RequestConfig): Promise<ModelDto[]> {
-    const result = await this.client['executeContractRead'](
+    const result = await this.client.executeContractRead(
       '/v1/admin/models',
       (contractClient, options) => contractClient.GET('/v1/admin/models', options),
       config,
@@ -54,7 +54,7 @@ export class FetchModelService {
 
   /** Merge every provider model catalog bundled with the running Admin release. */
   async importBundledCatalog(config?: RequestConfig): Promise<BundledModelCatalogImportResult> {
-    return this.client['executeContractOperation']<BundledModelCatalogImportResult>(
+    return this.client.executeContractOperation<BundledModelCatalogImportResult>(
       '/v1/admin/model-catalogs/import',
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/model-catalogs/import', options),
@@ -66,7 +66,7 @@ export class FetchModelService {
    * Get a specific model by ID
    */
   async get(id: number, config?: RequestConfig): Promise<ModelDto> {
-    return this.client['executeContractRead'](
+    return this.client.executeContractRead(
       `/v1/admin/models/${id}`,
       (contractClient, options) => contractClient.GET('/v1/admin/models/{id}', {
         ...options,
@@ -80,7 +80,7 @@ export class FetchModelService {
    * Get model identifiers for a specific model with normalized provider types
    */
   async getIdentifiers(id: number, config?: RequestConfig): Promise<NormalizedProviderTypeAssociation[]> {
-    const result = await this.client['executeContractRead'](
+    const result = await this.client.executeContractRead(
       `/v1/admin/models/${id}/identifiers`,
       (contractClient, options) => contractClient.GET('/v1/admin/models/{id}/identifiers', {
         ...options,
@@ -108,7 +108,7 @@ export class FetchModelService {
    * Get available providers for a model - returns associations with matching providers
    */
   async getModelProviders(id: number, config?: RequestConfig): Promise<ModelProviderAvailabilityDto[]> {
-    const result = await this.client['executeContractRead'](
+    const result = await this.client.executeContractRead(
       `/v1/admin/models/${id}/available-providers`,
       (contractClient, options) => contractClient.GET('/v1/admin/models/{id}/available-providers', {
         ...options,
@@ -123,7 +123,7 @@ export class FetchModelService {
    * Get models by provider
    */
   async getByProvider(provider: string, config?: RequestConfig): Promise<ModelDto[]> {
-    const result = await this.client['executeContractRead'](
+    const result = await this.client.executeContractRead(
       `/v1/admin/models/provider/models/${encodeURIComponent(provider)}`,
       (contractClient, options) => contractClient.GET('/v1/admin/models/provider/models/{provider}', {
         ...options,
@@ -139,7 +139,7 @@ export class FetchModelService {
    */
   async search(query: string, config?: RequestConfig): Promise<ModelDto[]> {
     const params = new URLSearchParams({ query });
-    const result = await this.client['executeContractRead'](
+    const result = await this.client.executeContractRead(
       `/v1/admin/models/search?${params.toString()}`,
       (contractClient, options) => contractClient.GET('/v1/admin/models/search', {
         ...options,
@@ -157,7 +157,7 @@ export class FetchModelService {
     data: CreateModelDto,
     config?: RequestConfig
   ): Promise<ModelDto> {
-    return this.client['executeContractOperation']<ModelDto, CreateModelDto>(
+    return this.client.executeContractOperation<ModelDto, CreateModelDto>(
       '/v1/admin/models',
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/models', {
@@ -177,7 +177,7 @@ export class FetchModelService {
     data: UpdateModelDto,
     config?: RequestConfig
   ): Promise<ModelDto> {
-    return this.client['executeContractOperation']<ModelDto, UpdateModelDto>(
+    return this.client.executeContractOperation<ModelDto, UpdateModelDto>(
       `/v1/admin/models/${id}`,
       HttpMethod.PATCH,
       (contractClient, options) => contractClient.PATCH('/v1/admin/models/{id}', {
@@ -194,7 +194,7 @@ export class FetchModelService {
    * Delete a model
    */
   async delete(id: number, config?: RequestConfig): Promise<void> {
-    return this.client['executeContractOperation']<void>(
+    return this.client.executeContractOperation<void>(
       `/v1/admin/models/${id}`,
       HttpMethod.DELETE,
       (contractClient, options) => contractClient.DELETE('/v1/admin/models/{id}', {
@@ -285,7 +285,7 @@ export class FetchModelService {
     const queryString = params.toString();
     const resolvedPath = queryString ? `/v1/admin/models/paged?${queryString}` : '/v1/admin/models/paged';
 
-    const response = await this.client['executeContractRead'](
+    const response = await this.client.executeContractRead(
       resolvedPath,
       (contractClient, requestOptions) => contractClient.GET('/v1/admin/models/paged', {
         ...requestOptions,
@@ -331,7 +331,7 @@ export class FetchModelService {
    * Get all provider mappings for a specific model
    */
   async getProviderMappings(id: number, config?: RequestConfig): Promise<ModelProviderMappingDto[]> {
-    const result = await this.client['executeContractRead'](
+    const result = await this.client.executeContractRead(
       `/v1/admin/models/${id}/provider-mappings`,
       (contractClient, options) => contractClient.GET('/v1/admin/models/{id}/provider-mappings', {
         ...options,
@@ -350,7 +350,7 @@ export class FetchModelService {
     mapping: ModelProviderMappingDto,
     config?: RequestConfig
   ): Promise<ModelProviderMappingDto> {
-    return this.client['executeContractOperation']<ModelProviderMappingDto, ModelProviderMappingDto>(
+    return this.client.executeContractOperation<ModelProviderMappingDto, ModelProviderMappingDto>(
       `/v1/admin/models/${id}/provider-mappings`,
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/models/{id}/provider-mappings', {
@@ -372,7 +372,7 @@ export class FetchModelService {
     mapping: ModelProviderMappingDto,
     config?: RequestConfig
   ): Promise<ModelProviderMappingDto> {
-    return this.client['executeContractOperation'](
+    return this.client.executeContractOperation(
       `/v1/admin/models/${id}/provider-mappings/${mappingId}`,
       HttpMethod.PATCH,
       (contractClient, options) => contractClient.PATCH('/v1/admin/models/{id}/provider-mappings/{mappingId}', {
@@ -393,7 +393,7 @@ export class FetchModelService {
     mappingId: number,
     config?: RequestConfig
   ): Promise<void> {
-    return this.client['executeContractOperation']<void>(
+    return this.client.executeContractOperation<void>(
       `/v1/admin/models/${id}/provider-mappings/${mappingId}`,
       HttpMethod.DELETE,
       (contractClient, options) => contractClient.DELETE('/v1/admin/models/{id}/provider-mappings/{mappingId}', {
@@ -441,7 +441,7 @@ export class FetchModelService {
         : undefined,
     };
 
-    const result = await this.client['executeContractOperation']<ModelIdentifierDto, ModelIdentifierRequestDto>(
+    const result = await this.client.executeContractOperation<ModelIdentifierDto, ModelIdentifierRequestDto>(
       `/v1/admin/models/${id}/identifiers`,
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/models/{id}/identifiers', {
@@ -502,7 +502,7 @@ export class FetchModelService {
         : undefined,
     };
 
-    return this.client['executeContractOperation'](
+    return this.client.executeContractOperation(
       `/v1/admin/models/${id}/identifiers/${identifierId}`,
       HttpMethod.PATCH,
       (contractClient, options) => contractClient.PATCH('/v1/admin/models/{id}/identifiers/{identifierId}', {
@@ -523,7 +523,7 @@ export class FetchModelService {
     identifierId: number,
     config?: RequestConfig
   ): Promise<void> {
-    return this.client['executeContractOperation']<void>(
+    return this.client.executeContractOperation<void>(
       `/v1/admin/models/${id}/identifiers/${identifierId}`,
       HttpMethod.DELETE,
       (contractClient, options) => contractClient.DELETE('/v1/admin/models/{id}/identifiers/{identifierId}', {

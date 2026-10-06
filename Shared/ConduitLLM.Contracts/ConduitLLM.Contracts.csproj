@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\ConduitLLM.Configuration\Messaging\*.cs"
+             Link="Messaging\%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

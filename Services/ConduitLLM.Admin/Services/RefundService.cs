@@ -261,7 +261,7 @@ public class RefundService : IRefundService
                 OperationId = idempotencyKey,
                 RequestHash = requestHash,
                 RefundTransactionId = transaction.Id,
-                ResponseJson = JsonSerializer.Serialize(refundResult),
+                ResponseJson = AdminJson.Serialize(refundResult),
                 CreatedAt = DateTime.UtcNow
             });
             await _context.SaveChangesAsync(ct);
@@ -340,7 +340,7 @@ public class RefundService : IRefundService
                 $"Idempotency key '{operationId}' was reused with different refund data.");
         }
 
-        return JsonSerializer.Deserialize<RefundResult>(record.ResponseJson)
+        return AdminJson.Deserialize<RefundResult>(record.ResponseJson)
             ?? throw new InvalidOperationException("Stored refund replay response is invalid.");
     }
 

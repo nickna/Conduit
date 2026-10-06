@@ -62,12 +62,6 @@ public partial class Program
             opts.UseSystemTextJsonForSerialization(options =>
             {
                 options.TypeInfoResolverChain.Insert(0, CoreMessagingJsonContext.Default);
-                if (options.TypeInfoResolverChain.All(static resolver =>
-                        resolver is not System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver))
-                {
-                    options.TypeInfoResolverChain.Add(
-                        new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver());
-                }
             });
 
             ConduitLLM.Gateway.Extensions.CacheInvalidationMessagingExtensions.AddGatewayCacheInvalidationBridges(opts);

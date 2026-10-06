@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using ConduitLLM.Configuration.Validation;
 
 namespace ConduitLLM.Configuration.DTOs
 {
@@ -35,7 +36,7 @@ namespace ConduitLLM.Configuration.DTOs
     {
         /// <summary>The discovered provider models to resolve.</summary>
         [Required]
-        [MinLength(1)]
+        [MinItems(1)]
         public List<BulkModelMappingItemDto> Mappings { get; set; } = new();
     }
 

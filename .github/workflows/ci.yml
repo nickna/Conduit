@@ -4,7 +4,7 @@ on:
   push:
     branches: [master, dev]
   pull_request:
-    branches: [master]
+    branches: [master, dev]
 
 env:
   DOTNET_VERSION: '10.0.x'
@@ -80,6 +80,38 @@ jobs:
   # already-running Conduit services plus provider credentials. The SignalR
   # component is self-contained through Testcontainers and is required in CI.
 
+  aot-analyzers:
+    name: NativeAOT analyzer ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Restore service graphs
+        run: |
+          dotnet restore Services/ConduitLLM.Admin/ConduitLLM.Admin.csproj
+          dotnet restore Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj
+      - name: Run analyzer-only AOT audit
+        shell: pwsh
+        run: ./scripts/aot/aot-audit.ps1 -NoRestore
+      - name: Add diagnostic counts to job summary
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path artifacts/aot-audit/summary.md) {
+            Get-Content artifacts/aot-audit/summary.md | Add-Content $env:GITHUB_STEP_SUMMARY
+          }
+      - name: Upload AOT analyzer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aot-analyzer-diagnostics
+          path: artifacts/aot-audit
+          retention-days: 30
+
   # Quick validation that everything builds
   validate:
     name: Validate
@@ -133,15 +165,25 @@ jobs:
         run: |
           dotnet restore
           dotnet build --no-restore
-          # Run tests but exclude integration tests and timing-sensitive tests
-          dotnet test --no-build --verbosity normal --filter "FullyQualifiedName!~IntegrationTests&Category!=TimingSensitive"
+          # Billing invariants, billing fault injection, and SignalR each run in
+          # isolated jobs above. Keep their infrastructure and timing-sensitive
+          # state out of this shared validation job while retaining the core and
+          # reflection-disabled serialization suites.
+          dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj --no-build --verbosity normal --filter "FullyQualifiedName!~IntegrationTests&Category!=TimingSensitive"
+          dotnet test Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj --no-build --verbosity normal
         env:
           TEST_REDIS_CONNECTION: localhost:6379
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
+          CONDUIT_CACHE_TEST_REDIS: localhost:6379
+          CONDUIT_CACHE_TEST_POSTGRES: Host=localhost;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
 
       - name: Admin media request-delegate generation guard
         shell: pwsh
         run: ./scripts/test/verify-admin-media-rdg.ps1 -NoRestore
+
+      - name: Gateway request-delegate generation guard
+        shell: pwsh
+        run: ./scripts/test/verify-gateway-rdg.ps1 -NoRestore
 
       - name: Exception logging ownership guard
         shell: pwsh
@@ -268,6 +310,7 @@ jobs:
           dotnet build Services/ConduitLLM.Gateway
           dotnet build Services/ConduitLLM.Admin
           dotnet build tools/WolverineSmokePublisher
+          dotnet build tools/ConduitLLM.Migrator
 
       - name: Two-host listener assertion
         run: pwsh ./scripts/test/wolverine-two-host-smoke.ps1 -NoBuild

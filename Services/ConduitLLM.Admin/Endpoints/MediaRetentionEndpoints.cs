@@ -41,7 +41,6 @@ namespace ConduitLLM.Admin.Endpoints
         {
             var group = app.MapGroup("/v1/admin/media-retention-policies")
                 .RequireAuthorization("MasterKeyPolicy")
-                .AddEndpointFilter<ValidationEndpointFilter>()
                 .AddEndpointFilter<OperationLoggingEndpointFilter>()
                 .WithTags("Media Retention");
             group.MapGet("", ([FromServices] MediaRetentionEndpoints e) => e.GetPolicies()).WithName("MediaRetention_GetPolicies").Produces<List<MediaRetentionPolicyDto>>();

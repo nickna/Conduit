@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ConduitLLM.Configuration.Services;
 using ConduitLLM.Core.Models.Pricing;
+using ConduitLLM.Core.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace ConduitLLM.Core.Services;
@@ -70,10 +71,13 @@ public class PricingRulesValidator : IPricingRulesValidator
 
         try
         {
-            var config = JsonSerializer.Deserialize<PricingRulesConfig>(json, new JsonSerializerOptions
+            var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
-            });
+            };
+            var config = JsonSerializer.Deserialize(
+                json,
+                new CorePricingJsonContext(options).PricingRulesConfig);
 
             if (config == null)
             {
@@ -260,10 +264,13 @@ public class PricingRulesValidator : IPricingRulesValidator
         Dictionary<string, ParameterDefinition>? schema;
         try
         {
-            schema = JsonSerializer.Deserialize<Dictionary<string, ParameterDefinition>>(parameterSchema, new JsonSerializerOptions
+            var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
-            });
+            };
+            schema = JsonSerializer.Deserialize(
+                parameterSchema,
+                new CorePricingJsonContext(options).DictionaryStringParameterDefinition);
         }
         catch (JsonException ex)
         {

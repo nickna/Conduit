@@ -11,7 +11,7 @@ import { useModels } from '@/hooks/useModelsApi';
 import { useProviders } from '@/hooks/useProviderApi';
 import type { ModelProviderMappingDto } from '@/lib/admin-api';
 import { CreateModelMappingModal } from './CreateModelMappingModal';
-import { EditModelMappingModal } from './EditModelMappingModalWithHooks';
+import { EditModelMappingModal } from './EditModelMappingModal';
 
 jest.mock('@/hooks/useModelAssociations', () => ({ useModelAssociations: jest.fn() }));
 jest.mock('@/hooks/useModelMappingsApi', () => ({

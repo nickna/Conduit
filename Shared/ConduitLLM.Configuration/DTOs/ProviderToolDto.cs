@@ -33,7 +33,7 @@ namespace ConduitLLM.Configuration.DTOs
         /// The name of the tool being used.
         /// </summary>
         [Required]
-        [MaxLength(100)]
+        [StringLength(100)]
         public string ToolName { get; set; } = string.Empty;
 
         /// <summary>
@@ -50,13 +50,13 @@ namespace ConduitLLM.Configuration.DTOs
         /// <summary>
         /// Unit type for billing (e.g., "requests", "hours", "searches")
         /// </summary>
-        [MaxLength(50)]
+        [StringLength(50)]
         public string? BillingUnit { get; set; }
 
         /// <summary>
         /// Optional cost description for admin reference.
         /// </summary>
-        [MaxLength(200)]
+        [StringLength(200)]
         public string? CostDescription { get; set; }
 
         /// <summary>
@@ -119,7 +119,7 @@ namespace ConduitLLM.Configuration.DTOs
         /// The name of the tool being used.
         /// </summary>
         [Required]
-        [MaxLength(100)]
+        [StringLength(100)]
         public string ToolName { get; set; } = string.Empty;
 
         /// <summary>
@@ -136,13 +136,13 @@ namespace ConduitLLM.Configuration.DTOs
         /// <summary>
         /// Unit type for billing (e.g., "requests", "hours", "searches")
         /// </summary>
-        [MaxLength(50)]
+        [StringLength(50)]
         public string? BillingUnit { get; set; } = "requests";
 
         /// <summary>
         /// Optional cost description for admin reference.
         /// </summary>
-        [MaxLength(200)]
+        [StringLength(200)]
         public string? CostDescription { get; set; }
 
         /// <summary>
@@ -175,13 +175,13 @@ namespace ConduitLLM.Configuration.DTOs
         /// <summary>
         /// Unit type for billing (e.g., "requests", "hours", "searches")
         /// </summary>
-        [MaxLength(50)]
+        [StringLength(50)]
         public string? BillingUnit { get; set; }
 
         /// <summary>
         /// Optional cost description for admin reference.
         /// </summary>
-        [MaxLength(200)]
+        [StringLength(200)]
         public string? CostDescription { get; set; }
     }
 }

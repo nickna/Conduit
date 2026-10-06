@@ -22,7 +22,7 @@ public class UpdateVirtualKeyRequestDto
     private int? _rateLimitPriority;
     private Dictionary<string, ModelRateLimitDto>? _modelRateLimits;
 
-    [MaxLength(100, ErrorMessage = "Key name cannot exceed 100 characters.")]
+    [StringLength(100, ErrorMessage = "Key name cannot exceed 100 characters.")]
     public string? KeyName
     {
         get => _keyName;

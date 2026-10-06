@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Exceptions;
+using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Providers.Authentication;
 using ConduitLLM.Providers.Configuration;
@@ -15,7 +16,7 @@ namespace ConduitLLM.Providers.Replicate
     /// Revised client for interacting with Replicate APIs using the new client hierarchy.
     /// Handles the asynchronous prediction workflow (start, poll, get result) for various model providers.
     /// </summary>
-    public partial class ReplicateClient : BaseLLMClient
+    public partial class ReplicateClient : BaseLLMClient, IVideoGenerationClient
     {
         // Default polling configuration
         private static readonly TimeSpan DefaultPollingInterval = TimeSpan.FromSeconds(2);

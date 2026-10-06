@@ -17,7 +17,7 @@ namespace ConduitLLM.Configuration.DTOs
         /// User-friendly name for this provider instance
         /// </summary>
         [Required]
-        [MaxLength(100)]
+        [StringLength(100)]
         public string ProviderName { get; set; } = string.Empty;
 
         /// <summary>
@@ -52,7 +52,7 @@ namespace ConduitLLM.Configuration.DTOs
         /// <summary>
         /// User-friendly name for this provider instance
         /// </summary>
-        [MaxLength(100)]
+        [StringLength(100)]
         public string? ProviderName { get; set; }
 
         /// <summary>

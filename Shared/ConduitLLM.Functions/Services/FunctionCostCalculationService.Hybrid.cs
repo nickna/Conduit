@@ -3,6 +3,8 @@ using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Enums;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Models.Pricing;
+using ConduitLLM.Functions.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace ConduitLLM.Functions.Services;
 
@@ -53,11 +55,17 @@ public partial class FunctionCostCalculationService
             return functionCost.ProviderType switch
             {
                 FunctionProviderType.Exa => CalculateExaHybridCost(
-                    DeserializeHybridConfig<ExaHybridPricingConfig>(functionCost), usage),
+                    DeserializeHybridConfig(
+                        functionCost,
+                        FunctionsJsonContext.Default.ExaHybridPricingConfig), usage),
                 FunctionProviderType.Tavily => CalculateTavilySearchCost(
-                    DeserializeHybridConfig<TavilySearchPricingConfig>(functionCost), usage),
+                    DeserializeHybridConfig(
+                        functionCost,
+                        FunctionsJsonContext.Default.TavilySearchPricingConfig), usage),
                 FunctionProviderType.Perplexity => CalculatePerplexityHybridCost(
-                    DeserializeHybridConfig<PerplexityHybridPricingConfig>(functionCost), usage),
+                    DeserializeHybridConfig(
+                        functionCost,
+                        FunctionsJsonContext.Default.PerplexityHybridPricingConfig), usage),
                 _ => throw new InvalidOperationException(
                     $"Hybrid pricing is not supported for provider {functionCost.ProviderType} on cost '{functionCost.CostName}'.")
             };
@@ -73,9 +81,11 @@ public partial class FunctionCostCalculationService
         }
     }
 
-    private static T DeserializeHybridConfig<T>(FunctionCost functionCost)
+    private static T DeserializeHybridConfig<T>(
+        FunctionCost functionCost,
+        JsonTypeInfo<T> jsonTypeInfo)
     {
-        return JsonSerializer.Deserialize<T>(functionCost.PricingConfiguration!)
+        return JsonSerializer.Deserialize(functionCost.PricingConfiguration!, jsonTypeInfo)
             ?? throw new JsonException($"Hybrid pricing configuration for '{functionCost.CostName}' deserialized to null.");
     }
 

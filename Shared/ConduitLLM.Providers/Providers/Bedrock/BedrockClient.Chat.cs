@@ -102,7 +102,9 @@ namespace ConduitLLM.Providers.Bedrock
             {
                 converseRequest.AdditionalModelRequestFields = new Dictionary<string, JsonElement>
                 {
-                    ["top_k"] = JsonSerializer.SerializeToElement(topK)
+                    ["top_k"] = JsonSerializer.SerializeToElement(
+                        topK,
+                        ProvidersJsonContext.Default.Int32)
                 };
             }
 
@@ -176,35 +178,57 @@ namespace ConduitLLM.Providers.Bedrock
             if (content is null or string)
                 return;
 
-            JsonElement root;
-            try
+            if (content is JsonElement root)
             {
-                root = content is JsonElement element
-                    ? element
-                    : JsonSerializer.SerializeToElement(content);
-            }
-            catch (Exception exception) when (exception is JsonException or NotSupportedException)
-            {
-                throw new ValidationException("Bedrock message content could not be serialized.", exception);
-            }
+                if (root.ValueKind != JsonValueKind.Array)
+                    return;
 
-            if (root.ValueKind != JsonValueKind.Array)
+                foreach (var part in root.EnumerateArray())
+                {
+                    ValidateContentPartType(
+                        part.ValueKind == JsonValueKind.Object
+                            && part.TryGetProperty("type", out var typeElement)
+                            && typeElement.ValueKind == JsonValueKind.String
+                                ? typeElement.GetString()
+                                : null);
+                }
                 return;
+            }
 
-            foreach (var part in root.EnumerateArray())
+            if (content is not IEnumerable<object> parts)
             {
-                if (!part.TryGetProperty("type", out var typeElement) ||
-                    typeElement.ValueKind != JsonValueKind.String)
-                {
-                    throw new ValidationException("Bedrock content parts must include a string type.");
-                }
+                throw new ValidationException(
+                    "Bedrock message content must be a string, a JSON array, or typed content parts.");
+            }
 
-                var type = typeElement.GetString();
-                if (type is not ("text" or "image_url"))
+            foreach (var part in parts)
+            {
+                var type = part switch
                 {
-                    throw new ValidationException(
-                        $"Bedrock does not support content part type '{type}'. Supported types are text and image_url.");
-                }
+                    TextContentPart => "text",
+                    ImageUrlContentPart => "image_url",
+                    ProviderContentPart providerPart => providerPart.Type,
+                    JsonElement element when element.ValueKind == JsonValueKind.Object
+                        && element.TryGetProperty("type", out var typeElement)
+                        && typeElement.ValueKind == JsonValueKind.String => typeElement.GetString(),
+                    _ => null
+                };
+
+                ValidateContentPartType(type);
+            }
+        }
+
+        private static void ValidateContentPartType(string? type)
+        {
+            if (type is null)
+            {
+                throw new ValidationException("Bedrock content parts must include a string type.");
+            }
+
+            if (type is not ("text" or "image_url"))
+            {
+                throw new ValidationException(
+                    $"Bedrock does not support content part type '{type}'. Supported types are text and image_url.");
             }
         }
 
@@ -273,9 +297,9 @@ namespace ConduitLLM.Providers.Bedrock
             }
             catch (JsonException)
             {
-                using var fallback = JsonDocument.Parse(
-                    JsonSerializer.Serialize(new { raw = arguments }));
-                return fallback.RootElement.Clone();
+                return JsonSerializer.SerializeToElement(
+                    new BedrockRawToolArguments { Raw = arguments },
+                    ProvidersJsonContext.Default.BedrockRawToolArguments);
             }
         }
 
@@ -316,7 +340,7 @@ namespace ConduitLLM.Providers.Bedrock
                         InputSchema = tool.Function.Parameters is { } parameters
                             ? new BedrockToolInputSchema
                             {
-                                Json = JsonSerializer.SerializeToElement(parameters)
+                                Json = ParseJsonNode(parameters)
                             }
                             : null
                     }
@@ -334,10 +358,9 @@ namespace ConduitLLM.Providers.Bedrock
                 return null;
             }
 
-            var serialized = JsonSerializer.SerializeToElement(toolChoice.GetSerializedValue());
-            if (serialized.ValueKind == JsonValueKind.String)
+            if (toolChoice.GetSerializedValue() is string serialized)
             {
-                return serialized.GetString() switch
+                return serialized switch
                 {
                     "auto" => new BedrockToolChoice { Auto = CreateEmptyJsonObject() },
                     "required" => new BedrockToolChoice { Any = CreateEmptyJsonObject() },
@@ -345,10 +368,7 @@ namespace ConduitLLM.Providers.Bedrock
                 };
             }
 
-            if (serialized.ValueKind == JsonValueKind.Object
-                && serialized.TryGetProperty("function", out var function)
-                && function.TryGetProperty("name", out var name)
-                && name.GetString() is { Length: > 0 } functionName)
+            if (toolChoice.TryGetFunctionName(out var functionName))
             {
                 return new BedrockToolChoice { Tool = new BedrockNamedToolChoice { Name = functionName } };
             }
@@ -359,6 +379,12 @@ namespace ConduitLLM.Providers.Bedrock
         private static JsonElement CreateEmptyJsonObject()
         {
             using var document = JsonDocument.Parse("{}");
+            return document.RootElement.Clone();
+        }
+
+        private static JsonElement ParseJsonNode(System.Text.Json.Nodes.JsonNode node)
+        {
+            using var document = JsonDocument.Parse(node.ToJsonString());
             return document.RootElement.Clone();
         }
 

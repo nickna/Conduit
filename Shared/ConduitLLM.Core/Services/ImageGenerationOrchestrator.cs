@@ -138,12 +138,7 @@ namespace ConduitLLM.Core.Services
                 try
                 {
                     // Safe cast since we know the processors handle ImageData
-                    var typedProcessor = processor as IMediaProcessingStrategy<object>;
-                    if (typedProcessor != null)
-                    {
-                        return await typedProcessor.ProcessAsync(imageData, context, cancellationToken);
-                    }
-                    return null;
+                    return await processor.ProcessAsync(imageData, context, cancellationToken);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {

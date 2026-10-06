@@ -2,6 +2,7 @@ using ConduitLLM.Configuration.DTOs;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Models;
 using System.Text.Json;
+using ConduitLLM.Configuration.Serialization;
 
 namespace ConduitLLM.Configuration.Extensions
 {
@@ -112,7 +113,11 @@ namespace ConduitLLM.Configuration.Extensions
         }
 
         private static string? SerializeOptions(Dictionary<string, JsonElement>? options) =>
-            options is null ? null : JsonSerializer.Serialize(options);
+            options is null
+                ? null
+                : JsonSerializer.Serialize(
+                    options,
+                    ConfigurationJsonContext.Default.DictionaryStringJsonElement);
 
         private static Dictionary<string, JsonElement>? ParseOptions(string? options)
         {
@@ -120,7 +125,9 @@ namespace ConduitLLM.Configuration.Extensions
                 return null;
             try
             {
-                return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(options);
+                return JsonSerializer.Deserialize(
+                    options,
+                    ConfigurationJsonContext.Default.DictionaryStringJsonElement);
             }
             catch (JsonException)
             {

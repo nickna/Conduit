@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" />
+    <PackageReference Include="Polly" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ConduitLLM.Configuration\ConduitLLM.Configuration.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\ConduitLLM.Core\Extensions\SignalRConfigurationExtensions.cs"
+             Link="Extensions\SignalRConfigurationExtensions.cs" />
+    <Compile Include="..\ConduitLLM.Core\Services\SignalRNotificationServiceBase.cs"
+             Link="Services\SignalRNotificationServiceBase.cs" />
+  </ItemGroup>
+</Project>

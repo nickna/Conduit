@@ -18,13 +18,13 @@ namespace ConduitLLM.Configuration.Entities
         /// Name of the retention policy (e.g., "Default", "Standard", "Enterprise").
         /// </summary>
         [Required]
-        [MaxLength(100)]
+        [StringLength(100)]
         public string Name { get; set; } = string.Empty;
 
         /// <summary>
         /// Description of the retention policy and its purpose.
         /// </summary>
-        [MaxLength(500)]
+        [StringLength(500)]
         public string? Description { get; set; }
 
         /// <summary>

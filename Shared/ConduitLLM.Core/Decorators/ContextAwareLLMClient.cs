@@ -15,7 +15,11 @@ namespace ConduitLLM.Core.Decorators
     /// <summary>
     /// Decorator that sets provider key context and tracks errors for LLM operations
     /// </summary>
-    public class ContextAwareLLMClient : ILLMClient, ILLMClientDecorator, IAuthenticationVerifiable
+    public class ContextAwareLLMClient :
+        ILLMClient,
+        ILLMClientDecorator,
+        IVideoGenerationClient,
+        IAuthenticationVerifiable
     {
         private readonly ILLMClient _innerClient;
         private readonly int _keyId;
@@ -146,31 +150,11 @@ namespace ConduitLLM.Core.Decorators
         {
             return await TrackedAsync(async () =>
             {
-                // CreateVideoAsync is not on ILLMClient — only specific providers implement it.
-                // The inner client may itself be a decorator (e.g. PromptCachingLLMClient)
-                // that hides the provider's video capability, so unwrap the chain to the
-                // innermost provider client before reflecting (issue #976).
-                var providerClient = _innerClient.UnwrapInnermost();
-                var providerClientType = providerClient.GetType();
-                var createVideoMethod = providerClientType.GetMethod("CreateVideoAsync",
-                    new[] { typeof(VideoGenerationRequest), typeof(string), typeof(CancellationToken) });
+                var videoClient = _innerClient.FindInChain<IVideoGenerationClient>()
+                    ?? throw new NotSupportedException(
+                        $"The underlying client {_innerClient.GetType().Name} does not support video generation");
 
-                if (createVideoMethod == null)
-                {
-                    throw new NotSupportedException(
-                        $"The underlying client {providerClientType.Name} does not support video generation");
-                }
-
-                var task = (Task<VideoGenerationResponse>?)createVideoMethod.Invoke(
-                    providerClient, new object?[] { request, apiKey, cancellationToken });
-
-                if (task == null)
-                {
-                    throw new InvalidOperationException(
-                        $"CreateVideoAsync on {providerClientType.Name} returned null");
-                }
-
-                return await task;
+                return await videoClient.CreateVideoAsync(request, apiKey, cancellationToken);
             });
         }
 

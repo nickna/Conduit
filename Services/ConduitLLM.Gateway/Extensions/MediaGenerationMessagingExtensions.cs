@@ -65,10 +65,18 @@ namespace ConduitLLM.Gateway.Extensions
         /// </summary>
         public static void AddMediaGenerationBridges(this WolverineOptions options)
         {
-            foreach (var eventType in BridgedEventTypes)
-            {
-                options.AddEventBridge(eventType);
-            }
+            options.AddEventBridge<ImageGenerationRequested>();
+            options.AddEventBridge<ImageGenerationCancelled>();
+            options.AddEventBridge<VideoGenerationRequested>();
+            options.AddEventBridge<VideoGenerationCancelled>();
+            options.AddEventBridge<VideoProgressCheckRequested>();
+            options.AddEventBridge<IndeterminateMediaTaskRetryRequested>();
+            options.AddEventBridge<ImageGenerationProgress>();
+            options.AddEventBridge<ImageGenerationCompleted>();
+            options.AddEventBridge<ImageGenerationFailed>();
+            options.AddEventBridge<VideoGenerationProgress>();
+            options.AddEventBridge<VideoGenerationCompleted>();
+            options.AddEventBridge<VideoGenerationFailed>();
         }
     }
 }

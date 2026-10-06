@@ -1,6 +1,6 @@
 import { FilterOptions } from './common';
 import { VirtualKeyMetadata } from './metadata';
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 
 export const TransactionType = {
   Credit: 'credit',

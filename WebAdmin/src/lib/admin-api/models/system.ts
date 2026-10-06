@@ -1,3 +1,5 @@
+import type { components } from '@/generated/admin-api';
+
 // Reconciled to the wire `SystemInfoDto` in issue #1038: the endpoint returns nested
 // version/os/database/runtime/recordCounts objects, not the previous flat shape.
 export interface VersionInfo {
@@ -46,23 +48,4 @@ export interface SystemInfoDto {
   recordCounts?: RecordCountsDto;
 }
 
-export interface HealthCheckData {
-  [key: string]: string | number | boolean | HealthCheckData | HealthCheckData[];
-}
-
-export interface HealthCheckDetail {
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  description?: string;
-  duration?: number;
-  error?: string;
-  data?: HealthCheckData;
-}
-
-export interface HealthStatusDto {
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  timestamp: string;
-  checks: {
-    [key: string]: HealthCheckDetail;
-  };
-  totalDuration: number;
-}
+export type HealthStatusDto = components['schemas']['HealthStatusDto'];

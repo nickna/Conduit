@@ -69,7 +69,7 @@ namespace ConduitLLM.Admin.Endpoints
 
         public static IEndpointRouteBuilder MapPricingEndpoints(IEndpointRouteBuilder app)
         {
-            var group = app.MapGroup("/v1/admin/pricing-tools").RequireAuthorization("MasterKeyPolicy").AddEndpointFilter<ValidationEndpointFilter>().AddEndpointFilter<OperationLoggingEndpointFilter>().WithTags("Pricing");
+            var group = app.MapGroup("/v1/admin/pricing-tools").RequireAuthorization("MasterKeyPolicy").AddEndpointFilter<OperationLoggingEndpointFilter>().WithTags("Pricing");
             group.MapGet("/types", ([FromServices] PricingEndpoints e) => e.GetPricingTypes()).WithName("Pricing_GetTypes").Produces<IEnumerable<PricingTypeInfo>>();
             group.MapGet("/operators", ([FromServices] PricingEndpoints e) => e.GetConditionOperators()).WithName("Pricing_GetOperators").Produces<IEnumerable<OperatorInfo>>();
             group.MapGet("/template", ([FromServices] PricingEndpoints e, string? pricingType = "per_second") => e.GetPricingTemplate(pricingType)).WithName("Pricing_GetTemplate").Produces<PricingRulesConfig>();
@@ -107,7 +107,7 @@ namespace ConduitLLM.Admin.Endpoints
 
             try
             {
-                config = JsonSerializer.Deserialize<T>(json, CaseInsensitiveJsonOptions);
+                config = AdminJson.Deserialize<T>(json, CaseInsensitiveJsonOptions);
             }
             catch (JsonException ex)
             {

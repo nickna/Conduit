@@ -12,7 +12,7 @@ public class CreateFunctionCostRequest
     /// Name for this cost configuration
     /// </summary>
     [Required]
-    [MaxLength(200)]
+    [StringLength(200)]
     public required string CostName { get; set; }
 
     /// <summary>

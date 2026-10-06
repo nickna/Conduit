@@ -5,7 +5,7 @@ namespace ConduitLLM.Configuration.DTOs
     /// <summary>
     /// Represents the result categories for API key testing
     /// </summary>
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<ApiKeyTestResult>))]
     public enum ApiKeyTestResult
     {
         Success,

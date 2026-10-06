@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using ConduitLLM.Configuration.Entities;
 
@@ -16,21 +17,16 @@ namespace ConduitLLM.Configuration.EntityConfigurations
     /// </summary>
     public class ProviderEntityConfiguration : IEntityTypeConfiguration<Provider>
     {
-        internal static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-
         /// <inheritdoc />
         public void Configure(EntityTypeBuilder<Provider> builder)
         {
             var converter = new ValueConverter<Dictionary<string, string>?, string?>(
-                value => value == null ? null : JsonSerializer.Serialize(value, SerializerOptions),
-                json => string.IsNullOrWhiteSpace(json)
-                    ? null
-                    : JsonSerializer.Deserialize<Dictionary<string, string>>(json, SerializerOptions));
+                value => ProviderSettingsJson.Serialize(value),
+                json => ProviderSettingsJson.Deserialize(json));
 
             var comparer = new ValueComparer<Dictionary<string, string>?>(
-                (left, right) => JsonSerializer.Serialize(left, SerializerOptions)
-                    == JsonSerializer.Serialize(right, SerializerOptions),
-                value => value == null ? 0 : JsonSerializer.Serialize(value, SerializerOptions).GetHashCode(),
+                (left, right) => ProviderSettingsJson.Serialize(left) == ProviderSettingsJson.Serialize(right),
+                value => value == null ? 0 : ProviderSettingsJson.Serialize(value)!.GetHashCode(),
                 value => value == null ? null : new Dictionary<string, string>(value));
 
             builder.Property(p => p.Settings)
@@ -47,21 +43,16 @@ namespace ConduitLLM.Configuration.EntityConfigurations
     /// </summary>
     public class ProviderKeyCredentialEntityConfiguration : IEntityTypeConfiguration<ProviderKeyCredential>
     {
-        private static readonly JsonSerializerOptions SerializerOptions = ProviderEntityConfiguration.SerializerOptions;
-
         /// <inheritdoc />
         public void Configure(EntityTypeBuilder<ProviderKeyCredential> builder)
         {
             var converter = new ValueConverter<Dictionary<string, string>?, string?>(
-                value => value == null ? null : JsonSerializer.Serialize(value, SerializerOptions),
-                json => string.IsNullOrWhiteSpace(json)
-                    ? null
-                    : JsonSerializer.Deserialize<Dictionary<string, string>>(json, SerializerOptions));
+                value => ProviderSettingsJson.Serialize(value),
+                json => ProviderSettingsJson.Deserialize(json));
 
             var comparer = new ValueComparer<Dictionary<string, string>?>(
-                (left, right) => JsonSerializer.Serialize(left, SerializerOptions)
-                    == JsonSerializer.Serialize(right, SerializerOptions),
-                value => value == null ? 0 : JsonSerializer.Serialize(value, SerializerOptions).GetHashCode(),
+                (left, right) => ProviderSettingsJson.Serialize(left) == ProviderSettingsJson.Serialize(right),
+                value => value == null ? 0 : ProviderSettingsJson.Serialize(value)!.GetHashCode(),
                 value => value == null ? null : new Dictionary<string, string>(value));
 
             builder.Property(p => p.SecretSettings)
@@ -70,4 +61,25 @@ namespace ConduitLLM.Configuration.EntityConfigurations
                 .HasConversion(converter, comparer);
         }
     }
+
+    /// <summary>
+    /// AOT-safe JSON conversion used by the EF provider settings value converters.
+    /// Public methods allow EF's compiled-model generator to reproduce the expressions.
+    /// </summary>
+    public static class ProviderSettingsJson
+    {
+        public static string? Serialize(Dictionary<string, string>? value) =>
+            value == null
+                ? null
+                : JsonSerializer.Serialize(value, ProviderSettingsJsonContext.Default.DictionaryStringString);
+
+        public static Dictionary<string, string>? Deserialize(string? json) =>
+            string.IsNullOrWhiteSpace(json)
+                ? null
+                : JsonSerializer.Deserialize(json, ProviderSettingsJsonContext.Default.DictionaryStringString);
+    }
+
+    [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
+    [JsonSerializable(typeof(Dictionary<string, string>))]
+    public partial class ProviderSettingsJsonContext : JsonSerializerContext;
 }

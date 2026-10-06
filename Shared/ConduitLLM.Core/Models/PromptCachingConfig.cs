@@ -2,6 +2,8 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using ConduitLLM.Core.Validation;
+
 namespace ConduitLLM.Core.Models;
 
 public static class PromptCachingConstants
@@ -32,7 +34,7 @@ public sealed class PromptCachingConfig
 
 public sealed class PromptCachingRule
 {
-    [Required, MaxLength(100)]
+    [Required, StringLength(100)]
     public string Name { get; set; } = string.Empty;
 
     public bool Enabled { get; set; } = true;
@@ -40,7 +42,7 @@ public sealed class PromptCachingRule
     [Required]
     public string Provider { get; set; } = string.Empty;
 
-    [Required, MaxLength(200)]
+    [Required, StringLength(200)]
     public string ModelPattern { get; set; } = string.Empty;
 
     [Required]
@@ -50,7 +52,7 @@ public sealed class PromptCachingRule
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Ttl { get; set; }
 
-    [MaxLength(PromptCachingConstants.MaxExplicitBreakpoints)]
+    [MaxItems(PromptCachingConstants.MaxExplicitBreakpoints)]
     public List<CacheInjectionPoint> InjectionPoints { get; set; } = new();
 }
 

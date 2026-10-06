@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Configuration.Serialization;
 using ConduitLLM.Configuration.DTOs.VirtualKey;
 using ConduitLLM.Configuration.Entities;
 
@@ -110,9 +111,9 @@ namespace ConduitLLM.Configuration.Utilities
 
             try
             {
-                var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, ModelRateLimitDto>>(
+                var parsed = System.Text.Json.JsonSerializer.Deserialize(
                     json,
-                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    ConfigurationJsonContext.Default.DictionaryStringModelRateLimitDto);
                 return parsed is { Count: > 0 } ? parsed : null;
             }
             catch (System.Text.Json.JsonException)
@@ -123,7 +124,11 @@ namespace ConduitLLM.Configuration.Utilities
 
         /// <summary>Serialises per-model overrides for storage, collapsing an empty map to null.</summary>
         public static string? SerializeModelRateLimits(Dictionary<string, ModelRateLimitDto>? limits) =>
-            limits is { Count: > 0 } ? System.Text.Json.JsonSerializer.Serialize(limits) : null;
+            limits is { Count: > 0 }
+                ? System.Text.Json.JsonSerializer.Serialize(
+                    limits,
+                    ConfigurationJsonContext.Default.DictionaryStringModelRateLimitDto)
+                : null;
 
         public static List<string>? ParseAllowedModels(string? allowedModels) =>
             string.IsNullOrWhiteSpace(allowedModels)

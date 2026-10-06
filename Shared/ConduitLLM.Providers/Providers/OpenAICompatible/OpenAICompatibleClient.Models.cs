@@ -36,8 +36,8 @@ namespace ConduitLLM.Providers.OpenAICompatible
                 var response = await CoreUtils.HttpClientHelper.GetJsonAsync<ListModelsResponse>(
                     client,
                     endpoint,
+                    Serialization.ProvidersJsonContext.Default.ListModelsResponse,
                     CreateStandardHeaders(apiKey),
-                    DefaultJsonOptions,
                     Logger,
                     cancellationToken);
 

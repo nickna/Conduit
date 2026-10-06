@@ -3,13 +3,11 @@
 import {
   Modal,
   TextInput,
-  Switch,
   Button,
   Text,
-  Textarea,
+  JsonInput,
   Alert,
   MultiSelect,
-  TagsInput,
   Divider,
   Stack,
   Group,
@@ -33,30 +31,14 @@ interface CreateVirtualKeyModalProps {
 
 interface CreateVirtualKeyForm {
   keyName: string;
-  description?: string;
   virtualKeyGroupId?: number;
   rateLimitRpm?: number;
   rateLimitRpd?: number;
   rateLimitTpm?: number;
   maxParallelRequests?: number;
-  isEnabled: boolean;
   allowedModels: string[];
-  allowedEndpoints: string[];
-  allowedIpAddresses: string[];
   metadata?: string;
 }
-
-const ENDPOINT_OPTIONS = [
-  { value: '/v1/chat/completions', label: 'Chat Completions' },
-  { value: '/v1/completions', label: 'Completions' },
-  { value: '/v1/embeddings', label: 'Embeddings' },
-  { value: '/v1/images/generations', label: 'Image Generation' },
-  { value: '/v1/audio/transcriptions', label: 'Audio Transcription' },
-  { value: '/v1/audio/translations', label: 'Audio Translation' },
-  { value: '/v1/audio/speech', label: 'Text to Speech' },
-  { value: '/v1/moderations', label: 'Moderations' },
-  { value: '/v1/conduit/videos/generations', label: 'Video Generation' },
-];
 
 export function CreateVirtualKeyModal({ opened, onClose, onSuccess }: CreateVirtualKeyModalProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -108,16 +90,12 @@ export function CreateVirtualKeyModal({ opened, onClose, onSuccess }: CreateVirt
   const form = useForm<CreateVirtualKeyForm>({
     initialValues: {
       keyName: '',
-      description: '',
       virtualKeyGroupId: undefined,
       rateLimitRpm: undefined,
       rateLimitRpd: undefined,
       rateLimitTpm: undefined,
       maxParallelRequests: undefined,
-      isEnabled: true,
       allowedModels: ['*'], // Default to all models
-      allowedEndpoints: ['/v1/chat/completions'],
-      allowedIpAddresses: [],
       metadata: '',
     },
     validate: {
@@ -142,8 +120,7 @@ export function CreateVirtualKeyModal({ opened, onClose, onSuccess }: CreateVirt
       rateLimitTpm: validators.minValue('Tokens per minute', 1),
       maxParallelRequests: validators.minValue('Max parallel requests', 1),
       allowedModels: validators.arrayMinLength('model', 1),
-      allowedEndpoints: validators.arrayMinLength('endpoint', 1),
-      allowedIpAddresses: validators.ipAddresses,
+      metadata: validators.jsonObject('Metadata'),
     },
   });
 
@@ -158,7 +135,6 @@ export function CreateVirtualKeyModal({ opened, onClose, onSuccess }: CreateVirt
 
       const payload = {
         keyName: values.keyName.trim(),
-        description: values.description?.trim() ?? undefined,
         virtualKeyGroupId: values.virtualKeyGroupId, // Now guaranteed to be number
         rateLimitRpm: values.rateLimitRpm ?? undefined,
         rateLimitRpd: values.rateLimitRpd ?? undefined,
@@ -166,7 +142,6 @@ export function CreateVirtualKeyModal({ opened, onClose, onSuccess }: CreateVirt
         maxParallelRequests: values.maxParallelRequests ?? undefined,
         allowedModels: values.allowedModels.length > 0 ? values.allowedModels : undefined,
         metadata: values.metadata?.trim() ? JSON.parse(values.metadata) as Record<string, unknown> : undefined,
-        isEnabled: values.isEnabled,
       };
 
       await withAdminClient(client => 
@@ -206,20 +181,6 @@ export function CreateVirtualKeyModal({ opened, onClose, onSuccess }: CreateVirt
         placeholder="Enter a unique name for this key"
         required
         {...form.getInputProps('keyName')}
-      />
-
-      <Textarea
-        label="Description"
-        placeholder="Optional description for this key"
-        rows={3}
-        {...form.getInputProps('description')}
-      />
-
-      <Switch
-        label="Enabled"
-        description="Whether this key can be used for API requests"
-        checked={form.values.isEnabled}
-        {...form.getInputProps('isEnabled')}
       />
 
       {groups.length === 0 && !isLoadingGroups ? (
@@ -283,29 +244,13 @@ export function CreateVirtualKeyModal({ opened, onClose, onSuccess }: CreateVirt
             {...form.getInputProps('allowedModels')}
           />
 
-          <MultiSelect
-            label="Allowed Endpoints"
-            description="API endpoints this key can access"
-            data={ENDPOINT_OPTIONS}
-            placeholder="Select endpoints"
-            searchable
-            clearable
-            required
-            {...form.getInputProps('allowedEndpoints')}
-          />
-
-          <TagsInput
-            label="IP Whitelist"
-            description="IP addresses allowed to use this key"
-            placeholder="Enter IP addresses"
-            {...form.getInputProps('allowedIpAddresses')}
-          />
-
-          <Textarea
+          <JsonInput
             label="Metadata"
-            description="Additional metadata in JSON format"
+            description="Additional metadata stored as a JSON object"
             placeholder='{"team": "engineering"}'
-            rows={3}
+            autosize
+            minRows={3}
+            formatOnBlur
             {...form.getInputProps('metadata')}
           />
 

@@ -71,12 +71,23 @@ namespace ConduitLLM.Providers.MiniMax
                         var type = typeElement.GetString();
                         if (type == "text" && element.TryGetProperty("text", out var textElement))
                         {
-                            miniMaxParts.Add(new { type = "text", text = textElement.GetString() });
+                            miniMaxParts.Add(new Dictionary<string, object?>
+                            {
+                                ["type"] = "text",
+                                ["text"] = textElement.GetString()
+                            });
                         }
                         else if (type == "image_url" && element.TryGetProperty("image_url", out var imageElement) &&
                                  imageElement.TryGetProperty("url", out var urlElement))
                         {
-                            miniMaxParts.Add(new { type = "image_url", image_url = new { url = urlElement.GetString() } });
+                            miniMaxParts.Add(new Dictionary<string, object?>
+                            {
+                                ["type"] = "image_url",
+                                ["image_url"] = new Dictionary<string, string?>
+                                {
+                                    ["url"] = urlElement.GetString()
+                                }
+                            });
                         }
                     }
                 }

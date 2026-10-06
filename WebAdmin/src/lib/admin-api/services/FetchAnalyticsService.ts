@@ -2,8 +2,10 @@ import type { FetchBaseApiClient } from '../client/FetchBaseApiClient';
 import type { RequestConfig } from '../client/types';
 import type {
   RequestLogParams,
-  RequestLogPage,
 } from '../models/analytics';
+import type { components } from '@/generated/admin-api';
+
+type RequestLogPage = components['schemas']['PagedResultOfLogRequestDto'];
 
 // Cost-related types
 export interface CostDashboardDto {
@@ -59,14 +61,14 @@ export class FetchAnalyticsService {
       status: params?.statusCode,
     };
 
-    return this.client['executeContractRead'](
+    return this.client.executeContractRead(
       '/v1/admin/analytics/logs',
       (contractClient, options) => contractClient.GET('/v1/admin/analytics/logs', {
         ...options,
         params: { query },
       }),
       config,
-    ) as unknown as Promise<RequestLogPage>;
+    );
   }
 
   /**
@@ -78,7 +80,7 @@ export class FetchAnalyticsService {
     endDate?: string,
     config?: RequestConfig
   ): Promise<CostDashboardDto> {
-    return this.client['executeContractRead'](
+    return this.client.executeContractRead(
       '/v1/admin/analytics/costs/summary',
       (contractClient, options) => contractClient.GET('/v1/admin/analytics/costs/summary', {
         ...options,
@@ -97,7 +99,7 @@ export class FetchAnalyticsService {
     endDate?: string,
     config?: RequestConfig
   ): Promise<CostTrendDto> {
-    return this.client['executeContractRead'](
+    return this.client.executeContractRead(
       '/v1/admin/analytics/costs/trends',
       (contractClient, options) => contractClient.GET('/v1/admin/analytics/costs/trends', {
         ...options,
@@ -119,7 +121,7 @@ export class FetchAnalyticsService {
     virtualKeyId?: number,
     config?: RequestConfig
   ): Promise<Uint8Array> {
-    const buffer = await this.client['executeContractRead']<ArrayBuffer>(
+    const buffer = await this.client.executeContractRead<ArrayBuffer>(
       '/v1/admin/analytics/export',
       (contractClient, options) => contractClient.GET('/v1/admin/analytics/export', {
         ...options,

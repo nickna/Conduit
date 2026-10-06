@@ -14,19 +14,19 @@ namespace ConduitLLM.Configuration.Entities
         /// The name of the model creator (e.g., OpenAI, Anthropic, etc.)
         /// </summary>
         [Required]
-        [MaxLength(100)]
+        [StringLength(100)]
         public string Name { get; set; } = string.Empty;
 
         /// <summary>
         /// Optional description of the model author/organization.
         /// </summary>
-        [MaxLength(500)]
+        [StringLength(500)]
         public string? Description { get; set; }
 
         /// <summary>
         /// URL to the author's website or documentation.
         /// </summary>
-        [MaxLength(500)]
+        [StringLength(500)]
         public string? WebsiteUrl { get; set; }
 
         /// <summary>

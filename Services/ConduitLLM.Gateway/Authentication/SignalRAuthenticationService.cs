@@ -103,10 +103,12 @@ namespace ConduitLLM.Gateway.Authentication
             {
                 try
                 {
-                    var metadata = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(virtualKey.Metadata);
-                    if (metadata != null && metadata.TryGetValue("isAdmin", out var isAdmin))
+                    using var metadata = System.Text.Json.JsonDocument.Parse(virtualKey.Metadata);
+                    if (metadata.RootElement.TryGetProperty("isAdmin", out var isAdmin))
                     {
-                        return isAdmin?.ToString()?.ToLower() == "true";
+                        return isAdmin.ValueKind == System.Text.Json.JsonValueKind.True ||
+                               (isAdmin.ValueKind == System.Text.Json.JsonValueKind.String &&
+                                string.Equals(isAdmin.GetString(), "true", StringComparison.OrdinalIgnoreCase));
                     }
                 }
                 catch

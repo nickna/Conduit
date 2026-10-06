@@ -7,6 +7,7 @@ using ConduitLLM.Functions.Exceptions;
 using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.UsageTracking;
+using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.Endpoints;
 
@@ -133,12 +134,12 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
                 configuration.ConfigurationName,
                 actualCost,
                 execution.Id.ToString(),
-                JsonSerializer.Serialize(new
-                {
-                    functionConfigurationId = configuration.Id,
-                    executionId = execution.Id,
-                    state = execution.State.ToString()
-                })));
+                JsonSerializer.Serialize(
+                    new FunctionCostMetadata(
+                        configuration.Id,
+                        execution.Id,
+                        execution.State.ToString()),
+                    GatewayInternalJsonContext.Default.FunctionCostMetadata)));
 
             // Return execution result
             return Ok(execution.ToContractDto());

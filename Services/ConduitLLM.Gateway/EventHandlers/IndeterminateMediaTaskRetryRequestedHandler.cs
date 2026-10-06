@@ -1,4 +1,6 @@
 using System.Text.Json;
+using ConduitLLM.Core.Serialization;
+using ConduitLLM.Gateway.Serialization;
 
 using ConduitLLM.Configuration.Messaging;
 using ConduitLLM.Core.Events;
@@ -16,11 +18,6 @@ namespace ConduitLLM.Gateway.EventHandlers;
 public sealed class IndeterminateMediaTaskRetryRequestedHandler
     : IEventHandler<IndeterminateMediaTaskRetryRequested>
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
     private readonly IAsyncTaskService _taskService;
     private readonly ILogger<IndeterminateMediaTaskRetryRequestedHandler> _logger;
 
@@ -108,7 +105,9 @@ public sealed class IndeterminateMediaTaskRetryRequestedHandler
             throw new InvalidOperationException(
                 $"Indeterminate image task {taskId} has no persisted request payload.");
         }
-        var request = JsonSerializer.Deserialize<ImageGenerationRequested>(metadata.Payload, JsonOptions)
+        var request = JsonSerializer.Deserialize(
+                metadata.Payload,
+                CoreMessagingJsonContext.Default.ImageGenerationRequested)
             ?? throw new InvalidOperationException(
                 $"Indeterminate image task {taskId} has an invalid request payload.");
         return request with
@@ -124,15 +123,18 @@ public sealed class IndeterminateMediaTaskRetryRequestedHandler
         VideoGenerationRequest? videoRequest = null;
         if (!string.IsNullOrWhiteSpace(metadata.Payload))
         {
-            videoRequest = JsonSerializer.Deserialize<VideoGenerationRequest>(metadata.Payload, JsonOptions);
+            videoRequest = JsonSerializer.Deserialize(
+                metadata.Payload,
+                CoreHttpJsonContext.Default.VideoGenerationRequest);
         }
         if (videoRequest == null &&
             metadata.ExtensionData?.TryGetValue("Request", out var storedRequest) == true)
         {
             videoRequest = storedRequest is JsonElement element
-                ? element.Deserialize<VideoGenerationRequest>(JsonOptions)
-                : JsonSerializer.Deserialize<VideoGenerationRequest>(
-                    JsonSerializer.Serialize(storedRequest, JsonOptions), JsonOptions);
+                ? element.Deserialize(CoreHttpJsonContext.Default.VideoGenerationRequest)
+                : JsonSerializer.Deserialize(
+                    JsonSerializer.Serialize(storedRequest, CoreHttpJsonContext.Default.Object),
+                    CoreHttpJsonContext.Default.VideoGenerationRequest);
         }
         if (videoRequest == null)
         {

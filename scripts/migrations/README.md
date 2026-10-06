@@ -76,6 +76,19 @@ cd Shared/ConduitLLM.Configuration
 - EF Core tools: `dotnet tool install --global dotnet-ef`
 - PowerShell Core 7+ (cross-platform)
 
+### Opting into EF build tooling
+
+EF Design and MSBuild task assemblies are excluded from normal service restores and
+production publishes. Enable them only for the shell that runs migration tooling:
+
+```powershell
+$env:ConduitEfTooling = 'true'
+dotnet restore Conduit.slnx
+dotnet ef migrations list --project Shared/ConduitLLM.Configuration
+```
+
+Remove the environment variable after finishing with `Remove-Item Env:ConduitEfTooling`.
+
 ## Why Not Python?
 
 When challenged to think critically about the solution, we determined that Python would be overengineering because:

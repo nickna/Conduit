@@ -9,13 +9,29 @@ This repository uses a simplified, industry-standard CI/CD pipeline.
 
 **What it does:**
 - Validates code builds and tests pass (.NET and WebAdmin lint/type-check)
+- Runs the analyzer-only NativeAOT warning ratchet on every PR without native linking
 - Builds all three Docker images for validation only — **never pushes** (this still
   catches Dockerfile / production-build breakage, notably WebAdmin's `next build`,
   which runs nowhere else in CI)
 
 CI publishes nothing. Docker images are published from a `v*` tag by the Release workflow.
 
-### 2. Release (`release.yml`)
+### 2. NativeAOT (`native-aot.yml`)
+
+**Triggers:** Push to `master`, weekly schedule, manual dispatch
+
+**What it does:**
+- Publishes Admin and Gateway as `linux-x64` NativeAOT executables
+- Launches each executable through the infrastructure-free OpenAPI path
+- Builds both parallel NativeAOT runtime images and verifies that they are non-root,
+  directly executable, health checked, and free of build/debug content
+- Retains publish duration, executable size, OpenAPI readiness, peak working set,
+  exact publish/smoke logs, runtime artifacts, and separately packaged symbols
+
+Native smoke failures are recorded but do not prevent artifact retention while the
+later NativeAOT phases burn down the known runtime incompatibilities.
+
+### 3. Release (`release.yml`)
 **Triggers:** Push of a tag matching `v*` (cut from `master`)
 
 Two channels, decided by the tag name — a tag is a **pre-release** iff its name
@@ -31,9 +47,16 @@ contains a hyphen (SemVer rule):
   only a stable tag becomes the repo's "Latest")
 - Builds and pushes the three versioned Docker images plus the channel tag
   (`:latest` / `:beta`)
+- Independently builds `linux-x64` Admin and Gateway NativeAOT canary candidates with
+  SBOM/provenance, a blocking critical-vulnerability scan, and separate short-lived
+  symbol artifacts. These candidates are deliberately excluded from JIT promotion.
 The Git tag drives the GitHub release and Docker image versions.
 
-### 3. CodeQL (`codeql-analysis.yml`)
+Native candidate promotion is governed by
+`docs/operations/native-aot-canary.md` and remains blocked by ADR 0006. No native
+candidate receives a version, `latest`, or `beta` tag from this workflow.
+
+### 4. CodeQL (`codeql-analysis.yml`)
 **Triggers:** Push to `master` or `dev`, Weekly schedule, Manual dispatch
 
 **What it does:**
@@ -41,7 +64,7 @@ The Git tag drives the GitHub release and Docker image versions.
 - Results appear in Security tab
 - Non-blocking, informational only
 
-### 4. Close dev issues (`close-dev-issues.yml`)
+### 5. Close dev issues (`close-dev-issues.yml`)
 **Triggers:** Push to `dev`, Manual dispatch
 
 GitHub only honours `Closes #N` for PRs merged into the **default** branch (`master`).

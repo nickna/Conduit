@@ -2,16 +2,9 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
-using ConduitLLM.Admin.DTOs;
-using ConduitLLM.Admin.Models.ModelAuthors;
-using ConduitLLM.Admin.Models.Models;
-using ConduitLLM.Admin.Models.ModelSeries;
-using ConduitLLM.Configuration.DTOs;
-using ConduitLLM.Configuration.DTOs.IpFilter;
-using ConduitLLM.Configuration.DTOs.VirtualKey;
-using ConduitLLM.Functions.DTOs;
+using ConduitLLM.Admin.Serialization;
 
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.Extensions.Options;
@@ -19,43 +12,6 @@ using Microsoft.Net.Http.Headers;
 using HttpJsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 
 namespace ConduitLLM.Admin.Endpoints;
-
-/// <summary>
-/// Registers the request DTOs that use RFC 7386 JSON Merge Patch semantics and records the
-/// original patch document alongside the normally deserialized DTO.
-/// </summary>
-internal sealed class JsonMergePatchRequestConverterFactory : JsonConverterFactory
-{
-    private static readonly HashSet<Type> PatchTypes =
-    [
-        typeof(UpdateFunctionConfigurationRequest),
-        typeof(UpdateFunctionCostDto),
-        typeof(UpdateFunctionCredentialRequest),
-        typeof(UpdateGlobalSettingDto),
-        typeof(UpdateIpFilterDto),
-        typeof(UpdateMediaRetentionPolicyRequest),
-        typeof(UpdateModelAuthorDto),
-        typeof(UpdateModelCostDto),
-        typeof(UpdateModelDto),
-        typeof(ModelIdentifierRequestDto),
-        typeof(UpdateModelProviderMappingDto),
-        typeof(UpdateModelSeriesDto),
-        typeof(UpdateNotificationDto),
-        typeof(UpdateProviderRequest),
-        typeof(UpdateKeyRequest),
-        typeof(UpdateProviderToolDto),
-        typeof(UpdateVirtualKeyGroupRequestDto),
-        typeof(UpdateVirtualKeyRequestDto)
-    ];
-
-    public override bool CanConvert(Type typeToConvert) => PatchTypes.Contains(typeToConvert);
-
-    public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
-    {
-        var converterType = typeof(JsonMergePatchRequestConverter<>).MakeGenericType(typeToConvert);
-        return (JsonConverter)Activator.CreateInstance(converterType, options)!;
-    }
-}
 
 /// <summary>
 /// Runtime-only request wrapper that keeps merge-patch parsing separate from the normal JSON
@@ -90,15 +46,12 @@ internal sealed class JsonMergePatch<T>
             .GetRequiredService<IOptions<HttpJsonOptions>>()
             .Value
             .SerializerOptions;
-        var mergePatchOptions = new JsonSerializerOptions(applicationOptions);
-        mergePatchOptions.Converters.Add(new JsonMergePatchRequestConverterFactory());
-
         try
         {
-            var value = await JsonSerializer.DeserializeAsync<T>(
+            using var document = await JsonDocument.ParseAsync(
                 context.Request.Body,
-                mergePatchOptions,
-                context.RequestAborted);
+                cancellationToken: context.RequestAborted);
+            var value = JsonMergePatchState.Parse<T>(document.RootElement, applicationOptions);
             return new JsonMergePatch<T>(
                 value ?? throw new BadHttpRequestException(
                     "A JSON Merge Patch request body is required."));
@@ -113,81 +66,6 @@ internal sealed class JsonMergePatch<T>
     }
 }
 
-internal sealed class JsonMergePatchRequestConverter<T> : JsonConverter<T>
-    where T : class
-{
-    private readonly JsonSerializerOptions _innerOptions;
-    private readonly Dictionary<string, string> _jsonToClrNames;
-
-    public JsonMergePatchRequestConverter(JsonSerializerOptions options)
-    {
-        _innerOptions = new JsonSerializerOptions(options);
-        for (var index = _innerOptions.Converters.Count - 1; index >= 0; index--)
-        {
-            if (_innerOptions.Converters[index] is JsonMergePatchRequestConverterFactory)
-            {
-                _innerOptions.Converters.RemoveAt(index);
-            }
-        }
-
-        var comparer = options.PropertyNameCaseInsensitive
-            ? StringComparer.OrdinalIgnoreCase
-            : StringComparer.Ordinal;
-        _jsonToClrNames = typeof(T)
-            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-            .Where(IsPatchableProperty)
-            .ToDictionary(
-                property => GetJsonPropertyName(property, options),
-                property => property.Name,
-                comparer);
-    }
-
-    public override T? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        using var document = JsonDocument.ParseValue(ref reader);
-        if (document.RootElement.ValueKind != JsonValueKind.Object)
-        {
-            throw new JsonException("A JSON Merge Patch request body must be a JSON object.");
-        }
-
-        foreach (var property in document.RootElement.EnumerateObject())
-        {
-            if (!_jsonToClrNames.ContainsKey(property.Name))
-            {
-                throw new JsonException($"The merge-patch property '{property.Name}' is not writable.");
-            }
-        }
-
-        var value = document.RootElement.Deserialize<T>(_innerOptions)
-            ?? throw new JsonException("The JSON Merge Patch request body cannot be null.");
-        JsonMergePatchState.Attach(
-            value,
-            document.RootElement.Clone(),
-            _innerOptions,
-            _jsonToClrNames);
-        return value;
-    }
-
-    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, value, _innerOptions);
-
-    private static bool IsPatchableProperty(PropertyInfo property)
-    {
-        if (!property.CanWrite || property.GetIndexParameters().Length != 0)
-        {
-            return false;
-        }
-
-        var ignore = property.GetCustomAttribute<JsonIgnoreAttribute>();
-        return ignore is null || ignore.Condition != JsonIgnoreCondition.Always;
-    }
-
-    private static string GetJsonPropertyName(PropertyInfo property, JsonSerializerOptions options) =>
-        property.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name
-        ?? options.PropertyNamingPolicy?.ConvertName(property.Name)
-        ?? property.Name;
-}
-
 /// <summary>
 /// Accessors for the original JSON Merge Patch document associated with a deserialized update DTO.
 /// </summary>
@@ -195,14 +73,40 @@ internal static class JsonMergePatchState
 {
     private static readonly ConditionalWeakTable<object, PatchState> States = new();
 
+    public static T Parse<T>(JsonElement document, JsonSerializerOptions serializerOptions)
+        where T : class
+    {
+        if (document.ValueKind != JsonValueKind.Object)
+            throw new JsonException("A JSON Merge Patch request body must be a JSON object.");
+
+        var typeInfo = GetTypeInfo<T>(serializerOptions);
+        var comparer = serializerOptions.PropertyNameCaseInsensitive
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+        var writableNames = typeInfo.Properties
+            .Where(property => property.Set is not null)
+            .Select(property => property.Name)
+            .ToHashSet(comparer);
+
+        foreach (var property in document.EnumerateObject())
+        {
+            if (!writableNames.Contains(property.Name))
+                throw new JsonException($"The merge-patch property '{property.Name}' is not writable.");
+        }
+
+        var request = (T?)JsonSerializer.Deserialize(document, typeInfo)
+            ?? throw new JsonException("The JSON Merge Patch request body cannot be null.");
+        Attach(request, document.Clone(), serializerOptions);
+        return request;
+    }
+
     public static void Attach(
         object request,
         JsonElement document,
-        JsonSerializerOptions serializerOptions,
-        IReadOnlyDictionary<string, string> jsonToClrNames)
+        JsonSerializerOptions serializerOptions)
     {
         States.Remove(request);
-        States.Add(request, new PatchState(document, serializerOptions, jsonToClrNames));
+        States.Add(request, new PatchState(document, serializerOptions));
     }
 
     public static bool IsDefined<TRequest>(this TRequest request, string clrPropertyName)
@@ -213,8 +117,10 @@ internal static class JsonMergePatchState
             return state.TryGetProperty(clrPropertyName, out _);
         }
 
-        var property = typeof(TRequest).GetProperty(clrPropertyName);
-        return property?.GetValue(request) is not null;
+        var options = AdminJsonOptions.Create();
+        var element = JsonSerializer.SerializeToElement(request, GetTypeInfo<TRequest>(options));
+        return TryGetJsonProperty(element, GetJsonName(clrPropertyName, options), false, out var value)
+            && value.ValueKind != JsonValueKind.Null;
     }
 
     public static bool TryGetPatchedProperty<TRequest, TValue>(
@@ -226,18 +132,18 @@ internal static class JsonMergePatchState
     {
         if (!States.TryGetValue(request, out var state))
         {
-            var property = typeof(TRequest).GetProperty(clrPropertyName)
-                ?? throw new ArgumentException(
-                    $"Property '{clrPropertyName}' does not exist on {typeof(TRequest).Name}.",
-                    nameof(clrPropertyName));
-            var value = property.GetValue(request);
-            if (value is null)
+            var fallbackOptions = AdminJsonOptions.Create();
+            var element = JsonSerializer.SerializeToElement(request, GetTypeInfo<TRequest>(fallbackOptions));
+            if (!TryGetJsonProperty(element, GetJsonName(clrPropertyName, fallbackOptions), false, out var value)
+                || value.ValueKind == JsonValueKind.Null)
             {
                 patchedValue = currentValue;
                 return false;
             }
 
-            patchedValue = (TValue)value;
+            patchedValue = (TValue)JsonSerializer.Deserialize(
+                value,
+                GetTypeInfo<TValue>(fallbackOptions))!;
             return true;
         }
 
@@ -255,12 +161,13 @@ internal static class JsonMergePatchState
                 $"Property '{state.GetJsonName(clrPropertyName)}' cannot be null.");
         }
 
-        var targetNode = JsonSerializer.SerializeToNode(currentValue, state.SerializerOptions);
+        var valueTypeInfo = GetTypeInfo<TValue>(state.SerializerOptions);
+        var targetNode = JsonSerializer.SerializeToNode(currentValue, valueTypeInfo);
         var patchNode = JsonNode.Parse(patch.GetRawText());
         var merged = Apply(targetNode, patchNode);
         patchedValue = merged is null
             ? default!
-            : merged.Deserialize<TValue>(state.SerializerOptions)!;
+            : (TValue)JsonSerializer.Deserialize(merged, valueTypeInfo)!;
         return true;
     }
 
@@ -288,23 +195,48 @@ internal static class JsonMergePatchState
         return targetObject;
     }
 
+    private static JsonTypeInfo GetTypeInfo<T>(JsonSerializerOptions options)
+    {
+        var typeInfo = options.GetTypeInfo(typeof(T));
+        if (typeInfo is null)
+            throw new JsonException($"No JSON contract is registered for {typeof(T).Name}.");
+        return typeInfo;
+    }
+
+    private static string GetJsonName(string clrPropertyName, JsonSerializerOptions options) =>
+        options.PropertyNamingPolicy?.ConvertName(clrPropertyName) ?? clrPropertyName;
+
+    private static bool TryGetJsonProperty(
+        JsonElement document,
+        string jsonName,
+        bool caseInsensitive,
+        out JsonElement value)
+    {
+        foreach (var property in document.EnumerateObject())
+        {
+            if (string.Equals(property.Name, jsonName,
+                    caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
     private sealed class PatchState
     {
         private readonly JsonElement _document;
         private readonly bool _propertyNameCaseInsensitive;
-        private readonly Dictionary<string, string> _clrToJsonNames;
 
         public PatchState(
             JsonElement document,
-            JsonSerializerOptions serializerOptions,
-            IReadOnlyDictionary<string, string> jsonToClrNames)
+            JsonSerializerOptions serializerOptions)
         {
             _document = document;
             _propertyNameCaseInsensitive = serializerOptions.PropertyNameCaseInsensitive;
-            _clrToJsonNames = jsonToClrNames.ToDictionary(
-                pair => pair.Value,
-                pair => pair.Key,
-                StringComparer.Ordinal);
             SerializerOptions = serializerOptions;
         }
 
@@ -313,30 +245,11 @@ internal static class JsonMergePatchState
         public bool TryGetProperty(string clrPropertyName, out JsonElement value)
         {
             var jsonName = GetJsonName(clrPropertyName);
-            foreach (var property in _document.EnumerateObject())
-            {
-                if (string.Equals(
-                        property.Name,
-                        jsonName,
-                        _propertyNameCaseInsensitive
-                            ? StringComparison.OrdinalIgnoreCase
-                            : StringComparison.Ordinal))
-                {
-                    value = property.Value;
-                    return true;
-                }
-            }
-
-            value = default;
-            return false;
+            return TryGetJsonProperty(_document, jsonName, _propertyNameCaseInsensitive, out value);
         }
 
         public string GetJsonName(string clrPropertyName) =>
-            _clrToJsonNames.TryGetValue(clrPropertyName, out var jsonName)
-                ? jsonName
-                : throw new ArgumentException(
-                    $"Property '{clrPropertyName}' is not writable in this merge-patch document.",
-                    nameof(clrPropertyName));
+            JsonMergePatchState.GetJsonName(clrPropertyName, SerializerOptions);
     }
 }
 

@@ -4,14 +4,14 @@ import { MantineProvider } from '@mantine/core';
 import { render, screen } from '@testing-library/react';
 import { DynamicParameters } from '@/components/parameters/DynamicParameters';
 import { useMediaInterface } from '@/app/hooks/useMediaInterface';
-import { getBrowserCoreClient } from '@/lib/client/browserCoreClient';
+import { getBrowserGatewayClient } from '@/lib/client/browserGatewayClient';
 import { ModelCapability } from '@/lib/gateway-api';
 
-jest.mock('@/lib/client/browserCoreClient', () => ({
-  getBrowserCoreClient: jest.fn(),
+jest.mock('@/lib/client/browserGatewayClient', () => ({
+  getBrowserGatewayClient: jest.fn(),
 }));
 
-const mockedGetBrowserCoreClient = jest.mocked(getBrowserCoreClient);
+const mockedGetBrowserGatewayClient = jest.mocked(getBrowserGatewayClient);
 
 function DiscoveryParameterHarness() {
   const [model, setModel] = useState('server-image-model');
@@ -39,7 +39,7 @@ function DiscoveryParameterHarness() {
 describe('image discovery parameter data flow', () => {
   beforeEach(() => {
     localStorage.clear();
-    mockedGetBrowserCoreClient.mockResolvedValue({
+    mockedGetBrowserGatewayClient.mockResolvedValue({
       discovery: {
         getModelsByCapability: jest.fn().mockResolvedValue({
           data: [{
@@ -83,6 +83,6 @@ describe('image discovery parameter data flow', () => {
 
     expect(await screen.findByText('Quality from discovery')).toBeVisible();
     expect(screen.getByText('Style from discovery')).toBeVisible();
-    expect(mockedGetBrowserCoreClient).toHaveBeenCalledTimes(1);
+    expect(mockedGetBrowserGatewayClient).toHaveBeenCalledTimes(1);
   });
 });

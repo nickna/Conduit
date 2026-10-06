@@ -34,11 +34,13 @@ public class HttpClientHelperTests
             "{}"));
         var (logger, messages) = CreateDebugLogger();
 
-        await HttpClientHelper.SendJsonRequestAsync<object, Dictionary<string, object>>(
+        await HttpClientHelper.SendJsonRequestAsync(
             client,
             HttpMethod.Post,
             "https://provider.example/v1/chat",
-            new { prompt = "hello" },
+            new Dictionary<string, string> { ["prompt"] = "hello" },
+            ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.DictionaryStringString,
+            ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.DictionaryStringObject,
             CredentialHeaders,
             logger: logger.Object);
 
@@ -58,7 +60,12 @@ public class HttpClientHelperTests
             client,
             HttpMethod.Post,
             "https://provider.example/v1/chat",
-            new { prompt = "hello", stream = true },
+            new Dictionary<string, string>
+            {
+                ["prompt"] = "hello",
+                ["stream"] = "true"
+            },
+            ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.DictionaryStringString,
             CredentialHeaders,
             logger: logger.Object);
 
@@ -84,6 +91,7 @@ public class HttpClientHelperTests
 
         await foreach (var _ in StreamHelper.ProcessSseStreamAsync<JsonElement>(
             response,
+            ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.JsonElement,
             logger.Object))
         {
         }

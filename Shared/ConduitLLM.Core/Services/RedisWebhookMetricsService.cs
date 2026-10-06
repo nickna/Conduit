@@ -337,7 +337,9 @@ namespace ConduitLLM.Core.Services
             if (isPermanent.HasValue)
                 eventData["is_permanent"] = isPermanent.Value;
             
-            var eventJson = System.Text.Json.JsonSerializer.Serialize(eventData);
+            var eventJson = System.Text.Json.JsonSerializer.Serialize(
+                eventData,
+                Serialization.AsyncTaskJsonContext.Default.DictionaryStringObject);
             
             // Add to sorted set with timestamp as score
             _ = transaction.SortedSetAddAsync(RedisKeys.WebhookMetrics.RecentEvents, eventJson, 

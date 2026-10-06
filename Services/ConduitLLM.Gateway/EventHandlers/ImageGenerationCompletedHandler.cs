@@ -3,6 +3,7 @@ using ConduitLLM.Configuration.Messaging;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Caching.Memory;
 
 using ConduitLLM.Gateway.Interfaces;
@@ -41,14 +42,24 @@ namespace ConduitLLM.Gateway.EventHandlers
             var taskStatus = await _asyncTaskService.GetTaskStatusAsync(message.TaskId, context.CancellationToken);
             if (taskStatus != null)
             {
-                var result = new
+                var images = new JsonArray();
+                foreach (var image in message.Images)
                 {
-                    images = message.Images.Select(img => new { url = img.Url, revisedPrompt = img.RevisedPrompt }).ToList(),
-                    imageCount = message.Images.Count(),
-                    provider = message.Provider,
-                    model = message.Model,
-                    duration = message.Duration.TotalSeconds,
-                    cost = message.Cost
+                    images.Add((JsonNode?)new JsonObject
+                    {
+                        ["url"] = image.Url,
+                        ["revisedPrompt"] = image.RevisedPrompt
+                    });
+                }
+
+                var result = new JsonObject
+                {
+                    ["images"] = images,
+                    ["imageCount"] = message.Images.Count(),
+                    ["provider"] = message.Provider,
+                    ["model"] = message.Model,
+                    ["duration"] = message.Duration.TotalSeconds,
+                    ["cost"] = message.Cost
                 };
 
                 await _asyncTaskService.UpdateTaskStatusAsync(

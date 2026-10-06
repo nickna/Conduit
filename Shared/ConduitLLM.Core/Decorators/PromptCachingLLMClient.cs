@@ -3,6 +3,7 @@ using System.Text.Json;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Serialization;
 using ConduitLLM.Core.Utilities;
 using ConduitLLM.Core.Metrics;
 using ConduitLLM.Core.Services;
@@ -14,7 +15,11 @@ namespace ConduitLLM.Core.Decorators;
 /// Decorator that automatically injects cache_control directives into chat completion
 /// requests when prompt caching auto-injection is enabled via GlobalSettings.
 /// </summary>
-public class PromptCachingLLMClient : ILLMClient, ILLMClientDecorator, IAuthenticationVerifiable
+public class PromptCachingLLMClient :
+    ILLMClient,
+    ILLMClientDecorator,
+    IVideoGenerationClient,
+    IAuthenticationVerifiable
 {
     private readonly ILLMClient _innerClient;
     private readonly IGlobalSettingsCacheService _settingsService;
@@ -87,37 +92,10 @@ public class PromptCachingLLMClient : ILLMClient, ILLMClientDecorator, IAuthenti
         VideoGenerationRequest request,
         string? apiKey = null,
         CancellationToken cancellationToken = default)
-        => InvokeVideoGenerationAsync(request, apiKey, cancellationToken);
-
-    private async Task<VideoGenerationResponse> InvokeVideoGenerationAsync(
-        VideoGenerationRequest request,
-        string? apiKey,
-        CancellationToken cancellationToken)
-    {
-        object target = _innerClient.UnwrapInnermost();
-        System.Reflection.MethodInfo? method = null;
-        for (ILLMClient? current = _innerClient; current != null;
-             current = (current as ILLMClientDecorator)?.InnerClient)
-        {
-            method = current.GetType().GetMethod(
-                nameof(CreateVideoAsync),
-                new[] { typeof(VideoGenerationRequest), typeof(string), typeof(CancellationToken) });
-            if (method != null)
-            {
-                target = current;
-                break;
-            }
-        }
-
-        if (method?.Invoke(target, new object?[] { request, apiKey, cancellationToken })
-            is not Task<VideoGenerationResponse> task)
-        {
-            throw new NotSupportedException(
-                $"The underlying client {target.GetType().Name} does not support video generation");
-        }
-
-        return await task;
-    }
+        => (_innerClient.FindInChain<IVideoGenerationClient>()
+            ?? throw new NotSupportedException(
+                $"The underlying client {_innerClient.GetType().Name} does not support video generation"))
+            .CreateVideoAsync(request, apiKey, cancellationToken);
 
     /// <summary>
     /// Verifies authentication by delegating to the inner client if it supports
@@ -185,7 +163,8 @@ public class PromptCachingLLMClient : ILLMClient, ILLMClientDecorator, IAuthenti
         if (string.IsNullOrWhiteSpace(json))
             return null;
 
-        return JsonSerializer.Deserialize<PromptCachingConfig>(
-            json, PromptCachingSerialization.Options);
+        var context = new CoreInternalJsonContext(
+            new JsonSerializerOptions(PromptCachingSerialization.Options));
+        return JsonSerializer.Deserialize(json, context.PromptCachingConfig);
     }
 }

@@ -23,7 +23,7 @@ public class FunctionCost : IIdentifiableEntity<int>
     /// Name for this cost configuration (e.g., "Exa Basic Search")
     /// </summary>
     [Required]
-    [MaxLength(200)]
+    [StringLength(200)]
     public required string CostName { get; set; }
 
     /// <summary>
@@ -40,7 +40,7 @@ public class FunctionCost : IIdentifiableEntity<int>
     /// <summary>
     /// Optional description of this cost configuration
     /// </summary>
-    [MaxLength(500)]
+    [StringLength(500)]
     public string? Description { get; set; }
 
     /// <summary>

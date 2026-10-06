@@ -52,7 +52,8 @@ public sealed class PricingConfigurationAuditHostedService : BackgroundService
                         EventType = BillingAuditEventType.InvalidPricingConfiguration,
                         Model = cost.CostName,
                         FailureReason = exception.Message.Length <= 500 ? exception.Message : exception.Message[..500],
-                        MetadataJson = System.Text.Json.JsonSerializer.Serialize(new { modelCostId = cost.Id })
+                        MetadataJson = AdminJson.Serialize(
+                            new Dictionary<string, object?> { ["modelCostId"] = cost.Id })
                     });
                 }
             }

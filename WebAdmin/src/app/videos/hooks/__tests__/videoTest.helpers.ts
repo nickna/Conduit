@@ -1,5 +1,5 @@
 import { useVideoStore } from '../useVideoStore';
-import * as clientCore from '@/lib/client/browserCoreClient';
+import * as clientCore from '@/lib/client/browserGatewayClient';
 import type { VideoStoreState } from '../../types';
 import { MediaGenerationStatus } from '@/app/types/media';
 
@@ -12,7 +12,7 @@ export interface VideoProgress {
 
 // Mock dependencies
 jest.mock('../useVideoStore');
-jest.mock('@/lib/client/browserCoreClient');
+jest.mock('@/lib/client/browserGatewayClient');
 
 export const mockUseVideoStore = jest.mocked(useVideoStore);
 
@@ -86,8 +86,8 @@ export const setupMocks = () => {
     })
   );
   
-  // Mock the SDK getBrowserCoreClient
-  (clientCore.getBrowserCoreClient as jest.Mock).mockResolvedValue({
+  // Mock the SDK getBrowserGatewayClient
+  (clientCore.getBrowserGatewayClient as jest.Mock).mockResolvedValue({
     videos: {
       generateWithProgress: jest.fn().mockResolvedValue({
         taskId: 'mock_task_id',

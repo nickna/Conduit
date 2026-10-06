@@ -17,7 +17,7 @@ public class FunctionExecutionRequestDto
     /// <summary>
     /// Optional webhook URL to notify when execution completes (for async executions)
     /// </summary>
-    [MaxLength(1000)]
+    [StringLength(1000)]
     public string? WebhookUrl { get; set; }
 
     /// <summary>

@@ -4,21 +4,32 @@
     <Project Path="Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj" />
   </Folder>
   <Folder Name="/Shared/">
+    <Project Path="Shared/ConduitLLM.Contracts/ConduitLLM.Contracts.csproj" />
     <Project Path="Shared/ConduitLLM.Configuration/ConduitLLM.Configuration.csproj" />
     <Project Path="Shared/ConduitLLM.Core/ConduitLLM.Core.csproj" />
     <Project Path="Shared/ConduitLLM.Functions/ConduitLLM.Functions.csproj" />
+    <Project Path="Shared/ConduitLLM.Media/ConduitLLM.Media.csproj" />
+    <Project Path="Shared/ConduitLLM.Messaging.Wolverine/ConduitLLM.Messaging.Wolverine.csproj" />
+    <Project Path="Shared/ConduitLLM.OpenApi/ConduitLLM.OpenApi.csproj" />
     <Project Path="Shared/ConduitLLM.Providers/ConduitLLM.Providers.csproj" />
     <Project Path="Shared/ConduitLLM.Security/ConduitLLM.Security.csproj" />
+    <Project Path="Shared/ConduitLLM.SignalR/ConduitLLM.SignalR.csproj" />
+    <Project Path="Shared/ConduitLLM.Tokenization/ConduitLLM.Tokenization.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Tests/ConduitLLM.Benchmarks/ConduitLLM.Benchmarks.csproj" />
     <Project Path="Tests/ConduitLLM.BillingInvariantTests/ConduitLLM.BillingInvariantTests.csproj" />
     <Project Path="Tests/ConduitLLM.FaultInjectionTests/ConduitLLM.FaultInjectionTests.csproj" />
     <Project Path="Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj" />
+    <Project Path="Tests/ConduitLLM.PersistenceAotTests/ConduitLLM.PersistenceAotTests.csproj" />
+    <Project Path="Tests/ConduitLLM.GatewayNativeAotTests/ConduitLLM.GatewayNativeAotTests.csproj" />
     <Project Path="Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj" />
     <Project Path="Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tools/ConduitLLM.CacheProbe/ConduitLLM.CacheProbe.csproj" />
+    <Project Path="tools/ConduitLLM.HealthProbe/ConduitLLM.HealthProbe.csproj" />
+    <Project Path="tools/ConduitLLM.Migrator/ConduitLLM.Migrator.csproj" />
     <Project Path="tools/openapi/GenerateOpenApiSpecs/GenerateOpenApiSpecs.csproj" />
     <Project Path="tools/WolverineSmokePublisher/WolverineSmokePublisher.csproj" />
   </Folder>

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ConduitLLM.Configuration.Messaging
@@ -14,7 +15,7 @@ namespace ConduitLLM.Configuration.Messaging
         /// Registers a handler implementation for an event type. A single class may be
         /// registered for several event types (call once per type it handles).
         /// </summary>
-        public static IServiceCollection AddEventHandler<TEvent, THandler>(this IServiceCollection services)
+        public static IServiceCollection AddEventHandler<TEvent, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>(this IServiceCollection services)
             where TEvent : class
             where THandler : class, IEventHandler<TEvent>
         {

@@ -1,6 +1,9 @@
+using System.Text.Json;
+
 using Microsoft.Extensions.Logging;
 using CoreModels = ConduitLLM.Core.Models;
 using ConduitLLM.Providers.OpenAI;
+using ConduitLLM.Providers.Serialization;
 using ProviderHelpers = ConduitLLM.Providers.Helpers;
 using ConduitLLM.Providers.Utilities;
 
@@ -26,16 +29,17 @@ namespace ConduitLLM.Providers.OpenAICompatible
             List<object>? openAiTools = null;
             if (request.Tools != null && request.Tools.Any())
             {
-                openAiTools = request.Tools.Select(t => new
-                {
-                    type = t.Type ?? "function",
-                    function = new
+                openAiTools = request.Tools.Select(t =>
+                    (object)new Dictionary<string, object?>
                     {
-                        name = t.Function?.Name ?? "unknown",
-                        description = t.Function?.Description,
-                        parameters = t.Function?.Parameters
-                    }
-                }).Cast<object>().ToList();
+                        ["type"] = t.Type ?? "function",
+                        ["function"] = new Dictionary<string, object?>
+                        {
+                            ["name"] = t.Function?.Name ?? "unknown",
+                            ["description"] = t.Function?.Description,
+                            ["parameters"] = t.Function?.Parameters
+                        }
+                    }).ToList();
             }
 
             // Map tool choice if present
@@ -58,20 +62,14 @@ namespace ConduitLLM.Providers.OpenAICompatible
                             ? ProviderHelpers.ContentHelper.GetContentAsString(m.Content)
                             : MapMultimodalContent(m.Content),
                     Name = m.Name,
-                    ToolCalls = m.ToolCalls?.Select(tc => new
-                    {
-                        id = tc.Id,
-                        type = tc.Type ?? "function",
-                        function = new
-                        {
-                            name = tc.Function?.Name,
-                            arguments = tc.Function?.Arguments
-                        }
-                    }).Cast<object>().ToList(),
+                    ToolCalls = m.ToolCalls,
                     ToolCallId = m.ToolCallId,
                     Annotations = m.Annotations is null
                         ? null
-                        : System.Text.Json.JsonSerializer.SerializeToElement(m.Annotations, DefaultJsonOptions),
+                        : JsonSerializer.SerializeToElement(
+                            m.Annotations,
+                            typeof(List<JsonElement>),
+                            ProvidersJsonContext.Default),
                     Audio = m.Audio,
                     Images = m.Images,
                     ReasoningDetails = m.ReasoningDetails,
@@ -171,7 +169,10 @@ namespace ConduitLLM.Providers.OpenAICompatible
             if (request.Stream != null)
                 openAiRequest["stream"] = request.Stream;
             if (request.StreamOptions != null)
-                openAiRequest["stream_options"] = new { include_usage = request.StreamOptions.IncludeUsage };
+                openAiRequest["stream_options"] = new Dictionary<string, object?>
+                {
+                    ["include_usage"] = request.StreamOptions.IncludeUsage
+                };
 
             // Pass through any extension data (model-specific parameters)
             if (request.ExtensionData != null)
@@ -213,10 +214,10 @@ namespace ConduitLLM.Providers.OpenAICompatible
             {
                 if (!string.IsNullOrEmpty(text))
                 {
-                    contentParts.Add(new
+                    contentParts.Add(new Dictionary<string, object?>
                     {
-                        type = "text",
-                        text = text
+                        ["type"] = "text",
+                        ["text"] = text
                     });
                 }
             }
@@ -225,30 +226,30 @@ namespace ConduitLLM.Providers.OpenAICompatible
             var imageUrls = ProviderHelpers.ContentHelper.ExtractImageUrls(content);
             foreach (var imageUrl in imageUrls)
             {
-                contentParts.Add(new
+                contentParts.Add(new Dictionary<string, object?>
                 {
-                    type = "image_url",
-                    image_url = new
+                    ["type"] = "image_url",
+                    ["image_url"] = new Dictionary<string, object?>
                     {
-                        url = imageUrl.Url,
-                        detail = string.IsNullOrEmpty(imageUrl.Detail) ? "auto" : imageUrl.Detail
+                        ["url"] = imageUrl.Url,
+                        ["detail"] = string.IsNullOrEmpty(imageUrl.Detail) ? "auto" : imageUrl.Detail
                     }
                 });
             }
 
             foreach (var videoUrl in ProviderHelpers.ContentHelper.ExtractVideoUrls(content))
             {
-                contentParts.Add(new
+                contentParts.Add(new Dictionary<string, object?>
                 {
-                    type = "video_url",
-                    video_url = new
+                    ["type"] = "video_url",
+                    ["video_url"] = new Dictionary<string, object?>
                     {
-                        url = videoUrl.Url,
-                        detail = videoUrl.Detail,
-                        max_frames = videoUrl.MaxFrames,
-                        sample_rate = videoUrl.SampleRate,
-                        start_time = videoUrl.StartTime,
-                        end_time = videoUrl.EndTime
+                        ["url"] = videoUrl.Url,
+                        ["detail"] = videoUrl.Detail,
+                        ["max_frames"] = videoUrl.MaxFrames,
+                        ["sample_rate"] = videoUrl.SampleRate,
+                        ["start_time"] = videoUrl.StartTime,
+                        ["end_time"] = videoUrl.EndTime
                     }
                 });
             }
@@ -312,17 +313,12 @@ namespace ConduitLLM.Providers.OpenAICompatible
                     return parts;
             }
 
-            // Fallback: try serialize/deserialize to preserve structure
-            try
+            // Value-type collections are not covariant to IEnumerable<object>.
+            if (content is IEnumerable<JsonElement> jsonElements)
             {
-                var json = System.Text.Json.JsonSerializer.Serialize(content);
-                var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json);
-                if (list != null && list.Count > 0)
-                    return list;
-            }
-            catch
-            {
-                // Fall through to MapMultimodalContent
+                var parts = jsonElements.Select(element => (object)element.Clone()).ToList();
+                if (parts.Count > 0)
+                    return parts;
             }
 
             return MapMultimodalContent(content);
@@ -375,10 +371,7 @@ namespace ConduitLLM.Providers.OpenAICompatible
                             Role = c.Message.Role ?? "assistant",
                             Content = c.Message.Content,
                             Name = c.Message.Name,
-                            ToolCalls = c.Message.ToolCalls != null
-                                ? System.Text.Json.JsonSerializer.Deserialize<List<CoreModels.ToolCall>>(
-                                    System.Text.Json.JsonSerializer.Serialize(c.Message.ToolCalls))
-                                : null,
+                            ToolCalls = c.Message.ToolCalls,
                             ToolCallId = c.Message.ToolCallId,
                             Annotations = c.Message.Annotations is { ValueKind: System.Text.Json.JsonValueKind.Array } annotations
                                 ? annotations.EnumerateArray().Select(annotation => annotation.Clone()).ToList()

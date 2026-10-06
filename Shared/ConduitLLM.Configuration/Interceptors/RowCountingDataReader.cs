@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 
 using Microsoft.Extensions.Logging;
 
@@ -129,6 +130,8 @@ public class RowCountingDataReader : DbDataReader
     public override double GetDouble(int ordinal) => _innerReader.GetDouble(ordinal);
 
     /// <inheritdoc/>
+    [return: DynamicallyAccessedMembers(
+        DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)]
     public override Type GetFieldType(int ordinal) => _innerReader.GetFieldType(ordinal);
 
     /// <inheritdoc/>

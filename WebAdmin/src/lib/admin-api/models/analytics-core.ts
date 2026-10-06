@@ -1,5 +1,4 @@
 import { FilterOptions } from './common';
-import { AnalyticsMetadata } from './metadata';
 
 // Additional types for comprehensive analytics service
 export interface RequestLogParams {
@@ -15,14 +14,6 @@ export interface RequestLogParams {
   maxLatency?: number;
   sortBy?: 'timestamp' | 'latency' | 'cost' | 'tokens';
   sortOrder?: 'asc' | 'desc';
-}
-
-export interface RequestLogPage {
-  items: RequestLogDto[];
-  totalCount: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
 }
 
 export interface UsageParams {
@@ -105,27 +96,6 @@ export interface ExportResult {
   expiresAt: string;
   size: number;
   recordCount: number;
-}
-
-export interface RequestLogDto {
-  id: string;
-  timestamp: string;
-  virtualKeyId?: number;
-  virtualKeyName?: string;
-  model: string;
-  provider: string;
-  inputTokens: number;
-  outputTokens: number;
-  cost: number;
-  currency: string;
-  duration: number;
-  status: 'success' | 'error' | 'timeout';
-  errorMessage?: string;
-  ipAddress?: string;
-  userAgent?: string;
-  requestHeaders?: Record<string, string>;
-  responseHeaders?: Record<string, string>;
-  metadata?: AnalyticsMetadata;
 }
 
 export interface RequestLogFilters extends FilterOptions {

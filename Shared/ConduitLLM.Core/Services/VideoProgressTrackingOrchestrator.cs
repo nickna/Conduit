@@ -1,6 +1,7 @@
 using ConduitLLM.Configuration.Messaging;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Serialization;
 
 using Microsoft.Extensions.Logging;
 
@@ -187,7 +188,9 @@ namespace ConduitLLM.Core.Services
                 {
                     try
                     {
-                        headers = JsonSerializer.Deserialize<Dictionary<string, string>>(webhookHeaders);
+                        headers = JsonSerializer.Deserialize(
+                            webhookHeaders,
+                            CoreInternalJsonContext.Default.DictionaryStringString);
                     }
                     catch
                     {

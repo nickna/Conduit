@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Functions.Serialization;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Providers.Tavily.Models;
 using ConduitLLM.Functions.Utilities;
@@ -27,7 +28,9 @@ public partial class TavilyClient
 
         try
         {
-            var tavilyResponse = JsonSerializer.Deserialize<TavilySearchResponse>(result.ResponseJson, _jsonOptions);
+            var tavilyResponse = JsonSerializer.Deserialize(
+                result.ResponseJson,
+                FunctionProviderJsonContext.Default.TavilySearchResponse);
 
             if (tavilyResponse == null)
             {

@@ -3,7 +3,7 @@
  */
 
 import { ProviderType } from './providers';
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 
 type ModelCapabilitySource = components['schemas']['ModelCapabilitySource'];
 

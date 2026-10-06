@@ -5,6 +5,8 @@ using System.Text.Json.Serialization.Metadata;
 
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Serialization;
+using ConduitLLM.Admin.Models.ModelAuthors;
+using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.DTOs;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.DTOs.SignalR;
@@ -15,6 +17,7 @@ using ConduitLLM.Core.Serialization;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.DTOs;
 using ConduitLLM.Gateway.Options;
+using ConduitLLM.Gateway.Models;
 using ConduitLLM.Gateway.Serialization;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Providers.Bedrock;
@@ -135,6 +138,66 @@ public sealed class SourceGeneratedJsonCompatibilityTests
             GatewayHttpJsonContext.Default.ModelListResponse,
             "gateway-model-list.json",
             SnakeCaseWireOptions());
+    }
+
+    [Fact]
+    public void Service_http_options_resolve_advertised_contracts_without_reflection()
+    {
+        var admin = AdminJsonOptions.Create();
+        var gateway = GatewayJsonOptions.Create();
+
+        Assert.DoesNotContain(
+            admin.TypeInfoResolverChain,
+            static resolver => resolver is DefaultJsonTypeInfoResolver);
+        Assert.DoesNotContain(
+            gateway.TypeInfoResolverChain,
+            static resolver => resolver is DefaultJsonTypeInfoResolver);
+
+        Assert.NotNull(admin.GetTypeInfo(typeof(UpdateModelAuthorDto)));
+        Assert.NotNull(admin.GetTypeInfo(typeof(IEnumerable<ModelAuthorDto>)));
+        Assert.NotNull(admin.GetTypeInfo(typeof(ProviderType?)));
+        Assert.NotNull(admin.GetTypeInfo(typeof(Microsoft.AspNetCore.Http.IFormFile)));
+        Assert.NotNull(gateway.GetTypeInfo(typeof(EphemeralKeyResponse)));
+        Assert.NotNull(gateway.GetTypeInfo(typeof(Microsoft.AspNetCore.Http.IFormFile)));
+        Assert.NotNull(gateway.GetTypeInfo(typeof(MediaUsageMetadata)));
+    }
+
+    [Fact]
+    public void Gateway_internal_metadata_uses_named_contracts_without_shape_expansion()
+    {
+        var value = new MediaTaskAccountingMetadata(
+            "image",
+            "task-sourcegen",
+            "queued",
+            ImageCount: 2,
+            Quality: "hd",
+            Size: "1024x1024",
+            Style: "vivid");
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(
+            value,
+            GatewayInternalJsonContext.Default.MediaTaskAccountingMetadata));
+        var root = document.RootElement;
+
+        Assert.Equal("image", root.GetProperty("type").GetString());
+        Assert.Equal("task-sourcegen", root.GetProperty("taskId").GetString());
+        Assert.Equal(2, root.GetProperty("imageCount").GetInt32());
+        Assert.False(root.TryGetProperty("durationSeconds", out _));
+        Assert.False(root.TryGetProperty("resolution", out _));
+        Assert.False(root.TryGetProperty("fps", out _));
+    }
+
+    [Fact]
+    public void Service_http_options_preserve_enum_wire_naming()
+    {
+        Assert.Equal(
+            "\"openAICompatible\"",
+            JsonSerializer.Serialize(ProviderType.OpenAICompatible, AdminJsonOptions.Create()));
+        Assert.Equal(
+            "\"timed_out\"",
+            JsonSerializer.Serialize(
+                ConduitLLM.Functions.Enums.ExecutionState.TimedOut,
+                GatewayJsonOptions.Create()));
     }
 
     [Fact]

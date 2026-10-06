@@ -104,32 +104,3 @@ export async function getServerGatewayClient(): Promise<InstanceType<typeof Cond
   }
   return gatewayClient;
 }
-
-// Backward-compatible alias
-export const getServerCoreClient = getServerGatewayClient;
-
-/**
- * Initialize API clients.
- * Should be called on server startup
- */
-export async function initializeApiClients(): Promise<void> {
-  try {
-    getServerAdminClient();
-    await getServerGatewayClient();
-    console.error('[API] Clients initialized successfully');
-  } catch (error) {
-    console.error('[API] Failed to initialize clients:', error);
-    throw error;
-  }
-}
-
-/**
- * Cleanup API clients.
- * Should be called on server shutdown
- */
-export async function cleanupApiClients(): Promise<void> {
-  adminClient = null;
-  gatewayClient = null;
-  webAdminVirtualKey = null;
-  console.error('[API] Clients cleaned up successfully');
-}

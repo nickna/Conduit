@@ -19,7 +19,7 @@ namespace ConduitLLM.Admin.Endpoints
 
             using var timer = PricingOperationDuration.WithLabels("validate").NewTimer();
 
-            var serializedConfiguration = JsonSerializer.Serialize(request.PricingConfiguration);
+            var serializedConfiguration = AdminJson.Serialize(request.PricingConfiguration);
             if (!TryDeserializePricingConfig<PricingRulesConfig>(serializedConfiguration, out var config, out var errorMessage))
             {
                 PricingValidations.WithLabels(errorMessage!.StartsWith("Invalid JSON") ? "invalid_json" : "null_config").Inc();
@@ -54,7 +54,7 @@ namespace ConduitLLM.Admin.Endpoints
             using var timer = PricingOperationDuration.WithLabels("simulate").NewTimer();
 
             // Parse pricing configuration
-            var serializedConfiguration = JsonSerializer.Serialize(request.PricingConfiguration);
+            var serializedConfiguration = AdminJson.Serialize(request.PricingConfiguration);
             if (!TryDeserializePricingConfig<PricingRulesConfig>(serializedConfiguration, out var config, out var errorMessage))
             {
                 PricingSimulations.WithLabels(errorMessage!.StartsWith("Invalid JSON") ? "invalid_json" : "null_config").Inc();

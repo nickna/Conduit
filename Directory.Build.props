@@ -34,6 +34,33 @@
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
+  <!--
+    Opt-in NativeAOT audit profile. This intentionally enables compatibility
+    analyzers without setting PublishAot: native linking remains service/RID
+    specific and is exercised by the dedicated native workflow.
+  -->
+  <PropertyGroup Condition="'$(ConduitAotAudit)' == 'true'">
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
+    <DefineConstants>$(DefineConstants);CONDUIT_NATIVE_AOT</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Native-only feature selection must be compile-time visible so optional
+       reflection-oriented protocol packages can be removed from the linked graph. -->
+  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+    <DefineConstants>$(DefineConstants);CONDUIT_NATIVE_AOT</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(PublishAot)' == 'true' and ('$(MSBuildProjectName)' == 'ConduitLLM.Admin' or '$(MSBuildProjectName)' == 'ConduitLLM.Gateway')">
+    <!-- Wolverine 6.14 constructs its closed intrinsic serializers through
+         Activator. Preserve those bounded internal types until the
+         upstream library publishes NativeAOT metadata/source-generation. -->
+    <RdXmlFile Include="$(MSBuildThisFileDirectory)Shared\ConduitLLM.Configuration\Messaging\Wolverine\Wolverine.NativeAot.rd.xml" />
+  </ItemGroup>
+
   <ItemGroup>
     <AssemblyMetadata Include="ConduitCommitSha" Value="$(ConduitCommitSha)" />
     <AssemblyMetadata Include="ConduitBuildTimestamp" Value="$(ConduitBuildTimestamp)" />

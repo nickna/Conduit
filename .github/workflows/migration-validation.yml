@@ -6,6 +6,9 @@ on:
     paths:
       - 'Shared/ConduitLLM.Configuration/**'
       - 'Tests/ConduitLLM.Tests/Configuration/Data/**'
+      - 'Tests/ConduitLLM.PersistenceAotTests/**'
+      - 'tools/ConduitLLM.Migrator/**'
+      - 'scripts/aot/persistence-native-smoke.ps1'
       - 'scripts/migrations/**'
       - '.github/workflows/release.yml'
       - '.github/workflows/migration-validation.yml'
@@ -14,6 +17,9 @@ on:
     paths:
       - 'Shared/ConduitLLM.Configuration/**'
       - 'Tests/ConduitLLM.Tests/Configuration/Data/**'
+      - 'Tests/ConduitLLM.PersistenceAotTests/**'
+      - 'tools/ConduitLLM.Migrator/**'
+      - 'scripts/aot/persistence-native-smoke.ps1'
       - 'scripts/migrations/**'
       - '.github/workflows/release.yml'
       - '.github/workflows/migration-validation.yml'
@@ -31,6 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
+      ConduitEfTooling: 'true'
     services:
       postgres:
         image: postgres:16
@@ -73,6 +80,10 @@ jobs:
           dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
           --configuration Release
           --filter FullyQualifiedName~ReleaseMigrationCommandTests
+
+      - name: Exercise native PostgreSQL persistence probe
+        shell: pwsh
+        run: ./scripts/aot/persistence-native-smoke.ps1 -Runtime linux-x64
 
       - name: Generate idempotent migration script
         run: |

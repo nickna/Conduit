@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getBrowserCoreClient } from '@/lib/client/browserCoreClient';
+import { getBrowserGatewayClient } from '@/lib/client/browserGatewayClient';
 import { ModelCapability, type DiscoveredModel as SDKDiscoveredModel } from '@/lib/gateway-api';
 
 // Extend the SDK type to include backend fields not in the generated types
@@ -20,7 +20,7 @@ export function useDiscoveryModels(capability?: ModelCapability | string) {
     queryFn: async () => {
       try {
         // Get the browser client with ephemeral key
-        const client = await getBrowserCoreClient();
+        const client = await getBrowserGatewayClient();
         
         // Use the SDK directly - let the backend handle filtering
         const response = capability 

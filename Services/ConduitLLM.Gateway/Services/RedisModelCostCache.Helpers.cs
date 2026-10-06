@@ -6,6 +6,7 @@ using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Models.Pricing;
+using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.Services
 {
@@ -48,7 +49,10 @@ namespace ConduitLLM.Gateway.Services
 
             // Create cached version with pre-parsed configuration
             var cachedCost = ConvertToCachedModelCost(cost);
-            await SetCacheEntryAsync(patternKey, cachedCost);
+            await SetCacheEntryAsync(
+                patternKey,
+                cachedCost,
+                GatewayRedisJsonContext.Default.CachedModelCost);
 
             Logger.LogDebug("Model cost cached for cost name: {CostName}", cost.CostName);
         }
@@ -145,11 +149,21 @@ namespace ConduitLLM.Gateway.Services
                 {
                     cached.ParsedPricingConfiguration = cost.PricingModel switch
                     {
-                        PricingModel.PerVideo => JsonSerializer.Deserialize<PerVideoPricingConfig>(cost.PricingConfiguration, JsonOptions),
-                        PricingModel.PerSecondVideo => JsonSerializer.Deserialize<PerSecondVideoPricingConfig>(cost.PricingConfiguration, JsonOptions),
-                        PricingModel.InferenceSteps => JsonSerializer.Deserialize<InferenceStepsPricingConfig>(cost.PricingConfiguration, JsonOptions),
-                        PricingModel.TieredTokens => JsonSerializer.Deserialize<TieredTokensPricingConfig>(cost.PricingConfiguration, JsonOptions),
-                        PricingModel.PerImage => JsonSerializer.Deserialize<PerImagePricingConfig>(cost.PricingConfiguration, JsonOptions),
+                        PricingModel.PerVideo => JsonSerializer.Deserialize(
+                            cost.PricingConfiguration,
+                            GatewayRedisJsonContext.Default.PerVideoPricingConfig),
+                        PricingModel.PerSecondVideo => JsonSerializer.Deserialize(
+                            cost.PricingConfiguration,
+                            GatewayRedisJsonContext.Default.PerSecondVideoPricingConfig),
+                        PricingModel.InferenceSteps => JsonSerializer.Deserialize(
+                            cost.PricingConfiguration,
+                            GatewayRedisJsonContext.Default.InferenceStepsPricingConfig),
+                        PricingModel.TieredTokens => JsonSerializer.Deserialize(
+                            cost.PricingConfiguration,
+                            GatewayRedisJsonContext.Default.TieredTokensPricingConfig),
+                        PricingModel.PerImage => JsonSerializer.Deserialize(
+                            cost.PricingConfiguration,
+                            GatewayRedisJsonContext.Default.PerImagePricingConfig),
                         _ => null
                     };
                 }

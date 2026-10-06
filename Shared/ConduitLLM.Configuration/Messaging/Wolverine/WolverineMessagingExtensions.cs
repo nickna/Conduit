@@ -5,8 +5,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
+using System.Reflection;
+
 using Wolverine;
 using Wolverine.Postgresql;
+using Wolverine.ErrorHandling;
+using ConduitLLM.Core.Caching;
 
 namespace ConduitLLM.Configuration.Messaging.Wolverine
 {
@@ -112,6 +116,15 @@ namespace ConduitLLM.Configuration.Messaging.Wolverine
             var autoProvision = configuration.GetValue(AutoProvisionKey, false);
             var inMemory = UsesInMemoryTransport(configuration);
 
+#if CONDUIT_NATIVE_AOT
+            // JasperFx otherwise probes the entry assembly's references and walks the
+            // managed stack while AddWolverine registers its shared defaults. Neither
+            // reflection path exists in a NativeAOT image. Pinning the application
+            // assembly is JasperFx's public escape hatch and leaves JIT discovery intact.
+            JasperFxOptions.RememberedApplicationAssembly =
+                Assembly.GetEntryAssembly() ?? typeof(WolverineMessagingExtensions).Assembly;
+#endif
+
             return host.UseWolverine(opts =>
             {
                 opts.ServiceName = serviceName;
@@ -172,8 +185,13 @@ namespace ConduitLLM.Configuration.Messaging.Wolverine
                 // added in I2.2/#925.
                 opts.Discovery.DisableConventionalDiscovery();
 
+                // Acknowledging a failed invalidation leaves every other cache node stale.
+                // Keep these idempotent operations durable across an extended Redis outage.
+                opts.Policies.OnException<ApplicationCacheInvalidationException>()
+                    .ScheduleRetryIndefinitely(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30));
+
                 configure?.Invoke(opts);
-            });
+            }, ExtensionDiscovery.ManualOnly);
         }
 
         /// <summary>
@@ -198,28 +216,15 @@ namespace ConduitLLM.Configuration.Messaging.Wolverine
         public static void AddEventBridge<TEvent>(this WolverineOptions options)
             where TEvent : class
         {
-            options.AddEventBridge(typeof(TEvent));
-        }
-
-        /// <summary>
-        /// Non-generic overload of <see cref="AddEventBridge{TEvent}(WolverineOptions)"/>
-        /// for registering bridges from a shared event-type list.
-        /// </summary>
-        public static void AddEventBridge(this WolverineOptions options, Type eventType)
-        {
-            var bridgeType = typeof(WolverineHandlerBridge<>).MakeGenericType(eventType);
-
-            options.Discovery.IncludeType(bridgeType);
+            options.Discovery.IncludeType<WolverineHandlerBridge<TEvent>>();
 
             // The generated bridge adapter must resolve the scoped handler collection per
             // message. Some handlers behind that collection use opaque lambda factories,
             // typed clients, or IServiceScopeFactory, so Wolverine cannot safely inline
             // their complete construction graph. Keep the global service-location policy
             // at its strict default and opt in only this explicitly registered collection.
-            var handlersType = typeof(IEnumerable<>)
-                .MakeGenericType(typeof(IEventHandler<>).MakeGenericType(eventType));
-            options.CodeGeneration.AlwaysUseServiceLocationFor(handlersType);
-            options.Services.AddScoped(bridgeType);
+            options.CodeGeneration.AlwaysUseServiceLocationFor<IEnumerable<IEventHandler<TEvent>>>();
+            options.Services.AddScoped<WolverineHandlerBridge<TEvent>>();
         }
     }
 }

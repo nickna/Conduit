@@ -32,7 +32,7 @@ public class RequestLog : IEntity<int>, IAuditEvent
     /// Name of the model used for the request
     /// </summary>
     [Required]
-    [MaxLength(100)]
+    [StringLength(100)]
     public string ModelName { get; set; } = string.Empty;
 
     /// <summary>
@@ -45,7 +45,7 @@ public class RequestLog : IEntity<int>, IAuditEvent
     /// Type of the provider that processed the request.
     /// Stored as string for flexibility and query performance.
     /// </summary>
-    [MaxLength(50)]
+    [StringLength(50)]
     public string? ProviderType { get; set; }
 
     public int? ModelProviderMappingId { get; set; }
@@ -55,14 +55,14 @@ public class RequestLog : IEntity<int>, IAuditEvent
     [Column(TypeName = "decimal(18, 8)")] public decimal CacheWritePremium { get; set; }
     [NotMapped] public decimal PromptCachingNetSavings => CachedReadSavings - CacheWritePremium;
     public bool RoutingAffinityUsed { get; set; }
-    [MaxLength(50)] public string? RoutingDecisionReason { get; set; }
+    [StringLength(50)] public string? RoutingDecisionReason { get; set; }
     public int RoutingFailoverCount { get; set; }
 
     /// <summary>
     /// Type of the request (chat, completion, embedding, etc.)
     /// </summary>
     [Required]
-    [MaxLength(50)]
+    [StringLength(50)]
     public string RequestType { get; set; } = string.Empty;
 
     /// <summary>
@@ -131,19 +131,19 @@ public class RequestLog : IEntity<int>, IAuditEvent
     /// <summary>
     /// Optional identifier of the user making the request
     /// </summary>
-    [MaxLength(100)]
+    [StringLength(100)]
     public string? UserId { get; set; }
 
     /// <summary>
     /// Optional IP address of the client making the request
     /// </summary>
-    [MaxLength(50)]
+    [StringLength(50)]
     public string? ClientIp { get; set; }
 
     /// <summary>
     /// Optional request path
     /// </summary>
-    [MaxLength(256)]
+    [StringLength(256)]
     public string? RequestPath { get; set; }
 
     /// <summary>

@@ -120,17 +120,6 @@ export interface ModelCostCalculation {
   costPerMillionOutputTokens: number;
 }
 
-export interface BulkModelCostUpdate {
-  modelIds: string[];
-  adjustment: {
-    type: 'percentage' | 'fixed';
-    value: number;
-    applyTo: 'input' | 'output' | 'both';
-  };
-  effectiveDate?: string;
-  reason?: string;
-}
-
 export interface ModelCostHistory {
   modelId: string;
   history: {

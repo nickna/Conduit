@@ -28,29 +28,9 @@ interface RequestLogDetailsDrawerProps {
   virtualKeyGroup?: VirtualKeyGroupDto;
 }
 
-interface ParsedMetadata {
-  value: RequestLogMetadata | null;
-  malformed: boolean;
-}
-
-function parseMetadata(metadata: string | null): ParsedMetadata {
-  if (!metadata) return { value: null, malformed: false };
-
-  try {
-    const value = JSON.parse(metadata) as unknown;
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      return { value: value as RequestLogMetadata, malformed: false };
-    }
-  } catch {
-    // The raw value is still useful to administrators and is rendered below.
-  }
-
-  return { value: null, malformed: true };
-}
-
-function formatBillingMethod(method: number | null): string {
-  if (method === 1) return 'Provider-reported cost';
-  if (method === 0) return 'Configured model cost';
+function formatBillingMethod(method: RequestLogEntry['billingMethod']): string {
+  if (method === 'providerReportedCost') return 'Provider-reported cost';
+  if (method === 'modelCost') return 'Configured model cost';
   return 'Not recorded';
 }
 
@@ -136,7 +116,6 @@ export function RequestLogDetailsDrawer({
 }: RequestLogDetailsDrawerProps) {
   if (!log) return null;
 
-  const parsedMetadata = parseMetadata(log.metadata);
   const showCacheDetails =
     log.promptCachingEligible ||
     log.promptCachingPolicyApplied ||
@@ -257,17 +236,14 @@ export function RequestLogDetailsDrawer({
                 )}
               </Group>
               {!log.metadata && <Text size="sm" c="dimmed">No type-specific metadata was recorded.</Text>}
-              {parsedMetadata.value && <MetadataSummary metadata={parsedMetadata.value} />}
-              {parsedMetadata.malformed && (
-                <Text size="sm" c="orange">Metadata is not a valid JSON object; the stored value is shown below.</Text>
-              )}
+              {log.metadata && <MetadataSummary metadata={log.metadata} />}
               {log.metadata && (
                 <Accordion variant="contained">
                   <Accordion.Item value="raw-metadata">
                     <Accordion.Control>Raw metadata</Accordion.Control>
                     <Accordion.Panel>
                       <Code block style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-                        {parsedMetadata.value ? JSON.stringify(parsedMetadata.value, null, 2) : log.metadata}
+                        {JSON.stringify(log.metadata, null, 2)}
                       </Code>
                     </Accordion.Panel>
                   </Accordion.Item>

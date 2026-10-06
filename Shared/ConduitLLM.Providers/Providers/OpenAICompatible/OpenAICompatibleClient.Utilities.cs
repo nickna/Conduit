@@ -29,8 +29,9 @@ namespace ConduitLLM.Providers.OpenAICompatible
                 HttpMethod.Post,
                 endpoint,
                 request,
+                GetRequiredJsonTypeInfo<TRequest>(DefaultJsonOptions),
+                GetRequiredJsonTypeInfo<TResponse>(DefaultJsonOptions),
                 CreateStandardHeaders(apiKey),
-                DefaultJsonOptions,
                 Logger,
                 cancellationToken,
                 TranslateHttpError);

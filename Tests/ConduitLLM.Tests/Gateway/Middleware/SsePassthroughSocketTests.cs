@@ -30,9 +30,13 @@ public class SsePassthroughSocketTests
         {
             var writer = context.Response.CreateEnhancedSSEWriter(
                 GatewayJsonOptions.Create());
-            await writer.WriteContentEventAsync(new { value = "first" }, context.RequestAborted);
+            await writer.WriteContentEventAsync(
+                new Dictionary<string, string> { ["value"] = "first" },
+                context.RequestAborted);
             await allowCompletion.Task.WaitAsync(context.RequestAborted);
-            await writer.WriteContentEventAsync(new { value = "second" }, context.RequestAborted);
+            await writer.WriteContentEventAsync(
+                new Dictionary<string, string> { ["value"] = "second" },
+                context.RequestAborted);
             await writer.WriteDoneEventAsync(context.RequestAborted);
             endpointCompleted.TrySetResult();
         });

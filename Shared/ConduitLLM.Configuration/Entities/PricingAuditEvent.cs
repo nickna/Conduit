@@ -29,7 +29,7 @@ public class PricingAuditEvent : IAuditEvent
     /// <summary>
     /// Model identifier used in the request.
     /// </summary>
-    [MaxLength(100)]
+    [StringLength(100)]
     public string ModelId { get; set; } = string.Empty;
 
     /// <summary>
@@ -40,7 +40,7 @@ public class PricingAuditEvent : IAuditEvent
     /// <summary>
     /// Pricing type used: per_unit, per_second, or per_step.
     /// </summary>
-    [MaxLength(20)]
+    [StringLength(20)]
     public string PricingType { get; set; } = string.Empty;
 
     /// <summary>
@@ -81,7 +81,7 @@ public class PricingAuditEvent : IAuditEvent
     /// <summary>
     /// Request ID for correlation with request logs.
     /// </summary>
-    [MaxLength(100)]
+    [StringLength(100)]
     public string? RequestId { get; set; }
 
     /// <summary>

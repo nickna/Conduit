@@ -3,6 +3,7 @@ using System.Text.Json;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Metrics;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Serialization;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.Tokenizers;
@@ -455,7 +456,8 @@ namespace ConduitLLM.Core.Services
         /// </summary>
         private static int EstimateContentObjectTokens(object content, Tokenizer encoding, ref TokenCountFidelity fidelity)
         {
-            using var document = JsonDocument.Parse(JsonSerializer.Serialize(content));
+            using var document = JsonDocument.Parse(
+                JsonSerializer.Serialize(content, CoreHttpJsonContext.Default.Object));
             return EstimateJsonElementTokens(document.RootElement, encoding, ref fidelity);
         }
 

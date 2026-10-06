@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Serialization;
 using ConduitLLM.Functions.Enums;
 using ConduitLLM.Functions.Interfaces;
 using Microsoft.Extensions.Logging;
@@ -44,21 +45,16 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
         _logger.LogDebug("Loading {Count} function configurations for virtual key {VirtualKeyId}",
             functionConfigurationIds.Count, virtualKeyId);
 
-        // Try to get from cache if caching is enabled
-        if (_cacheService != null)
-        {
-            var cachedTools = await _cacheService.GetCachedToolsAsync(functionConfigurationIds, cancellationToken);
-            if (cachedTools != null)
-            {
-                _logger.LogDebug("Cache hit: Loaded {Count} tools from cache for virtual key {VirtualKeyId}",
-                    cachedTools.Count, virtualKeyId);
-                return cachedTools;
-            }
+        functionConfigurationIds = functionConfigurationIds.Distinct().Order().ToList();
+        if (_cacheService is not null)
+            return await _cacheService.GetOrLoadAsync(functionConfigurationIds,
+                token => LoadToolsAsync(functionConfigurationIds, token), cancellationToken: cancellationToken);
+        return (await LoadToolsAsync(functionConfigurationIds, cancellationToken)).Tools;
+    }
 
-            _logger.LogDebug("Cache miss: Loading {Count} function configurations from database for virtual key {VirtualKeyId}",
-                functionConfigurationIds.Count, virtualKeyId);
-        }
-
+    private async Task<FunctionDiscoveryLoad> LoadToolsAsync(List<int> functionConfigurationIds,
+        CancellationToken cancellationToken)
+    {
         // Load all configurations from database
         var configurations = await _functionConfigRepository.GetByIdsAsync(functionConfigurationIds, cancellationToken);
 
@@ -97,34 +93,16 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
                     tools.Add(ConvertConfigurationToTool(config));
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogError(ex, "Failed to convert function configuration {ConfigId} to Tool", config.Id);
                 throw new InvalidOperationException($"Failed to convert function configuration {config.Id} to Tool", ex);
             }
         }
 
-        // Cache the tools if caching is enabled
-        if (_cacheService != null)
-        {
-            try
-            {
-                await _cacheService.SetCachedToolsAsync(functionConfigurationIds, tools, ttlMinutes: null, cancellationToken);
-                _logger.LogDebug("Cached {Count} tools for function configurations: {ConfigIds}",
-                    tools.Count, string.Join(", ", functionConfigurationIds));
-            }
-            catch (Exception ex)
-            {
-                // Log but don't fail if caching fails
-                _logger.LogWarning(ex, "Failed to cache tools for function configurations: {ConfigIds}",
-                    string.Join(", ", functionConfigurationIds));
-            }
-        }
-
-        _logger.LogInformation("Loaded {Count} tools for virtual key {VirtualKeyId}: {ToolNames}",
-            tools.Count, virtualKeyId, string.Join(", ", tools.Select(t => t.Function.Name)));
-
-        return tools;
+        var ttl = configurations.Where(config => config.CacheTtlMinutes.HasValue)
+            .Select(config => config.CacheTtlMinutes).Min();
+        return new FunctionDiscoveryLoad(tools, ttl);
     }
 
     public async Task<Dictionary<string, FunctionRoute>> GetFunctionNameToIdMappingAsync(
@@ -254,7 +232,9 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
         {
             try
             {
-                parameters = JsonSerializer.Deserialize<JsonObject>(config.ParameterSchema);
+                parameters = JsonSerializer.Deserialize(
+                    config.ParameterSchema,
+                    AsyncTaskJsonContext.Default.JsonObject);
             }
             catch (JsonException ex)
             {

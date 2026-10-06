@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.Endpoints;
 
@@ -49,9 +50,9 @@ public abstract class GatewayEndpointHandlerBase
     protected static IResult NotFound<T>(T value) => Results.NotFound(value);
     protected static IResult NotFound() =>
         GatewayResults.OpenAIError(StatusCodes.Status404NotFound, "Resource not found", "not_found", "not_found_error");
-    protected static IResult Unauthorized<T>(T value) => Results.Json(value, statusCode: StatusCodes.Status401Unauthorized);
     protected static IResult Conflict<T>(T value) => Results.Conflict(value);
-    protected static IResult Accepted<T>(T value) => Results.Json(value, statusCode: StatusCodes.Status202Accepted);
+    protected static IResult Accepted(AsyncTaskResponse value) =>
+        Results.Json(value, GatewayHttpJsonContext.Default.AsyncTaskResponse, statusCode: StatusCodes.Status202Accepted);
     protected static IResult Forbid(params string[] messages) =>
         GatewayResults.OpenAIError(
             StatusCodes.Status403Forbidden,
@@ -64,7 +65,8 @@ public abstract class GatewayEndpointHandlerBase
     protected static IResult File(byte[] contents, string contentType, string? fileDownloadName = null, bool enableRangeProcessing = false) =>
         Results.File(contents, contentType, fileDownloadName, enableRangeProcessing: enableRangeProcessing);
     protected static IResult Content(string content, string contentType) => Results.Text(content, contentType);
-    protected static IResult StatusCode<T>(int statusCode, T value) => Results.Json(value, statusCode: statusCode);
+    protected static IResult StatusCode(int statusCode, string value) =>
+        Results.Json(value, ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.String, statusCode: statusCode);
     protected static IResult OpenAIError(
         int statusCode,
         string message,

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-01-01T00:00:00Z",
+  "service": "admin",
+  "platform": "linux-x64",
+  "jit": {},
+  "native": {},
+  "comparison": {
+    "imageSizeReductionPercent": 0,
+    "pullSizeReductionPercent": 0,
+    "coldStartReductionPercent": 0,
+    "idleMemoryReductionPercent": 0,
+    "steadyStateMemoryReductionPercent": 0,
+    "peakMemoryReductionPercent": 0,
+    "throughputImprovementPercent": 0,
+    "p50LatencyRegressionPercent": 0,
+    "p95LatencyRegressionPercent": 0,
+    "p99LatencyRegressionPercent": 0
+  },
+  "notes": "Schema example only. Promotion requires output from measure-native-container.ps1, not this template."
+}

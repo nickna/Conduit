@@ -27,7 +27,7 @@ export class FetchModelMappingsService {
   async list(
     config?: RequestConfig
   ): Promise<ModelProviderMappingDto[]> {
-    const result = await this.client['executeContractRead'](
+    const result = await this.client.executeContractRead(
       '/v1/admin/model-provider-mappings',
       (contractClient, options) => contractClient.GET('/v1/admin/model-provider-mappings', options),
       config,
@@ -39,7 +39,7 @@ export class FetchModelMappingsService {
    * Get a specific model mapping by ID
    */
   async getById(id: number, config?: RequestConfig): Promise<ModelProviderMappingDto> {
-    return this.client['executeContractRead'](
+    return this.client.executeContractRead(
       `/v1/admin/model-provider-mappings/${id}`,
       (contractClient, options) => contractClient.GET('/v1/admin/model-provider-mappings/{id}', {
         ...options,
@@ -56,7 +56,7 @@ export class FetchModelMappingsService {
     data: CreateModelProviderMappingDto,
     config?: RequestConfig
   ): Promise<ModelProviderMappingDto> {
-    return this.client['executeContractOperation']<ModelProviderMappingDto, CreateModelProviderMappingDto>(
+    return this.client.executeContractOperation<ModelProviderMappingDto, CreateModelProviderMappingDto>(
       '/v1/admin/model-provider-mappings',
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/model-provider-mappings', {
@@ -76,7 +76,7 @@ export class FetchModelMappingsService {
     data: UpdateModelProviderMappingDto,
     config?: RequestConfig
   ): Promise<ModelProviderMappingDto> {
-    return this.client['executeContractOperation']<ModelProviderMappingDto, UpdateModelProviderMappingDto>(
+    return this.client.executeContractOperation<ModelProviderMappingDto, UpdateModelProviderMappingDto>(
       `/v1/admin/model-provider-mappings/${id}`,
       HttpMethod.PATCH,
       (contractClient, options) => contractClient.PATCH('/v1/admin/model-provider-mappings/{id}', {
@@ -93,7 +93,7 @@ export class FetchModelMappingsService {
    * Delete a model mapping
    */
   async deleteById(id: number, config?: RequestConfig): Promise<void> {
-    return this.client['executeContractOperation']<void>(
+    return this.client.executeContractOperation<void>(
       `/v1/admin/model-provider-mappings/${id}`,
       HttpMethod.DELETE,
       (contractClient, options) => contractClient.DELETE('/v1/admin/model-provider-mappings/{id}', {
@@ -114,7 +114,7 @@ export class FetchModelMappingsService {
     request: BulkModelMappingPreviewRequest,
     config?: RequestConfig
   ): Promise<BulkModelMappingPreviewResponse> {
-    return this.client['executeContractOperation']<BulkModelMappingPreviewResponse, BulkModelMappingPreviewRequest>(
+    return this.client.executeContractOperation<BulkModelMappingPreviewResponse, BulkModelMappingPreviewRequest>(
       '/v1/admin/model-provider-mappings/bulk/preview',
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/model-provider-mappings/bulk/preview', {
@@ -133,7 +133,7 @@ export class FetchModelMappingsService {
     request: BulkMappingRequest,
     config?: RequestConfig
   ): Promise<BulkMappingResponse> {
-    return this.client['executeContractOperation']<BulkMappingResponse, BulkMappingRequest>(
+    return this.client.executeContractOperation<BulkMappingResponse, BulkMappingRequest>(
       '/v1/admin/model-provider-mappings/bulk',
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/model-provider-mappings/bulk', {
@@ -152,7 +152,7 @@ export class FetchModelMappingsService {
     ids: number[],
     config?: RequestConfig
   ): Promise<BulkDeleteResult> {
-    return this.client['executeContractOperation']<BulkDeleteResult, number[]>(
+    return this.client.executeContractOperation<BulkDeleteResult, number[]>(
       '/v1/admin/model-provider-mappings/bulk/delete',
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/model-provider-mappings/bulk/delete', {
@@ -171,7 +171,7 @@ export class FetchModelMappingsService {
     ids: number[],
     config?: RequestConfig
   ): Promise<BulkUpdateResult> {
-    return this.client['executeContractOperation']<BulkUpdateResult, number[]>(
+    return this.client.executeContractOperation<BulkUpdateResult, number[]>(
       '/v1/admin/model-provider-mappings/bulk/enable',
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/model-provider-mappings/bulk/enable', {
@@ -190,7 +190,7 @@ export class FetchModelMappingsService {
     ids: number[],
     config?: RequestConfig
   ): Promise<BulkUpdateResult> {
-    return this.client['executeContractOperation']<BulkUpdateResult, number[]>(
+    return this.client.executeContractOperation<BulkUpdateResult, number[]>(
       '/v1/admin/model-provider-mappings/bulk/disable',
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/model-provider-mappings/bulk/disable', {

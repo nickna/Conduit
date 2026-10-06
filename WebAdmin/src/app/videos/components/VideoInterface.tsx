@@ -166,7 +166,6 @@ export default function VideoInterface() {
 
       {/* Prompt Input */}
       <EnhancedVideoPromptInput 
-        models={discoveryData?.data || []} 
         dynamicParameters={parameterState.getSubmitValues()}
       />
 

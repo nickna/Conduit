@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Functions.Serialization;
 using ConduitLLM.Functions.Models.Pricing;
 using ConduitLLM.Functions.Utilities;
 
@@ -181,7 +182,9 @@ public partial class FunctionCostCalculationService
         TieredPricingConfig? config;
         try
         {
-            config = JsonSerializer.Deserialize<TieredPricingConfig>(functionCost.TieredPricing);
+            config = JsonSerializer.Deserialize(
+                functionCost.TieredPricing,
+                FunctionsJsonContext.Default.TieredPricingConfig);
         }
         catch (Exception ex)
         {
@@ -227,11 +230,17 @@ public partial class FunctionCostCalculationService
             return functionCost.ProviderType switch
             {
                 Enums.FunctionProviderType.Exa => EstimateExaHybridCost(
-                    DeserializeHybridConfig<ExaHybridPricingConfig>(functionCost), requestParameters),
+                    DeserializeHybridConfig(
+                        functionCost,
+                        FunctionsJsonContext.Default.ExaHybridPricingConfig), requestParameters),
                 Enums.FunctionProviderType.Tavily => EstimateTavilySearchCost(
-                    DeserializeHybridConfig<TavilySearchPricingConfig>(functionCost), requestParameters),
+                    DeserializeHybridConfig(
+                        functionCost,
+                        FunctionsJsonContext.Default.TavilySearchPricingConfig), requestParameters),
                 Enums.FunctionProviderType.Perplexity => EstimatePerplexityHybridCost(
-                    DeserializeHybridConfig<PerplexityHybridPricingConfig>(functionCost), requestParameters),
+                    DeserializeHybridConfig(
+                        functionCost,
+                        FunctionsJsonContext.Default.PerplexityHybridPricingConfig), requestParameters),
                 _ => throw new InvalidOperationException(
                     $"Hybrid pricing is not supported for provider {functionCost.ProviderType} on cost '{functionCost.CostName}'.")
             };

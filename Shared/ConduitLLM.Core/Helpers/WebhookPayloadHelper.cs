@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using ConduitLLM.Core.Serialization;
 
 namespace ConduitLLM.Core.Helpers
 {
@@ -25,21 +26,24 @@ namespace ConduitLLM.Core.Helpers
                 return "{}";
             }
             
-            var json = JsonSerializer.Serialize(payload, JsonOptions);
+            var json = JsonSerializer.Serialize(
+                payload,
+                CoreJsonTypeInfo.Require(payload.GetType(), JsonOptions));
             var sizeInBytes = Encoding.UTF8.GetByteCount(json);
             
             if (sizeInBytes > maxSizeBytes)
             {
                 // Try to create a truncated version with error info
-                var truncatedPayload = new
-                {
-                    error = "Payload too large",
-                    originalSizeBytes = sizeInBytes,
-                    maxSizeBytes = maxSizeBytes,
-                    truncated = true
-                };
+                var truncatedPayload = new WebhookPayloadTooLarge(
+                    "Payload too large",
+                    sizeInBytes,
+                    maxSizeBytes,
+                    true);
                 
-                json = JsonSerializer.Serialize(truncatedPayload, JsonOptions);
+                json = JsonSerializer.Serialize(
+                    truncatedPayload,
+                    new CoreInternalJsonContext(
+                        new JsonSerializerOptions(JsonOptions)).WebhookPayloadTooLarge);
             }
             
             return json;

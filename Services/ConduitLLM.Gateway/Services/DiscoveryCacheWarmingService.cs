@@ -1,3 +1,4 @@
+using ConduitLLM.Core.Caching;
 using System.Diagnostics;
 using System.Text.Json;
 using ConduitLLM.Configuration;
@@ -20,19 +21,21 @@ namespace ConduitLLM.Gateway.Services
         private readonly DiscoveryCacheOptions _options;
         private readonly JsonSerializerOptions _wireJsonOptions;
         private readonly ILogger<DiscoveryCacheWarmingService> _logger;
+        private readonly TimeProvider _clock;
 
         public DiscoveryCacheWarmingService(
             IServiceProvider serviceProvider,
             IDiscoveryCacheService discoveryCacheService,
             IOptions<DiscoveryCacheOptions> options,
             JsonSerializerOptions wireJsonOptions,
-            ILogger<DiscoveryCacheWarmingService> logger)
+            ILogger<DiscoveryCacheWarmingService> logger, TimeProvider? clock = null)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _discoveryCacheService = discoveryCacheService ?? throw new ArgumentNullException(nameof(discoveryCacheService));
             _options = options.Value ?? throw new ArgumentNullException(nameof(options));
             _wireJsonOptions = wireJsonOptions ?? throw new ArgumentNullException(nameof(wireJsonOptions));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _clock = clock ?? TimeProvider.System;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -55,22 +58,20 @@ namespace ConduitLLM.Gateway.Services
             }
 
             using var lockScope = _serviceProvider.CreateScope();
-            var lockService = lockScope.ServiceProvider.GetService<IDistributedLockService>();
+            var lockService = lockScope.ServiceProvider.GetService<IDistributedLockProvider>();
             _logger.LogDebug("Attempting to acquire distributed lock for cache warming");
 
             var result = await lockService.RunWithOptionalLockAsync(
                 "discovery:cache:warming",
-                TimeSpan.FromMinutes(5),
                 TimeSpan.FromSeconds(_options.DistributedLockTimeoutSeconds),
-                TimeSpan.FromSeconds(1),
-                async lockAcquired =>
+                async (lockAcquired, protectedToken) =>
                 {
                     if (lockAcquired)
                     {
                         _logger.LogDebug("Acquired distributed lock for cache warming");
                     }
 
-                    await WarmCachesAsync(stoppingToken);
+                    await WarmCachesAsync(protectedToken);
                     return true;
                 },
                 _logger,
@@ -94,8 +95,8 @@ namespace ConduitLLM.Gateway.Services
                 var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ConduitDbContext>>();
 
                 // Warm cache for common capability filters
-                var commonCapabilities = _options.WarmupCapabilities ?? new List<string> 
-                { 
+                var commonCapabilities = _options.WarmupCapabilities ?? new List<string>
+                {
                     "chat", "image_input", "video_input", "audio_input", "file_input",
                     "image_generation", "video_generation"
                 };
@@ -106,16 +107,16 @@ namespace ConduitLLM.Gateway.Services
                 // Then warm cache for each common capability
                 foreach (var capability in commonCapabilities)
                 {
-                    if (stoppingToken.IsCancellationRequested)
-                        break;
+                    stoppingToken.ThrowIfCancellationRequested();
 
                     await WarmCacheForCapability(dbContextFactory, capability, stoppingToken);
-                    
+
                     // Small delay between cache warming operations
                     await Task.Delay(100, stoppingToken);
                 }
 
                 stopwatch.Stop();
+                stoppingToken.ThrowIfCancellationRequested();
                 _logger.LogInformation(
                     "Discovery cache warming completed in {ElapsedMs}ms. Warmed {Count} cache entries",
                     stopwatch.ElapsedMilliseconds,
@@ -123,7 +124,7 @@ namespace ConduitLLM.Gateway.Services
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("Cache warming cancelled due to application shutdown");
+                throw;
             }
             catch (Exception ex)
             {
@@ -139,36 +140,19 @@ namespace ConduitLLM.Gateway.Services
         {
             try
             {
-                using var context = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-                
-                var projectedModels = await DiscoveryModelProjector.ProjectAsync(
-                    context,
-                    capability,
-                    _options.ExposePricing,
-                    _logger,
-                    cancellationToken);
-                var models = projectedModels
-                    .Select(model => JsonSerializer.SerializeToElement(model, _wireJsonOptions))
-                    .ToList();
-
-                // Cache the results
-                var cacheKey = DiscoveryCacheService.BuildCacheKey(
+                var cacheKey = DiscoveryCacheKeys.Build(
                     capability,
                     includePricing: _options.ExposePricing);
-                var discoveryResult = new DiscoveryModelsResult
-                {
-                    Data = models,
-                    Count = models.Count,
-                    CapabilityFilter = capability
-                };
+                var result = await _discoveryCacheService.GetOrLoadAsync(cacheKey, token =>
+                    DiscoveryCacheLoader.LoadAsync(dbContextFactory, capability, _options.ExposePricing,
+                        _wireJsonOptions, _logger, token, _clock), cancellationToken);
 
-                await _discoveryCacheService.SetDiscoveryResultsAsync(cacheKey, discoveryResult, cancellationToken);
-                
                 _logger.LogInformation(
                     "Warmed discovery cache for capability '{Capability}' with {Count} models",
                     capability ?? "all",
-                    models.Count);
+                    result.Count);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error warming cache for capability: {Capability}", capability ?? "all");

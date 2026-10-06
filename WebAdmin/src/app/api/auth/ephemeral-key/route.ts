@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { toApiErrorResponse } from '@/lib/errors/api-errors';
-import { getServerAdminClient, getServerCoreClient } from '@/lib/server/api-client-config';
+import { getServerAdminClient, getServerGatewayClient } from '@/lib/server/api-client-config';
 import type { WebAdminEphemeralKeyResponse } from '@/lib/api-transport/contracts';
 
 interface EphemeralKeyRequest {
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     const userAgent = request.headers.get('user-agent') ?? 'unknown';
     
     // Use the local Gateway boundary to generate an ephemeral key.
-    const coreClient = await getServerCoreClient();
+    const coreClient = await getServerGatewayClient();
     const response = await coreClient.auth.generateEphemeralKey(webAdminVirtualKey, {
       metadata: {
         sourceIP,

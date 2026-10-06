@@ -28,7 +28,7 @@ import {
 } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
 import { useDisclosure } from '@mantine/hooks';
-import { type IpRule } from '@/hooks/useSecurityApi';
+import type { CreateIpFilterDto, IpFilterDto } from '@/lib/admin-api';
 import { IpRulesTable } from '@/components/ip-filtering/IpRulesTable';
 import { IpRuleModal } from '@/components/ip-filtering/IpRuleModal';
 import { IpTestModal } from '@/components/ip-filtering/IpTestModal';
@@ -40,12 +40,11 @@ import { useIpFilteringHandlers } from './handlers';
 import { IpFilteringStats } from './IpFilteringStats';
 import { useBulkSelection } from '@/hooks/useBulkSelection';
 
-const getRuleId = (rule: IpRule) => rule.id ?? '';
-const hasRuleId = (rule: IpRule) => rule.id !== undefined;
+const getRuleId = (rule: IpFilterDto) => rule.id;
 
 export default function IpFilteringPage() {
   const [activeTab, setActiveTab] = useState<string | null>('all');
-  const [selectedRule, setSelectedRule] = useState<IpRule | null>(null);
+  const [selectedRule, setSelectedRule] = useState<IpFilterDto | null>(null);
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const [testModalOpened, { open: openTestModal, close: closeTestModal }] = useDisclosure(false);
   const [templateModalOpened, { open: openTemplateModal, close: closeTemplateModal }] = useDisclosure(false);
@@ -56,8 +55,8 @@ export default function IpFilteringPage() {
 
   // Filter rules based on active tab
   const filteredRules = rules.filter(rule => {
-    if (activeTab === 'allow') return rule.action === 'allow';
-    if (activeTab === 'block') return rule.action === 'block';
+    if (activeTab === 'allow') return rule.filterType === 'whitelist';
+    if (activeTab === 'block') return rule.filterType === 'blacklist';
     return true;
   });
   const {
@@ -72,7 +71,6 @@ export default function IpFilteringPage() {
   } = useBulkSelection({
     items: filteredRules,
     getKey: getRuleId,
-    isSelectable: hasRuleId,
   });
   const selectedRules = Array.from(selectedKeys);
   const {
@@ -93,12 +91,12 @@ export default function IpFilteringPage() {
     openTestModal();
   };
 
-  const handleEditRule = (rule: IpRule) => {
+  const handleEditRule = (rule: IpFilterDto) => {
     setSelectedRule(rule);
     openModal();
   };
 
-  const handleModalSubmitWrapper = async (values: Partial<IpRule>) => {
+  const handleModalSubmitWrapper = async (values: CreateIpFilterDto) => {
     try {
       await handleModalSubmit(values, selectedRule, setIsSubmitting);
       closeModal();
@@ -295,8 +293,8 @@ export default function IpFilteringPage() {
                 onSelectAll={toggleAll}
                 onSelectRule={toggleOne}
                 onEdit={handleEditRule}
-                onDelete={(ruleId: string) => void handleDeleteRule(ruleId)}
-                onToggle={(ruleId: string, enabled: boolean) => void handleToggleRule(ruleId, enabled, rules)}
+                onDelete={ruleId => void handleDeleteRule(ruleId)}
+                onToggle={(ruleId, enabled) => void handleToggleRule(ruleId, enabled, rules)}
               />
             </Card.Section>
 

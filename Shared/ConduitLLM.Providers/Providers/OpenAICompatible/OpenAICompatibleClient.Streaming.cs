@@ -72,7 +72,9 @@ namespace ConduitLLM.Providers.OpenAICompatible
         protected virtual CoreModels.ChatCompletionChunk? MapStreamingChunk(JsonElement chunk)
         {
             var chunkJson = TransformChunkJson(chunk);
-            return JsonSerializer.Deserialize<CoreModels.ChatCompletionChunk>(chunkJson, DefaultJsonOptions);
+            return JsonSerializer.Deserialize(
+                chunkJson,
+                Core.Serialization.CoreHttpJsonContext.Default.ChatCompletionChunk);
         }
 
         /// <summary>
@@ -114,8 +116,8 @@ namespace ConduitLLM.Providers.OpenAICompatible
 
             await foreach (var chunk in CoreUtils.StreamHelper.ProcessSseStreamAsync<JsonElement>(
                 response,
+                Serialization.ProvidersJsonContext.Default.JsonElement,
                 Logger,
-                DefaultJsonOptions,
                 cancellationToken))
             {
                 if (cancellationToken.IsCancellationRequested)
@@ -167,7 +169,7 @@ namespace ConduitLLM.Providers.OpenAICompatible
                 // Ensure stream_options is present
                 if (!dictObj.ContainsKey("stream_options"))
                 {
-                    dictObj["stream_options"] = new { include_usage = true };
+                    dictObj["stream_options"] = new CoreModels.StreamOptions { IncludeUsage = true };
                 }
                 return dictObj;
             }
@@ -197,8 +199,8 @@ namespace ConduitLLM.Providers.OpenAICompatible
                 HttpMethod.Post,
                 endpoint,
                 request,
+                GetRequiredJsonTypeInfo<object>(DefaultJsonOptions),
                 CreateStandardHeaders(apiKey),
-                DefaultJsonOptions,
                 Logger,
                 cancellationToken,
                 TranslateHttpError);

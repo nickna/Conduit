@@ -41,6 +41,7 @@
     <ProjectReference Include="..\..\Shared\ConduitLLM.Configuration\ConduitLLM.Configuration.csproj" />
     <ProjectReference Include="..\..\Services\ConduitLLM.Gateway\ConduitLLM.Gateway.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Functions\ConduitLLM.Functions.csproj" />
+    <ProjectReference Include="..\..\tools\ConduitLLM.Migrator\ConduitLLM.Migrator.csproj" />
   </ItemGroup>
 
   <ItemGroup>

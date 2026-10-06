@@ -1,4 +1,4 @@
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 
 export type DriftItemDto = components['schemas']['DriftItemDto'];
 export type ProviderSyncRunDto = components['schemas']['ProviderSyncRunDto'];

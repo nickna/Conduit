@@ -12,7 +12,6 @@ import {
 } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
 import { useModelMappings } from '@/hooks/useModelMappingsApi';
-import type { ExtendedModelProviderMappingDto } from '../types/modelCost';
 
 interface ModelMappingSelectorProps {
   value: number[];
@@ -44,13 +43,12 @@ export function ModelMappingSelector({
 
   // Convert mappings to select items
   const selectItems: SelectItem[] = mappings.map((mapping) => {
-    const extendedMapping = mapping as ExtendedModelProviderMappingDto;
     return {
-      value: String(extendedMapping.id),
-      label: extendedMapping.modelAlias ?? extendedMapping.providerModelId ?? '',
-      provider: extendedMapping.providerName ?? undefined,
-      providerType: extendedMapping.providerTypeName ?? undefined,
-      modelId: extendedMapping.providerModelId ?? undefined,
+      value: String(mapping.modelProviderTypeAssociationId),
+      label: mapping.modelAlias,
+      provider: mapping.provider?.displayName,
+      providerType: mapping.provider?.providerType,
+      modelId: mapping.providerModelId,
     };
   });
 

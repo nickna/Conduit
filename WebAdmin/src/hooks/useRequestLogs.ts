@@ -2,6 +2,9 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { withAdminClient } from '@/lib/client/adminClient';
+import type { components } from '@/generated/admin-api';
+
+type LogRequestDto = components['schemas']['LogRequestDto'];
 
 /**
  * Request log entry as returned by the backend API
@@ -27,7 +30,7 @@ export interface RequestLogEntry {
   cachedInputTokens: number | null;
   cachedWriteTokens: number | null;
   cost: number;
-  billingMethod: number | null;
+  billingMethod: components['schemas']['RequestBillingMethod'];
   providerReportedCostUsd: number | null;
   providerCostMarkupMultiplier: number | null;
   billedAtUtc: string | null;
@@ -37,7 +40,7 @@ export interface RequestLogEntry {
   requestPath: string | null;
   statusCode: number | null;
   timestamp: string;
-  metadata: string | null;
+  metadata: RequestLogMetadata | null;
 }
 
 /**
@@ -101,14 +104,6 @@ export interface RequestLogMetadata {
 /**
  * Paginated response from the backend
  */
-export interface RequestLogPageResult {
-  items: RequestLogEntry[];
-  totalCount: number;
-  currentPage: number;
-  pageSize: number;
-  totalPages: number;
-}
-
 /**
  * Filter options for request logs
  */
@@ -167,6 +162,41 @@ export function requestLogFiltersToApiParams(
   };
 }
 
+function toRequestLogEntry(item: LogRequestDto): RequestLogEntry {
+  return {
+    id: item.id ?? 0,
+    virtualKeyId: item.virtualKeyId ?? 0,
+    modelName: item.modelName ?? '',
+    providerId: item.providerId ?? null,
+    providerType: item.providerType ?? null,
+    modelProviderMappingId: item.modelProviderMappingId ?? null,
+    promptCachingEligible: item.promptCachingEligible ?? false,
+    promptCachingPolicyApplied: item.promptCachingPolicyApplied ?? false,
+    cachedReadSavings: item.cachedReadSavings ?? 0,
+    cacheWritePremium: item.cacheWritePremium ?? 0,
+    routingAffinityUsed: item.routingAffinityUsed ?? false,
+    routingDecisionReason: item.routingDecisionReason ?? null,
+    routingFailoverCount: item.routingFailoverCount ?? 0,
+    requestType: item.requestType ?? '',
+    inputTokens: item.inputTokens ?? 0,
+    outputTokens: item.outputTokens ?? 0,
+    cachedInputTokens: item.cachedInputTokens ?? null,
+    cachedWriteTokens: item.cachedWriteTokens ?? null,
+    cost: item.cost ?? 0,
+    billingMethod: item.billingMethod ?? null,
+    providerReportedCostUsd: item.providerReportedCostUsd ?? null,
+    providerCostMarkupMultiplier: item.providerCostMarkupMultiplier ?? null,
+    billedAtUtc: item.billedAtUtc ?? null,
+    responseTimeMs: item.responseTimeMs ?? 0,
+    userId: item.userId ?? null,
+    clientIp: item.clientIp ?? null,
+    requestPath: item.requestPath ?? null,
+    statusCode: item.statusCode ?? null,
+    timestamp: item.timestamp ?? '',
+    metadata: item.metadata ?? null,
+  };
+}
+
 /**
  * Hook for fetching paginated request logs with filtering
  */
@@ -195,77 +225,8 @@ export function useRequestLogs({
         );
       });
 
-      const items = result.items ?? [];
-      const mappedLogs: RequestLogEntry[] = items.map((item) => {
-        const rawItem = item as unknown as {
-          id?: number | string;
-          virtualKeyId?: number;
-          model?: string;
-          modelName?: string;
-          providerId?: number | null;
-          providerType?: string | null;
-          modelProviderMappingId?: number | null;
-          promptCachingEligible?: boolean;
-          promptCachingPolicyApplied?: boolean;
-          cachedReadSavings?: number;
-          cacheWritePremium?: number;
-          routingAffinityUsed?: boolean;
-          routingDecisionReason?: string | null;
-          routingFailoverCount?: number;
-          requestType?: string;
-          inputTokens?: number;
-          outputTokens?: number;
-          cachedInputTokens?: number | null;
-          cachedWriteTokens?: number | null;
-          cost?: number;
-          billingMethod?: number | null;
-          providerReportedCostUsd?: number | null;
-          providerCostMarkupMultiplier?: number | null;
-          billedAtUtc?: string | null;
-          duration?: number;
-          responseTimeMs?: number;
-          userId?: string | null;
-          clientIp?: string | null;
-          ipAddress?: string | null;
-          requestPath?: string | null;
-          statusCode?: number | null;
-          timestamp?: string;
-          metadata?: string | null;
-        };
-
-        return {
-          id: typeof rawItem.id === 'string' ? parseInt(rawItem.id, 10) : (rawItem.id ?? 0),
-          virtualKeyId: rawItem.virtualKeyId ?? 0,
-          modelName: rawItem.model ?? rawItem.modelName ?? '',
-          providerId: rawItem.providerId ?? null,
-          providerType: rawItem.providerType ?? null,
-          modelProviderMappingId: rawItem.modelProviderMappingId ?? null,
-          promptCachingEligible: rawItem.promptCachingEligible ?? false,
-          promptCachingPolicyApplied: rawItem.promptCachingPolicyApplied ?? false,
-          cachedReadSavings: rawItem.cachedReadSavings ?? 0,
-          cacheWritePremium: rawItem.cacheWritePremium ?? 0,
-          routingAffinityUsed: rawItem.routingAffinityUsed ?? false,
-          routingDecisionReason: rawItem.routingDecisionReason ?? null,
-          routingFailoverCount: rawItem.routingFailoverCount ?? 0,
-          requestType: rawItem.requestType ?? '',
-          inputTokens: rawItem.inputTokens ?? 0,
-          outputTokens: rawItem.outputTokens ?? 0,
-          cachedInputTokens: rawItem.cachedInputTokens ?? null,
-          cachedWriteTokens: rawItem.cachedWriteTokens ?? null,
-          cost: rawItem.cost ?? 0,
-          billingMethod: rawItem.billingMethod ?? null,
-          providerReportedCostUsd: rawItem.providerReportedCostUsd ?? null,
-          providerCostMarkupMultiplier: rawItem.providerCostMarkupMultiplier ?? null,
-          billedAtUtc: rawItem.billedAtUtc ?? null,
-          responseTimeMs: rawItem.duration ?? rawItem.responseTimeMs ?? 0,
-          userId: rawItem.userId ?? null,
-          clientIp: rawItem.clientIp ?? rawItem.ipAddress ?? null,
-          requestPath: rawItem.requestPath ?? null,
-          statusCode: rawItem.statusCode ?? null,
-          timestamp: rawItem.timestamp ?? new Date().toISOString(),
-          metadata: rawItem.metadata ?? null,
-        };
-      });
+      const mappedLogs = (result.data ?? []).map(toRequestLogEntry);
+      const pagination = result.pagination;
 
       let stats: RequestLogStats;
       if (mappedLogs.length > 0) {
@@ -280,7 +241,7 @@ export function useRequestLogs({
           mappedLogs.reduce((sum, log) => sum + log.responseTimeMs, 0) / mappedLogs.length;
 
         stats = {
-          totalRequests: result.totalCount ?? mappedLogs.length,
+          totalRequests: pagination?.totalItems ?? mappedLogs.length,
           successCount,
           errorCount,
           totalCost,
@@ -289,7 +250,7 @@ export function useRequestLogs({
         };
       } else {
         stats = {
-          totalRequests: result.totalCount ?? 0,
+          totalRequests: pagination?.totalItems ?? 0,
           successCount: 0,
           errorCount: 0,
           totalCost: 0,
@@ -300,9 +261,9 @@ export function useRequestLogs({
 
       return {
         logs: mappedLogs,
-        totalCount: result.totalCount ?? 0,
-        totalPages: result.totalPages ?? Math.ceil((result.totalCount ?? 0) / pageSize),
-        currentPage: result.page ?? page,
+        totalCount: pagination?.totalItems ?? 0,
+        totalPages: pagination?.totalPages ?? Math.ceil((pagination?.totalItems ?? 0) / pageSize),
+        currentPage: pagination?.page ?? page,
         stats,
       };
     },
@@ -342,11 +303,8 @@ export function useDistinctModels() {
       );
       return [
         ...new Set(
-          (result.items ?? [])
-            .map(item => {
-              const rawItem = item as unknown as { model?: string; modelName?: string };
-              return rawItem.model ?? rawItem.modelName ?? '';
-            })
+          (result.data ?? [])
+            .map(item => item.modelName ?? '')
             .filter(model => model !== '')
         ),
       ].sort();

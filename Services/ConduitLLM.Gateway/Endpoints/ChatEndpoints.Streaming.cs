@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using ConduitLLM.Gateway.Serialization;
 
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
@@ -513,7 +514,9 @@ namespace ConduitLLM.Gateway.Endpoints
                     .ToList();
                 if (responseToolCalls.Count > 0)
                 {
-                    completionOutput += JsonSerializer.Serialize(responseToolCalls, _jsonSerializerOptions);
+                    completionOutput += JsonSerializer.Serialize(
+                        responseToolCalls,
+                        GatewayJsonTypeInfo.Require<List<ToolCall>>(_jsonSerializerOptions));
                 }
 
                 var estimatedUsage = await _usageEstimationService.EstimateUsageFromStreamingResponseAsync(
@@ -548,9 +551,10 @@ namespace ConduitLLM.Gateway.Endpoints
                 var completionOutput = state.ContentAccumulator.ToString();
                 if (state.AccumulatedToolCalls.Count > 0)
                 {
+                    var materializedToolCalls = state.MaterializeToolCalls();
                     completionOutput += JsonSerializer.Serialize(
-                        state.MaterializeToolCalls(),
-                        _jsonSerializerOptions);
+                        materializedToolCalls,
+                        GatewayJsonTypeInfo.Require<List<ToolCall>>(_jsonSerializerOptions));
                 }
 
                 var estimatedUsage = await _usageEstimationService.EstimateUsageFromStreamingResponseAsync(

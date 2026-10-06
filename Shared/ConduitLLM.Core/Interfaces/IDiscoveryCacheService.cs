@@ -11,6 +11,10 @@ namespace ConduitLLM.Core.Interfaces
     /// </summary>
     public interface IDiscoveryCacheService
     {
+        /// <summary>Loads one discovery variant, coalescing healthy misses in the selected cache implementation.</summary>
+        Task<DiscoveryModelsResult> GetOrLoadAsync(string cacheKey,
+            Func<CancellationToken, Task<DiscoveryModelsResult>> load, CancellationToken cancellationToken = default);
+
         /// <summary>
         /// Gets cached discovery results for models
         /// </summary>
@@ -74,6 +78,8 @@ namespace ConduitLLM.Core.Interfaces
         /// Optional capability filter that was applied
         /// </summary>
         public string? CapabilityFilter { get; set; }
+        /// <summary>Internal cache deadline for scheduled price activation/expiry; never part of endpoint wire JSON.</summary>
+        public DateTime? PricingRefreshAt { get; set; }
     }
 
 }

@@ -7,12 +7,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Condition="'$(ConduitEfTooling)' == 'true'">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Build.Tasks.Core" />
-    <PackageReference Include="Microsoft.Build.Utilities.Core" />
+    <PackageReference Include="Microsoft.Build.Tasks.Core" PrivateAssets="all" Condition="'$(ConduitEfTooling)' == 'true'" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="all" Condition="'$(ConduitEfTooling)' == 'true'" />
     <PackageReference Include="System.Security.Cryptography.Xml" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
@@ -21,7 +21,6 @@
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
     <PackageReference Include="AspNetCore.HealthChecks.Redis" />
-    <PackageReference Include="RabbitMQ.Client" />
     <PackageReference Include="Polly" />
     <PackageReference Include="Polly.Extensions.Http" />
     <PackageReference Include="prometheus-net" />
@@ -34,14 +33,20 @@
 
 
   <ItemGroup>
-    <!-- Wolverine backend of the messaging abstraction (epic #909 Phase 2, #924).
-         Spike-verified on this toolchain: docs/architecture/messaging-migration/spike-wolverine-postgres.md -->
-    <PackageReference Include="WolverineFx" />
-    <PackageReference Include="WolverineFx.Postgresql" />
+    <ProjectReference Include="..\ConduitLLM.Contracts\ConduitLLM.Contracts.csproj" />
+    <ProjectReference Include="..\ConduitLLM.Functions\ConduitLLM.Functions.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ConduitLLM.Functions\ConduitLLM.Functions.csproj" />
+    <Compile Remove="Messaging\*.cs" />
+    <Compile Remove="Messaging\Wolverine\*.cs" />
+    <Compile Remove="Data\SimpleMigrationService.cs" />
+  </ItemGroup>
+
+  <!-- The generated EF model is a native runtime artifact. Excluding it from JIT
+       builds keeps the existing model construction and query-filter behavior. -->
+  <ItemGroup Condition="'$(PublishAot)' != 'true'">
+    <Compile Remove="Data\CompiledModels\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>

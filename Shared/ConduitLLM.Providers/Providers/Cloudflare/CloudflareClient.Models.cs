@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ConduitLLM.Providers.Serialization;
 
 using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Providers.Common.Models;
@@ -55,7 +56,9 @@ namespace ConduitLLM.Providers.Cloudflare
                         $"Cloudflare model discovery failed: {errorMessage} [HTTP {(int)httpResponse.StatusCode}]");
                 }
 
-                var parsed = JsonSerializer.Deserialize<CloudflareModelsSearchResponse>(content, DefaultJsonOptions);
+                var parsed = JsonSerializer.Deserialize(
+                    content,
+                    ProvidersJsonContext.Default.CloudflareModelsSearchResponse);
 
                 var models = parsed?.Result?
                     .Select(entry => (Id: SelectModelIdentifier(entry), entry.Description))

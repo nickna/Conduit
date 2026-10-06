@@ -342,7 +342,7 @@ namespace ConduitLLM.Admin.Services
 
         private static byte[] ExportToJson(IList<RequestLog> logs)
         {
-            var json = System.Text.Json.JsonSerializer.Serialize(logs.Select(MapToLogRequestDto), new System.Text.Json.JsonSerializerOptions
+            var json = AdminJson.Serialize(logs.Select(MapToLogRequestDto).ToList(), new System.Text.Json.JsonSerializerOptions
             {
                 WriteIndented = true
             });

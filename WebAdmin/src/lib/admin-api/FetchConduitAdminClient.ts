@@ -149,7 +149,7 @@ export type {
 } from './client/types';
 
 // Re-export generated types
-export type { components, operations, paths } from './generated/admin-api';
+export type { components, operations, paths } from '@/generated/admin-api';
 
 // Re-export specific schema types for convenience
 // NOTE: These types are available via components['schemas']['TypeName']

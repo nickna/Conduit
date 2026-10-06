@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "status": "blocked",
+  "blockedBy": [
+    "ADR 0006 keeps production persistence on JIT while EF Core NativeAOT query execution is experimental.",
+    "The parent epic's full native data-plane and supported-feature acceptance criteria are not complete."
+  ],
+  "sequence": ["admin", "gateway"],
+  "minimumSoakHours": {
+    "admin": 168,
+    "gateway": 168
+  },
+  "rolloutPercentages": [1, 5, 25, 50, 100],
+  "requiredConsecutiveHealthyWindows": 24,
+  "thresholds": {
+    "minimumImageSizeReductionPercent": 10,
+    "minimumColdStartReductionPercent": 20,
+    "minimumIdleMemoryReductionPercent": 15,
+    "maximumP99LatencyRegressionPercent": 5,
+    "minimumThroughputImprovementPercent": 0,
+    "maximumErrorRate": 0.001
+  },
+  "requiredEvidence": [
+    "same public and persisted contracts as JIT",
+    "same PostgreSQL, Redis, and Wolverine backing services",
+    "full supported feature matrix",
+    "dashboard and alert coverage",
+    "tested automatic traffic rollback",
+    "tested manual JIT redeploy",
+    "no unresolved critical vulnerabilities",
+    "SBOM and provenance attestations"
+  ]
+}

@@ -25,12 +25,17 @@ public partial class Program
 
         // 1. Configure Conduit Settings
         builder.Services.AddOptions<ConduitSettings>()
-            .Bind(builder.Configuration.GetSection("Conduit"))
-            .ValidateDataAnnotations(); // Add validation if using DataAnnotations in settings classes
+            .Bind(builder.Configuration.GetSection("Conduit"));
 
         builder.Services.AddOptions<UsageTrackingOptions>()
             .Bind(builder.Configuration.GetSection("UsageTracking"))
-            .ValidateDataAnnotations()
+            .Validate(options =>
+                    options.MaximumStreamingCompletionCharacters is >= 1024 and <= 16 * 1024 * 1024 &&
+                    options.MaximumStreamingToolCallCharacters is >= 1024 and <= 16 * 1024 * 1024 &&
+                    options.MaximumStreamingToolCalls is >= 1 and <= 1024 &&
+                    options.AccountingFinalizationTimeoutSeconds is >= 1 and <= 120 &&
+                    options.GracefulShutdownSeconds is >= 5 and <= 600,
+                "UsageTracking settings are outside their supported ranges.")
             .ValidateOnStart();
         builder.Services.Configure<HostOptions>(options =>
         {
@@ -41,7 +46,12 @@ public partial class Program
 
         builder.Services.AddOptions<BillingAdmissionOptions>()
             .Bind(builder.Configuration.GetSection(BillingAdmissionOptions.SectionName))
-            .ValidateDataAnnotations()
+            .Validate(options =>
+                    options.DefaultMaximumOutputTokens is >= 1 and <= 1_000_000 &&
+                    options.MaximumOutputTokensCap is >= 1 and <= 1_000_000 &&
+                    options.ApproximateVocabularyPromptBuffer is >= 0.0 and <= 2.0 &&
+                    options.CharacterHeuristicPromptBuffer is >= 0.0 and <= 2.0,
+                "BillingAdmission settings are outside their supported ranges.")
             .ValidateOnStart();
 
     }

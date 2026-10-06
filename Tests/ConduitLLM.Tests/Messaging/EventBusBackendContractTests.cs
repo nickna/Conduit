@@ -234,10 +234,10 @@ namespace ConduitLLM.Tests.Messaging
                     opts.Discovery.DisableConventionalDiscovery();
                     opts.UseRuntimeCompilation();
 
-                    foreach (var eventType in bridgedEventTypes)
-                    {
-                        opts.AddEventBridge(eventType);
-                    }
+                    if (bridgedEventTypes.Contains(typeof(ContractEvent)))
+                        opts.AddEventBridge<ContractEvent>();
+                    if (bridgedEventTypes.Contains(typeof(FollowOnEvent)))
+                        opts.AddEventBridge<FollowOnEvent>();
 
                     opts.Services.AddSingleton(Sink);
                     registerHandlers(opts.Services);

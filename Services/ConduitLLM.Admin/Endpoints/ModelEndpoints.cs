@@ -57,7 +57,6 @@ namespace ConduitLLM.Admin.Endpoints
         {
             var group = app.MapGroup("/v1/admin/models")
                 .RequireAuthorization("MasterKeyPolicy")
-                .AddEndpointFilter<ValidationEndpointFilter>()
                 .AddEndpointFilter<OperationLoggingEndpointFilter>()
                 .WithTags("Models");
 
@@ -296,7 +295,7 @@ namespace ConduitLLM.Admin.Endpoints
             {
                 Name = dto.Name,
                 ModelSeriesId = dto.ModelSeriesId,
-                ModelParameters = dto.ModelParameters is null ? null : JsonSerializer.Serialize(dto.ModelParameters),
+                ModelParameters = dto.ModelParameters is null ? null : AdminJson.Serialize(dto.ModelParameters),
                 InputModalitiesJson = ModelModalities.Serialize(dto.InputModalities),
                 OutputModalitiesJson = ModelModalities.Serialize(dto.OutputModalities),
                 CapabilitySource = dto.CapabilitySource ??
@@ -423,7 +422,7 @@ namespace ConduitLLM.Admin.Endpoints
             {
                 var newParams = modelParameters is null or { Count: 0 }
                     ? null
-                    : JsonSerializer.Serialize(modelParameters);
+                    : AdminJson.Serialize(modelParameters);
                 if (model.ModelParameters != newParams)
                     changes.Add(("ModelParameters", model.ModelParameters ?? "null", newParams ?? "null"));
                 model.ModelParameters = newParams;
@@ -595,11 +594,20 @@ namespace ConduitLLM.Admin.Endpoints
         /// </summary>
         private static string[] GetChangedProperties(UpdateModelDto dto)
         {
-            return typeof(UpdateModelDto)
-                .GetProperties()
-                .Where(property => JsonMergePatchState.IsDefined(dto, property.Name))
-                .Select(property => property.Name)
-                .ToArray();
+            string[] properties =
+            [
+                nameof(dto.Name), nameof(dto.ModelSeriesId), nameof(dto.InputModalities),
+                nameof(dto.OutputModalities), nameof(dto.CapabilitySource),
+                nameof(dto.CapabilitiesLastVerifiedAt), nameof(dto.ClearDirectionalCapabilities),
+                nameof(dto.SupportsChat), nameof(dto.SupportsVision),
+                nameof(dto.SupportsFunctionCalling), nameof(dto.SupportsStreaming),
+                nameof(dto.SupportsImageGeneration), nameof(dto.SupportsVideoGeneration),
+                nameof(dto.SupportsSpeechToText), nameof(dto.SupportsTextToSpeech),
+                nameof(dto.SupportsRerank), nameof(dto.SupportsEmbeddings),
+                nameof(dto.MaxInputTokens), nameof(dto.MaxOutputTokens),
+                nameof(dto.IsActive), nameof(dto.ModelParameters)
+            ];
+            return properties.Where(property => JsonMergePatchState.IsDefined(dto, property)).ToArray();
         }
 
         private static void ApplyBooleanPatch(

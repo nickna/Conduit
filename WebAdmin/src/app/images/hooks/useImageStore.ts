@@ -113,8 +113,8 @@ export const useImageStore = create<ImageStore>()((set, get, api) => ({
 
     try {
       // Get SDK client and use it directly
-      const { getBrowserCoreClient } = await import('@/lib/client/browserCoreClient');
-      const client = await getBrowserCoreClient();
+      const { getBrowserGatewayClient } = await import('@/lib/client/browserGatewayClient');
+      const client = await getBrowserGatewayClient();
       
       // Use SDK to generate image with hardcoded defaults
       const result = await client.images.generate({

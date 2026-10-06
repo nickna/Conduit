@@ -77,10 +77,17 @@ namespace ConduitLLM.Admin.Services
 
                 foreach (var mapping in mappings)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     await ProcessMappingAsync(db, run, mapping, byId, bySlug, cancellationToken);
                 }
 
+                cancellationToken.ThrowIfCancellationRequested();
                 run.Status = "Completed";
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                run.Status = "Cancelled";
+                throw;
             }
             catch (Exception ex)
             {
@@ -91,7 +98,29 @@ namespace ConduitLLM.Admin.Services
             finally
             {
                 run.CompletedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync(cancellationToken);
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    try { await db.SaveChangesAsync(cancellationToken); }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+                }
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    // A fresh context persists only the run status, never pending drift mutations after loss.
+                    using var completion = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                    try
+                    {
+                        await using var completionDb = await _dbFactory.CreateDbContextAsync(completion.Token);
+                        var persistedRun = await completionDb.ProviderMetadataSyncRuns.FindAsync([run.Id], completion.Token);
+                        if (persistedRun != null)
+                        {
+                            persistedRun.Status = "Cancelled";
+                            persistedRun.CompletedAt = run.CompletedAt;
+                            await completionDb.SaveChangesAsync(completion.Token);
+                        }
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "Could not persist cancelled sync status for run {RunId}", run.Id); }
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
             }
 
             return MapRun(run);
@@ -106,7 +135,7 @@ namespace ConduitLLM.Admin.Services
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
 
-            var parsed = JsonSerializer.Deserialize<OpenRouterCatalogResponse>(json, JsonOptions);
+            var parsed = AdminJson.Deserialize<OpenRouterCatalogResponse>(json, JsonOptions);
             var models = parsed?.Data ?? new List<OpenRouterCatalogModel>();
 
             // The full list is returned when offset/limit are omitted; a suspiciously round count may
@@ -141,7 +170,9 @@ namespace ConduitLLM.Admin.Services
 
             if (catalog == null)
             {
-                detected[DriftType.ModelRemoved] = ("{}", Json(new { removed = true }));
+                detected[DriftType.ModelRemoved] = (
+                    "{}",
+                    Json(new Dictionary<string, object?> { ["removed"] = true }));
             }
             else
             {
@@ -150,11 +181,14 @@ namespace ConduitLLM.Admin.Services
                 ComputeCapabilitiesDrift(catalog, mpta, model, detected);
 
                 if (!string.IsNullOrEmpty(catalog.ExpirationDate))
-                    detected[DriftType.ModelDeprecated] = ("{}", Json(new { expirationDate = catalog.ExpirationDate }));
+                    detected[DriftType.ModelDeprecated] = (
+                        "{}",
+                        Json(new Dictionary<string, object?> { ["expirationDate"] = catalog.ExpirationDate }));
             }
 
             foreach (var driftType in Enum.GetValues<DriftType>())
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var existingPending = await db.ProviderMetadataDriftItems.FirstOrDefaultAsync(
                     x => x.ModelProviderMappingId == mapping.Id && x.DriftType == driftType && x.Status == DriftStatus.Pending,
                     cancellationToken);
@@ -319,7 +353,7 @@ namespace ConduitLLM.Admin.Services
         private static decimal? Round4(decimal value) => Math.Round(value, 4);
         private static decimal? Round4(decimal? value) => value.HasValue ? Math.Round(value.Value, 4) : null;
 
-        private static string Json(object value) => JsonSerializer.Serialize(value, JsonOptions);
+        private static string Json(object value) => AdminJson.Serialize(value, JsonOptions);
 
         private static ProviderSyncRunDto MapRun(ProviderMetadataSyncRun run) => new()
         {

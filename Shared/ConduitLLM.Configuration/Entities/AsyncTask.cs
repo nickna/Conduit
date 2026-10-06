@@ -14,14 +14,14 @@ namespace ConduitLLM.Configuration.Entities
         /// Gets or sets the unique identifier for the task.
         /// </summary>
         [Key]
-        [MaxLength(50)]
+        [StringLength(50)]
         public string Id { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the task type (e.g., "image_generation", "video_generation").
         /// </summary>
         [Required]
-        [MaxLength(100)]
+        [StringLength(100)]
         public string Type { get; set; } = string.Empty;
 
         /// <summary>
@@ -48,7 +48,7 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Gets or sets the progress message.
         /// </summary>
-        [MaxLength(500)]
+        [StringLength(500)]
         public string? ProgressMessage { get; set; }
 
         /// <summary>
@@ -102,7 +102,7 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Gets or sets the ID of the worker/instance that has leased this task.
         /// </summary>
-        [MaxLength(100)]
+        [StringLength(100)]
         public string? LeasedBy { get; set; }
 
         /// <summary>
@@ -117,7 +117,7 @@ namespace ConduitLLM.Configuration.Entities
         public DateTime? ProviderInvocationCompletedAt { get; set; }
 
         /// <summary>Provider operation identifier captured for reconciliation.</summary>
-        [MaxLength(200)]
+        [StringLength(200)]
         public string? ProviderOperationId { get; set; }
 
         /// <summary>
@@ -125,7 +125,7 @@ namespace ConduitLLM.Configuration.Entities
         /// indeterminate task back to pending. Used to make command redelivery
         /// idempotent across the database update and follow-on event publish.
         /// </summary>
-        [MaxLength(64)]
+        [StringLength(64)]
         public string? RetryDispatchId { get; set; }
 
         /// <summary>

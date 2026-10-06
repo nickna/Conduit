@@ -32,7 +32,7 @@ namespace ConduitLLM.Admin.Extensions
                 .Get<MediaLifecycleOptions>() ?? new MediaLifecycleOptions();
 
             // Register distributed lock service (PostgreSQL-based, works without Redis)
-            services.AddSingleton<IDistributedLockService, PostgresDistributedLockService>();
+            services.AddConduitDistributedLocks();
 
             // Use the same media registration and environment-variable contract as Gateway.
             services.AddMediaServices(configuration);

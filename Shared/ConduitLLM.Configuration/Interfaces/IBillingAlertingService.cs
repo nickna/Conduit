@@ -14,7 +14,10 @@ namespace ConduitLLM.Configuration.Interfaces
         /// <param name="virtualKeyId">Optional virtual key ID associated with the failure</param>
         /// <param name="additionalContext">Optional additional context data</param>
         /// <returns>Task representing the async operation</returns>
-        Task SendCriticalAlertAsync(string message, int? virtualKeyId = null, object? additionalContext = null);
+        Task SendCriticalAlertAsync(
+            string message,
+            int? virtualKeyId = null,
+            Dictionary<string, object?>? additionalContext = null);
 
     }
 }

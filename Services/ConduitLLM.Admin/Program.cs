@@ -2,18 +2,14 @@ using ConduitLLM.Admin.Endpoints;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Extensions;
 using ConduitLLM.Admin.Serialization;
-using ConduitLLM.Configuration.Data;
 using ConduitLLM.Configuration.Extensions;
-using ConduitLLM.Core.Converters;
 using ConduitLLM.Core.Extensions;
-using ConduitLLM.Core.Serialization;
 using ConduitLLM.Security.Extensions;
 using ConduitLLM.Security.Middleware;
 
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
+#if CONDUIT_WOLVERINE_CODEGEN
 using JasperFx;
+#endif
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
@@ -30,16 +26,9 @@ public partial class Program
     /// Application entry point that configures and starts the web application
     /// </summary>
     /// <param name="args">Command line arguments</param>
-    /// <returns>Process exit code (nonzero when the "migrate" verb fails)</returns>
+    /// <returns>Process exit code</returns>
     public static async Task<int> Main(string[] args)
     {
-        // "migrate" verb: run the standalone migrator (release-hook entry point)
-        // instead of the web host — e.g. `dotnet ConduitLLM.Admin.dll migrate`.
-        if (MigrationCommand.Matches(args))
-        {
-            return await MigrationCommand.RunAsync();
-        }
-
         var builder = WebApplication.CreateBuilder(args);
 
         // Create a startup logger for structured logging during service registration
@@ -49,10 +38,20 @@ public partial class Program
         // Add services to the container
         // Keep Minimal API JSON aligned with the established Admin contract.
         builder.Services.ConfigureHttpJsonOptions(options =>
-            ConfigureAdminJson(options.SerializerOptions));
+            AdminJsonOptions.Configure(options.SerializerOptions));
+        builder.Services.AddValidation();
         builder.Services.AddProblemDetails(options =>
             options.CustomizeProblemDetails = context =>
             {
+                if (context.ProblemDetails is HttpValidationProblemDetails validation)
+                {
+                    context.ProblemDetails.Detail = string.Join(
+                        "; ",
+                        validation.Errors.SelectMany(static entry =>
+                            entry.Value.Select(message => string.IsNullOrEmpty(entry.Key)
+                                ? message
+                                : $"{entry.Key}: {message}")));
+                }
                 context.ProblemDetails.Extensions["code"] =
                     AdminErrorCodes.ForStatus(context.ProblemDetails.Status);
                 context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
@@ -270,31 +269,15 @@ public partial class Program
             app.Environment.EnvironmentName,
             string.Join(", ", serverAddresses ?? Array.Empty<string>()));
 
-        // JasperFx command-line integration: with no arguments this runs the web host
-        // exactly like app.Run(); the committed Wolverine adapters are regenerated with
-        // `./scripts/generate-wolverine-code.ps1` and verified for drift in CI.
+#if CONDUIT_WOLVERINE_CODEGEN
+        // Generation-only command path, enabled by scripts/generate-wolverine-code.ps1.
         return await app.RunJasperFxCommands(args);
+#else
+        await app.RunAsync();
+        return 0;
+#endif
     }
 
-    private static void ConfigureAdminJson(JsonSerializerOptions options)
-    {
-        options.TypeInfoResolverChain.Insert(0, AdminHttpJsonContext.Default);
-        options.TypeInfoResolverChain.Insert(1, CoreHttpJsonContext.Default);
-        if (options.TypeInfoResolverChain.All(static resolver =>
-                resolver is not System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver))
-        {
-            options.TypeInfoResolverChain.Add(
-                new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver());
-        }
-
-        options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-        options.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
-        options.PropertyNameCaseInsensitive = true;
-        options.Converters.Add(
-            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
-        options.Converters.Add(new UtcDateTimeConverter());
-        options.Converters.Add(new NullableUtcDateTimeConverter());
-    }
 }
 
 // Make Program accessible for testing

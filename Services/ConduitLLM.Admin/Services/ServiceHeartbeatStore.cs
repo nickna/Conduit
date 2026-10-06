@@ -61,7 +61,7 @@ namespace ConduitLLM.Admin.Services
             try
             {
                 var db = _redis.GetDatabase();
-                var json = JsonSerializer.Serialize(heartbeat);
+                var json = AdminJson.Serialize(heartbeat);
                 var ttl = CalculateTtl(heartbeat.Heartbeat.IntervalSeconds);
                 await db.StringSetAsync(
                     RedisKeys.ServiceHeartbeat.For(heartbeat.ServiceId, heartbeat.Heartbeat.InstanceId),
@@ -199,10 +199,10 @@ namespace ConduitLLM.Admin.Services
 
             if (hasEmbeddedHeartbeat)
             {
-                return JsonSerializer.Deserialize<ServiceHeartbeatSnapshot>(json);
+                return AdminJson.Deserialize<ServiceHeartbeatSnapshot>(json);
             }
 
-            var legacy = JsonSerializer.Deserialize<LegacyServiceHeartbeatSnapshot>(json);
+            var legacy = AdminJson.Deserialize<LegacyServiceHeartbeatSnapshot>(json);
             if (legacy is null)
             {
                 return null;
@@ -234,7 +234,7 @@ namespace ConduitLLM.Admin.Services
         private static string GetInProcessKey(string serviceId, string instanceId) =>
             $"{serviceId}\n{instanceId}";
 
-        private sealed class LegacyServiceHeartbeatSnapshot
+        internal sealed class LegacyServiceHeartbeatSnapshot
         {
             public string ServiceId { get; set; } = string.Empty;
             public string InstanceId { get; set; } = string.Empty;

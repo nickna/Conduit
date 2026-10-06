@@ -17,8 +17,8 @@ namespace ConduitLLM.Tests.Services.Orchestrators
     /// <summary>
     /// Unit tests for VideoGenerationOrchestrator.
     /// </summary>
-    // Test client that has CreateVideoAsync method for reflection
-    public class TestVideoClient : ILLMClient
+    // Test client implementing the explicit video-generation capability.
+    public class TestVideoClient : ILLMClient, IVideoGenerationClient
     {
         private readonly VideoGenerationResponse _response;
         
@@ -29,8 +29,8 @@ namespace ConduitLLM.Tests.Services.Orchestrators
         
         public Task<VideoGenerationResponse> CreateVideoAsync(
             VideoGenerationRequest request,
-            IProgress<VideoGenerationProgress>? progress,
-            CancellationToken cancellationToken)
+            string? apiKey = null,
+            CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_response);
         }
@@ -133,7 +133,7 @@ namespace ConduitLLM.Tests.Services.Orchestrators
 
         protected override void SetupSuccessfulGeneration(VideoGenerationResponse response)
         {
-            // Use test client that has CreateVideoAsync method for reflection
+            // Use a test client with the explicit video-generation capability.
             var testClient = new TestVideoClient(response);
             
             ClientFactoryMock.Setup(x => x.GetClientByProviderIdAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))

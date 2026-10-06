@@ -42,8 +42,7 @@ namespace ConduitLLM.Admin.Services
             await using var db = await _dbFactory.CreateDbContextAsync();
             var query = db.ProviderMetadataDriftItems
                 .Include(x => x.Mapping)
-                .AsNoTracking()
-                .AsQueryable();
+                .AsNoTracking();
 
             if (!string.IsNullOrEmpty(status) && Enum.TryParse<DriftStatus>(status, true, out var s))
                 query = query.Where(x => x.Status == s);
@@ -364,9 +363,9 @@ namespace ConduitLLM.Admin.Services
         };
 
         private static T Deserialize<T>(string json) where T : new()
-            => JsonSerializer.Deserialize<T>(json, JsonOptions) ?? new T();
+            => AdminJson.Deserialize<T>(json, JsonOptions) ?? new T();
 
-        private static string Serialize(object value) => JsonSerializer.Serialize(value, JsonOptions);
+        private static string Serialize(object value) => AdminJson.Serialize(value, JsonOptions);
 
         private static bool JsonEquivalent(string a, string b)
             => string.Equals(a, b, StringComparison.Ordinal);

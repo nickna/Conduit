@@ -14,7 +14,7 @@ namespace ConduitLLM.Configuration.DTOs
         /// <remarks>
         /// Examples: "GPT-4 Standard Pricing", "Llama 3 Unified Cost", "Embedding Models - Ada"
         /// </remarks>
-        [MaxLength(255)]
+        [StringLength(255)]
         public string? CostName { get; set; }
 
         /// <summary>
@@ -40,7 +40,7 @@ namespace ConduitLLM.Configuration.DTOs
         /// <summary>
         /// Model type for categorization
         /// </summary>
-        [MaxLength(50)]
+        [StringLength(50)]
         public string? ModelType { get; set; }
 
         /// <summary>
@@ -51,7 +51,7 @@ namespace ConduitLLM.Configuration.DTOs
         /// <summary>
         /// Optional description
         /// </summary>
-        [MaxLength(500)]
+        [StringLength(500)]
         public string? Description { get; set; }
 
         /// <summary>

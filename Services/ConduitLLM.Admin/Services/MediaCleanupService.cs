@@ -1,3 +1,4 @@
+using ConduitLLM.Core.Extensions;
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -19,7 +20,7 @@ namespace ConduitLLM.Admin.Services
     public class MediaCleanupService : BackgroundService
     {
         private readonly IServiceScopeFactory _serviceScopeFactory;
-        private readonly IDistributedLockService _lockService;
+        private readonly IDistributedLockProvider _lockService;
         private readonly MediaLifecycleOptions _options;
         private readonly ILogger<MediaCleanupService> _logger;
         private readonly IMediaStorageConfigurationGuard? _storageConfigurationGuard;
@@ -35,7 +36,7 @@ namespace ConduitLLM.Admin.Services
         /// <param name="storageConfigurationGuard">Storage safety guard</param>
         public MediaCleanupService(
             IServiceScopeFactory serviceScopeFactory,
-            IDistributedLockService lockService,
+            IDistributedLockProvider lockService,
             IOptions<MediaLifecycleOptions> options,
             ILogger<MediaCleanupService> logger,
             IMediaStorageConfigurationGuard? storageConfigurationGuard = null)
@@ -140,9 +141,9 @@ namespace ConduitLLM.Admin.Services
                 return;
             }
 
-            using var lockHandle = await _lockService.AcquireLockAsync(
+            await using var lockHandle = await _lockService.TryAcquireAsync(
                 MediaCleanupLock.Key,
-                MediaCleanupLock.Duration,
+                TimeSpan.Zero,
                 stoppingToken);
 
             if (lockHandle == null)
@@ -157,9 +158,13 @@ namespace ConduitLLM.Admin.Services
                 "Instance {InstanceId} acquired cleanup leadership",
                 _instanceId);
 
+            using var operationCancellation = lockHandle.CreateOperationCancellation(
+                stoppingToken, MediaCleanupLock.OperationDeadline);
+
             try
             {
-                await RunCleanupAsync(stoppingToken);
+                await RunCleanupAsync(operationCancellation.Token);
+                operationCancellation.Token.ThrowIfCancellationRequested();
             }
             finally
             {
@@ -321,6 +326,7 @@ namespace ConduitLLM.Admin.Services
                 // Record run completion for status tracking
                 if (statusService != null)
                 {
+                    using var completionCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(3));
                     await statusService.RecordRunCompletionAsync(
                         totalDeleted,
                         totalBytesFreed,
@@ -328,7 +334,7 @@ namespace ConduitLLM.Admin.Services
                         status,
                         _instanceId,
                         "scheduled",
-                        stoppingToken);
+                        stoppingToken.IsCancellationRequested ? completionCancellation.Token : stoppingToken);
                 }
 
             }

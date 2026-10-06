@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using ConduitLLM.Admin.Extensions;
 using ConduitLLM.Admin.Interfaces;
 using ConduitLLM.Configuration.DTOs.Monitoring;
+using ConduitLLM.Configuration.Data;
 using ConduitLLM.Core.Diagnostics;
 
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +20,7 @@ public class AdminSystemInfoService : IAdminSystemInfoService
     private readonly IConfigurationDbContext _dbContext;
     private readonly ILogger<AdminSystemInfoService> _logger;
     private readonly IProviderRepository _providerRepository;
+    private readonly ISchemaVersionProbe? _schemaVersionProbe;
     private readonly ConduitLLM.Core.Configuration.CustomerErrorOptions _customerErrorOptions;
     private readonly DateTime _startTime;
 
@@ -29,15 +31,18 @@ public class AdminSystemInfoService : IAdminSystemInfoService
     /// <param name="logger">The logger</param>
     /// <param name="providerRepository">The provider repository</param>
     /// <param name="customerErrorOptions">Customer error mode (CONDUIT_CUSTOMER_MODE)</param>
+    /// <param name="schemaVersionProbe">Read-only database schema-version probe</param>
     public AdminSystemInfoService(
         IConfigurationDbContext dbContext,
         ILogger<AdminSystemInfoService> logger,
         IProviderRepository providerRepository,
-        ConduitLLM.Core.Configuration.CustomerErrorOptions? customerErrorOptions = null)
+        ConduitLLM.Core.Configuration.CustomerErrorOptions? customerErrorOptions = null,
+        ISchemaVersionProbe? schemaVersionProbe = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _providerRepository = providerRepository ?? throw new ArgumentNullException(nameof(providerRepository));
+        _schemaVersionProbe = schemaVersionProbe;
         _customerErrorOptions = customerErrorOptions ?? new ConduitLLM.Core.Configuration.CustomerErrorOptions();
         _startTime = Process.GetCurrentProcess().StartTime;
     }
@@ -241,23 +246,20 @@ public class AdminSystemInfoService : IAdminSystemInfoService
 
             if (canConnect)
             {
-                // Check migrations
-                var pendingMigrationsList = (await _dbContext.GetDatabase().GetPendingMigrationsAsync()).ToList();
-                bool pendingMigrations = pendingMigrationsList.Count > 0;
-
-                // Get migration history
-                var migrations = (await _dbContext.GetDatabase().GetAppliedMigrationsAsync()).ToList();
-
-                health.Status = pendingMigrations ? "degraded" : "healthy";
-                if (pendingMigrations)
+                var schema = _schemaVersionProbe is null
+                    ? null
+                    : await _schemaVersionProbe.GetStatusAsync();
+                health.Status = schema is null || schema.IsCurrent ? "healthy" : "degraded";
+                if (schema is { IsCurrent: false })
                 {
-                    _logger.LogWarning("Database has {PendingCount} pending migrations (applied: {AppliedCount})",
-                        pendingMigrationsList.Count, migrations.Count);
-                    health.Description = "Database connected but has pending migrations";
+                    _logger.LogWarning(
+                        "Database schema version {AppliedVersion} does not match required version {ExpectedVersion}",
+                        schema.AppliedVersion ?? "<uninitialized>", schema.ExpectedVersion);
+                    health.Description = "Database connected but schema version is not current";
                 }
                 else
                 {
-                    _logger.LogDebug("Database healthy with {AppliedCount} applied migrations", migrations.Count);
+                    _logger.LogDebug("Database schema is current");
                 }
             }
             else

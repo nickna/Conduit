@@ -1,0 +1,12 @@
+<Directives>
+  <Application>
+    <Assembly Name="ConduitLLM.Admin">
+      <Type Name="Internal.Generated.WolverineHandlers.FunctionConfigurationChangedHandler2137694965" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.FunctionDiscoveryCacheInvalidationRequestedHandler486748459" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.GatewayHeartbeatHandler989896135" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.GeneratedHandlerRegistry" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.GlobalSettingChangedHandler1604840796" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.GlobalSettingsReloadRequestedHandler1670587812" Dynamic="Required All" />
+    </Assembly>
+  </Application>
+</Directives>

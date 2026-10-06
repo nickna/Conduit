@@ -46,7 +46,7 @@ public class ModelProviderMappingEndpoints
 
     public static IEndpointRouteBuilder MapModelProviderMappingEndpoints(IEndpointRouteBuilder app)
     {
-        var g = app.MapGroup("/v1/admin/model-provider-mappings").RequireAuthorization("MasterKeyPolicy").AddEndpointFilter<ValidationEndpointFilter>().AddEndpointFilter<OperationLoggingEndpointFilter>().WithTags("Model Provider Mappings");
+        var g = app.MapGroup("/v1/admin/model-provider-mappings").RequireAuthorization("MasterKeyPolicy").AddEndpointFilter<OperationLoggingEndpointFilter>().WithTags("Model Provider Mappings");
         g.MapGet("/", ([FromServices] ModelProviderMappingEndpoints e) => e.GetAllMappings()).WithName("ModelProviderMapping_GetAll").Produces<IEnumerable<ModelProviderMappingDto>>();
         g.MapGet("/{id}", ([FromServices] ModelProviderMappingEndpoints e, int id) => e.GetMappingById(id)).WithName("ModelProviderMapping_GetById").Produces<ModelProviderMappingDto>().Produces(StatusCodes.Status404NotFound);
         g.MapPost("/", ([FromServices] ModelProviderMappingEndpoints e, CreateModelProviderMappingDto dto) => e.CreateMapping(dto)).WithName("ModelProviderMapping_Create").Produces<ModelProviderMappingDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status409Conflict);

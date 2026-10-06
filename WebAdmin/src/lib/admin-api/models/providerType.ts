@@ -1,4 +1,4 @@
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 
 /** Provider values as serialized by the Admin API. Regeneration extends this union automatically. */
 export type ProviderType = components['schemas']['ProviderType'];

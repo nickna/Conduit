@@ -36,19 +36,18 @@ import { modals } from '@mantine/modals';
 import { fetchModelCostById, fetchModelCosts, useDeleteModelCost } from '../hooks/useModelCostsApi';
 import { ModelCost } from '../types/modelCost';
 import { PricingModel, ModelType } from '@/lib/admin-api';
-import { EditModelCostModalV2 } from './EditModelCostModalV2';
+import { EditModelCostModal } from './EditModelCostModal';
 import { ViewModelCostModal } from './ViewModelCostModal';
 import { formatters } from '@/lib/utils/formatters';
 import { CallToActionEmpty } from './CallToActionEmpty';
 import { useEnrichedModelCosts } from '../hooks/useEnrichedModelCosts';
 
 interface ModelCostsTableProps {
-  onRefresh?: () => void;
   hasProviders?: boolean;
   hasModelMappings?: boolean;
 }
 
-export function ModelCostsTable({ onRefresh, hasProviders, hasModelMappings }: ModelCostsTableProps) {
+export function ModelCostsTable({ hasProviders, hasModelMappings }: ModelCostsTableProps) {
   const deleteMutation = useDeleteModelCost();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -73,7 +72,7 @@ export function ModelCostsTable({ onRefresh, hasProviders, hasModelMappings }: M
   const [viewingCost, setViewingCost] = useState<ModelCost | null>(null);
 
   // Fetch data - modelTypeFilter is passed to server for server-side filtering
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['model-costs', page, pageSize, activeFilter, modelTypeFilter],
     queryFn: () => fetchModelCosts(page, pageSize, {
       isActive: (() => {
@@ -459,14 +458,12 @@ export function ModelCostsTable({ onRefresh, hasProviders, hasModelMappings }: M
       </Card>
 
       {editingCost && (
-        <EditModelCostModalV2
+        <EditModelCostModal
           isOpen={!!editingCost}
           modelCost={editingCost}
           onClose={() => setEditingCost(null)}
           onSuccess={() => {
             setEditingCost(null);
-            void refetch();
-            onRefresh?.();
           }}
         />
       )}

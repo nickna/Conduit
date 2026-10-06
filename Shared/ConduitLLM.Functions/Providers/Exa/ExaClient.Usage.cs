@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Functions.Serialization;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Providers.Exa.Models;
 
@@ -54,7 +55,9 @@ public partial class ExaClient
     /// </summary>
     private FunctionExecutionUsage CalculateUsageFromSearchResponse(Interfaces.FunctionExecutionResult result)
     {
-        var exaResponse = JsonSerializer.Deserialize<ExaSearchResponse>(result.ResponseJson!, _jsonOptions);
+        var exaResponse = JsonSerializer.Deserialize(
+            result.ResponseJson!,
+            FunctionProviderJsonContext.Default.ExaSearchResponse);
 
         if (exaResponse == null)
         {
@@ -108,7 +111,9 @@ public partial class ExaClient
     /// </summary>
     private FunctionExecutionUsage CalculateUsageFromContentsResponse(Interfaces.FunctionExecutionResult result)
     {
-        var exaResponse = JsonSerializer.Deserialize<ExaContentsResponse>(result.ResponseJson!, _jsonOptions);
+        var exaResponse = JsonSerializer.Deserialize(
+            result.ResponseJson!,
+            FunctionProviderJsonContext.Default.ExaContentsResponse);
 
         if (exaResponse == null)
         {

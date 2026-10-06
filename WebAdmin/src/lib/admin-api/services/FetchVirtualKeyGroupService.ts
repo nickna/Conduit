@@ -1,7 +1,7 @@
 import type { FetchBaseApiClient } from '../client/FetchBaseApiClient';
 import type { RequestConfig } from '../client/types';
 import { HttpMethod } from '../client/HttpMethod';
-import type { components, paths } from '../generated/admin-api';
+import type { components, paths } from '@/generated/admin-api';
 import type { TransactionHistoryParams } from '../models/virtualKey';
 import { balanceAdjustmentSchema, parseCriticalResponse } from '@/lib/api-transport/critical-response-validation';
 
@@ -22,29 +22,29 @@ export class FetchVirtualKeyGroupService {
   async list(params?: ListGroupsParams, config?: RequestConfig): Promise<PagedGroups> {
     const query: ListQuery = params;
     const qs = new URLSearchParams(Object.entries(params ?? {}).map(([k, v]) => [k, String(v)])).toString();
-    return this.client['executeContractRead'](`/v1/admin/virtual-key-groups${qs ? `?${qs}` : ''}`,
+    return this.client.executeContractRead(`/v1/admin/virtual-key-groups${qs ? `?${qs}` : ''}`,
       (client, options) => client.GET('/v1/admin/virtual-key-groups', { ...options, params: { query } }), config);
   }
 
   async get(id: number, config?: RequestConfig): Promise<VirtualKeyGroupDto> {
-    return this.client['executeContractRead'](`/v1/admin/virtual-key-groups/${id}`,
+    return this.client.executeContractRead(`/v1/admin/virtual-key-groups/${id}`,
       (client, options) => client.GET('/v1/admin/virtual-key-groups/{id}', { ...options, params: { path: { id } } }), config);
   }
 
   async create(data: CreateVirtualKeyGroupRequestDto, config?: RequestConfig): Promise<VirtualKeyGroupDto> {
-    return this.client['executeContractOperation']('/v1/admin/virtual-key-groups', HttpMethod.POST,
+    return this.client.executeContractOperation('/v1/admin/virtual-key-groups', HttpMethod.POST,
       (client, options) => client.POST('/v1/admin/virtual-key-groups', { ...options, body: data }), config, data);
   }
 
   async update(id: number, data: UpdateVirtualKeyGroupRequestDto, config?: RequestConfig): Promise<void> {
-    await this.client['executeContractOperation'](`/v1/admin/virtual-key-groups/${id}`, HttpMethod.PATCH,
+    await this.client.executeContractOperation(`/v1/admin/virtual-key-groups/${id}`, HttpMethod.PATCH,
       (client, options) => client.PATCH('/v1/admin/virtual-key-groups/{id}', {
         ...options, params: { path: { id }, header: { ['If-Match']: '*' } }, body: data,
       }), config, data);
   }
 
   async adjustBalance(id: number, data: AdjustBalanceDto, config?: RequestConfig): Promise<VirtualKeyGroupDto> {
-    const response = await this.client['executeContractOperation'](`/v1/admin/virtual-key-groups/${id}/adjust-balance`, HttpMethod.POST,
+    const response = await this.client.executeContractOperation(`/v1/admin/virtual-key-groups/${id}/adjust-balance`, HttpMethod.POST,
       (client, options) => client.POST('/v1/admin/virtual-key-groups/{id}/adjust-balance', {
         ...options, params: { path: { id }, header: { ['If-Match']: '*' } }, body: data,
       }), config, data);
@@ -52,14 +52,14 @@ export class FetchVirtualKeyGroupService {
   }
 
   async delete(id: number, config?: RequestConfig): Promise<void> {
-    await this.client['executeContractOperation'](`/v1/admin/virtual-key-groups/${id}`, HttpMethod.DELETE,
+    await this.client.executeContractOperation(`/v1/admin/virtual-key-groups/${id}`, HttpMethod.DELETE,
       (client, options) => client.DELETE('/v1/admin/virtual-key-groups/{id}', {
         ...options, params: { path: { id }, header: { ['If-Match']: '*' } },
       }), config);
   }
 
   async getKeys(id: number, config?: RequestConfig): Promise<VirtualKeyDto[]> {
-    const result = await this.client['executeContractRead'](`/v1/admin/virtual-key-groups/${id}/keys`,
+    const result = await this.client.executeContractRead(`/v1/admin/virtual-key-groups/${id}/keys`,
       (client, options) => client.GET('/v1/admin/virtual-key-groups/{id}/keys', { ...options, params: { path: { id } } }), config);
     return result.data;
   }
@@ -67,7 +67,7 @@ export class FetchVirtualKeyGroupService {
   async getTransactionHistory(id: number, params?: TransactionHistoryParams, config?: RequestConfig): Promise<PagedTransactions> {
     const query = params;
     const qs = new URLSearchParams(Object.entries(params ?? {}).map(([k, v]) => [k, String(v)])).toString();
-    return this.client['executeContractRead'](`/v1/admin/virtual-key-groups/${id}/transactions${qs ? `?${qs}` : ''}`,
+    return this.client.executeContractRead(`/v1/admin/virtual-key-groups/${id}/transactions${qs ? `?${qs}` : ''}`,
       (client, options) => client.GET('/v1/admin/virtual-key-groups/{id}/transactions', {
         ...options, params: { path: { id }, query },
       }), config);

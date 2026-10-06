@@ -2,7 +2,7 @@
  * Model management types for the Admin API
  */
 
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 
 // Re-export ModelType enum from modelType.ts
 export { ModelType } from './modelType';

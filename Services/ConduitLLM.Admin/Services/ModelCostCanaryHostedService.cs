@@ -122,12 +122,12 @@ public sealed class ModelCostCanaryHostedService : BackgroundService
                         ProviderType = mapping.Provider.ProviderType.ToString(),
                         CalculatedCost = 0m,
                         FailureReason = Truncate(exception.Message, 500),
-                        MetadataJson = JsonSerializer.Serialize(new
+                        MetadataJson = AdminJson.Serialize(new Dictionary<string, object?>
                         {
-                            mappingId = mapping.Id,
-                            modelCostId = modelCost?.Id,
-                            pricingModel = modelCost?.PricingModel.ToString(),
-                            reason
+                            ["mappingId"] = mapping.Id,
+                            ["modelCostId"] = modelCost?.Id,
+                            ["pricingModel"] = modelCost?.PricingModel.ToString(),
+                            ["reason"] = reason
                         })
                     });
                 }
@@ -176,7 +176,7 @@ public sealed class ModelCostCanaryHostedService : BackgroundService
         if (modelCost.PricingModel == PricingModel.PerVideo &&
             !string.IsNullOrWhiteSpace(modelCost.PricingConfiguration))
         {
-            var config = JsonSerializer.Deserialize<PerVideoPricingConfig>(modelCost.PricingConfiguration, JsonOptions);
+            var config = AdminJson.Deserialize<PerVideoPricingConfig>(modelCost.PricingConfiguration, JsonOptions);
             var rateKey = config?.Rates?.Keys.FirstOrDefault();
             var separator = rateKey?.LastIndexOf('_') ?? -1;
             if (separator > 0 && int.TryParse(rateKey![(separator + 1)..], out var duration))

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Distributed;
+using System.Text.Json.Serialization;
 using ConduitLLM.Configuration.Constants;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Models;
@@ -86,7 +87,7 @@ namespace ConduitLLM.Gateway.Services
             IDistributedCache cache,
             IDataProtectionProvider dataProtectionProvider,
             ILogger<EphemeralKeyService> logger)
-            : base(cache, logger)
+            : base(cache, logger, EphemeralKeyJsonContext.Default.EphemeralKeyData)
         {
             ArgumentNullException.ThrowIfNull(dataProtectionProvider);
             _protector = dataProtectionProvider.CreateProtector(ProtectorPurpose);
@@ -193,4 +194,8 @@ namespace ConduitLLM.Gateway.Services
             return _protector.Unprotect(protectedValue[ProtectedValuePrefix.Length..]);
         }
     }
+
+    [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
+    [JsonSerializable(typeof(EphemeralKeyData))]
+    internal partial class EphemeralKeyJsonContext : JsonSerializerContext;
 }

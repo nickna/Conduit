@@ -514,7 +514,9 @@ namespace ConduitLLM.Configuration.Repositories
                         updatedMetadata["costCorrected"] = true;
                         updatedMetadata["costCorrectedAt"] = DateTime.UtcNow.ToString("O");
 
-                        requestLog.Metadata = System.Text.Json.JsonSerializer.Serialize(updatedMetadata);
+                        requestLog.Metadata = System.Text.Json.JsonSerializer.Serialize(
+                            updatedMetadata,
+                            Serialization.ConfigurationJsonContext.Default.DictionaryStringObject);
                     }
                     catch (System.Text.Json.JsonException ex)
                     {

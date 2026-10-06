@@ -38,7 +38,11 @@ public static class MultimodalContentInspector
             {
                 content = message.Content is JsonElement element
                     ? element
-                    : JsonSerializer.SerializeToElement(message.Content);
+                    : JsonSerializer.SerializeToElement(
+                        message.Content,
+                        Serialization.CoreJsonTypeInfo.Require(
+                            message.Content.GetType(),
+                            Serialization.ConduitJsonOptions.Wire));
             }
             catch (Exception exception) when (exception is JsonException or NotSupportedException)
             {

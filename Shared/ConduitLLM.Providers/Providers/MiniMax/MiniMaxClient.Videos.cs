@@ -249,7 +249,9 @@ namespace ConduitLLM.Providers.MiniMax
             MiniMaxVideoStatusResponse? parsed;
             try
             {
-                parsed = JsonSerializer.Deserialize<MiniMaxVideoStatusResponse>(content, DefaultJsonOptions);
+                parsed = JsonSerializer.Deserialize(
+                    content,
+                    MiniMaxStreamJsonContext.Default.MiniMaxVideoStatusResponse);
             }
             catch (JsonException ex)
             {

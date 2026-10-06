@@ -20,20 +20,20 @@ public partial class VirtualKey : IEntity<int>, IAuditableEntity
     /// Name of the virtual key
     /// </summary>
     [Required]
-    [MaxLength(100)]
+    [StringLength(100)]
     public string KeyName { get; set; } = string.Empty;
 
     /// <summary>
     /// The hash of the key value used for authentication
     /// </summary>
     [Required]
-    [MaxLength(128)]
+    [StringLength(128)]
     public string KeyHash { get; set; } = string.Empty;
 
     /// <summary>
     /// Optional description of the key
     /// </summary>
-    [MaxLength(500)]
+    [StringLength(500)]
     public string? Description { get; set; }
 
     /// <summary>

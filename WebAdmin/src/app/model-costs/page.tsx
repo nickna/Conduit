@@ -1,20 +1,21 @@
 'use client';
 
 import { Suspense, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Center, Container, Title, Text, Button, Group, Loader, Stack } from '@mantine/core';
 import { IconPlus, IconRefresh, IconFileImport, IconFileExport } from '@tabler/icons-react';
 import { useRouter } from 'next/navigation';
 import { ModelCostsTable } from './components/ModelCostsTable';
 import { ImportModelCostsModal } from './components/ImportModelCostsModal';
-import { useModelCostsApi } from './hooks/useModelCostsApi';
+import { useExportModelCosts } from './hooks/useModelCostsApi';
 import { useProviders } from '@/hooks/useProviderApi';
 import { useModelMappings } from '@/hooks/useModelMappingsApi';
 
 export default function ModelCostsPage() {
   const router = useRouter();
-  const [refreshKey, setRefreshKey] = useState(0);
+  const queryClient = useQueryClient();
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const { exportModelCosts, isExporting } = useModelCostsApi();
+  const exportMutation = useExportModelCosts();
   const { providers } = useProviders();
   const { mappings } = useModelMappings();
 
@@ -22,16 +23,10 @@ export default function ModelCostsPage() {
   const hasModelMappings = mappings.length > 0;
 
   const handleRefresh = () => {
-    setRefreshKey(prev => prev + 1);
+    void queryClient.invalidateQueries({ queryKey: ['model-costs'] });
   };
 
-  const handleExport = async () => {
-    try {
-      await exportModelCosts();
-    } catch {
-      // Error handling is done in the hook
-    }
-  };
+  const handleExport = () => exportMutation.mutate('csv');
 
   return (
     <Container size="xl">
@@ -47,8 +42,8 @@ export default function ModelCostsPage() {
             <Button
               leftSection={<IconFileExport size={16} />}
               variant="light"
-              onClick={() => void handleExport()}
-              loading={isExporting}
+              onClick={handleExport}
+              loading={exportMutation.isPending}
             >
               Export CSV
             </Button>
@@ -68,7 +63,7 @@ export default function ModelCostsPage() {
             </Button>
             <Button
               leftSection={<IconPlus size={16} />}
-              onClick={() => router.push('/model-costs/add-v2')}
+              onClick={() => router.push('/model-costs/add')}
             >
               Add Pricing
             </Button>
@@ -77,8 +72,6 @@ export default function ModelCostsPage() {
 
         <Suspense fallback={<Center py="xl"><Loader /></Center>}>
           <ModelCostsTable
-            key={refreshKey}
-            onRefresh={handleRefresh}
             hasProviders={hasProviders}
             hasModelMappings={hasModelMappings}
           />

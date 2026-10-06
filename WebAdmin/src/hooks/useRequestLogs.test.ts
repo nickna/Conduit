@@ -29,10 +29,8 @@ function deferred<T>(): Deferred<T> {
 
 function response(id: number, page: number) {
   return {
-    items: [{ id, model: `model-${id}`, timestamp: '2026-07-22T00:00:00Z' }],
-    totalCount: 1,
-    totalPages: 1,
-    page,
+    data: [{ id, modelName: `model-${id}`, timestamp: '2026-07-22T00:00:00Z' }],
+    pagination: { totalItems: 1, totalPages: 1, page, pageSize: 25 },
   };
 }
 

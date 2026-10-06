@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using ConduitLLM.Configuration.DTOs;
 using ConduitLLM.Configuration.Entities;
+using ConduitLLM.Configuration.Serialization;
 
 namespace ConduitLLM.Configuration.Models;
 
@@ -40,7 +41,9 @@ public static class ModelModalities
 
         try
         {
-            return Normalize(JsonSerializer.Deserialize<string[]>(json) ?? []);
+            return Normalize(JsonSerializer.Deserialize(
+                json,
+                ConfigurationModelJsonContext.Default.StringArray) ?? []);
         }
         catch (JsonException)
         {
@@ -49,7 +52,11 @@ public static class ModelModalities
     }
 
     public static string? Serialize(IEnumerable<string>? modalities) =>
-        modalities is null ? null : JsonSerializer.Serialize(Normalize(modalities));
+        modalities is null
+            ? null
+            : JsonSerializer.Serialize(
+                Normalize(modalities).ToArray(),
+                ConfigurationModelJsonContext.Default.StringArray);
 
     public static IReadOnlyList<string> Normalize(IEnumerable<string> modalities) =>
         modalities
@@ -85,8 +92,6 @@ public sealed class ProviderOperationalCapabilities
 /// </summary>
 public static class ModelCapabilityResolver
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     public static ModelCapabilitiesDto Resolve(
         Model model,
         ModelProviderTypeAssociation? association = null)
@@ -153,7 +158,11 @@ public static class ModelCapabilityResolver
     }
 
     public static string? SerializeOverrides(ProviderOperationalCapabilities? capabilities) =>
-        capabilities is null ? null : JsonSerializer.Serialize(capabilities, JsonOptions);
+        capabilities is null
+            ? null
+            : JsonSerializer.Serialize(
+                capabilities,
+                ConfigurationModelJsonContext.Default.ProviderOperationalCapabilities);
 
     public static ProviderOperationalCapabilities? DeserializeOverrides(string? json)
     {
@@ -164,7 +173,9 @@ public static class ModelCapabilityResolver
 
         try
         {
-            return JsonSerializer.Deserialize<ProviderOperationalCapabilities>(json, JsonOptions);
+            return JsonSerializer.Deserialize(
+                json,
+                ConfigurationModelJsonContext.Default.ProviderOperationalCapabilities);
         }
         catch (JsonException)
         {

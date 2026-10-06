@@ -18,6 +18,7 @@ namespace ConduitLLM.Providers;
 internal sealed class ProviderKeyFailoverLLMClient :
     ILLMClient,
     ILLMClientDecorator,
+    IVideoGenerationClient,
     IAuthenticationVerifiable
 {
     private const int MaxAttempts = 3;
@@ -248,35 +249,17 @@ internal sealed class ProviderKeyFailoverLLMClient :
         };
     }
 
-    private static async Task<VideoGenerationResponse> InvokeVideoAsync(
+    private static Task<VideoGenerationResponse> InvokeVideoAsync(
         ILLMClient client,
         VideoGenerationRequest request,
         string? apiKey,
         CancellationToken cancellationToken)
     {
-        object target = client.UnwrapInnermost();
-        System.Reflection.MethodInfo? method = null;
-        for (ILLMClient? current = client; current is not null;
-             current = (current as ILLMClientDecorator)?.InnerClient)
-        {
-            method = current.GetType().GetMethod(
-                nameof(CreateVideoAsync),
-                new[] { typeof(VideoGenerationRequest), typeof(string), typeof(CancellationToken) });
-            if (method is not null)
-            {
-                target = current;
-                break;
-            }
-        }
+        var videoClient = client.FindInChain<IVideoGenerationClient>()
+            ?? throw new NotSupportedException(
+                $"The underlying client {client.GetType().Name} does not support video generation");
 
-        if (method?.Invoke(target, new object?[] { request, apiKey, cancellationToken })
-            is not Task<VideoGenerationResponse> task)
-        {
-            throw new NotSupportedException(
-                $"The underlying client {target.GetType().Name} does not support video generation");
-        }
-
-        return await task;
+        return videoClient.CreateVideoAsync(request, apiKey, cancellationToken);
     }
 
     private static void ThrowOriginalOrNoEligibleTarget(ExceptionDispatchInfo? originalError)

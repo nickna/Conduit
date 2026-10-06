@@ -30,7 +30,7 @@ namespace ConduitLLM.Configuration.Entities
 
         /// <summary>The provider (OpenRouter) model id, e.g. <c>anthropic/claude-3.5-sonnet</c>.</summary>
         [Required]
-        [MaxLength(200)]
+        [StringLength(200)]
         public string OpenRouterModelId { get; set; } = string.Empty;
 
         /// <summary>The kind of drift. Stored as a string via a value conversion.</summary>
@@ -60,7 +60,7 @@ namespace ConduitLLM.Configuration.Entities
         public DateTime? ResolvedAt { get; set; }
 
         /// <summary>Who/what resolved the item ("admin" or "system:auto-resolve").</summary>
-        [MaxLength(100)]
+        [StringLength(100)]
         public string? ResolvedBy { get; set; }
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
@@ -20,7 +21,6 @@ public sealed class HybridCacheAccessor
     private readonly string _keyPrefix;
     private readonly TimeSpan _memoryExpiration;
     private readonly TimeSpan _distributedExpiration;
-    private readonly JsonSerializerOptions _jsonOptions;
 
     public HybridCacheAccessor(
         IMemoryCache memoryCache,
@@ -28,8 +28,7 @@ public sealed class HybridCacheAccessor
         ILogger logger,
         string keyPrefix,
         TimeSpan memoryExpiration,
-        TimeSpan distributedExpiration,
-        JsonSerializerOptions jsonOptions)
+        TimeSpan distributedExpiration)
     {
         _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
         _distributedCache = distributedCache;
@@ -39,11 +38,11 @@ public sealed class HybridCacheAccessor
             : keyPrefix;
         _memoryExpiration = memoryExpiration;
         _distributedExpiration = distributedExpiration;
-        _jsonOptions = jsonOptions ?? throw new ArgumentNullException(nameof(jsonOptions));
     }
 
     public async Task<T?> GetAsync<T>(
         string key,
+        JsonTypeInfo<T> jsonTypeInfo,
         CancellationToken cancellationToken = default)
     {
         var fullKey = BuildKey(key);
@@ -68,7 +67,7 @@ public sealed class HybridCacheAccessor
                 return default;
             }
 
-            var distributedValue = JsonSerializer.Deserialize<T>(cachedData, _jsonOptions);
+            var distributedValue = JsonSerializer.Deserialize(cachedData, jsonTypeInfo);
             if (distributedValue is not null)
             {
                 _memoryCache.Set(fullKey, distributedValue, _memoryExpiration);
@@ -87,6 +86,7 @@ public sealed class HybridCacheAccessor
     public async Task SetAsync<T>(
         string key,
         T value,
+        JsonTypeInfo<T> jsonTypeInfo,
         CancellationToken cancellationToken = default)
     {
         if (value is null)
@@ -101,7 +101,7 @@ public sealed class HybridCacheAccessor
         {
             try
             {
-                var json = JsonSerializer.Serialize(value, _jsonOptions);
+                var json = JsonSerializer.Serialize(value, jsonTypeInfo);
                 await _distributedCache.SetStringAsync(
                     fullKey,
                     json,

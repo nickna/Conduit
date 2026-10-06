@@ -86,8 +86,7 @@ public class ModelRepository : RepositoryBase<Model, int>, IModelRepository
         return await ExecuteAsync(async context =>
         {
             var query = ApplyDetailIncludes(GetDbSet(context))
-                .AsNoTracking()
-                .AsQueryable();
+                .AsNoTracking();
 
             // Apply search filter
             if (!string.IsNullOrWhiteSpace(search))

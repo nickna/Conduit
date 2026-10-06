@@ -1,13 +1,13 @@
 import { useState, useCallback } from 'react';
 import { useVideoStore } from './useVideoStore';
 import { disconnectVideoSignalRClient } from '@/lib/client/videoSignalRClient';
-import { getBrowserCoreClient } from '@/lib/client/browserCoreClient';
+import { getBrowserGatewayClient } from '@/lib/client/browserGatewayClient';
 import type { 
   VideoSettings, 
   VideoTask, 
   VideoGenerationResult
 } from '../types';
-import { MediaGenerationStatus, mapLegacyStatus } from '@/app/types/media';
+import { MediaGenerationStatus, mapGenerationStatus } from '@/app/types/media';
 import {
   createToastErrorHandler, 
   shouldShowBalanceWarning,
@@ -43,7 +43,7 @@ export function useEnhancedVideoGeneration() {
 
     try {
       // Get the SDK client with ephemeral key
-      const client = await getBrowserCoreClient();
+      const client = await getBrowserGatewayClient();
       
       // Prepare the video generation request - only model and dynamic parameters
       const request = {
@@ -80,7 +80,7 @@ export function useEnhancedVideoGeneration() {
           console.warn(`Video generation progress: ${progress.percentage}%`);
           // Map SDK status to VideoTask status
           // Map SDK status to MediaGenerationStatus
-          const taskStatus = mapLegacyStatus(progress.status);
+          const taskStatus = mapGenerationStatus(progress.status);
           
           updateTask(currentTaskId, {
             progress: progress.percentage,
@@ -163,7 +163,7 @@ export function useEnhancedVideoGeneration() {
   const cancelGeneration = useCallback(async (taskId: string) => {
     try {
       // Get the SDK client with ephemeral key
-      const client = await getBrowserCoreClient();
+      const client = await getBrowserGatewayClient();
       
       // Use SDK to cancel the task
       await client.videos.cancelTask(taskId);

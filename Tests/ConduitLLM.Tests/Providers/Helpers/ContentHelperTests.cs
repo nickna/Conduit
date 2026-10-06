@@ -171,6 +171,23 @@ public class ContentHelperTests
     }
 
     [Fact]
+    public void ShouldPreserveAsArray_ValueTypeArray_ReturnsTrue()
+    {
+        ContentHelper.ShouldPreserveAsArray(new[] { 1, 2, 3 }).Should().BeTrue();
+    }
+
+    [Fact]
+    public void UnknownObjectContentUsesItsStringRepresentation()
+    {
+        var content = new OpaqueContent();
+
+        ContentHelper.ExtractMultimodalContent(content).Should().Equal("opaque-content");
+        ContentHelper.GetContentAsString(content).Should().Be("opaque-content");
+        ContentHelper.IsTextOnly(content).Should().BeTrue();
+        ContentHelper.ShouldPreserveAsArray(content).Should().BeFalse();
+    }
+
+    [Fact]
     public void IsTextOnly_WithVideoUrl_ReturnsFalse()
     {
         var content = JsonSerializer.Deserialize<JsonElement>(
@@ -227,6 +244,11 @@ public class ContentHelperTests
         result.Should().ContainSingle();
         result[0].StartTime.Should().Be(1.5);
         result[0].EndTime.Should().Be(8);
+    }
+
+    private sealed class OpaqueContent
+    {
+        public override string ToString() => "opaque-content";
     }
 
 }

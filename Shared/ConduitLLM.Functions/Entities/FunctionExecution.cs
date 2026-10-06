@@ -84,7 +84,7 @@ public class FunctionExecution : IIdentifiableEntity<Guid>
     /// <summary>
     /// Error message if execution failed
     /// </summary>
-    [MaxLength(2000)]
+    [StringLength(2000)]
     public string? ErrorMessage { get; set; }
 
     /// <summary>
@@ -120,7 +120,7 @@ public class FunctionExecution : IIdentifiableEntity<Guid>
     /// Worker instance ID that has leased this execution for processing
     /// Used for distributed async execution
     /// </summary>
-    [MaxLength(100)]
+    [StringLength(100)]
     public string? LeasedBy { get; set; }
 
     /// <summary>
@@ -140,7 +140,7 @@ public class FunctionExecution : IIdentifiableEntity<Guid>
     /// <summary>
     /// Optional webhook URL to notify when execution completes
     /// </summary>
-    [MaxLength(1000)]
+    [StringLength(1000)]
     public string? WebhookUrl { get; set; }
 
     /// <summary>
@@ -157,7 +157,7 @@ public class FunctionExecution : IIdentifiableEntity<Guid>
     /// <summary>
     /// Optional status message for progress updates
     /// </summary>
-    [MaxLength(500)]
+    [StringLength(500)]
     public string? StatusMessage { get; set; }
 
     // Navigation properties

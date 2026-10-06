@@ -10,9 +10,6 @@ public partial class Program
 {
     public static void ConfigureCachingServices(WebApplicationBuilder builder)
     {
-        // Register unified cache manager (required by DiscoveryCacheService and other services)
-        builder.Services.AddCacheManager(builder.Configuration);
-
         // Configure batch spending options
         builder.Services.Configure<BatchSpendingOptions>(
             builder.Configuration.GetSection(BatchSpendingOptions.SectionName));
@@ -21,6 +18,7 @@ public partial class Program
 
         // Configure Redis connection for all Redis-dependent services
         var redisConnectionString = ConduitLLM.Configuration.Utilities.RedisUrlParser.ResolveConnectionString();
+        builder.Services.AddConduitApplicationCache(builder.Configuration, builder.Environment.EnvironmentName, redisConnectionString);
 
         // Configure CacheOptions with the parsed Redis connection string for cache services.
         builder.Services.Configure<ConduitLLM.Configuration.Options.CacheOptions>(options =>
@@ -32,6 +30,7 @@ public partial class Program
         });
 
         builder.Services.AddRedisDataProtection(redisConnectionString, "Conduit");
+        builder.Services.AddConduitDistributedLocks();
 
         // Configure Redis connection multiplexer FIRST (shared across all Redis services)
         if (!string.IsNullOrEmpty(redisConnectionString))
@@ -70,10 +69,6 @@ public partial class Program
 
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IVirtualKeyCache, RedisVirtualKeyCache>();
 
-            // Register distributed lock service - prefer PostgreSQL for better consistency
-            // PostgreSQL advisory locks are more reliable for cache warming coordination
-            builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IDistributedLockService, PostgresDistributedLockService>();
-
             // Register cache stampede prevention service (must be registered before caches that depend on it)
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IDistributedCachePopulator, DistributedCachePopulator>();
 
@@ -81,7 +76,7 @@ public partial class Program
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IProviderCache, RedisProviderCache>();
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IModelCostCache, RedisModelCostCache>();
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IProviderToolCache, RedisProviderToolCache>();
-            
+
             // Register CachedApiVirtualKeyService with event publishing dependency
             builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyService>(serviceProvider =>
             {
@@ -108,9 +103,6 @@ public partial class Program
                 return new ConduitLLM.Gateway.Services.DirectApiVirtualKeyService(
                     virtualKeyRepository, groupRepository, spendHistoryRepository, eventBus, logger);
             });
-
-            // Register PostgreSQL distributed lock service (works even without Redis)
-            builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IDistributedLockService, ConduitLLM.Core.Services.PostgresDistributedLockService>();
         }
 
         // Register Webhook Delivery Tracker for deduplication and statistics
@@ -118,17 +110,17 @@ public partial class Program
         {
             // Register the Redis tracker as the inner implementation
             builder.Services.AddSingleton<ConduitLLM.Core.Services.RedisWebhookDeliveryTracker>();
-            
+
             // Add memory caching
             builder.Services.AddMemoryCache();
-            
+
             // Register the cached wrapper as the main interface
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IWebhookDeliveryTracker>(sp =>
             {
                 var redisTracker = sp.GetRequiredService<ConduitLLM.Core.Services.RedisWebhookDeliveryTracker>();
                 var memoryCache = sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
                 var logger = sp.GetRequiredService<ILogger<ConduitLLM.Core.Services.CachedWebhookDeliveryTracker>>();
-                
+
                 return new ConduitLLM.Core.Services.CachedWebhookDeliveryTracker(redisTracker, memoryCache, logger);
             });
         }

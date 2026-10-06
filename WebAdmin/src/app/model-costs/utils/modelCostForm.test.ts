@@ -11,7 +11,7 @@ describe('modelCostForm', () => {
   it('preserves inactive state in create requests', () => {
     const values = createModelCostFormValues();
     values.costName = 'Disabled pricing';
-    values.modelProviderMappingIds = [12];
+    values.modelProviderTypeAssociationIds = [12];
     values.isActive = false;
 
     expect(toCreateModelCostDto(values)).toMatchObject({
@@ -56,7 +56,7 @@ describe('modelCostForm', () => {
 
     expect(values).toMatchObject({
       costName: 'Existing pricing',
-      modelProviderMappingIds: [12],
+      modelProviderTypeAssociationIds: [12],
       isActive: false,
       priority: 3,
     });

@@ -22,7 +22,7 @@ public class ContextAwareLLMClientTests
     /// Fake provider client that supports video generation (like MiniMaxClient) and
     /// authentication verification.
     /// </summary>
-    private sealed class FakeVideoCapableProviderClient : ILLMClient, IAuthenticationVerifiable
+    private sealed class FakeVideoCapableProviderClient : ILLMClient, IAuthenticationVerifiable, IVideoGenerationClient
     {
         private readonly VideoGenerationResponse _videoResponse;
 
@@ -33,7 +33,7 @@ public class ContextAwareLLMClientTests
             _videoResponse = videoResponse;
         }
 
-        // Discovered via reflection by ContextAwareLLMClient / VideoGenerationOrchestrator.
+        // Exposed through the compile-time optional capability contract.
         public Task<VideoGenerationResponse> CreateVideoAsync(
             VideoGenerationRequest request,
             string? apiKey = null,

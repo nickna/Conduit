@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Functions.Serialization;
 using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Models.Pricing;
@@ -45,7 +46,9 @@ public partial class FunctionCostCalculationService
         TieredPricingConfig? config;
         try
         {
-            config = JsonSerializer.Deserialize<TieredPricingConfig>(functionCost.TieredPricing);
+            config = JsonSerializer.Deserialize(
+                functionCost.TieredPricing,
+                FunctionsJsonContext.Default.TieredPricingConfig);
         }
         catch (Exception ex)
         {

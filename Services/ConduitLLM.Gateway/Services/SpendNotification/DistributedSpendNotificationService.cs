@@ -1,9 +1,11 @@
+using ConduitLLM.Core.Extensions;
 using Microsoft.AspNetCore.SignalR;
 using StackExchange.Redis;
 using ConduitLLM.Configuration.DTOs.SignalR;
 using ConduitLLM.Configuration.Services;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Gateway.Hubs;
+using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.Services.SpendNotification
 {
@@ -175,12 +177,13 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                     serviceProvider.GetRequiredService<ILogger<SpendDataRepository>>());
 
                 // Initialize budget alert manager
-                var lockService = serviceProvider.GetRequiredService<IDistributedLockService>();
+                var lockService = serviceProvider.GetRequiredService<IDistributedLockProvider>();
                 _budgetAlertManager = new BudgetAlertManager(
                     _hubContext,
                     _repository,
                     lockService,
-                    serviceProvider.GetRequiredService<ILogger<BudgetAlertManager>>());
+                    serviceProvider.GetRequiredService<ILogger<BudgetAlertManager>>(),
+                    serviceProvider.GetService<IHostApplicationLifetime>());
 
                 // Initialize pattern analyzer
                 _patternAnalyzer = new SpendPatternAnalyzer(
@@ -242,14 +245,13 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
         {
             if (_repository != null)
             {
-                var instanceData = new
-                {
+                var now = DateTime.UtcNow;
+                var instanceData = new SpendNotificationInstanceData(
                     InstanceId,
-                    MachineName = Environment.MachineName,
-                    ProcessId = Environment.ProcessId,
-                    StartedAt = DateTime.UtcNow,
-                    LastHeartbeat = DateTime.UtcNow
-                };
+                    Environment.MachineName,
+                    Environment.ProcessId,
+                    now,
+                    now);
 
                 await _repository.RegisterInstanceAsync(InstanceId, instanceData);
                 _logger.LogInformation("Registered spend notification instance: {InstanceId}", InstanceId);

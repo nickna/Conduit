@@ -1,5 +1,6 @@
 using ConduitLLM.Core.Models;
 using System.Text.Json;
+using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.Endpoints;
 
@@ -23,15 +24,18 @@ public static class GatewayResults
         string type = "invalid_request_error",
         string? param = null,
         JsonElement? metadata = null) =>
-        Results.Json(new OpenAIErrorResponse
-        {
-            Error = new OpenAIError
+        Results.Json(
+            new OpenAIErrorResponse
             {
-                Message = message,
-                Type = type,
-                Code = code,
-                Param = param,
-                Metadata = metadata
-            }
-        }, statusCode: statusCode);
+                Error = new OpenAIError
+                {
+                    Message = message,
+                    Type = type,
+                    Code = code,
+                    Param = param,
+                    Metadata = metadata
+                }
+            },
+            GatewayHttpJsonContext.Default.OpenAIErrorResponse,
+            statusCode: statusCode);
 }

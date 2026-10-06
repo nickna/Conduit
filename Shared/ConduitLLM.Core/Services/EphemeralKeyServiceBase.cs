@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 
@@ -14,6 +15,7 @@ namespace ConduitLLM.Core.Services
     {
         protected readonly IDistributedCache Cache;
         protected readonly ILogger Logger;
+        private readonly JsonTypeInfo<TKeyData> _keyDataTypeInfo;
 
         /// <summary>
         /// The prefix used for cache keys (e.g., "ephemeral:" or "ephemeral:master:")
@@ -35,10 +37,14 @@ namespace ConduitLLM.Core.Services
         /// </summary>
         /// <param name="cache">The distributed cache</param>
         /// <param name="logger">The logger</param>
-        protected EphemeralKeyServiceBase(IDistributedCache cache, ILogger logger)
+        protected EphemeralKeyServiceBase(
+            IDistributedCache cache,
+            ILogger logger,
+            JsonTypeInfo<TKeyData> keyDataTypeInfo)
         {
             Cache = cache ?? throw new ArgumentNullException(nameof(cache));
             Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _keyDataTypeInfo = keyDataTypeInfo ?? throw new ArgumentNullException(nameof(keyDataTypeInfo));
         }
 
         /// <summary>
@@ -90,7 +96,7 @@ namespace ConduitLLM.Core.Services
         protected async Task StoreKeyDataAsync(string key, TKeyData keyData, int? ttlOverride = null)
         {
             var cacheKey = GetCacheKey(key);
-            var serializedData = JsonSerializer.Serialize(keyData);
+            var serializedData = JsonSerializer.Serialize(keyData, _keyDataTypeInfo);
             var ttl = ttlOverride ?? TTLSeconds;
 
             await Cache.SetStringAsync(
@@ -117,7 +123,7 @@ namespace ConduitLLM.Core.Services
                 return null;
             }
 
-            return JsonSerializer.Deserialize<TKeyData>(serializedData);
+            return JsonSerializer.Deserialize(serializedData, _keyDataTypeInfo);
         }
 
         /// <summary>
@@ -167,8 +173,11 @@ namespace ConduitLLM.Core.Services
         /// </summary>
         /// <param name="cache">The distributed cache</param>
         /// <param name="logger">The logger</param>
-        protected ConsumableEphemeralKeyServiceBase(IDistributedCache cache, ILogger logger)
-            : base(cache, logger)
+        protected ConsumableEphemeralKeyServiceBase(
+            IDistributedCache cache,
+            ILogger logger,
+            JsonTypeInfo<TKeyData> keyDataTypeInfo)
+            : base(cache, logger, keyDataTypeInfo)
         {
         }
 

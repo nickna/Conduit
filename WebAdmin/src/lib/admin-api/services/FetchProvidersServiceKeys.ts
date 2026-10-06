@@ -28,7 +28,7 @@ export class FetchProvidersServiceKeys {
     providerId: number,
     config?: RequestConfig
   ): Promise<ProviderKeyCredentialDto[]> {
-    const result = await this.client['executeContractRead'](`/v1/admin/providers/${providerId}/keys`,
+    const result = await this.client.executeContractRead(`/v1/admin/providers/${providerId}/keys`,
       (contractClient, options) => contractClient.GET('/v1/admin/providers/{providerId}/keys', { ...options, params: { path: { providerId } } }), config);
     return result.data;
   }
@@ -41,7 +41,7 @@ export class FetchProvidersServiceKeys {
     keyId: number,
     config?: RequestConfig
   ): Promise<ProviderKeyCredentialDto> {
-    return this.client['executeContractRead'](`/v1/admin/providers/${providerId}/keys/${keyId}`,
+    return this.client.executeContractRead(`/v1/admin/providers/${providerId}/keys/${keyId}`,
       (contractClient, options) => contractClient.GET('/v1/admin/providers/{providerId}/keys/{keyId}', { ...options, params: { path: { providerId, keyId } } }), config);
   }
 
@@ -53,7 +53,7 @@ export class FetchProvidersServiceKeys {
     data: CreateProviderKeyCredentialDto,
     config?: RequestConfig
   ): Promise<ProviderKeyCredentialDto> {
-    return this.client['executeContractOperation'](`/v1/admin/providers/${providerId}/keys`, HttpMethod.POST,
+    return this.client.executeContractOperation(`/v1/admin/providers/${providerId}/keys`, HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/providers/{providerId}/keys', { ...options, params: { path: { providerId } }, body: data }), config, data);
   }
 
@@ -66,7 +66,7 @@ export class FetchProvidersServiceKeys {
     data: UpdateProviderKeyCredentialDto,
     config?: RequestConfig
   ): Promise<ProviderKeyCredentialDto> {
-    return this.client['executeContractOperation'](`/v1/admin/providers/${providerId}/keys/${keyId}`, HttpMethod.PATCH,
+    return this.client.executeContractOperation(`/v1/admin/providers/${providerId}/keys/${keyId}`, HttpMethod.PATCH,
       (contractClient, options) => contractClient.PATCH('/v1/admin/providers/{providerId}/keys/{keyId}', { ...options, params: { path: { providerId, keyId } }, body: data }), config, data);
   }
 
@@ -78,7 +78,7 @@ export class FetchProvidersServiceKeys {
     keyId: number,
     config?: RequestConfig
   ): Promise<void> {
-    return this.client['executeContractOperation'](`/v1/admin/providers/${providerId}/keys/${keyId}`, HttpMethod.DELETE,
+    return this.client.executeContractOperation(`/v1/admin/providers/${providerId}/keys/${keyId}`, HttpMethod.DELETE,
       (contractClient, options) => contractClient.DELETE('/v1/admin/providers/{providerId}/keys/{keyId}', { ...options, params: { path: { providerId, keyId } } }), config);
   }
 
@@ -90,7 +90,7 @@ export class FetchProvidersServiceKeys {
     keyId: number,
     config?: RequestConfig
   ): Promise<void> {
-    return this.client['executeContractOperation'](`/v1/admin/providers/${providerId}/keys/${keyId}/set-primary`, HttpMethod.POST,
+    return this.client.executeContractOperation(`/v1/admin/providers/${providerId}/keys/${keyId}/set-primary`, HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/providers/{providerId}/keys/{keyId}/set-primary', { ...options, params: { path: { providerId, keyId } } }), config);
   }
 
@@ -119,7 +119,7 @@ export class FetchProvidersServiceKeys {
     config?: RequestConfig
   ): Promise<StandardApiKeyTestResponse> {
     try {
-      const result = await this.client['executeContractOperation']<RawApiKeyTestResponse>(`/v1/admin/providers/${providerId}/keys/${keyId}/test`, HttpMethod.POST,
+      const result = await this.client.executeContractOperation<RawApiKeyTestResponse>(`/v1/admin/providers/${providerId}/keys/${keyId}/test`, HttpMethod.POST,
         (contractClient, options) => contractClient.POST('/v1/admin/providers/{providerId}/keys/{keyId}/test', { ...options, params: { path: { providerId, keyId } } }), config);
 
       // Normalize the response to handle C# PascalCase and enum mismatches
@@ -141,7 +141,7 @@ export class FetchProvidersServiceKeys {
    */
   private async getProviderById(id: number, config?: RequestConfig): Promise<ProviderDto | null> {
     try {
-      return await this.client['executeContractRead'](`/v1/admin/providers/${id}`,
+      return await this.client.executeContractRead(`/v1/admin/providers/${id}`,
         (contractClient, options) => contractClient.GET('/v1/admin/providers/{id}', { ...options, params: { path: { id } } }), config);
     } catch {
       return null;

@@ -155,7 +155,7 @@ namespace ConduitLLM.Admin.Endpoints
                 Identifier = dto.Identifier,
                 Provider = providerType,
                 IsPrimary = dto.IsPrimary ?? false,
-                Metadata = dto.Metadata is null ? null : JsonSerializer.Serialize(dto.Metadata),
+                Metadata = dto.Metadata is null ? null : AdminJson.Serialize(dto.Metadata),
                 MaxInputTokens = dto.MaxInputTokens,
                 MaxOutputTokens = dto.MaxOutputTokens,
                 SpeedScore = dto.SpeedScore,

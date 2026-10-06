@@ -3,6 +3,7 @@ using System.Text.Json;
 using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Serialization;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -78,14 +79,17 @@ namespace ConduitLLM.Core.Middleware
                 }
             };
 
+            var errorContext = new CoreHttpJsonContext(new JsonSerializerOptions(ErrorJsonOptions));
             if (mapping.ProviderDetail is not null)
             {
                 errorResponse.Error.Metadata = JsonSerializer.SerializeToElement(
                     new Dictionary<string, ProviderErrorDetail> { ["provider_error"] = mapping.ProviderDetail },
-                    ErrorJsonOptions);
+                    errorContext.DictionaryStringProviderErrorDetail);
             }
 
-            return JsonSerializer.Serialize(errorResponse, ErrorJsonOptions);
+            return JsonSerializer.Serialize(
+                errorResponse,
+                errorContext.OpenAIErrorResponse);
         }
 
         private static string NormalizeEndpointForMetrics(string path)

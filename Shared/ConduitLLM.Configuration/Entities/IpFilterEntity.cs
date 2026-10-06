@@ -20,7 +20,7 @@ public class IpFilterEntity : IEntity<int>, IAuditableEntity
     /// Type of the IP filter (whitelist or blacklist)
     /// </summary>
     [Required]
-    [MaxLength(10)]
+    [StringLength(10)]
     public string FilterType { get; set; } = "blacklist";
 
     /// <summary>
@@ -29,19 +29,19 @@ public class IpFilterEntity : IEntity<int>, IAuditableEntity
     /// IPv6 (e.g., "2001:db8::1" or "2001:db8::/32")
     /// </summary>
     [Required]
-    [MaxLength(50)]
+    [StringLength(50)]
     public string IpAddressOrCidr { get; set; } = string.Empty;
 
     /// <summary>
     /// Optional display name for the filter rule.
     /// </summary>
-    [MaxLength(100)]
+    [StringLength(100)]
     public string? Name { get; set; }
 
     /// <summary>
     /// Optional description of the filter
     /// </summary>
-    [MaxLength(500)]
+    [StringLength(500)]
     public string? Description { get; set; }
 
     /// <summary>
@@ -62,13 +62,13 @@ public class IpFilterEntity : IEntity<int>, IAuditableEntity
     /// <summary>
     /// Username or identifier of who created the filter (for audit trail)
     /// </summary>
-    [MaxLength(100)]
+    [StringLength(100)]
     public string? CreatedBy { get; set; }
 
     /// <summary>
     /// Username or identifier of who last updated the filter (for audit trail)
     /// </summary>
-    [MaxLength(100)]
+    [StringLength(100)]
     public string? UpdatedBy { get; set; }
 
     /// <summary>

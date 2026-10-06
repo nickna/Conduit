@@ -116,11 +116,9 @@ namespace ConduitLLM.Security.Middleware
             }
 
             // Return JSON error response
-            await context.Response.WriteAsJsonAsync(new
-            {
-                error = result.Reason,
-                code = result.StatusCode
-            });
+            await context.Response.WriteAsJsonAsync(
+                new Serialization.SecurityErrorResponse(result.Reason, result.StatusCode),
+                Serialization.SecurityCacheJsonContext.Default.SecurityErrorResponse);
         }
 
         /// <summary>

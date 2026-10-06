@@ -14,10 +14,10 @@ public sealed class RefundIdempotencyRecord
 
     public int VirtualKeyGroupId { get; set; }
 
-    [Required, MaxLength(100)]
+    [Required, StringLength(100)]
     public string OperationId { get; set; } = string.Empty;
 
-    [Required, MaxLength(64)]
+    [Required, StringLength(64)]
     public string RequestHash { get; set; } = string.Empty;
 
     public long RefundTransactionId { get; set; }

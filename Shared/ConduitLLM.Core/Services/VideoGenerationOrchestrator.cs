@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using ConduitLLM.Configuration.Entities;
@@ -11,6 +10,7 @@ using IModelProviderMappingService = ConduitLLM.Configuration.Interfaces.IModelP
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Metrics;
+using ConduitLLM.Core.Serialization;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Configuration.Messaging;
 using ConduitLLM.Core.Services.Abstractions;
@@ -96,92 +96,45 @@ namespace ConduitLLM.Core.Services
                 throw new NotSupportedException($"No provider available for model {modelInfo.ModelAlias}");
             }
 
-            // Video generation is not part of ILLMClient — only specific provider clients
-            // implement CreateVideoAsync. Unwrap the decorator chain to the innermost provider
-            // client to check the capability; decorators would otherwise hide it (issue #976).
-            var innermostClient = client.UnwrapInnermost();
-            var innermostType = innermostClient.GetType();
+            var videoClient = client.FindInChain<IVideoGenerationClient>()
+                ?? throw new NotSupportedException(
+                    $"Provider for model {modelInfo.ModelAlias} does not support video generation");
 
-            var supportsVideo = innermostType.GetMethods()
-                .Any(m => m.Name == "CreateVideoAsync" && m.GetParameters().Length == 3);
-
-            if (!supportsVideo)
+            // Progress reporting is an explicit optional provider capability.
+            if (client.FindInChain<IVideoProgressCallbackClient>() is { } progressClient)
             {
-                throw new NotSupportedException($"Provider for model {modelInfo.ModelAlias} does not support video generation");
+                SetupProgressCallback(progressClient, request.Model);
             }
 
-            // Set up the progress callback for any provider client that exposes SetProgressCallback
-            // (e.g. MiniMax, OpenRouter), not just MiniMax by name.
-            if (innermostType.GetMethod("SetProgressCallback") != null)
-            {
-                SetupProgressCallback(innermostClient, request.Model, cancellationToken);
-            }
-
-            // Invoke through the outermost client in the chain that exposes CreateVideoAsync so
-            // decorators (e.g. ContextAwareLLMClient's key context and error tracking) still run.
-            object invocationTarget = innermostClient;
-            MethodInfo? createVideoMethod = null;
-            for (ILLMClient? current = client; current != null;
-                 current = (current as ILLMClientDecorator)?.InnerClient)
-            {
-                var method = current.GetType().GetMethods()
-                    .FirstOrDefault(m => m.Name == "CreateVideoAsync" && m.GetParameters().Length == 3);
-                if (method != null)
-                {
-                    invocationTarget = current;
-                    createVideoMethod = method;
-                    break;
-                }
-            }
-
-            if (createVideoMethod == null)
-            {
-                throw new NotSupportedException($"Provider for model {modelInfo.ModelAlias} does not support video generation");
-            }
-
-            // Invoke video generation
-            var task = createVideoMethod.Invoke(invocationTarget, new object?[] { request, null, cancellationToken })
-                as Task<VideoGenerationResponse>;
-
-            if (task == null)
-            {
-                throw new InvalidOperationException($"CreateVideoAsync method on {invocationTarget.GetType().Name} did not return expected Task<VideoGenerationResponse>");
-            }
-
-            return await task;
+            return await videoClient.CreateVideoAsync(request, null, cancellationToken);
         }
 
-        private void SetupProgressCallback(object client, string requestId, CancellationToken cancellationToken)
+        private void SetupProgressCallback(
+            IVideoProgressCallbackClient client,
+            string requestId)
         {
-            var clientType = client.GetType();
-            var setCallbackMethod = clientType.GetMethod("SetProgressCallback");
-            if (setCallbackMethod != null)
+            Func<string, string, int, Task> progressCallback = async (taskId, status, progressPercentage) =>
             {
-                Func<string, string, int, Task> progressCallback = async (taskId, status, progressPercentage) =>
+                _logger.LogInformation("Video generation progress for {TaskId}: {Status} at {Progress}%",
+                    taskId, status, progressPercentage);
+
+                await _taskService.UpdateTaskStatusAsync(
+                    requestId,
+                    TaskState.Processing,
+                    progress: progressPercentage);
+
+                await _eventBus.PublishAsync(new VideoGenerationProgress
                 {
-                    _logger.LogInformation("Video generation progress for {TaskId}: {Status} at {Progress}%",
-                        taskId, status, progressPercentage);
+                    RequestId = requestId,
+                    ProgressPercentage = progressPercentage,
+                    Status = status,
+                    Message = $"Video generation {status.ToLowerInvariant()}",
+                    CorrelationId = requestId
+                });
+            };
 
-                    // Update task progress
-                    await _taskService.UpdateTaskStatusAsync(
-                        requestId,
-                        TaskState.Processing,
-                        progress: progressPercentage);
-
-                    // Publish progress event
-                    await _eventBus.PublishAsync(new VideoGenerationProgress
-                    {
-                        RequestId = requestId,
-                        ProgressPercentage = progressPercentage,
-                        Status = status,
-                        Message = $"Video generation {status.ToLowerInvariant()}",
-                        CorrelationId = requestId
-                    });
-                };
-
-                setCallbackMethod.Invoke(client, new object[] { progressCallback });
-                _logger.LogDebug("Set video progress callback for MiniMax client");
-            }
+            client.SetProgressCallback(progressCallback);
+            _logger.LogDebug("Set video progress callback for {ClientType}", client.GetType().Name);
         }
 
         protected override async Task<ProcessedMedia> ProcessMediaAsync(
@@ -230,13 +183,7 @@ namespace ConduitLLM.Core.Services
 
                 try
                 {
-                    // Safe cast since we know the processors handle VideoData
-                    var typedProcessor = processor as IMediaProcessingStrategy<object>;
-                    if (typedProcessor != null)
-                    {
-                        return await typedProcessor.ProcessAsync(videoData, context, cancellationToken);
-                    }
-                    return null;
+                    return await processor.ProcessAsync(videoData, context, cancellationToken);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -318,7 +265,9 @@ namespace ConduitLLM.Core.Services
                     }
                     else if (requestObj is System.Text.Json.JsonElement jsonReq)
                     {
-                        var videoRequest = System.Text.Json.JsonSerializer.Deserialize<VideoGenerationRequest>(jsonReq.GetRawText());
+                        var videoRequest = System.Text.Json.JsonSerializer.Deserialize(
+                            jsonReq.GetRawText(),
+                            AsyncTaskJsonContext.Default.VideoGenerationRequest);
                         if (videoRequest != null)
                         {
                             videoRequest.Model = modelInfo.ModelId;

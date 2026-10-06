@@ -473,7 +473,7 @@ export abstract class BaseApiClient {
    * Execute a function with caching
    * Returns cached value if available, otherwise executes function and caches result
    */
-  protected async withCache<T>(
+  public async withCache<T>(
     cacheKey: string,
     fn: () => Promise<T>,
     ttl?: number,
@@ -492,7 +492,7 @@ export abstract class BaseApiClient {
   /**
    * Generate a cache key from resource and identifiers
    */
-  protected getCacheKey(
+  public getCacheKey(
     resource: string,
     ...identifiers: (string | number | Record<string, unknown> | undefined)[]
   ): string {

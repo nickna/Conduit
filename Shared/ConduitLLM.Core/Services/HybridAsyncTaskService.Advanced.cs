@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Serialization;
 using ConduitLLM.Configuration.Interfaces;
 
 using Microsoft.Extensions.Caching.Distributed;
@@ -73,7 +74,9 @@ namespace ConduitLLM.Core.Services
                 {
                     try
                     {
-                        metadata = JsonSerializer.Deserialize<ConduitLLM.Core.Models.TaskMetadata>(task.Metadata);
+                        metadata = JsonSerializer.Deserialize(
+                            task.Metadata,
+                            AsyncTaskJsonContext.Default.TaskMetadata);
                     }
                     catch (JsonException exception)
                     {
@@ -151,7 +154,7 @@ namespace ConduitLLM.Core.Services
                 _ => throw new ArgumentOutOfRangeException()
             };
             var metadata = result.Task?.Metadata is { Length: > 0 } json
-                ? JsonSerializer.Deserialize<ConduitLLM.Core.Models.TaskMetadata>(json)
+                ? JsonSerializer.Deserialize(json, AsyncTaskJsonContext.Default.TaskMetadata)
                 : null;
             return new MediaTaskRetryPreparation(status, result.Task?.Type, metadata);
         }
@@ -248,7 +251,9 @@ namespace ConduitLLM.Core.Services
                 try
                 {
                     var cacheKey = GetTaskKey(task.Id);
-                    var json = JsonSerializer.Serialize(taskStatus);
+                    var json = JsonSerializer.Serialize(
+                        taskStatus,
+                        AsyncTaskJsonContext.Default.AsyncTaskStatus);
                     await _cache.SetStringAsync(cacheKey, json, new DistributedCacheEntryOptions
                     {
                         SlidingExpiration = TimeSpan.FromHours(24)

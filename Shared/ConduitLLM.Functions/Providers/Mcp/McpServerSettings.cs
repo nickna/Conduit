@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ConduitLLM.Functions.Serialization;
 
 namespace ConduitLLM.Functions.Providers.Mcp;
 
@@ -36,11 +37,6 @@ public sealed class McpServerSettings
     [JsonPropertyName("allowPrivateNetwork")]
     public bool AllowPrivateNetwork { get; init; }
 
-    private static readonly JsonSerializerOptions Options = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
     /// <summary>
     /// Parses the ProviderSettings JSON. Returns defaults for null/blank/invalid input so a
     /// misconfigured blob degrades to "expose all tools, Authorization: Bearer, no private network".
@@ -54,7 +50,9 @@ public sealed class McpServerSettings
 
         try
         {
-            return JsonSerializer.Deserialize<McpServerSettings>(providerSettingsJson, Options)
+            return JsonSerializer.Deserialize(
+                       providerSettingsJson,
+                       FunctionsJsonContext.Default.McpServerSettings)
                    ?? new McpServerSettings();
         }
         catch (JsonException)

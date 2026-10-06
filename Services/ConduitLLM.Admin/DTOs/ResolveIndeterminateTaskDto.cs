@@ -7,10 +7,10 @@ public sealed class ResolveIndeterminateTaskDto
     [Required]
     public string Resolution { get; set; } = string.Empty;
 
-    [Required, MaxLength(500)]
+    [Required, StringLength(500)]
     public string Reason { get; set; } = string.Empty;
 
-    [MaxLength(200)]
+    [StringLength(200)]
     public string? ProviderOperationId { get; set; }
 }
 

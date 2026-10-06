@@ -16,7 +16,6 @@ public static class TasksEndpoints
         var group = app.MapGroup("/v1/admin/tasks")
             .RequireAuthorization("MasterKeyPolicy")
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
-            .AddEndpointFilter<ValidationEndpointFilter>()
             .WithTags("Tasks");
         group.MapPost("/cleanup", Cleanup).WithName("Tasks_Cleanup")
             .Produces<TaskCleanupResponseDto>(StatusCodes.Status200OK);

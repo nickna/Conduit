@@ -2,7 +2,7 @@
 export { FetchConduitAdminClient as ConduitAdminClient } from './FetchConduitAdminClient';
 
 // Export generated types
-export type { paths, components } from './generated/admin-api';
+export type { paths, components } from '@/generated/admin-api';
 
 // Types
 export * from './client/types';
@@ -53,7 +53,6 @@ export type {
   UpdateModelCostDto,
   ModelCostFilters,
   ModelCostCalculation,
-  BulkModelCostUpdate,
   ModelCostHistory,
   CostEstimate,
   ModelCostComparison,
@@ -131,11 +130,10 @@ export * from './models/metadata';
 export * from './models/common-types';
 
 // Constants
-export * from './constants';
 
 // Re-export generated types
 export type {
   components as AdminComponents,
   operations as AdminOperations,
   paths as AdminPaths
-} from './generated/admin-api';
+} from '@/generated/admin-api';

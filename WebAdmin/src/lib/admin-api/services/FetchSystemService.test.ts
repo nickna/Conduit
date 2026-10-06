@@ -135,20 +135,17 @@ describe('FetchSystemService diagnostics contracts', () => {
       message: 'accepted',
       timestamp: '2026-07-23T18:00:00Z',
     };
-    const post = jest.fn().mockResolvedValue(result);
+    const executeContractOperation = jest.fn().mockResolvedValue(result);
     const service = new FetchSystemService({
-      post,
+      executeContractOperation,
     } as unknown as FetchBaseApiClient);
 
     await expect(service.invalidateFunctionDiscoveryCache()).resolves.toEqual(result);
-    expect(post).toHaveBeenCalledWith(
+    expect(executeContractOperation).toHaveBeenCalledWith(
       '/v1/admin/system-metadata/cache/invalidate-function-discovery',
-      {},
-      expect.objectContaining({
-        signal: undefined,
-        timeout: undefined,
-        headers: undefined,
-      }),
+      'POST',
+      expect.any(Function),
+      undefined,
     );
   });
 });

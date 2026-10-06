@@ -7,15 +7,11 @@ import { useVideoStore } from '../hooks/useVideoStore';
 import { useEnhancedVideoGeneration } from '../hooks/useEnhancedVideoGeneration';
 import { MediaPromptInput } from '@/app/components/media';
 import { MediaGenerationStatus } from '@/app/types/media';
-import type { DiscoveryModel } from '@/app/chat/hooks/useDiscoveryModels';
-
 interface VideoPromptInputProps {
-  models: DiscoveryModel[];
   dynamicParameters?: Record<string, unknown>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export default function EnhancedVideoPromptInput({ models, dynamicParameters }: VideoPromptInputProps) {
+export default function EnhancedVideoPromptInput({ dynamicParameters }: VideoPromptInputProps) {
   const [prompt, setPrompt] = useState('');
   const { settings, currentTask, setError } = useVideoStore();
   

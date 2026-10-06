@@ -6,6 +6,7 @@ using System.Text.Json;
 using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models.Audio;
+using ConduitLLM.Core.Serialization;
 using CoreModels = ConduitLLM.Core.Models;
 
 using Microsoft.Extensions.Logging;
@@ -87,7 +88,9 @@ namespace ConduitLLM.Providers.OpenAICompatible
                 }
                 else
                 {
-                    result = JsonSerializer.Deserialize<AudioTranscriptionResponse>(responseText, DefaultJsonOptions)
+                    result = JsonSerializer.Deserialize(
+                        responseText,
+                        CoreHttpJsonContext.Default.AudioTranscriptionResponse)
                         ?? new AudioTranscriptionResponse { Text = string.Empty };
                 }
 
@@ -131,7 +134,9 @@ namespace ConduitLLM.Providers.OpenAICompatible
                             body[kvp.Key] = kvp.Value;
                 }
 
-                var json = JsonSerializer.Serialize(body, DefaultJsonOptions);
+                var json = JsonSerializer.Serialize(
+                    body,
+                    CoreHttpJsonContext.Default.DictionaryStringObject);
                 using var httpRequest = new HttpRequestMessage(HttpMethod.Post, GetTextToSpeechEndpoint())
                 {
                     Content = new StringContent(json, Encoding.UTF8, "application/json")

@@ -41,7 +41,7 @@ beforeEach(() => mockFetch.mockReset());
 
 describe('IP filter generated operations', () => {
   it.each([
-    ['list', '/v1/admin/ip-filters', (c: ConduitAdminClient) => c.ipFilters.list()],
+    ['list', '/v1/admin/ip-filters?page=1&pageSize=100', (c: ConduitAdminClient) => c.ipFilters.list()],
     ['enabled list', '/v1/admin/ip-filters/enabled', (c: ConduitAdminClient) => c.ipFilters.getEnabled()],
     ['virtual-key list', '/v1/admin/ip-filters/by-virtual-key/42', (c: ConduitAdminClient) => c.ipFilters.listByVirtualKey(42)],
     ['get', '/v1/admin/ip-filters/7', (c: ConduitAdminClient) => c.ipFilters.getById(7)],
@@ -55,17 +55,15 @@ describe('IP filter generated operations', () => {
     expect(request.headers.get('X-Master-Key')).toBe('master-key');
   });
 
-  it('preserves the optional list query facade', async () => {
-    mockFetch.mockResolvedValueOnce(response(filterPage));
-    await client().ipFilters.list({ filterType: 'whitelist', isEnabled: true, nameContains: 'Office space' });
-    expect((mockFetch.mock.calls[0]?.[0] as Request).url)
-      .toBe('https://admin.test/v1/admin/ip-filters?filterType=whitelist&isEnabled=true&nameContains=Office%20space');
-  });
-
   it('creates with the exact request body and accepts 201', async () => {
     const create = { name: 'Office', ipAddressOrCidr: '2001:db8::/32', filterType: 'whitelist' as const, isEnabled: true };
     mockFetch.mockResolvedValueOnce(response(filter, 201));
-    await expect(client().ipFilters.create(create)).resolves.toEqual(filter);
+    await expect(client().ipFilters.create(create)).resolves.toEqual({
+      ...filter,
+      description: undefined,
+      createdBy: undefined,
+      updatedBy: undefined,
+    });
     const request = mockFetch.mock.calls[0]?.[0] as Request;
     expect(request.method).toBe('POST');
     expect(body(request)).toEqual(create);

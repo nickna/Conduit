@@ -5,6 +5,7 @@
     <!-- Compile Minimal API request delegates at build time. Treat an endpoint
          falling back to runtime generation as a build regression. -->
     <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
     <WarningsAsErrors>$(WarningsAsErrors);RDG012</WarningsAsErrors>
     <!-- 1591: missing XML doc; NU1510: intentional direct security references. -->
     <NoWarn>$(NoWarn);1591;NU1510</NoWarn>
@@ -24,12 +25,6 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Scalar.AspNetCore" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.Build.Tasks.Core" />
-    <PackageReference Include="Microsoft.Build.Utilities.Core" />
     <PackageReference Include="System.Security.Cryptography.Xml" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" />
     <PackageReference Include="OpenTelemetry" />
@@ -47,6 +42,9 @@
     <ProjectReference Include="..\..\Shared\ConduitLLM.Core\ConduitLLM.Core.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Providers\ConduitLLM.Providers.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Security\ConduitLLM.Security.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Media\ConduitLLM.Media.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.OpenApi\ConduitLLM.OpenApi.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Messaging.Wolverine\ConduitLLM.Messaging.Wolverine.csproj" />
     <!-- WebAdmin reference removed, now using API client -->
   </ItemGroup>
 
@@ -55,9 +53,16 @@
   <ItemGroup Condition="'$(ConduitWolverineCodegen)' == 'true'">
     <PackageReference Include="WolverineFx.RuntimeCompilation" PrivateAssets="all" />
   </ItemGroup>
+  <PropertyGroup Condition="'$(ConduitWolverineCodegen)' == 'true'">
+    <DefineConstants>$(DefineConstants);CONDUIT_WOLVERINE_CODEGEN</DefineConstants>
+  </PropertyGroup>
 
   <ItemGroup>
     <Compile Update="Internal\Generated\**\*.cs" Watch="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PublishAot)' == 'true'">
+    <RdXmlFile Include="NativeAot.rd.xml" />
   </ItemGroup>
 
   <!-- Exclude appsettings.json from being copied when referenced as a project dependency -->

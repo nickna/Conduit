@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Core.Serialization;
 
 namespace ConduitLLM.Core.Services
 {
@@ -47,7 +48,9 @@ namespace ConduitLLM.Core.Services
 
             try
             {
-                var parsed = JsonSerializer.Deserialize<Dictionary<string, ModelRateLimitRule>>(json, SerializerOptions);
+                var context = new CoreInternalJsonContext(
+                    new JsonSerializerOptions(SerializerOptions));
+                var parsed = JsonSerializer.Deserialize(json, context.DictionaryStringModelRateLimitRule);
                 return parsed is { Count: > 0 } ? parsed : null;
             }
             catch (JsonException)

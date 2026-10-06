@@ -4,7 +4,7 @@ import { useRef, useState, useCallback } from 'react';
 import { Button, Text, Group, Stack, Progress, Badge, Tooltip, ActionIcon } from '@mantine/core';
 import { IconUpload, IconPhoto, IconVideo, IconMusic, IconX } from '@tabler/icons-react';
 import { notify } from '@/lib/notifications';
-import { getBrowserCoreClient } from '@/lib/client/browserCoreClient';
+import { getBrowserGatewayClient } from '@/lib/client/browserGatewayClient';
 import type { DynamicParameter } from '../types/parameters';
 
 interface MediaUploadControlProps {
@@ -80,7 +80,7 @@ export function MediaUploadControl({
 
     try {
       // Get Core client with ephemeral key
-      const coreClient = await getBrowserCoreClient();
+      const coreClient = await getBrowserGatewayClient();
 
       // Determine media type from file MIME type
       let mediaType: 'Image' | 'Video' | 'Audio' | undefined;

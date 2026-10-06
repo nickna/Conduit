@@ -95,6 +95,7 @@ public static class AdminResults
                         ? new Dictionary<string, object?>()
                         : new Dictionary<string, object?>(_extensions)
                 },
+                AdminHttpResponseJsonContext.Default.AdminProblemDetails,
                 statusCode: _status,
                 contentType: "application/problem+json").ExecuteAsync(httpContext);
         }

@@ -14,6 +14,7 @@
     <PackageVersion Include="bunit" Version="2.7.2" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
     <PackageVersion Include="coverlet.msbuild" Version="10.0.1" />
+    <PackageVersion Include="DistributedLock.Postgres" Version="1.3.1" />
     <PackageVersion Include="AwesomeAssertions" Version="9.5.0" />
     <PackageVersion Include="FsCheck.Xunit" Version="3.3.3" />
     <PackageVersion Include="MessagePack" Version="2.5.302" />
@@ -109,5 +110,8 @@
          Assert.Skip, and swallowing the condition would make the tests silently green. -->
     <PackageVersion Include="Xunit.SkippableFact" Version="1.5.23" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
+    <!-- Shared application cache: one MIT-licensed FusionCache release across integrations. -->
+    <PackageVersion Include="ZiggyCreatures.FusionCache" Version="2.9.0" />
+    <PackageVersion Include="ZiggyCreatures.FusionCache.Backplane.StackExchangeRedis" Version="2.9.0" />
   </ItemGroup>
 </Project>

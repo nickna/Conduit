@@ -32,7 +32,7 @@ export class FetchSettingsService {
    * Get all global settings
    */
   async getGlobalSettings(config?: RequestConfig): Promise<SettingsDto> {
-    const readPage = (page: number) => this.client['executeContractRead'](
+    const readPage = (page: number) => this.client.executeContractRead(
       '/v1/admin/global-settings',
       (contractClient, options) => contractClient.GET('/v1/admin/global-settings', {
         ...options,
@@ -63,7 +63,7 @@ export class FetchSettingsService {
 
   /** Gets the server-owned registry used to render and validate typed settings. */
   async getDefinitions(config?: RequestConfig): Promise<GlobalSettingDefinitionDto[]> {
-    const result = await this.client['executeContractRead'](
+    const result = await this.client.executeContractRead(
       '/v1/admin/global-settings/definitions',
       (contractClient, options) => contractClient.GET('/v1/admin/global-settings/definitions', {
         ...options,
@@ -78,7 +78,7 @@ export class FetchSettingsService {
    * Get a specific setting by key
    */
   async getGlobalSetting(key: string, config?: RequestConfig): Promise<GlobalSettingDto> {
-    return this.client['executeContractRead'](
+    return this.client.executeContractRead(
       `/v1/admin/global-settings/by-key/${encodeURIComponent(key)}`,
       (contractClient, options) => contractClient.GET('/v1/admin/global-settings/by-key/{key}', {
         ...options,
@@ -95,7 +95,7 @@ export class FetchSettingsService {
     data: CreateGlobalSettingDto,
     config?: RequestConfig
   ): Promise<GlobalSettingDto> {
-    return this.client['executeContractOperation']<GlobalSettingDto, CreateGlobalSettingDto>(
+    return this.client.executeContractOperation<GlobalSettingDto, CreateGlobalSettingDto>(
       '/v1/admin/global-settings',
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/global-settings', {
@@ -122,7 +122,7 @@ export class FetchSettingsService {
       description,
     };
 
-    return this.client['executeContractOperation']<void, UpdateGlobalSettingByKeyDto>(
+    return this.client.executeContractOperation<void, UpdateGlobalSettingByKeyDto>(
       '/v1/admin/global-settings/by-key',
       HttpMethod.PUT,
       (contractClient, options) => contractClient.PUT('/v1/admin/global-settings/by-key', {
@@ -138,7 +138,7 @@ export class FetchSettingsService {
    * Delete a global setting
    */
   async deleteGlobalSetting(key: string, config?: RequestConfig): Promise<void> {
-    return this.client['executeContractOperation']<void>(
+    return this.client.executeContractOperation<void>(
       `/v1/admin/global-settings/by-key/${encodeURIComponent(key)}`,
       HttpMethod.DELETE,
       (contractClient, options) => contractClient.DELETE('/v1/admin/global-settings/by-key/{key}', {
@@ -169,7 +169,7 @@ export class FetchSettingsService {
    * Get global settings cache statistics
    */
   async getCacheStats(config?: RequestConfig): Promise<GlobalSettingCacheStats> {
-    return this.client['executeContractRead'](
+    return this.client.executeContractRead(
       '/v1/admin/global-settings/cache/stats',
       (contractClient, options) => contractClient.GET('/v1/admin/global-settings/cache/stats', options),
       config,
@@ -180,7 +180,7 @@ export class FetchSettingsService {
    * Reload all global settings from database into cache
    */
   async reloadCache(config?: RequestConfig): Promise<GlobalSettingsReloadAcceptedResponse> {
-    return this.client['executeContractOperation']<GlobalSettingsReloadAcceptedResponse>(
+    return this.client.executeContractOperation<GlobalSettingsReloadAcceptedResponse>(
       '/v1/admin/global-settings/cache/reload',
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/global-settings/cache/reload', options),
@@ -192,7 +192,7 @@ export class FetchSettingsService {
    * Invalidate a specific cached setting
    */
   async invalidateSetting(key: string, config?: RequestConfig): Promise<void> {
-    return this.client['executeContractOperation']<void>(
+    return this.client.executeContractOperation<void>(
       `/v1/admin/global-settings/cache/invalidate/${encodeURIComponent(key)}`,
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/global-settings/cache/invalidate/{key}', {

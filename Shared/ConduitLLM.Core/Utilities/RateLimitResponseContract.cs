@@ -51,6 +51,7 @@ public static class RateLimitResponseContract
         await JsonSerializer.SerializeAsync(
             context.Response.Body,
             BuildError(scope, limit, retryAfter, message),
+            Serialization.CoreHttpJsonContext.Default.OpenAIErrorResponse,
             cancellationToken: context.RequestAborted);
     }
 

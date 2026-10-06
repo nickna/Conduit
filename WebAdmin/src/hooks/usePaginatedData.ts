@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 
 interface UsePaginatedDataOptions {
   defaultPageSize?: number;
@@ -25,10 +25,9 @@ export function usePaginatedData<T>(
   const totalItems = Array.isArray(data) ? data.length : 0;
   const totalPages = Math.ceil(totalItems / pageSize);
 
-  // Reset to first page if current page is out of bounds
-  if (page > totalPages && totalPages > 0) {
-    setPage(1);
-  }
+  useEffect(() => {
+    if (page > totalPages && totalPages > 0) setPage(1);
+  }, [page, totalPages]);
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Core.Serialization;
 
 using ConduitLLM.Core.Models;
 
@@ -16,7 +17,8 @@ public static class GroqChunkConverter
     public static ChatCompletionChunk? Convert(JsonElement providerChunk, JsonSerializerOptions options)
     {
         var transformedJson = ExtractGroqUsageJson(providerChunk);
-        var chunk = JsonSerializer.Deserialize<ChatCompletionChunk>(transformedJson, options);
+        var context = new CoreHttpJsonContext(new JsonSerializerOptions(options));
+        var chunk = JsonSerializer.Deserialize(transformedJson, context.ChatCompletionChunk);
         if (chunk != null)
         {
             chunk.ProviderToolUsage = ExtractHostedToolUsage(providerChunk);

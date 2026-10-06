@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ConduitLLM.Core\ConduitLLM.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ConduitLLM.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\ConduitLLM.Core\Services\S3MediaStorageService.*.cs"
+             Link="Services\%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

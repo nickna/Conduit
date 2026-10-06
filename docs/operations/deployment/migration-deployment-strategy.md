@@ -7,7 +7,7 @@ auto-provisioning during normal startup.
 ## Release sequence
 
 1. Build the Admin, Gateway, and WebAdmin candidate images.
-2. Run the candidate Admin image once with the `migrate` argument.
+2. Run the standalone migrator bundled in the candidate Admin image.
 3. Only after exit code `0`, roll out Gateway and Admin (and promote any floating
    image tags).
 
@@ -33,25 +33,26 @@ docker compose run --rm migrate
 `docker compose up -d` also runs the same one-shot service automatically and
 starts both APIs only after it succeeds.
 
-For another container platform, run the release's Admin image as a Job or release
-hook:
+For another container platform, run the release's standalone migrator as a Job or
+release hook:
 
 ```bash
 docker run --rm \
+  --entrypoint dotnet \
   -e DATABASE_URL \
   -e CONDUIT_MIGRATION_LOCK_TIMEOUT_SECONDS=600 \
-  ghcr.io/nickna/conduit-admin:<version> migrate
+  ghcr.io/nickna/conduit-admin:<version> /app/migrator/ConduitLLM.Migrator.dll
 ```
 
 For a source checkout:
 
 ```bash
-dotnet run --project Services/ConduitLLM.Admin -- migrate
+dotnet run --project tools/ConduitLLM.Migrator
 ```
 
 Both normal services should use `CONDUIT_MIGRATION_MODE=Wait` (the default) and
 `ConduitLLM__Messaging__Wolverine__AutoProvision=false` (also the default).
-`Wait` performs read-only pending-migration probes and returns `503` from
+`Wait` performs a read-only schema-version probe and returns `503` from
 `/health/ready` until the schema is current. The readiness message tells the
 operator to run the explicit migrator. `Skip` disables this guard for tests or a
 deliberate break-glass operation. The removed `Apply` value fails startup with an

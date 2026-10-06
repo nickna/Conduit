@@ -53,25 +53,25 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Reference ID (e.g., virtual key ID, batch operation ID)
         /// </summary>
-        [MaxLength(100)]
+        [StringLength(100)]
         public string? ReferenceId { get; set; }
 
         /// <summary>
         /// Description of the transaction
         /// </summary>
-        [MaxLength(500)]
+        [StringLength(500)]
         public string? Description { get; set; }
 
         /// <summary>
         /// What initiated this transaction (e.g., "System", "Admin", "API")
         /// </summary>
-        [MaxLength(50)]
+        [StringLength(50)]
         public string InitiatedBy { get; set; } = "System";
 
         /// <summary>
         /// Clerk user ID if initiated by an admin user
         /// </summary>
-        [MaxLength(100)]
+        [StringLength(100)]
         public string? InitiatedByUserId { get; set; }
 
         /// <summary>
@@ -80,7 +80,7 @@ namespace ConduitLLM.Configuration.Entities
         /// present: a redelivered message is detected by this key and the balance
         /// adjustment is not applied twice.
         /// </summary>
-        [MaxLength(100)]
+        [StringLength(100)]
         public string? IdempotencyKey { get; set; }
 
         /// <summary>

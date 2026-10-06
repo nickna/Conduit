@@ -50,7 +50,7 @@ public static class PromptCachingEndpoints
         PromptCachingConfig? config;
         try
         {
-            config = JsonSerializer.Deserialize<PromptCachingConfig>(
+            config = AdminJson.Deserialize<PromptCachingConfig>(
                 json, PromptCachingSerialization.Options);
         }
         catch (JsonException)
@@ -101,7 +101,7 @@ public static class PromptCachingEndpoints
             });
         }
 
-        var json = JsonSerializer.Serialize(config, PromptCachingSerialization.Options);
+        var json = AdminJson.Serialize(config, PromptCachingSerialization.Options);
         if (await globalSettingService.GetSettingByKeyAsync(SettingKey) is not null)
         {
             await globalSettingService.UpdateSettingByKeyAsync(new UpdateGlobalSettingByKeyDto

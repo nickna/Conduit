@@ -23,9 +23,6 @@ namespace ConduitLLM.Admin.Extensions
         /// <returns>The service collection for chaining</returns>
         public static IServiceCollection AddCoreServices(this IServiceCollection services, IConfiguration configuration, ILogger? startupLogger = null)
         {
-            // Register unified cache manager (required by CacheManagementService)
-            services.AddCacheManager(configuration);
-
             // Add database services - use ConfigurationDbContext
             services.AddDatabaseServices<ConduitLLM.Configuration.ConduitDbContext>();
 
@@ -71,7 +68,7 @@ namespace ConduitLLM.Admin.Extensions
                        .AddInterceptors(interceptor);
             });
             startupLogger?.LogInformation("Query monitoring interceptor configured for performance tracking");
-            
+
             // Also add scoped registration from factory for services that need direct injection
             // Note: This creates contexts from the factory on demand
             services.AddScoped<ConduitLLM.Configuration.ConduitDbContext>(provider =>
@@ -84,9 +81,6 @@ namespace ConduitLLM.Admin.Extensions
                 return factory.CreateDbContext();
             });
 
-            // Add context management services
-            services.AddConduitContextManagement(configuration);
-
             // The Admin discovery preview uses the same pricing visibility option as Gateway,
             // without registering the cache implementation itself.
             services.Configure<ConduitLLM.Core.Services.DiscoveryCacheOptions>(
@@ -94,7 +88,7 @@ namespace ConduitLLM.Admin.Extensions
 
             // Note: AddDiscoveryCache is not registered in Admin API as it's optional
             // The SystemInfo endpoint handler has IDiscoveryCacheService? as a nullable dependency.
-            // If needed in the future, must first register AddCacheManager(configuration)
+            // The shared application cache is registered by the host; preview does not populate it.
 
             // Add Function Discovery Cache for function tool definition caching
             services.AddFunctionDiscoveryCache(configuration);

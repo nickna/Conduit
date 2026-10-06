@@ -31,14 +31,14 @@ import { TablePagination } from '@/components/common/TablePagination';
 import { RequestLogsTable } from '@/components/analytics/RequestLogsTable';
 import { RequestLogsFilters } from '@/components/analytics/RequestLogsFilters';
 import { ViewVirtualKeyModal } from '@/components/virtualkeys/ViewVirtualKeyModal';
-import { useRequestLogs, useDistinctModels, type RequestLogFormFilters } from '@/hooks/useRequestLogs';
+import { useRequestLogs, useDistinctModels, type RequestLogEntry, type RequestLogFormFilters } from '@/hooks/useRequestLogs';
 import { exportToCSV, exportToJSON, formatDateForExport } from '@/lib/utils/export';
 import { withAdminClient } from '@/lib/client/adminClient';
 import type { VirtualKeyDto, VirtualKeyGroupDto } from '@/lib/admin-api';
 
-function formatBillingMethodForExport(method: number | null): string {
-  if (method === 1) return 'provider-reported';
-  if (method === 0) return 'model-cost';
+function formatBillingMethodForExport(method: RequestLogEntry['billingMethod']): string {
+  if (method === 'providerReportedCost') return 'provider-reported';
+  if (method === 'modelCost') return 'model-cost';
   return '';
 }
 

@@ -1,0 +1,54 @@
+# Parallel NativeAOT image. The framework-dependent Dockerfile remains the release default.
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302-noble AS build
+ARG TARGETARCH
+ARG VERSION=3.0.0
+ARG COMMIT_SHA=dev
+ARG BUILD_TIMESTAMP=unknown
+WORKDIR /src
+
+RUN test "$TARGETARCH" = "amd64" && \
+    apt-get update && apt-get install --yes --no-install-recommends clang zlib1g-dev && \
+    rm -rf /var/lib/apt/lists/*
+COPY . .
+RUN dotnet restore Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj --runtime linux-x64 \
+      -p:PublishAot=true -p:ConduitAotAudit=true && \
+    dotnet restore tools/ConduitLLM.HealthProbe/ConduitLLM.HealthProbe.csproj --runtime linux-x64 \
+      -p:PublishAot=true
+RUN dotnet publish Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj \
+      --configuration Release --runtime linux-x64 --self-contained true --no-restore \
+      --output /app/runtime -p:PublishAot=true -p:ConduitAotAudit=true -p:StripSymbols=true \
+      -p:UseSharedCompilation=false -p:Version="$VERSION" -p:InformationalVersion="$VERSION" \
+      -p:ConduitCommitSha="$COMMIT_SHA" -p:ConduitBuildTimestamp="$BUILD_TIMESTAMP" && \
+    dotnet publish tools/ConduitLLM.HealthProbe/ConduitLLM.HealthProbe.csproj \
+      --configuration Release --runtime linux-x64 --self-contained true --no-restore \
+      --output /app/probe -p:PublishAot=true -p:StripSymbols=true -p:UseSharedCompilation=false && \
+    mkdir -p /app/symbols && \
+    find /app/runtime /app/probe -type f \( -name '*.dbg' -o -name '*.pdb' \) \
+      -exec mv -t /app/symbols {} + && \
+    cp /app/probe/ConduitLLM.HealthProbe /app/runtime/conduit-health-probe
+
+FROM scratch AS symbols
+COPY --from=build /app/symbols /
+
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-extra AS runtime
+ARG VERSION=3.0.0
+ARG COMMIT_SHA=dev
+ARG BUILD_TIMESTAMP=unknown
+LABEL org.opencontainers.image.title="Conduit Gateway NativeAOT" \
+      org.opencontainers.image.source="https://github.com/nickna/Conduit" \
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.revision="$COMMIT_SHA" \
+      org.opencontainers.image.created="$BUILD_TIMESTAMP" \
+      io.conduit.runtime="native-aot" \
+      io.conduit.promotion="canary-only"
+WORKDIR /app
+COPY --from=build --chown=$APP_UID:$APP_UID /app/runtime/ ./
+USER $APP_UID
+ENV ASPNETCORE_URLS=http://+:8080 \
+    ASPNETCORE_ENVIRONMENT=Production \
+    DOTNET_RUNNING_IN_CONTAINER=true \
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD ["/app/conduit-health-probe", "http://localhost:8080/health/live"]
+ENTRYPOINT ["/app/ConduitLLM.Gateway"]

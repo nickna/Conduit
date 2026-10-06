@@ -17,10 +17,10 @@ public sealed class BillingReconciliationOptions
     [Range(0, 360)]
     public int GracePeriodMinutes { get; set; } = 15;
 
-    [Range(typeof(decimal), "0", "1")]
+    [Range(0.0, 1.0)]
     public decimal RelativeThreshold { get; set; } = 0.01m;
 
-    [Range(typeof(decimal), "0", "1000000")]
+    [Range(0.0, 1000000.0)]
     public decimal AbsoluteThresholdUsd { get; set; } = 0.01m;
 
     [Range(1, 168)]

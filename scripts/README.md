@@ -23,6 +23,7 @@ repository root unless a command says otherwise.
 | Verify committed Wolverine adapters | `./scripts/generate-wolverine-code.ps1 -Verify` |
 | Run the Gateway/Admin messaging smoke test | `./scripts/test/wolverine-two-host-smoke.ps1` |
 | Run local CodeQL analysis | `./scripts/test/test-codeql.ps1` |
+| Run the analyzer-only NativeAOT audit | `./scripts/aot/aot-audit.ps1` |
 
 `dev.ps1` is the canonical development entry point. It always combines
 `docker-compose.yml` with `docker-compose.dev.yml`; do not invoke the

@@ -1,6 +1,8 @@
 using System.Net;
 
 using ConduitLLM.Functions.Interfaces;
+using ConduitLLM.Functions.Providers.Tavily.Models;
+using ConduitLLM.Functions.Serialization;
 
 namespace ConduitLLM.Functions.Providers.Tavily;
 
@@ -12,12 +14,13 @@ public partial class TavilyClient
         CancellationToken cancellationToken = default) =>
         VerifyViaProbeAsync(
             "/search",
-            new
+            new TavilySearchRequest
             {
-                query = "test",
-                max_results = 1,
-                search_depth = "basic"
+                Query = "test",
+                MaxResults = 1,
+                SearchDepth = "basic"
             },
+            FunctionProviderJsonContext.Default.TavilySearchRequest,
             apiKey,
             cancellationToken);
 

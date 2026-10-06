@@ -15,15 +15,17 @@ namespace ConduitLLM.Gateway.EventHandlers
         private readonly IDiscoveryCacheService _discoveryCacheService;
         private readonly IModelCapabilityService _modelCapabilityService;
         private readonly ILogger<ModelCacheInvalidationHandler> _logger;
+        private readonly IModelMappingCacheInvalidator? _mappings;
 
         public ModelCacheInvalidationHandler(
             IDiscoveryCacheService discoveryCacheService,
             IModelCapabilityService modelCapabilityService,
-            ILogger<ModelCacheInvalidationHandler> logger)
+            ILogger<ModelCacheInvalidationHandler> logger, IModelMappingCacheInvalidator? mappings = null)
         {
             _discoveryCacheService = discoveryCacheService ?? throw new ArgumentNullException(nameof(discoveryCacheService));
             _modelCapabilityService = modelCapabilityService ?? throw new ArgumentNullException(nameof(modelCapabilityService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _mappings = mappings;
         }
 
         /// <summary>
@@ -38,7 +40,8 @@ namespace ConduitLLM.Gateway.EventHandlers
                 message.ChangeType,
                 message.ParametersChanged);
 
-            await _discoveryCacheService.InvalidateAllDiscoveryAsync();
+            if (_mappings is not null) await _mappings.InvalidateAsync(context.CancellationToken);
+            await _discoveryCacheService.InvalidateAllDiscoveryAsync(context.CancellationToken);
             await _modelCapabilityService.RefreshCacheAsync();
 
             _logger.LogInformation(

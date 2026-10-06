@@ -43,6 +43,7 @@ public interface IAdminVirtualKeyService
     /// <param name="id">The ID of the virtual key to delete</param>
     /// <returns>True if the deletion was successful, false otherwise</returns>
     Task<bool> DeleteVirtualKeyAsync(int id);
+    Task<bool> DeleteVirtualKeyAsync(int id, CancellationToken cancellationToken);
 
 
     /// <summary>

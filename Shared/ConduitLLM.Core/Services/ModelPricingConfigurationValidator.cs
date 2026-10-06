@@ -1,7 +1,9 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 using ConduitLLM.Configuration;
 using ConduitLLM.Core.Models.Pricing;
+using ConduitLLM.Core.Serialization;
 
 namespace ConduitLLM.Core.Services;
 
@@ -98,7 +100,10 @@ public static class ModelPricingConfigurationValidator
 
     private static T Deserialize<T>(string json) where T : class
     {
-        return JsonSerializer.Deserialize<T>(json, JsonOptions)
+        var context = new CorePricingJsonContext(new JsonSerializerOptions(JsonOptions));
+        var typeInfo = (JsonTypeInfo<T>?)context.GetTypeInfo(typeof(T))
+            ?? throw new NotSupportedException($"Pricing contract '{typeof(T)}' is not registered.");
+        return JsonSerializer.Deserialize(json, typeInfo)
             ?? throw new ArgumentException($"Pricing configuration could not be parsed as {typeof(T).Name}.");
     }
 

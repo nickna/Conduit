@@ -1,5 +1,5 @@
 import type { FetchBaseApiClient } from '../client/FetchBaseApiClient';
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 import type { RequestConfig } from '../client/types';
 import { HttpMethod } from '../client/HttpMethod';
 
@@ -19,7 +19,7 @@ export class FetchModelAuthorService {
    * Get all model authors
    */
   async list(config?: RequestConfig): Promise<ModelAuthorDto[]> {
-    const result = await this.client['executeContractRead'](
+    const result = await this.client.executeContractRead(
       '/v1/admin/model-authors',
       (contractClient, options) => contractClient.GET('/v1/admin/model-authors', options),
       config,
@@ -31,7 +31,7 @@ export class FetchModelAuthorService {
    * Get a specific model author by ID
    */
   async get(id: number, config?: RequestConfig): Promise<ModelAuthorDto> {
-    return this.client['executeContractRead'](
+    return this.client.executeContractRead(
       `/v1/admin/model-authors/${id}`,
       (contractClient, options) => contractClient.GET('/v1/admin/model-authors/{id}', {
         ...options,
@@ -45,7 +45,7 @@ export class FetchModelAuthorService {
    * Get series by author
    */
   async getSeries(id: number, config?: RequestConfig): Promise<SimpleModelSeriesDto[]> {
-    const result = await this.client['executeContractRead'](
+    const result = await this.client.executeContractRead(
       `/v1/admin/model-authors/${id}/series`,
       (contractClient, options) => contractClient.GET('/v1/admin/model-authors/{id}/series', {
         ...options,
@@ -67,7 +67,7 @@ export class FetchModelAuthorService {
     data: CreateModelAuthorDto,
     config?: RequestConfig
   ): Promise<ModelAuthorDto> {
-    return this.client['executeContractOperation']<ModelAuthorDto, CreateModelAuthorDto>(
+    return this.client.executeContractOperation<ModelAuthorDto, CreateModelAuthorDto>(
       '/v1/admin/model-authors',
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/model-authors', {
@@ -87,7 +87,7 @@ export class FetchModelAuthorService {
     data: UpdateModelAuthorDto,
     config?: RequestConfig
   ): Promise<ModelAuthorDto> {
-    return this.client['executeContractOperation']<ModelAuthorDto, UpdateModelAuthorDto>(
+    return this.client.executeContractOperation<ModelAuthorDto, UpdateModelAuthorDto>(
       `/v1/admin/model-authors/${id}`,
       HttpMethod.PATCH,
       (contractClient, options) => contractClient.PATCH('/v1/admin/model-authors/{id}', {
@@ -104,7 +104,7 @@ export class FetchModelAuthorService {
    * Delete a model author
    */
   async delete(id: number, config?: RequestConfig): Promise<void> {
-    return this.client['executeContractOperation']<void>(
+    return this.client.executeContractOperation<void>(
       `/v1/admin/model-authors/${id}`,
       HttpMethod.DELETE,
       (contractClient, options) => contractClient.DELETE('/v1/admin/model-authors/{id}', {

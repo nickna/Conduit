@@ -20,7 +20,8 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { IconPlus, IconTrash, IconArrowLeft } from '@tabler/icons-react';
 
-import { useSecurityApi, type IpRule } from '@/hooks/useSecurityApi';
+import { useSecurityApi } from '@/hooks/useSecurityApi';
+import type { CreateIpFilterDto, IpFilterDto } from '@/lib/admin-api';
 import { IpRuleModal } from '@/components/ip-filtering/IpRuleModal';
 import { notify } from '@/lib/notifications';
 
@@ -32,7 +33,7 @@ export default function VirtualKeyIpFiltersPage() {
   const { getIpRulesForKey, createIpRuleForKey, deleteIpRule, updateIpRule } =
     useSecurityApi();
 
-  const [rules, setRules] = useState<IpRule[]>([]);
+  const [rules, setRules] = useState<IpFilterDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalOpened, { open: openModal, close: closeModal }] =
@@ -57,15 +58,10 @@ export default function VirtualKeyIpFiltersPage() {
     void fetchRules();
   }, [fetchRules]);
 
-  const handleAdd = async (values: Partial<IpRule>) => {
+  const handleAdd = async (values: CreateIpFilterDto) => {
     setIsSubmitting(true);
     try {
-      await createIpRuleForKey(virtualKeyId, {
-        ipAddress: values.ipAddress ?? '',
-        action: values.action ?? 'block',
-        description: values.description,
-        isEnabled: true,
-      });
+      await createIpRuleForKey(virtualKeyId, values);
       closeModal();
       await fetchRules();
     } finally {
@@ -73,21 +69,14 @@ export default function VirtualKeyIpFiltersPage() {
     }
   };
 
-  const handleDelete = async (id?: string) => {
-    if (id === undefined) {
-      return;
-    }
+  const handleDelete = async (id: number) => {
     await deleteIpRule(id);
     await fetchRules();
   };
 
-  const handleToggle = async (rule: IpRule) => {
-    if (rule.id === undefined) {
-      return;
-    }
+  const handleToggle = async (rule: IpFilterDto) => {
     await updateIpRule(rule.id, {
-      ...rule,
-      isEnabled: !(rule.isEnabled ?? true),
+      isEnabled: !rule.isEnabled,
     });
     await fetchRules();
   };
@@ -147,16 +136,16 @@ export default function VirtualKeyIpFiltersPage() {
                 )}
                 {rules.map((rule) => (
                   <Table.Tr key={rule.id}>
-                    <Table.Td>{rule.ipAddress}</Table.Td>
+                    <Table.Td>{rule.ipAddressOrCidr}</Table.Td>
                     <Table.Td>
-                      <Badge color={rule.action === 'allow' ? 'green' : 'red'}>
-                        {rule.action === 'allow' ? 'Allow' : 'Block'}
+                      <Badge color={rule.filterType === 'whitelist' ? 'green' : 'red'}>
+                        {rule.filterType === 'whitelist' ? 'Allow' : 'Block'}
                       </Badge>
                     </Table.Td>
                     <Table.Td>{rule.description ?? '—'}</Table.Td>
                     <Table.Td>
                       <Switch
-                        checked={rule.isEnabled ?? true}
+                        checked={rule.isEnabled}
                         onChange={() => void handleToggle(rule)}
                         aria-label="Toggle rule enabled"
                       />

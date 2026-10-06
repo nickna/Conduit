@@ -46,8 +46,9 @@ namespace ConduitLLM.Providers.Replicate
                     }
                 }
 
-                // Last resort: serialize to JSON and try to extract
-                return JsonSerializer.Serialize(output);
+                // Persisted provider output normally arrives as JsonElement; unknown typed
+                // values use their non-reflective string representation.
+                return output.ToString() ?? string.Empty;
             }
             catch (Exception ex)
             {
@@ -122,7 +123,9 @@ namespace ConduitLLM.Providers.Replicate
                 // Log the raw output for debugging
                 try
                 {
-                    var outputJson = JsonSerializer.Serialize(output);
+                    var outputJson = output is JsonElement element
+                        ? element.GetRawText()
+                        : output.ToString();
                     Logger.LogDebug("Raw prediction output for video: {Output}", outputJson);
                 }
                 catch (Exception ex)

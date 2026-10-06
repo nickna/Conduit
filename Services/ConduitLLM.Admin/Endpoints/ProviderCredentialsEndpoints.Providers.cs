@@ -52,7 +52,6 @@ namespace ConduitLLM.Admin.Endpoints
         {
             var group = app.MapGroup("/v1/admin/providers")
                 .RequireAuthorization("MasterKeyPolicy")
-                .AddEndpointFilter<ValidationEndpointFilter>()
                 .AddEndpointFilter<OperationLoggingEndpointFilter>()
                 .WithTags("Provider Credentials");
 

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ConduitLLM.Functions.Serialization;
 using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Functions.Exceptions;
 using ConduitLLM.Functions.Providers.Tavily.Models;
@@ -31,7 +32,11 @@ public partial class TavilyClient
             using var client = CreateHttpClient(apiKey);
 
             // Make API request
-            var response = await client.PostAsJsonAsync("/search", tavilyRequest, _jsonOptions, cancellationToken);
+            var response = await client.PostAsJsonAsync(
+                "/search",
+                tavilyRequest,
+                FunctionProviderJsonContext.Default.TavilySearchRequest,
+                cancellationToken);
 
             stopwatch.Stop();
 
@@ -43,7 +48,9 @@ public partial class TavilyClient
             }
 
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            var tavilyResponse = JsonSerializer.Deserialize<TavilySearchResponse>(responseBody, _jsonOptions);
+            var tavilyResponse = JsonSerializer.Deserialize(
+                responseBody,
+                FunctionProviderJsonContext.Default.TavilySearchResponse);
 
             if (tavilyResponse == null)
             {

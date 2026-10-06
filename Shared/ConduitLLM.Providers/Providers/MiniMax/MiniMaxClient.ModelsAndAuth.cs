@@ -51,18 +51,20 @@ namespace ConduitLLM.Providers.MiniMax
                 
                 // Make a minimal chat completion request with max_tokens=1 to minimize cost
                 var testUrl = $"{effectiveBaseUrl}/v1/chat/completions";
-                var testRequest = new
+                var testRequest = new MiniMaxChatCompletionRequest
                 {
-                    model = "abab6.5-chat",  // Use the actual MiniMax model name
-                    messages = new[]
+                    Model = "abab6.5-chat",  // Use the actual MiniMax model name
+                    Messages =
                     {
-                        new { role = "user", content = "Hi" }
+                        new MiniMaxMessage { Role = "user", Content = "Hi" }
                     },
-                    max_tokens = 1,
-                    stream = false
+                    MaxTokens = 1,
+                    Stream = false
                 };
                 
-                var json = JsonSerializer.Serialize(testRequest);
+                var json = JsonSerializer.Serialize(
+                    testRequest,
+                    MiniMaxStreamJsonContext.Default.MiniMaxChatCompletionRequest);
                 using var testContent = new StringContent(json, Encoding.UTF8, "application/json");
                 using var response = await httpClient.PostAsync(testUrl, testContent, cancellationToken);
                 var responseTime = (DateTime.UtcNow - startTime).TotalMilliseconds;

@@ -2,18 +2,18 @@
 
 import { Alert, Text, Stack } from '@mantine/core';
 import { IconInfoCircle, IconShieldCheck, IconShieldOff } from '@tabler/icons-react';
-import type { IpRule } from '@/hooks/useSecurityApi';
+import type { IpFilterDto } from '@/lib/admin-api';
 
 interface IpFilterPolicyBannerProps {
-  rules: IpRule[];
+  rules: IpFilterDto[];
 }
 
 type PolicyState = 'no-rules' | 'block-only' | 'allow-only' | 'allow-and-block';
 
-function getPolicyState(rules: IpRule[]): PolicyState {
+function getPolicyState(rules: IpFilterDto[]): PolicyState {
   const enabledRules = rules.filter(r => r.isEnabled !== false);
-  const hasAllow = enabledRules.some(r => r.action === 'allow');
-  const hasBlock = enabledRules.some(r => r.action === 'block');
+  const hasAllow = enabledRules.some(r => r.filterType === 'whitelist');
+  const hasBlock = enabledRules.some(r => r.filterType === 'blacklist');
 
   if (!hasAllow && !hasBlock) return 'no-rules';
   if (!hasAllow && hasBlock) return 'block-only';

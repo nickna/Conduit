@@ -46,7 +46,6 @@ public class FunctionConfigurationsEndpoints
     {
         var group = app.MapGroup("/v1/admin/function-configurations")
             .RequireAuthorization("MasterKeyPolicy")
-            .AddEndpointFilter<ValidationEndpointFilter>()
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Function Configurations");
         group.MapGet("/", ([FromServices] FunctionConfigurationsEndpoints e) => e.GetAllConfigurations())

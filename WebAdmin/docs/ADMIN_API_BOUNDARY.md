@@ -10,13 +10,10 @@ but ordinary HTTP requests flow through an `openapi-fetch` client parameterized 
 `paths` type. Contract route constants use `satisfies keyof paths`, so renamed or removed routes fail
 WebAdmin type-checking.
 
-Contract-native operations are complete for model authors, model series, models, model identifiers, model costs,
-model provider availability, per-model provider mappings, and bundled-catalog import. Their fourteen
-reads and sixteen mutations invoke literal generated paths directly, including generated path and
-query parameters, through a shared executor that retains the existing Admin request lifecycle. The
-boundary check prevents the three migrated model-family services from returning to generic `get`,
-`post`, `put`, or `delete` compatibility calls. Other services still use the compatibility URL
-transport while their contracts are migrated in bounded slices.
+All Admin services are contract-native. Reads and mutations invoke literal generated paths, including
+generated path and query parameters, through a shared executor that retains the Admin request
+lifecycle. The boundary check prevents services from returning to generic URL calls or protected-method
+bracket access.
 
 Browser operations still obtain a fresh ephemeral master key from
 `/api/auth/ephemeral-master-key`, create a zero-retry Admin client, and call the externally reachable
@@ -37,5 +34,4 @@ versions remain available. Run `npm run check:api-boundary` to enforce the depen
 Contract generation and CI also fail when the WebAdmin-local generated types drift from the
 authoritative Admin document.
 
-See [Admin contract migration](./ADMIN_CONTRACT_READ_MIGRATION.md) for completed and candidate
-slices.
+See [Admin contract transport](./ADMIN_CONTRACT_READ_MIGRATION.md) for the current maintenance rules.

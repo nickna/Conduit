@@ -1,0 +1,52 @@
+<Directives>
+  <Application>
+    <Assembly Name="ConduitLLM.Gateway">
+      <Type Name="Internal.Generated.WolverineHandlers.AsyncTaskCreatedHandler1369561184" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.AsyncTaskDeletedHandler1748419689" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.AsyncTaskUpdatedHandler246659091" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.BatchSpendFlushRequestedEventHandler2015624974" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.DiscoveryCacheInvalidationRequestedHandler237165615" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.FunctionConfigurationChangedHandler2137694965" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.FunctionDiscoveryCacheInvalidationRequestedHandler486748459" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.GeneratedHandlerRegistry" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.GlobalSettingChangedHandler1604840796" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.GlobalSettingsReloadRequestedHandler1670587812" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ImageGenerationCancelledHandler1595577643" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ImageGenerationCompletedHandler2007403103" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ImageGenerationFailedHandler1223967915" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ImageGenerationProgressHandler1112272111" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ImageGenerationRequestedHandler2005711106" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.IndeterminateMediaTaskRetryRequestedHandler420107553" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.IpFilterChangedHandler791876176" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.MediaCleanupAlertRaisedHandler713447171" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.MediaGenerationCompletedHandler889483596" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ModelCostChangedHandler1365821621" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ModelMappingChangedHandler1717399634" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ModelUpdatedHandler646168095" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ProviderCreatedHandler1410551054" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ProviderDeletedHandler705036809" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ProviderKeyCredentialCreatedHandler1500586609" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ProviderKeyCredentialDeletedHandler717419062" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ProviderKeyCredentialPrimaryChangedHandler371327903" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ProviderKeyCredentialUpdatedHandler766608408" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ProviderKeyDisabledEventHandler1480123240" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ProviderKeyReenabledEventHandler610596914" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ProviderToolChangedHandler2048238288" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.ProviderUpdatedHandler295253405" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.SpendThresholdExceededHandler1188337519" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.SpendUpdatedHandler645727144" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.SpendUpdateRequestedHandler1733208880" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.VideoGenerationCancelledHandler849548161" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.VideoGenerationCompletedHandler1200393709" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.VideoGenerationFailedHandler443929283" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.VideoGenerationProgressHandler1306811493" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.VideoGenerationRequestedHandler1559174860" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.VideoGenerationStartedHandler1934489511" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.VideoProgressCheckRequestedHandler1615435913" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.VirtualKeyCreatedHandler697639089" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.VirtualKeyDeletedHandler110958986" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.VirtualKeyUpdatedHandler1569555928" Dynamic="Required All" />
+      <Type Name="Internal.Generated.WolverineHandlers.WebhookDeliveryRequestedHandler639286956" Dynamic="Required All" />
+    </Assembly>
+  </Application>
+</Directives>

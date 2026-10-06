@@ -6,6 +6,7 @@ using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Models;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Functions.Utilities;
+using ConduitLLM.Functions.Serialization;
 
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Caching.Distributed;
@@ -37,12 +38,7 @@ namespace ConduitLLM.Core.Services
                 logger,
                 "DatabaseModelCapability:",
                 TimeSpan.FromMinutes(5),
-                TimeSpan.FromMinutes(30),
-                new JsonSerializerOptions
-                {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                    WriteIndented = false
-                });
+                TimeSpan.FromMinutes(30));
         }
 
         /// <inheritdoc/>
@@ -51,7 +47,9 @@ namespace ConduitLLM.Core.Services
             var cacheKey = $"Vision:{model}";
             
             // Try hybrid cache first
-            var cachedResult = await _cache.GetAsync<bool?>(cacheKey);
+            var cachedResult = await _cache.GetAsync(
+                cacheKey,
+                FunctionsJsonContext.Default.NullableBoolean);
             if (cachedResult.HasValue)
             {
                 return cachedResult.Value;
@@ -63,7 +61,7 @@ namespace ConduitLLM.Core.Services
                 var association = mapping?.ModelProviderTypeAssociation;
                 var result = association?.Model is not null &&
                     ModelCapabilityResolver.Resolve(association.Model, association).SupportsImageInput;
-                await _cache.SetAsync(cacheKey, result);
+                await _cache.SetAsync(cacheKey, result, FunctionsJsonContext.Default.Boolean);
                 return result;
             }
             catch (Exception ex)
@@ -78,7 +76,9 @@ namespace ConduitLLM.Core.Services
         {
             var cacheKey = $"VideoInput:{model}";
 
-            var cachedResult = await _cache.GetAsync<bool?>(cacheKey);
+            var cachedResult = await _cache.GetAsync(
+                cacheKey,
+                FunctionsJsonContext.Default.NullableBoolean);
             if (cachedResult.HasValue)
             {
                 return cachedResult.Value;
@@ -90,7 +90,7 @@ namespace ConduitLLM.Core.Services
                 var association = mapping?.ModelProviderTypeAssociation;
                 var result = association?.Model is not null &&
                     ModelCapabilityResolver.Resolve(association.Model, association).SupportsVideoInput;
-                await _cache.SetAsync(cacheKey, result);
+                await _cache.SetAsync(cacheKey, result, FunctionsJsonContext.Default.Boolean);
                 return result;
             }
             catch (Exception ex)
@@ -106,7 +106,9 @@ namespace ConduitLLM.Core.Services
             var cacheKey = $"VideoGeneration:{model}";
             
             // Try hybrid cache first
-            var cachedResult = await _cache.GetAsync<bool?>(cacheKey);
+            var cachedResult = await _cache.GetAsync(
+                cacheKey,
+                FunctionsJsonContext.Default.NullableBoolean);
             if (cachedResult.HasValue)
             {
                 return cachedResult.Value;
@@ -118,7 +120,7 @@ namespace ConduitLLM.Core.Services
                 var association = mapping?.ModelProviderTypeAssociation;
                 var result = association?.Model is not null &&
                     ModelCapabilityResolver.Resolve(association.Model, association).SupportsVideoGeneration;
-                await _cache.SetAsync(cacheKey, result);
+                await _cache.SetAsync(cacheKey, result, FunctionsJsonContext.Default.Boolean);
                 return result;
             }
             catch (Exception ex)
@@ -133,7 +135,9 @@ namespace ConduitLLM.Core.Services
         {
             var cacheKey = $"SpeechToText:{model}";
 
-            var cachedResult = await _cache.GetAsync<bool?>(cacheKey);
+            var cachedResult = await _cache.GetAsync(
+                cacheKey,
+                FunctionsJsonContext.Default.NullableBoolean);
             if (cachedResult.HasValue)
             {
                 return cachedResult.Value;
@@ -145,7 +149,7 @@ namespace ConduitLLM.Core.Services
                 var association = mapping?.ModelProviderTypeAssociation;
                 var result = association?.Model is not null &&
                     ModelCapabilityResolver.Resolve(association.Model, association).SupportsSpeechToText;
-                await _cache.SetAsync(cacheKey, result);
+                await _cache.SetAsync(cacheKey, result, FunctionsJsonContext.Default.Boolean);
                 return result;
             }
             catch (Exception ex)
@@ -160,7 +164,9 @@ namespace ConduitLLM.Core.Services
         {
             var cacheKey = $"TextToSpeech:{model}";
 
-            var cachedResult = await _cache.GetAsync<bool?>(cacheKey);
+            var cachedResult = await _cache.GetAsync(
+                cacheKey,
+                FunctionsJsonContext.Default.NullableBoolean);
             if (cachedResult.HasValue)
             {
                 return cachedResult.Value;
@@ -172,7 +178,7 @@ namespace ConduitLLM.Core.Services
                 var association = mapping?.ModelProviderTypeAssociation;
                 var result = association?.Model is not null &&
                     ModelCapabilityResolver.Resolve(association.Model, association).SupportsTextToSpeech;
-                await _cache.SetAsync(cacheKey, result);
+                await _cache.SetAsync(cacheKey, result, FunctionsJsonContext.Default.Boolean);
                 return result;
             }
             catch (Exception ex)
@@ -187,7 +193,9 @@ namespace ConduitLLM.Core.Services
         {
             var cacheKey = $"Rerank:{model}";
 
-            var cachedResult = await _cache.GetAsync<bool?>(cacheKey);
+            var cachedResult = await _cache.GetAsync(
+                cacheKey,
+                FunctionsJsonContext.Default.NullableBoolean);
             if (cachedResult.HasValue)
             {
                 return cachedResult.Value;
@@ -199,7 +207,7 @@ namespace ConduitLLM.Core.Services
                 var association = mapping?.ModelProviderTypeAssociation;
                 var result = association?.Model is not null &&
                     ModelCapabilityResolver.Resolve(association.Model, association).SupportsRerank;
-                await _cache.SetAsync(cacheKey, result);
+                await _cache.SetAsync(cacheKey, result, FunctionsJsonContext.Default.Boolean);
                 return result;
             }
             catch (Exception ex)
@@ -215,7 +223,9 @@ namespace ConduitLLM.Core.Services
             var cacheKey = $"Tokenizer:{model}";
             
             // Try hybrid cache first
-            var cachedResult = await _cache.GetAsync<string?>(cacheKey);
+            var cachedResult = await _cache.GetAsync(
+                cacheKey,
+                FunctionsJsonContext.Default.String);
             if (cachedResult != null)
             {
                 return cachedResult;
@@ -236,7 +246,7 @@ namespace ConduitLLM.Core.Services
                 }
 
                 string result = tokenizerType.ToString()!;
-                await _cache.SetAsync(cacheKey, result);
+                await _cache.SetAsync(cacheKey, result, FunctionsJsonContext.Default.String);
                 return result;
             }
             catch (Exception ex)
@@ -253,7 +263,9 @@ namespace ConduitLLM.Core.Services
             var cacheKey = $"Default:{provider}:{capabilityType}";
             
             // Try hybrid cache first
-            var cachedResult = await _cache.GetAsync<string?>(cacheKey);
+            var cachedResult = await _cache.GetAsync(
+                cacheKey,
+                FunctionsJsonContext.Default.String);
             if (cachedResult != null)
             {
                 return cachedResult;

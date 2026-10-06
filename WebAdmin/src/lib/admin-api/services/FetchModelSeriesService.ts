@@ -1,5 +1,5 @@
 import type { FetchBaseApiClient } from '../client/FetchBaseApiClient';
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 import type { RequestConfig } from '../client/types';
 import { HttpMethod } from '../client/HttpMethod';
 
@@ -19,7 +19,7 @@ export class FetchModelSeriesService {
    * Get all model series
    */
   async list(config?: RequestConfig): Promise<ModelSeriesDto[]> {
-    const result = await this.client['executeContractRead'](
+    const result = await this.client.executeContractRead(
       '/v1/admin/model-series',
       (contractClient, options) => contractClient.GET('/v1/admin/model-series', options),
       config,
@@ -31,7 +31,7 @@ export class FetchModelSeriesService {
    * Get a specific model series by ID
    */
   async get(id: number, config?: RequestConfig): Promise<ModelSeriesDto> {
-    return this.client['executeContractRead'](
+    return this.client.executeContractRead(
       `/v1/admin/model-series/${id}`,
       (contractClient, options) => contractClient.GET('/v1/admin/model-series/{id}', {
         ...options,
@@ -45,7 +45,7 @@ export class FetchModelSeriesService {
    * Get models in a series
    */
   async getModels(id: number, config?: RequestConfig): Promise<SeriesSimpleModelDto[]> {
-    const result = await this.client['executeContractRead'](
+    const result = await this.client.executeContractRead(
       `/v1/admin/model-series/${id}/models`,
       (contractClient, options) => contractClient.GET('/v1/admin/model-series/{id}/models', {
         ...options,
@@ -63,7 +63,7 @@ export class FetchModelSeriesService {
     data: CreateModelSeriesDto,
     config?: RequestConfig
   ): Promise<ModelSeriesDto> {
-    return this.client['executeContractOperation']<ModelSeriesDto, CreateModelSeriesDto>(
+    return this.client.executeContractOperation<ModelSeriesDto, CreateModelSeriesDto>(
       '/v1/admin/model-series',
       HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/model-series', {
@@ -83,7 +83,7 @@ export class FetchModelSeriesService {
     data: UpdateModelSeriesDto,
     config?: RequestConfig
   ): Promise<ModelSeriesDto> {
-    return this.client['executeContractOperation']<ModelSeriesDto, UpdateModelSeriesDto>(
+    return this.client.executeContractOperation<ModelSeriesDto, UpdateModelSeriesDto>(
       `/v1/admin/model-series/${id}`,
       HttpMethod.PATCH,
       (contractClient, options) => contractClient.PATCH('/v1/admin/model-series/{id}', {
@@ -100,7 +100,7 @@ export class FetchModelSeriesService {
    * Delete a model series
    */
   async delete(id: number, config?: RequestConfig): Promise<void> {
-    return this.client['executeContractOperation']<void>(
+    return this.client.executeContractOperation<void>(
       `/v1/admin/model-series/${id}`,
       HttpMethod.DELETE,
       (contractClient, options) => contractClient.DELETE('/v1/admin/model-series/{id}', {

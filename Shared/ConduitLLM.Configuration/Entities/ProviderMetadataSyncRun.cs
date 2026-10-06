@@ -22,12 +22,12 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>When the run completed (UTC), or null if still running.</summary>
         public DateTime? CompletedAt { get; set; }
 
-        /// <summary>Run status: Running | Completed | Failed.</summary>
-        [MaxLength(20)]
+        /// <summary>Run status: Running | Completed | Failed | Cancelled.</summary>
+        [StringLength(20)]
         public string Status { get; set; } = "Running";
 
         /// <summary>What triggered the run: "Schedule" or "Manual".</summary>
-        [MaxLength(100)]
+        [StringLength(100)]
         public string TriggeredBy { get; set; } = "Schedule";
 
         /// <summary>Number of models fetched from the provider catalog.</summary>
@@ -46,7 +46,7 @@ namespace ConduitLLM.Configuration.Entities
         public int ItemsAutoResolved { get; set; }
 
         /// <summary>Error message when the run failed.</summary>
-        [MaxLength(2000)]
+        [StringLength(2000)]
         public string? ErrorMessage { get; set; }
     }
 }

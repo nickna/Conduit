@@ -19,8 +19,10 @@
       4. The Gateway starts message listening on all five queues (gateway-events,
          webhook-delivery, video-generation-events, spend-update-events,
          image-generation-events).
-      5. Representative spend, batch, image, and video messages are delivered through
-         the real PostgreSQL queues to the committed static handler adapters.
+      5. Representative spend, batch, image, and video messages reach the committed
+         static handler adapters through the real PostgreSQL queues. In the native
+         supported-boundary run, spend stops at the explicitly excluded EF query data
+         plane after the adapter has invoked it.
       6. Neither host logs agent-assignment, service-location, or static-code-loading
          failures (including a fallback handler scan).
 
@@ -47,6 +49,10 @@
 .PARAMETER Configuration
     Build configuration of the service outputs (default Debug).
 
+.PARAMETER NativeArtifactDirectory
+    Root produced by scripts/aot/publish-native.ps1. When set, launches the
+    published native Admin and Gateway executables instead of framework-dependent DLLs.
+
 .EXAMPLE
     # CI (after `dotnet build` of both services):
     ./scripts/test/wolverine-two-host-smoke.ps1 -NoBuild
@@ -68,6 +74,7 @@ param(
     [string]$PsqlCommand,
     [switch]$NoBuild,
     [string]$Configuration = 'Debug',
+    [string]$NativeArtifactDirectory,
     [int]$AdminPort = 15002,
     [int]$GatewayPort = 15000,
     [int]$TimeoutSeconds = 240
@@ -76,12 +83,16 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if (-not $DatabaseUrl) { Write-Error 'DatabaseUrl not set (pass -DatabaseUrl or set DATABASE_URL).' }
+if ($NativeArtifactDirectory -and -not $RedisUrl) {
+    Write-Error 'RedisUrl not set (pass -RedisUrl or set REDIS_URL) for the native two-host smoke.'
+}
 if (-not $PsqlCommand) { $PsqlCommand = "psql $DatabaseUrl" }
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '..')
 $adminProject = Join-Path $repoRoot 'Services' 'ConduitLLM.Admin'
 $gatewayProject = Join-Path $repoRoot 'Services' 'ConduitLLM.Gateway'
 $publisherProject = Join-Path $repoRoot 'tools' 'WolverineSmokePublisher'
+$migratorProject = Join-Path $repoRoot 'tools' 'ConduitLLM.Migrator'
 $logDir = Join-Path ([System.IO.Path]::GetTempPath()) "wolverine-two-host-$PID"
 New-Item -ItemType Directory -Force $logDir | Out-Null
 
@@ -135,15 +146,23 @@ function Wait-ForDeliveryProbes([string]$Name, [System.Collections.IDictionary]$
 }
 
 function Start-ServiceHost([string]$Project, [string]$Name, [int]$Port) {
-    $dll = Join-Path $Project 'bin' $Configuration 'net10.0' "$Name.dll"
-    if (-not (Test-Path $dll)) { throw "Build output not found: $dll (build first or drop -NoBuild)" }
+    if ($NativeArtifactDirectory) {
+        $serviceSlug = $Name.Replace('ConduitLLM.', '').ToLowerInvariant()
+        $executableName = if ($IsWindows) { "$Name.exe" } else { $Name }
+        $hostPath = Join-Path $NativeArtifactDirectory 'runtime' $serviceSlug $executableName
+        $hostArguments = @()
+    } else {
+        $hostPath = Join-Path $Project 'bin' $Configuration 'net10.0' "$Name.dll"
+        $hostArguments = @($hostPath)
+    }
+    if (-not (Test-Path $hostPath)) { throw "Host output not found: $hostPath (build/publish first)" }
     $out = Join-Path $logDir "$Name.out.log"
     $err = Join-Path $logDir "$Name.err.log"
     $env:ASPNETCORE_URLS = "http://localhost:$Port"
     $startArgs = @{
-        FilePath = 'dotnet'
-        ArgumentList = @($dll)
-        WorkingDirectory = (Split-Path $dll)
+        FilePath = if ($NativeArtifactDirectory) { $hostPath } else { 'dotnet' }
+        ArgumentList = $hostArguments
+        WorkingDirectory = (Split-Path $hostPath)
         RedirectStandardOutput = $out
         RedirectStandardError = $err
         PassThru = $true
@@ -171,23 +190,35 @@ function Get-HostLog([string]$Name) {
 $env:DATABASE_URL = $DatabaseUrl
 if ($RedisUrl) { $env:REDIS_URL = $RedisUrl }
 $env:ConduitLLM__Messaging__Backend = 'Wolverine'
-$env:CONDUIT_MIGRATION_MODE = 'Skip'   # migrations are applied via the migrate verb below
+$env:CONDUIT_MIGRATION_MODE = 'Skip'   # migrations are applied by the standalone executable below
 $env:ASPNETCORE_ENVIRONMENT = 'Production'
 $env:CONDUIT_ENABLE_HTTPS_REDIRECTION = 'false'
+if ($IsWindows) { $env:Logging__EventLog__LogLevel__Default = 'None' }
 
 if (-not $NoBuild) {
-    Write-Host '== Building Gateway + Admin =='
-    dotnet build $gatewayProject -c $Configuration
-    if ($LASTEXITCODE -ne 0) { exit 1 }
-    dotnet build $adminProject -c $Configuration
-    if ($LASTEXITCODE -ne 0) { exit 1 }
+    if (-not $NativeArtifactDirectory) {
+        Write-Host '== Building Gateway + Admin =='
+        dotnet build $gatewayProject -c $Configuration
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+        dotnet build $adminProject -c $Configuration
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+    }
     dotnet build $publisherProject -c $Configuration
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+    dotnet build $migratorProject -c $Configuration
     if ($LASTEXITCODE -ne 0) { exit 1 }
 }
 
-Write-Host '== Applying EF migrations (migrate verb) =='
-dotnet (Join-Path $adminProject 'bin' $Configuration 'net10.0' 'ConduitLLM.Admin.dll') migrate
-if ($LASTEXITCODE -ne 0) { Write-Error 'migrate verb failed' }
+Write-Host '== Applying EF migrations (standalone migrator) =='
+dotnet (Join-Path $migratorProject 'bin' $Configuration 'net10.0' 'ConduitLLM.Migrator.dll')
+if ($LASTEXITCODE -ne 0) { Write-Error 'standalone migrator failed' }
+
+# Wolverine retains node records briefly after an ungraceful shutdown and may prune
+# them during the next startup. Use the database clock to identify this run's nodes
+# without depending on either cleanup timing or the workstation clock.
+$nodeRegistrationStartedAt = (Invoke-Sql 'SELECT clock_timestamp()').Replace("'", "''")
+$adminNodeCountSql = "SELECT count(*) FROM wolverine_conduit_admin.wolverine_nodes WHERE started >= '$nodeRegistrationStartedAt'::timestamptz"
+$gatewayNodeCountSql = "SELECT count(*) FROM wolverine_conduit_gateway.wolverine_nodes WHERE started >= '$nodeRegistrationStartedAt'::timestamptz"
 
 $admin = $null
 $gateway = $null
@@ -196,24 +227,29 @@ try {
     # Admin FIRST: recreates the W1 leadership scenario (see .DESCRIPTION).
     Write-Host '== Booting Admin API (Wolverine backend) =='
     $admin = Start-ServiceHost $adminProject 'ConduitLLM.Admin' $AdminPort
-    $adminUp = Wait-ForSql 'SELECT count(*) FROM wolverine_conduit_admin.wolverine_nodes' '1' 'Admin node registration'
+    $adminUp = Wait-ForSql $adminNodeCountSql '1' 'Admin node registration'
 
     Write-Host '== Booting Gateway API (Wolverine backend) =='
     $gateway = Start-ServiceHost $gatewayProject 'ConduitLLM.Gateway' $GatewayPort
     $gatewayUp = Wait-ForSql @'
-SELECT count(*) FROM wolverine_conduit_gateway.wolverine_node_assignments
+SELECT CASE WHEN count(*) >= 2 THEN 1 ELSE 0 END FROM wolverine_conduit_gateway.wolverine_node_assignments
  WHERE id IN ('wolverine-listener://postgresql/spend-update-events',
               'wolverine-listener://postgresql/image-generation-events')
    AND started IS NOT NULL
-'@ '2' 'Gateway exclusive listener assignments'
+'@ '1' 'Gateway exclusive listener assignments'
 
     Write-Host '== Publishing representative delivery probes =='
     $probeId = [Guid]::NewGuid().ToString('N')
     dotnet (Join-Path $publisherProject 'bin' $Configuration 'net10.0' 'WolverineSmokePublisher.dll') $probeId
     if ($LASTEXITCODE -ne 0) { Write-Error 'Wolverine delivery-probe publisher failed' }
 
+    $spendPattern = if ($NativeArtifactDirectory) {
+        'SpendUpdateRequestedHandler1733208880\.<HandleAsync>'
+    } else {
+        'Spend update request for non-existent virtual key 2147483647'
+    }
     $deliveryPatterns = [ordered]@{
-        Spend = 'Spend update request for non-existent virtual key 2147483647'
+        Spend = $spendPattern
         Batch = "Processing batch spend flush request static-codegen-batch-$probeId"
         Image = "Received cancellation request for image generation task static-codegen-image-$probeId"
         Video = "Received cancellation request for video generation task static-codegen-video-$probeId"
@@ -229,9 +265,9 @@ SELECT count(*) FROM wolverine_conduit_gateway.wolverine_node_assignments
     Assert $gatewayUp 'Gateway exclusive listeners (spend-update-events, image-generation-events) assigned and started'
 
     # (1) Separate single-node clusters — the W1 guard.
-    Assert ((Invoke-Sql 'SELECT count(*) FROM wolverine_conduit_admin.wolverine_nodes') -eq '1') `
+    Assert ((Invoke-Sql $adminNodeCountSql) -eq '1') `
         'Admin durability schema holds exactly its own node (no shared cluster)'
-    Assert ((Invoke-Sql 'SELECT count(*) FROM wolverine_conduit_gateway.wolverine_nodes') -eq '1') `
+    Assert ((Invoke-Sql $gatewayNodeCountSql) -eq '1') `
         'Gateway durability schema holds exactly its own node (no shared cluster)'
 
     # (3) The Admin cluster must never be assigned queue listener agents.
@@ -246,7 +282,12 @@ SELECT count(*) FROM wolverine_conduit_gateway.wolverine_node_assignments
     }
 
     # (5) Representative messages traverse each generated handler path.
-    Assert $spendDelivered 'SpendUpdateRequested delivered through its static handler adapter'
+    $spendAssertion = if ($NativeArtifactDirectory) {
+        'SpendUpdateRequested reached its static handler adapter before the excluded EF query plane'
+    } else {
+        'SpendUpdateRequested delivered through its static handler adapter'
+    }
+    Assert $spendDelivered $spendAssertion
     Assert $batchDelivered 'BatchSpendFlushRequestedEvent delivered through its static handler adapter'
     Assert $imageDelivered 'ImageGenerationCancelled delivered through its static handler adapter'
     Assert $videoDelivered 'VideoGenerationCancelled delivered through its static handler adapter'

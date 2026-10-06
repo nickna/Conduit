@@ -86,10 +86,32 @@ namespace ConduitLLM.Gateway.Extensions
         /// </summary>
         public static void AddGatewayCacheInvalidationBridges(this WolverineOptions options)
         {
-            foreach (var eventType in BridgedEventTypes)
-            {
-                options.AddEventBridge(eventType);
-            }
+            options.AddEventBridge<VirtualKeyUpdated>();
+            options.AddEventBridge<VirtualKeyCreated>();
+            options.AddEventBridge<VirtualKeyDeleted>();
+            options.AddEventBridge<SpendUpdated>();
+            options.AddEventBridge<SpendThresholdExceeded>();
+            options.AddEventBridge<ProviderCreated>();
+            options.AddEventBridge<ProviderUpdated>();
+            options.AddEventBridge<ProviderDeleted>();
+            options.AddEventBridge<ModelUpdated>();
+            options.AddEventBridge<DiscoveryCacheInvalidationRequested>();
+            options.AddEventBridge<AsyncTaskCreated>();
+            options.AddEventBridge<AsyncTaskUpdated>();
+            options.AddEventBridge<AsyncTaskDeleted>();
+            options.AddEventBridge<MediaGenerationCompleted>();
+            options.AddEventBridge<VideoGenerationStarted>();
+            options.AddEventBridge<MediaCleanupAlertRaised>();
+            options.AddEventBridge<ModelMappingChanged>();
+            options.AddEventBridge<ModelCostChanged>();
+            options.AddEventBridge<IpFilterChanged>();
+            options.AddEventBridge<ProviderToolChanged>();
+            options.AddEventBridge<Configuration.Events.ProviderKeyCredentialCreated>();
+            options.AddEventBridge<Configuration.Events.ProviderKeyCredentialUpdated>();
+            options.AddEventBridge<Configuration.Events.ProviderKeyCredentialDeleted>();
+            options.AddEventBridge<Configuration.Events.ProviderKeyCredentialPrimaryChanged>();
+            options.AddEventBridge<Configuration.Events.ProviderKeyDisabledEvent>();
+            options.AddEventBridge<Configuration.Events.ProviderKeyReenabledEvent>();
         }
     }
 }

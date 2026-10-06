@@ -1,5 +1,8 @@
+using System.Text.Json;
+
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Interfaces;
+using ConduitLLM.Admin.Serialization;
 using ConduitLLM.Admin.Services;
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
@@ -140,6 +143,40 @@ public sealed class MediaCleanupStatusServiceTests : IDisposable
         status.IsBudgetBackendPersistent.Should().BeFalse();
         status.BudgetFailureMode.Should().Be("FailClosed");
         status.BudgetAlertThresholdPercent.Should().Be(85);
+    }
+
+    [Fact]
+    public void RedisContracts_PreserveLegacyPascalCaseAndReadExistingValues()
+    {
+        var run = new LastRunInfo
+        {
+            LastRunTimeUtc = new DateTime(2026, 8, 12, 12, 30, 0, DateTimeKind.Utc),
+            FilesDeleted = 3,
+            BytesFreed = 4096,
+            DurationSeconds = 1.5,
+            Status = "Completed",
+            LeaderInstanceId = "admin-1",
+            TriggeredBy = "scheduled"
+        };
+
+        var json = JsonSerializer.Serialize(
+            run,
+            MediaCleanupRedisJsonContext.Default.LastRunInfo);
+
+        using var document = JsonDocument.Parse(json);
+        document.RootElement.GetProperty("FilesDeleted").GetInt32().Should().Be(3);
+        document.RootElement.TryGetProperty("filesDeleted", out _).Should().BeFalse();
+
+        const string existingDrift =
+            """{"UntrackedObjectCount":7,"UntrackedBytes":8192,"ObservedAtUtc":"2026-08-12T12:30:00Z"}""";
+        var drift = JsonSerializer.Deserialize(
+            existingDrift,
+            MediaCleanupRedisJsonContext.Default.ReconciliationDriftInfo);
+
+        drift.Should().NotBeNull();
+        drift!.UntrackedObjectCount.Should().Be(7);
+        drift.UntrackedBytes.Should().Be(8192);
+        drift.ObservedAtUtc.Should().Be(new DateTime(2026, 8, 12, 12, 30, 0, DateTimeKind.Utc));
     }
 
     public void Dispose()

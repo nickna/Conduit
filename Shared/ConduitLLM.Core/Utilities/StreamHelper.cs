@@ -1,9 +1,11 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Serialization;
 
 using Microsoft.Extensions.Logging;
 
@@ -15,8 +17,6 @@ namespace ConduitLLM.Core.Utilities
     /// </summary>
     public static class StreamHelper
     {
-        private static readonly JsonSerializerOptions DefaultJsonOptions = Serialization.ConduitJsonOptions.Wire;
-
         /// <summary>
         /// Processes a server-sent event (SSE) stream from an HTTP response and yields deserialized objects.
         /// </summary>
@@ -28,18 +28,16 @@ namespace ConduitLLM.Core.Utilities
         /// <returns>An async enumerable of deserialized objects from the stream.</returns>
         public static async IAsyncEnumerable<T> ProcessSseStreamAsync<T>(
             HttpResponseMessage response,
+            JsonTypeInfo<T> jsonTypeInfo,
             ILogger? logger = null,
-            JsonSerializerOptions? options = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            var jsonOptions = options ?? DefaultJsonOptions;
-
             await foreach (var dataBuffer in ReadSseDataLinesAsync(response, logger, cancellationToken))
             {
                 T? data = default;
                 try
                 {
-                    data = JsonSerializer.Deserialize<T>(dataBuffer, jsonOptions);
+                    data = JsonSerializer.Deserialize(dataBuffer, jsonTypeInfo);
                 }
                 catch (JsonException ex)
                 {
@@ -52,45 +50,6 @@ namespace ConduitLLM.Core.Utilities
                     yield return data;
                 }
             }
-        }
-
-        /// <summary>
-        /// Extracts and deserializes data from an SSE stream.
-        /// </summary>
-        private static async Task<List<T>> ExtractSseDataAsync<T>(
-            HttpResponseMessage response,
-            ILogger? logger,
-            JsonSerializerOptions jsonOptions,
-            CancellationToken cancellationToken)
-        {
-            var results = new List<T>();
-
-            try
-            {
-                await foreach (var dataBuffer in ReadSseDataLinesAsync(response, logger, cancellationToken))
-                {
-                    try
-                    {
-                        var data = JsonSerializer.Deserialize<T>(dataBuffer, jsonOptions);
-                        if (data != null)
-                        {
-                            logger?.LogTrace("Adding deserialized stream chunk to results");
-                            results.Add(data);
-                        }
-                    }
-                    catch (JsonException ex)
-                    {
-                        logger?.LogWarning(ex, "Error deserializing stream chunk: {Data}", dataBuffer);
-                    }
-                }
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger?.LogError(ex, "Error processing SSE stream");
-                throw new LLMCommunicationException("Error processing streaming response", ex);
-            }
-
-            return results;
         }
 
         /// <summary>
@@ -188,11 +147,13 @@ namespace ConduitLLM.Core.Utilities
         public static async IAsyncEnumerable<ChatCompletionChunk> ProcessLlmStreamAsync(
             HttpResponseMessage response,
             ILogger? logger = null,
-            JsonSerializerOptions? options = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await foreach (var chunk in ProcessSseStreamAsync<ChatCompletionChunk>(
-                response, logger, options, cancellationToken))
+                response,
+                CoreHttpJsonContext.Default.ChatCompletionChunk,
+                logger,
+                cancellationToken))
             {
                 yield return chunk;
             }
@@ -299,16 +260,14 @@ namespace ConduitLLM.Core.Utilities
         public static async IAsyncEnumerable<TResult> ProcessCustomStreamAsync<TRaw, TResult>(
             HttpResponseMessage response,
             Func<TRaw, TResult> converter,
+            JsonTypeInfo<TRaw> jsonTypeInfo,
             string delimiter = "\n",
             ILogger? logger = null,
-            JsonSerializerOptions? options = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            var jsonOptions = options ?? DefaultJsonOptions;
-
             // Process the stream outside of any try-catch
             foreach (var result in await ExtractCustomStreamDataAsync<TRaw, TResult>(
-                response, converter, delimiter, logger, jsonOptions, cancellationToken))
+                response, converter, jsonTypeInfo, delimiter, logger, cancellationToken))
             {
                 yield return result;
             }
@@ -320,9 +279,9 @@ namespace ConduitLLM.Core.Utilities
         private static async Task<List<TResult>> ExtractCustomStreamDataAsync<TRaw, TResult>(
             HttpResponseMessage response,
             Func<TRaw, TResult> converter,
+            JsonTypeInfo<TRaw> jsonTypeInfo,
             string delimiter,
             ILogger? logger,
-            JsonSerializerOptions jsonOptions,
             CancellationToken cancellationToken)
         {
             var results = new List<TResult>();
@@ -345,7 +304,7 @@ namespace ConduitLLM.Core.Utilities
 
                     try
                     {
-                        var rawData = JsonSerializer.Deserialize<TRaw>(line, jsonOptions);
+                        var rawData = JsonSerializer.Deserialize(line, jsonTypeInfo);
                         if (rawData != null)
                         {
                             logger?.LogTrace("Converting raw stream data to result type");

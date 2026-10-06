@@ -1,7 +1,7 @@
 import type { FetchBaseApiClient } from '../client/FetchBaseApiClient';
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 import type { RequestConfig } from '../client/types';
-import { ENDPOINTS } from '../constants';
+import { HttpMethod } from '../client/HttpMethod';
 import type {
   SystemInfoDto,
   HealthStatusDto
@@ -22,13 +22,10 @@ export class FetchSystemService {
    * Get system information
    */
   async getSystemInfo(config?: RequestConfig): Promise<SystemInfoDto> {
-    return this.client['get']<SystemInfoDto>(
-      ENDPOINTS.SYSTEM.INFO,
-      {
-        signal: config?.signal,
-        timeout: config?.timeout,
-        headers: config?.headers,
-      }
+    return this.client.executeContractRead(
+      '/v1/admin/system-metadata/info',
+      (client, options) => client.GET('/v1/admin/system-metadata/info', options),
+      config,
     );
   }
 
@@ -36,13 +33,10 @@ export class FetchSystemService {
    * Get system health status
    */
   async getHealth(config?: RequestConfig): Promise<HealthStatusDto> {
-    return this.client['get']<HealthStatusDto>(
-      ENDPOINTS.SYSTEM.HEALTH,
-      {
-        signal: config?.signal,
-        timeout: config?.timeout,
-        headers: config?.headers,
-      }
+    return this.client.executeContractRead(
+      '/v1/admin/system-metadata/health',
+      (client, options) => client.GET('/v1/admin/system-metadata/health', options),
+      config,
     );
   }
 
@@ -51,21 +45,17 @@ export class FetchSystemService {
    * @returns Promise with cache invalidation result
    */
   async invalidateDiscoveryCache(config?: RequestConfig): Promise<{ message: string; timestamp: string; note?: string }> {
-    const response = await this.client['post']<{ message: string; timestamp: string; note?: string }>(
+    return this.client.executeContractOperation(
       '/v1/admin/system-metadata/cache/invalidate-discovery',
-      {},
-      {
-        signal: config?.signal,
-        timeout: config?.timeout,
-        headers: config?.headers,
-      }
+      HttpMethod.POST,
+      (client, options) => client.POST('/v1/admin/system-metadata/cache/invalidate-discovery', options),
+      config,
     );
-    return response;
   }
 
   /** Gets logical service, dependency, and per-instance health. */
   async getServiceHealth(config?: RequestConfig): Promise<ServiceHealthResponse> {
-    return this.client['executeContractRead'](
+    return this.client.executeContractRead(
       '/v1/admin/health-status/services',
       (contractClient, options) => contractClient.GET('/v1/admin/health-status/services', options),
       config,
@@ -76,14 +66,11 @@ export class FetchSystemService {
   async invalidateFunctionDiscoveryCache(
     config?: RequestConfig,
   ): Promise<{ message: string; timestamp: string; note?: string }> {
-    return this.client['post']<{ message: string; timestamp: string; note?: string }>(
+    return this.client.executeContractOperation(
       '/v1/admin/system-metadata/cache/invalidate-function-discovery',
-      {},
-      {
-        signal: config?.signal,
-        timeout: config?.timeout,
-        headers: config?.headers,
-      },
+      HttpMethod.POST,
+      (client, options) => client.POST('/v1/admin/system-metadata/cache/invalidate-function-discovery', options),
+      config,
     );
   }
 

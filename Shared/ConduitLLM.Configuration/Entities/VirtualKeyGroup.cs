@@ -19,14 +19,14 @@ public class VirtualKeyGroup : IEntity<int>, IAuditableEntity
     /// <summary>
     /// Optional external group identifier for integration with external systems
     /// </summary>
-    [MaxLength(100)]
+    [StringLength(100)]
     public string? ExternalGroupId { get; set; }
 
     /// <summary>
     /// Name of the group
     /// </summary>
     [Required]
-    [MaxLength(100)]
+    [StringLength(100)]
     public string GroupName { get; set; } = string.Empty;
 
     /// <summary>

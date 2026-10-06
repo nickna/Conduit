@@ -27,8 +27,8 @@ namespace ConduitLLM.Providers.OpenAI
                     var response = await ConduitLLM.Core.Utilities.HttpClientHelper.GetJsonAsync<AzureOpenAIModels.ListDeploymentsResponse>(
                         client,
                         endpoint,
+                        Serialization.ProvidersJsonContext.Default.ListDeploymentsResponse,
                         new Dictionary<string, string>(),
-                        DefaultJsonOptions,
                         Logger,
                         cancellationToken);
 

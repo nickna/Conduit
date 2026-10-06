@@ -8,6 +8,7 @@ using StackExchange.Redis;
 
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Interfaces;
+using ConduitLLM.Admin.Serialization;
 using ConduitLLM.Configuration.DTOs;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Options;
@@ -277,7 +278,9 @@ namespace ConduitLLM.Admin.Services
                 var db = _redis.GetDatabase();
                 await db.StringSetAsync(
                     REDIS_KEY_RECONCILIATION_DRIFT,
-                    JsonSerializer.Serialize(drift),
+                    JsonSerializer.Serialize(
+                        drift,
+                        MediaCleanupRedisJsonContext.Default.ReconciliationDriftInfo),
                     TimeSpan.FromDays(7));
             }
             catch (Exception ex)
@@ -299,7 +302,9 @@ namespace ConduitLLM.Admin.Services
             try
             {
                 var db = _redis.GetDatabase();
-                var json = JsonSerializer.Serialize(runInfo);
+                var json = JsonSerializer.Serialize(
+                    runInfo,
+                    MediaCleanupRedisJsonContext.Default.LastRunInfo);
                 await db.StringSetAsync(redisKey, json, TimeSpan.FromDays(7));
                 await db.StringSetAsync(REDIS_KEY_LEADER, leaderInstanceId, TimeSpan.FromMinutes(35));
             }
@@ -477,7 +482,9 @@ namespace ConduitLLM.Admin.Services
                 var json = await db.StringGetAsync(REDIS_KEY_RECONCILIATION_DRIFT);
                 return json.IsNullOrEmpty
                     ? _reconciliationDriftFallback
-                    : JsonSerializer.Deserialize<ReconciliationDriftInfo>(json.ToString())
+                    : JsonSerializer.Deserialize(
+                        json.ToString(),
+                        MediaCleanupRedisJsonContext.Default.ReconciliationDriftInfo)
                         ?? _reconciliationDriftFallback;
             }
             catch (Exception ex)
@@ -511,7 +518,9 @@ namespace ConduitLLM.Admin.Services
                     return fallback;
                 }
 
-                return JsonSerializer.Deserialize<LastRunInfo>(json.ToString());
+                return JsonSerializer.Deserialize(
+                    json.ToString(),
+                    MediaCleanupRedisJsonContext.Default.LastRunInfo);
             }
             catch (Exception ex)
             {
@@ -540,25 +549,5 @@ namespace ConduitLLM.Admin.Services
             }
         }
 
-        /// <summary>
-        /// Internal class for serializing last run info to Redis.
-        /// </summary>
-        private class LastRunInfo
-        {
-            public DateTime? LastRunTimeUtc { get; set; }
-            public int FilesDeleted { get; set; }
-            public long BytesFreed { get; set; }
-            public double DurationSeconds { get; set; }
-            public string? Status { get; set; }
-            public string? LeaderInstanceId { get; set; }
-            public string? TriggeredBy { get; set; }
-        }
-
-        private sealed class ReconciliationDriftInfo
-        {
-            public int UntrackedObjectCount { get; set; }
-            public long UntrackedBytes { get; set; }
-            public DateTime? ObservedAtUtc { get; set; }
-        }
     }
 }

@@ -1,9 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <PreserveCompilationContext>true</PreserveCompilationContext>
     <StaticWebAssetProjectMode>Default</StaticWebAssetProjectMode>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Compile Minimal API request delegates at build time. Treat an endpoint
+         falling back to runtime generation as a build regression. -->
+    <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <WarningsAsErrors>$(WarningsAsErrors);RDG012</WarningsAsErrors>
     <!-- 1591: missing XML doc; NU1510: intentional direct security references. -->
     <NoWarn>$(NoWarn);1591;NU1510</NoWarn>
     <!-- Build-time OpenAPI export is opt-in so ordinary local builds stay fast. -->
@@ -23,6 +27,11 @@
     <ProjectReference Include="..\..\Shared\ConduitLLM.Core\ConduitLLM.Core.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Providers\ConduitLLM.Providers.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Security\ConduitLLM.Security.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Media\ConduitLLM.Media.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.OpenApi\ConduitLLM.OpenApi.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.SignalR\ConduitLLM.SignalR.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Tokenization\ConduitLLM.Tokenization.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Messaging.Wolverine\ConduitLLM.Messaging.Wolverine.csproj" />
   </ItemGroup>
 
   <!-- Roslyn is a generation-time tool only. Normal restores and production
@@ -30,9 +39,16 @@
   <ItemGroup Condition="'$(ConduitWolverineCodegen)' == 'true'">
     <PackageReference Include="WolverineFx.RuntimeCompilation" PrivateAssets="all" />
   </ItemGroup>
+  <PropertyGroup Condition="'$(ConduitWolverineCodegen)' == 'true'">
+    <DefineConstants>$(DefineConstants);CONDUIT_WOLVERINE_CODEGEN</DefineConstants>
+  </PropertyGroup>
 
   <ItemGroup>
     <Compile Update="Internal\Generated\**\*.cs" Watch="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PublishAot)' == 'true'">
+    <RdXmlFile Include="NativeAot.rd.xml" />
   </ItemGroup>
 
   <ItemGroup>
@@ -40,15 +56,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.S3" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.Build.Tasks.Core" />
-    <PackageReference Include="Microsoft.Build.Utilities.Core" />
     <PackageReference Include="System.Security.Cryptography.Xml" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
@@ -70,8 +79,6 @@
     <PackageReference Include="prometheus-net" />
     <PackageReference Include="prometheus-net.AspNetCore" />
     <PackageReference Include="AspNetCore.HealthChecks.Redis" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" />
     <PackageReference Include="Microsoft.Extensions.Http.Polly" />
     <PackageReference Include="Polly" />
     <PackageReference Include="Polly.Extensions.Http" />

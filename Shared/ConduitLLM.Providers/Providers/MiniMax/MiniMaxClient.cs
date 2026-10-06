@@ -1,9 +1,11 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Providers.Configuration;
+using ConduitLLM.Providers.Serialization;
 
 using Microsoft.Extensions.Logging;
 
@@ -12,7 +14,11 @@ namespace ConduitLLM.Providers.MiniMax
     /// <summary>
     /// Client for interacting with MiniMax AI APIs.
     /// </summary>
-    public partial class MiniMaxClient : BaseLLMClient, IAuthenticationVerifiable
+    public partial class MiniMaxClient :
+        BaseLLMClient,
+        IVideoGenerationClient,
+        IVideoProgressCallbackClient,
+        IAuthenticationVerifiable
     {
         private readonly string _baseUrl;
         private Func<string, string, int, Task>? _progressCallback;
@@ -23,7 +29,12 @@ namespace ConduitLLM.Providers.MiniMax
         private static readonly JsonSerializerOptions CaseInsensitiveJsonOptions = new()
         {
             PropertyNameCaseInsensitive = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+            TypeInfoResolver = JsonTypeInfoResolver.Combine(
+                MiniMaxStreamJsonContext.Default,
+                ProvidersJsonContext.Default,
+                ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default,
+                ConduitLLM.Core.Serialization.AsyncTaskJsonContext.Default)
         };
 
         /// <summary>
@@ -78,8 +89,9 @@ namespace ConduitLLM.Providers.MiniMax
                 HttpMethod.Post,
                 endpoint,
                 request,
+                GetRequiredJsonTypeInfo<TRequest>(jsonOptions),
+                GetRequiredJsonTypeInfo<TResponse>(jsonOptions),
                 headers: null,
-                jsonOptions,
                 Logger,
                 cancellationToken);
         }

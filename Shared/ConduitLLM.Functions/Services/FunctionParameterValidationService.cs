@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Functions.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace ConduitLLM.Functions.Services;
@@ -44,7 +45,9 @@ public class FunctionParameterValidationService
             // Validate required parameters
             if (schema.TryGetProperty("required", out var requiredElement))
             {
-                var requiredParams = JsonSerializer.Deserialize<List<string>>(requiredElement.GetRawText());
+                var requiredParams = JsonSerializer.Deserialize(
+                    requiredElement.GetRawText(),
+                    FunctionsJsonContext.Default.ListString);
                 if (requiredParams != null)
                 {
                     foreach (var requiredParam in requiredParams)
@@ -181,7 +184,9 @@ public class FunctionParameterValidationService
                     // Validate against options if provided
                     if (paramDef.TryGetProperty("options", out var optionsElement))
                     {
-                        var options = JsonSerializer.Deserialize<List<string>>(optionsElement.GetRawText());
+                        var options = JsonSerializer.Deserialize(
+                            optionsElement.GetRawText(),
+                            FunctionsJsonContext.Default.ListString);
                         if (options != null && value is string strValue)
                         {
                             if (!options.Contains(strValue))

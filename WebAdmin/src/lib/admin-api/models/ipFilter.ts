@@ -1,5 +1,3 @@
-import { FilterOptions } from './common';
-
 export type FilterType = 'whitelist' | 'blacklist';
 export type FilterMode = 'permissive' | 'restrictive';
 
@@ -56,14 +54,4 @@ export interface UpdateIpFilterSettingsDto {
 export interface IpCheckResult {
   isAllowed: boolean;
   deniedReason?: string | null;
-}
-
-export interface IpFilterFilters extends FilterOptions {
-  filterType?: FilterType;
-  isEnabled?: boolean;
-  nameContains?: string;
-  ipAddressOrCidrContains?: string;
-  lastMatchedAfter?: string;
-  lastMatchedBefore?: string;
-  minMatchCount?: number;
 }

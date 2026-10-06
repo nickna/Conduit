@@ -1,6 +1,6 @@
 import type { FetchBaseApiClient } from '../client/FetchBaseApiClient';
 import type { RequestConfig } from '../client/types';
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 import { HttpMethod } from '../client/HttpMethod';
 import type { ProviderSettings } from '../models/common-types';
 import {
@@ -73,7 +73,7 @@ export class FetchProvidersService {
     config?: RequestConfig
   ): Promise<ProviderListResponseDto> {
     const query = { page, pageSize };
-    return this.client['executeContractRead'](`/v1/admin/providers?page=${page}&pageSize=${pageSize}`,
+    return this.client.executeContractRead(`/v1/admin/providers?page=${page}&pageSize=${pageSize}`,
       (contractClient, options) => contractClient.GET('/v1/admin/providers', { ...options, params: { query } }), config);
   }
 
@@ -84,7 +84,7 @@ export class FetchProvidersService {
    * endpoint requirements, help content, and structured fields.
    */
   async getConfigurationSchema(config?: RequestConfig): Promise<ProviderConfigurationSchema> {
-    const response = await this.client['executeContractRead']<ProviderSettingsSchemaDto[]>(
+    const response = await this.client.executeContractRead<ProviderSettingsSchemaDto[]>(
       '/v1/admin/providers/settings-schema',
       (contractClient, options) => contractClient.GET('/v1/admin/providers/settings-schema', options), config);
 
@@ -118,7 +118,7 @@ export class FetchProvidersService {
    * Get a specific provider by ID
    */
   async getById(id: number, config?: RequestConfig): Promise<ProviderDto> {
-    return this.client['executeContractRead'](`/v1/admin/providers/${id}`,
+    return this.client.executeContractRead(`/v1/admin/providers/${id}`,
       (contractClient, options) => contractClient.GET('/v1/admin/providers/{id}', { ...options, params: { path: { id } } }), config);
   }
 
@@ -129,7 +129,7 @@ export class FetchProvidersService {
     data: CreateProviderDto,
     config?: RequestConfig
   ): Promise<ProviderDto> {
-    return this.client['executeContractOperation']('/v1/admin/providers', HttpMethod.POST,
+    return this.client.executeContractOperation('/v1/admin/providers', HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/providers', { ...options, body: data }), config, data);
   }
 
@@ -141,7 +141,7 @@ export class FetchProvidersService {
     data: UpdateProviderDto,
     config?: RequestConfig
   ): Promise<ProviderDto> {
-    return this.client['executeContractOperation'](`/v1/admin/providers/${id}`, HttpMethod.PATCH,
+    return this.client.executeContractOperation(`/v1/admin/providers/${id}`, HttpMethod.PATCH,
       (contractClient, options) => contractClient.PATCH('/v1/admin/providers/{id}', { ...options, params: { path: { id } }, body: data }), config, data);
   }
 
@@ -149,7 +149,7 @@ export class FetchProvidersService {
    * Delete a provider
    */
   async deleteById(id: number, config?: RequestConfig): Promise<void> {
-    return this.client['executeContractOperation'](`/v1/admin/providers/${id}`, HttpMethod.DELETE,
+    return this.client.executeContractOperation(`/v1/admin/providers/${id}`, HttpMethod.DELETE,
       (contractClient, options) => contractClient.DELETE('/v1/admin/providers/{id}', { ...options, params: { path: { id } } }), config);
   }
 
@@ -161,7 +161,7 @@ export class FetchProvidersService {
     config?: RequestConfig
   ): Promise<StandardApiKeyTestResponse> {
     try {
-      const result = await this.client['executeContractOperation']<RawApiKeyTestResponse>(`/v1/admin/providers/${id}/test`, HttpMethod.POST,
+      const result = await this.client.executeContractOperation<RawApiKeyTestResponse>(`/v1/admin/providers/${id}/test`, HttpMethod.POST,
         (contractClient, options) => contractClient.POST('/v1/admin/providers/{id}/test', { ...options, params: { path: { id } } }), config);
 
       // Normalize the response to handle C# PascalCase and enum mismatches
@@ -186,7 +186,7 @@ export class FetchProvidersService {
     config?: RequestConfig
   ): Promise<StandardApiKeyTestResponse> {
     try {
-      const result = await this.client['executeContractOperation']<RawApiKeyTestResponse, ProviderConfig>('/v1/admin/providers/test', HttpMethod.POST,
+      const result = await this.client.executeContractOperation<RawApiKeyTestResponse, ProviderConfig>('/v1/admin/providers/test', HttpMethod.POST,
         (contractClient, options) => contractClient.POST('/v1/admin/providers/test', { ...options, body: providerConfig }), config, providerConfig);
 
       // Normalize the response to handle C# PascalCase and enum mismatches

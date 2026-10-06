@@ -38,7 +38,10 @@ namespace ConduitLLM.Providers.OpenRouter
     /// - "models": string[] with "route": "fallback" for multi-model fallback
     /// </para>
     /// </remarks>
-    public partial class OpenRouterClient : ConduitLLM.Providers.OpenAICompatible.OpenAICompatibleClient
+    public partial class OpenRouterClient :
+        ConduitLLM.Providers.OpenAICompatible.OpenAICompatibleClient,
+        ConduitLLM.Core.Interfaces.IVideoGenerationClient,
+        ConduitLLM.Core.Interfaces.IVideoProgressCallbackClient
     {
         private static ProviderErrorMessages OpenRouterErrorMessages =>
             ProviderConfigurationRegistry.GetErrorMessages(ProviderType.OpenRouter);

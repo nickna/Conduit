@@ -8,8 +8,8 @@ import {
 } from '@/lib/conduit-common';
 
 // Mock the browser client
-jest.mock('@/lib/client/browserCoreClient', () => ({
-  getBrowserCoreClient: jest.fn().mockResolvedValue({
+jest.mock('@/lib/client/browserGatewayClient', () => ({
+  getBrowserGatewayClient: jest.fn().mockResolvedValue({
     images: {
       generate: jest.fn()
     }
@@ -204,11 +204,11 @@ describe('useImageStore', () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-      const browserClientModule = jest.requireMock('@/lib/client/browserCoreClient') as {
-        getBrowserCoreClient: jest.MockedFunction<() => Promise<typeof mockClient>>;
+      const browserClientModule = jest.requireMock('@/lib/client/browserGatewayClient') as {
+        getBrowserGatewayClient: jest.MockedFunction<() => Promise<typeof mockClient>>;
       };
-      const { getBrowserCoreClient } = browserClientModule;
-      getBrowserCoreClient.mockResolvedValue(mockClient);
+      const { getBrowserGatewayClient } = browserClientModule;
+      getBrowserGatewayClient.mockResolvedValue(mockClient);
 
       const { result } = renderHook(() => useImageStore());
 
@@ -245,11 +245,11 @@ describe('useImageStore', () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-      const browserClientModule = jest.requireMock('@/lib/client/browserCoreClient') as {
-        getBrowserCoreClient: jest.MockedFunction<() => Promise<typeof mockClient>>;
+      const browserClientModule = jest.requireMock('@/lib/client/browserGatewayClient') as {
+        getBrowserGatewayClient: jest.MockedFunction<() => Promise<typeof mockClient>>;
       };
-      const { getBrowserCoreClient } = browserClientModule;
-      getBrowserCoreClient.mockResolvedValue(mockClient);
+      const { getBrowserGatewayClient } = browserClientModule;
+      getBrowserGatewayClient.mockResolvedValue(mockClient);
 
       const { result } = renderHook(() => useImageStore());
 
@@ -279,11 +279,11 @@ describe('useImageStore', () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-      const browserClientModule = jest.requireMock('@/lib/client/browserCoreClient') as {
-        getBrowserCoreClient: jest.MockedFunction<() => Promise<typeof mockClient>>;
+      const browserClientModule = jest.requireMock('@/lib/client/browserGatewayClient') as {
+        getBrowserGatewayClient: jest.MockedFunction<() => Promise<typeof mockClient>>;
       };
-      const { getBrowserCoreClient } = browserClientModule;
-      getBrowserCoreClient.mockResolvedValue(mockClient);
+      const { getBrowserGatewayClient } = browserClientModule;
+      getBrowserGatewayClient.mockResolvedValue(mockClient);
 
       const { result } = renderHook(() => useImageStore());
 
@@ -314,11 +314,11 @@ describe('useImageStore', () => {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-      const browserClientModule = jest.requireMock('@/lib/client/browserCoreClient') as {
-        getBrowserCoreClient: jest.MockedFunction<() => Promise<typeof mockClient>>;
+      const browserClientModule = jest.requireMock('@/lib/client/browserGatewayClient') as {
+        getBrowserGatewayClient: jest.MockedFunction<() => Promise<typeof mockClient>>;
       };
-      const { getBrowserCoreClient } = browserClientModule;
-      getBrowserCoreClient.mockResolvedValue(mockClient);
+      const { getBrowserGatewayClient } = browserClientModule;
+      getBrowserGatewayClient.mockResolvedValue(mockClient);
 
       const { result } = renderHook(() => useImageStore());
 

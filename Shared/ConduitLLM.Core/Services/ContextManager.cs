@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Serialization;
 
 using Microsoft.Extensions.Logging;
 
@@ -299,7 +300,10 @@ namespace ConduitLLM.Core.Services
             try
             {
                 // Try to provide a sensible preview for other object types
-                string json = JsonSerializer.Serialize(content);
+                var typeInfo = CoreJsonTypeInfo.TryGet(content.GetType(), ConduitJsonOptions.Compact);
+                if (typeInfo is null)
+                    return content.ToString() ?? "[Object]";
+                string json = JsonSerializer.Serialize(content, typeInfo);
                 if (json.Length > maxLength)
                     return json.Substring(0, maxLength) + "...";
                 return json;

@@ -16,19 +16,13 @@ public static class GatewayJsonOptions
     {
         options.TypeInfoResolverChain.Insert(0, GatewayHttpJsonContext.Default);
         options.TypeInfoResolverChain.Insert(1, CoreHttpJsonContext.Default);
-        if (options.TypeInfoResolverChain.All(static resolver =>
-                resolver is not System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver))
-        {
-            options.TypeInfoResolverChain.Add(
-                new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver());
-        }
+        options.TypeInfoResolverChain.Insert(2, GatewayInternalJsonContext.Default);
 
         options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
         options.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-        options.Converters.Add(
-            new JsonStringEnumConverter(
-                JsonNamingPolicy.SnakeCaseLower,
-                allowIntegerValues: false));
+        AddStringEnumConverter<ConduitLLM.Functions.Enums.ExecutionState>(options);
+        AddStringEnumConverter<ConduitLLM.Core.Models.MediaType>(options);
+        AddStringEnumConverter<ConduitLLM.Core.Interfaces.TaskState>(options);
         options.Converters.Add(new UtcDateTimeConverter());
         options.Converters.Add(new NullableUtcDateTimeConverter());
     }
@@ -39,4 +33,11 @@ public static class GatewayJsonOptions
         Configure(options);
         return options;
     }
+
+    private static void AddStringEnumConverter<TEnum>(JsonSerializerOptions options)
+        where TEnum : struct, Enum =>
+        options.Converters.Add(
+            new JsonStringEnumConverter<TEnum>(
+                JsonNamingPolicy.SnakeCaseLower,
+                allowIntegerValues: false));
 }

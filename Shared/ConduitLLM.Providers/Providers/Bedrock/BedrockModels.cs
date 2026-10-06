@@ -97,6 +97,11 @@ namespace ConduitLLM.Providers.Bedrock
         public JsonElement Json { get; set; }
     }
 
+    internal class BedrockRawToolArguments
+    {
+        public string Raw { get; set; } = string.Empty;
+    }
+
     /// <summary>Exactly one member is set: <c>auto</c>, <c>any</c>, or a named <c>tool</c>.</summary>
     internal class BedrockToolChoice
     {

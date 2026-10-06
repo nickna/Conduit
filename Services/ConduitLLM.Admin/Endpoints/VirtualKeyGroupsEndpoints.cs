@@ -52,7 +52,6 @@ namespace ConduitLLM.Admin.Endpoints
             var group = app.MapGroup("/v1/admin/virtual-key-groups")
                 .RequireAuthorization()
                 .AddEndpointFilter<VersionedResourceEndpointFilter>()
-                .AddEndpointFilter<ValidationEndpointFilter>()
                 .AddEndpointFilter<OperationLoggingEndpointFilter>()
                 .WithTags("Virtual Key Groups");
 

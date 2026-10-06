@@ -5,6 +5,7 @@ using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Gateway.Serialization;
 using StackExchange.Redis;
 
 namespace ConduitLLM.Gateway.Services;
@@ -45,6 +46,7 @@ public class RedisProviderToolCache : BufferedStatsRedisCacheBase, IProviderTool
             cacheKey,
             ServiceName,
             async () => await databaseFallback(providerType) as List<ProviderTool>,
+            GatewayRedisJsonContext.Default.ListProviderTool,
             debugLabel: $"Provider tools for {providerType}");
 
         return result ?? new List<ProviderTool>();

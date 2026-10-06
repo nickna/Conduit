@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ConduitLLM.Core.Constants;
+using ConduitLLM.Gateway.Serialization;
 using StackExchange.Redis;
 
 namespace ConduitLLM.Gateway.Services.SpendNotification
@@ -52,7 +53,7 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
         /// <summary>
         /// Registers an instance in Redis
         /// </summary>
-        Task RegisterInstanceAsync(string instanceId, object instanceData);
+        Task RegisterInstanceAsync(string instanceId, SpendNotificationInstanceData instanceData);
         
         /// <summary>
         /// Unregisters an instance from Redis
@@ -238,10 +239,15 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             }
         }
 
-        public async Task RegisterInstanceAsync(string instanceId, object instanceData)
+        public async Task RegisterInstanceAsync(string instanceId, SpendNotificationInstanceData instanceData)
         {
             var key = RedisKeys.Spend.Instance(instanceId);
-            await _database.HashSetAsync(key, "data", JsonSerializer.Serialize(instanceData));
+            await _database.HashSetAsync(
+                key,
+                "data",
+                JsonSerializer.Serialize(
+                    instanceData,
+                    GatewayInternalJsonContext.Default.SpendNotificationInstanceData));
             await _database.KeyExpireAsync(key, TimeSpan.FromMinutes(2));
         }
 

@@ -17,7 +17,7 @@ namespace ConduitLLM.Core.Services.Strategies
     /// <summary>
     /// Processes media from external URLs by downloading and storing.
     /// </summary>
-    public class UrlMediaProcessor : IMediaProcessingStrategy<object>
+    public class UrlMediaProcessor : IMediaProcessingStrategy<IGeneratedMediaData>
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IMediaStorageService _storageService;
@@ -37,12 +37,12 @@ namespace ConduitLLM.Core.Services.Strategies
         }
 
         public async Task<ProcessedMediaItem> ProcessAsync(
-            object mediaData,
+            IGeneratedMediaData mediaData,
             MediaProcessingContext context,
             CancellationToken cancellationToken)
         {
             // Extract URL from the media object
-            string? url = ExtractUrl(mediaData);
+            string? url = mediaData.Url;
             if (string.IsNullOrEmpty(url) || !UrlBuilder.IsValidUrl(url))
             {
                 throw new InvalidOperationException($"Invalid or missing URL in media data");
@@ -168,14 +168,6 @@ namespace ConduitLLM.Core.Services.Strategies
                     }
                 };
             }
-        }
-
-        private string? ExtractUrl(object mediaData)
-        {
-            // Use reflection to find Url property
-            var type = mediaData.GetType();
-            var urlProperty = type.GetProperty("Url");
-            return urlProperty?.GetValue(mediaData) as string;
         }
 
         private HttpClient CreateHttpClient(MediaType mediaType)

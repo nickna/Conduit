@@ -1,6 +1,7 @@
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Serialization;
 using ConduitLLM.Configuration.DTOs;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Gateway.Constants;
@@ -94,7 +95,9 @@ namespace ConduitLLM.Gateway.Middleware
                 RequestPath = context.Request.Path.ToString(),
                 HttpStatusCode = context.Response.StatusCode,
                 ProviderType = providerType,
-                UsageJson = System.Text.Json.JsonSerializer.Serialize(usage),
+                UsageJson = System.Text.Json.JsonSerializer.Serialize(
+                    usage,
+                    CoreHttpJsonContext.Default.Usage),
                 CalculatedCost = cost,
                 IsEstimated = eventType == Configuration.Entities.BillingAuditEventType.UsageEstimated,
                 FailureReason = reason.Length <= 500 ? reason : reason[..500]
@@ -167,7 +170,9 @@ namespace ConduitLLM.Gateway.Middleware
                     StatusCode = context.Response.StatusCode,
                     Metadata = string.IsNullOrWhiteSpace(metadata)
                         ? null
-                        : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(metadata)
+                        : JsonSerializer.Deserialize(
+                            metadata,
+                            CoreHttpJsonContext.Default.DictionaryStringJsonElement)
                 };
 
                 await requestLogService.LogRequestAsync(logRequest);

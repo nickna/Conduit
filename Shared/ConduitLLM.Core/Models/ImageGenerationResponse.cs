@@ -52,7 +52,7 @@ namespace ConduitLLM.Core.Models
     /// Depending on the request's response_format parameter, either the Url or B64Json 
     /// property will be populated, but typically not both.
     /// </remarks>
-    public class ImageData
+    public class ImageData : IGeneratedMediaData
     {
         /// <summary>
         /// The URL where the generated image can be accessed.

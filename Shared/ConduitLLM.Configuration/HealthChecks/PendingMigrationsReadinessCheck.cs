@@ -26,7 +26,7 @@ namespace ConduitLLM.Configuration.HealthChecks
             return Task.FromResult(_state.IsSchemaCurrent
                 ? HealthCheckResult.Healthy("Database schema is current")
                 : HealthCheckResult.Unhealthy(
-                    "Database schema is not current. Run 'dotnet ConduitLLM.Admin.dll migrate' before rollout."));
+                    "Database schema is not current. Run the ConduitLLM.Migrator deployment job to migrate before rollout."));
         }
     }
 }

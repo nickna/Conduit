@@ -6,6 +6,7 @@ using ConduitLLM.Configuration.Options;
 using ConduitLLM.Gateway.Endpoints;
 using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Core.Serialization;
+using ConduitLLM.Gateway.Serialization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -94,15 +95,15 @@ namespace ConduitLLM.Gateway.Middleware
             context.Response.Headers["x-request-id"] = context.TraceIdentifier;
 
             var metadata = _options.IncludeErrorDetails
-                ? System.Text.Json.JsonSerializer.SerializeToElement(new
-                {
-                    circuit_state = stats.State.ToString(),
-                    total_failures = stats.TotalFailures,
-                    rejected_requests = stats.RejectedRequests,
-                    last_failure_at = stats.LastFailureAt?.ToString("O"),
-                    circuit_opened_at = stats.CircuitOpenedAt?.ToString("O"),
-                    retry_after_seconds = stats.TimeUntilHalfOpen?.TotalSeconds
-                }, ConduitJsonOptions.Compact)
+                ? System.Text.Json.JsonSerializer.SerializeToElement(
+                    new RedisCircuitBreakerMetadata(
+                        stats.State.ToString(),
+                        stats.TotalFailures,
+                        stats.RejectedRequests,
+                        stats.LastFailureAt?.ToString("O"),
+                        stats.CircuitOpenedAt?.ToString("O"),
+                        stats.TimeUntilHalfOpen?.TotalSeconds),
+                    GatewayInternalJsonContext.Default.RedisCircuitBreakerMetadata)
                 : (System.Text.Json.JsonElement?)null;
 
             await GatewayResults.OpenAIError(

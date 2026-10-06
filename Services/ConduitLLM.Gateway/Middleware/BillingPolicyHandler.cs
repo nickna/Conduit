@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Core.Serialization;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Interfaces;
@@ -116,7 +117,7 @@ namespace ConduitLLM.Gateway.Middleware
                 VirtualKeyId = virtualKeyId,
                 Model = model,
                 RequestId = context.TraceIdentifier,
-                UsageJson = JsonSerializer.Serialize(usage),
+                UsageJson = JsonSerializer.Serialize(usage, CoreHttpJsonContext.Default.Usage),
                 CalculatedCost = cost,
                 ProviderType = providerType,
                 RequestPath = context.Request.Path.ToString(),
@@ -208,7 +209,7 @@ namespace ConduitLLM.Gateway.Middleware
                 VirtualKeyId = virtualKeyId,
                 Model = model,
                 RequestId = context.TraceIdentifier,
-                UsageJson = JsonSerializer.Serialize(usage),
+                UsageJson = JsonSerializer.Serialize(usage, CoreHttpJsonContext.Default.Usage),
                 CalculatedCost = cost,
                 ProviderType = providerType,
                 RequestPath = context.Request.Path.ToString(),
@@ -298,7 +299,7 @@ namespace ConduitLLM.Gateway.Middleware
                 VirtualKeyId = virtualKeyId,
                 Model = model,
                 RequestId = context.TraceIdentifier,
-                UsageJson = JsonSerializer.Serialize(usage),
+                UsageJson = JsonSerializer.Serialize(usage, CoreHttpJsonContext.Default.Usage),
                 CalculatedCost = cost,
                 ProviderType = providerType,
                 RequestPath = context.Request.Path.ToString(),

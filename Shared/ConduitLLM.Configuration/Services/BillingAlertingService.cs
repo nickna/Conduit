@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Entities;
+using ConduitLLM.Configuration.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -34,13 +35,18 @@ namespace ConduitLLM.Configuration.Services
         }
 
         /// <inheritdoc />
-        public async Task SendCriticalAlertAsync(string message, int? virtualKeyId = null, object? additionalContext = null)
+        public async Task SendCriticalAlertAsync(
+            string message,
+            int? virtualKeyId = null,
+            Dictionary<string, object?>? additionalContext = null)
         {
             try
             {
                 var now = DateTime.UtcNow;
                 var serializedContext = additionalContext != null
-                    ? JsonSerializer.Serialize(additionalContext)
+                    ? JsonSerializer.Serialize(
+                        additionalContext,
+                        ConfigurationJsonContext.Default.DictionaryStringObject)
                     : null;
 
                 // Every failure must be durably recorded. Notification throttling below must not

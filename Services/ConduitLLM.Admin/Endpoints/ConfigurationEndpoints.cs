@@ -126,7 +126,7 @@ public static class ConfigurationEndpoints
             .SingleOrDefaultAsync(item => item.Key == "Routing.Defaults", cancellationToken);
         return Results.Ok(setting is null
             ? new RoutingDefaultsDto()
-            : JsonSerializer.Deserialize<RoutingDefaultsDto>(setting.Value) ?? new RoutingDefaultsDto());
+            : AdminJson.Deserialize<RoutingDefaultsDto>(setting.Value) ?? new RoutingDefaultsDto());
     }
 
     private static async Task<IResult> PutRoutingDefaults(
@@ -143,7 +143,7 @@ public static class ConfigurationEndpoints
         await globalSettingService.UpdateSettingByKeyAsync(new UpdateGlobalSettingByKeyDto
         {
             Key = "Routing.Defaults",
-            Value = JsonSerializer.Serialize(dto),
+            Value = AdminJson.Serialize(dto),
             Description = "Default provider-aware chat routing policy"
         });
         await globalSettingService.UpdateSettingByKeyAsync(new UpdateGlobalSettingByKeyDto

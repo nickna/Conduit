@@ -2,12 +2,12 @@ import { renderHook, act } from '@testing-library/react';
 import { useEnhancedVideoGeneration } from '../useEnhancedVideoGeneration';
 import { setupMocks } from './videoTest.helpers';
 import type { VideoTask } from '../../types';
-import * as browserClientModule from '@/lib/client/browserCoreClient';
+import * as browserClientModule from '@/lib/client/browserGatewayClient';
 import type { VideoProgressCallbacks } from '@/lib/gateway-api';
 import { MediaGenerationStatus } from '@/app/types/media';
 
 // Mock the browser client module
-jest.mock('@/lib/client/browserCoreClient');
+jest.mock('@/lib/client/browserGatewayClient');
 
 // Mock the useVideoStore hook directly in this test file
 jest.mock('../useVideoStore');
@@ -39,8 +39,8 @@ describe('useEnhancedVideoGeneration - Task Management', () => {
       },
     };
 
-    // Mock the getBrowserCoreClient function
-    (browserClientModule.getBrowserCoreClient as jest.Mock).mockResolvedValue(mockClient);
+    // Mock the getBrowserGatewayClient function
+    (browserClientModule.getBrowserGatewayClient as jest.Mock).mockResolvedValue(mockClient);
   });
 
   afterEach(() => {

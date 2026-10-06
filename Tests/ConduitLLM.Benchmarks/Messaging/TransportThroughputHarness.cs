@@ -341,10 +341,7 @@ namespace ConduitLLM.Benchmarks.Messaging
                         opts.CodeGeneration.TypeLoadMode = TypeLoadMode.Dynamic;
                         opts.UseRuntimeCompilation();
 
-                        foreach (var eventType in target.EventTypes)
-                        {
-                            opts.AddEventBridge(eventType);
-                        }
+                        AddBenchmarkBridges(opts, target.EventTypes);
 
                         // Production routing, verbatim.
                         opts.ApplyConduitPublishRouting();
@@ -431,6 +428,18 @@ namespace ConduitLLM.Benchmarks.Messaging
 
         private static double Elapsed(long startTimestamp) =>
             Math.Max((Stopwatch.GetTimestamp() - startTimestamp) / (double)Stopwatch.Frequency, 1e-6);
+
+        private static void AddBenchmarkBridges(WolverineOptions options, IReadOnlyList<Type> eventTypes)
+        {
+            if (eventTypes.Contains(typeof(SpendUpdateRequested))) options.AddEventBridge<SpendUpdateRequested>();
+            if (eventTypes.Contains(typeof(WebhookDeliveryRequested))) options.AddEventBridge<WebhookDeliveryRequested>();
+            if (eventTypes.Contains(typeof(ImageGenerationRequested))) options.AddEventBridge<ImageGenerationRequested>();
+            if (eventTypes.Contains(typeof(ImageGenerationCancelled))) options.AddEventBridge<ImageGenerationCancelled>();
+            if (eventTypes.Contains(typeof(VideoGenerationRequested))) options.AddEventBridge<VideoGenerationRequested>();
+            if (eventTypes.Contains(typeof(VideoGenerationCancelled))) options.AddEventBridge<VideoGenerationCancelled>();
+            if (eventTypes.Contains(typeof(VideoProgressCheckRequested))) options.AddEventBridge<VideoProgressCheckRequested>();
+            if (eventTypes.Contains(typeof(VirtualKeyUpdated))) options.AddEventBridge<VirtualKeyUpdated>();
+        }
 
         private static void PrintUsage()
         {

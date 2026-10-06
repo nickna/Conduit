@@ -48,7 +48,6 @@ namespace ConduitLLM.Admin.Endpoints
         {
             var group = app.MapGroup("/v1/admin/provider-errors")
                 .RequireAuthorization("MasterKeyPolicy")
-                .AddEndpointFilter<ValidationEndpointFilter>()
                 .AddEndpointFilter<OperationLoggingEndpointFilter>()
                 .WithTags("Provider Errors");
             group.MapGet("/recent", ([FromServices] ProviderErrorsEndpoints e, int? providerId = null, int? keyId = null, int limit = 100) => e.GetRecentErrors(providerId, keyId, limit))

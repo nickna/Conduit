@@ -7,7 +7,7 @@ import {
   Switch,
   Stack,
   Text,
-  Textarea,
+  JsonInput,
   Alert,
   Button,
   Divider,
@@ -16,7 +16,7 @@ import {
 import { useForm } from '@mantine/form';
 import { IconAlertCircle } from '@tabler/icons-react';
 import { validators } from '@/lib/utils/form-validators';
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 import type { VirtualKeyDto } from '@/lib/admin-api';
 import { withAdminClient } from '@/lib/client/adminClient';
@@ -32,7 +32,7 @@ interface EditVirtualKeyModalProps {
 
 interface EditVirtualKeyForm {
   keyName: string;
-  description?: string;
+  metadata: string;
   virtualKeyGroupId?: number;
   isEnabled: boolean;
   allowedModels: string[];
@@ -43,9 +43,9 @@ interface EditVirtualKeyForm {
 }
 
 export function EditVirtualKeyModal({ opened, onClose, virtualKey, onSuccess }: EditVirtualKeyModalProps) {
-  const [initialFormValues, setInitialFormValues] = useState<EditVirtualKeyForm>(() => ({
+  const initialFormValues: EditVirtualKeyForm = {
     keyName: '',
-    description: '',
+    metadata: '',
     virtualKeyGroupId: undefined,
     isEnabled: true,
     allowedModels: [],
@@ -53,7 +53,7 @@ export function EditVirtualKeyModal({ opened, onClose, virtualKey, onSuccess }: 
     rateLimitRpd: undefined,
     rateLimitTpm: undefined,
     maxParallelRequests: undefined,
-  }));
+  };
   const lastVirtualKeyId = useRef<number | undefined>(undefined);
 
   const form = useForm<EditVirtualKeyForm>({
@@ -76,6 +76,7 @@ export function EditVirtualKeyModal({ opened, onClose, virtualKey, onSuccess }: 
       rateLimitRpd: validators.minValue('Requests per day', 1),
       rateLimitTpm: validators.minValue('Tokens per minute', 1),
       maxParallelRequests: validators.minValue('Max parallel requests', 1),
+      metadata: validators.jsonObject('Metadata'),
     },
   });
 
@@ -95,8 +96,8 @@ export function EditVirtualKeyModal({ opened, onClose, virtualKey, onSuccess }: 
         rateLimitRpd: values.rateLimitRpd ?? undefined,
         rateLimitTpm: values.rateLimitTpm ?? undefined,
         maxParallelRequests: values.maxParallelRequests ?? undefined,
-        metadata: values.description?.trim()
-          ? JSON.parse(values.description) as Record<string, unknown>
+        metadata: values.metadata.trim()
+          ? JSON.parse(values.metadata) as Record<string, unknown>
           : undefined,
       };
 
@@ -126,7 +127,7 @@ export function EditVirtualKeyModal({ opened, onClose, virtualKey, onSuccess }: 
 
     const newFormValues: EditVirtualKeyForm = {
       keyName: virtualKey.keyName,
-      description: virtualKey.metadata ? JSON.stringify(virtualKey.metadata) : '',
+      metadata: virtualKey.metadata ? JSON.stringify(virtualKey.metadata, null, 2) : '',
       virtualKeyGroupId: virtualKey.virtualKeyGroupId ?? undefined,
       isEnabled: virtualKey.isEnabled,
       allowedModels: models,
@@ -136,7 +137,6 @@ export function EditVirtualKeyModal({ opened, onClose, virtualKey, onSuccess }: 
       maxParallelRequests: virtualKey.maxParallelRequests ?? undefined,
     };
 
-    setInitialFormValues(newFormValues);
     form.setValues(newFormValues);
     form.resetDirty();
   }, [virtualKey, form]);
@@ -168,11 +168,14 @@ export function EditVirtualKeyModal({ opened, onClose, virtualKey, onSuccess }: 
           {...form.getInputProps('keyName')}
         />
 
-        <Textarea
-          label="Description"
-          placeholder="Optional description for this key"
-          rows={3}
-          {...form.getInputProps('description')}
+        <JsonInput
+          label="Metadata"
+          description="Additional metadata stored as a JSON object"
+          placeholder='{"team": "engineering"}'
+          autosize
+          minRows={3}
+          formatOnBlur
+          {...form.getInputProps('metadata')}
         />
 
         <Switch

@@ -1,4 +1,6 @@
+using ConduitLLM.Core.Caching;
 using System.Text.Json;
+using ConduitLLM.Gateway.Serialization;
 using ConduitLLM.Configuration;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
@@ -8,7 +10,9 @@ using ConduitLLM.Configuration.DTOs;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using ConduitLLM.Gateway.DTOs;
+using ConduitLLM.Gateway.Services;
 using ConduitLLM.Functions.Utilities;
+using ConduitLLM.Functions.DTOs;
 using GatewayDiscoveredModelDto = ConduitLLM.Configuration.DTOs.DiscoveredModelDto;
 
 namespace ConduitLLM.Gateway.Endpoints
@@ -25,6 +29,7 @@ namespace ConduitLLM.Gateway.Endpoints
         private readonly IDiscoveryCacheService _discoveryCacheService;
         private readonly JsonSerializerOptions _wireJsonOptions;
         private readonly DiscoveryCacheOptions _discoveryOptions;
+        private readonly TimeProvider _clock;
 
         /// <summary>
         /// Initializes the Discovery endpoint handler.
@@ -37,13 +42,14 @@ namespace ConduitLLM.Gateway.Endpoints
             JsonSerializerOptions wireJsonOptions,
             IOptions<DiscoveryCacheOptions> discoveryOptions,
             IHttpContextAccessor httpContextAccessor,
-            ILogger<DiscoveryEndpoints> logger)
+            ILogger<DiscoveryEndpoints> logger, TimeProvider? clock = null)
             : base(null, httpContextAccessor, logger)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _modelCapabilityService = modelCapabilityService ?? throw new ArgumentNullException(nameof(modelCapabilityService));
             _virtualKeyService = virtualKeyService ?? throw new ArgumentNullException(nameof(virtualKeyService));
             _discoveryCacheService = discoveryCacheService ?? throw new ArgumentNullException(nameof(discoveryCacheService));
+            _clock = clock ?? TimeProvider.System;
             _wireJsonOptions = wireJsonOptions ?? throw new ArgumentNullException(nameof(wireJsonOptions));
             _discoveryOptions = (discoveryOptions ?? throw new ArgumentNullException(nameof(discoveryOptions))).Value;
         }
@@ -93,43 +99,14 @@ namespace ConduitLLM.Gateway.Endpoints
             // cached under a distinct key so toggling ExposePricing never serves the
             // wrong shape from a stale entry.
             var exposePricing = _discoveryOptions.ExposePricing;
-            var cacheKey = DiscoveryCacheService.BuildCacheKey(capability, includePricing: exposePricing);
+            var cacheKey = DiscoveryCacheKeys.Build(capability, includePricing: exposePricing);
 
-            // Try to get from cache first
-            var cachedResult = await _discoveryCacheService.GetDiscoveryResultsAsync(cacheKey);
-            if (cachedResult != null)
-            {
-                Logger.LogDebug("Returning cached discovery results for capability: {Capability}", LoggingSanitizer.S(capability ?? "all"));
-                var cachedModels = cachedResult.Data
-                    .Select(element => element.Deserialize<GatewayDiscoveredModelDto>(_wireJsonOptions))
-                    .Where(model => model is not null)
-                    .Cast<GatewayDiscoveredModelDto>()
-                    .ToList();
-                return Ok(new DiscoveryModelsResponse(cachedModels, cachedModels.Count));
-            }
-
-            using var context = await _dbContextFactory.CreateDbContextAsync(HttpContext.RequestAborted);
-            var models = await DiscoveryModelProjector.ProjectAsync(
-                context,
-                capability,
-                exposePricing,
-                Logger,
+            var result = await _discoveryCacheService.GetOrLoadAsync(cacheKey, token =>
+                DiscoveryCacheLoader.LoadAsync(_dbContextFactory, capability, exposePricing, _wireJsonOptions, Logger, token, _clock),
                 HttpContext.RequestAborted);
-
-            // Cache the results for future requests
-            var discoveryResult = new DiscoveryModelsResult
-            {
-                Data = models.Select(model =>
-                    JsonSerializer.SerializeToElement(model, _wireJsonOptions)).ToList(),
-                Count = models.Count,
-                CapabilityFilter = capability
-            };
-
-            await _discoveryCacheService.SetDiscoveryResultsAsync(cacheKey, discoveryResult);
-
-            Logger.LogInformation("Cached discovery results for capability: {Capability} with {Count} models",
-                LoggingSanitizer.S(capability ?? "all"), models.Count);
-
+            var models = result.Data.Select(element => element.Deserialize(
+                    GatewayJsonTypeInfo.Require<GatewayDiscoveredModelDto>(_wireJsonOptions)))
+                .Where(model => model is not null).Cast<GatewayDiscoveredModelDto>().ToList();
             return Ok(new DiscoveryModelsResponse(models, models.Count));
         }
 
@@ -219,7 +196,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 catch (Exception ex)
                 {
                     Logger.LogWarning(ex, "Failed to parse parameters for model {Model}", LoggingSanitizer.S(model));
-                    parameters = JsonSerializer.SerializeToElement(new { });
+                    parameters = EmptyJsonObject();
                 }
             }
 
@@ -227,7 +204,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 modelMapping.ModelProviderTypeAssociation.ModelId,
                 modelMapping.ModelAlias,
                 modelMapping.ModelProviderTypeAssociation.Model.Series?.Name ?? string.Empty,
-                parameters ?? JsonSerializer.SerializeToElement(new { })));
+                parameters ?? EmptyJsonObject()));
         }
 
         /// <summary>
@@ -248,15 +225,15 @@ namespace ConduitLLM.Gateway.Endpoints
             // "v4" entries use the canonical configuration shape with structured parameter schemas.
             var cacheKey = $"functions_discovery_v4_{purpose ?? "all"}_{providerType ?? "all"}";
 
-            // Try to get from cache first
-            var cachedResult = await _discoveryCacheService.GetDiscoveryResultsAsync(cacheKey);
-            if (cachedResult is { Data.Count: > 0 })
-            {
-                Logger.LogDebug("Returning cached function discovery results");
-                return Ok(cachedResult.Data[0]);
-            }
+            var value = await _discoveryCacheService.GetOrLoadAsync(cacheKey,
+                token => LoadFunctionCatalogAsync(purpose, providerType, token), HttpContext.RequestAborted);
+            return Ok(value.Data[0]);
+        }
 
-            using var context = await _dbContextFactory.CreateDbContextAsync();
+        private async Task<DiscoveryModelsResult> LoadFunctionCatalogAsync(string? purpose, string? providerType,
+            CancellationToken token)
+        {
+            using var context = await _dbContextFactory.CreateDbContextAsync(token);
 
             // Get all enabled function configurations
             var query = context.FunctionConfigurations
@@ -279,7 +256,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 }
             }
 
-            var configurations = await query.AsNoTracking().ToListAsync();
+            var configurations = await query.AsNoTracking().ToListAsync(token);
 
             var result = new ConduitLLM.Functions.DTOs.FunctionDiscoveryResponse
             {
@@ -301,16 +278,17 @@ namespace ConduitLLM.Gateway.Endpoints
             // Cache the results
             var discoveryResult = new DiscoveryModelsResult
             {
-                Data = new List<JsonElement> { JsonSerializer.SerializeToElement(result, _wireJsonOptions) },
+                Data = new List<JsonElement>
+                {
+                    JsonSerializer.SerializeToElement(
+                        result,
+                        GatewayJsonTypeInfo.Require<FunctionDiscoveryResponse>(_wireJsonOptions))
+                },
                 Count = result.Count,
                 CapabilityFilter = purpose
             };
 
-            await _discoveryCacheService.SetDiscoveryResultsAsync(cacheKey, discoveryResult);
-
-            Logger.LogInformation("Cached function discovery results with {Count} functions", result.Count);
-
-            return Ok(result);
+            return discoveryResult;
         }
 
         /// <summary>
@@ -329,25 +307,32 @@ namespace ConduitLLM.Gateway.Endpoints
             // "v4" entries use function_id and structured parameter/example objects.
             var cacheKey = $"function_parameters_v4_{functionConfigurationId}";
 
-            // Try to get from cache first
-            var cachedResult = await _discoveryCacheService.GetDiscoveryResultsAsync(cacheKey);
-            if (cachedResult is { Data.Count: > 0 })
+            try
             {
-                Logger.LogDebug("Returning cached function parameter schema for config {ConfigId}", functionConfigurationId);
-                return Ok(cachedResult.Data[0]);
+                var value = await _discoveryCacheService.GetOrLoadAsync(cacheKey,
+                    token => LoadFunctionParametersAsync(functionConfigurationId, token), HttpContext.RequestAborted);
+                return Ok(value.Data[0]);
             }
+            catch (FunctionConfigurationNotFoundException)
+            {
+                return OpenAIError(404, $"Function configuration {functionConfigurationId} not found or is disabled", "not_found");
+            }
+        }
 
-            using var context = await _dbContextFactory.CreateDbContextAsync();
+        private sealed class FunctionConfigurationNotFoundException : Exception;
+        private async Task<DiscoveryModelsResult> LoadFunctionParametersAsync(int functionConfigurationId, CancellationToken token)
+        {
+            using var context = await _dbContextFactory.CreateDbContextAsync(token);
 
             // Find the function configuration
             var configuration = await context.FunctionConfigurations
                 .AsNoTracking()
                 .Where(fc => fc.Id == functionConfigurationId && fc.IsEnabled)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(token);
 
             if (configuration == null)
             {
-                return OpenAIError(404, $"Function configuration {functionConfigurationId} not found or is disabled", "not_found");
+                throw new FunctionConfigurationNotFoundException();
             }
 
             // Parse the parameter schema
@@ -376,15 +361,22 @@ namespace ConduitLLM.Gateway.Endpoints
             // Cache the results
             var discoveryResult = new DiscoveryModelsResult
             {
-                Data = new List<JsonElement> { JsonSerializer.SerializeToElement(result, _wireJsonOptions) },
+                Data = new List<JsonElement>
+                {
+                    JsonSerializer.SerializeToElement(
+                        result,
+                        GatewayJsonTypeInfo.Require<FunctionParametersResponseDto>(_wireJsonOptions))
+                },
                 Count = 1
             };
 
-            await _discoveryCacheService.SetDiscoveryResultsAsync(cacheKey, discoveryResult);
+            return discoveryResult;
+        }
 
-            Logger.LogInformation("Cached function parameter schema for config {ConfigId}", functionConfigurationId);
-
-            return Ok(result);
+        private static JsonElement EmptyJsonObject()
+        {
+            using var document = JsonDocument.Parse("{}");
+            return document.RootElement.Clone();
         }
     }
 }

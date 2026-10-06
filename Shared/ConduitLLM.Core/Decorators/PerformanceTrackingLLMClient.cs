@@ -9,7 +9,11 @@ namespace ConduitLLM.Core.Decorators
     /// <summary>
     /// Decorator that adds performance tracking to LLM client operations.
     /// </summary>
-    public class PerformanceTrackingLLMClient : ILLMClient, ILLMClientDecorator, IAuthenticationVerifiable
+    public class PerformanceTrackingLLMClient :
+        ILLMClient,
+        ILLMClientDecorator,
+        IVideoGenerationClient,
+        IAuthenticationVerifiable
     {
         private readonly ILLMClient _innerClient;
         private readonly IPerformanceMetricsService _metricsService;
@@ -223,29 +227,11 @@ namespace ConduitLLM.Core.Decorators
             string? apiKey = null,
             CancellationToken cancellationToken = default)
         {
-            object target = _innerClient.UnwrapInnermost();
-            System.Reflection.MethodInfo? method = null;
-            for (ILLMClient? current = _innerClient; current != null;
-                 current = (current as ILLMClientDecorator)?.InnerClient)
-            {
-                method = current.GetType().GetMethod(
-                    nameof(CreateVideoAsync),
-                    new[] { typeof(VideoGenerationRequest), typeof(string), typeof(CancellationToken) });
-                if (method != null)
-                {
-                    target = current;
-                    break;
-                }
-            }
+            var videoClient = _innerClient.FindInChain<IVideoGenerationClient>()
+                ?? throw new NotSupportedException(
+                    $"The underlying client {_innerClient.GetType().Name} does not support video generation");
 
-            if (method?.Invoke(target, new object?[] { request, apiKey, cancellationToken })
-                is not Task<VideoGenerationResponse> task)
-            {
-                throw new NotSupportedException(
-                    $"The underlying client {target.GetType().Name} does not support video generation");
-            }
-
-            return await task;
+            return await videoClient.CreateVideoAsync(request, apiKey, cancellationToken);
         }
 
         /// <summary>

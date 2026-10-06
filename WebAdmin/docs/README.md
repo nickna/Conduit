@@ -23,7 +23,7 @@ Complete guide to WebAdmin virtual key system:
 The contract-derived, WebAdmin-owned integration with the Admin service.
 
 ### 🔄 [Admin Contract-Read Migration](./ADMIN_CONTRACT_READ_MIGRATION.md)
-Status and sequencing for moving Admin reads onto direct generated operations.
+Maintenance rules for the completed generated-contract transport.
 
 ### 🔌 [Gateway API Boundary](./GATEWAY_API_BOUNDARY.md)
 The focused local Gateway transport, streaming behavior, and generated wire types.
@@ -43,18 +43,11 @@ Important security information:
 - Security layers and best practices
 - Incident response procedures
 
-### 🔐 [Security Authentication SDK](./SECURITY-AUTH-SDK.md)
-Technical security implementation details:
-- Authentication flow
-- Session management
-- Rate limiting
-- Security headers
-
 ## Quick Links
 
 ### For Developers
 - [Admin API Boundary](./ADMIN_API_BOUNDARY.md) - Admin integration rules
-- [Admin Contract-Read Migration](./ADMIN_CONTRACT_READ_MIGRATION.md) - Completed and candidate read slices
+- [Admin Contract Transport](./ADMIN_CONTRACT_READ_MIGRATION.md) - Generated-operation maintenance rules
 - [Gateway API Boundary](./GATEWAY_API_BOUNDARY.md) - Gateway integration rules
 - [Architecture](./ARCHITECTURE.md) - Understand the system design
 - [Troubleshooting](./TROUBLESHOOTING.md) - Common issues and solutions
@@ -66,7 +59,6 @@ Technical security implementation details:
 
 ### For Security Teams
 - [Security Considerations](./SECURITY-CONSIDERATIONS.md) - Security overview
-- [Security Authentication SDK](./SECURITY-AUTH-SDK.md) - Technical details
 - [Virtual Key Management](./VIRTUAL-KEY-MANAGEMENT.md) - Key security model
 
 ## Getting Started

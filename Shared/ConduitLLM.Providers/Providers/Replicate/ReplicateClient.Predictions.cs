@@ -5,6 +5,7 @@ using System.Text.Json;
 using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Metrics;
 using ConduitLLM.Providers.Helpers;
+using ConduitLLM.Providers.Serialization;
 
 using Microsoft.Extensions.Logging;
 
@@ -67,7 +68,11 @@ namespace ConduitLLM.Providers.Replicate
                 }
                 
                 Logger.LogInformation("Sending request to Replicate: {BaseUrl}{Endpoint}", client.BaseAddress, endpoint);
-                using var response = await client.PostAsJsonAsync(endpoint, request, cancellationToken);
+                using var response = await client.PostAsJsonAsync(
+                    endpoint,
+                    request,
+                    ProvidersJsonContext.Default.ReplicatePredictionRequest,
+                    cancellationToken);
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -79,8 +84,9 @@ namespace ConduitLLM.Providers.Replicate
                         response.StatusCode, errorContent);
                 }
 
-                var predictionResponse = await response.Content.ReadFromJsonAsync<ReplicatePredictionResponse>(
-                    cancellationToken: cancellationToken);
+                var predictionResponse = await response.Content.ReadFromJsonAsync(
+                    ProvidersJsonContext.Default.ReplicatePredictionResponse,
+                    cancellationToken);
 
                 if (predictionResponse == null)
                 {
@@ -161,8 +167,9 @@ namespace ConduitLLM.Providers.Replicate
                     response.StatusCode, errorContent);
             }
 
-            var prediction = await response.Content.ReadFromJsonAsync<ReplicatePredictionResponse>(
-                cancellationToken: cancellationToken);
+            var prediction = await response.Content.ReadFromJsonAsync(
+                ProvidersJsonContext.Default.ReplicatePredictionResponse,
+                cancellationToken);
             if (prediction == null)
             {
                 throw new LLMCommunicationException("Failed to deserialize Replicate prediction response");

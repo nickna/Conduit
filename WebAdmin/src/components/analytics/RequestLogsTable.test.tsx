@@ -24,7 +24,7 @@ const baseLog: RequestLogEntry = {
   cachedInputTokens: 4,
   cachedWriteTokens: 2,
   cost: 0.000063,
-  billingMethod: 1,
+  billingMethod: 'providerReportedCost',
   providerReportedCostUsd: 0.00005,
   providerCostMarkupMultiplier: 1.2,
   billedAtUtc: '2026-07-22T06:00:01Z',
@@ -104,20 +104,10 @@ describe('RequestLogsTable', () => {
     expect(screen.getByText('No type-specific metadata was recorded.')).toBeInTheDocument();
   });
 
-  it('preserves malformed metadata for troubleshooting', () => {
-    renderTable({ ...baseLog, metadata: 'not-json' });
-
-    fireEvent.click(screen.getByRole('button', { name: 'View request details for request 42' }));
-
-    expect(screen.getByText(/not a valid JSON object/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Raw metadata'));
-    expect(screen.getByText('not-json')).toBeInTheDocument();
-  });
-
   it('renders recognized function metadata as structured diagnostics', () => {
     renderTable({
       ...baseLog,
-      metadata: JSON.stringify({
+      metadata: {
         type: 'chat_with_functions',
         functionCalls: [{
           functionName: 'lookup_customer',
@@ -125,7 +115,7 @@ describe('RequestLogsTable', () => {
           functionExecutionId: 'execution-123',
           cost: 0.001,
         }],
-      }),
+      },
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'View request details for request 42' }));

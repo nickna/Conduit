@@ -1,0 +1,178 @@
+name: NativeAOT
+
+on:
+  push:
+    branches: [master]
+  schedule:
+    - cron: '23 8 * * 1'
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '10.0.x'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-and-smoke:
+    name: linux-x64 publish and process smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: conduit
+          POSTGRES_PASSWORD: conduitpass
+          POSTGRES_DB: conduitdb
+        options: >-
+          --health-cmd "pg_isready -U conduit -d conduitdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install NativeAOT toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang zlib1g-dev
+
+      - name: Publish both native services
+        shell: pwsh
+        run: ./scripts/aot/publish-native.ps1
+
+      - name: Launch native OpenAPI smokes
+        id: native-smoke
+        shell: pwsh
+        run: ./scripts/aot/native-smoke.ps1
+
+      - name: Build release-owned migration and message probes
+        run: |
+          dotnet build tools/ConduitLLM.Migrator --configuration Release
+          dotnet build tools/WolverineSmokePublisher --configuration Release
+
+      - name: Native two-host PostgreSQL and Wolverine proof
+        shell: pwsh
+        run: ./scripts/test/wolverine-two-host-smoke.ps1 -NoBuild -Configuration Release -NativeArtifactDirectory artifacts/native-aot
+        env:
+          DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
+          REDIS_URL: redis://localhost:6379
+
+      - name: Native Gateway supported protocol and infrastructure boundary
+        shell: pwsh
+        run: ./scripts/aot/gateway-native-parity.ps1 -NoBuild -ArtifactDirectory artifacts/native-aot
+        env:
+          DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
+          REDIS_URL: redis://localhost:6379
+
+      - name: Publish native baseline summary
+        if: always()
+        shell: pwsh
+        run: |
+          $report = Get-Content artifacts/native-aot/reports/native-baselines.json -Raw | ConvertFrom-Json
+          @(
+            '# NativeAOT linux-x64 baselines'
+            ''
+            '| Service | Publish (s) | Executable (MiB) | OpenAPI ready (ms) | Peak working set (MiB) | Smoke |'
+            '|---|---:|---:|---:|---:|---|'
+          ) | Add-Content $env:GITHUB_STEP_SUMMARY
+          foreach ($service in $report.services) {
+            $publish = [Math]::Round($service.publishDurationMilliseconds / 1000, 2)
+            $size = [Math]::Round($service.executableBytes / 1MB, 2)
+            $memory = [Math]::Round($service.peakWorkingSetBytes / 1MB, 2)
+            "| $($service.service) | $publish | $size | $($service.openApiReadyMilliseconds) | $memory | $($service.smokeSucceeded) |" |
+              Add-Content $env:GITHUB_STEP_SUMMARY
+          }
+          '' | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-Content artifacts/native-aot/reports/linker-summary.md |
+            Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload Admin native runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: conduit-admin-linux-x64-native
+          path: artifacts/native-aot/runtime/admin
+          retention-days: 30
+
+      - name: Upload Gateway native runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: conduit-gateway-linux-x64-native
+          path: artifacts/native-aot/runtime/gateway
+          retention-days: 30
+
+      - name: Upload native symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: conduit-linux-x64-native-symbols
+          path: artifacts/native-aot/symbols
+          retention-days: 14
+
+      - name: Upload native diagnostics and baselines
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conduit-linux-x64-native-reports
+          path: artifacts/native-aot/reports
+          retention-days: 90
+
+  native-images:
+    name: Native image - ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: publish-and-smoke
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: admin
+            dockerfile: Services/ConduitLLM.Admin/Dockerfile.native
+          - service: http
+            dockerfile: Services/ConduitLLM.Gateway/Dockerfile.native
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build linux-x64 native image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          load: true
+          tags: conduit-${{ matrix.service }}-native:ci
+          cache-from: type=gha,scope=${{ matrix.service }}-native
+          cache-to: type=gha,scope=${{ matrix.service }}-native,mode=max
+          build-args: |
+            VERSION=0.0.0-ci
+            COMMIT_SHA=${{ github.sha }}
+            BUILD_TIMESTAMP=1970-01-01T00:00:00Z
+
+      - name: Verify minimal native runtime image
+        shell: pwsh
+        run: ./scripts/aot/verify-native-image.ps1 -Image conduit-${{ matrix.service }}-native:ci -Service ${{ matrix.service }}

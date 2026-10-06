@@ -3,6 +3,7 @@ using System.Text.Json;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Models.Pricing;
+using ConduitLLM.Core.Serialization;
 using ConduitLLM.Core.Utilities;
 
 using Microsoft.Extensions.Logging;
@@ -14,16 +15,6 @@ namespace ConduitLLM.Core.Services;
 /// </summary>
 public partial class CostCalculationService
 {
-    /// <summary>
-    /// Serializer options for parsing <see cref="ModelCost.PricingConfiguration"/> JSON.
-    /// Case-insensitive because documented configs and the WebAdmin UI produce camelCase
-    /// property names (e.g. "baseRate") while the config POCOs use PascalCase.
-    /// </summary>
-    private static readonly JsonSerializerOptions PricingConfigJsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
     private Task<decimal> CalculatePerVideoCostAsync(string modelId, ModelCost modelCost, Usage usage)
     {
         if (!usage.VideoDurationSeconds.HasValue || string.IsNullOrEmpty(usage.VideoResolution))
@@ -38,7 +29,9 @@ public partial class CostCalculationService
         {
             try
             {
-                config = JsonSerializer.Deserialize<PerVideoPricingConfig>(modelCost.PricingConfiguration, PricingConfigJsonOptions);
+                config = JsonSerializer.Deserialize(
+                    modelCost.PricingConfiguration,
+                    CorePricingJsonContext.Default.PerVideoPricingConfig);
             }
             catch (Exception ex)
             {
@@ -106,7 +99,9 @@ public partial class CostCalculationService
         {
             try
             {
-                config = JsonSerializer.Deserialize<PerSecondVideoPricingConfig>(modelCost.PricingConfiguration, PricingConfigJsonOptions);
+                config = JsonSerializer.Deserialize(
+                    modelCost.PricingConfiguration,
+                    CorePricingJsonContext.Default.PerSecondVideoPricingConfig);
             }
             catch (Exception ex)
             {
@@ -160,7 +155,9 @@ public partial class CostCalculationService
         {
             try
             {
-                config = JsonSerializer.Deserialize<InferenceStepsPricingConfig>(modelCost.PricingConfiguration, PricingConfigJsonOptions);
+                config = JsonSerializer.Deserialize(
+                    modelCost.PricingConfiguration,
+                    CorePricingJsonContext.Default.InferenceStepsPricingConfig);
             }
             catch (Exception ex)
             {
@@ -199,7 +196,9 @@ public partial class CostCalculationService
         {
             try
             {
-                config = JsonSerializer.Deserialize<TieredTokensPricingConfig>(modelCost.PricingConfiguration, PricingConfigJsonOptions);
+                config = JsonSerializer.Deserialize(
+                    modelCost.PricingConfiguration,
+                    CorePricingJsonContext.Default.TieredTokensPricingConfig);
             }
             catch (Exception ex)
             {
@@ -269,7 +268,9 @@ public partial class CostCalculationService
         {
             try
             {
-                config = JsonSerializer.Deserialize<PerImagePricingConfig>(modelCost.PricingConfiguration, PricingConfigJsonOptions);
+                config = JsonSerializer.Deserialize(
+                    modelCost.PricingConfiguration,
+                    CorePricingJsonContext.Default.PerImagePricingConfig);
             }
             catch (Exception ex)
             {
@@ -336,7 +337,9 @@ public partial class CostCalculationService
         {
             try
             {
-                config = JsonSerializer.Deserialize<PricingRulesConfig>(modelCost.PricingConfiguration, PricingConfigJsonOptions);
+                config = JsonSerializer.Deserialize(
+                    modelCost.PricingConfiguration,
+                    CorePricingJsonContext.Default.PricingRulesConfig);
                 _logger.LogDebug("Parsed pricing rules configuration directly for model {ModelId}", modelId);
             }
             catch (Exception ex)

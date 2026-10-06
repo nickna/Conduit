@@ -33,7 +33,7 @@ namespace ConduitLLM.Tests.Admin.Services
     public class MediaCleanupServiceTests : IDisposable
     {
         private readonly ServiceProvider _serviceProvider;
-        private readonly Mock<IDistributedLockService> _mockLockService;
+        private readonly Mock<IDistributedLockProvider> _mockLockService;
         private readonly Mock<IMediaStorageService> _mockStorageService;
         private readonly Mock<IMediaDeletionBudgetService> _mockBudgetService;
         private readonly Mock<IMediaRecordRepository> _mockMediaRepository;
@@ -41,7 +41,7 @@ namespace ConduitLLM.Tests.Admin.Services
         private readonly Mock<IMediaCleanupApprovalService> _mockApprovalService;
         private readonly Mock<IMediaStorageConfigurationGuard> _mockStorageGuard;
         private readonly Mock<ILogger<MediaCleanupService>> _mockLogger;
-        private readonly Mock<IDistributedLock> _mockLock;
+        private readonly Mock<IDistributedLockOwnership> _mockLock;
         private readonly MutableOptions<MediaLifecycleOptions> _engineOptions;
         private readonly ConduitDbContext _context;
         private readonly SqliteTestDatabase _database;
@@ -51,7 +51,7 @@ namespace ConduitLLM.Tests.Admin.Services
             _database = new SqliteTestDatabase();
             _context = _database.CreateContext();
 
-            _mockLockService = new Mock<IDistributedLockService>();
+            _mockLockService = new Mock<IDistributedLockProvider>();
             _mockStorageService = new Mock<IMediaStorageService>();
             _mockBudgetService = new Mock<IMediaDeletionBudgetService>();
             _mockMediaRepository = new Mock<IMediaRecordRepository>();
@@ -63,9 +63,7 @@ namespace ConduitLLM.Tests.Admin.Services
                 new MediaLifecycleOptions());
 
             // Set up lock mock
-            _mockLock = new Mock<IDistributedLock>();
-            _mockLock.Setup(x => x.Key).Returns("media:cleanup:leader");
-            _mockLock.Setup(x => x.IsValid).Returns(true);
+            _mockLock = new Mock<IDistributedLockOwnership>();
 
             // Default budget service setup - within budget
             _mockBudgetService
@@ -155,7 +153,7 @@ namespace ConduitLLM.Tests.Admin.Services
 
             await service.RunScheduledCleanupAsync(CancellationToken.None);
 
-            _mockLockService.Verify(lockService => lockService.AcquireLockAsync(
+            _mockLockService.Verify(lockService => lockService.TryAcquireAsync(
                 It.IsAny<string>(),
                 It.IsAny<TimeSpan>(),
                 It.IsAny<CancellationToken>()), Times.Never);
@@ -235,19 +233,22 @@ namespace ConduitLLM.Tests.Admin.Services
         {
             // Arrange
             var options = new MediaLifecycleOptions { Enabled = false };
-            var service = CreateService(options);
-
-            using var cts = new CancellationTokenSource();
+            using var service = CreateService(options);
 
             // Act
-            var executeTask = service.StartAsync(cts.Token);
-            await Task.Delay(100);
-            cts.Cancel();
-            await service.StopAsync(CancellationToken.None);
+            await service.StartAsync(CancellationToken.None);
+            try
+            {
+                await service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None);
+            }
 
             // Assert
             _mockLockService.Verify(
-                x => x.AcquireLockAsync(
+                x => x.TryAcquireAsync(
                     It.IsAny<string>(),
                     It.IsAny<TimeSpan>(),
                     It.IsAny<CancellationToken>()),
@@ -259,15 +260,18 @@ namespace ConduitLLM.Tests.Admin.Services
         {
             // Arrange
             var options = new MediaLifecycleOptions { Enabled = false };
-            var service = CreateService(options);
-
-            using var cts = new CancellationTokenSource();
+            using var service = CreateService(options);
 
             // Act
-            await service.StartAsync(cts.Token);
-            await Task.Delay(100);
-            cts.Cancel();
-            await service.StopAsync(CancellationToken.None);
+            await service.StartAsync(CancellationToken.None);
+            try
+            {
+                await service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None);
+            }
 
             // Assert
             _mockLogger.Verify(
@@ -296,20 +300,36 @@ namespace ConduitLLM.Tests.Admin.Services
             };
 
             _mockLockService
-                .Setup(x => x.AcquireLockAsync(
+                .Setup(x => x.TryAcquireAsync(
                     It.IsAny<string>(),
                     It.IsAny<TimeSpan>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(_mockLock.Object);
 
-            var service = CreateService(options);
-            using var cts = new CancellationTokenSource();
+            var startupLogged = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            _mockLogger
+                .Setup(x => x.Log(
+                    LogLevel.Information,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((o, t) =>
+                        o.ToString()!.Contains("starting")),
+                    It.IsAny<Exception>(),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()))
+                .Callback(new InvocationAction(_ => startupLogged.TrySetResult()));
+
+            using var service = CreateService(options);
 
             // Act
-            await service.StartAsync(cts.Token);
-            await Task.Delay(200);
-            cts.Cancel();
-            await service.StopAsync(CancellationToken.None);
+            await service.StartAsync(CancellationToken.None);
+            try
+            {
+                await startupLogged.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None);
+            }
 
             // Assert
             _mockLogger.Verify(
@@ -330,11 +350,11 @@ namespace ConduitLLM.Tests.Admin.Services
             var options = new MediaLifecycleOptions { Enabled = true };
 
             _mockLockService
-                .Setup(x => x.AcquireLockAsync(
+                .Setup(x => x.TryAcquireAsync(
                     It.IsAny<string>(),
                     It.IsAny<TimeSpan>(),
                     It.IsAny<CancellationToken>()))
-                .ReturnsAsync((IDistributedLock?)null);
+                .ReturnsAsync((IDistributedLockOwnership?)null);
 
             SeedTestGroup(1);
             SeedDefaultRetentionPolicy();
@@ -360,8 +380,7 @@ namespace ConduitLLM.Tests.Admin.Services
             var options = CreateExecutionOptions();
             options.EnableReconciliation = false;
             options.EnableRetentionCleanup = false;
-            var lockService = new InMemoryDistributedLockService(
-                Mock.Of<ILogger<InMemoryDistributedLockService>>());
+            var lockService = new ConduitLLM.Tests.Helpers.TestDistributedLockProvider();
             var deleteStarted = new TaskCompletionSource(
                 TaskCreationOptions.RunContinuationsAsynchronously);
             var allowDelete = new TaskCompletionSource(
@@ -443,7 +462,7 @@ namespace ConduitLLM.Tests.Admin.Services
             var service = CreateService(options);
             await service.RunScheduledCleanupAsync(CancellationToken.None);
 
-            _mockLockService.Verify(x => x.AcquireLockAsync(
+            _mockLockService.Verify(x => x.TryAcquireAsync(
                 "media:cleanup:leader", It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
             VerifyBulkDelete("expired-media", Times.Once());
             _mockMediaRepository.Verify(x => x.HardDeleteAsync(
@@ -1208,7 +1227,7 @@ namespace ConduitLLM.Tests.Admin.Services
         private void ArrangeLockAcquired()
         {
             _mockLockService
-                .Setup(x => x.AcquireLockAsync(
+                .Setup(x => x.TryAcquireAsync(
                     It.IsAny<string>(),
                     It.IsAny<TimeSpan>(),
                     It.IsAny<CancellationToken>()))
@@ -1252,6 +1271,30 @@ namespace ConduitLLM.Tests.Admin.Services
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task ScheduledCleanup_BackendFailure_FailsClosed()
+        {
+            _mockLockService.Setup(service => service.TryAcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("isolated database outage"));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => CreateService(CreateExecutionOptions())
+                .RunScheduledCleanupAsync(CancellationToken.None));
+            _mockStorageService.Verify(service => service.DeleteManyAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ScheduledCleanup_DetectedLoss_DoesNotBeginProtectedWork()
+        {
+            using var lost = new CancellationTokenSource();
+            lost.Cancel();
+            _mockLock.SetupGet(handle => handle.HandleLostToken).Returns(lost.Token);
+            _mockLockService.Setup(service => service.TryAcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(_mockLock.Object);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateService(CreateExecutionOptions())
+                .RunScheduledCleanupAsync(CancellationToken.None));
+            _mockStorageService.Verify(service => service.DeleteManyAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()), Times.Never);
+            _mockLock.Verify(handle => handle.DisposeAsync(), Times.Once);
         }
 
         public void Dispose()

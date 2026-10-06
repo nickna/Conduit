@@ -24,6 +24,7 @@ LICENSE
 CHANGELOG
 
 # Build outputs
+artifacts/
 **/bin/
 **/obj/
 **/out/

@@ -44,9 +44,28 @@ try {
 
         # Keep the generation-only RuntimeCompilation dependency out of the
         # ordinary obj/bin trees used by builds and production publishes.
+        # Build the shared project graph serially before launching the generator.
+        # Parallel rebuilds can race while cleaning shared outputs on newer SDKs,
+        # producing a silent build failure before JasperFx starts.
+        & dotnet build `
+            $project `
+            --configuration Release `
+            --nologo `
+            --tl:off `
+            --verbosity minimal `
+            --artifacts-path $artifactRoot `
+            --maxcpucount:1 `
+            -p:ConduitWolverineCodegen=true `
+            -p:UseSharedCompilation=false
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Wolverine code generation build failed for $project."
+        }
+
         & dotnet run `
             --project $project `
             --configuration Release `
+            --no-build `
             --no-launch-profile `
             --artifacts-path $artifactRoot `
             -p:ConduitWolverineCodegen=true `

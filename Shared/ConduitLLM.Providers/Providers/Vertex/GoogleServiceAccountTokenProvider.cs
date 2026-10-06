@@ -19,7 +19,7 @@ namespace ConduitLLM.Providers.Vertex;
 /// expiry. The service-account key never leaves this process: only the signed assertion is posted
 /// to Google's OAuth token endpoint.
 /// </remarks>
-internal sealed class GoogleServiceAccountTokenProvider
+internal sealed partial class GoogleServiceAccountTokenProvider
 {
     internal const string TokenEndpoint = "https://oauth2.googleapis.com/token";
     internal const string CloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform";
@@ -96,7 +96,9 @@ internal sealed class GoogleServiceAccountTokenProvider
             OAuthTokenResponse? tokenResponse;
             try
             {
-                tokenResponse = JsonSerializer.Deserialize<OAuthTokenResponse>(body);
+                tokenResponse = JsonSerializer.Deserialize(
+                    body,
+                    GoogleServiceAccountJsonContext.Default.OAuthTokenResponse);
             }
             catch (JsonException ex)
             {
@@ -176,8 +178,12 @@ internal sealed class GoogleServiceAccountTokenProvider
             ["exp"] = issuedAt.AddHours(1).ToUnixTimeSeconds()
         };
 
-        var encodedHeader = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(header));
-        var encodedClaims = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(claims));
+        var encodedHeader = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(
+            header,
+            GoogleServiceAccountJsonContext.Default.DictionaryStringObject));
+        var encodedClaims = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(
+            claims,
+            GoogleServiceAccountJsonContext.Default.DictionaryStringObject));
         var unsignedAssertion = $"{encodedHeader}.{encodedClaims}";
 
         try
@@ -213,7 +219,9 @@ internal sealed class GoogleServiceAccountTokenProvider
         GoogleServiceAccountCredential? credential;
         try
         {
-            credential = JsonSerializer.Deserialize<GoogleServiceAccountCredential>(serviceAccountJson);
+            credential = JsonSerializer.Deserialize(
+                serviceAccountJson,
+                GoogleServiceAccountJsonContext.Default.GoogleServiceAccountCredential);
         }
         catch (JsonException ex)
         {
@@ -302,4 +310,12 @@ internal sealed class GoogleServiceAccountTokenProvider
         [JsonPropertyName("token_uri")]
         public string? TokenUri { get; init; }
     }
+
+    [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
+    [JsonSerializable(typeof(OAuthTokenResponse))]
+    [JsonSerializable(typeof(GoogleServiceAccountCredential))]
+    [JsonSerializable(typeof(Dictionary<string, object>))]
+    [JsonSerializable(typeof(string))]
+    [JsonSerializable(typeof(long))]
+    private sealed partial class GoogleServiceAccountJsonContext : JsonSerializerContext;
 }

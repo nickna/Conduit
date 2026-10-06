@@ -3,6 +3,7 @@ using ConduitLLM.Configuration.Constants;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.Services
 {
@@ -36,7 +37,9 @@ namespace ConduitLLM.Gateway.Services
 
             try
             {
-                var credential = await TryGetCacheEntryAsync<CachedProvider>(cacheKey);
+                var credential = await TryGetCacheEntryAsync(
+                    cacheKey,
+                    GatewayRedisJsonContext.Default.CachedProvider);
                 if (credential != null)
                 {
                     Logger.LogDebug("Provider credential cache hit: {ProviderId}", providerId);
@@ -51,7 +54,9 @@ namespace ConduitLLM.Gateway.Services
                 var dbCredential = await _cachePopulator.GetOrPopulateAsync(
                     lockKey: $"populate:provider:{providerId}",
                     // Re-check cache in case another instance populated it
-                    cacheCheck: () => TryGetCacheEntryAsync<CachedProvider>(cacheKey),
+                    cacheCheck: () => TryGetCacheEntryAsync(
+                        cacheKey,
+                        GatewayRedisJsonContext.Default.CachedProvider),
                     factory: () => databaseFallback(providerId));
 
                 if (dbCredential != null)
@@ -179,7 +184,10 @@ namespace ConduitLLM.Gateway.Services
         private async Task SetProviderAsync(int providerId, CachedProvider credential)
         {
             var cacheKey = CacheKeys.Provider.ById(providerId);
-            await SetCacheEntryAsync(cacheKey, credential);
+            await SetCacheEntryAsync(
+                cacheKey,
+                credential,
+                GatewayRedisJsonContext.Default.CachedProvider);
 
             Logger.LogDebug("Provider credential cached: {ProviderId} with {KeyCount} keys",
                 providerId, credential.Keys.Count);

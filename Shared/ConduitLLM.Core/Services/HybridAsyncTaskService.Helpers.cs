@@ -3,6 +3,7 @@ using System.Text.Json;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Serialization;
 
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
@@ -21,7 +22,7 @@ namespace ConduitLLM.Core.Services
             bool isCompleted = false)
         {
             var key = GetTaskKey(taskId);
-            var json = JsonSerializer.Serialize(taskStatus);
+            var json = JsonSerializer.Serialize(taskStatus, AsyncTaskJsonContext.Default.AsyncTaskStatus);
             
             var options = new DistributedCacheEntryOptions
             {
@@ -62,9 +63,13 @@ namespace ConduitLLM.Core.Services
                 CreatedAt = dbTask.CreatedAt,
                 UpdatedAt = dbTask.UpdatedAt,
                 CompletedAt = dbTask.CompletedAt,
-                Result = string.IsNullOrEmpty(dbTask.Result) ? null : JsonSerializer.Deserialize<object>(dbTask.Result),
+                Result = string.IsNullOrEmpty(dbTask.Result)
+                    ? null
+                    : JsonSerializer.Deserialize(dbTask.Result, AsyncTaskJsonContext.Default.JsonElement),
                 Error = dbTask.Error,
-                Metadata = string.IsNullOrEmpty(dbTask.Metadata) ? null : JsonSerializer.Deserialize<TaskMetadata>(dbTask.Metadata),
+                Metadata = string.IsNullOrEmpty(dbTask.Metadata)
+                    ? null
+                    : JsonSerializer.Deserialize(dbTask.Metadata, AsyncTaskJsonContext.Default.TaskMetadata),
                 Progress = dbTask.Progress,
                 ProgressMessage = dbTask.ProgressMessage,
                 RetryCount = dbTask.RetryCount,
@@ -90,7 +95,10 @@ namespace ConduitLLM.Core.Services
             try
             {
                 // Extract VirtualKeyId from metadata
-                var json = JsonSerializer.Serialize(metadata);
+                var json = JsonSerializer.Serialize(
+                    metadata,
+                    metadata.GetType(),
+                    AsyncTaskJsonContext.Default);
                 using var jsonDoc = JsonDocument.Parse(json);
                 var root = jsonDoc.RootElement;
 

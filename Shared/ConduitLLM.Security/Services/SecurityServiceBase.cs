@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using ConduitLLM.Core.Utilities;
 using ConduitLLM.Security.Models;
 using ConduitLLM.Security.Options;
+using ConduitLLM.Security.Serialization;
 
 namespace ConduitLLM.Security.Services
 {
@@ -70,7 +72,9 @@ namespace ConduitLLM.Security.Services
             var key = $"{FailedLoginPrefix}{ipAddress}";
             var banKey = $"{BanPrefix}{ipAddress}";
 
-            var attempts = (await GetCacheObjectAsync<FailedAuthData>(key))?.Attempts ?? 0;
+            var attempts = (await GetCacheObjectAsync(
+                key,
+                SecurityCacheJsonContext.Default.FailedAuthData))?.Attempts ?? 0;
             attempts++;
 
             var maskedKey = MaskKey(attemptedKey);
@@ -90,7 +94,11 @@ namespace ConduitLLM.Security.Services
                     LastAttemptedKey = maskedKey
                 };
 
-                await SetCacheValueAsync(banKey, banInfo, TimeSpan.FromMinutes(Options.FailedAuth.BanDurationMinutes));
+                await SetCacheValueAsync(
+                    banKey,
+                    banInfo,
+                    TimeSpan.FromMinutes(Options.FailedAuth.BanDurationMinutes),
+                    SecurityCacheJsonContext.Default.BannedIpInfo);
                 Logger.LogWarning("IP {IpAddress} has been banned after {Attempts} failed authentication attempts",
                     ipAddress, attempts);
 
@@ -106,7 +114,12 @@ namespace ConduitLLM.Security.Services
                     LastAttemptedKey = maskedKey
                 };
 
-                await SetCacheValueAsync(key, authData, TimeSpan.FromMinutes(Options.FailedAuth.BanDurationMinutes), sliding: true);
+                await SetCacheValueAsync(
+                    key,
+                    authData,
+                    TimeSpan.FromMinutes(Options.FailedAuth.BanDurationMinutes),
+                    SecurityCacheJsonContext.Default.FailedAuthData,
+                    sliding: true);
             }
         }
 
@@ -133,7 +146,9 @@ namespace ConduitLLM.Security.Services
                 var cachedValue = await DistributedCache.GetStringAsync(banKey);
                 if (!string.IsNullOrEmpty(cachedValue))
                 {
-                    var banInfo = JsonSerializer.Deserialize<BannedIpInfo>(cachedValue);
+                    var banInfo = JsonSerializer.Deserialize(
+                        cachedValue,
+                        SecurityCacheJsonContext.Default.BannedIpInfo);
                     return banInfo?.BannedUntil > DateTime.UtcNow;
                 }
             }
@@ -237,37 +252,12 @@ namespace ConduitLLM.Security.Services
         // ─── Cache Helpers ──────────────────────────────────────────────
 
         /// <summary>
-        /// Gets a value from distributed or memory cache
-        /// </summary>
-        protected async Task<T> GetCacheValueAsync<T>(string key) where T : struct
-        {
-            if (Options.UseDistributedTracking && DistributedCache != null)
-            {
-                var cachedValue = await DistributedCache.GetStringAsync(key);
-                if (!string.IsNullOrEmpty(cachedValue))
-                {
-                    try
-                    {
-                        return JsonSerializer.Deserialize<T>(cachedValue);
-                    }
-                    catch
-                    {
-                        return default;
-                    }
-                }
-            }
-            else
-            {
-                return MemoryCache.Get<T>(key);
-            }
-
-            return default;
-        }
-
-        /// <summary>
         /// Gets a reference type value from distributed or memory cache
         /// </summary>
-        protected async Task<T?> GetCacheObjectAsync<T>(string key) where T : class
+        protected async Task<T?> GetCacheObjectAsync<T>(
+            string key,
+            JsonTypeInfo<T> jsonTypeInfo)
+            where T : class
         {
             if (Options.UseDistributedTracking && DistributedCache != null)
             {
@@ -276,7 +266,7 @@ namespace ConduitLLM.Security.Services
                 {
                     try
                     {
-                        return JsonSerializer.Deserialize<T>(cachedValue);
+                        return JsonSerializer.Deserialize(cachedValue, jsonTypeInfo);
                     }
                     catch
                     {
@@ -295,7 +285,12 @@ namespace ConduitLLM.Security.Services
         /// <summary>
         /// Sets a value in distributed or memory cache
         /// </summary>
-        protected async Task SetCacheValueAsync<T>(string key, T value, TimeSpan expiration, bool sliding = false)
+        protected async Task SetCacheValueAsync<T>(
+            string key,
+            T value,
+            TimeSpan expiration,
+            JsonTypeInfo<T> jsonTypeInfo,
+            bool sliding = false)
         {
             if (Options.UseDistributedTracking && DistributedCache != null)
             {
@@ -305,7 +300,10 @@ namespace ConduitLLM.Security.Services
                 else
                     options.AbsoluteExpirationRelativeToNow = expiration;
 
-                await DistributedCache.SetStringAsync(key, JsonSerializer.Serialize(value), options);
+                await DistributedCache.SetStringAsync(
+                    key,
+                    JsonSerializer.Serialize(value, jsonTypeInfo),
+                    options);
             }
             else
             {

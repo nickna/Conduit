@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json.Serialization.Metadata;
 using System.Text.Json;
 using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Exceptions;
@@ -94,9 +95,10 @@ public abstract class FunctionClientBase
     /// Verifies credentials with a lightweight provider-specific request while keeping
     /// transport, cancellation, and common status handling consistent.
     /// </summary>
-    protected async Task<FunctionAuthenticationResult> VerifyViaProbeAsync(
+    protected async Task<FunctionAuthenticationResult> VerifyViaProbeAsync<TRequest>(
         string path,
-        object request,
+        TRequest request,
+        JsonTypeInfo<TRequest> jsonTypeInfo,
         string? apiKey = null,
         CancellationToken cancellationToken = default)
     {
@@ -118,7 +120,7 @@ public abstract class FunctionClientBase
             using var response = await client.PostAsJsonAsync(
                 path,
                 request,
-                _jsonOptions,
+                jsonTypeInfo,
                 cancellationToken);
 
             stopwatch.Stop();

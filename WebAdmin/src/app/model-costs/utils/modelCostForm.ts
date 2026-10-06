@@ -8,7 +8,7 @@ import {
 
 export interface ModelCostFormValues {
   costName: string;
-  modelProviderMappingIds: number[];
+  modelProviderTypeAssociationIds: number[];
   pricingModel: PricingModel;
   pricingConfiguration: string;
   modelType: ModelType;
@@ -17,20 +17,10 @@ export interface ModelCostFormValues {
   cachedInputCostPerMillion: number;
   cachedInputWriteCostPerMillion: number;
   embeddingCostPerMillion: number;
-  searchUnitCostPer1K: number;
-  inferenceStepCost: number;
-  defaultInferenceSteps: number;
-  imageCostPerImage: number;
   audioCostPerMinute: number;
   audioCostPerKCharacters: number;
-  audioInputCostPerMinute: number;
-  audioOutputCostPerMinute: number;
-  videoCostPerSecond: number;
-  videoResolutionMultipliers: string;
-  imageResolutionMultipliers: string;
   supportsBatchProcessing: boolean;
   batchProcessingMultiplier: number;
-  imageQualityMultipliers: string;
   priority: number;
   description: string;
   isActive: boolean;
@@ -39,7 +29,7 @@ export interface ModelCostFormValues {
 export function createModelCostFormValues(): ModelCostFormValues {
   return {
     costName: '',
-    modelProviderMappingIds: [],
+    modelProviderTypeAssociationIds: [],
     pricingModel: PricingModel.Standard,
     pricingConfiguration: '',
     modelType: ModelType.Chat,
@@ -48,20 +38,10 @@ export function createModelCostFormValues(): ModelCostFormValues {
     cachedInputCostPerMillion: 0,
     cachedInputWriteCostPerMillion: 0,
     embeddingCostPerMillion: 0,
-    searchUnitCostPer1K: 0,
-    inferenceStepCost: 0,
-    defaultInferenceSteps: 0,
-    imageCostPerImage: 0,
     audioCostPerMinute: 0,
     audioCostPerKCharacters: 0,
-    audioInputCostPerMinute: 0,
-    audioOutputCostPerMinute: 0,
-    videoCostPerSecond: 0,
-    videoResolutionMultipliers: '',
-    imageResolutionMultipliers: '',
     supportsBatchProcessing: false,
     batchProcessingMultiplier: 0.5,
-    imageQualityMultipliers: '',
     priority: 0,
     description: '',
     isActive: true,
@@ -72,7 +52,7 @@ export function modelCostToFormValues(modelCost: ModelCostDto): ModelCostFormVal
   return {
     ...createModelCostFormValues(),
     costName: modelCost.costName,
-    modelProviderMappingIds: modelCost.modelProviderTypeAssociationIds,
+    modelProviderTypeAssociationIds: modelCost.modelProviderTypeAssociationIds,
     pricingModel: modelCost.pricingModel ?? PricingModel.Standard,
     pricingConfiguration: modelCost.pricingConfiguration ?? '',
     modelType: modelCost.modelType,
@@ -81,7 +61,6 @@ export function modelCostToFormValues(modelCost: ModelCostDto): ModelCostFormVal
     cachedInputCostPerMillion: modelCost.cachedInputCostPerMillionTokens ?? 0,
     cachedInputWriteCostPerMillion: modelCost.cachedInputWriteCostPerMillionTokens ?? 0,
     embeddingCostPerMillion: modelCost.embeddingCostPerMillionTokens ?? 0,
-    searchUnitCostPer1K: modelCost.costPerSearchUnit ?? 0,
     audioCostPerMinute: modelCost.audioCostPerMinute ?? 0,
     audioCostPerKCharacters: modelCost.audioCostPerThousandCharacters ?? 0,
     supportsBatchProcessing: modelCost.supportsBatchProcessing ?? false,
@@ -94,7 +73,7 @@ export function modelCostToFormValues(modelCost: ModelCostDto): ModelCostFormVal
 
 export const modelCostFormValidation = {
   costName: (value: string) => (!value.trim() ? 'Cost name is required' : null),
-  modelProviderMappingIds: (value: number[]) =>
+  modelProviderTypeAssociationIds: (value: number[]) =>
     value.length === 0 ? 'At least one model must be selected' : null,
   priority: (value: number) => (value < 0 ? 'Priority must be non-negative' : null),
   pricingConfiguration: (value: string, values: ModelCostFormValues) => {
@@ -115,7 +94,7 @@ export const modelCostFormValidation = {
 function toRequestFields(values: ModelCostFormValues) {
   return {
     costName: values.costName,
-    modelProviderTypeAssociationIds: values.modelProviderMappingIds,
+    modelProviderTypeAssociationIds: values.modelProviderTypeAssociationIds,
     pricingModel: values.pricingModel,
     pricingConfiguration: values.pricingConfiguration || undefined,
     modelType: values.modelType,
@@ -127,7 +106,6 @@ function toRequestFields(values: ModelCostFormValues) {
     cachedInputCostPerMillionTokens: values.cachedInputCostPerMillion || undefined,
     cachedInputWriteCostPerMillionTokens: values.cachedInputWriteCostPerMillion || undefined,
     embeddingCostPerMillionTokens: values.embeddingCostPerMillion || undefined,
-    costPerSearchUnit: values.searchUnitCostPer1K || undefined,
     audioCostPerMinute: values.audioCostPerMinute || undefined,
     audioCostPerThousandCharacters: values.audioCostPerKCharacters || undefined,
     supportsBatchProcessing: values.supportsBatchProcessing,

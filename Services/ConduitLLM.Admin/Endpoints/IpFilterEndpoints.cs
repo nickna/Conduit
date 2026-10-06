@@ -36,7 +36,6 @@ public class IpFilterEndpoints : AdminEndpointHandlerBase
         var group = app.MapGroup("/v1/admin/ip-filters")
             .RequireAuthorization("MasterKeyPolicy")
             .AddEndpointFilter<VersionedResourceEndpointFilter>()
-            .AddEndpointFilter<ValidationEndpointFilter>()
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("IP Filters");
 

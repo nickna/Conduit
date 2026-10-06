@@ -51,5 +51,6 @@ public abstract class AdminEndpointHandlerBase
     protected static IResult NotFound(string message) => AdminResults.NotFound(message);
     protected static IResult Conflict(string message) => AdminResults.Conflict(message);
     protected static IResult NoContent() => Results.NoContent();
-    protected static IResult StatusCode<T>(int statusCode, T value) => Results.Json(value, statusCode: statusCode);
+    protected static IResult StatusCode(int statusCode, string value) =>
+        Results.Json(value, AdminInternalJsonContext.Default.String, statusCode: statusCode);
 }

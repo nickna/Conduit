@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Configuration.Serialization;
 
 namespace ConduitLLM.Configuration.Utilities
 {
@@ -18,7 +19,9 @@ namespace ConduitLLM.Configuration.Utilities
 
             try
             {
-                return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(metadata);
+                return JsonSerializer.Deserialize(
+                    metadata,
+                    ConfigurationJsonContext.Default.DictionaryStringJsonElement);
             }
             catch (JsonException)
             {

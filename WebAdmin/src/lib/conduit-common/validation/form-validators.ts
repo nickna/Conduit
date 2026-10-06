@@ -40,6 +40,18 @@ export const validators = {
     return emailRegex.test(value) ? null : "Must be a valid email address";
   },
 
+  jsonObject: (fieldName: string) => (value: string | undefined) => {
+    if (!value?.trim()) return null;
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? null
+        : `${fieldName} must be a JSON object`;
+    } catch {
+      return `${fieldName} must be valid JSON`;
+    }
+  },
+
   minValue: (fieldName: string, min: number) => (value: number | undefined) =>
     value !== undefined && value < min
       ? `${fieldName} must be at least ${min}`

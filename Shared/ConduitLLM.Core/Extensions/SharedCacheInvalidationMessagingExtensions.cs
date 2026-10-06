@@ -42,10 +42,10 @@ namespace ConduitLLM.Core.Extensions
         /// <summary>Registers the Wolverine bridge handlers for the shared Core cache events (#925).</summary>
         public static void AddSharedCacheInvalidationBridges(this WolverineOptions options)
         {
-            foreach (var eventType in BridgedEventTypes)
-            {
-                options.AddEventBridge(eventType);
-            }
+            options.AddEventBridge<GlobalSettingChanged>();
+            options.AddEventBridge<GlobalSettingsReloadRequested>();
+            options.AddEventBridge<FunctionConfigurationChanged>();
+            options.AddEventBridge<FunctionDiscoveryCacheInvalidationRequested>();
         }
     }
 }

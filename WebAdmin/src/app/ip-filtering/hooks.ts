@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react';
-import { useSecurityApi, type IpRule, type IpStats } from '@/hooks/useSecurityApi';
+import { useSecurityApi, type IpStats } from '@/hooks/useSecurityApi';
+import type { IpFilterDto } from '@/lib/admin-api';
 import { notify } from '@/lib/notifications';
 
 export function useIpFilteringData() {
   const [isLoading, setIsLoading] = useState(true);
-  const [rules, setRules] = useState<IpRule[]>([]);
+  const [rules, setRules] = useState<IpFilterDto[]>([]);
   const [stats, setStats] = useState<IpStats | null>(null);
   const { getIpRules, error } = useSecurityApi();
 
@@ -17,11 +18,11 @@ export function useIpFilteringData() {
       // Calculate statistics from the rules data
       const calculatedStats: IpStats = {
         totalRules: fetchedRules.length,
-        allowRules: fetchedRules.filter(r => r.action === 'allow').length,
-        blockRules: fetchedRules.filter(r => r.action === 'block').length,
-        activeRules: fetchedRules.filter(r => r.isEnabled !== false).length,
+        allowRules: fetchedRules.filter(r => r.filterType === 'whitelist').length,
+        blockRules: fetchedRules.filter(r => r.filterType === 'blacklist').length,
+        activeRules: fetchedRules.filter(r => r.isEnabled).length,
         lastRuleUpdate: fetchedRules.length > 0
-          ? new Date(Math.max(...fetchedRules.map(r => new Date(r.createdAt ?? '').getTime()).filter(t => !isNaN(t)))).toISOString()
+          ? new Date(Math.max(...fetchedRules.map(r => new Date(r.updatedAt).getTime()))).toISOString()
           : null,
       };
       setStats(calculatedStats);

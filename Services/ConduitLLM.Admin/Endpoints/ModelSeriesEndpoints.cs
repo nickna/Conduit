@@ -6,6 +6,8 @@ using ConduitLLM.Configuration.DTOs;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Repositories;
 using ConduitLLM.Core.Extensions;
+using ConduitLLM.Core.Events;
+using ConduitLLM.Configuration.Messaging;
 using ConduitLLM.Functions.Utilities;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
@@ -19,7 +21,6 @@ public static class ModelSeriesEndpoints
         var group = app.MapGroup("/v1/admin/model-series")
             .RequireAuthorization("MasterKeyPolicy")
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
-            .AddEndpointFilter<ValidationEndpointFilter>()
             .WithTags("ModelSeries");
 
         group.MapGet("/", GetAll).WithName("ModelSeries_GetAll")
@@ -88,9 +89,10 @@ public static class ModelSeriesEndpoints
             Name = dto.Name,
             Description = dto.Description,
             TokenizerType = dto.TokenizerType,
-            Parameters = dto.Parameters is null ? "{}" : JsonSerializer.Serialize(dto.Parameters)
+            Parameters = dto.Parameters is null ? "{}" : AdminJson.Serialize(dto.Parameters)
         };
         await repository.CreateAsync(series);
+        await ExpireRoutingAsync(context);
         var reloaded = await repository.GetByIdWithAuthorAsync(series.Id)
             ?? throw new InvalidOperationException("Failed to reload created series");
         AdminAudit.Log(context, Logger(loggerFactory), "Created", "ModelSeries", reloaded.Id,
@@ -145,9 +147,10 @@ public static class ModelSeriesEndpoints
                 StructuredJson.ParseObject(series.Parameters),
                 out Dictionary<string, JsonElement>? parameters))
         {
-            series.Parameters = JsonSerializer.Serialize(parameters ?? []);
+            series.Parameters = AdminJson.Serialize(parameters ?? []);
         }
         await repository.UpdateAsync(series);
+        await ExpireRoutingAsync(context);
         AdminAudit.Log(context, Logger(loggerFactory), "Updated", "ModelSeries", id,
             $"Name: {LoggingSanitizer.S(series.Name)}");
         return Results.Ok(series.ToDto());
@@ -168,6 +171,7 @@ public static class ModelSeriesEndpoints
                 $"Cannot delete model series with {models.Count()} associated models. Delete the models first.");
         }
         await repository.DeleteAsync(id);
+        await ExpireRoutingAsync(context);
         AdminAudit.Log(context, Logger(loggerFactory), "Deleted", "ModelSeries", id,
             $"Name: {LoggingSanitizer.S(series.Name)}");
         return Results.NoContent();
@@ -175,4 +179,8 @@ public static class ModelSeriesEndpoints
 
     private static ILogger Logger(ILoggerFactory factory) =>
         factory.CreateLogger("ConduitLLM.Admin.Endpoints.ModelSeries");
+
+    private static Task ExpireRoutingAsync(HttpContext context) =>
+        context.RequestServices.GetRequiredService<IEventBus>().PublishAsync(new DiscoveryCacheInvalidationRequested
+        { Reason = "Model series defaults changed", RequestedBy = "model-series" }, context.RequestAborted);
 }

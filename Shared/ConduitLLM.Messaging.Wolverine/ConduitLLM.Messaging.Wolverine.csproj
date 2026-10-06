@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PostgreSQL-backed messaging adapter; intentionally absent from transport-neutral contracts. -->
+    <PackageReference Include="WolverineFx" />
+    <PackageReference Include="WolverineFx.Postgresql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ConduitLLM.Contracts\ConduitLLM.Contracts.csproj" />
+    <ProjectReference Include="..\ConduitLLM.Configuration\ConduitLLM.Configuration.csproj" />
+    <ProjectReference Include="..\ConduitLLM.Core\ConduitLLM.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\ConduitLLM.Configuration\Messaging\Wolverine\*.cs"
+             Link="Wolverine\%(Filename)%(Extension)" />
+    <Compile Include="..\ConduitLLM.Core\Messaging\ConduitMessagingTopology.cs"
+             Link="Messaging\ConduitMessagingTopology.cs" />
+    <Compile Include="..\ConduitLLM.Core\Extensions\SharedCacheInvalidationMessagingExtensions.cs"
+             Link="Extensions\SharedCacheInvalidationMessagingExtensions.cs" />
+  </ItemGroup>
+</Project>

@@ -230,7 +230,9 @@ namespace ConduitLLM.Gateway.Endpoints
 
             var combined = new Dictionary<string, JsonElement>
             {
-                ["provider_error"] = JsonSerializer.SerializeToElement(providerErrorDetail)
+                ["provider_error"] = JsonSerializer.SerializeToElement(
+                    providerErrorDetail,
+                    ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.ProviderErrorDetail)
             };
 
             if (fileAnnotationMetadata is { } annotations &&
@@ -242,7 +244,9 @@ namespace ConduitLLM.Gateway.Endpoints
                 }
             }
 
-            return JsonSerializer.SerializeToElement(combined);
+            return JsonSerializer.SerializeToElement(
+                combined,
+                ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.DictionaryStringJsonElement);
         }
 
         internal static JsonElement? TryExtractFileAnnotationMetadata(string? responseBody)
@@ -261,10 +265,12 @@ namespace ConduitLLM.Gateway.Endpoints
                     return null;
                 }
 
-                return JsonSerializer.SerializeToElement(new Dictionary<string, JsonElement>
-                {
-                    ["file_annotations"] = annotations.Clone()
-                });
+                return JsonSerializer.SerializeToElement(
+                    new Dictionary<string, JsonElement>
+                    {
+                        ["file_annotations"] = annotations.Clone()
+                    },
+                    ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.DictionaryStringJsonElement);
             }
             catch (JsonException)
             {
@@ -294,7 +300,9 @@ namespace ConduitLLM.Gateway.Endpoints
                     message.Role.Equals("developer", StringComparison.OrdinalIgnoreCase));
                 var firstUser = request.Messages.FirstOrDefault(message =>
                     message.Role.Equals("user", StringComparison.OrdinalIgnoreCase));
-                affinitySource = JsonSerializer.Serialize(new[] { firstSystem?.Content, firstUser?.Content });
+                affinitySource = JsonSerializer.Serialize(
+                    new[] { firstSystem?.Content, firstUser?.Content },
+                    ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.ObjectArray);
             }
 
             using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(virtualKeyHash));

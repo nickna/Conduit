@@ -17,7 +17,7 @@ import {
 } from '@mantine/core';
 import { IconFileTypeCsv, IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import { notify } from '@/lib/notifications';
-import { useModelCostsApi } from '../hooks/useModelCostsApi';
+import { useImportModelCostsWithAliases } from '../hooks/useModelCostsApi';
 import { parseCSVContent, ParsedModelCost } from '../utils/csvHelpers';
 
 interface ImportModelCostsModalProps {
@@ -28,11 +28,10 @@ interface ImportModelCostsModalProps {
 
 
 export function ImportModelCostsModal({ isOpen, onClose, onSuccess }: ImportModelCostsModalProps) {
-  const { importModelCostsWithAliases } = useModelCostsApi();
+  const importMutation = useImportModelCostsWithAliases();
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<ParsedModelCost[]>([]);
   const [isParsing, setIsParsing] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
 
   const parseCSV = async (csvFile: File) => {
@@ -69,10 +68,7 @@ export function ImportModelCostsModal({ isOpen, onClose, onSuccess }: ImportMode
       return;
     }
 
-    setIsImporting(true);
-    
     try {
-      // Convert parsed data to the format expected by the import-with-aliases endpoint
       const costsWithAliases = validData.map(cost => ({
         costName: cost.costName,
         modelAliases: cost.modelAliases,
@@ -82,20 +78,15 @@ export function ImportModelCostsModal({ isOpen, onClose, onSuccess }: ImportMode
         cachedInputCostPerMillionTokens: cost.cachedInputCostPerMillion,
         cachedInputWriteCostPerMillionTokens: cost.cachedInputWriteCostPerMillion,
         embeddingCostPerMillionTokens: cost.embeddingCostPerMillion,
-        imageCostPerImage: cost.imageCostPerImage,
-        videoCostPerSecond: cost.videoCostPerSecond,
-        videoResolutionMultipliers: cost.videoResolutionMultipliers,
+        costPerSearchUnit: cost.searchUnitCostPer1K,
         supportsBatchProcessing: cost.supportsBatchProcessing,
         batchProcessingMultiplier: cost.batchProcessingMultiplier,
-        imageQualityMultipliers: cost.imageQualityMultipliers,
-        costPerSearchUnit: cost.searchUnitCostPer1K,
-        costPerInferenceStep: cost.costPerInferenceStep,
-        defaultInferenceSteps: cost.defaultInferenceSteps,
         priority: cost.priority,
         description: cost.description,
+        isActive: cost.active,
       }));
 
-      const result = await importModelCostsWithAliases(costsWithAliases);
+      const result = await importMutation.mutateAsync(costsWithAliases);
       
       if (result.success > 0) {
         onSuccess?.();
@@ -104,9 +95,7 @@ export function ImportModelCostsModal({ isOpen, onClose, onSuccess }: ImportMode
         setParsedData([]);
       }
     } catch {
-      // Error handling is done in the hook
-    } finally {
-      setIsImporting(false);
+      // Error handling is done in the hook.
     }
   };
 
@@ -222,17 +211,9 @@ export function ImportModelCostsModal({ isOpen, onClose, onSuccess }: ImportMode
                         <Badge variant="outline" size="sm">{cost.modelType}</Badge>
                       </Table.Td>
                       <Table.Td>
-                        {cost.modelType === 'chat' && (
-                          <Text size="xs">
-                            ${cost.inputCostPerMillion}/M • ${cost.outputCostPerMillion}/M
-                          </Text>
-                        )}
-                        {cost.modelType === 'image' && cost.imageCostPerImage && (
-                          <Text size="xs">${cost.imageCostPerImage}/image</Text>
-                        )}
-                        {cost.modelType === 'video' && cost.videoCostPerSecond && (
-                          <Text size="xs">${cost.videoCostPerSecond}/sec</Text>
-                        )}
+                        <Text size="xs">
+                          ${cost.inputCostPerMillion}/M • ${cost.outputCostPerMillion}/M
+                        </Text>
                       </Table.Td>
                       <Table.Td>
                         <Text size="sm">{cost.priority}</Text>
@@ -283,7 +264,7 @@ export function ImportModelCostsModal({ isOpen, onClose, onSuccess }: ImportMode
           </Button>
           <Button 
             onClick={() => void handleImport()}
-            loading={isImporting}
+            loading={importMutation.isPending}
             disabled={validCount === 0}
           >
             Import {validCount > 0 ? `${validCount} Items` : ''}

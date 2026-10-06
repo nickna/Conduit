@@ -26,7 +26,6 @@ const contractNativeModelFamilyServices = new Set([
   'src/lib/admin-api/services/FetchModelCostService.ts',
   'src/lib/admin-api/services/FetchProvidersService.ts',
   'src/lib/admin-api/services/FetchProvidersServiceKeys.ts',
-  'src/lib/admin-api/services/FetchPricingService.ts',
   'src/lib/admin-api/services/FetchProviderSyncService.ts',
   'src/lib/admin-api/services/FetchProviderErrorsService.ts',
   'src/lib/admin-api/services/FetchVirtualKeyService.ts',
@@ -45,6 +44,11 @@ const retiredLocalNames = [
   'errors/sdk-errors',
   'handleSDKError',
   'SDKChatStreamingAdapter',
+  "this.client['executeContractRead']",
+  "this.client['executeContractOperation']",
+  'browserCoreClient',
+  'getBrowserCoreClient',
+  'getServerCoreClient',
 ];
 
 async function scan(directory) {

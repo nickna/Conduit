@@ -19,7 +19,7 @@ namespace ConduitLLM.Tests.Core.Services
     [Trait("Category", "Unit")]
     public class CoordinatedConnectionPoolWarmerTests
     {
-        private readonly Mock<IDistributedLockService> _lockServiceMock;
+        private readonly Mock<IDistributedLockProvider> _lockServiceMock;
         private readonly Mock<IConnectionMultiplexer> _redisMock;
         private readonly Mock<ISubscriber> _subscriberMock;
         private readonly Mock<ILogger<CoordinatedConnectionPoolWarmer>> _loggerMock;
@@ -29,7 +29,7 @@ namespace ConduitLLM.Tests.Core.Services
 
         public CoordinatedConnectionPoolWarmerTests()
         {
-            _lockServiceMock = new Mock<IDistributedLockService>();
+            _lockServiceMock = new Mock<IDistributedLockProvider>();
             _redisMock = new Mock<IConnectionMultiplexer>();
             _subscriberMock = new Mock<ISubscriber>();
             _loggerMock = new Mock<ILogger<CoordinatedConnectionPoolWarmer>>();
@@ -37,7 +37,6 @@ namespace ConduitLLM.Tests.Core.Services
             {
                 EnableCoordinatedWarming = true,
                 SignalTimeout = TimeSpan.FromMilliseconds(100),
-                LockExpiry = TimeSpan.FromSeconds(30),
                 StaggerDelay = TimeSpan.FromMilliseconds(10)
             };
 
@@ -62,8 +61,36 @@ namespace ConduitLLM.Tests.Core.Services
 
             // Assert - Lock should never be acquired
             _lockServiceMock.Verify(
-                l => l.AcquireLockAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
+                l => l.TryAcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
                 Times.Never);
+        }
+
+        [Fact]
+        public async Task StartAsync_DetectedLoss_ReleasesWithoutPublishingSignal()
+        {
+            using var lost = new CancellationTokenSource();
+            lost.Cancel();
+            var ownership = new Mock<IDistributedLockOwnership>();
+            ownership.SetupGet(value => value.HandleLostToken).Returns(lost.Token);
+            _lockServiceMock.Setup(value => value.TryAcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(ownership.Object);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateWarmer("CoreAPI").StartAsync(CancellationToken.None));
+            _subscriberMock.Verify(value => value.PublishAsync(It.IsAny<RedisChannel>(), It.IsAny<RedisValue>(), It.IsAny<CommandFlags>()), Times.Never);
+            ownership.Verify(value => value.DisposeAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task StartAsync_WarmingFailure_DoesNotPublishSuccessSignal()
+        {
+            var factory = new Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ConduitLLM.Configuration.ConduitDbContext>>();
+            factory.Setup(value => value.CreateDbContextAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("isolated DB outage"));
+            using var services = new ServiceCollection().AddSingleton(factory.Object).BuildServiceProvider();
+            var ownership = new Mock<IDistributedLockOwnership>();
+            _lockServiceMock.Setup(value => value.TryAcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>())).ReturnsAsync(ownership.Object);
+            using var warmer = new CoordinatedConnectionPoolWarmer(services, _lockServiceMock.Object, _redisMock.Object, _loggerMock.Object, _options, "CoreAPI");
+            await warmer.StartAsync(CancellationToken.None);
+            _subscriberMock.Verify(value => value.PublishAsync(It.IsAny<RedisChannel>(), It.IsAny<RedisValue>(), It.IsAny<CommandFlags>()), Times.Never);
+            ownership.Verify(value => value.DisposeAsync(), Times.Once);
         }
 
         [Fact]
@@ -89,7 +116,7 @@ namespace ConduitLLM.Tests.Core.Services
 
             // Assert - Lock should never be acquired when coordination is disabled
             _lockServiceMock.Verify(
-                l => l.AcquireLockAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
+                l => l.TryAcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
                 Times.Never);
         }
 
@@ -110,7 +137,7 @@ namespace ConduitLLM.Tests.Core.Services
 
             // Assert - Lock should never be acquired when Redis is unavailable
             _lockServiceMock.Verify(
-                l => l.AcquireLockAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
+                l => l.TryAcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
                 Times.Never);
         }
 
@@ -135,9 +162,9 @@ namespace ConduitLLM.Tests.Core.Services
         public async Task StartAsync_AsLeader_AcquiresLockAndPublishesSignal()
         {
             // Arrange
-            var lockMock = new Mock<IDistributedLock>();
+            var lockMock = new Mock<IDistributedLockOwnership>();
             _lockServiceMock
-                .Setup(l => l.AcquireLockAsync(
+                .Setup(l => l.TryAcquireAsync(
                     It.Is<string>(s => s.Contains("CoreAPI")),
                     It.IsAny<TimeSpan>(),
                     It.IsAny<CancellationToken>()))
@@ -150,14 +177,14 @@ namespace ConduitLLM.Tests.Core.Services
 
             // Assert - Lock acquired
             _lockServiceMock.Verify(
-                l => l.AcquireLockAsync(
+                l => l.TryAcquireAsync(
                     It.Is<string>(s => s.Contains("CoreAPI")),
                     It.IsAny<TimeSpan>(),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
 
             // Lock should be released
-            lockMock.Verify(l => l.ReleaseAsync(), Times.Once);
+            lockMock.Verify(l => l.DisposeAsync(), Times.Once);
 
             // Signal should be published
             _subscriberMock.Verify(
@@ -173,11 +200,11 @@ namespace ConduitLLM.Tests.Core.Services
         {
             // Arrange - Lock acquisition fails (follower scenario)
             _lockServiceMock
-                .Setup(l => l.AcquireLockAsync(
+                .Setup(l => l.TryAcquireAsync(
                     It.IsAny<string>(),
                     It.IsAny<TimeSpan>(),
                     It.IsAny<CancellationToken>()))
-                .ReturnsAsync((IDistributedLock?)null);
+                .ReturnsAsync((IDistributedLockOwnership?)null);
 
             var warmer = CreateWarmer("CoreAPI");
 
@@ -201,9 +228,7 @@ namespace ConduitLLM.Tests.Core.Services
 
             var warmer = CreateWarmer("CoreAPI");
 
-            // Act & Assert - Should not throw
-            var exception = await Record.ExceptionAsync(() => warmer.StartAsync(cts.Token));
-            Assert.Null(exception);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => warmer.StartAsync(cts.Token));
         }
 
         [Fact]
@@ -263,9 +288,9 @@ namespace ConduitLLM.Tests.Core.Services
         public async Task StartAsync_AcquiresLockWithServiceTypeInKey(string serviceType)
         {
             // Arrange
-            var lockMock = new Mock<IDistributedLock>();
+            var lockMock = new Mock<IDistributedLockOwnership>();
             _lockServiceMock
-                .Setup(l => l.AcquireLockAsync(
+                .Setup(l => l.TryAcquireAsync(
                     It.IsAny<string>(),
                     It.IsAny<TimeSpan>(),
                     It.IsAny<CancellationToken>()))
@@ -278,7 +303,7 @@ namespace ConduitLLM.Tests.Core.Services
 
             // Assert - Lock key should include service type
             _lockServiceMock.Verify(
-                l => l.AcquireLockAsync(
+                l => l.TryAcquireAsync(
                     It.Is<string>(s => s.EndsWith($":{serviceType}")),
                     It.IsAny<TimeSpan>(),
                     It.IsAny<CancellationToken>()),
@@ -289,9 +314,9 @@ namespace ConduitLLM.Tests.Core.Services
         public async Task StartAsync_AsLeader_ReleasesLockEvenWhenWarmingFails()
         {
             // Arrange
-            var lockMock = new Mock<IDistributedLock>();
+            var lockMock = new Mock<IDistributedLockOwnership>();
             _lockServiceMock
-                .Setup(l => l.AcquireLockAsync(
+                .Setup(l => l.TryAcquireAsync(
                     It.IsAny<string>(),
                     It.IsAny<TimeSpan>(),
                     It.IsAny<CancellationToken>()))
@@ -305,7 +330,7 @@ namespace ConduitLLM.Tests.Core.Services
             await warmer.StartAsync(CancellationToken.None);
 
             // Assert - Lock should still be released
-            lockMock.Verify(l => l.ReleaseAsync(), Times.Once);
+            lockMock.Verify(l => l.DisposeAsync(), Times.Once);
         }
 
         [Fact]
@@ -319,7 +344,7 @@ namespace ConduitLLM.Tests.Core.Services
 
             // Assert - No lock acquisition, no pub/sub
             _lockServiceMock.Verify(
-                l => l.AcquireLockAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
+                l => l.TryAcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()),
                 Times.Never);
 
             _subscriberMock.Verify(
@@ -328,20 +353,18 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        public async Task StartAsync_UsesConfiguredLockExpiry()
+        public async Task StartAsync_UsesImmediateAcquisition()
         {
             // Arrange
-            var customExpiry = TimeSpan.FromMinutes(10);
             var options = new ConnectionPoolWarmingOptions
             {
                 EnableCoordinatedWarming = true,
-                LockExpiry = customExpiry,
                 SignalTimeout = TimeSpan.FromMilliseconds(100)
             };
 
-            var lockMock = new Mock<IDistributedLock>();
+            var lockMock = new Mock<IDistributedLockOwnership>();
             _lockServiceMock
-                .Setup(l => l.AcquireLockAsync(
+                .Setup(l => l.TryAcquireAsync(
                     It.IsAny<string>(),
                     It.IsAny<TimeSpan>(),
                     It.IsAny<CancellationToken>()))
@@ -358,11 +381,11 @@ namespace ConduitLLM.Tests.Core.Services
             // Act
             await warmer.StartAsync(CancellationToken.None);
 
-            // Assert - Should use configured lock expiry
+            // Assert - Acquisition never waits for another warmer.
             _lockServiceMock.Verify(
-                l => l.AcquireLockAsync(
+                l => l.TryAcquireAsync(
                     It.IsAny<string>(),
-                    customExpiry,
+                    TimeSpan.Zero,
                     It.IsAny<CancellationToken>()),
                 Times.Once);
         }
@@ -371,9 +394,9 @@ namespace ConduitLLM.Tests.Core.Services
         public async Task StartAsync_PublishesSignalToCorrectChannel()
         {
             // Arrange
-            var lockMock = new Mock<IDistributedLock>();
+            var lockMock = new Mock<IDistributedLockOwnership>();
             _lockServiceMock
-                .Setup(l => l.AcquireLockAsync(
+                .Setup(l => l.TryAcquireAsync(
                     It.IsAny<string>(),
                     It.IsAny<TimeSpan>(),
                     It.IsAny<CancellationToken>()))

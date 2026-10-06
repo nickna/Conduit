@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
@@ -14,6 +15,7 @@ using ConduitLLM.Core.Utilities;
 using ConduitLLM.Providers.Authentication;
 using ConduitLLM.Providers.Common.Models;
 using ConduitLLM.Providers.Configuration;
+using ConduitLLM.Providers.Serialization;
 
 using Microsoft.Extensions.Logging;
 
@@ -57,7 +59,25 @@ namespace ConduitLLM.Providers
         protected readonly string ProviderName;
         protected readonly IHttpClientFactory? HttpClientFactory;
 
-        protected static readonly JsonSerializerOptions DefaultJsonOptions = ConduitLLM.Core.Serialization.ConduitJsonOptions.Wire;
+        protected static readonly JsonSerializerOptions DefaultJsonOptions = CreateDefaultJsonOptions();
+
+        private static JsonSerializerOptions CreateDefaultJsonOptions()
+        {
+            var options = new JsonSerializerOptions(
+                ConduitLLM.Core.Serialization.ConduitJsonOptions.Wire)
+            {
+                TypeInfoResolver = JsonTypeInfoResolver.Combine(
+                    ProvidersJsonContext.Default,
+                    ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default,
+                    ConduitLLM.Core.Serialization.AsyncTaskJsonContext.Default)
+            };
+            return options;
+        }
+
+        protected static JsonTypeInfo<T> GetRequiredJsonTypeInfo<T>(JsonSerializerOptions options) =>
+            options.GetTypeInfo(typeof(T)) as JsonTypeInfo<T>
+            ?? throw new InvalidOperationException(
+                $"Generated JSON metadata is not registered for {typeof(T).FullName}.");
 
         /// <summary>
         /// Gets the authentication strategy for this provider.

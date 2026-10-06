@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useModelMappings } from '@/hooks/useModelMappingsApi';
 import type { ModelCostDto } from '@/lib/admin-api';
-import type { ExtendedModelProviderMappingDto } from '../types/modelCost';
 
 interface ProviderInfo {
   providerId: number;
@@ -29,18 +28,15 @@ export function useEnrichedModelCosts(modelCosts: ModelCostDto[] | undefined) {
       const providersMap = new Map<number, ProviderInfo>();
       
       cost.associatedModelAliases.forEach(alias => {
-        const extendedMapping = mappings.find(m => {
-          const extended = m as ExtendedModelProviderMappingDto;
-          return extended.modelAlias === alias || extended.providerModelId === alias;
-        }) as ExtendedModelProviderMappingDto | undefined;
+        const mapping = mappings.find(m => m.modelAlias === alias || m.providerModelId === alias);
         
-        if (extendedMapping) {
-          const providerId = extendedMapping.providerId;
+        if (mapping) {
+          const providerId = mapping.providerId;
           if (!providersMap.has(providerId)) {
             providersMap.set(providerId, {
               providerId,
-              providerName: extendedMapping.providerName ?? `Provider ${providerId}`,
-              providerType: extendedMapping.providerTypeName ?? 'Unknown'
+              providerName: mapping.provider?.displayName ?? `Provider ${providerId}`,
+              providerType: mapping.provider?.providerType ?? 'Unknown'
             });
           }
         }

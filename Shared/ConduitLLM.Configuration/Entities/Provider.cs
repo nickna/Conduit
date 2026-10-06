@@ -30,7 +30,7 @@ namespace ConduitLLM.Configuration.Entities
         /// For example: "Production OpenAI", "Dev Azure OpenAI", "Nick's Ollama Server"
         /// </summary>
         [Required]
-        [MaxLength(100)]
+        [StringLength(100)]
         public string ProviderName { get; set; } = string.Empty;
 
         /// <summary>

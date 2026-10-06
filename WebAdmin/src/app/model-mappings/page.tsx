@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Container, Title, Text, Button, Group, Stack, Tooltip } from '@mantine/core';
 import { IconPlus, IconRefresh, IconFileImport, IconTrash } from '@tabler/icons-react';
-import { ModelMappingsTable } from '@/components/modelmappings/ModelMappingsTableWithHooks';
+import { ModelMappingsTable } from '@/components/modelmappings/ModelMappingsTable';
 import { CreateModelMappingModal } from '@/components/modelmappings/CreateModelMappingModal';
 import { BulkMappingModal } from '@/components/modelmappings/BulkMappingModal';
 import { notify } from '@/lib/notifications';
@@ -11,12 +12,12 @@ import { useAdminClient } from '@/lib/client/adminClient';
 
 export default function ModelMappingsPage() {
   const { executeWithAdmin } = useAdminClient();
-  const [refreshKey, setRefreshKey] = useState(0);
+  const queryClient = useQueryClient();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
 
   const handleRefresh = () => {
-    setRefreshKey(prev => prev + 1);
+    void queryClient.invalidateQueries({ queryKey: ['model-mappings'] });
   };
 
   const handleInvalidateCache = async () => {
@@ -89,10 +90,7 @@ export default function ModelMappingsPage() {
           </Group>
         </Group>
 
-        <ModelMappingsTable 
-          key={refreshKey} 
-          onRefresh={handleRefresh}
-        />
+        <ModelMappingsTable />
       </Stack>
 
       <CreateModelMappingModal

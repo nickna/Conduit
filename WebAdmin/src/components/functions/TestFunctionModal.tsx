@@ -25,7 +25,7 @@ import {
   IconInfoCircle,
 } from '@tabler/icons-react';
 import { notify } from '@/lib/notifications';
-import { getBrowserCoreClient } from '@/lib/client/browserCoreClient';
+import { getBrowserGatewayClient } from '@/lib/client/browserGatewayClient';
 import {
   FunctionConfigurationDto,
   getExecutionStateBadgeColor,
@@ -96,7 +96,7 @@ export function TestFunctionModal({ opened, onClose, configuration }: TestFuncti
   useEffect(() => {
     if (opened && configuration) {
       setLoadingSchema(true);
-      getBrowserCoreClient()
+      getBrowserGatewayClient()
         .then((client) => client.discovery.getFunctionParameters(configuration.id))
         .then((schema) => {
           // Use example request if available, otherwise use empty object
@@ -126,7 +126,7 @@ export function TestFunctionModal({ opened, onClose, configuration }: TestFuncti
 
     try {
       // Get the Gateway API client with ephemeral key
-      const coreClient = await getBrowserCoreClient();
+      const coreClient = await getBrowserGatewayClient();
 
       // Parse parameters and metadata
       const parameters = JSON.parse(values.parameters) as Record<string, unknown>;

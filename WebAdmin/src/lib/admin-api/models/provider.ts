@@ -1,6 +1,6 @@
 import { FilterOptions } from './common';
 import { ProviderType } from './providerType';
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 
 export type ProviderDto = components['schemas']['ProviderDto'];
 export type CreateProviderDto = components['schemas']['CreateProviderRequest'];

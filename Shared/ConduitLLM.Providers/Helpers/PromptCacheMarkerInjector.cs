@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Serialization;
 
 namespace ConduitLLM.Providers.Helpers;
 
@@ -52,6 +53,11 @@ internal static class PromptCacheMarkerInjector
         out object? updated)
     {
         updated = content;
+        if (content is null)
+        {
+            return false;
+        }
+
         JsonArray blocks;
 
         if (content is string text)
@@ -67,7 +73,7 @@ internal static class PromptCacheMarkerInjector
         {
             try
             {
-                blocks = JsonNode.Parse(JsonSerializer.Serialize(content)) as JsonArray ?? new JsonArray();
+                blocks = ToJsonNode(content) as JsonArray ?? new JsonArray();
             }
             catch (Exception ex) when (ex is JsonException or NotSupportedException)
             {
@@ -87,7 +93,7 @@ internal static class PromptCacheMarkerInjector
             return false;
         }
 
-        last[markerKey] = JsonSerializer.SerializeToNode(markerValue);
+        last[markerKey] = ToJsonNode(markerValue);
         updated = blocks;
         return true;
     }
@@ -101,7 +107,7 @@ internal static class PromptCacheMarkerInjector
 
         try
         {
-            return (JsonNode.Parse(JsonSerializer.Serialize(content)) as JsonArray)?
+            return (ToJsonNode(content) as JsonArray)?
                 .Count(node => node is JsonObject block && block.ContainsKey(markerKey)) ?? 0;
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException)
@@ -109,4 +115,14 @@ internal static class PromptCacheMarkerInjector
             return 0;
         }
     }
+
+    private static JsonNode? ToJsonNode(object value) => value switch
+    {
+        JsonNode node => node.DeepClone(),
+        JsonElement element => JsonNode.Parse(element.GetRawText()),
+        _ => JsonSerializer.SerializeToNode(
+            value,
+            value.GetType(),
+            CoreHttpJsonContext.Default)
+    };
 }

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Serialization;
 using ConduitLLM.Functions.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -176,7 +177,9 @@ public class AgenticOrchestrationService : IAgenticOrchestrationService
             Dictionary<string, object> parameters;
             try
             {
-                parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(toolCall.Function.Arguments)
+                parameters = JsonSerializer.Deserialize(
+                    toolCall.Function.Arguments,
+                    AsyncTaskJsonContext.Default.DictionaryStringObject)
                     ?? new Dictionary<string, object>();
             }
             catch (JsonException ex)

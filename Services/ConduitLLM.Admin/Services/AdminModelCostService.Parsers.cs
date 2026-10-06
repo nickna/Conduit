@@ -35,7 +35,7 @@ namespace ConduitLLM.Admin.Services
                 CachedInputWriteCostPerMillionTokens = mc.CachedInputWriteCostPerMillionTokens
             });
 
-            return JsonSerializer.Serialize(exportData, new JsonSerializerOptions
+            return AdminJson.Serialize(exportData, new JsonSerializerOptions
             {
                 WriteIndented = true
             });
@@ -70,7 +70,7 @@ namespace ConduitLLM.Admin.Services
         {
             try
             {
-                var importData = JsonSerializer.Deserialize<List<ModelCostExportDto>>(jsonData);
+                var importData = AdminJson.Deserialize<List<ModelCostExportDto>>(jsonData);
                 if (importData == null) return new List<CreateModelCostDto>();
 
                 _logger.LogDebug("Parsed {Count} model costs from JSON import", importData.Count);

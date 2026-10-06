@@ -40,7 +40,6 @@ namespace ConduitLLM.Admin.Endpoints
         public static IEndpointRouteBuilder MapProviderToolsEndpoints(IEndpointRouteBuilder app)
         {
             var group = app.MapGroup("/v1/admin/provider-tools")
-                .AddEndpointFilter<ValidationEndpointFilter>()
                 .AddEndpointFilter<OperationLoggingEndpointFilter>()
                 .WithTags("Provider Tools");
             group.MapGet("/", ([FromServices] ProviderToolsEndpoints e, ProviderType? provider = null, bool? isActive = null) => e.GetProviderTools(provider, isActive)).WithName("ProviderTools_GetAll").Produces<IEnumerable<ProviderToolDto>>();

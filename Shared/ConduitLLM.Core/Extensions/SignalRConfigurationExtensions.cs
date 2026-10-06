@@ -5,6 +5,36 @@ using ConduitLLM.Configuration.Serialization;
 
 namespace ConduitLLM.Core.Extensions
 {
+    /// <summary>Compile-time and configuration policy for SignalR protocols.</summary>
+    public static class ConduitSignalRProtocolPolicy
+    {
+        /// <summary>Whether this assembly was compiled for the NativeAOT variant.</summary>
+        public static bool IsNativeAot
+        {
+            get
+            {
+#if CONDUIT_NATIVE_AOT
+                return true;
+#else
+                return false;
+#endif
+            }
+        }
+
+        /// <summary>The protocols advertised by this runtime variant.</summary>
+        public static string[] SupportedProtocols =>
+            IsMessagePackEnabled ? ["json", "messagepack"] : ["json"];
+
+        /// <summary>Resolves the JIT-compatible environment switch and native exclusion.</summary>
+        public static bool ResolveMessagePackEnabled(bool isNativeAot, string? configuredValue) =>
+            !isNativeAot && !string.Equals(configuredValue, "false", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Whether MessagePack should be registered in this process.</summary>
+        public static bool IsMessagePackEnabled => ResolveMessagePackEnabled(
+            IsNativeAot,
+            Environment.GetEnvironmentVariable("SIGNALR_MESSAGEPACK_ENABLED"));
+    }
+
     /// <summary>
     /// Shared SignalR configuration used by both Gateway and Admin APIs.
     /// </summary>
@@ -49,17 +79,13 @@ namespace ConduitLLM.Core.Extensions
                 resolverChain.Insert(
                     0,
                     ConfigurationSignalRJsonContext.Default);
-                if (resolverChain.All(static resolver =>
-                        resolver is not System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver))
-                {
-                    resolverChain.Add(
-                        new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver());
-                }
             });
 
-            // Add MessagePack protocol support with LZ4 compression
-            var messagePackEnabled = Environment.GetEnvironmentVariable("SIGNALR_MESSAGEPACK_ENABLED")?.ToLowerInvariant() != "false";
-            if (messagePackEnabled)
+            // The JIT service retains its existing MessagePack wire contract. The first
+            // NativeAOT variant is compile-time JSON-only so the reflection-oriented
+            // contractless resolver and its package are absent from the native graph.
+#if !CONDUIT_NATIVE_AOT
+            if (ConduitSignalRProtocolPolicy.IsMessagePackEnabled)
             {
                 signalRBuilder.AddMessagePackProtocol(options =>
                 {
@@ -70,6 +96,7 @@ namespace ConduitLLM.Core.Extensions
                         .WithCompressionMinLength(256);
                 });
             }
+#endif
 
             // Configure SignalR Redis backplane for horizontal scaling
             if (!string.IsNullOrEmpty(redisConnectionString))

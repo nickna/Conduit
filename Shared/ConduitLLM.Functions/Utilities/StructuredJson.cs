@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Functions.Serialization;
 
 namespace ConduitLLM.Functions.Utilities;
 
@@ -37,5 +38,9 @@ public static class StructuredJson
     }
 
     public static string? SerializeObject(Dictionary<string, JsonElement>? value) =>
-        value is null ? null : JsonSerializer.Serialize(value);
+        value is null
+            ? null
+            : JsonSerializer.Serialize(
+                value,
+                FunctionsJsonContext.Default.DictionaryStringJsonElement);
 }

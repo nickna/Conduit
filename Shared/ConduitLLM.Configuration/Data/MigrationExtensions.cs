@@ -17,7 +17,7 @@ namespace ConduitLLM.Configuration.Data
             services.AddSingleton(sp => MigrationStartupOptions.FromEnvironment(
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger("Conduit.MigrationStartup")));
             services.AddSingleton<MigrationReadinessState>();
-            services.AddSingleton<IPendingMigrationsProbe, PendingMigrationsProbe>();
+            services.AddSingleton<ISchemaVersionProbe, SchemaVersionProbe>();
             services.AddHostedService<MigrationWaitService>();
             return services;
         }

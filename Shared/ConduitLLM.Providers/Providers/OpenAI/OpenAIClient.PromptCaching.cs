@@ -47,7 +47,7 @@ public partial class OpenAIClient
                     new Dictionary<string, object?> { ["mode"] = "explicit" },
                     out var content))
                 {
-                    messages[index] = messages[index] with { Content = content };
+                    messages[index] = messages[index].WithContent(content);
                     added++;
                 }
             }

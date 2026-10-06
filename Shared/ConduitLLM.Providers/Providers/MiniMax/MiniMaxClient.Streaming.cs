@@ -41,7 +41,9 @@ namespace ConduitLLM.Providers.MiniMax
 
             if (Logger.IsEnabled(LogLevel.Debug))
             {
-                var requestJson = System.Text.Json.JsonSerializer.Serialize(miniMaxRequest);
+                var requestJson = System.Text.Json.JsonSerializer.Serialize(
+                    miniMaxRequest,
+                    MiniMaxStreamJsonContext.Default.MiniMaxChatCompletionRequest);
                 Logger.LogDebug(
                     "MiniMax Streaming Request to {Endpoint}: {Request}",
                     endpoint,
@@ -53,7 +55,7 @@ namespace ConduitLLM.Providers.MiniMax
                 HttpMethod.Post,
                 endpoint,
                 miniMaxRequest,
-                null,
+                MiniMaxStreamJsonContext.Default.MiniMaxChatCompletionRequest,
                 null,
                 Logger,
                 cancellationToken);
@@ -62,8 +64,8 @@ namespace ConduitLLM.Providers.MiniMax
             await foreach (var chunk in Core.Utilities.StreamHelper
                 .ProcessSseStreamAsync<MiniMaxStreamChunk>(
                     response,
+                    MiniMaxStreamJsonContext.Default.MiniMaxStreamChunk,
                     Logger,
-                    null,
                     cancellationToken)
                 .WithCancellation(cancellationToken))
             {

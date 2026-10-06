@@ -5,6 +5,7 @@ using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Enums;
 using ConduitLLM.Configuration.Options;
 using ConduitLLM.Gateway.Interfaces;
+using ConduitLLM.Gateway.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Prometheus;
@@ -206,24 +207,24 @@ public sealed class BillingReconciliationService : BackgroundService
                     Timestamp = DateTime.UtcNow,
                     CalculatedCost = potentialLoss,
                     FailureReason = $"Billing reconciliation mismatch ({string.Join(", ", comparisonTypes)})",
-                    MetadataJson = JsonSerializer.Serialize(new
-                    {
-                        windowStartUtc = start,
-                        windowEndUtc = end,
-                        requestLogCost = request.RequestCost,
-                        ledgerDebitCost = transaction.LedgerCost,
-                        ledgerDifference,
-                        ledgerRelativeDifference = RelativeDifference(request.RequestCost, transaction.LedgerCost),
-                        providerActualCost = request.ProviderActualCost,
-                        providerExpectedBilledCost = request.ProviderExpectedBilledCost,
-                        providerBilledCost = request.ProviderBilledCost,
-                        providerDifference,
-                        providerRelativeDifference = RelativeDifference(request.ProviderExpectedBilledCost, request.ProviderBilledCost),
-                        requestCount = request.RequestCount,
-                        ledgerTransactionCount = transaction.TransactionCount,
-                        incompleteProviderEvidenceCount = request.IncompleteProviderEvidenceCount,
-                        comparisonTypes
-                    })
+                    MetadataJson = JsonSerializer.Serialize(
+                        new BillingReconciliationMetadata(
+                            start,
+                            end,
+                            request.RequestCost,
+                            transaction.LedgerCost,
+                            ledgerDifference,
+                            RelativeDifference(request.RequestCost, transaction.LedgerCost),
+                            request.ProviderActualCost,
+                            request.ProviderExpectedBilledCost,
+                            request.ProviderBilledCost,
+                            providerDifference,
+                            RelativeDifference(request.ProviderExpectedBilledCost, request.ProviderBilledCost),
+                            request.RequestCount,
+                            transaction.TransactionCount,
+                            request.IncompleteProviderEvidenceCount,
+                            comparisonTypes.ToArray()),
+                        GatewayInternalJsonContext.Default.BillingReconciliationMetadata)
                 });
                 await context.SaveChangesAsync(cancellationToken);
             }

@@ -46,7 +46,7 @@ public class AdminExceptionMiddleware : ExceptionHandlingMiddlewareBase
             Code = AdminErrorCodes.ForStatus(mapping.StatusCode),
             TraceId = traceId
         };
-        return JsonSerializer.Serialize(problem, ErrorJsonOptions);
+        return AdminJson.Serialize(problem, ErrorJsonOptions);
     }
 }
 

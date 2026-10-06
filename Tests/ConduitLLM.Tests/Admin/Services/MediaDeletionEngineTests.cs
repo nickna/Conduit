@@ -673,6 +673,32 @@ public sealed class MediaDeletionEngineTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task CancellationAfterUncooperativeStorage_DoesNotStartAnotherBatchOrReportSuccess()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var engine = CreateEngine(new MediaLifecycleOptions
+        {
+            DryRunMode = false, EnableSoftDelete = false, MaxBatchSize = 1,
+            BudgetReservationStride = 1, RequireManualApprovalForLargeBatches = false,
+        });
+        _storage.Setup(service => service.DeleteManyAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IEnumerable<string> keys, CancellationToken _) =>
+            {
+                cancellation.Cancel();
+                return SuccessfulDelete(keys);
+            });
+        var operation = new MediaDeletionOperationContext(MediaCleanupTypes.Manual, "manual", "test");
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => engine.ExecuteOperationAsync(operation,
+            () => engine.DeleteAsync(new MediaDeletionRequest(CreateRecords(3), operation, Purge: true), cancellation.Token),
+            cancellation.Token));
+        _storage.Verify(service => service.DeleteManyAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()), Times.Once);
+        _repository.Verify(repository => repository.HardDeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _status.Verify(service => service.RecordOperationCompletionAsync(It.IsAny<string>(), It.IsAny<int>(),
+            It.IsAny<long>(), It.IsAny<double>(), "Cancelled", It.IsAny<string>(), It.IsAny<string>(),
+            It.Is<CancellationToken>(token => !token.IsCancellationRequested)), Times.Once);
+    }
+
     private MediaDeletionEngine CreateEngine(
         MediaLifecycleOptions options,
         IEventBus? eventBus = null) => new(

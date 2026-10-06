@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ConduitLLM.Providers.Serialization;
 
 using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Models;
@@ -102,7 +103,9 @@ namespace ConduitLLM.Providers.Cloudflare
                 "Creating image using Cloudflare Workers AI at {Endpoint} with model {Model}, prompt length: {PromptLength}",
                 nativeEndpoint, modelId, request.Prompt.Length);
 
-            var requestJson = JsonSerializer.Serialize(requestBody, DefaultJsonOptions);
+            var requestJson = JsonSerializer.Serialize(
+                requestBody,
+                ProvidersJsonContext.Default.DictionaryStringObject);
             using var httpContent = new StringContent(requestJson, System.Text.Encoding.UTF8, "application/json");
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, nativeEndpoint)
             {
@@ -250,7 +253,9 @@ namespace ConduitLLM.Providers.Cloudflare
             CloudflareImageResponse? response;
             try
             {
-                response = JsonSerializer.Deserialize<CloudflareImageResponse>(content, DefaultJsonOptions);
+                response = JsonSerializer.Deserialize(
+                    content,
+                    ProvidersJsonContext.Default.CloudflareImageResponse);
             }
             catch (JsonException ex)
             {
@@ -299,7 +304,9 @@ namespace ConduitLLM.Providers.Cloudflare
         {
             try
             {
-                var errorResponse = JsonSerializer.Deserialize<CloudflareImageResponse>(responseContent, DefaultJsonOptions);
+                var errorResponse = JsonSerializer.Deserialize(
+                    responseContent,
+                    ProvidersJsonContext.Default.CloudflareImageResponse);
                 if (errorResponse?.Errors != null && errorResponse.Errors.Count > 0)
                 {
                     return string.Join("; ", errorResponse.Errors

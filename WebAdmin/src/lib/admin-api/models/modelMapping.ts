@@ -1,5 +1,5 @@
 import { FilterOptions } from './common';
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 
 export type ModelProviderMappingDto = components['schemas']['ModelProviderMappingDto'];
 export type ModelCapabilitiesDto = components['schemas']['ModelCapabilitiesDto'];

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.Middleware
 {
@@ -66,18 +67,16 @@ namespace ConduitLLM.Gateway.Middleware
             if (data == null || data.ToolCalls.Count == 0)
                 return null;
 
-            return JsonSerializer.Serialize(new
-            {
-                type = "chat_with_tools",
-                toolCallCount = data.ToolCalls.Count,
-                toolCalls = data.ToolCalls.Select(tc => new
-                {
-                    id = tc.Id,
-                    type = tc.Type,
-                    functionName = tc.FunctionName,
-                    hasArguments = tc.HasArguments
-                })
-            });
+            return JsonSerializer.Serialize(
+                new ChatToolCallsMetadata(
+                    "chat_with_tools",
+                    data.ToolCalls.Count,
+                    data.ToolCalls.Select(tc => new ChatToolCallMetadata(
+                        tc.Id,
+                        tc.Type,
+                        tc.FunctionName,
+                        tc.HasArguments)).ToList()),
+                GatewayInternalJsonContext.Default.ChatToolCallsMetadata);
         }
     }
 

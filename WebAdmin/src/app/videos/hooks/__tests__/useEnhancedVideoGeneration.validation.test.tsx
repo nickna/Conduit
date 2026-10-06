@@ -1,10 +1,10 @@
 import { renderHook, act } from '@testing-library/react';
 import { useEnhancedVideoGeneration } from '../useEnhancedVideoGeneration';
-import * as browserClientModule from '@/lib/client/browserCoreClient';
+import * as browserClientModule from '@/lib/client/browserGatewayClient';
 import type { VideoProgressCallbacks } from '@/lib/gateway-api';
 
 // Mock the browser client module
-jest.mock('@/lib/client/browserCoreClient');
+jest.mock('@/lib/client/browserGatewayClient');
 
 // Mock the video SignalR client
 jest.mock('@/lib/client/videoSignalRClient', () => ({
@@ -34,8 +34,8 @@ describe('useEnhancedVideoGeneration - Settings Validation', () => {
       },
     };
 
-    // Mock the getBrowserCoreClient function
-    (browserClientModule.getBrowserCoreClient as jest.Mock).mockResolvedValue(mockClient);
+    // Mock the getBrowserGatewayClient function
+    (browserClientModule.getBrowserGatewayClient as jest.Mock).mockResolvedValue(mockClient);
 
     // Setup default success response
     mockGenerateWithProgress.mockImplementation((request: unknown, callbacks?: VideoProgressCallbacks) => {

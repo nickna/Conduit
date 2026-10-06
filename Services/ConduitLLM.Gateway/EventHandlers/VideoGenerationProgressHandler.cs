@@ -6,6 +6,8 @@ using ConduitLLM.Gateway.Interfaces;
 
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Memory;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace ConduitLLM.Gateway.EventHandlers
 {
@@ -60,21 +62,25 @@ namespace ConduitLLM.Gateway.EventHandlers
                 taskStatus.Progress = message.ProgressPercentage;
                 taskStatus.ProgressMessage = message.Message ?? message.Status;
 
-                // Update metadata with detailed progress info
-                if (taskStatus.Result is IDictionary<string, object> resultDict)
+                var result = taskStatus.Result is JsonElement { ValueKind: JsonValueKind.Object } element
+                    ? JsonNode.Parse(element.GetRawText()) as JsonObject ?? new JsonObject()
+                    : taskStatus.Result as JsonObject ?? new JsonObject();
+                result["progress"] = new JsonObject
                 {
-                    resultDict["progress"] = progressData;
-                }
-                else if (taskStatus.Result == null)
-                {
-                    taskStatus.Result = new Dictionary<string, object> { ["progress"] = progressData };
-                }
+                    ["requestId"] = message.RequestId,
+                    ["status"] = message.Status,
+                    ["progressPercentage"] = message.ProgressPercentage,
+                    ["message"] = message.Message,
+                    ["framesCompleted"] = message.FramesCompleted,
+                    ["totalFrames"] = message.TotalFrames,
+                    ["lastUpdated"] = DateTime.UtcNow
+                };
 
                 await _asyncTaskService.UpdateTaskStatusAsync(
                     message.RequestId,
                     TaskState.Processing,
                     progress: message.ProgressPercentage,
-                    result: taskStatus.Result,
+                    result: result,
                     error: null,
                     cancellationToken: context.CancellationToken);
             }

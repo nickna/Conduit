@@ -1,9 +1,10 @@
 'use client';
 
+import { useMutation } from '@tanstack/react-query';
 import { withAdminClient } from '@/lib/client/adminClient';
 import { useAdminMutation } from '@/hooks/useAdminMutation';
 import { notify } from '@/lib/notifications';
-import { downloadFile } from '../utils/csvHelpers';
+import { downloadFile, serializeModelCostsToCsv } from '../utils/csvHelpers';
 import type {
   ModelCost,
   CreateModelCostDto,
@@ -11,6 +12,7 @@ import type {
   ModelCostListResponse,
   ModelCostFilters,
 } from '../types/modelCost';
+import { ModelType } from '@/lib/admin-api';
 
 /**
  * Fetch model costs with pagination and filters.
@@ -43,24 +45,6 @@ export async function fetchModelCostById(id: number): Promise<ModelCost> {
 /**
  * Find a model cost by pattern matching on name or aliases.
  */
-export async function getModelCostByPattern(pattern: string): Promise<ModelCost | null> {
-  try {
-    const costs = await withAdminClient(client =>
-      client.modelCosts.list({ pageSize: 100 })
-    );
-
-    const matchingCost = costs.items.find(cost =>
-      cost.costName.includes(pattern) ||
-      cost.associatedModelAliases.some(alias => alias.includes(pattern))
-    );
-
-    return matchingCost as ModelCost ?? null;
-  } catch (error) {
-    console.warn('Error fetching model cost by pattern:', error);
-    return null;
-  }
-}
-
 // --- Mutation hooks using useAdminMutation ---
 
 export function useCreateModelCost() {
@@ -87,104 +71,127 @@ export function useDeleteModelCost() {
   });
 }
 
-export function useImportModelCosts() {
-  return useAdminMutation<{ success?: number; failed?: number; errors?: Array<{ error: string }> }, CreateModelCostDto[]>({
-    mutationFn: (costs) => (client) => client.modelCosts.import(costs),
-    successMessage: (result) => `Successfully imported ${result.success ?? 0} model costs`,
-    invalidateKeys: ['model-costs'],
+export interface ModelCostImportInput {
+  costName: string;
+  modelAliases: string[];
+  modelType: string;
+  inputCostPerMillionTokens: number;
+  outputCostPerMillionTokens: number;
+  cachedInputCostPerMillionTokens?: number;
+  cachedInputWriteCostPerMillionTokens?: number;
+  embeddingCostPerMillionTokens?: number;
+  costPerSearchUnit?: number;
+  supportsBatchProcessing?: boolean;
+  batchProcessingMultiplier?: number;
+  priority?: number;
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface ModelCostImportSummary {
+  success: number;
+  failed: number;
+  errors: Array<{ costName: string; error: string }>;
+}
+
+export function useImportModelCostsWithAliases() {
+  return useMutation<ModelCostImportSummary, Error, ModelCostImportInput[]>({
+    mutationFn: async items => withAdminClient(async client => {
+      const mappings = await client.modelMappings.list();
+      const associationIdByAlias = new Map<string, number>();
+      for (const mapping of mappings) {
+        const associationId = mapping.modelProviderTypeAssociationId;
+        if (!associationId) continue;
+        associationIdByAlias.set(mapping.modelAlias.toLowerCase(), associationId);
+        associationIdByAlias.set(mapping.providerModelId.toLowerCase(), associationId);
+      }
+
+      const preflightErrors: ModelCostImportSummary['errors'] = [];
+      const importable: CreateModelCostDto[] = [];
+      for (const item of items) {
+        const associationIds = [...new Set(
+          item.modelAliases
+            .map(alias => associationIdByAlias.get(alias.toLowerCase()))
+            .filter((id): id is number => id !== undefined),
+        )];
+        const unresolvedAliases = item.modelAliases.filter(
+          alias => !associationIdByAlias.has(alias.toLowerCase()),
+        );
+        if (associationIds.length === 0 || unresolvedAliases.length > 0) {
+          preflightErrors.push({
+            costName: item.costName,
+            error: unresolvedAliases.length > 0
+              ? `No model mapping found for: ${unresolvedAliases.join(', ')}`
+              : 'No model mappings were resolved',
+          });
+          continue;
+        }
+
+        importable.push({
+          costName: item.costName,
+          modelProviderTypeAssociationIds: associationIds,
+          modelType: item.modelType as ModelType,
+          inputCostPerMillionTokens: item.inputCostPerMillionTokens,
+          outputCostPerMillionTokens: item.outputCostPerMillionTokens,
+          cachedInputCostPerMillionTokens: item.cachedInputCostPerMillionTokens,
+          cachedInputWriteCostPerMillionTokens: item.cachedInputWriteCostPerMillionTokens,
+          embeddingCostPerMillionTokens: item.embeddingCostPerMillionTokens,
+          costPerSearchUnit: item.costPerSearchUnit,
+          supportsBatchProcessing: item.supportsBatchProcessing,
+          batchProcessingMultiplier: item.batchProcessingMultiplier,
+          priority: item.priority,
+          description: item.description,
+          isActive: item.isActive,
+        });
+      }
+
+      if (importable.length === 0) {
+        return { success: 0, failed: preflightErrors.length, errors: preflightErrors };
+      }
+
+      const result = await client.modelCosts.import(importable);
+      const apiErrors = (result.errors ?? []).map(error => ({
+        costName: importable[error.row - 1]?.costName ?? 'Unknown',
+        error: error.error,
+      }));
+      return {
+        success: result.success ?? 0,
+        failed: (result.failed ?? 0) + preflightErrors.length,
+        errors: [...preflightErrors, ...apiErrors],
+      };
+    }),
+    onSuccess: result => {
+      if (result.success > 0) notify.success(`Successfully imported ${result.success} model costs`);
+      if (result.failed > 0) {
+        notify.warning(result.errors.map(error => `${error.costName}: ${error.error}`).join('\n'));
+      }
+    },
+    onError: error => notify.error(error, 'Failed to import model costs'),
   });
 }
 
-// --- Legacy hook for backward compatibility during migration ---
-// Consumers should migrate to individual hooks above.
+async function fetchAllModelCosts(): Promise<ModelCost[]> {
+  const pageSize = 250;
+  const firstPage = await fetchModelCosts(1, pageSize);
+  const costs = [...firstPage.items];
+  for (let page = 2; page <= firstPage.totalPages; page += 1) {
+    costs.push(...(await fetchModelCosts(page, pageSize)).items);
+  }
+  return costs;
+}
 
-export function useModelCostsApi() {
-  const createMutation = useCreateModelCost();
-  const updateMutation = useUpdateModelCost();
-  const deleteMutation = useDeleteModelCost();
-  const importMutation = useImportModelCosts();
-
-  const createModelCost = async (data: CreateModelCostDto): Promise<ModelCost> => {
-    return createMutation.mutateAsync(data);
-  };
-
-  const updateModelCost = async (id: number, data: UpdateModelCostDto): Promise<ModelCost> => {
-    return updateMutation.mutateAsync({ id, data });
-  };
-
-  const deleteModelCost = async (id: number): Promise<void> => {
-    return deleteMutation.mutateAsync(id);
-  };
-
-  const importModelCosts = async (costs: CreateModelCostDto[]): Promise<{ imported?: number }> => {
-    const result = await importMutation.mutateAsync(costs);
-    return { imported: result.success ?? costs.length };
-  };
-
-  const importModelCostsWithAliases = async (
-    costsWithAliases: Array<{
-      costName: string;
-      modelAliases: string[];
-      modelType: string;
-      inputCostPerMillionTokens: number;
-      outputCostPerMillionTokens: number;
-      [key: string]: unknown;
-    }>
-  ): Promise<{ success: number; failed: number; errors: Array<{ costName: string; error: string }> }> => {
-    const transformedCosts = costsWithAliases.map(item => ({
-      costName: item.costName,
-      modelProviderMappingIds: [],
-      inputCostPerMillionTokens: item.inputCostPerMillionTokens,
-      outputCostPerMillionTokens: item.outputCostPerMillionTokens,
-      description: JSON.stringify({ ...item }),
-    }));
-
-    const result = await withAdminClient(client =>
-      client.modelCosts.import(transformedCosts)
-    );
-
-    const success = result.success ?? 0;
-    const failed = result.failed ?? 0;
-    const errors = result.errors?.map((errorItem, index) => ({
-      costName: costsWithAliases[index]?.costName ?? 'Unknown',
-      error: errorItem.error,
-    })) ?? [];
-
-    if (success > 0) {
-      notify.success(`Successfully imported ${success} model costs`);
-    }
-    if (failed > 0) {
-      const errorMessage = errors
-        .map(e => `${e.costName}: ${e.error}`)
-        .join('\n');
-      notify.warning(`Failed to import ${failed} costs:\n${errorMessage}`);
-    }
-
-    return { success, failed, errors };
-  };
-
-  const exportModelCosts = async (format: 'csv' | 'json' = 'csv'): Promise<void> => {
-    try {
-      const blob = await Promise.resolve(new Blob(['Model costs export not available'], { type: 'text/plain' }));
-      const filename = `model-costs-${new Date().toISOString().split('T')[0]}.${format}`;
-      downloadFile(blob, filename);
-      notify.success('Model costs exported successfully');
-    } catch (error) {
-      notify.error(error, 'Failed to export model costs');
-      throw error;
-    }
-  };
-
-  return {
-    isLoading: createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || importMutation.isPending,
-    isExporting: false,
-    fetchModelCosts,
-    createModelCost,
-    updateModelCost,
-    deleteModelCost,
-    importModelCosts,
-    importModelCostsWithAliases,
-    exportModelCosts,
-    getModelCostByPattern,
-  };
+export function useExportModelCosts() {
+  return useMutation<void, Error, 'csv' | 'json'>({
+    mutationFn: async format => {
+      const costs = await fetchAllModelCosts();
+      const contents = format === 'csv'
+        ? serializeModelCostsToCsv(costs)
+        : JSON.stringify(costs, null, 2);
+      const contentType = format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json';
+      const date = new Date().toISOString().slice(0, 10);
+      downloadFile(new Blob([contents], { type: contentType }), `model-costs-${date}.${format}`);
+    },
+    onSuccess: () => notify.success('Model costs exported successfully'),
+    onError: error => notify.error(error, 'Failed to export model costs'),
+  });
 }

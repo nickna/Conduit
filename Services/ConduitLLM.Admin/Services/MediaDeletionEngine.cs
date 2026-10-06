@@ -62,7 +62,9 @@ public sealed class MediaDeletionEngine : IMediaDeletionEngine
 
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             result = await action();
+            cancellationToken.ThrowIfCancellationRequested();
             operationStatus = GetOperationStatus(result);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -85,6 +87,9 @@ public sealed class MediaDeletionEngine : IMediaDeletionEngine
         finally
         {
             stopwatch.Stop();
+            using var completionCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            var completionToken = cancellationToken.IsCancellationRequested
+                ? completionCancellation.Token : cancellationToken;
             await _statusService.RecordOperationCompletionAsync(
                 operation.CleanupType,
                 result.FilesDeleted,
@@ -93,14 +98,13 @@ public sealed class MediaDeletionEngine : IMediaDeletionEngine
                 operationStatus,
                 operation.LeaderInstanceId,
                 operation.TriggeredBy,
-                cancellationToken);
+                completionToken);
 
             RecordMetrics(operation, result, operationStatus, stopwatch.Elapsed);
-            await PublishOperationalAlertsAsync(
-                operation,
-                result,
-                operationStatus,
-                cancellationToken);
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                await PublishOperationalAlertsAsync(operation, result, operationStatus, cancellationToken);
+            }
         }
 
         return result with
@@ -115,6 +119,7 @@ public sealed class MediaDeletionEngine : IMediaDeletionEngine
         MediaDeletionRequest request,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var processedRecordIds = request.ProcessedRecordIds;
         var trackedCandidates = request.MediaRecords
             .Where(record => processedRecordIds == null || processedRecordIds.Add(record.Id))
@@ -495,6 +500,7 @@ public sealed class MediaDeletionEngine : IMediaDeletionEngine
                 break;
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             var retryableKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var item in storageResult.Items)
             {

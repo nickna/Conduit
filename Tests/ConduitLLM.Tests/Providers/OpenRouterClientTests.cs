@@ -241,6 +241,73 @@ namespace ConduitLLM.Tests.Providers
         }
 
         [Fact]
+        public async Task Chat_PreservesAnnotationsAndToolCallsAcrossProviderBoundary()
+        {
+            _chatJson = """
+            {
+              "id":"c",
+              "object":"chat.completion",
+              "created":1,
+              "model":"openai/gpt-4o",
+              "choices":[{
+                "index":0,
+                "message":{
+                  "role":"assistant",
+                  "tool_calls":[{
+                    "id":"response-tool",
+                    "type":"function",
+                    "function":{"name":"lookup","arguments":"{\"id\":7}"}
+                  }]
+                },
+                "finish_reason":"tool_calls"
+              }],
+              "usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
+            }
+            """;
+            using var annotationDocument = JsonDocument.Parse(
+                """{"type":"file","file":{"hash":"request-hash"}}""");
+            var request = new ChatCompletionRequest
+            {
+                Model = "alias",
+                Messages =
+                [
+                    new Message
+                    {
+                        Role = "assistant",
+                        Annotations = [annotationDocument.RootElement.Clone()],
+                        ToolCalls =
+                        [
+                            new ToolCall
+                            {
+                                Id = "request-tool",
+                                Function = new FunctionCall
+                                {
+                                    Name = "lookup",
+                                    Arguments = "{\"id\":3}"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            };
+
+            var response = await CreateClient().CreateChatCompletionAsync(request);
+
+            using var sent = JsonDocument.Parse(
+                _capturedRequests.Single(item => item.Path.EndsWith("/chat/completions")).Body);
+            var sentMessage = sent.RootElement.GetProperty("messages")[0];
+            sentMessage.GetProperty("annotations")[0].GetProperty("file")
+                .GetProperty("hash").GetString().Should().Be("request-hash");
+            sentMessage.GetProperty("tool_calls")[0].GetProperty("id").GetString()
+                .Should().Be("request-tool");
+
+            var responseTool = response.Choices.Single().Message.ToolCalls.Should().ContainSingle().Subject;
+            responseTool.Id.Should().Be("response-tool");
+            responseTool.Function.Name.Should().Be("lookup");
+            responseTool.Function.Arguments.Should().Be("{\"id\":7}");
+        }
+
+        [Fact]
         public async Task Chat_ClaudeAutomaticCaching_AddsTopLevelDirectiveWithoutMutatingRequest()
         {
             var client = CreateClient(model: "anthropic/claude-sonnet-4");

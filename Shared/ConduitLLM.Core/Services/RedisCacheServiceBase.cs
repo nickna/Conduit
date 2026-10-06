@@ -49,6 +49,7 @@ public abstract class RedisCacheServiceBase
         string cacheKey,
         string serviceName,
         Func<Task<T?>> dbFallback,
+        JsonTypeInfo<T> jsonTypeInfo,
         bool cacheResult = true,
         TimeSpan? expiry = null,
         string? debugLabel = null) where T : class
@@ -62,7 +63,7 @@ public abstract class RedisCacheServiceBase
                 var jsonString = (string?)cachedValue;
                 if (jsonString is not null)
                 {
-                    var result = JsonSerializer.Deserialize<T>(jsonString, JsonOptions);
+                    var result = JsonSerializer.Deserialize(jsonString, jsonTypeInfo);
                     if (result != null)
                     {
                         Logger.LogDebug("Cache hit: {Label}", debugLabel ?? cacheKey);
@@ -80,7 +81,7 @@ public abstract class RedisCacheServiceBase
 
             if (dbResult != null && cacheResult)
             {
-                await SetCacheEntryAsync(cacheKey, dbResult, expiry);
+                await SetCacheEntryAsync(cacheKey, dbResult, jsonTypeInfo, expiry);
             }
 
             return dbResult;
@@ -91,27 +92,6 @@ public abstract class RedisCacheServiceBase
             await TrackMissAsync(serviceName);
             return await dbFallback();
         }
-    }
-
-    /// <summary>
-    /// Read and deserialize a cache entry, or null when absent or unparseable.
-    /// Does not track stats or fall back — for callers that need custom
-    /// hit/miss handling around the raw lookup.
-    /// </summary>
-    protected async Task<T?> TryGetCacheEntryAsync<T>(string cacheKey) where T : class
-    {
-        var cachedValue = await Database.StringGetAsync(cacheKey);
-
-        if (cachedValue.HasValue)
-        {
-            var jsonString = (string?)cachedValue;
-            if (jsonString is not null)
-            {
-                return JsonSerializer.Deserialize<T>(jsonString, JsonOptions);
-            }
-        }
-
-        return null;
     }
 
     /// <summary>
@@ -131,15 +111,6 @@ public abstract class RedisCacheServiceBase
         return jsonString is null
             ? null
             : JsonSerializer.Deserialize(jsonString, jsonTypeInfo);
-    }
-
-    /// <summary>
-    /// Serialize and store a value in Redis.
-    /// </summary>
-    protected async Task SetCacheEntryAsync<T>(string cacheKey, T value, TimeSpan? expiry = null)
-    {
-        var json = JsonSerializer.Serialize(value, JsonOptions);
-        await Database.StringSetAsync(cacheKey, json, expiry ?? DefaultExpiry);
     }
 
     /// <summary>

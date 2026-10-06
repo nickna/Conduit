@@ -10,14 +10,14 @@ import {
   Badge,
 } from '@mantine/core';
 import { useState, useEffect, useMemo } from 'react';
-import type { IpRule } from '@/hooks/useSecurityApi';
+import type { IpFilterDto } from '@/lib/admin-api';
 import type { IpFilterTemplate, IpTemplateRule } from './ipFilterTemplates';
 
 interface IpTemplateModalProps {
   opened: boolean;
   onClose: () => void;
   template: IpFilterTemplate | null;
-  existingRules: IpRule[];
+  existingRules: IpFilterDto[];
   onConfirm: (template: IpFilterTemplate, rulesToCreate: IpTemplateRule[]) => void;
   isLoading?: boolean;
 }
@@ -35,7 +35,7 @@ export function IpTemplateModal({
   const existingCidrs = useMemo(() => {
     const set = new Set<string>();
     for (const rule of existingRules) {
-      set.add(rule.ipAddress);
+      set.add(rule.ipAddressOrCidr);
     }
     return set;
   }, [existingRules]);

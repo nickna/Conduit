@@ -41,10 +41,12 @@ public static class ObservabilityExtensions
                             !httpContext.Request.Path.StartsWithSegments("/metrics");
                     })
                     .AddHttpClientInstrumentation()
+#if !CONDUIT_NATIVE_AOT
                     .AddSqlClientInstrumentation(options =>
                     {
                         options.RecordException = true;
                     })
+#endif
                     .AddRedisInstrumentation()
                     .AddSource("ConduitLLM.SignalR")
                     .AddSource("ConduitLLM.MediaGeneration")

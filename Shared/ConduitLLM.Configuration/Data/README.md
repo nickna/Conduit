@@ -14,13 +14,13 @@ and the schema-compatibility rules are
 |---|---|
 | `MigrationStartupOptions.cs` | `CONDUIT_MIGRATION_MODE` (`Wait`/`Skip`) + timeout env parsing; rejects legacy `Apply` |
 | `SimpleMigrationService.cs` | Applies migrations + seeds default data under a blocking session-scoped `pg_advisory_lock(7891011)` |
-| `MigrationWaitService.cs` | Wait mode: background poll of pending migrations; flips readiness when the schema is current |
+| `MigrationWaitService.cs` | Wait mode: compares the latest history row with the compiled schema version; flips readiness when current |
 | `MigrationReadinessState.cs` | Process-wide "schema is current" flag |
 | `../HealthChecks/PendingMigrationsReadinessCheck.cs` | Gates `/health/ready` (tag `ready`) on that flag |
 | `MigrationExtensions.cs` | Read-only readiness registration (`AddDatabaseMigration`) |
-| `MigrationCommand.cs` | `migrate` CLI verb: standalone migrator + Wolverine schema provisioning (release-hook entry point) |
+| `tools/ConduitLLM.Migrator` | Standalone EF migrator + Wolverine schema provisioning (release-hook entry point) |
 | `ExecutionStrategyExtensions.cs` | `ExecuteInTransactionAsync` — explicit transactions compatible with `EnableRetryOnFailure` |
-| `ConfigurationDbContextFactory.cs` | Design-time factory; also resolves `DATABASE_URL` for the migrate verb |
+| `ConfigurationDbContextFactory.cs` | Design-time factory; also resolves `DATABASE_URL` for the standalone migrator |
 
 ## Design invariants
 
@@ -34,5 +34,5 @@ and the schema-compatibility rules are
   (waiter timeout `CONDUIT_MIGRATION_LOCK_TIMEOUT_SECONDS`), then re-check
   `GetPendingMigrationsAsync()` and find nothing to do.
 - **Seeding runs under the lock** and is idempotent.
-- **Web processes are schema-read-only.** Only the `migrate` verb constructs
+- **Web processes are schema-read-only.** Only `ConduitLLM.Migrator` constructs
   `SimpleMigrationService` or enables Wolverine resource provisioning.

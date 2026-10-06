@@ -16,7 +16,7 @@ namespace ConduitLLM.Core.Services.Strategies
     /// <summary>
     /// Processes base64-encoded media data.
     /// </summary>
-    public class Base64MediaProcessor : IMediaProcessingStrategy<object>
+    public class Base64MediaProcessor : IMediaProcessingStrategy<IGeneratedMediaData>
     {
         private readonly IMediaStorageService _storageService;
         private readonly IEventBus _eventBus;
@@ -33,12 +33,12 @@ namespace ConduitLLM.Core.Services.Strategies
         }
 
         public async Task<ProcessedMediaItem> ProcessAsync(
-            object mediaData,
+            IGeneratedMediaData mediaData,
             MediaProcessingContext context,
             CancellationToken cancellationToken)
         {
             // Extract base64 data from the media object
-            string? base64Data = ExtractBase64Data(mediaData);
+            string? base64Data = mediaData.B64Json;
             if (string.IsNullOrEmpty(base64Data))
             {
                 throw new InvalidOperationException("No base64 data found in media object");
@@ -81,14 +81,6 @@ namespace ConduitLLM.Core.Services.Strategies
                     ["format"] = "b64_json"
                 }
             };
-        }
-
-        private string? ExtractBase64Data(object mediaData)
-        {
-            // Use reflection to find B64Json property
-            var type = mediaData.GetType();
-            var b64Property = type.GetProperty("B64Json");
-            return b64Property?.GetValue(mediaData) as string;
         }
 
         private MediaMetadata CreateMediaMetadata(MediaProcessingContext context)

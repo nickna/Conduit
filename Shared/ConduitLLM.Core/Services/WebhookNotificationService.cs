@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using Microsoft.Extensions.Logging;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Serialization;
 
 namespace ConduitLLM.Core.Services
 {
@@ -85,7 +86,9 @@ namespace ConduitLLM.Core.Services
                 request.Headers.TryAddWithoutValidation("X-Webhook-Timestamp", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString());
 
                 // Add content
-                request.Content = JsonContent.Create(payload);
+                request.Content = JsonContent.Create(
+                    payload,
+                    CoreJsonTypeInfo.Require(payload.GetType(), ConduitJsonOptions.Wire));
 
                 // Apply custom timeout if specified
                 using var cts = customTimeout.HasValue 

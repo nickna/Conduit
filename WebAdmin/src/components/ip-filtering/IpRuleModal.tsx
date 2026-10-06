@@ -13,14 +13,14 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { IconAlertCircle } from '@tabler/icons-react';
-import type { IpRule } from '@/hooks/useSecurityApi';
+import type { CreateIpFilterDto, IpFilterDto } from '@/lib/admin-api';
 import { getIpOrCidrValidationError } from '@/lib/utils/ip-validation';
 
 interface IpRuleModalProps {
   opened: boolean;
   onClose: () => void;
-  onSubmit: (values: Partial<IpRule>) => Promise<void>;
-  rule?: IpRule | null;
+  onSubmit: (values: CreateIpFilterDto) => Promise<void>;
+  rule?: IpFilterDto | null;
   isLoading?: boolean;
 }
 
@@ -38,12 +38,13 @@ export function IpRuleModal({
   
   const form = useForm({
     initialValues: {
-      ipAddress: rule?.ipAddress ?? '',
-      action: rule?.action ?? 'block',
+      name: rule?.name ?? '',
+      ipAddressOrCidr: rule?.ipAddressOrCidr ?? '',
+      filterType: rule?.filterType ?? 'blacklist',
       description: rule?.description ?? '',
     },
     validate: {
-      ipAddress: validateIpAddress,
+      ipAddressOrCidr: validateIpAddress,
       description: (value) => {
         if (value && value.length > 500) {
           return 'Description must be 500 characters or less';
@@ -55,10 +56,7 @@ export function IpRuleModal({
 
   const handleSubmit = async (values: typeof form.values) => {
     try {
-      await onSubmit({
-        ...values,
-        id: rule?.id,
-      });
+      await onSubmit({ ...values, isEnabled: rule?.isEnabled ?? true });
       form.reset();
       // Don't close here - let the parent handle it after successful save
     } catch (error) {
@@ -83,10 +81,17 @@ export function IpRuleModal({
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">
           <TextInput
+            label="Name"
+            placeholder="e.g., Office network"
+            required
+            {...form.getInputProps('name')}
+          />
+
+          <TextInput
             label="IP Address / CIDR"
             placeholder="e.g., 192.168.1.1 or 10.0.0.0/24"
             required
-            {...form.getInputProps('ipAddress')}
+            {...form.getInputProps('ipAddressOrCidr')}
             disabled={isEditing}
           />
 
@@ -102,11 +107,11 @@ export function IpRuleModal({
           <Select
             label="Action"
             data={[
-              { value: 'allow', label: 'Allow (Whitelist)' },
-              { value: 'block', label: 'Block (Blacklist)' },
+              { value: 'whitelist', label: 'Allow (Whitelist)' },
+              { value: 'blacklist', label: 'Block (Blacklist)' },
             ]}
             required
-            {...form.getInputProps('action')}
+            {...form.getInputProps('filterType')}
           />
 
           <Textarea

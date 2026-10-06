@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace ConduitLLM.Configuration.Services;
 
 /// <summary>
-/// Service for managing and retrieving model costs. Pure repository operations — caching is handled by the CachedModelCostService decorator.
+/// Service for managing and retrieving model costs. Pure repository operations — caching is handled by the FusionModelCostService decorator.
 /// </summary>
 public class ModelCostService : IModelCostService
 {
@@ -173,7 +173,7 @@ public class ModelCostService : IModelCostService
     /// <inheritdoc />
     public Task ClearCacheAsync(CancellationToken cancellationToken = default)
     {
-        // No-op: caching is handled by the CachedModelCostService decorator
+        // No-op: caching is handled by the FusionModelCostService decorator
         return Task.CompletedTask;
     }
 }

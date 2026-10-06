@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ConduitLLM.Functions.Serialization;
 using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Functions.Exceptions;
 using ConduitLLM.Functions.Providers.Exa.Models;
@@ -38,7 +39,11 @@ public partial class ExaClient
             using var client = CreateHttpClient(apiKey);
 
             // Make API request
-            var response = await client.PostAsJsonAsync("/contents", exaRequest, _jsonOptions, cancellationToken);
+            var response = await client.PostAsJsonAsync(
+                "/contents",
+                exaRequest,
+                FunctionProviderJsonContext.Default.ExaContentsRequest,
+                cancellationToken);
 
             stopwatch.Stop();
 
@@ -50,7 +55,9 @@ public partial class ExaClient
             }
 
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            var exaResponse = JsonSerializer.Deserialize<ExaContentsResponse>(responseBody, _jsonOptions);
+            var exaResponse = JsonSerializer.Deserialize(
+                responseBody,
+                FunctionProviderJsonContext.Default.ExaContentsResponse);
 
             if (exaResponse == null)
             {

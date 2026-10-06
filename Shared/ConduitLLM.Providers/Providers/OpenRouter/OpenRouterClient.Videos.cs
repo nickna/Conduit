@@ -82,7 +82,12 @@ namespace ConduitLLM.Providers.OpenRouter
                 using var pollScope = BeginPollingScope("CreateVideo");
                 var status = await AsyncJobPoller.PollAsync(
                     fetchStatus: ct => CoreUtils.HttpClientHelper.GetJsonAsync<OpenRouterVideoStatus>(
-                        client, $"{BaseUrl}/videos/{jobId}", headers, DefaultJsonOptions, Logger, ct),
+                        client,
+                        $"{BaseUrl}/videos/{jobId}",
+                        Serialization.ProvidersJsonContext.Default.OpenRouterVideoStatus,
+                        headers,
+                        Logger,
+                        ct),
                     classify: ClassifyVideoStatus,
                     extractSuccess: s => s,
                     extractFailure: s => new LLMCommunicationException($"OpenRouter video generation failed for job {jobId}."),
@@ -136,13 +141,13 @@ namespace ConduitLLM.Providers.OpenRouter
                 _ => JobState.InProgress   // pending / in_progress / queued / unknown → keep polling
             };
 
-        private record OpenRouterVideoSubmitResponse
+        internal record OpenRouterVideoSubmitResponse
         {
             [JsonPropertyName("id")]
             public string? Id { get; init; }
         }
 
-        private record OpenRouterVideoStatus
+        internal record OpenRouterVideoStatus
         {
             [JsonPropertyName("id")]
             public string? Id { get; init; }
@@ -160,7 +165,7 @@ namespace ConduitLLM.Providers.OpenRouter
             public OpenRouterVideoUsage? Usage { get; init; }
         }
 
-        private record OpenRouterVideoUsage
+        internal record OpenRouterVideoUsage
         {
             [JsonPropertyName("cost")]
             public decimal? Cost { get; init; }

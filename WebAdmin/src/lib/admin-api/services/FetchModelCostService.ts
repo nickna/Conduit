@@ -1,6 +1,6 @@
 import type { FetchBaseApiClient } from '../client/FetchBaseApiClient';
 import type { RequestConfig } from '../client/types';
-import type { components } from '../generated/admin-api';
+import type { components } from '@/generated/admin-api';
 import { HttpMethod } from '../client/HttpMethod';
 import {
   ModelCostDto,
@@ -103,7 +103,7 @@ export class FetchModelCostService {
     const query = { page: params?.page, pageSize: params?.pageSize, providerId,
       isActive: params?.isActive, modelType: params?.modelType };
     const queryString = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)])).toString();
-    const result: ContractPagedModelCosts = await this.client['executeContractRead'](
+    const result: ContractPagedModelCosts = await this.client.executeContractRead(
       `/v1/admin/model-costs${queryString ? `?${queryString}` : ''}`,
       (contractClient, options) => contractClient.GET('/v1/admin/model-costs', { ...options, params: { query } }), config);
     return {
@@ -119,7 +119,7 @@ export class FetchModelCostService {
    * Get a specific model cost by ID
    */
   async getById(id: number, config?: RequestConfig): Promise<ModelCostDto> {
-    const result = await this.client['executeContractRead'](`/v1/admin/model-costs/${id}`,
+    const result = await this.client.executeContractRead(`/v1/admin/model-costs/${id}`,
       (contractClient, options) => contractClient.GET('/v1/admin/model-costs/{id}', { ...options, params: { path: { id } } }), config);
     return modelCostFromWire(result);
   }
@@ -138,7 +138,7 @@ export class FetchModelCostService {
       ...data,
       pricingConfiguration: parsePricingConfiguration(data.pricingConfiguration) ?? {},
     } as unknown as ContractCreateModelCost;
-    const result = await this.client['executeContractOperation']<ContractModelCost, ContractCreateModelCost>('/v1/admin/model-costs', HttpMethod.POST,
+    const result = await this.client.executeContractOperation<ContractModelCost, ContractCreateModelCost>('/v1/admin/model-costs', HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/model-costs', { ...options, body }), config, body);
     return modelCostFromWire(result);
   }
@@ -155,7 +155,7 @@ export class FetchModelCostService {
       ...data,
       pricingConfiguration: parsePricingConfiguration(data.pricingConfiguration),
     } as unknown as ContractUpdateModelCost;
-    const result = await this.client['executeContractOperation']<ContractModelCost, ContractUpdateModelCost>(`/v1/admin/model-costs/${id}`, HttpMethod.PATCH,
+    const result = await this.client.executeContractOperation<ContractModelCost, ContractUpdateModelCost>(`/v1/admin/model-costs/${id}`, HttpMethod.PATCH,
       (contractClient, options) => contractClient.PATCH('/v1/admin/model-costs/{id}', { ...options, params: { path: { id } }, body }), config, body);
     return modelCostFromWire(result);
   }
@@ -164,7 +164,7 @@ export class FetchModelCostService {
    * Delete a model cost configuration
    */
   async deleteById(id: number, config?: RequestConfig): Promise<void> {
-    return this.client['executeContractOperation']<void>(`/v1/admin/model-costs/${id}`, HttpMethod.DELETE,
+    return this.client.executeContractOperation<void>(`/v1/admin/model-costs/${id}`, HttpMethod.DELETE,
       (contractClient, options) => contractClient.DELETE('/v1/admin/model-costs/{id}', { ...options, params: { path: { id } } }), config);
   }
 
@@ -175,17 +175,10 @@ export class FetchModelCostService {
     modelCosts: CreateModelCostDto[],
     config?: RequestConfig
   ): Promise<ModelCostImportResult> {
-    const result: ContractBulkImportResult = await this.client['executeContractOperation']('/v1/admin/model-costs/import', HttpMethod.POST,
+    const result: ContractBulkImportResult = await this.client.executeContractOperation('/v1/admin/model-costs/import', HttpMethod.POST,
       (contractClient, options) => contractClient.POST('/v1/admin/model-costs/import', { ...options, body: modelCosts as ContractCreateModelCost[] }), config, modelCosts);
     return { success: result.successCount ?? 0, failed: result.failureCount ?? 0,
       errors: (result.errors ?? []).map((error, index) => ({ row: index + 1, error })) };
-  }
-
-  /**
-   * Bulk update multiple model costs
-   */
-  async bulkUpdate(): Promise<ModelCostDto[]> {
-    throw new Error('Bulk update endpoint no longer exists. Update model costs individually.');
   }
 
 }

@@ -9,6 +9,8 @@ using ConduitLLM.Gateway.Constants;
 using ConduitLLM.Gateway.UsageTracking;
 using GatewayOpsMetrics = ConduitLLM.Gateway.Services.GatewayOperationsMetricsService;
 using ConduitLLM.Gateway.DTOs;
+using ConduitLLM.Core.Serialization;
+using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.Endpoints
 {
@@ -120,7 +122,9 @@ namespace ConduitLLM.Gateway.Endpoints
                     Model = modelName,
                     Prompt = request.Prompt,
                     CorrelationId = correlationId,
-                    Payload = System.Text.Json.JsonSerializer.Serialize(generationRequest),
+                    Payload = System.Text.Json.JsonSerializer.Serialize(
+                        generationRequest,
+                        CoreMessagingJsonContext.Default.ImageGenerationRequested),
                     ExtensionData = new Dictionary<string, object>
                     {
                         // MediaGenerationOrchestrator re-validates the raw key from task metadata
@@ -151,16 +155,16 @@ namespace ConduitLLM.Gateway.Endpoints
                     CheckStatusUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}/v1/images/generations/{Uri.EscapeDataString(taskId)}/status",
                     CreatedAt = DateTime.UtcNow
                 };
-                accounting.RecordMetadata(System.Text.Json.JsonSerializer.Serialize(new
-                {
-                    type = "image",
-                    taskId,
-                    status = TaskStateConstants.Queued,
-                    imageCount = request.N,
-                    quality = request.Quality,
-                    size = request.Size,
-                    style = request.Style
-                }));
+                accounting.RecordMetadata(System.Text.Json.JsonSerializer.Serialize(
+                    new MediaTaskAccountingMetadata(
+                        "image",
+                        taskId,
+                        TaskStateConstants.Queued,
+                        ImageCount: request.N,
+                        Quality: request.Quality,
+                        Size: request.Size,
+                        Style: request.Style),
+                    GatewayInternalJsonContext.Default.MediaTaskAccountingMetadata));
 
                 GatewayOpsMetrics.RecordMediaOperation("generate", "image_async", "queued");
                 return Accepted(response);

@@ -101,9 +101,7 @@ namespace ConduitLLM.Gateway.Consumers
 
                 if (request.EventType == WebhookEventType.TaskProgress)
                 {
-                    // Deserialize the JSON payload
-                    var payload = System.Text.Json.JsonSerializer.Deserialize<object>(request.PayloadJson)
-                        ?? new { error = "Failed to deserialize payload" };
+                    var payload = ParseWebhookPayload(request.PayloadJson);
 
                     sendResult = await _webhookService.SendTaskProgressWebhookAsync(
                         request.WebhookUrl,
@@ -113,9 +111,7 @@ namespace ConduitLLM.Gateway.Consumers
                 }
                 else
                 {
-                    // Deserialize the JSON payload
-                    var payload = System.Text.Json.JsonSerializer.Deserialize<object>(request.PayloadJson)
-                        ?? new { error = "Failed to deserialize payload" };
+                    var payload = ParseWebhookPayload(request.PayloadJson);
 
                     sendResult = await _webhookService.SendTaskCompletionWebhookAsync(
                         request.WebhookUrl,
@@ -263,6 +259,19 @@ namespace ConduitLLM.Gateway.Consumers
                 throw new NonRetryableMessageException(
                     $"Webhook delivery failed after {MAX_RETRY_COUNT} retries to {request.WebhookUrl}");
             }
+        }
+
+        private static System.Text.Json.JsonElement ParseWebhookPayload(string payloadJson)
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(payloadJson);
+            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null)
+            {
+                return document.RootElement.Clone();
+            }
+
+            using var fallback = System.Text.Json.JsonDocument.Parse(
+                """{"error":"Failed to deserialize payload"}""");
+            return fallback.RootElement.Clone();
         }
     }
 }

@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using ConduitLLM.Configuration.Models;
 
 namespace ConduitLLM.Configuration.ModelCatalogs;
@@ -22,7 +23,11 @@ public sealed class BundledModelCatalog
         CancellationToken cancellationToken = default)
     {
         var configuration = await DeserializeResourceAsync<Dictionary<string, ProviderCatalogConfiguration>>(
-            "provider-config.json", cancellationToken);
+            "provider-config.json",
+            (JsonTypeInfo<Dictionary<string, ProviderCatalogConfiguration>>)
+                BundledModelCatalogJsonContext.Default.GetTypeInfo(
+                    typeof(Dictionary<string, ProviderCatalogConfiguration>))!,
+            cancellationToken);
         var resources = _assembly.GetManifestResourceNames().ToHashSet(StringComparer.Ordinal);
         var catalogs = new List<BundledProviderCatalog>();
 
@@ -35,7 +40,10 @@ public sealed class BundledModelCatalog
                     $"Bundled model catalog configuration references '{providerName}', but {fileName} is not embedded.");
             }
 
-            var document = await DeserializeResourceAsync<ProviderModelsDocument>(fileName, cancellationToken);
+            var document = await DeserializeResourceAsync(
+                fileName,
+                BundledModelCatalogJsonContext.Default.ProviderModelsDocument,
+                cancellationToken);
             catalogs.Add(new BundledProviderCatalog(providerName, provider, document.Models));
         }
 
@@ -56,23 +64,25 @@ public sealed class BundledModelCatalog
         return catalogs;
     }
 
-    private async Task<T> DeserializeResourceAsync<T>(string fileName, CancellationToken cancellationToken)
+    private async Task<T> DeserializeResourceAsync<T>(
+        string fileName,
+        JsonTypeInfo<T> typeInfo,
+        CancellationToken cancellationToken)
     {
         await using var stream = _assembly.GetManifestResourceStream(ResourcePrefix + fileName)
             ?? throw new InvalidOperationException($"Bundled model catalog resource '{fileName}' was not found.");
-        return await JsonSerializer.DeserializeAsync<T>(stream, SerializerOptions, cancellationToken)
+        return await JsonSerializer.DeserializeAsync(stream, typeInfo, cancellationToken)
             ?? throw new InvalidOperationException($"Bundled model catalog resource '{fileName}' is empty or invalid.");
     }
-
-    private static readonly JsonSerializerOptions SerializerOptions = CreateSerializerOptions();
-
-    private static JsonSerializerOptions CreateSerializerOptions()
-    {
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        options.Converters.Add(new JsonStringEnumConverter());
-        return options;
-    }
 }
+
+[JsonSourceGenerationOptions(
+    GenerationMode = JsonSourceGenerationMode.Metadata,
+    PropertyNameCaseInsensitive = true,
+    UseStringEnumConverter = true)]
+[JsonSerializable(typeof(Dictionary<string, ProviderCatalogConfiguration>))]
+[JsonSerializable(typeof(ProviderModelsDocument))]
+internal partial class BundledModelCatalogJsonContext : JsonSerializerContext;
 
 public sealed record BundledProviderCatalog(
     string Name,

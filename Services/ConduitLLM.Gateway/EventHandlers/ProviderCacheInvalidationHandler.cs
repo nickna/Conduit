@@ -17,25 +17,29 @@ namespace ConduitLLM.Gateway.EventHandlers
         private readonly ISettingsRefreshService _settingsRefreshService;
         private readonly IDiscoveryCacheService _discoveryCacheService;
         private readonly ILogger<ProviderCacheInvalidationHandler> _logger;
+        private readonly IModelMappingCacheInvalidator? _mappings;
 
         public ProviderCacheInvalidationHandler(
             ISettingsRefreshService settingsRefreshService,
             IDiscoveryCacheService discoveryCacheService,
-            ILogger<ProviderCacheInvalidationHandler> logger)
+            ILogger<ProviderCacheInvalidationHandler> logger, IModelMappingCacheInvalidator? mappings = null)
         {
             _settingsRefreshService = settingsRefreshService ?? throw new ArgumentNullException(nameof(settingsRefreshService));
             _discoveryCacheService = discoveryCacheService ?? throw new ArgumentNullException(nameof(discoveryCacheService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _mappings = mappings;
         }
 
         public async Task HandleAsync(ProviderCreated message, IEventContext context)
         {
+            if (_mappings is not null) await _mappings.InvalidateAsync(context.CancellationToken);
             await RefreshAndInvalidateAsync(message.ProviderId, "creation",
                 invalidateDiscovery: true);
         }
 
         public async Task HandleAsync(ProviderUpdated message, IEventContext context)
         {
+            if (_mappings is not null) await _mappings.InvalidateAsync(context.CancellationToken);
             var invalidateDiscovery = message.ChangedProperties.Contains("IsEnabled") ||
                                      message.ChangedProperties.Contains("IsActive");
             await RefreshAndInvalidateAsync(message.ProviderId, "update",
@@ -44,6 +48,7 @@ namespace ConduitLLM.Gateway.EventHandlers
 
         public async Task HandleAsync(ProviderDeleted message, IEventContext context)
         {
+            if (_mappings is not null) await _mappings.InvalidateAsync(context.CancellationToken);
             await RefreshAndInvalidateAsync(message.ProviderId, "deletion",
                 invalidateDiscovery: true);
         }

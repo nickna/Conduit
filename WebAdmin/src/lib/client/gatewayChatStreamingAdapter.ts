@@ -1,4 +1,4 @@
-import { getBrowserCoreClient } from './browserCoreClient';
+import { getBrowserGatewayClient } from './browserGatewayClient';
 import {
   isChatCompletionChunk,
   isStreamingMetrics,
@@ -56,7 +56,7 @@ export class GatewayChatStreamingAdapter {
 
     try {
       // Get the Gateway client with an ephemeral key.
-      const client = await getBrowserCoreClient();
+      const client = await getBrowserGatewayClient();
       
       // Create abort controller for cancellation
       this.abortController = new AbortController();

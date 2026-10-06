@@ -1,4 +1,4 @@
-import { CreateModelCostDto } from '../types/modelCost';
+import type { ModelCost } from '../types/modelCost';
 import { downloadBlob } from '@/lib/utils/export';
 
 export interface ParsedModelCost {
@@ -10,15 +10,9 @@ export interface ParsedModelCost {
   cachedInputCostPerMillion?: number;
   cachedInputWriteCostPerMillion?: number;
   embeddingCostPerMillion?: number;
-  imageCostPerImage?: number;
-  videoCostPerSecond?: number;
-  videoResolutionMultipliers?: string;
   batchProcessingMultiplier?: number;
   supportsBatchProcessing: boolean;
-  imageQualityMultipliers?: string;
   searchUnitCostPer1K?: number;
-  costPerInferenceStep?: number;
-  defaultInferenceSteps?: number;
   priority: number;
   active: boolean;
   description?: string;
@@ -92,7 +86,6 @@ export const parseCSVContent = (text: string): ParsedModelCost[] => {
         priority: 0,
         active: false,
         supportsBatchProcessing: false,
-        imageQualityMultipliers: undefined,
         isValid: false,
         errors: [`Row has ${values.length} columns but expected ${headers.length}`],
         rowNumber,
@@ -123,15 +116,9 @@ export const parseCSVContent = (text: string): ParsedModelCost[] => {
       cachedInputCostPerMillion: parseNumericValue(row['cached input cost (per million tokens)']),
       cachedInputWriteCostPerMillion: parseNumericValue(row['cache write cost (per million tokens)']),
       embeddingCostPerMillion: parseNumericValue(row['embedding cost (per million tokens)']),
-      imageCostPerImage: parseNumericValue(row['image cost (per image)']),
-      videoCostPerSecond: parseNumericValue(row['video cost (per second)']),
-      videoResolutionMultipliers: row['video resolution multipliers']?.trim(),
       batchProcessingMultiplier: parseNumericValue(row['batch processing multiplier']),
       supportsBatchProcessing: row['supports batch processing']?.toLowerCase() === 'yes' || row['supports batch processing']?.toLowerCase() === 'true',
-      imageQualityMultipliers: row['image quality multipliers']?.trim(),
       searchUnitCostPer1K: parseNumericValue(row['search unit cost (per 1k units)']),
-      costPerInferenceStep: parseNumericValue(row['cost per inference step']),
-      defaultInferenceSteps: parseNumericValue(row['default inference steps']),
       priority: parseNumericValue(row['priority'], 0) ?? 0,
       active: row['active']?.toLowerCase() === 'yes' || row['active']?.toLowerCase() === 'true',
       description: row['description']?.trim(),
@@ -155,57 +142,9 @@ export const parseCSVContent = (text: string): ParsedModelCost[] => {
     if (cost.cachedInputCostPerMillion !== undefined && cost.cachedInputCostPerMillion < 0) errors.push('Cached input cost cannot be negative');
     if (cost.cachedInputWriteCostPerMillion !== undefined && cost.cachedInputWriteCostPerMillion < 0) errors.push('Cache write cost cannot be negative');
     if (cost.embeddingCostPerMillion !== undefined && cost.embeddingCostPerMillion < 0) errors.push('Embedding cost cannot be negative');
-    if (cost.imageCostPerImage !== undefined && cost.imageCostPerImage < 0) errors.push('Image cost cannot be negative');
-    if (cost.videoCostPerSecond !== undefined && cost.videoCostPerSecond < 0) errors.push('Video cost cannot be negative');
     if (cost.batchProcessingMultiplier !== undefined && cost.batchProcessingMultiplier < 0) errors.push('Batch processing multiplier cannot be negative');
     if (cost.batchProcessingMultiplier !== undefined && cost.batchProcessingMultiplier > 1) errors.push('Batch processing multiplier cannot be greater than 1 (>100% cost)');
     if (cost.searchUnitCostPer1K !== undefined && cost.searchUnitCostPer1K < 0) errors.push('Search unit cost cannot be negative');
-    if (cost.costPerInferenceStep !== undefined && cost.costPerInferenceStep < 0) errors.push('Cost per inference step cannot be negative');
-    if (cost.defaultInferenceSteps !== undefined && cost.defaultInferenceSteps < 0) errors.push('Default inference steps cannot be negative');
-    
-    // Validate image quality multipliers JSON
-    if (cost.imageQualityMultipliers) {
-      try {
-        const multipliers = JSON.parse(cost.imageQualityMultipliers) as unknown;
-        if (typeof multipliers !== 'object' || Array.isArray(multipliers)) {
-          errors.push('Image quality multipliers must be a JSON object');
-        } else {
-          // Validate each multiplier value
-          const multipliersObj = multipliers as Record<string, unknown>;
-          for (const [key, value] of Object.entries(multipliersObj)) {
-            if (typeof value !== 'number' || value < 0) {
-              errors.push(`Image quality multiplier for "${key}" must be a positive number`);
-            } else if (value > 10) {
-              errors.push(`Image quality multiplier for "${key}" seems unreasonably high (>10x)`);
-            }
-          }
-        }
-      } catch {
-        errors.push('Image quality multipliers must be valid JSON');
-      }
-    }
-
-    // Validate video resolution multipliers JSON
-    if (cost.videoResolutionMultipliers) {
-      try {
-        const multipliers = JSON.parse(cost.videoResolutionMultipliers) as unknown;
-        if (typeof multipliers !== 'object' || Array.isArray(multipliers)) {
-          errors.push('Video resolution multipliers must be a JSON object');
-        } else {
-          // Validate each multiplier value
-          const multipliersObj = multipliers as Record<string, unknown>;
-          for (const [key, value] of Object.entries(multipliersObj)) {
-            if (typeof value !== 'number' || value < 0) {
-              errors.push(`Video resolution multiplier for "${key}" must be a positive number`);
-            } else if (value > 10) {
-              errors.push(`Video resolution multiplier for "${key}" seems unreasonably high (>10x)`);
-            }
-          }
-        }
-      } catch {
-        errors.push('Video resolution multipliers must be valid JSON');
-      }
-    }
     
     // Reasonable upper bounds validation
     if (cost.inputCostPerMillion > 1000000) errors.push('Input cost seems unreasonably high (>$1,000,000 per million tokens)');
@@ -231,32 +170,55 @@ export const parseCSVContent = (text: string): ParsedModelCost[] => {
   return parsed;
 };
 
-export const convertParsedToDto = (parsedData: ParsedModelCost[]): CreateModelCostDto[] => {
-  return parsedData
-    .filter(d => d.isValid)
-    .map(cost => ({
-      costName: cost.costName,
-      modelProviderMappingIds: [], // Will be resolved during import
-      modelType: cost.modelType as 'chat' | 'embedding' | 'image' | 'audio' | 'video',
-      inputCostPerMillionTokens: cost.inputCostPerMillion, // Already per million
-      outputCostPerMillionTokens: cost.outputCostPerMillion,
-      cachedInputCostPerMillionTokens: cost.cachedInputCostPerMillion,
-      cachedInputWriteCostPerMillionTokens: cost.cachedInputWriteCostPerMillion,
-      embeddingCostPerMillionTokens: cost.embeddingCostPerMillion,
-      imageCostPerImage: cost.imageCostPerImage,
-      videoCostPerSecond: cost.videoCostPerSecond,
-      batchProcessingMultiplier: cost.batchProcessingMultiplier,
-      supportsBatchProcessing: cost.supportsBatchProcessing,
-      imageQualityMultipliers: cost.imageQualityMultipliers,
-      costPerSearchUnit: cost.searchUnitCostPer1K,
-      costPerInferenceStep: cost.costPerInferenceStep,
-      defaultInferenceSteps: cost.defaultInferenceSteps,
-      priority: cost.priority,
-      isActive: cost.active,
-      description: cost.description,
-    } as CreateModelCostDto));
-};
-
 export const downloadFile = (blob: Blob, filename: string) => {
   downloadBlob(blob, filename);
 };
+
+const MODEL_COST_EXPORT_HEADERS = [
+  'Cost Name',
+  'Associated Model Aliases',
+  'Model Type',
+  'Input Cost (per million tokens)',
+  'Output Cost (per million tokens)',
+  'Cached Input Cost (per million tokens)',
+  'Cache Write Cost (per million tokens)',
+  'Embedding Cost (per million tokens)',
+  'Search Unit Cost (per 1K units)',
+  'Supports Batch Processing',
+  'Batch Processing Multiplier',
+  'Priority',
+  'Active',
+  'Description',
+] as const;
+
+function escapeCsvValue(value: unknown): string {
+  let text = '';
+  if (typeof value === 'string') text = value;
+  else if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') text = String(value);
+  else if (value !== null && value !== undefined) text = JSON.stringify(value);
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+/** Serialize current model-cost data using the same columns accepted by the importer. */
+export function serializeModelCostsToCsv(costs: ModelCost[]): string {
+  const rows = costs.map(cost => [
+    cost.costName,
+    cost.associatedModelAliases.join(','),
+    cost.modelType,
+    cost.inputCostPerMillionTokens,
+    cost.outputCostPerMillionTokens,
+    cost.cachedInputCostPerMillionTokens,
+    cost.cachedInputWriteCostPerMillionTokens,
+    cost.embeddingCostPerMillionTokens,
+    cost.costPerSearchUnit,
+    cost.supportsBatchProcessing,
+    cost.batchProcessingMultiplier,
+    cost.priority,
+    cost.isActive,
+    cost.description,
+  ]);
+
+  return [MODEL_COST_EXPORT_HEADERS, ...rows]
+    .map(row => row.map(escapeCsvValue).join(','))
+    .join('\r\n');
+}

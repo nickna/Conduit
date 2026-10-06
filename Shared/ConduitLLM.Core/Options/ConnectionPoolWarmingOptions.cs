@@ -30,13 +30,6 @@ namespace ConduitLLM.Core.Options
         public TimeSpan SignalTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
         /// <summary>
-        /// Gets or sets how long the warming lock should be held.
-        /// Should be longer than expected warming time to prevent lock expiry mid-warming.
-        /// Default: 5 minutes
-        /// </summary>
-        public TimeSpan LockExpiry { get; set; } = TimeSpan.FromMinutes(5);
-
-        /// <summary>
         /// Gets or sets the Redis channel for warming completion signals.
         /// The service type will be appended (e.g., "conduit:connectionpool:warmed:CoreAPI").
         /// Default: "conduit:connectionpool:warmed"

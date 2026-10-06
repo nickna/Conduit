@@ -10,6 +10,7 @@ using ConduitLLM.Core.Models.Responses;
 using ConduitLLM.Gateway.Billing;
 using ConduitLLM.Gateway.Constants;
 using ConduitLLM.Gateway.Options;
+using ConduitLLM.Gateway.Serialization;
 using ConduitLLM.Gateway.UsageTracking;
 
 using Microsoft.AspNetCore.Http.Features;
@@ -344,9 +345,11 @@ public sealed class ResponsesEndpoints : GatewayEndpointHandlerBase
         var outcome = StreamTransportOutcome.NotStarted;
         string? finishReason = null;
 
-        async Task WriteEventAsync(string type, object payload, CancellationToken token)
+        async Task WriteEventAsync(string type, ResponseStreamEvent payload, CancellationToken token)
         {
-            var json = JsonSerializer.Serialize(payload, _jsonOptions);
+            var json = JsonSerializer.Serialize(
+                payload,
+                GatewayJsonTypeInfo.Require<ResponseStreamEvent>(_jsonOptions));
             var frame = $"event: {type}\ndata: {json}\n\n";
             await Response.WriteAsync(frame, token);
             await Response.Body.FlushAsync(token);
@@ -636,7 +639,9 @@ public sealed class ResponsesEndpoints : GatewayEndpointHandlerBase
             {
                 string value => value,
                 null => string.Empty,
-                var value => JsonSerializer.Serialize(value)
+                var value => JsonSerializer.Serialize(
+                    value,
+                    ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.Object)
             };
             var estimated = await _usageEstimationService.EstimateUsageFromStreamingResponseAsync(
                 response.Model ?? request.Model,
@@ -785,7 +790,9 @@ public sealed class ResponsesEndpoints : GatewayEndpointHandlerBase
         {
             string value => value,
             null => string.Empty,
-            var value => JsonSerializer.Serialize(value)
+            var value => JsonSerializer.Serialize(
+                value,
+                ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default.Object)
         };
         var finishReason = chatResponse.Choices.FirstOrDefault()?.FinishReason;
         var incompleteReason = IncompleteReason(finishReason);

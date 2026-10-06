@@ -25,7 +25,7 @@ namespace ConduitLLM.Configuration.Entities
         /// This is the name that clients will use in their API calls (e.g., "gpt-4").
         /// </summary>
         [Required]
-        [MaxLength(100)]
+        [StringLength(100)]
         public string ModelAlias { get; set; } = string.Empty;
 
         /// <summary>
@@ -33,7 +33,7 @@ namespace ConduitLLM.Configuration.Entities
         /// This is the provider-specific model name (e.g., "gpt-4-turbo-preview", "claude-3-opus-20240229").
         /// </summary>
         [Required]
-        [MaxLength(100)]
+        [StringLength(100)]
         public string ProviderModelId { get; set; } = string.Empty;
 
         /// <summary>

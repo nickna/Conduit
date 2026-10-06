@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -240,29 +242,33 @@ namespace ConduitLLM.Core.Services
                                 totalChars += 3400;
                             }
                         }
-                        else
+                        else if (part is ProviderContentPart providerPart)
                         {
-                            // Fallback to reflection for unknown types
-                            var partType = part.GetType();
-                            var typeProperty = partType.GetProperty("Type");
-                            if (typeProperty != null)
+                            if (providerPart.Type == "text" &&
+                                providerPart.ExtensionData?.TryGetValue("text", out var textElement) == true &&
+                                textElement.ValueKind == JsonValueKind.String)
                             {
-                                var typeValue = typeProperty.GetValue(part)?.ToString();
-                                if (typeValue == "text")
-                                {
-                                    var textProperty = partType.GetProperty("Text");
-                                    var text = textProperty?.GetValue(part)?.ToString();
-                                    if (!string.IsNullOrEmpty(text))
-                                    {
-                                        totalChars += text.Length;
-                                    }
-                                }
-                                else if (typeValue == "image_url")
-                                {
-                                    // Conservative fallback for untyped image: 850 tokens * 4 chars/token = 3400 chars
-                                    totalChars += 3400;
-                                    _logger.LogWarning("Using conservative image token estimate for untyped image content");
-                                }
+                                totalChars += textElement.GetString()?.Length ?? 0;
+                            }
+                            else if (providerPart.Type == "image_url")
+                            {
+                                totalChars += 3400;
+                                _logger.LogWarning("Using conservative image token estimate for provider image content");
+                            }
+                        }
+                        else if (part is JsonElement element &&
+                                 element.ValueKind == JsonValueKind.Object &&
+                                 element.TryGetProperty("type", out var typeElement))
+                        {
+                            if (typeElement.GetString() == "text" &&
+                                element.TryGetProperty("text", out var textElement))
+                            {
+                                totalChars += textElement.GetString()?.Length ?? 0;
+                            }
+                            else if (typeElement.GetString() == "image_url")
+                            {
+                                totalChars += 3400;
+                                _logger.LogWarning("Using conservative image token estimate for JSON image content");
                             }
                         }
                     }

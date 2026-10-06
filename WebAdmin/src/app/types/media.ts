@@ -3,21 +3,6 @@
  */
 
 /**
- * Common status types for async generation tasks
- * @deprecated Use MediaGenerationStatus enum instead
- */
-export type GenerationStatus = 
-  | 'idle' 
-  | 'pending' 
-  | 'running' 
-  | 'generating'
-  | 'completed' 
-  | 'failed' 
-  | 'cancelled' 
-  | 'timedout'
-  | 'error';
-
-/**
  * Unified status enum for media generation tasks
  * Simplified from the original GenerationStatus to provide consistency
  */
@@ -46,17 +31,10 @@ export const isActiveStatus = (status: MediaGenerationStatus): boolean => {
 /**
  * Helper to check if a status is terminal (no more changes expected)
  */
-export const isTerminalStatus = (status: MediaGenerationStatus): boolean => {
-  return status === MediaGenerationStatus.Completed || 
-         status === MediaGenerationStatus.Failed || 
-         status === MediaGenerationStatus.Cancelled;
-};
-
 /**
- * Map legacy status values to the unified MediaGenerationStatus
- * Used for backward compatibility during migration
+ * Map Gateway task status values to the UI's unified generation status.
  */
-export const mapLegacyStatus = (status: string): MediaGenerationStatus => {
+export const mapGenerationStatus = (status: string): MediaGenerationStatus => {
   switch (status) {
     case 'idle':
       return MediaGenerationStatus.Idle;

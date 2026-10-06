@@ -101,4 +101,31 @@ public sealed class ModelCapabilityResolverTests
         Assert.Equal(ModelCapabilitySource.ProviderApi, capabilities.CapabilitySource);
         Assert.Equal(verifiedAt, capabilities.CapabilitiesLastVerifiedAt);
     }
+
+    [Fact]
+    public void PersistedCapabilityContracts_PreserveWebJsonAndLegacyReads()
+    {
+        var serialized = ModelCapabilityResolver.SerializeOverrides(
+            new ProviderOperationalCapabilities
+            {
+                SupportsChat = true,
+                SupportsFunctionCalling = false
+            });
+
+        Assert.Equal(
+            "{\"supportsChat\":true,\"supportsStreaming\":null,\"supportsVision\":null,"
+            + "\"supportsImageGeneration\":null,\"supportsVideoGeneration\":null,"
+            + "\"supportsEmbeddings\":null,\"supportsFunctionCalling\":false,"
+            + "\"supportsSpeechToText\":null,\"supportsTextToSpeech\":null,\"supportsRerank\":null}",
+            serialized);
+
+        var legacy = ModelCapabilityResolver.DeserializeOverrides(
+            "{\"SupportsChat\":true,\"SupportsStreaming\":false}");
+
+        Assert.NotNull(legacy);
+        Assert.True(legacy.SupportsChat);
+        Assert.False(legacy.SupportsStreaming);
+        Assert.Equal("[\"image\",\"text\"]", ModelModalities.Serialize([" Text ", "IMAGE", "text"]));
+        Assert.Equal(["image", "text"], ModelModalities.Parse("[\"image\",\"text\"]"));
+    }
 }

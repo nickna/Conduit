@@ -37,7 +37,7 @@ public sealed class PromptCacheMarkerInjectorTests
         var added = PromptCacheMarkerInjector.TryAddMarker(
             content,
             "prompt_cache_breakpoint",
-            new { mode = "explicit" },
+            new Dictionary<string, object?> { ["mode"] = "explicit" },
             out var updated);
 
         added.Should().BeFalse();
@@ -50,7 +50,7 @@ public sealed class PromptCacheMarkerInjectorTests
         var added = PromptCacheMarkerInjector.TryAddMarker(
             "stable prefix",
             "cache_control",
-            new { type = "ephemeral" },
+            new Dictionary<string, object?> { ["type"] = "ephemeral" },
             out var updated);
 
         added.Should().BeTrue();

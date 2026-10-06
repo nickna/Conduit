@@ -19,7 +19,7 @@ public static class DiscoveryModelProjector
         string? capability,
         bool includePricing,
         ILogger logger,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, TimeProvider? clock = null)
     {
         var modelMappings = await context.ModelProviderMappings
             .Include(mapping => mapping.Provider)
@@ -41,6 +41,7 @@ public static class DiscoveryModelProjector
             capability ?? "all");
 
         var models = new List<DiscoveredModelDto>();
+        var now = (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;
         foreach (var mapping in modelMappings)
         {
             var association = mapping.ModelProviderTypeAssociation;
@@ -98,7 +99,8 @@ public static class DiscoveryModelProjector
                     maxInputTokens + maxOutputTokens,
                     maxOutputTokens,
                     supportsPdf),
-                includePricing ? BuildPricing(association.ModelCost) : null));
+                includePricing ? BuildPricing(association.ModelCost, now) : null)
+                { PricingRefreshAt = includePricing ? PricingRefresh(association.ModelCost, now) : null });
         }
 
         return models;
@@ -136,9 +138,15 @@ public static class DiscoveryModelProjector
         };
     }
 
-    private static DiscoveryModelPricingDto? BuildPricing(ModelCost? cost)
+    private static DateTime? PricingRefresh(ModelCost? cost, DateTime now)
     {
-        var now = DateTime.UtcNow;
+        if (cost is not { IsActive: true }) return null;
+        if (cost.EffectiveDate > now) return cost.EffectiveDate;
+        return cost.ExpiryDate > now ? cost.ExpiryDate : null;
+    }
+
+    private static DiscoveryModelPricingDto? BuildPricing(ModelCost? cost, DateTime now)
+    {
         if (cost is not { IsActive: true }
             || cost.EffectiveDate > now
             || (cost.ExpiryDate.HasValue && cost.ExpiryDate.Value <= now))

@@ -66,6 +66,6 @@ public class FunctionExecutionAudit
     /// <summary>
     /// Failure reason if this is a failure event
     /// </summary>
-    [MaxLength(2000)]
+    [StringLength(2000)]
     public string? FailureReason { get; set; }
 }

@@ -1,4 +1,5 @@
-import { useSecurityApi, type IpRule } from '@/hooks/useSecurityApi';
+import { useSecurityApi } from '@/hooks/useSecurityApi';
+import type { CreateIpFilterDto, IpFilterDto } from '@/lib/admin-api';
 import { withAdminClient } from '@/lib/client/adminClient';
 import { notify } from '@/lib/notifications';
 import { downloadBlob, escapeCsvField } from '@/lib/utils/export';
@@ -7,34 +8,29 @@ import type { IpFilterTemplate, IpTemplateRule } from '@/components/ip-filtering
 export function useIpFilteringHandlers(
   fetchIpRules: () => Promise<void>,
   clearSelection: () => void,
-  deselectRule: (ruleId: string) => void,
+  deselectRule: (ruleId: number) => void,
 ) {
   const { updateIpRule, deleteIpRule, createIpRule } = useSecurityApi();
 
-  const handleBulkOperation = async (operation: string, selectedRules: string[]) => {
+  const handleBulkOperation = async (operation: string, selectedRules: number[]) => {
     if (selectedRules.length === 0) return;
     
     try {
-      // Since bulk operations are not implemented in the Admin SDK, 
-      // we'll perform individual operations for each selected rule
       const promises = selectedRules.map(async (ruleId) => {
-        const numericId = parseInt(ruleId, 10);
-        if (isNaN(numericId)) throw new Error(`Invalid rule ID: ${ruleId}`);
-
         switch (operation) {
           case 'enable':
             await withAdminClient(client => 
-              client.ipFilters.enableFilter(numericId)
+              client.ipFilters.enableFilter(ruleId)
             );
             break;
           case 'disable':
             await withAdminClient(client => 
-              client.ipFilters.disableFilter(numericId)
+              client.ipFilters.disableFilter(ruleId)
             );
             break;
           case 'delete':
             await withAdminClient(client => 
-              client.ipFilters.deleteById(numericId)
+              client.ipFilters.deleteById(ruleId)
             );
             break;
           default:
@@ -176,7 +172,7 @@ export function useIpFilteringHandlers(
     input.click();
   };
 
-  const handleDeleteRule = async (ruleId: string) => {
+  const handleDeleteRule = async (ruleId: number) => {
     try {
       await deleteIpRule(ruleId);
       await fetchIpRules();
@@ -186,12 +182,12 @@ export function useIpFilteringHandlers(
     }
   };
 
-  const handleToggleRule = async (ruleId: string, enabled: boolean, rules: IpRule[]) => {
+  const handleToggleRule = async (ruleId: number, enabled: boolean, rules: IpFilterDto[]) => {
     try {
       const rule = rules.find(r => r.id === ruleId);
       if (!rule) return;
       
-      await updateIpRule(ruleId, { ...rule, isEnabled: enabled });
+      await updateIpRule(ruleId, { isEnabled: enabled });
       await fetchIpRules();
     } catch (error) {
       console.error('Failed to toggle IP rule:', error);
@@ -199,18 +195,16 @@ export function useIpFilteringHandlers(
   };
 
   const handleModalSubmit = async (
-    values: Partial<IpRule>,
-    selectedRule: IpRule | null,
+    values: CreateIpFilterDto,
+    selectedRule: IpFilterDto | null,
     setIsSubmitting: React.Dispatch<React.SetStateAction<boolean>>
   ) => {
     setIsSubmitting(true);
     try {
-      if (selectedRule?.id) {
-        // Update existing rule
+      if (selectedRule) {
         await updateIpRule(selectedRule.id, values);
       } else {
-        // Create new rule
-        await createIpRule(values as IpRule);
+        await createIpRule(values);
       }
       await fetchIpRules();
     } catch (error) {
