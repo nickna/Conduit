@@ -56,7 +56,6 @@ namespace ConduitLLM.Core.Messaging
         {
             typeof(VideoGenerationRequested),
             typeof(VideoGenerationCancelled),
-            typeof(VideoProgressCheckRequested),
         };
 
         /// <summary>image-generation-events (tuned: <see cref="ConduitEndpointPolicies.ImageGeneration"/>).</summary>

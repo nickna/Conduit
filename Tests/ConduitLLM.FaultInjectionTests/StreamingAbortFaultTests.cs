@@ -9,6 +9,7 @@ using ConduitLLM.Gateway.Middleware;
 using ConduitLLM.Gateway.Options;
 using ConduitLLM.Gateway.Services;
 using AwesomeAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -23,8 +24,7 @@ public sealed class StreamingAbortFaultTests(BillingFaultFixture fixture)
     {
         const decimal expectedCost = 0.0042m;
         var account = await fixture.SeedAccountAsync();
-        await using var batch = fixture.CreateBatchService();
-        await batch.StartAsync(CancellationToken.None);
+        await using var batch = await fixture.StartBatchServiceAsync();
         var directService = new DirectApiVirtualKeyService(
             fixture.CreateKeyRepository(),
             fixture.CreateGroupRepository(),
@@ -98,6 +98,13 @@ public sealed class StreamingAbortFaultTests(BillingFaultFixture fixture)
 
         (await batch.FlushPendingUpdatesAsync()).Should().Be(1);
         await fixture.AssertAccountedForAsync(account.GroupId, expectedCost);
+
+        await using var verification = fixture.CreateDbContext();
+        var debit = await verification.VirtualKeyGroupTransactions.SingleAsync(
+            transaction => transaction.VirtualKeyGroupId == account.GroupId);
+        debit.Amount.Should().Be(expectedCost);
+        (await verification.VirtualKeyGroups.SingleAsync(group => group.Id == account.GroupId))
+            .Balance.Should().Be(100m - expectedCost);
     }
 
     private static async IAsyncEnumerable<ChatCompletionChunk> PartialStreamWithoutUsage(

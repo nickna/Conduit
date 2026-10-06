@@ -101,32 +101,6 @@ namespace ConduitLLM.Configuration.Repositories
         }
 
         /// <inheritdoc/>
-        public async Task<List<AsyncTask>> GetByVirtualKeyAsync(int virtualKeyId, CancellationToken cancellationToken = default)
-        {
-            return await ExecuteAsync(async context =>
-            {
-                return await context.AsyncTasks
-                    .AsNoTracking()
-                    .Where(t => t.VirtualKeyId == virtualKeyId)
-                    .OrderByDescending(t => t.CreatedAt)
-                    .ToListAsync(cancellationToken);
-            }, cancellationToken);
-        }
-
-        /// <inheritdoc/>
-        public async Task<List<AsyncTask>> GetActiveByVirtualKeyAsync(int virtualKeyId, CancellationToken cancellationToken = default)
-        {
-            return await ExecuteAsync(async context =>
-            {
-                return await context.AsyncTasks
-                    .AsNoTracking()
-                    .Where(t => t.VirtualKeyId == virtualKeyId && !t.IsArchived)
-                    .OrderByDescending(t => t.CreatedAt)
-                    .ToListAsync(cancellationToken);
-            }, cancellationToken);
-        }
-
-        /// <inheritdoc/>
         public async Task<int> ArchiveOldTasksAsync(
             TimeSpan completedOlderThan,
             TimeSpan? staleActiveOlderThan = null,
@@ -229,30 +203,6 @@ namespace ConduitLLM.Configuration.Repositories
         }
 
         /// <inheritdoc/>
-        public async Task<List<AsyncTask>> GetPendingTasksAsync(string? taskType = null, int limit = 100, CancellationToken cancellationToken = default)
-        {
-            return await ExecuteAsync(async context =>
-            {
-                var now = DateTime.UtcNow;
-                var query = context.AsyncTasks
-                    .AsNoTracking()
-                    .Where(t => t.State == 0 && !t.IsArchived &&
-                               (t.LeasedBy == null || t.LeaseExpiryTime == null || t.LeaseExpiryTime < now) &&
-                               (t.NextRetryAt == null || t.NextRetryAt <= now));
-
-                if (!string.IsNullOrEmpty(taskType))
-                {
-                    query = query.Where(t => t.Type == taskType);
-                }
-
-                return await query
-                    .OrderBy(t => t.CreatedAt)
-                    .Take(limit)
-                    .ToListAsync(cancellationToken);
-            }, cancellationToken);
-        }
-
-        /// <inheritdoc/>
         public Task<(List<AsyncTask> Tasks, int TotalCount)> GetByStateAsync(
             int state,
             int page,
@@ -277,106 +227,6 @@ namespace ConduitLLM.Configuration.Repositories
         }
 
         /// <inheritdoc/>
-        public async Task<AsyncTask?> LeaseNextPendingTaskAsync(string workerId, TimeSpan leaseDuration, string? taskType = null, CancellationToken cancellationToken = default)
-        {
-            if (string.IsNullOrWhiteSpace(workerId))
-            {
-                throw new ArgumentNullException(nameof(workerId));
-            }
-
-            try
-            {
-                return await ExecuteAsync(async context =>
-                {
-                    // No explicit transaction: the single SaveChangesAsync is atomic on
-                    // its own, and racing workers are arbitrated by the Version
-                    // concurrency token.
-                    var now = DateTime.UtcNow;
-                    var query = context.AsyncTasks
-                        .Where(t => t.State == 0 && !t.IsArchived &&
-                                   (t.LeasedBy == null || t.LeaseExpiryTime == null || t.LeaseExpiryTime < now) &&
-                                   (t.NextRetryAt == null || t.NextRetryAt <= now));
-
-                    if (!string.IsNullOrEmpty(taskType))
-                    {
-                        query = query.Where(t => t.Type == taskType);
-                    }
-
-                    // Use row-level locking to prevent concurrent access
-                    var task = await query
-                        .OrderBy(t => t.CreatedAt)
-                        .FirstOrDefaultAsync(cancellationToken);
-
-                    if (task != null)
-                    {
-                        task.LeasedBy = workerId;
-                        task.LeaseExpiryTime = now.Add(leaseDuration);
-                        task.UpdatedAt = now;
-                        task.Version++;
-
-                        await context.SaveChangesAsync(cancellationToken);
-
-                        Logger.LogInformation("Worker {WorkerId} leased task {TaskId} until {ExpiryTime}",
-                            workerId, task.Id, task.LeaseExpiryTime);
-                    }
-
-                    return task;
-                }, cancellationToken);
-            }
-            catch (DbUpdateConcurrencyException ex)
-            {
-                Logger.LogDebug(ex, "Concurrency conflict while leasing a pending task");
-                return null;
-            }
-
-        }
-
-        /// <inheritdoc/>
-        public async Task<bool> ReleaseLeaseAsync(string taskId, string workerId, CancellationToken cancellationToken = default)
-        {
-            if (string.IsNullOrWhiteSpace(taskId))
-            {
-                throw new ArgumentNullException(nameof(taskId));
-            }
-
-            if (string.IsNullOrWhiteSpace(workerId))
-            {
-                throw new ArgumentNullException(nameof(workerId));
-            }
-
-            return await ExecuteAsync(async context =>
-            {
-                var now = DateTime.UtcNow;
-                var task = await context.AsyncTasks
-                    .FirstOrDefaultAsync(t => t.Id == taskId &&
-                                             t.LeasedBy == workerId &&
-                                             t.LeaseExpiryTime != null &&
-                                             t.LeaseExpiryTime > now,
-                                             cancellationToken);
-
-                if (task == null)
-                {
-                    Logger.LogWarning("Task {TaskId} not found or not leased by worker {WorkerId}", taskId, workerId);
-                    return false;
-                }
-
-                task.LeasedBy = null;
-                task.LeaseExpiryTime = null;
-                task.UpdatedAt = DateTime.UtcNow;
-                task.Version++;
-
-                var affected = await context.SaveChangesAsync(cancellationToken);
-
-                if (affected > 0)
-                {
-                    Logger.LogInformation("Released lease on task {TaskId} by worker {WorkerId}", taskId, workerId);
-                }
-
-                return affected > 0;
-            }, cancellationToken);
-        }
-
-        /// <inheritdoc/>
         public async Task<bool> ExtendLeaseAsync(string taskId, string workerId, TimeSpan extension, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(taskId))
@@ -394,6 +244,7 @@ namespace ConduitLLM.Configuration.Repositories
                 var now = DateTime.UtcNow;
                 var task = await context.AsyncTasks
                     .FirstOrDefaultAsync(t => t.Id == taskId && t.LeasedBy == workerId &&
+                                             t.State == 1 && !t.IsArchived &&
                                              t.LeaseExpiryTime != null && t.LeaseExpiryTime > now,
                                              cancellationToken);
 
@@ -421,58 +272,6 @@ namespace ConduitLLM.Configuration.Repositories
         }
 
         /// <inheritdoc/>
-        public async Task<List<AsyncTask>> GetExpiredLeaseTasksAsync(int limit = 100, CancellationToken cancellationToken = default)
-        {
-            return await ExecuteAsync(async context =>
-            {
-                var now = DateTime.UtcNow;
-                return await context.AsyncTasks
-                    .AsNoTracking()
-                    .Where(t => t.LeasedBy != null &&
-                               t.LeaseExpiryTime != null &&
-                               t.LeaseExpiryTime < now &&
-                               t.State == 1) // Processing state
-                    .OrderBy(t => t.LeaseExpiryTime)
-                    .Take(limit)
-                    .ToListAsync(cancellationToken);
-            }, cancellationToken);
-        }
-
-        /// <inheritdoc/>
-        public async Task<bool> UpdateWithVersionCheckAsync(AsyncTask task, int expectedVersion, CancellationToken cancellationToken = default)
-        {
-            ArgumentNullException.ThrowIfNull(task);
-
-            try
-            {
-                return await ExecuteAsync(async context =>
-                {
-                    task.UpdatedAt = DateTime.UtcNow;
-                    task.Version = expectedVersion + 1;
-
-                    context.AsyncTasks.Attach(task);
-                    context.Entry(task).State = EntityState.Modified;
-                    context.Entry(task).Property(t => t.Version).OriginalValue = expectedVersion;
-                    var affected = await context.SaveChangesAsync(cancellationToken);
-
-                    if (affected > 0)
-                    {
-                        Logger.LogInformation("Updated task {TaskId} with version check (version {OldVersion} -> {NewVersion})",
-                            task.Id, expectedVersion, task.Version);
-                    }
-
-                    return affected > 0;
-                }, cancellationToken);
-            }
-            catch (DbUpdateConcurrencyException ex)
-            {
-                Logger.LogWarning(ex, "Concurrency conflict updating task {TaskId} with version check", task.Id);
-                return false;
-            }
-
-        }
-
-        /// <inheritdoc/>
         public async Task<AsyncTaskClaimResult> TryClaimTaskAsync(
             string taskId,
             string workerId,
@@ -488,7 +287,7 @@ namespace ConduitLLM.Configuration.Repositories
                 if (context.Database.IsRelational())
                 {
                     var affected = await context.AsyncTasks
-                        .Where(t => t.Id == taskId && !t.IsArchived &&
+                        .Where(t => t.Id == taskId && !t.IsArchived && t.ProviderInvocationStartedAt == null && t.ProviderInvocationCompletedAt == null &&
                             (t.State == 0 || (t.State == 1 &&
                                 t.ProviderInvocationStartedAt == null &&
                                 t.LeaseExpiryTime < now)))
@@ -506,7 +305,7 @@ namespace ConduitLLM.Configuration.Repositories
                 else
                 {
                     var pending = await context.AsyncTasks.SingleOrDefaultAsync(
-                        t => t.Id == taskId && !t.IsArchived &&
+                        t => t.Id == taskId && !t.IsArchived && t.ProviderInvocationStartedAt == null && t.ProviderInvocationCompletedAt == null &&
                             (t.State == 0 || (t.State == 1 &&
                                 t.ProviderInvocationStartedAt == null &&
                                 t.LeaseExpiryTime < now)), cancellationToken);
@@ -523,8 +322,8 @@ namespace ConduitLLM.Configuration.Repositories
                 }
 
                 var uncertain = await context.AsyncTasks.SingleOrDefaultAsync(t =>
-                    t.Id == taskId && t.State == 1 &&
-                    t.ProviderInvocationStartedAt != null && t.LeaseExpiryTime < now,
+                    t.Id == taskId && !t.IsArchived && (t.State == 0 || t.State == 1 && t.LeaseExpiryTime < now) &&
+                    (t.ProviderInvocationStartedAt != null || t.ProviderInvocationCompletedAt != null),
                     cancellationToken);
                 if (uncertain != null)
                 {
@@ -579,8 +378,10 @@ namespace ConduitLLM.Configuration.Repositories
             return await ExecuteAsync(async context =>
             {
                 var now = DateTime.UtcNow;
-                var query = context.AsyncTasks.Where(t => t.Id == taskId
-                    && t.State == 1 && t.LeasedBy == workerId);
+                var query = context.AsyncTasks.Where(t => t.Id == taskId && !t.IsArchived
+                    && t.State == 1 && t.LeasedBy == workerId && t.LeaseExpiryTime > now
+                    && (completed ? t.ProviderInvocationStartedAt != null :
+                        t.ProviderInvocationStartedAt == null && t.ProviderInvocationCompletedAt == null));
                 if (context.Database.IsRelational())
                 {
                     var affected = completed
@@ -716,67 +517,5 @@ namespace ConduitLLM.Configuration.Repositories
             }, cancellationToken, nameof(PrepareIndeterminateTaskRetryAsync));
         }
 
-        /// <inheritdoc/>
-        public async Task<ExpiredTaskRecoveryResult> RecoverExpiredMediaTasksAsync(
-            CancellationToken cancellationToken = default)
-        {
-            return await ExecuteAsync(async context =>
-            {
-                var now = DateTime.UtcNow;
-                var mediaTypes = new[] { "image_generation", "video_generation" };
-                if (context.Database.IsRelational())
-                {
-                    var reset = await context.AsyncTasks
-                        .Where(t => t.State == 1 && mediaTypes.Contains(t.Type) &&
-                            t.LeaseExpiryTime < now && t.ProviderInvocationStartedAt == null)
-                        .ExecuteUpdateAsync(setters => setters
-                            .SetProperty(t => t.State, 0)
-                            .SetProperty(t => t.LeasedBy, (string?)null)
-                            .SetProperty(t => t.LeaseExpiryTime, (DateTime?)null)
-                            .SetProperty(t => t.UpdatedAt, now)
-                            .SetProperty(t => t.Version, t => t.Version + 1), cancellationToken);
-                    var uncertain = await context.AsyncTasks
-                        .Where(t => t.State == 1 && mediaTypes.Contains(t.Type) &&
-                            t.LeaseExpiryTime < now && t.ProviderInvocationStartedAt != null)
-                        .ExecuteUpdateAsync(setters => setters
-                            .SetProperty(t => t.State, 6)
-                            .SetProperty(t => t.IsRetryable, false)
-                            .SetProperty(t => t.Error, "Provider outcome is unknown after the processing lease expired.")
-                            .SetProperty(t => t.LeasedBy, (string?)null)
-                            .SetProperty(t => t.LeaseExpiryTime, (DateTime?)null)
-                            .SetProperty(t => t.CompletedAt, now)
-                            .SetProperty(t => t.UpdatedAt, now)
-                            .SetProperty(t => t.Version, t => t.Version + 1), cancellationToken);
-                    return new ExpiredTaskRecoveryResult(reset, uncertain);
-                }
-
-                var expired = await context.AsyncTasks.Where(t => t.State == 1 &&
-                    mediaTypes.Contains(t.Type) && t.LeaseExpiryTime < now).ToListAsync(cancellationToken);
-                var resetCount = 0;
-                var uncertainCount = 0;
-                foreach (var task in expired)
-                {
-                    task.LeasedBy = null;
-                    task.LeaseExpiryTime = null;
-                    task.UpdatedAt = now;
-                    task.Version++;
-                    if (task.ProviderInvocationStartedAt == null)
-                    {
-                        task.State = 0;
-                        resetCount++;
-                    }
-                    else
-                    {
-                        task.State = 6;
-                        task.IsRetryable = false;
-                        task.Error = "Provider outcome is unknown after the processing lease expired.";
-                        task.CompletedAt = now;
-                        uncertainCount++;
-                    }
-                }
-                await context.SaveChangesAsync(cancellationToken);
-                return new ExpiredTaskRecoveryResult(resetCount, uncertainCount);
-            }, cancellationToken);
-        }
     }
 }

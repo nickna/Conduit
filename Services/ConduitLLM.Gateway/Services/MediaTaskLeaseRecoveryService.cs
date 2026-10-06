@@ -1,9 +1,9 @@
-using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Metrics;
 
 namespace ConduitLLM.Gateway.Services;
 
-/// <summary>Classifies expired media leases without blindly repeating provider work.</summary>
+/// <summary>Durably redispatches safe work and classifies unknown provider outcomes.</summary>
 public sealed class MediaTaskLeaseRecoveryService : BackgroundService
 {
     private static readonly System.Diagnostics.Metrics.Meter Meter = new("ConduitLLM.Media.Idempotency");
@@ -28,9 +28,12 @@ public sealed class MediaTaskLeaseRecoveryService : BackgroundService
             try
             {
                 using var scope = _scopeFactory.CreateScope();
-                var repository = scope.ServiceProvider.GetRequiredService<IAsyncTaskRepository>();
-                var result = await repository.RecoverExpiredMediaTasksAsync(stoppingToken);
+                var recovery = scope.ServiceProvider.GetRequiredService<IMediaTaskRecovery>();
+                var result = await recovery.RecoverAsync(stoppingToken);
                 if (result.ResetToPending > 0) SafeRecoveries.Add(result.ResetToPending);
+                if (result.Redispatched > 0 || result.Blocked > 0)
+                    _logger.LogInformation("Media recovery durably redispatched {Redispatched} tasks; {Blocked} requests require repair",
+                        result.Redispatched, result.Blocked);
                 if (result.MarkedIndeterminate > 0)
                 {
                     MediaTaskIdempotencyMetrics.RecordIndeterminate(

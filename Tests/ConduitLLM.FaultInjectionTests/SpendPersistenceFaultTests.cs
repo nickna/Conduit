@@ -4,8 +4,10 @@ using ConduitLLM.Configuration.Repositories;
 using ConduitLLM.Gateway.Middleware;
 using ConduitLLM.Gateway.Services;
 using AwesomeAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using StackExchange.Redis;
 
 namespace ConduitLLM.FaultInjectionTests;
 
@@ -13,13 +15,67 @@ namespace ConduitLLM.FaultInjectionTests;
 public sealed class SpendPersistenceFaultTests(BillingFaultFixture fixture)
 {
     [Fact(Timeout = 90_000)]
+    public async Task CommittedDebitBeforeRedisAcknowledgement_RecoveryDoesNotDoubleCharge()
+    {
+        const decimal cost = 0.0042m;
+        var account = await fixture.SeedAccountAsync();
+        var realRepository = fixture.CreateGroupRepository();
+        var committed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var acknowledge = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pausedRepository = new Mock<IVirtualKeyGroupRepository>();
+        pausedRepository.Setup(repository => repository.AdjustBalanceIdempotentAsync(
+                It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<ReferenceType>(), It.IsAny<string?>(), It.IsAny<DateTime>()))
+            .Returns(async (int groupId, decimal amount, string idempotencyKey, string? description,
+                string? initiatedBy, ReferenceType referenceType, string? referenceId, DateTime billingWindow) =>
+            {
+                var result = await realRepository.AdjustBalanceIdempotentAsync(
+                    groupId, amount, idempotencyKey, description, initiatedBy, referenceType, referenceId, billingWindow);
+                committed.TrySetResult();
+                await acknowledge.Task;
+                return result;
+            });
+
+        await using var batch = fixture.CreateBatchService(pausedRepository.Object);
+        await batch.QueueSpendUpdateAsync(account.KeyId, cost, DateTime.UtcNow);
+        var flush = batch.FlushPendingUpdatesAsync();
+        try
+        {
+            await committed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            await using var db = fixture.CreateDbContext();
+            var debit = await db.VirtualKeyGroupTransactions.AsNoTracking().SingleAsync(
+                transaction => transaction.VirtualKeyGroupId == account.GroupId);
+            debit.Amount.Should().Be(cost);
+
+            // Reproduce CI's transient double-accounting snapshot: the committed
+            // debit and Redis claim represent the SAME charge until acknowledgement.
+            await using var redis = await ConnectionMultiplexer.ConnectAsync(fixture.RedisConnectionString);
+            var claim = redis.GetServer(redis.GetEndPoints()[0]).Keys(
+                pattern: $"processing_spend_window_units:group:{account.GroupId}:window:*:claim:*").Single();
+            var claimId = claim.ToString().Split(":claim:", StringSplitOptions.None)[1];
+            debit.IdempotencyKey.Should().Be($"batch-spend:{claimId}");
+            ((long)(await redis.GetDatabase().StringGetAsync(claim))).Should().Be(420_000);
+
+            // Another process can recover the still-present claim without repeating
+            // the debit, even while the original flusher has not acknowledged it.
+            await using var recovery = fixture.CreateBatchService();
+            (await recovery.FlushPendingUpdatesAsync()).Should().Be(1);
+            await fixture.AssertAccountedForAsync(account.GroupId, cost);
+            (await db.VirtualKeyGroupTransactions.CountAsync(
+                transaction => transaction.VirtualKeyGroupId == account.GroupId)).Should().Be(1);
+            (await db.VirtualKeyGroups.AsNoTracking().SingleAsync(group => group.Id == account.GroupId))
+                .Balance.Should().Be(100m - cost);
+        }
+        finally { acknowledge.TrySetResult(); await flush; }
+    }
+
+    [Fact(Timeout = 90_000)]
     public async Task RedisUnavailable_DuringQueue_PersistsSpendDirectlyToPostgres()
     {
         const decimal cost = 1.2345m;
         const decimal warmupCost = 0.0001m;
         var account = await fixture.SeedAccountAsync();
-        await using var batch = fixture.CreateBatchService();
-        await batch.StartAsync(CancellationToken.None);
+        await using var batch = await fixture.StartBatchServiceAsync();
 
         // Establish the multiplexer before cutting Redis so this fails at the queue write,
         // not while constructing the test harness.

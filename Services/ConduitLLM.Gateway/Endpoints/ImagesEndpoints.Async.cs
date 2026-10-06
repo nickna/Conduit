@@ -100,10 +100,9 @@ namespace ConduitLLM.Gateway.Endpoints
                 // Create correlation ID
                 var correlationId = Guid.NewGuid().ToString();
 
-                // Create the generation request event first so we can store it as metadata
+                // Submission assigns the task ID before persisting the command and metadata.
                 var generationRequest = new ImageGenerationRequested
                 {
-                    TaskId = "", // Will be filled in after task creation
                     VirtualKeyId = virtualKeyId,
                     VirtualKeyHash = virtualKey.KeyHash,
                     Request = request,
@@ -132,17 +131,8 @@ namespace ConduitLLM.Gateway.Endpoints
                     }
                 };
 
-                // Create the task using the correct method signature
-                var taskId = await _taskService.CreateTaskAsync(
-                    taskType: "image_generation",
-                    virtualKeyId: virtualKeyId,
-                    metadata: metadata);
-
-                // Update the request with the actual task ID
-                generationRequest = generationRequest with { TaskId = taskId };
-
-                // Publish the event directly to the event bus for immediate processing
-                PublishEventFireAndForget(generationRequest, "create async image generation", new { TaskId = taskId, Model = modelName });
+                var taskId = await _mediaTaskSubmission.SubmitAsync(
+                    generationRequest, metadata, HttpContext.RequestAborted);
                 
                 _logger.LogInformation("Created async image generation task {TaskId} for model {Model} and published event",
                     taskId, LoggingSanitizer.S(modelName));

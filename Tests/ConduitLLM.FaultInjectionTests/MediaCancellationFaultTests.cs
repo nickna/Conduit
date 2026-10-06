@@ -52,6 +52,9 @@ public sealed class MediaCancellationFaultTests(BillingFaultFixture fixture)
         taskService.Setup(service => service.MarkProviderInvocationStartedAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
+        taskService.Setup(service => service.ExtendTaskLeaseAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         taskService.Setup(service => service.MarkProviderInvocationCompletedAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);

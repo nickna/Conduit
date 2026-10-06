@@ -437,7 +437,6 @@ namespace ConduitLLM.Benchmarks.Messaging
             if (eventTypes.Contains(typeof(ImageGenerationCancelled))) options.AddEventBridge<ImageGenerationCancelled>();
             if (eventTypes.Contains(typeof(VideoGenerationRequested))) options.AddEventBridge<VideoGenerationRequested>();
             if (eventTypes.Contains(typeof(VideoGenerationCancelled))) options.AddEventBridge<VideoGenerationCancelled>();
-            if (eventTypes.Contains(typeof(VideoProgressCheckRequested))) options.AddEventBridge<VideoProgressCheckRequested>();
             if (eventTypes.Contains(typeof(VirtualKeyUpdated))) options.AddEventBridge<VirtualKeyUpdated>();
         }
 

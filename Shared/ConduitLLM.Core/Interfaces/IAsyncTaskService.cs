@@ -78,15 +78,6 @@ namespace ConduitLLM.Core.Interfaces
             AsyncTaskRetentionPolicy policy,
             CancellationToken cancellationToken = default);
 
-        /// <summary>
-        /// Gets all pending tasks that need to be processed.
-        /// </summary>
-        /// <param name="taskType">Optional filter by task type</param>
-        /// <param name="limit">Maximum number of tasks to return</param>
-        /// <param name="cancellationToken">Cancellation token</param>
-        /// <returns>List of pending tasks</returns>
-        Task<IList<AsyncTaskStatus>> GetPendingTasksAsync(string? taskType = null, int limit = 100, CancellationToken cancellationToken = default);
-
         Task<ConduitLLM.Configuration.Interfaces.AsyncTaskClaimResult> TryClaimTaskAsync(
             string taskId,
             string workerId,
