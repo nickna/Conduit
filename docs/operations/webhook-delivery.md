@@ -45,3 +45,27 @@ Reproduce the HTTP regression suite with:
 dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj -m:2 --filter 'FullyQualifiedName~WebhookHttpTests'
 ```
 
+## Durable identity and claim foundation (WR-3)
+
+The additive `AddDurableWebhookDeliveries` migration creates indexed PostgreSQL
+receipts. The existing domain `EventId` is the logical identity; it survives retry
+and operator replay, while different progress occurrences have different IDs.
+Receipt scope hashes that ID, the owner, and the immutable callback URL. Wolverine
+envelope IDs are excluded. `X-Webhook-Id` is reserved and replaces any custom header
+of the same name, case insensitively. Legacy queued messages retain their original
+EventId, Timestamp, RetryCount, and NextRetryAt; new cycle fields default to zero/null.
+
+The adapter atomically claims a record and persists a Wolverine lease-recovery
+message. Concurrent workers cannot acquire an unexpired claim. Starting an actual
+attempt persists its count before sending; success and scheduling are fenced by
+the claim token and expiry. The saved request snapshot remains authoritative for
+retries. Scheduling updates delivery state and Wolverine's scheduled inbox in one
+transaction. A failed scheduling write leaves the previous claim/recovery message
+intact. Receipts and payloads initially retain until 30 days after the delivery
+deadline; the recovery/retention increment supplies bounded operator purge.
+
+Three real PostgreSQL tests pass for two-instance exclusion with no Redis,
+expired-owner fencing, and scheduling-write rollback. Four identity/legacy-format
+unit tests pass. The checked-in native EF model is regenerated. Consumer adoption
+and receiver-visible identity are integrated with WR-2 before deployment.
+
