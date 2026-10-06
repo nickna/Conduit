@@ -1,5 +1,6 @@
 using ConduitLLM.Configuration;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Services;
 using ConduitLLM.IntegrationTests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,41 @@ namespace ConduitLLM.IntegrationTests.Tests;
 [Trait("Component", "DistributedLock")]
 public sealed class PostgresDistributedLockProviderTests(PostgresLockTestContainerFixture fixture)
 {
+    [Fact]
+    public async Task OptionalHelper_ActualContention_SkipsOrFallsBackAccordingToCallerPolicy()
+    {
+        const string key = "test:optional:policy";
+        await using var ownership = await CreateProvider().TryAcquireAsync(key);
+        Assert.NotNull(ownership);
+        var calls = 0;
+        Task<int> Operation(bool acquired, CancellationToken _) { Assert.False(acquired); calls++; return Task.FromResult(42); }
+        var skipped = await CreateProvider().RunWithOptionalLockAsync(key, TimeSpan.FromMilliseconds(50), Operation,
+            NullLogger.Instance, skipOnTimeout: true);
+        Assert.False(skipped.Executed);
+        Assert.Equal(0, calls);
+        var fallback = await CreateProvider().RunWithOptionalLockAsync(key, TimeSpan.FromMilliseconds(50), Operation,
+            NullLogger.Instance);
+        Assert.Equal(42, fallback.Value);
+        Assert.Equal(1, calls);
+        using var canceled = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateProvider().RunWithOptionalLockAsync(
+            key, TimeSpan.FromSeconds(10), Operation, NullLogger.Instance, canceled.Token));
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task OptionalHelper_ActualBackendOutage_RunsFallbackOnceEvenForDiscoveryPolicy()
+    {
+        var unavailable = new PostgresDistributedLockProvider(
+            "Host=127.0.0.1;Port=1;Database=locktest;Username=locktest;Password=locktest",
+            NullLogger<PostgresDistributedLockProvider>.Instance);
+        var calls = 0;
+        var result = await unavailable.RunWithOptionalLockAsync("test:optional:outage", TimeSpan.Zero,
+            (acquired, _) => { Assert.False(acquired); calls++; return Task.FromResult(42); }, NullLogger.Instance, skipOnTimeout: true);
+        Assert.True(result.Executed);
+        Assert.Equal(1, calls);
+    }
+
     private PostgresDistributedLockProvider CreateProvider() => new(fixture.ConnectionString,
         NullLogger<PostgresDistributedLockProvider>.Instance);
     private PostgresDistributedLockService CreateLegacy() => new(new ContextFactory(fixture.ConnectionString),

@@ -58,22 +58,20 @@ namespace ConduitLLM.Gateway.Services
             }
 
             using var lockScope = _serviceProvider.CreateScope();
-            var lockService = lockScope.ServiceProvider.GetService<IDistributedLockService>();
+            var lockService = lockScope.ServiceProvider.GetService<IDistributedLockProvider>();
             _logger.LogDebug("Attempting to acquire distributed lock for cache warming");
 
             var result = await lockService.RunWithOptionalLockAsync(
                 "discovery:cache:warming",
-                TimeSpan.FromMinutes(5),
                 TimeSpan.FromSeconds(_options.DistributedLockTimeoutSeconds),
-                TimeSpan.FromSeconds(1),
-                async lockAcquired =>
+                async (lockAcquired, protectedToken) =>
                 {
                     if (lockAcquired)
                     {
                         _logger.LogDebug("Acquired distributed lock for cache warming");
                     }
 
-                    await WarmCachesAsync(stoppingToken);
+                    await WarmCachesAsync(protectedToken);
                     return true;
                 },
                 _logger,
@@ -109,8 +107,7 @@ namespace ConduitLLM.Gateway.Services
                 // Then warm cache for each common capability
                 foreach (var capability in commonCapabilities)
                 {
-                    if (stoppingToken.IsCancellationRequested)
-                        break;
+                    stoppingToken.ThrowIfCancellationRequested();
 
                     await WarmCacheForCapability(dbContextFactory, capability, stoppingToken);
 
@@ -119,6 +116,7 @@ namespace ConduitLLM.Gateway.Services
                 }
 
                 stopwatch.Stop();
+                stoppingToken.ThrowIfCancellationRequested();
                 _logger.LogInformation(
                     "Discovery cache warming completed in {ElapsedMs}ms. Warmed {Count} cache entries",
                     stopwatch.ElapsedMilliseconds,
@@ -127,6 +125,7 @@ namespace ConduitLLM.Gateway.Services
             catch (OperationCanceledException)
             {
                 _logger.LogInformation("Cache warming cancelled due to application shutdown");
+                throw;
             }
             catch (Exception ex)
             {

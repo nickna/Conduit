@@ -2,134 +2,85 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Extensions;
 using Microsoft.Extensions.Logging;
 
-namespace ConduitLLM.Core.Services
+namespace ConduitLLM.Core.Services;
+
+/// <summary>Striped local coordination plus optional distributed ownership for independent caches.</summary>
+public sealed class DistributedCachePopulator : IDistributedCachePopulator
 {
-    /// <summary>
-    /// Implements cache stampede prevention using hybrid local + distributed locking.
-    /// When multiple requests hit a cache miss simultaneously, only one performs the
-    /// database query while others wait for the result.
-    /// </summary>
-    public class DistributedCachePopulator : IDistributedCachePopulator
+    private readonly IDistributedLockProvider _lockService;
+    private readonly ILogger<DistributedCachePopulator> _logger;
+    private readonly StripedAsyncLock _localLocks = new();
+    private static readonly TimeSpan LockTimeout = TimeSpan.FromSeconds(10);
+
+    public DistributedCachePopulator(IDistributedLockProvider lockService, ILogger<DistributedCachePopulator> logger)
     {
-        private readonly IDistributedLockService _lockService;
-        private readonly ILogger<DistributedCachePopulator> _logger;
+        _lockService = lockService;
+        _logger = logger;
+    }
 
-        // Local striped locks prevent same-instance stampedes without per-key lifecycle races.
-        private readonly StripedAsyncLock _localLocks = new();
+    // Existing uncancellable callbacks are awaited in full under healthy ownership.
+    public Task<T?> GetOrPopulateAsync<T>(string lockKey, Func<Task<T?>> cacheCheck,
+        Func<Task<T?>> factory, CancellationToken cancellationToken = default) where T : class
+        => GetOrPopulateAsync(lockKey, _ => cacheCheck(), _ => factory(), cancellationToken);
 
-        // Configuration
-        private static readonly TimeSpan LockExpiry = TimeSpan.FromSeconds(30);
-        private static readonly TimeSpan LockTimeout = TimeSpan.FromSeconds(10);
-        private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(50);
-
-        public DistributedCachePopulator(
-            IDistributedLockService lockService,
-            ILogger<DistributedCachePopulator> logger)
+    public async Task<T?> GetOrPopulateAsync<T>(string lockKey, Func<CancellationToken, Task<T?>> cacheCheck,
+        Func<CancellationToken, Task<T?>> factory, CancellationToken cancellationToken = default) where T : class
+    {
+        async Task<T?> CheckAsync(CancellationToken token)
         {
-            _lockService = lockService;
-            _logger = logger;
+            token.ThrowIfCancellationRequested();
+            try
+            {
+                var value = await cacheCheck(token);
+                token.ThrowIfCancellationRequested();
+                return value;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                token.ThrowIfCancellationRequested();
+                _logger.LogWarning(ex, "Cache check failed for {LockKey}; proceeding to population", lockKey);
+                return null;
+            }
+        }
+        async Task<T?> LoadAsync(CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            var value = await factory(token);
+            token.ThrowIfCancellationRequested();
+            return value;
         }
 
-        /// <inheritdoc />
-        public async Task<T?> GetOrPopulateAsync<T>(
-            string lockKey,
-            Func<Task<T?>> cacheCheck,
-            Func<Task<T?>> factory,
-            CancellationToken cancellationToken = default) where T : class
+        var cached = await CheckAsync(cancellationToken);
+        if (cached is not null) { return cached; }
+        IDisposable? localLock;
+        try { localLock = await _localLocks.TryAcquireAsync(lockKey, LockTimeout, cancellationToken); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
         {
-            // Step 1: Fast path - check cache without any locking
-            try
-            {
-                var cachedValue = await cacheCheck();
-                if (cachedValue != null)
+            _logger.LogWarning(ex, "Local cache coordination failed for {LockKey}; falling back to factory", lockKey);
+            return await LoadAsync(cancellationToken);
+        }
+        if (localLock is null)
+        {
+            _logger.LogWarning("Local cache coordination timed out for {LockKey}; falling back to factory", lockKey);
+            return await LoadAsync(cancellationToken);
+        }
+        using (localLock)
+        {
+            cached = await CheckAsync(cancellationToken);
+            if (cached is not null) { return cached; }
+            var result = await _lockService.RunWithOptionalLockAsync(lockKey, LockTimeout,
+                async (acquired, token) =>
                 {
-                    return cachedValue;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Cache check failed for key {LockKey}, proceeding to population", lockKey);
-            }
-
-            // Step 2: Acquire local lock to prevent same-instance stampede
-            IDisposable? localLock;
-
-            try
-            {
-                // Wait for local lock with timeout
-                localLock = await _localLocks.TryAcquireAsync(lockKey, LockTimeout, cancellationToken);
-                if (localLock == null)
-                {
-                    _logger.LogWarning("Timeout waiting for local lock on {LockKey}, falling back to factory", lockKey);
-                    return await factory();
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error acquiring local lock for {LockKey}, falling back to factory", lockKey);
-                return await factory();
-            }
-
-            try
-            {
-                // Step 3: Double-check cache after acquiring local lock
-                try
-                {
-                    var cachedValue = await cacheCheck();
-                    if (cachedValue != null)
+                    if (acquired)
                     {
-                        _logger.LogDebug("Cache hit after local lock for {LockKey}", lockKey);
-                        return cachedValue;
+                        var value = await CheckAsync(token);
+                        if (value is not null) { return value; }
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Cache double-check failed for {LockKey}", lockKey);
-                }
-
-                // Step 4: Acquire distributed lock to prevent cross-instance stampede
-                var result = await _lockService.RunWithOptionalLockAsync(
-                    lockKey,
-                    LockExpiry,
-                    LockTimeout,
-                    RetryDelay,
-                    async lockAcquired =>
-                {
-                    // Step 5: Triple-check cache after acquiring distributed lock
-                    // Another instance may have populated it while we were waiting
-                    if (lockAcquired)
-                    {
-                        try
-                        {
-                            var cachedValue = await cacheCheck();
-                            if (cachedValue != null)
-                            {
-                                _logger.LogDebug("Cache hit after distributed lock for {LockKey}", lockKey);
-                                return cachedValue;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Cache triple-check failed for {LockKey}", lockKey);
-                        }
-                    }
-
-                    // Step 6: Call factory (database fallback)
-                    _logger.LogDebug("Executing factory for {LockKey}", lockKey);
-                    return await factory();
-                },
-                    _logger,
-                    cancellationToken);
-                return result.Value;
-            }
-            finally
-            {
-                localLock.Dispose();
-            }
+                    return await LoadAsync(token);
+                }, _logger, cancellationToken);
+            return result.Value;
         }
     }
 }

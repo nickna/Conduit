@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConduitLLM.Configuration;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Options;
 using ConduitLLM.Core.Serialization;
 using Microsoft.EntityFrameworkCore;
@@ -26,16 +27,18 @@ namespace ConduitLLM.Core.Services
     /// 2. After warming, it publishes a signal via Redis Pub/Sub
     /// 3. Other instances wait for the signal, then warm their own pools
     /// </summary>
-    public class CoordinatedConnectionPoolWarmer : IHostedService
+    public class CoordinatedConnectionPoolWarmer : IHostedService, IDisposable
     {
         private readonly IServiceProvider _serviceProvider;
-        private readonly IDistributedLockService? _lockService;
+        private readonly IDistributedLockProvider? _lockService;
         private readonly IConnectionMultiplexer? _redis;
         private readonly ILogger<CoordinatedConnectionPoolWarmer> _logger;
         private readonly ConnectionPoolWarmingOptions _options;
         private readonly string _instanceId;
         private readonly string _serviceType;
         private readonly int _connectionsToWarm;
+        private readonly CancellationTokenSource _shutdown = new();
+        private Task? _warmingTask;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CoordinatedConnectionPoolWarmer"/> class.
@@ -48,7 +51,7 @@ namespace ConduitLLM.Core.Services
         /// <param name="serviceType">Service type (CoreAPI, AdminAPI) for isolation.</param>
         public CoordinatedConnectionPoolWarmer(
             IServiceProvider serviceProvider,
-            IDistributedLockService? lockService,
+            IDistributedLockProvider? lockService,
             IConnectionMultiplexer? redis,
             ILogger<CoordinatedConnectionPoolWarmer> logger,
             ConnectionPoolWarmingOptions options,
@@ -71,8 +74,15 @@ namespace ConduitLLM.Core.Services
         /// <summary>
         /// Starts the coordinated connection pool warming process.
         /// </summary>
-        public async Task StartAsync(CancellationToken cancellationToken)
+        public Task StartAsync(CancellationToken cancellationToken)
+            => _warmingTask = StartCoreAsync(cancellationToken);
+
+        private async Task StartCoreAsync(CancellationToken cancellationToken)
         {
+            using var work = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token,
+                _serviceProvider.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? CancellationToken.None);
+            cancellationToken = work.Token;
+            cancellationToken.ThrowIfCancellationRequested();
             if (_connectionsToWarm <= 0)
             {
                 _logger.LogInformation(
@@ -102,9 +112,10 @@ namespace ConduitLLM.Core.Services
                     await WarmConnectionPoolAsync(cancellationToken);
                 }
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
                 _logger.LogInformation("Connection pool warming cancelled due to shutdown");
+                throw;
             }
             catch (Exception ex)
             {
@@ -116,22 +127,29 @@ namespace ConduitLLM.Core.Services
         }
 
         /// <summary>
-        /// Stops the service (no-op for connection warmer).
+        /// Cancels warming and awaits protected work before service disposal.
         /// </summary>
-        public Task StopAsync(CancellationToken cancellationToken)
+        public async Task StopAsync(CancellationToken cancellationToken)
         {
+            _shutdown.Cancel();
+            if (_warmingTask is not null)
+            {
+                try { await _warmingTask.WaitAsync(cancellationToken); }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+            }
             _logger.LogDebug("Coordinated connection pool warmer stopped for {ServiceType}", _serviceType);
-            return Task.CompletedTask;
         }
+
+        public void Dispose() => _shutdown.Dispose();
 
         private async Task ExecuteCoordinatedWarmingAsync(CancellationToken cancellationToken)
         {
             var lockKey = GetLockKey();
 
             // Try to acquire the warming lock (non-blocking)
-            var lockHandle = await _lockService!.AcquireLockAsync(
+            var lockHandle = await _lockService!.TryAcquireAsync(
                 lockKey,
-                _options.LockExpiry,
+                TimeSpan.Zero,
                 cancellationToken);
 
             if (lockHandle != null)
@@ -145,19 +163,24 @@ namespace ConduitLLM.Core.Services
         }
 
         private async Task ExecuteAsLeaderAsync(
-            IDistributedLock lockHandle,
+            IDistributedLockOwnership lockHandle,
             CancellationToken cancellationToken)
         {
             try
             {
+                using var work = lockHandle.CreateOperationCancellation(cancellationToken);
+                cancellationToken = work.Token;
+                cancellationToken.ThrowIfCancellationRequested();
                 _logger.LogInformation(
                     "Instance {InstanceId} acquired warming lock for {ServiceType}. Warming pool as leader.",
                     _instanceId, _serviceType);
 
                 await WarmConnectionPoolAsync(cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
 
                 // Publish warming complete signal
                 await PublishWarmingSignalAsync(cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
 
                 _logger.LogInformation(
                     "Leader {InstanceId} completed warming for {ServiceType}. Signal published.",
@@ -168,7 +191,7 @@ namespace ConduitLLM.Core.Services
             {
                 try
                 {
-                    await lockHandle.ReleaseAsync();
+                    await lockHandle.DisposeAsync();
                     _logger.LogDebug("Warming lock released for {ServiceType}", _serviceType);
                 }
                 catch (Exception ex)
@@ -189,6 +212,8 @@ namespace ConduitLLM.Core.Services
             var channel = GetSignalChannel();
             var subscriber = _redis!.GetSubscriber();
             ChannelMessageQueue? messageQueue = null;
+            using var listenerCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            Task listener = Task.CompletedTask;
 
             try
             {
@@ -196,11 +221,11 @@ namespace ConduitLLM.Core.Services
                 messageQueue = await subscriber.SubscribeAsync(RedisChannel.Literal(channel));
 
                 // Process messages asynchronously
-                _ = Task.Run(async () =>
+                listener = Task.Run(async () =>
                 {
                     try
                     {
-                        await foreach (var message in messageQueue)
+                        await foreach (var message in messageQueue.WithCancellation(listenerCancellation.Token))
                         {
                             try
                             {
@@ -232,7 +257,7 @@ namespace ConduitLLM.Core.Services
                     {
                         // Expected when unsubscribing
                     }
-                }, cancellationToken);
+                }, listenerCancellation.Token);
 
                 // Wait for signal or timeout
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -254,10 +279,16 @@ namespace ConduitLLM.Core.Services
             }
             finally
             {
+                listenerCancellation.Cancel();
                 // Unsubscribe from channel
-                if (messageQueue != null)
+                try
                 {
-                    await messageQueue.UnsubscribeAsync();
+                    if (messageQueue != null) { await messageQueue.UnsubscribeAsync(); }
+                }
+                finally
+                {
+                    try { await listener; }
+                    catch (OperationCanceledException) when (listenerCancellation.IsCancellationRequested) { }
                 }
             }
 
@@ -337,6 +368,7 @@ namespace ConduitLLM.Core.Services
                 });
 
                 await Task.WhenAll(tasks);
+                cancellationToken.ThrowIfCancellationRequested();
 
                 stopwatch.Stop();
 
@@ -344,6 +376,7 @@ namespace ConduitLLM.Core.Services
                     "Connection pool warmed for {ServiceType} with {ConnectionCount} connections in {ElapsedMilliseconds}ms",
                     _serviceType, _connectionsToWarm, stopwatch.ElapsedMilliseconds);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
                 stopwatch.Stop();
@@ -352,6 +385,7 @@ namespace ConduitLLM.Core.Services
                     "Failed to warm connection pool for {ServiceType} after {ElapsedMilliseconds}ms. " +
                     "Connections will be established on demand.",
                     _serviceType, stopwatch.ElapsedMilliseconds);
+                throw;
             }
         }
 

@@ -10,17 +10,37 @@ namespace ConduitLLM.Tests.Core.Services;
 public sealed class DistributedCachePopulatorTests
 {
     [Fact]
+    public async Task FactoryFailure_IsNotExecutedTwiceAfterOptionalFallback()
+    {
+        var locks = new Mock<IDistributedLockProvider>();
+        locks.Setup(value => value.TryAcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("backend"));
+        var populator = new DistributedCachePopulator(locks.Object, Mock.Of<ILogger<DistributedCachePopulator>>());
+        var calls = 0;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => populator.GetOrPopulateAsync<string>("work",
+            () => Task.FromResult<string>(null), () => { calls++; throw new InvalidOperationException("factory"); }));
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task CanceledCacheRead_DoesNotRunFactoryFallback()
+    {
+        var locks = new Mock<IDistributedLockProvider>();
+        var populator = new DistributedCachePopulator(locks.Object, Mock.Of<ILogger<DistributedCachePopulator>>());
+        var calls = 0;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => populator.GetOrPopulateAsync<string>("work",
+            () => Task.FromCanceled<string>(new CancellationToken(true)), () => { calls++; return Task.FromResult("value"); }));
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
     public async Task GetOrPopulateAsync_ConcurrentMisses_RunFactoryOncePerKey()
     {
-        var distributedLocks = new Mock<IDistributedLockService>();
+        var distributedLocks = new Mock<IDistributedLockProvider>();
         distributedLocks
-            .Setup(service => service.AcquireLockWithRetryAsync(
-                It.IsAny<string>(),
-                It.IsAny<TimeSpan>(),
-                It.IsAny<TimeSpan>(),
-                It.IsAny<TimeSpan>(),
+            .Setup(service => service.TryAcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IDistributedLock)null!);
+            .ReturnsAsync((IDistributedLockOwnership)null!);
         var populator = new DistributedCachePopulator(
             distributedLocks.Object,
             Mock.Of<ILogger<DistributedCachePopulator>>());

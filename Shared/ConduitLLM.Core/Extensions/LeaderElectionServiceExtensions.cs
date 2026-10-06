@@ -122,7 +122,7 @@ namespace ConduitLLM.Core.Extensions
             // Register the coordinated warmer as a hosted service
             services.AddSingleton<IHostedService>(serviceProvider =>
             {
-                var lockService = serviceProvider.GetService<IDistributedLockService>();
+                var lockService = serviceProvider.GetService<IDistributedLockProvider>();
                 var redis = serviceProvider.GetService<IConnectionMultiplexer>();
                 var logger = serviceProvider.GetRequiredService<ILogger<CoordinatedConnectionPoolWarmer>>();
                 var options = serviceProvider.GetService<IOptions<ConnectionPoolWarmingOptions>>()?.Value

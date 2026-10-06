@@ -32,6 +32,17 @@ Redis repository methods have no token API: check before/after each awaited oper
 do not abandon those calls or redesign mark-before-send/cooldown. Known-loss release
 errors are logged/counted without masking cancellation; healthy release errors propagate.
 
+DL-5 evidence: 35 helper/populator/warmer tests and two actual PostgreSQL optional-policy
+tests passed. Busy waiting returns null: discovery skips, cache population falls back.
+Infrastructure failure (including backend timeout) remains distinct and preserves optional
+fallback. Missing service falls back; caller cancellation never does. Operation failure
+is never executed twice. Callbacks receive protected tokens; the populator keeps its old
+uncancellable overload, awaiting it under healthy ownership, and offers a token overload.
+Striped local coalescing and all cache rechecks remain. Connection warming awaits its
+subscription listener on cleanup and StopAsync cancels/awaits work. Loss/failure cannot
+publish a warming success signal; Redis pub/sub operations already in flight remain
+uncancellable. Discovery also avoids logging a canceled warm as completed.
+
 ## Contract and intentional lifetime change
 
 `IDistributedLockProvider.TryAcquireAsync(key, acquisitionTimeout, cancellationToken)`
