@@ -116,3 +116,41 @@ before lease expiry, kills a recovery subprocess after reset while envelope inse
 is blocked, and verifies execution after restart. Concurrent sweeps/two worker hosts,
 stale owners, malformed historical rows, cancellation/terminal exclusion, and crashes
 after the provider marker are checked against PostgreSQL and the real billing ledger.
+
+## Worker API retirement audit (#1418)
+
+The final call-site audit covered Services, Shared, tools, tests, benchmarks, WebAdmin,
+documentation, Wolverine generated adapters, source-generated JSON metadata, and native
+type roots. The supported release workflow (`.github/workflows/release.yml`) publishes
+service containers; README client integration uses the HTTP/OpenAPI contracts. All
+current .NET consumers of Core/Configuration are repository project references, with
+no package references to those assemblies or active NuGet publishing workflow. The
+old `.github/SETUP_DOTNET_VERSIONING.md` and archived publishing workflow describe a
+historical package setup, not the current release pipeline. GitHub package inventory
+requires a `read:packages` scope unavailable to this audit; public NuGet metadata was
+also inaccessible. No supported external worker API consumer is identified by the
+current source or release documentation. Third-party source integrations that used
+these CLR interfaces must adapt; HTTP task status, cancellation, and generation
+contracts are unchanged.
+
+| Removed API/workflow | Call-site evidence and replacement |
+| --- | --- |
+| `GetByVirtualKeyAsync`, `GetActiveByVirtualKeyAsync` | Definitions only; operator listings use `GetByStateAsync` / `GetTasksByStateAsync`. |
+| `LeaseNextPendingTaskAsync`, `ReleaseLeaseAsync`, `GetExpiredLeaseTasksAsync`, `UpdateWithVersionCheckAsync` | Only obsolete repository tests; Wolverine consumers claim a specific task ID. |
+| Repository/service `GetPendingTasksAsync` | Only its wrapper and obsolete tests; durable recovery selects and locks bounded batches in its own transaction. |
+| `RecoverExpiredMediaTasksAsync`, `ExpiredTaskRecoveryResult` | Only reset-only tests after #1417; `IMediaTaskRecovery` atomically commits reset and replacement dispatch. PostgreSQL restart tests cover the replacement. |
+| `VideoProgressTrackingOrchestrator`, `VideoProgressCheckRequested` | No initiating production publisher; the handler only self-published, with a payload timestamp that did not schedule delivery. Removed handler, contract, bridge/DI registration, benchmark registration, queue type, JSON metadata, generated adapter, and native root. `VideoGenerationOrchestrator` retains provider progress callbacks and notifications. |
+
+All candidate pull-worker methods were retired. `TryClaimTaskAsync`,
+`ExtendLeaseAsync` / `ExtendTaskLeaseAsync`, provider-phase markers, operator retry
+preparation, durable recovery, retention, task status, cancellation, and billing guards
+remain active. The lease-extension test now asserts owner/expiry persistence without
+exercising lease release. Obsolete reset-only and pull-worker tests were removed;
+claim/ownership, provider phases, retention, operator reconciliation, and real
+PostgreSQL/Wolverine recovery tests remain.
+
+The cleanup removes 296 physical lines of repository/service implementations and
+74 interface lines. Dormant progress implementation/contract removal contributes
+another 265 lines; generated adapters, registrations, and obsolete tests are reported
+separately in the PR diff. These are measured deletions, not the 1,785 lines originally
+inspected. No task entity or database schema changes are part of this retirement.

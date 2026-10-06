@@ -11,8 +11,7 @@ namespace ConduitLLM.Gateway.Extensions
     /// <summary>
     /// Registration for the media-generation orchestrators and their progress/completed/failed
     /// handlers, migrated to <c>IEventHandler&lt;T&gt;</c> in epic #909 (issue #920). The
-    /// orchestrators (<c>ImageGenerationOrchestrator</c>, <c>VideoGenerationOrchestrator</c>,
-    /// <c>VideoProgressTrackingOrchestrator</c>) consume on the tuned
+    /// orchestrators (<c>ImageGenerationOrchestrator</c>, <c>VideoGenerationOrchestrator</c>) consume on the tuned
     /// <c>image-generation-events</c> / <c>video-generation-events</c> endpoints — their
     /// bridges are bound there explicitly by <c>Program.Messaging.cs</c> — while the
     /// progress/completed/failed handlers ride the default (auto-configured) endpoints,
@@ -29,10 +28,9 @@ namespace ConduitLLM.Gateway.Extensions
             services.AddEventHandler<ImageGenerationRequested, ConduitLLM.Core.Services.ImageGenerationOrchestrator>();
             services.AddEventHandler<ImageGenerationCancelled, ConduitLLM.Core.Services.ImageGenerationOrchestrator>();
 
-            // Video generation orchestrators (request + cancellation + progress checks on video-generation-events)
+            // Video generation orchestrator (request + cancellation on video-generation-events)
             services.AddEventHandler<VideoGenerationRequested, ConduitLLM.Core.Services.VideoGenerationOrchestrator>();
             services.AddEventHandler<VideoGenerationCancelled, ConduitLLM.Core.Services.VideoGenerationOrchestrator>();
-            services.AddEventHandler<VideoProgressCheckRequested, ConduitLLM.Core.Services.VideoProgressTrackingOrchestrator>();
 
             // Progress / completed / failed notification handlers (default endpoints)
             services.AddEventHandler<ImageGenerationProgress, Gateway.EventHandlers.ImageGenerationProgressHandler>();
@@ -69,7 +67,6 @@ namespace ConduitLLM.Gateway.Extensions
             options.AddEventBridge<ImageGenerationCancelled>();
             options.AddEventBridge<VideoGenerationRequested>();
             options.AddEventBridge<VideoGenerationCancelled>();
-            options.AddEventBridge<VideoProgressCheckRequested>();
             options.AddEventBridge<IndeterminateMediaTaskRetryRequested>();
             options.AddEventBridge<ImageGenerationProgress>();
             options.AddEventBridge<ImageGenerationCompleted>();

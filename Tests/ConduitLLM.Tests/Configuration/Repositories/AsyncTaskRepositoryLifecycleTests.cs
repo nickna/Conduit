@@ -24,77 +24,7 @@ public sealed class AsyncTaskRepositoryLifecycleTests : IAsyncLifetime
     public Task DisposeAsync() => _database.DisposeAsync().AsTask();
 
     [Fact]
-    public async Task GetPendingTasksAsync_FiltersAndOrdersEligibleTasks()
-    {
-        var now = DateTime.UtcNow;
-        var oldest = DurableLifecycleTestData.NewAsyncTask("oldest", now.AddMinutes(-20));
-        var expiredLease = DurableLifecycleTestData.NewAsyncTask("expired-lease", now.AddMinutes(-15));
-        expiredLease.LeasedBy = "dead-worker";
-        expiredLease.LeaseExpiryTime = now.AddMinutes(-5);
-        expiredLease.NextRetryAt = now.AddMinutes(-1);
-
-        var later = DurableLifecycleTestData.NewAsyncTask("later", now.AddMinutes(-10));
-        var wrongType = DurableLifecycleTestData.NewAsyncTask(
-            "wrong-type", now.AddMinutes(-30), "video_generation");
-        var archived = DurableLifecycleTestData.NewAsyncTask("archived", now.AddMinutes(-40));
-        archived.IsArchived = true;
-        var activeLease = DurableLifecycleTestData.NewAsyncTask("active-lease", now.AddMinutes(-50));
-        activeLease.LeasedBy = "worker";
-        activeLease.LeaseExpiryTime = now.AddMinutes(10);
-        var futureRetry = DurableLifecycleTestData.NewAsyncTask("future-retry", now.AddMinutes(-60));
-        futureRetry.NextRetryAt = now.AddMinutes(10);
-        var completed = DurableLifecycleTestData.NewAsyncTask(
-            "completed", now.AddMinutes(-70), state: 2);
-
-        await SeedTasksAsync(
-            oldest, expiredLease, later, wrongType, archived, activeLease, futureRetry, completed);
-
-        var selected = await _repository.GetPendingTasksAsync("image_generation", limit: 2);
-
-        Assert.Equal(new[] { "oldest", "expired-lease" }, selected.Select(t => t.Id));
-    }
-
-    [Fact]
-    public async Task LeaseNextPendingTaskAsync_LeasesOldestEligibleAndPersistsVersion()
-    {
-        var now = DateTime.UtcNow;
-        var deferred = DurableLifecycleTestData.NewAsyncTask("deferred", now.AddHours(-2));
-        deferred.NextRetryAt = now.AddHours(1);
-        var expected = DurableLifecycleTestData.NewAsyncTask("expected", now.AddHours(-1));
-        expected.Version = 4;
-        await SeedTasksAsync(deferred, expected);
-
-        var leased = await _repository.LeaseNextPendingTaskAsync(
-            "worker-a", TimeSpan.FromMinutes(5));
-
-        Assert.NotNull(leased);
-        Assert.Equal("expected", leased.Id);
-        await using var verification = _database.CreateContext();
-        var durable = await verification.AsyncTasks.AsNoTracking().SingleAsync(t => t.Id == "expected");
-        Assert.Equal("worker-a", durable.LeasedBy);
-        Assert.True(durable.LeaseExpiryTime > now.AddMinutes(4));
-        Assert.Equal(5, durable.Version);
-    }
-
-    [Fact]
-    public async Task LeaseNextPendingTaskAsync_ConcurrentWorkers_HaveOneWinner()
-    {
-        await SeedTasksAsync(DurableLifecycleTestData.NewAsyncTask(
-            "lease-race", DateTime.UtcNow.AddMinutes(-5)));
-
-        var results = await Task.WhenAll(
-            _repository.LeaseNextPendingTaskAsync("worker-1", TimeSpan.FromMinutes(5)),
-            _repository.LeaseNextPendingTaskAsync("worker-2", TimeSpan.FromMinutes(5)));
-
-        Assert.Single(results, result => result != null);
-        await using var verification = _database.CreateContext();
-        var durable = await verification.AsyncTasks.AsNoTracking().SingleAsync();
-        Assert.Contains(durable.LeasedBy, new[] { "worker-1", "worker-2" });
-        Assert.Equal(1, durable.Version);
-    }
-
-    [Fact]
-    public async Task ReleaseAndExtendLease_RequireOwnerAndUnexpiredLease()
+    public async Task ExtendLease_RequiresOwnerAndUnexpiredLease()
     {
         var now = DateTime.UtcNow;
         var active = DurableLifecycleTestData.NewAsyncTask("active", now.AddMinutes(-2), state: 1);
@@ -109,51 +39,16 @@ public sealed class AsyncTaskRepositoryLifecycleTests : IAsyncLifetime
             "active", "other", TimeSpan.FromMinutes(20)));
         Assert.True(await _repository.ExtendLeaseAsync(
             "active", "owner", TimeSpan.FromMinutes(20)));
-        Assert.False(await _repository.ReleaseLeaseAsync("active", "other"));
-        Assert.True(await _repository.ReleaseLeaseAsync("active", "owner"));
         Assert.False(await _repository.ExtendLeaseAsync(
             "expired", "owner", TimeSpan.FromMinutes(20)));
-        Assert.False(await _repository.ReleaseLeaseAsync("expired", "owner"));
 
         await using var verification = _database.CreateContext();
         var durable = await verification.AsyncTasks.AsNoTracking()
             .OrderBy(t => t.Id)
             .ToListAsync();
-        Assert.Null(durable.Single(t => t.Id == "active").LeasedBy);
+        Assert.Equal("owner", durable.Single(t => t.Id == "active").LeasedBy);
+        Assert.True(durable.Single(t => t.Id == "active").LeaseExpiryTime > now.AddMinutes(19));
         Assert.Equal("owner", durable.Single(t => t.Id == "expired").LeasedBy);
-    }
-
-    [Fact]
-    public async Task UpdateWithVersionCheckAsync_FreshUpdateWinsAndStaleUpdatesDoNotMutate()
-    {
-        var seeded = DurableLifecycleTestData.NewAsyncTask(
-            "versioned", DateTime.UtcNow.AddMinutes(-1));
-        seeded.Version = 3;
-        seeded.Progress = 10;
-        await SeedTasksAsync(seeded);
-
-        AsyncTask fresh;
-        AsyncTask stale;
-        await using (var context = _database.CreateContext())
-        {
-            fresh = await context.AsyncTasks.AsNoTracking().SingleAsync();
-            stale = await context.AsyncTasks.AsNoTracking().SingleAsync();
-        }
-
-        fresh.Progress = 40;
-        Assert.True(await _repository.UpdateWithVersionCheckAsync(fresh, 3));
-        stale.Progress = 90;
-        Assert.False(await _repository.UpdateWithVersionCheckAsync(stale, 3));
-        var missing = DurableLifecycleTestData.NewAsyncTask(
-            "missing", DateTime.UtcNow);
-        missing.Progress = 100;
-        Assert.False(await _repository.UpdateWithVersionCheckAsync(missing, 0));
-
-        await using var verification = _database.CreateContext();
-        var durable = await verification.AsyncTasks.AsNoTracking().SingleAsync();
-        Assert.Equal(40, durable.Progress);
-        Assert.Equal(4, durable.Version);
-        Assert.False(await verification.AsyncTasks.AnyAsync(t => t.Id == "missing"));
     }
 
     [Fact]
@@ -259,21 +154,6 @@ public sealed class AsyncTaskRepositoryLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task GetExpiredLeaseTasksAsync_EnforcesStateTimeAndLimit()
-    {
-        var now = DateTime.UtcNow;
-        var first = NewLeasedTask("first", now.AddMinutes(-20), 1, now.AddMinutes(-10));
-        var second = NewLeasedTask("second", now.AddMinutes(-15), 1, now.AddMinutes(-5));
-        var pending = NewLeasedTask("pending", now.AddMinutes(-30), 0, now.AddMinutes(-20));
-        var active = NewLeasedTask("active", now.AddMinutes(-40), 1, now.AddMinutes(20));
-        await SeedTasksAsync(first, second, pending, active);
-
-        var expired = await _repository.GetExpiredLeaseTasksAsync(limit: 1);
-
-        Assert.Equal(new[] { "first" }, expired.Select(t => t.Id));
-    }
-
-    [Fact]
     public async Task ArchiveCleanupAndBulkDelete_OnlyAffectEligibleRows()
     {
         var now = DateTime.UtcNow;
@@ -367,15 +247,4 @@ public sealed class AsyncTaskRepositoryLifecycleTests : IAsyncLifetime
         return task;
     }
 
-    private static AsyncTask NewLeasedTask(
-        string id,
-        DateTime createdAt,
-        int state,
-        DateTime expiry)
-    {
-        var task = DurableLifecycleTestData.NewAsyncTask(id, createdAt, state: state);
-        task.LeasedBy = "worker";
-        task.LeaseExpiryTime = expiry;
-        return task;
-    }
 }

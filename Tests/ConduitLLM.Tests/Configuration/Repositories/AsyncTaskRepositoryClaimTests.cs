@@ -114,51 +114,5 @@ public sealed class AsyncTaskRepositoryClaimTests : IDisposable
         Assert.Equal(6, (await verification.AsyncTasks.AsNoTracking().SingleAsync()).State);
     }
 
-    [Fact]
-    public async Task RecoverExpiredMediaTasksAsync_PreProviderLease_ReturnsTaskToPending()
-    {
-        using (var context = new ConduitDbContext(_options))
-        {
-            var task = await context.AsyncTasks.SingleAsync();
-            task.State = 1;
-            task.LeasedBy = "dead-worker";
-            task.LeaseExpiryTime = DateTime.UtcNow.AddMinutes(-1);
-            await context.SaveChangesAsync();
-        }
-
-        var result = await _repository.RecoverExpiredMediaTasksAsync();
-
-        Assert.Equal(new ExpiredTaskRecoveryResult(1, 0), result);
-        using var verification = new ConduitDbContext(_options);
-        var recoveredTask = await verification.AsyncTasks.AsNoTracking().SingleAsync();
-        Assert.Equal(0, recoveredTask.State);
-        Assert.Null(recoveredTask.LeasedBy);
-        Assert.Null(recoveredTask.LeaseExpiryTime);
-    }
-
-    [Fact]
-    public async Task RecoverExpiredMediaTasksAsync_PostProviderLease_BecomesIndeterminate()
-    {
-        using (var context = new ConduitDbContext(_options))
-        {
-            var task = await context.AsyncTasks.SingleAsync();
-            task.State = 1;
-            task.LeasedBy = "dead-worker";
-            task.LeaseExpiryTime = DateTime.UtcNow.AddMinutes(-1);
-            task.ProviderInvocationStartedAt = DateTime.UtcNow.AddMinutes(-2);
-            await context.SaveChangesAsync();
-        }
-
-        var result = await _repository.RecoverExpiredMediaTasksAsync();
-
-        Assert.Equal(new ExpiredTaskRecoveryResult(0, 1), result);
-        using var verification = new ConduitDbContext(_options);
-        var recoveredTask = await verification.AsyncTasks.AsNoTracking().SingleAsync();
-        Assert.Equal(6, recoveredTask.State);
-        Assert.False(recoveredTask.IsRetryable);
-        Assert.Null(recoveredTask.LeasedBy);
-        Assert.Null(recoveredTask.LeaseExpiryTime);
-    }
-
     public void Dispose() => _database.Dispose();
 }
