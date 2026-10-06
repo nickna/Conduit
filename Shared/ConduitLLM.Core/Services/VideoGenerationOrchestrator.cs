@@ -41,6 +41,8 @@ namespace ConduitLLM.Core.Services
         protected override string GetPrompt(VideoGenerationRequested request) => request.ResolveRequest().Prompt;
         protected override string GetVirtualKeyId(VideoGenerationRequested request) => request.VirtualKeyId;
         protected override string? GetWebhookUrl(VideoGenerationRequested request) => request.WebhookUrl;
+        protected override Dictionary<string, string>? GetWebhookHeaders(VideoGenerationRequested request) =>
+            request.WebhookHeaders == null ? null : new(request.WebhookHeaders);
         protected override string? GetCorrelationId(VideoGenerationRequested request) => request.CorrelationId;
         protected override bool GetIsAsync(VideoGenerationRequested request) => request.IsAsync;
 

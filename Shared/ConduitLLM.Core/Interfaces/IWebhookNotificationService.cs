@@ -6,10 +6,15 @@ namespace ConduitLLM.Core.Interfaces
     /// <param name="Success">Whether the endpoint returned a success status code.</param>
     /// <param name="StatusCode">The HTTP status code returned by the endpoint, or null when no response was received (timeout, connection error).</param>
     /// <param name="Error">Description of the failure, or null on success.</param>
-    public record WebhookSendResult(bool Success, int? StatusCode, string? Error)
+    public enum WebhookFailureKind { None, Http, Network, Timeout, InvalidRequest }
+
+    public record WebhookSendResult(bool Success, int? StatusCode, string? Error,
+        WebhookFailureKind FailureKind = WebhookFailureKind.None, TimeSpan? RetryAfter = null)
     {
         public static WebhookSendResult Ok(int statusCode) => new(true, statusCode, null);
-        public static WebhookSendResult Failed(int? statusCode, string error) => new(false, statusCode, error);
+        public static WebhookSendResult Failed(int? statusCode, string error,
+            WebhookFailureKind kind = WebhookFailureKind.Http, TimeSpan? retryAfter = null) =>
+            new(false, statusCode, error, kind, retryAfter);
     }
 
     /// <summary>

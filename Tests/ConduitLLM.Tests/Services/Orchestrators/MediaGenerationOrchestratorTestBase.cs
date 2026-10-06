@@ -438,7 +438,8 @@ namespace ConduitLLM.Tests.Services.Orchestrators
                 EventBusMock.Verify(x => x.PublishAsync(
                     It.Is<WebhookDeliveryRequested>(w => 
                         w.TaskId == GetRequestId(request) &&
-                        w.WebhookUrl == webhookUrl),
+                        w.WebhookUrl == webhookUrl &&
+                        w.Headers != null && w.Headers["Authorization"] == "Bearer callback-test"),
                     It.IsAny<CancellationToken>()), Times.Once);
             }
         }
