@@ -121,6 +121,9 @@ namespace ConduitLLM.Core.Services
         /// <summary>Called before a virtual key is deleted. Subclasses can use this for media cleanup.</summary>
         protected virtual Task OnBeforeVirtualKeyDeleteAsync(int keyId) => Task.CompletedTask;
 
+        protected virtual Task OnBeforeVirtualKeyDeleteAsync(int keyId, CancellationToken cancellationToken)
+            => OnBeforeVirtualKeyDeleteAsync(keyId);
+
         /// <summary>Called after a virtual key is deleted. Subclasses can use this for cache invalidation.</summary>
         protected virtual Task OnVirtualKeyDeletedAsync(VirtualKey key) => Task.CompletedTask;
 
@@ -382,8 +385,11 @@ namespace ConduitLLM.Core.Services
             return success;
         }
 
-        public virtual async Task<bool> DeleteVirtualKeyAsync(int id)
+        public virtual Task<bool> DeleteVirtualKeyAsync(int id) => DeleteVirtualKeyCoreAsync(id, CancellationToken.None);
+
+        protected async Task<bool> DeleteVirtualKeyCoreAsync(int id, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var key = await VirtualKeyRepository.GetByIdAsync(id);
             if (key == null)
             {
@@ -391,7 +397,8 @@ namespace ConduitLLM.Core.Services
                 return false;
             }
 
-            await OnBeforeVirtualKeyDeleteAsync(id);
+            await OnBeforeVirtualKeyDeleteAsync(id, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
 
             var success = await VirtualKeyRepository.DeleteAsync(id);
 

@@ -12,6 +12,15 @@ Legacy/new exclusion is tested using the actual legacy implementation in both di
 The integration fixture accepts `CONDUIT_LOCK_TEST_POSTGRES` for PG16/17 matrix runs;
 without it, its owned PostgreSQL 17 container remains the default.
 
+DL-3 evidence: 97 focused media unit tests passed, including two-instance exclusion,
+backend outage fail-closed, detected loss before work, and cancellation after storage
+ignores its token. Actual PostgreSQL 17 session termination canceled the deletion
+engine within the 10s bound, started only one batch, and recorded `Cancelled` with a
+fresh three-second completion token. Manual/scheduled/hard-delete/restore/key-cleanup
+share the numeric identity and propagate request/shutdown, 30-minute deadline and loss.
+Storage calls already running at loss can complete; canceled post-storage bookkeeping
+may leave a record for a subsequent idempotent cleanup. No fencing/exactly-once claim.
+
 ## Contract and intentional lifetime change
 
 `IDistributedLockProvider.TryAcquireAsync(key, acquisitionTimeout, cancellationToken)`
