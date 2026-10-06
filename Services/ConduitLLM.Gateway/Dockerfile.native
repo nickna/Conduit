@@ -1,5 +1,5 @@
 # Parallel NativeAOT image. The framework-dependent Dockerfile remains the release default.
-FROM mcr.microsoft.com/dotnet/sdk:10.0.302-noble AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.401-noble AS build
 ARG TARGETARCH
 ARG VERSION=3.0.0
 ARG COMMIT_SHA=dev
