@@ -261,6 +261,16 @@ namespace ConduitLLM.Core.Services
                 throw new InvalidOperationException($"Task {taskId} not found");
             }
 
+            // Cancellation cannot establish whether an in-flight provider accepted
+            // work. Preserve that uncertainty before clearing the task's lease.
+            if (status == TaskState.Cancelled && dbTask.ProviderInvocationStartedAt.HasValue &&
+                !dbTask.ProviderInvocationCompletedAt.HasValue)
+            {
+                status = TaskState.Indeterminate;
+                error = "Provider outcome is unknown after cancellation; automatic retry is disabled.";
+                dbTask.IsRetryable = false;
+            }
+
             // Update database entity
             dbTask.State = (int)status;
             dbTask.UpdatedAt = DateTime.UtcNow;

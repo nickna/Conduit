@@ -1,4 +1,7 @@
 using ConduitLLM.Configuration.Messaging;
+using ConduitLLM.Configuration;
+using ConduitLLM.Configuration.Repositories;
+using Microsoft.EntityFrameworkCore;
 using ConduitLLM.Configuration.Messaging.Wolverine;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Messaging;
@@ -19,10 +22,31 @@ var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Diction
 }).Build();
 using var host = Host.CreateDefaultBuilder()
     .ConfigureLogging(log => log.ClearProviders())
-    .ConfigureServices(services => services.AddWolverineEventBus())
+    .ConfigureServices(services => { services.AddWolverineEventBus(); services.AddDistributedMemoryCache(); })
     .AddConduitWolverine(configuration, connectionString, "media-test-publisher",
         options => options.ApplyConduitPublishRouting()).Build();
 await host.StartAsync();
+if (args.FirstOrDefault() == "claim")
+{
+    var repository = new AsyncTaskRepository(new ProbeContextFactory(connectionString), NullLogger<AsyncTaskRepository>.Instance);
+    var owner = $"crashed-worker:{Environment.ProcessId}";
+    var result = await repository.TryClaimTaskAsync(args[1], owner, TimeSpan.FromMinutes(15));
+    if (args.ElementAtOrDefault(2) == "post-provider")
+        await repository.MarkProviderInvocationStartedAsync(args[1], owner);
+    Console.WriteLine($"CLAIMED:{result}");
+    await Task.Delay(Timeout.InfiniteTimeSpan);
+    return;
+}
+if (args.FirstOrDefault() == "recover")
+{
+    var recovery = new MediaTaskRecovery(host.Services.GetRequiredService<IWolverineRuntime>(),
+        host.Services.GetRequiredService<IEventBus>(), host.Services.GetRequiredService<Microsoft.Extensions.Caching.Distributed.IDistributedCache>(),
+        NullLogger<MediaTaskRecovery>.Instance);
+    var result = await recovery.RecoverAsync();
+    Console.WriteLine($"RECOVERED:{result.Redispatched}");
+    await Task.Delay(Timeout.InfiniteTimeSpan);
+    return;
+}
 var submission = new MediaTaskSubmission(host.Services.GetRequiredService<IWolverineRuntime>(),
     host.Services.GetRequiredService<IEventBus>(), NullLogger<MediaTaskSubmission>.Instance);
 var metadata = new TaskMetadata(1)
@@ -46,3 +70,8 @@ Console.WriteLine($"ACCEPTED:{id}");
 await Task.Delay(Timeout.InfiniteTimeSpan);
 
 public sealed class MediaDispatchProbeMarker;
+
+internal sealed class ProbeContextFactory(string connectionString) : IDbContextFactory<ConduitDbContext>
+{
+    public ConduitDbContext CreateDbContext() => new(new DbContextOptionsBuilder<ConduitDbContext>().UseNpgsql(connectionString).Options);
+}

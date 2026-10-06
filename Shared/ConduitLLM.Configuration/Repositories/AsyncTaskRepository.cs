@@ -394,6 +394,7 @@ namespace ConduitLLM.Configuration.Repositories
                 var now = DateTime.UtcNow;
                 var task = await context.AsyncTasks
                     .FirstOrDefaultAsync(t => t.Id == taskId && t.LeasedBy == workerId &&
+                                             t.State == 1 && !t.IsArchived &&
                                              t.LeaseExpiryTime != null && t.LeaseExpiryTime > now,
                                              cancellationToken);
 
@@ -488,7 +489,7 @@ namespace ConduitLLM.Configuration.Repositories
                 if (context.Database.IsRelational())
                 {
                     var affected = await context.AsyncTasks
-                        .Where(t => t.Id == taskId && !t.IsArchived &&
+                        .Where(t => t.Id == taskId && !t.IsArchived && t.ProviderInvocationStartedAt == null && t.ProviderInvocationCompletedAt == null &&
                             (t.State == 0 || (t.State == 1 &&
                                 t.ProviderInvocationStartedAt == null &&
                                 t.LeaseExpiryTime < now)))
@@ -506,7 +507,7 @@ namespace ConduitLLM.Configuration.Repositories
                 else
                 {
                     var pending = await context.AsyncTasks.SingleOrDefaultAsync(
-                        t => t.Id == taskId && !t.IsArchived &&
+                        t => t.Id == taskId && !t.IsArchived && t.ProviderInvocationStartedAt == null && t.ProviderInvocationCompletedAt == null &&
                             (t.State == 0 || (t.State == 1 &&
                                 t.ProviderInvocationStartedAt == null &&
                                 t.LeaseExpiryTime < now)), cancellationToken);
@@ -523,8 +524,8 @@ namespace ConduitLLM.Configuration.Repositories
                 }
 
                 var uncertain = await context.AsyncTasks.SingleOrDefaultAsync(t =>
-                    t.Id == taskId && t.State == 1 &&
-                    t.ProviderInvocationStartedAt != null && t.LeaseExpiryTime < now,
+                    t.Id == taskId && !t.IsArchived && (t.State == 0 || t.State == 1 && t.LeaseExpiryTime < now) &&
+                    (t.ProviderInvocationStartedAt != null || t.ProviderInvocationCompletedAt != null),
                     cancellationToken);
                 if (uncertain != null)
                 {
@@ -579,8 +580,10 @@ namespace ConduitLLM.Configuration.Repositories
             return await ExecuteAsync(async context =>
             {
                 var now = DateTime.UtcNow;
-                var query = context.AsyncTasks.Where(t => t.Id == taskId
-                    && t.State == 1 && t.LeasedBy == workerId);
+                var query = context.AsyncTasks.Where(t => t.Id == taskId && !t.IsArchived
+                    && t.State == 1 && t.LeasedBy == workerId && t.LeaseExpiryTime > now
+                    && (completed ? t.ProviderInvocationStartedAt != null :
+                        t.ProviderInvocationStartedAt == null && t.ProviderInvocationCompletedAt == null));
                 if (context.Database.IsRelational())
                 {
                     var affected = completed

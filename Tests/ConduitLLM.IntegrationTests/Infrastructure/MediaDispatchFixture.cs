@@ -43,6 +43,9 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     public string ConnectionString => _postgres.GetConnectionString();
     public Mock<ILLMClient> Provider { get; } = new();
     public Mock<IDistributedCache> Cache { get; } = new();
+    public int HandledImages;
+    public Func<Task>? BeforeKeyValidation { get; set; }
+    public IBatchSpendUpdateService? Reservations { get; set; }
 
     public ConduitDbContext Db() => new(new DbContextOptionsBuilder<ConduitDbContext>()
         .UseNpgsql(ConnectionString).Options);
@@ -82,12 +85,15 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
                     services.AddSingleton(failedBus.Object);
                 }
                 services.AddScoped<IMediaTaskSubmission, MediaTaskSubmission>();
+                services.AddSingleton(Cache.Object);
+                services.AddScoped<IMediaTaskRecovery, MediaTaskRecovery>();
                 if (worker)
                 {
                     AddOrchestratorDependencies(services);
                     services.AddScoped<IAsyncTaskService>(sp => new HybridAsyncTaskService(
                         Repository(), Cache.Object, sp.GetRequiredService<IEventBus>(), NullLogger<HybridAsyncTaskService>.Instance));
-                    services.AddScoped<IEventHandler<ImageGenerationRequested>, ImageGenerationOrchestrator>();
+                    services.AddScoped<ImageGenerationOrchestrator>();
+                    services.AddScoped<IEventHandler<ImageGenerationRequested>>(sp => new ObservedImages(sp.GetRequiredService<ImageGenerationOrchestrator>(), this));
                     services.AddScoped<IEventHandler<VideoGenerationRequested>, VideoGenerationOrchestrator>();
                     services.AddScoped<IEventHandler<SpendUpdateRequested>>(_ => new DebitHandler(this));
                 }
@@ -121,15 +127,20 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
         });
         var key = new Mock<ConduitLLM.Core.Interfaces.IVirtualKeyService>();
         key.Setup(k => k.ValidateVirtualKeyAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync(VirtualKeyValidationOutcome.Success(new VirtualKey { Id = 1, VirtualKeyGroupId = 1, IsEnabled = true }));
+            .Returns(async () =>
+            {
+                if (BeforeKeyValidation != null) await BeforeKeyValidation();
+                return VirtualKeyValidationOutcome.Success(new VirtualKey { Id = 1, VirtualKeyGroupId = 1, IsEnabled = true });
+            });
         var cost = new Mock<ICostCalculationService>();
         cost.Setup(c => c.CalculateCostAsync(It.IsAny<string>(), It.IsAny<Usage>(), It.IsAny<CancellationToken>())).ReturnsAsync(0.01m);
         services.AddSingleton(factory.Object);
         services.AddSingleton(mapping.Object);
         services.AddSingleton(key.Object);
         services.AddSingleton(cost.Object);
+        if (Reservations != null) services.AddSingleton(Reservations);
         services.AddSingleton(Mock.Of<IMediaStorageService>());
-        services.AddSingleton(Mock.Of<ICancellableTaskRegistry>());
+        services.AddSingleton<ICancellableTaskRegistry, CancellableTaskRegistry>();
         services.AddSingleton(Mock.Of<IWebhookNotificationService>());
         services.AddSingleton(Mock.Of<IHttpClientFactory>());
         services.AddSingleton(Mock.Of<IProviderErrorTrackingService>());
@@ -141,11 +152,21 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     public async Task ResetAsync()
     {
         Provider.Reset(); Cache.Reset();
+        HandledImages = 0; BeforeKeyValidation = null; Reservations = null;
         Provider.As<IVideoGenerationClient>().Setup(p => p.CreateVideoAsync(It.IsAny<VideoGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new VideoGenerationResponse { Created = 1, Data = [] });
         Provider.Setup(p => p.CreateImageAsync(It.IsAny<ImageGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ImageGenerationResponse { Created = 1, Data = [] });
         await SqlAsync("TRUNCATE TABLE \"AsyncTasks\", \"VirtualKeyGroupTransactions\"; UPDATE \"VirtualKeyGroups\" SET \"Balance\" = 100");
+        // Every host/subprocess from the preceding case has stopped. Isolate the
+        // disposable test database's transport queues from historical deliveries.
+        await SqlAsync("""
+            TRUNCATE TABLE wolverine_media_test.wolverine_incoming_envelopes, wolverine_media_test.wolverine_outgoing_envelopes;
+            DO $$ DECLARE row record; BEGIN
+            FOR row IN SELECT tablename FROM pg_tables WHERE schemaname = 'wolverine_transport' LOOP
+              EXECUTE format('TRUNCATE TABLE wolverine_transport.%I CASCADE', row.tablename);
+            END LOOP; END $$;
+            """);
     }
 
     public async Task SqlAsync(string sql)
@@ -158,14 +179,7 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
 
     public async Task<(Process Process, string Id)> StartPublisherAsync(string type)
     {
-        var root = new DirectoryInfo(AppContext.BaseDirectory);
-        while (root != null && !File.Exists(Path.Combine(root.FullName, "Conduit.slnx"))) root = root.Parent;
-        var configuration = AppContext.BaseDirectory.Contains("Release", StringComparison.Ordinal) ? "Release" : "Debug";
-        var dll = Path.Combine(root!.FullName, "tools", "ConduitLLM.MediaDispatchProbe", "bin", configuration, "net10.0", "ConduitLLM.MediaDispatchProbe.dll");
-        var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
-        start.ArgumentList.Add(dll); start.ArgumentList.Add(type);
-        start.Environment["CONDUIT_MEDIA_TEST_POSTGRES"] = ConnectionString;
-        var process = Process.Start(start)!;
+        var process = StartProbe(type);
         var line = await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(30));
         if (line?.StartsWith("ACCEPTED:", StringComparison.Ordinal) != true)
         {
@@ -177,6 +191,19 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
         return (process, line[9..]);
     }
 
+    public Process StartProbe(params string[] args)
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root != null && !File.Exists(Path.Combine(root.FullName, "Conduit.slnx"))) root = root.Parent;
+        var configuration = AppContext.BaseDirectory.Contains("Release", StringComparison.Ordinal) ? "Release" : "Debug";
+        var dll = Path.Combine(root!.FullName, "tools", "ConduitLLM.MediaDispatchProbe", "bin", configuration, "net10.0", "ConduitLLM.MediaDispatchProbe.dll");
+        var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
+        start.ArgumentList.Add(dll);
+        foreach (var arg in args) start.ArgumentList.Add(arg);
+        start.Environment["CONDUIT_MEDIA_TEST_POSTGRES"] = $"{ConnectionString};Application Name=media-dispatch-probe";
+        return Process.Start(start)!;
+    }
+
     public static async Task EventuallyAsync(Func<Task<bool>> predicate)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
@@ -186,6 +213,14 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     private sealed class Factory(MediaDispatchFixture fixture) : IDbContextFactory<ConduitDbContext>
     {
         public ConduitDbContext CreateDbContext() => fixture.Db();
+    }
+    private sealed class ObservedImages(ImageGenerationOrchestrator inner, MediaDispatchFixture fixture) : IEventHandler<ImageGenerationRequested>
+    {
+        public async Task HandleAsync(ImageGenerationRequested request, IEventContext context)
+        {
+            await inner.HandleAsync(request, context);
+            Interlocked.Increment(ref fixture.HandledImages);
+        }
     }
     private sealed class DebitHandler(MediaDispatchFixture fixture) : IEventHandler<SpendUpdateRequested>
     {

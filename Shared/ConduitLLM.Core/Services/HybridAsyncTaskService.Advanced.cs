@@ -26,7 +26,8 @@ namespace ConduitLLM.Core.Services
                 taskId, workerId, leaseDuration, cancellationToken);
             if (result == AsyncTaskClaimResult.Claimed)
             {
-                await _cache.RemoveAsync(GetTaskKey(taskId), cancellationToken);
+                try { await _cache.RemoveAsync(GetTaskKey(taskId), cancellationToken); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Claim cache invalidation failed for task {TaskId}", taskId); }
             }
             return result;
         }

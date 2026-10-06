@@ -59,3 +59,60 @@ It terminates the publisher subprocess without shutdown, restarts message handli
 forces outgoing-envelope rollback and transport publication failure, and verifies
 full payload preservation, resumed generation, one invocation/debit, and optional
 cache/notification failure. No live provider credentials or charges are needed.
+
+## Automatic recovery
+
+The existing one-minute `MediaTaskLeaseRecoveryService` now calls `IMediaTaskRecovery`.
+Each pass selects at most 100 non-archived image/video rows with PostgreSQL
+`FOR UPDATE SKIP LOCKED`: expired Processing leases and Pending rows untouched for
+two minutes whose scheduled retry is due. Row locks serialize recovery with provider
+markers, claims, cancellation, and another Gateway's sweep. Resetting ownership/state
+and inserting replacement envelopes use the same PostgreSQL transaction as acceptance.
+The two-minute Pending grace period limits duplicate dispatch while an original command
+is queued. `UpdatedAt` records reconciliation and bounds repeat redispatch; task-ID
+claims remain the execution authority. Safe lease recovery does not consume a provider
+retry attempt. There is no new timer or independent scheduling system.
+
+Only tasks with no provider-start **or** completion marker are automatically replayed.
+Marked outcomes become Indeterminate with automatic retry disabled. Terminal and
+archived tasks remain excluded. Provider-start requires the current owner and an
+unexpired lease and can succeed only once. An old worker that loses this check exits
+without invoking the provider, overwriting the new owner's result, or releasing the
+task-ID reservation now used by its replacement. Claim cache invalidation is best-effort.
+Local cancellation registration also follows the durable claim: replacement executions
+install their own source, and stale executions can unregister only their own source.
+Failure/cancellation finalization first renews the current owner's lease atomically;
+an execution that lost ownership leaves the replacement's state and reservation alone.
+Persisted cancellation classifies an unfinished provider invocation as Indeterminate
+before clearing its lease, even if the worker has not unwound yet. A pre-provider
+cancellation remains Cancelled and releases its unspent reservation; neither state is
+automatically replayed.
+
+Recovery and operator-approved retries share `MediaGenerationCommandReconstruction`,
+including legacy image commands with blank task IDs and legacy video request metadata.
+No model/prompt or authorization data is guessed. Missing/malformed request or key
+metadata leaves the original state and records `Dispatch recovery blocked:` in `Error`.
+Updating its timestamp moves the blocked row to the back of the bounded scan so it does
+not permanently exclude later eligible work. The next eligible scan rechecks repaired
+metadata. Unsupported non-media task types are outside this recovery policy.
+
+Monitor `media_task_dispatch_recoveries` in `ConduitLLM.Media.Dispatch`, tagged by
+`outcome` (`redispatched`, `indeterminate`, `blocked`), the existing safe-recovery and
+Indeterminate counters, and Wolverine outgoing/dead-letter counts. The periodic worker
+logs aggregate redispatch/repair counts. Task IDs and types are logged; keys and request
+payloads are not.
+
+To verify a rollout, inspect old Pending rows and expired leases in `AsyncTasks`, then
+confirm an eligible task reaches Processing/Completed and has one billing ledger entry.
+Check blocked tasks through the operator task listing or the persisted `Error` field;
+repair the complete stored request/authorization metadata using the original source,
+or cancel the task if that source is unavailable. Indeterminate tasks require #1328's
+operator/provider reconciliation. Never clear provider markers merely because a task
+is old. Existing PostgreSQL indexes bound the scan; no new application or messaging
+schema migration is needed, and old eligible Pending rows are reconciled on startup.
+
+The integration suite also kills a claimant, consumes its real Wolverine redelivery
+before lease expiry, kills a recovery subprocess after reset while envelope insertion
+is blocked, and verifies execution after restart. Concurrent sweeps/two worker hosts,
+stale owners, malformed historical rows, cancellation/terminal exclusion, and crashes
+after the provider marker are checked against PostgreSQL and the real billing ledger.
