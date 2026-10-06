@@ -20,10 +20,11 @@ public static class AsyncTaskServiceExtensions
             var cache = serviceProvider.GetRequiredService<IDistributedCache>();
             var eventBus = serviceProvider.GetService<IEventBus>();
             var logger = serviceProvider.GetRequiredService<ILogger<HybridAsyncTaskService>>();
+            var terminalWriter = serviceProvider.GetService<IMediaTaskTerminalWriter>();
 
             return eventBus is null
-                ? new HybridAsyncTaskService(repository, cache, logger)
-                : new HybridAsyncTaskService(repository, cache, eventBus, logger);
+                ? new HybridAsyncTaskService(repository, cache, logger, terminalWriter)
+                : new HybridAsyncTaskService(repository, cache, eventBus, logger, terminalWriter);
         });
 
         return services;

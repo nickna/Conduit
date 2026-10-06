@@ -111,3 +111,31 @@ processing duplicate events through the production static bridge, queue policy,
 and HTTP registration. The receiver observes one active POST for duplicates and
 stable IDs/custom headers on retry. A SignalR failure after success causes no resend.
 
+## Atomic terminal media callbacks (WR-4)
+
+Gateway terminal writers lock the authoritative task, check its version and worker
+lease, and commit the terminal result and Wolverine callback envelope together.
+Identity derives from the task and committed execution version. Concurrent or
+repeated terminal writes cannot replace an outcome or create another callback.
+Callback recovery sends the saved intent without invoking a provider or spending.
+Cache, SignalR, and provider-error reporting run after the authoritative commit;
+their failures cannot manufacture a failed callback after completion.
+
+Running image/video Completed, Failed, and Cancelled callbacks retain their existing
+payload contracts, original headers, destination, owner, and correlation. API/event
+cancellation reconstructs the running task's callback from accepted metadata if it
+wins the orchestrator race. Pending cancellation, timeout, and Indeterminate paths
+did not promise callbacks and retain that behavior. Unknown provider outcomes remain
+Indeterminate with automatic generation retry disabled. Late progress cannot reopen
+a terminal task or cache a rejected optimistic update (issue #1446).
+
+No historical terminal rows are automatically notified: their missing intent cannot
+be distinguished safely from an already delivered legacy callback. Roll out this
+writer for new transitions after the receipt migration. Any legacy reconciliation
+requires independently identified missing intents and an explicit bounded window.
+
+Verification covers concurrent terminal writers for all six image/video outcomes,
+outbox-write rollback, dispatch after host restart, cache/notification failure,
+cancellation races, stale worker fencing, and delayed progress. Existing durable
+acceptance/recovery tests also verify provider markers and spend safeguards.
+

@@ -14,6 +14,7 @@ namespace ConduitLLM.Core.Services
         private readonly IAsyncTaskRepository _repository;
         private readonly IDistributedCache _cache;
         private readonly IEventBus? _eventBus;
+        private readonly IMediaTaskTerminalWriter? _terminalWriter;
         private readonly ILogger<HybridAsyncTaskService> _logger;
         private const string TASK_KEY_PREFIX = Constants.RedisKeys.AsyncTask.Prefix;
         private const int CACHE_EXPIRY_HOURS = 2; // Shorter expiry for completed tasks
@@ -27,11 +28,13 @@ namespace ConduitLLM.Core.Services
         public HybridAsyncTaskService(
             IAsyncTaskRepository repository,
             IDistributedCache cache,
-            ILogger<HybridAsyncTaskService> logger)
+            ILogger<HybridAsyncTaskService> logger,
+            IMediaTaskTerminalWriter? terminalWriter = null)
         {
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _terminalWriter = terminalWriter;
         }
 
         /// <summary>
@@ -45,12 +48,14 @@ namespace ConduitLLM.Core.Services
             IAsyncTaskRepository repository,
             IDistributedCache cache,
             IEventBus? eventBus,
-            ILogger<HybridAsyncTaskService> logger)
+            ILogger<HybridAsyncTaskService> logger,
+            IMediaTaskTerminalWriter? terminalWriter = null)
         {
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
             _eventBus = eventBus; // Allow null
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _terminalWriter = terminalWriter;
         }
 
 

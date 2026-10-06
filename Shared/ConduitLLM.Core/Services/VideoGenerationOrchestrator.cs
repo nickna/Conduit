@@ -63,11 +63,12 @@ namespace ConduitLLM.Core.Services
             IProviderErrorTrackingService errorTrackingService,
             ILogger<VideoGenerationOrchestrator> logger,
             ConduitLLM.Configuration.Interfaces.IBatchSpendUpdateService? batchSpendService = null,
-            IProviderErrorTranslator? providerErrorTranslator = null)
+            IProviderErrorTranslator? providerErrorTranslator = null,
+            IMediaTaskTerminalWriter? terminalWriter = null)
             : base(clientFactory, taskService, storageService, eventBus,
                    modelMappingService, virtualKeyService, costService, taskRegistry,
                    webhookService, httpClientFactory, parameterValidator, metrics,
-                   errorTrackingService, logger, batchSpendService, providerErrorTranslator)
+                   errorTrackingService, logger, batchSpendService, providerErrorTranslator, terminalWriter)
         {
             _retryConfiguration = retryConfiguration?.Value ?? new VideoGenerationRetryConfiguration();
 

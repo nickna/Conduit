@@ -87,11 +87,14 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
                     var failedBus = new Mock<IEventBus>();
                     failedBus.Setup(bus => bus.PublishAsync(It.IsAny<AsyncTaskCreated>(), It.IsAny<CancellationToken>()))
                         .ThrowsAsync(new IOException("Optional notification unavailable"));
+                    failedBus.Setup(bus => bus.PublishAsync(It.IsAny<AsyncTaskUpdated>(), It.IsAny<CancellationToken>()))
+                        .ThrowsAsync(new IOException("Optional terminal notification unavailable"));
                     services.AddSingleton(failedBus.Object);
                 }
                 services.AddScoped<IMediaTaskSubmission, MediaTaskSubmission>();
                 services.AddSingleton(Cache.Object);
                 services.AddScoped<IMediaTaskRecovery, MediaTaskRecovery>();
+                services.AddScoped<IMediaTaskTerminalWriter, MediaTaskTerminalWriter>();
                 if (webhooks)
                 {
                     services.AddMemoryCache();
@@ -106,7 +109,8 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
                 {
                     AddOrchestratorDependencies(services);
                     services.AddScoped<IAsyncTaskService>(sp => new HybridAsyncTaskService(
-                        Repository(), Cache.Object, sp.GetRequiredService<IEventBus>(), NullLogger<HybridAsyncTaskService>.Instance));
+                        Repository(), Cache.Object, sp.GetRequiredService<IEventBus>(), NullLogger<HybridAsyncTaskService>.Instance,
+                        sp.GetRequiredService<IMediaTaskTerminalWriter>()));
                     services.AddScoped<ImageGenerationOrchestrator>();
                     services.AddScoped<IEventHandler<ImageGenerationRequested>>(sp => new ObservedImages(sp.GetRequiredService<ImageGenerationOrchestrator>(), this));
                     services.AddScoped<IEventHandler<VideoGenerationRequested>, VideoGenerationOrchestrator>();

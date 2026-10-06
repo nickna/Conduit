@@ -445,6 +445,18 @@ namespace ConduitLLM.Tests.Services.Orchestrators
         }
 
         [Fact]
+        public async Task HandleAsync_TerminalCommitError_DoesNotManufactureFailedOutcome()
+        {
+            var request = CreateTestEventRequest();
+            SetupSuccessfulGeneration(CreateTestResponse());
+            EventBusMock.Setup(bus => bus.PublishAsync(It.IsAny<WebhookDeliveryRequested>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new IOException("Commit outcome may be unknown"));
+            await Assert.ThrowsAsync<IOException>(() => Orchestrator.HandleAsync(request, CreateEventContext()));
+            TaskServiceMock.Verify(service => service.UpdateTaskStatusAsync(GetRequestId(request), TaskState.Failed,
+                It.IsAny<int?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Fact]
         public async Task HandleAsync_WhenMappingHasModelCostId_ShouldUseDirectCostLookupAndPublishSpend()
         {
             // Arrange - mapping resolved through the model catalog: legacy ProviderModelId is stale

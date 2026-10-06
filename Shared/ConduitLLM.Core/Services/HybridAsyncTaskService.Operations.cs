@@ -254,12 +254,20 @@ namespace ConduitLLM.Core.Services
             string? error = null, 
             CancellationToken cancellationToken = default)
         {
+            if (_terminalWriter != null && status is not (TaskState.Pending or TaskState.Processing))
+            {
+                var json = result == null ? null : JsonSerializer.Serialize(result, result.GetType(), AsyncTaskJsonContext.Default);
+                await _terminalWriter.CommitAsync(new(taskId, status, Progress: progress, ResultJson: json, Error: error), cancellationToken);
+                return;
+            }
             // Get task from database to ensure it exists
             var dbTask = await _repository.GetByIdAsync(taskId, cancellationToken);
             if (dbTask == null)
             {
                 throw new InvalidOperationException($"Task {taskId} not found");
             }
+            // Delayed progress notifications cannot reopen a committed terminal task.
+            if (status == TaskState.Processing && dbTask.State >= (int)TaskState.Completed) return;
 
             // Cancellation cannot establish whether an in-flight provider accepted
             // work. Preserve that uncertainty before clearing the task's lease.
@@ -324,7 +332,7 @@ namespace ConduitLLM.Core.Services
             }
 
             // Save to database
-            await _repository.UpdateAsync(dbTask, cancellationToken);
+            if (!await _repository.UpdateAsync(dbTask, cancellationToken)) return;
 
             // Update cache
             var taskStatus = ConvertToTaskStatus(dbTask);

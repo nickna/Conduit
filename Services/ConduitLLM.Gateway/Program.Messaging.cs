@@ -48,6 +48,8 @@ public partial class Program
         builder.Services.AddWolverineEventBus();
         builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IWebhookDeliveryStore,
             ConduitLLM.Messaging.Wolverine.WebhookDeliveryStore>();
+        builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IMediaTaskTerminalWriter,
+            ConduitLLM.Messaging.Wolverine.MediaTaskTerminalWriter>();
         builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IMediaTaskSubmission,
             ConduitLLM.Messaging.Wolverine.MediaTaskSubmission>();
         builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IMediaTaskRecovery,
