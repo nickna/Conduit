@@ -29,6 +29,9 @@ using Testcontainers.PostgreSql;
 using Wolverine;
 using Wolverine.Postgresql;
 using Wolverine.Runtime;
+using ConduitLLM.Gateway.Extensions;
+using ConduitLLM.Gateway.Services;
+using ConduitLLM.Gateway.Consumers;
 
 namespace ConduitLLM.IntegrationTests.Infrastructure;
 
@@ -46,6 +49,8 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     public int HandledImages;
     public Func<Task>? BeforeKeyValidation { get; set; }
     public IBatchSpendUpdateService? Reservations { get; set; }
+    public Mock<IWebhookDeliveryNotificationService> WebhookNotifications { get; } = new();
+    public IWebhookCircuitBreaker? ReceiverCircuit { get; set; }
 
     public ConduitDbContext Db() => new(new DbContextOptionsBuilder<ConduitDbContext>()
         .UseNpgsql(ConnectionString).Options);
@@ -64,7 +69,7 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     }
     public async Task DisposeAsync() => await _postgres.DisposeAsync();
 
-    public IHost Host(bool worker, bool notificationsFail = false)
+    public IHost Host(bool worker, bool notificationsFail = false, bool webhooks = false)
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -87,6 +92,16 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
                 services.AddScoped<IMediaTaskSubmission, MediaTaskSubmission>();
                 services.AddSingleton(Cache.Object);
                 services.AddScoped<IMediaTaskRecovery, MediaTaskRecovery>();
+                if (webhooks)
+                {
+                    services.AddMemoryCache();
+                    services.AddWebhookHttpServices(config);
+                    services.AddScoped<IWebhookDeliveryStore, WebhookDeliveryStore>();
+                    services.AddSingleton(WebhookNotifications.Object);
+                    if (ReceiverCircuit != null) services.AddSingleton(ReceiverCircuit);
+                    else services.AddSingleton<IWebhookCircuitBreaker, WebhookCircuitBreaker>();
+                    services.AddScoped<IEventHandler<WebhookDeliveryRequested>, WebhookDeliveryConsumer>();
+                }
                 if (worker)
                 {
                     AddOrchestratorDependencies(services);
@@ -102,6 +117,12 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
             {
                 options.ApplicationAssembly = typeof(ConduitLLM.Gateway.Endpoints.ImagesEndpoints).Assembly;
                 options.ApplyConduitPublishRouting();
+                if (webhooks)
+                {
+                    options.Durability.ScheduledJobPollingTime = TimeSpan.FromMilliseconds(100);
+                    options.AddEventBridge<WebhookDeliveryRequested>();
+                    options.ListenWithPolicy(ConduitEndpointPolicies.WebhookDelivery, [typeof(WebhookDeliveryRequested)]);
+                }
                 if (worker)
                 {
                     options.AddEventBridge<ImageGenerationRequested>();
@@ -153,11 +174,12 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     {
         Provider.Reset(); Cache.Reset();
         HandledImages = 0; BeforeKeyValidation = null; Reservations = null;
+        ReceiverCircuit = null; WebhookNotifications.Reset();
         Provider.As<IVideoGenerationClient>().Setup(p => p.CreateVideoAsync(It.IsAny<VideoGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new VideoGenerationResponse { Created = 1, Data = [] });
         Provider.Setup(p => p.CreateImageAsync(It.IsAny<ImageGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ImageGenerationResponse { Created = 1, Data = [] });
-        await SqlAsync("TRUNCATE TABLE \"AsyncTasks\", \"VirtualKeyGroupTransactions\"; UPDATE \"VirtualKeyGroups\" SET \"Balance\" = 100");
+        await SqlAsync("TRUNCATE TABLE \"AsyncTasks\", \"VirtualKeyGroupTransactions\", \"WebhookDeliveries\"; UPDATE \"VirtualKeyGroups\" SET \"Balance\" = 100");
         // Every host/subprocess from the preceding case has stopped. Isolate the
         // disposable test database's transport queues from historical deliveries.
         await SqlAsync("""

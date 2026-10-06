@@ -22,10 +22,7 @@ public static class WebhookServicesExtensions
     /// </summary>
     public static IServiceCollection AddWebhookServices(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOptions<WebhookDeliveryOptions>()
-            .Bind(configuration.GetSection(WebhookDeliveryOptions.SectionName))
-            .Validate(options => options.IsValid(), "Invalid webhook delivery options.")
-            .ValidateOnStart();
+        services.AddWebhookHttpServices(configuration);
         // Register Webhook Delivery Service
         services.AddSingleton<IWebhookDeliveryService, WebhookDeliveryService>();
 
@@ -111,7 +108,17 @@ public static class WebhookServicesExtensions
             }
         });
 
-        // Register Webhook Notification Service with optimized configuration for high throughput
+        return services;
+    }
+
+    /// <summary>Production HTTP sender and receiver retry policy, independently testable with real receivers.</summary>
+    public static IServiceCollection AddWebhookHttpServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<WebhookDeliveryOptions>()
+            .Bind(configuration.GetSection(WebhookDeliveryOptions.SectionName))
+            .Validate(options => options.IsValid(), "Invalid webhook delivery options.")
+            .ValidateOnStart();
+        services.AddSingleton<WebhookDeliveryPolicy>();
         services.AddTransient<WebhookMetricsHandler>();
         services.AddHttpClient<IWebhookNotificationService, WebhookNotificationService>(
             "WebhookClient",

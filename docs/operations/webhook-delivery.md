@@ -69,3 +69,45 @@ expired-owner fencing, and scheduling-write rollback. Four identity/legacy-forma
 unit tests pass. The checked-in native EF model is regenerated. Consumer adoption
 and receiver-visible identity are integrated with WR-2 before deployment.
 
+## Durable receiver policy (WR-2)
+
+The consumer now uses PostgreSQL claims and receipts. It returns immediately for
+delivered, actively claimed, future-due, and obsolete-cycle work. It sends the
+reserved X-Webhook-Id alongside the saved custom headers. A committed receipt
+suppresses sends even if subsequent SignalR or circuit reporting fails.
+
+Options under `Webhooks:Delivery`:
+
+| Option | Default | Meaning |
+| --- | ---: | --- |
+| MaxAttempts | 100 | Maximum reserved actual send attempts per cycle |
+| TerminalWindowSeconds | 86400 | Terminal notification delivery window |
+| ProgressWindowSeconds | 300 | Started/progress notification freshness |
+| InitialDelaySeconds | 2 | First retry backoff |
+| MaxDelaySeconds | 3600 | Capped exponential backoff |
+| JitterRatio | 0.2 | Symmetric backoff jitter |
+| MaxRetryAfterSeconds | 3600 | Maximum receiver-requested wait |
+| DeferralSeconds | 30 | Circuit/admission deferral fallback |
+
+2xx succeeds. Network failures, receiver timeouts, 408, 429, 500, 502, 503, and 504
+retry. Other statuses (including redirects, authentication failures, 501, and 505)
+exhaust deliberately. Invalid URLs/JSON and oversized payloads exhaust without a
+send. The legacy null-payload fallback remains compatible. Retry-After cannot
+shorten the normal backoff, and all retry/deferral times are capped at the deadline.
+Open circuits durably defer without consuming a send attempt. No receiver backoff
+sleeps in a worker. Terminal exhaustion retains the NonRetryableMessageException
+path to Wolverine error storage and the endpoint's `Retry: null` protection.
+
+Counts are reserved immediately before the send. A crash between that write and
+HTTP can consume a slot without a POST; this conservatively prevents exceeding the
+budget after restart. A crash after remote acceptance and before the receipt can
+redeliver. Delivery is at least once: receivers should deduplicate X-Webhook-Id.
+The lease recovery envelope also protects work when a schedule/receipt write or
+shutdown interrupts handling. Optional notifications never control scheduling.
+
+Validation: 103 webhook/policy/endpoint tests pass. Five real PostgreSQL tests pass,
+including a 15-second outage with a pending retry across host restart and two hosts
+processing duplicate events through the production static bridge, queue policy,
+and HTTP registration. The receiver observes one active POST for duplicates and
+stable IDs/custom headers on retry. A SignalR failure after success causes no resend.
+
