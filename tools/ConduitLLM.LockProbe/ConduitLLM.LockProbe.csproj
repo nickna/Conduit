@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsAotCompatible>true</IsAotCompatible>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="DistributedLock.Postgres" />
+    <PackageReference Include="Npgsql" />
+    <Compile Include="../../Shared/ConduitLLM.Core/Services/PostgresLockIdentity.cs" Link="PostgresLockIdentity.cs" />
+  </ItemGroup>
+</Project>
