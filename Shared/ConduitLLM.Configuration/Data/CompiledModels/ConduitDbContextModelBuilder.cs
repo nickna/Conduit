@@ -17,7 +17,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
     public partial class ConduitDbContextModel
     {
         private ConduitDbContextModel()
-            : base(skipDetectChanges: false, modelId: new Guid("c1543a38-e9f0-4e6d-a1bf-c2d293eeb09a"), entityTypeCount: 37)
+            : base(skipDetectChanges: false, modelId: new Guid("86a53c64-bb51-47a5-b7a9-58f6d2f029c2"), entityTypeCount: 38)
         {
         }
 
@@ -53,6 +53,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var virtualKeyGroupTransaction = VirtualKeyGroupTransactionEntityType.Create(this);
             var virtualKeySpendHistory = VirtualKeySpendHistoryEntityType.Create(this);
             var webhookDeliveryRecord = WebhookDeliveryRecordEntityType.Create(this);
+            var webhookReplayAudit = WebhookReplayAuditEntityType.Create(this);
             var functionCallAudit = FunctionCallAuditEntityType.Create(this);
             var functionConfiguration = FunctionConfigurationEntityType.Create(this);
             var functionCost = FunctionCostEntityType.Create(this);
@@ -123,6 +124,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             VirtualKeyGroupTransactionEntityType.CreateAnnotations(virtualKeyGroupTransaction);
             VirtualKeySpendHistoryEntityType.CreateAnnotations(virtualKeySpendHistory);
             WebhookDeliveryRecordEntityType.CreateAnnotations(webhookDeliveryRecord);
+            WebhookReplayAuditEntityType.CreateAnnotations(webhookReplayAudit);
             FunctionCallAuditEntityType.CreateAnnotations(functionCallAudit);
             FunctionConfigurationEntityType.CreateAnnotations(functionConfiguration);
             FunctionCostEntityType.CreateAnnotations(functionCost);
@@ -5709,10 +5711,117 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_WebhookDeliveries_TaskIdIx).Add(iX_WebhookDeliveries_TaskId);
             webhookDeliveriesTable.Indexes.Add("IX_WebhookDeliveries_TaskId", iX_WebhookDeliveries_TaskId);
 
-            var functionCallAudit = FindEntityType("ConduitLLM.Functions.Entities.FunctionCallAudit")!;
+            var webhookReplayAudit = FindEntityType("ConduitLLM.Configuration.Entities.WebhookReplayAudit")!;
 
             var defaultTableMappings29 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionCallAudit.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings29);
+            webhookReplayAudit.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings29);
+            var conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase = new TableBase("ConduitLLM.Configuration.Entities.WebhookReplayAudit", null, relationalModel);
+            var actorColumnBase = new ColumnBase<ColumnMappingBase>("Actor", "character varying(128)", conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase);
+            conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase.Columns.Add("Actor", actorColumnBase);
+            var cycleColumnBase0 = new ColumnBase<ColumnMappingBase>("Cycle", "integer", conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase);
+            conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase.Columns.Add("Cycle", cycleColumnBase0);
+            var deadLetterIdColumnBase = new ColumnBase<ColumnMappingBase>("DeadLetterId", "uuid", conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase)
+            {
+                IsNullable = true
+            };
+            conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase.Columns.Add("DeadLetterId", deadLetterIdColumnBase);
+            var deliveryIdColumnBase = new ColumnBase<ColumnMappingBase>("DeliveryId", "character varying(64)", conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase);
+            conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase.Columns.Add("DeliveryId", deliveryIdColumnBase);
+            var operationIdColumnBase1 = new ColumnBase<ColumnMappingBase>("OperationId", "uuid", conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase);
+            conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase.Columns.Add("OperationId", operationIdColumnBase1);
+            var previousAttemptsColumnBase = new ColumnBase<ColumnMappingBase>("PreviousAttempts", "integer", conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase);
+            conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase.Columns.Add("PreviousAttempts", previousAttemptsColumnBase);
+            var requestedAtColumnBase = new ColumnBase<ColumnMappingBase>("RequestedAt", "timestamp with time zone", conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase);
+            conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase.Columns.Add("RequestedAt", requestedAtColumnBase);
+            var retainUntilColumnBase0 = new ColumnBase<ColumnMappingBase>("RetainUntil", "timestamp with time zone", conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase);
+            conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase.Columns.Add("RetainUntil", retainUntilColumnBase0);
+            relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.WebhookReplayAudit", conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase);
+            var conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase = new TableMappingBase<ColumnMappingBase>(webhookReplayAudit, conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase, null);
+            conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase, false);
+            defaultTableMappings29.Add(conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)operationIdColumnBase1, webhookReplayAudit.FindProperty("OperationId")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)actorColumnBase, webhookReplayAudit.FindProperty("Actor")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)cycleColumnBase0, webhookReplayAudit.FindProperty("Cycle")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)deadLetterIdColumnBase, webhookReplayAudit.FindProperty("DeadLetterId")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)deliveryIdColumnBase, webhookReplayAudit.FindProperty("DeliveryId")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)previousAttemptsColumnBase, webhookReplayAudit.FindProperty("PreviousAttempts")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)requestedAtColumnBase, webhookReplayAudit.FindProperty("RequestedAt")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)retainUntilColumnBase0, webhookReplayAudit.FindProperty("RetainUntil")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
+
+            var tableMappings29 = new List<TableMapping>();
+            webhookReplayAudit.SetRuntimeAnnotation("Relational:TableMappings", tableMappings29);
+            var webhookReplayAuditsTable = new Table("WebhookReplayAudits", null, relationalModel);
+            var operationIdColumn1 = new Column("OperationId", "uuid", webhookReplayAuditsTable);
+            webhookReplayAuditsTable.Columns.Add("OperationId", operationIdColumn1);
+            operationIdColumn1.Accessors = ColumnAccessorsFactory.CreateGeneric<Guid>(operationIdColumn1);
+            var actorColumn = new Column("Actor", "character varying(128)", webhookReplayAuditsTable);
+            webhookReplayAuditsTable.Columns.Add("Actor", actorColumn);
+            actorColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(actorColumn);
+            var cycleColumn0 = new Column("Cycle", "integer", webhookReplayAuditsTable);
+            webhookReplayAuditsTable.Columns.Add("Cycle", cycleColumn0);
+            cycleColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(cycleColumn0);
+            var deadLetterIdColumn = new Column("DeadLetterId", "uuid", webhookReplayAuditsTable)
+            {
+                IsNullable = true
+            };
+            webhookReplayAuditsTable.Columns.Add("DeadLetterId", deadLetterIdColumn);
+            deadLetterIdColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<Guid>(deadLetterIdColumn);
+            var deliveryIdColumn = new Column("DeliveryId", "character varying(64)", webhookReplayAuditsTable);
+            webhookReplayAuditsTable.Columns.Add("DeliveryId", deliveryIdColumn);
+            deliveryIdColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(deliveryIdColumn);
+            var previousAttemptsColumn = new Column("PreviousAttempts", "integer", webhookReplayAuditsTable);
+            webhookReplayAuditsTable.Columns.Add("PreviousAttempts", previousAttemptsColumn);
+            previousAttemptsColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(previousAttemptsColumn);
+            var requestedAtColumn = new Column("RequestedAt", "timestamp with time zone", webhookReplayAuditsTable);
+            webhookReplayAuditsTable.Columns.Add("RequestedAt", requestedAtColumn);
+            requestedAtColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(requestedAtColumn);
+            var retainUntilColumn0 = new Column("RetainUntil", "timestamp with time zone", webhookReplayAuditsTable);
+            webhookReplayAuditsTable.Columns.Add("RetainUntil", retainUntilColumn0);
+            retainUntilColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(retainUntilColumn0);
+            relationalModel.Tables.Add(("WebhookReplayAudits", null), webhookReplayAuditsTable);
+            var webhookReplayAuditsTableMapping = new TableMapping(webhookReplayAudit, webhookReplayAuditsTable, null);
+            webhookReplayAuditsTable.AddTypeMapping(webhookReplayAuditsTableMapping, false);
+            tableMappings29.Add(webhookReplayAuditsTableMapping);
+            RelationalModel.CreateColumnMapping(operationIdColumn1, webhookReplayAudit.FindProperty("OperationId")!, webhookReplayAuditsTableMapping);
+            RelationalModel.CreateColumnMapping(actorColumn, webhookReplayAudit.FindProperty("Actor")!, webhookReplayAuditsTableMapping);
+            RelationalModel.CreateColumnMapping(cycleColumn0, webhookReplayAudit.FindProperty("Cycle")!, webhookReplayAuditsTableMapping);
+            RelationalModel.CreateColumnMapping(deadLetterIdColumn, webhookReplayAudit.FindProperty("DeadLetterId")!, webhookReplayAuditsTableMapping);
+            RelationalModel.CreateColumnMapping(deliveryIdColumn, webhookReplayAudit.FindProperty("DeliveryId")!, webhookReplayAuditsTableMapping);
+            RelationalModel.CreateColumnMapping(previousAttemptsColumn, webhookReplayAudit.FindProperty("PreviousAttempts")!, webhookReplayAuditsTableMapping);
+            RelationalModel.CreateColumnMapping(requestedAtColumn, webhookReplayAudit.FindProperty("RequestedAt")!, webhookReplayAuditsTableMapping);
+            RelationalModel.CreateColumnMapping(retainUntilColumn0, webhookReplayAudit.FindProperty("RetainUntil")!, webhookReplayAuditsTableMapping);
+            var pK_WebhookReplayAudits = new UniqueConstraint("PK_WebhookReplayAudits", webhookReplayAuditsTable, new[] { operationIdColumn1 });
+            webhookReplayAuditsTable.PrimaryKey = pK_WebhookReplayAudits;
+            pK_WebhookReplayAudits.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<Guid>(pK_WebhookReplayAudits));
+            var pK_WebhookReplayAuditsKey = RelationalModel.GetKey(this,
+                "ConduitLLM.Configuration.Entities.WebhookReplayAudit",
+                new[] { "OperationId" });
+            pK_WebhookReplayAudits.MappedKeys.Add(pK_WebhookReplayAuditsKey);
+            RelationalModel.GetOrCreateUniqueConstraints(pK_WebhookReplayAuditsKey).Add(pK_WebhookReplayAudits);
+            webhookReplayAuditsTable.UniqueConstraints.Add("PK_WebhookReplayAudits", pK_WebhookReplayAudits);
+            var iX_WebhookReplayAudits_DeliveryId_Cycle = new TableIndex(
+            "IX_WebhookReplayAudits_DeliveryId_Cycle", webhookReplayAuditsTable, new[] { deliveryIdColumn, cycleColumn0 }, true);
+            iX_WebhookReplayAudits_DeliveryId_Cycle.SetRowIndexValueFactory(new CompositeRowIndexValueFactory(iX_WebhookReplayAudits_DeliveryId_Cycle));
+            var iX_WebhookReplayAudits_DeliveryId_CycleIx = RelationalModel.GetIndex(this,
+                "ConduitLLM.Configuration.Entities.WebhookReplayAudit",
+                new[] { "DeliveryId", "Cycle" });
+            iX_WebhookReplayAudits_DeliveryId_Cycle.MappedIndexes.Add(iX_WebhookReplayAudits_DeliveryId_CycleIx);
+            RelationalModel.GetOrCreateTableIndexes(iX_WebhookReplayAudits_DeliveryId_CycleIx).Add(iX_WebhookReplayAudits_DeliveryId_Cycle);
+            webhookReplayAuditsTable.Indexes.Add("IX_WebhookReplayAudits_DeliveryId_Cycle", iX_WebhookReplayAudits_DeliveryId_Cycle);
+            var iX_WebhookReplayAudits_RetainUntil = new TableIndex(
+            "IX_WebhookReplayAudits_RetainUntil", webhookReplayAuditsTable, new[] { retainUntilColumn0 }, false);
+            iX_WebhookReplayAudits_RetainUntil.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<DateTime>(iX_WebhookReplayAudits_RetainUntil));
+            var iX_WebhookReplayAudits_RetainUntilIx = RelationalModel.GetIndex(this,
+                "ConduitLLM.Configuration.Entities.WebhookReplayAudit",
+                new[] { "RetainUntil" });
+            iX_WebhookReplayAudits_RetainUntil.MappedIndexes.Add(iX_WebhookReplayAudits_RetainUntilIx);
+            RelationalModel.GetOrCreateTableIndexes(iX_WebhookReplayAudits_RetainUntilIx).Add(iX_WebhookReplayAudits_RetainUntil);
+            webhookReplayAuditsTable.Indexes.Add("IX_WebhookReplayAudits_RetainUntil", iX_WebhookReplayAudits_RetainUntil);
+
+            var functionCallAudit = FindEntityType("ConduitLLM.Functions.Entities.FunctionCallAudit")!;
+
+            var defaultTableMappings30 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionCallAudit.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings30);
             var conduitLLMFunctionsEntitiesFunctionCallAuditTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionCallAudit", null, relationalModel);
             var chatCompletionIdColumnBase = new ColumnBase<ColumnMappingBase>("ChatCompletionId", "uuid", conduitLLMFunctionsEntitiesFunctionCallAuditTableBase)
             {
@@ -5777,7 +5886,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionCallAudit", conduitLLMFunctionsEntitiesFunctionCallAuditTableBase);
             var conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase = new TableMappingBase<ColumnMappingBase>(functionCallAudit, conduitLLMFunctionsEntitiesFunctionCallAuditTableBase, null);
             conduitLLMFunctionsEntitiesFunctionCallAuditTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase, false);
-            defaultTableMappings29.Add(conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
+            defaultTableMappings30.Add(conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase28, functionCallAudit.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)chatCompletionIdColumnBase, functionCallAudit.FindProperty("ChatCompletionId")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)costColumnBase0, functionCallAudit.FindProperty("Cost")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
@@ -5794,8 +5903,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)timestampColumnBase3, functionCallAudit.FindProperty("Timestamp")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase9, functionCallAudit.FindProperty("VirtualKeyId")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
 
-            var tableMappings29 = new List<TableMapping>();
-            functionCallAudit.SetRuntimeAnnotation("Relational:TableMappings", tableMappings29);
+            var tableMappings30 = new List<TableMapping>();
+            functionCallAudit.SetRuntimeAnnotation("Relational:TableMappings", tableMappings30);
             var functionCallAuditsTable = new Table("FunctionCallAudits", null, relationalModel);
             var idColumn28 = new Column("Id", "uuid", functionCallAuditsTable);
             functionCallAuditsTable.Columns.Add("Id", idColumn28);
@@ -5875,7 +5984,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("FunctionCallAudits", null), functionCallAuditsTable);
             var functionCallAuditsTableMapping = new TableMapping(functionCallAudit, functionCallAuditsTable, null);
             functionCallAuditsTable.AddTypeMapping(functionCallAuditsTableMapping, false);
-            tableMappings29.Add(functionCallAuditsTableMapping);
+            tableMappings30.Add(functionCallAuditsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn28, functionCallAudit.FindProperty("Id")!, functionCallAuditsTableMapping);
             RelationalModel.CreateColumnMapping(chatCompletionIdColumn, functionCallAudit.FindProperty("ChatCompletionId")!, functionCallAuditsTableMapping);
             RelationalModel.CreateColumnMapping(costColumn0, functionCallAudit.FindProperty("Cost")!, functionCallAuditsTableMapping);
@@ -5966,8 +6075,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionConfiguration = FindEntityType("ConduitLLM.Functions.Entities.FunctionConfiguration")!;
 
-            var defaultTableMappings30 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionConfiguration.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings30);
+            var defaultTableMappings31 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionConfiguration.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings31);
             var conduitLLMFunctionsEntitiesFunctionConfigurationTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionConfiguration", null, relationalModel);
             var baseUrlColumnBase1 = new ColumnBase<ColumnMappingBase>("BaseUrl", "character varying(500)", conduitLLMFunctionsEntitiesFunctionConfigurationTableBase)
             {
@@ -6023,7 +6132,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionConfiguration", conduitLLMFunctionsEntitiesFunctionConfigurationTableBase);
             var conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase = new TableMappingBase<ColumnMappingBase>(functionConfiguration, conduitLLMFunctionsEntitiesFunctionConfigurationTableBase, null);
             conduitLLMFunctionsEntitiesFunctionConfigurationTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase, false);
-            defaultTableMappings30.Add(conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
+            defaultTableMappings31.Add(conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase29, functionConfiguration.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)baseUrlColumnBase1, functionConfiguration.FindProperty("BaseUrl")!, conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)cacheTtlMinutesColumnBase, functionConfiguration.FindProperty("CacheTtlMinutes")!, conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
@@ -6040,8 +6149,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)timeoutSecondsColumnBase, functionConfiguration.FindProperty("TimeoutSeconds")!, conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase13, functionConfiguration.FindProperty("UpdatedAt")!, conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
 
-            var tableMappings30 = new List<TableMapping>();
-            functionConfiguration.SetRuntimeAnnotation("Relational:TableMappings", tableMappings30);
+            var tableMappings31 = new List<TableMapping>();
+            functionConfiguration.SetRuntimeAnnotation("Relational:TableMappings", tableMappings31);
             var functionConfigurationsTable = new Table("FunctionConfigurations", null, relationalModel);
             var idColumn29 = new Column("Id", "integer", functionConfigurationsTable);
             functionConfigurationsTable.Columns.Add("Id", idColumn29);
@@ -6113,7 +6222,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("FunctionConfigurations", null), functionConfigurationsTable);
             var functionConfigurationsTableMapping = new TableMapping(functionConfiguration, functionConfigurationsTable, null);
             functionConfigurationsTable.AddTypeMapping(functionConfigurationsTableMapping, false);
-            tableMappings30.Add(functionConfigurationsTableMapping);
+            tableMappings31.Add(functionConfigurationsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn29, functionConfiguration.FindProperty("Id")!, functionConfigurationsTableMapping);
             RelationalModel.CreateColumnMapping(baseUrlColumn1, functionConfiguration.FindProperty("BaseUrl")!, functionConfigurationsTableMapping);
             RelationalModel.CreateColumnMapping(cacheTtlMinutesColumn, functionConfiguration.FindProperty("CacheTtlMinutes")!, functionConfigurationsTableMapping);
@@ -6168,8 +6277,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionCost = FindEntityType("ConduitLLM.Functions.Entities.FunctionCost")!;
 
-            var defaultTableMappings31 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionCost.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings31);
+            var defaultTableMappings32 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionCost.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings32);
             var conduitLLMFunctionsEntitiesFunctionCostTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionCost", null, relationalModel);
             var baseCostColumnBase = new ColumnBase<ColumnMappingBase>("BaseCost", "numeric(18,8)", conduitLLMFunctionsEntitiesFunctionCostTableBase)
             {
@@ -6242,7 +6351,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionCost", conduitLLMFunctionsEntitiesFunctionCostTableBase);
             var conduitLLMFunctionsEntitiesFunctionCostMappingBase = new TableMappingBase<ColumnMappingBase>(functionCost, conduitLLMFunctionsEntitiesFunctionCostTableBase, null);
             conduitLLMFunctionsEntitiesFunctionCostTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionCostMappingBase, false);
-            defaultTableMappings31.Add(conduitLLMFunctionsEntitiesFunctionCostMappingBase);
+            defaultTableMappings32.Add(conduitLLMFunctionsEntitiesFunctionCostMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase30, functionCost.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionCostMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)baseCostColumnBase, functionCost.FindProperty("BaseCost")!, conduitLLMFunctionsEntitiesFunctionCostMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)costNameColumnBase0, functionCost.FindProperty("CostName")!, conduitLLMFunctionsEntitiesFunctionCostMappingBase);
@@ -6263,8 +6372,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)tieredPricingColumnBase, functionCost.FindProperty("TieredPricing")!, conduitLLMFunctionsEntitiesFunctionCostMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase14, functionCost.FindProperty("UpdatedAt")!, conduitLLMFunctionsEntitiesFunctionCostMappingBase);
 
-            var tableMappings31 = new List<TableMapping>();
-            functionCost.SetRuntimeAnnotation("Relational:TableMappings", tableMappings31);
+            var tableMappings32 = new List<TableMapping>();
+            functionCost.SetRuntimeAnnotation("Relational:TableMappings", tableMappings32);
             var functionCostsTable = new Table("FunctionCosts", null, relationalModel);
             var idColumn30 = new Column("Id", "integer", functionCostsTable);
             functionCostsTable.Columns.Add("Id", idColumn30);
@@ -6357,7 +6466,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("FunctionCosts", null), functionCostsTable);
             var functionCostsTableMapping = new TableMapping(functionCost, functionCostsTable, null);
             functionCostsTable.AddTypeMapping(functionCostsTableMapping, false);
-            tableMappings31.Add(functionCostsTableMapping);
+            tableMappings32.Add(functionCostsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn30, functionCost.FindProperty("Id")!, functionCostsTableMapping);
             RelationalModel.CreateColumnMapping(baseCostColumn, functionCost.FindProperty("BaseCost")!, functionCostsTableMapping);
             RelationalModel.CreateColumnMapping(costNameColumn0, functionCost.FindProperty("CostName")!, functionCostsTableMapping);
@@ -6407,8 +6516,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionCostMapping = FindEntityType("ConduitLLM.Functions.Entities.FunctionCostMapping")!;
 
-            var defaultTableMappings32 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionCostMapping.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings32);
+            var defaultTableMappings33 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionCostMapping.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings33);
             var conduitLLMFunctionsEntitiesFunctionCostMappingTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionCostMapping", null, relationalModel);
             var createdAtColumnBase18 = new ColumnBase<ColumnMappingBase>("CreatedAt", "timestamp with time zone", conduitLLMFunctionsEntitiesFunctionCostMappingTableBase);
             conduitLLMFunctionsEntitiesFunctionCostMappingTableBase.Columns.Add("CreatedAt", createdAtColumnBase18);
@@ -6428,7 +6537,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionCostMapping", conduitLLMFunctionsEntitiesFunctionCostMappingTableBase);
             var conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase = new TableMappingBase<ColumnMappingBase>(functionCostMapping, conduitLLMFunctionsEntitiesFunctionCostMappingTableBase, null);
             conduitLLMFunctionsEntitiesFunctionCostMappingTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase, false);
-            defaultTableMappings32.Add(conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
+            defaultTableMappings33.Add(conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase31, functionCostMapping.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase18, functionCostMapping.FindProperty("CreatedAt")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)functionConfigurationIdColumnBase0, functionCostMapping.FindProperty("FunctionConfigurationId")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
@@ -6436,8 +6545,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)functionCostId1ColumnBase, functionCostMapping.FindProperty("FunctionCostId1")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isActiveColumnBase4, functionCostMapping.FindProperty("IsActive")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
 
-            var tableMappings32 = new List<TableMapping>();
-            functionCostMapping.SetRuntimeAnnotation("Relational:TableMappings", tableMappings32);
+            var tableMappings33 = new List<TableMapping>();
+            functionCostMapping.SetRuntimeAnnotation("Relational:TableMappings", tableMappings33);
             var functionCostMappingsTable = new Table("FunctionCostMappings", null, relationalModel);
             var idColumn31 = new Column("Id", "integer", functionCostMappingsTable);
             functionCostMappingsTable.Columns.Add("Id", idColumn31);
@@ -6464,7 +6573,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("FunctionCostMappings", null), functionCostMappingsTable);
             var functionCostMappingsTableMapping = new TableMapping(functionCostMapping, functionCostMappingsTable, null);
             functionCostMappingsTable.AddTypeMapping(functionCostMappingsTableMapping, false);
-            tableMappings32.Add(functionCostMappingsTableMapping);
+            tableMappings33.Add(functionCostMappingsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn31, functionCostMapping.FindProperty("Id")!, functionCostMappingsTableMapping);
             RelationalModel.CreateColumnMapping(createdAtColumn18, functionCostMapping.FindProperty("CreatedAt")!, functionCostMappingsTableMapping);
             RelationalModel.CreateColumnMapping(functionConfigurationIdColumn0, functionCostMapping.FindProperty("FunctionConfigurationId")!, functionCostMappingsTableMapping);
@@ -6510,8 +6619,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionCredential = FindEntityType("ConduitLLM.Functions.Entities.FunctionCredential")!;
 
-            var defaultTableMappings33 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionCredential.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings33);
+            var defaultTableMappings34 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionCredential.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings34);
             var conduitLLMFunctionsEntitiesFunctionCredentialTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionCredential", null, relationalModel);
             var apiKeyColumnBase0 = new ColumnBase<ColumnMappingBase>("ApiKey", "character varying(2000)", conduitLLMFunctionsEntitiesFunctionCredentialTableBase)
             {
@@ -6555,7 +6664,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionCredential", conduitLLMFunctionsEntitiesFunctionCredentialTableBase);
             var conduitLLMFunctionsEntitiesFunctionCredentialMappingBase = new TableMappingBase<ColumnMappingBase>(functionCredential, conduitLLMFunctionsEntitiesFunctionCredentialTableBase, null);
             conduitLLMFunctionsEntitiesFunctionCredentialTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionCredentialMappingBase, false);
-            defaultTableMappings33.Add(conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
+            defaultTableMappings34.Add(conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase32, functionCredential.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)apiKeyColumnBase0, functionCredential.FindProperty("ApiKey")!, conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)baseUrlColumnBase2, functionCredential.FindProperty("BaseUrl")!, conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
@@ -6569,8 +6678,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)providerTypeColumnBase5, functionCredential.FindProperty("ProviderType")!, conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase15, functionCredential.FindProperty("UpdatedAt")!, conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
 
-            var tableMappings33 = new List<TableMapping>();
-            functionCredential.SetRuntimeAnnotation("Relational:TableMappings", tableMappings33);
+            var tableMappings34 = new List<TableMapping>();
+            functionCredential.SetRuntimeAnnotation("Relational:TableMappings", tableMappings34);
             var functionCredentialsTable = new Table("FunctionCredentials", null, relationalModel);
             var idColumn32 = new Column("Id", "integer", functionCredentialsTable);
             functionCredentialsTable.Columns.Add("Id", idColumn32);
@@ -6627,7 +6736,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("FunctionCredentials", null), functionCredentialsTable);
             var functionCredentialsTableMapping = new TableMapping(functionCredential, functionCredentialsTable, null);
             functionCredentialsTable.AddTypeMapping(functionCredentialsTableMapping, false);
-            tableMappings33.Add(functionCredentialsTableMapping);
+            tableMappings34.Add(functionCredentialsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn32, functionCredential.FindProperty("Id")!, functionCredentialsTableMapping);
             RelationalModel.CreateColumnMapping(apiKeyColumn0, functionCredential.FindProperty("ApiKey")!, functionCredentialsTableMapping);
             RelationalModel.CreateColumnMapping(baseUrlColumn2, functionCredential.FindProperty("BaseUrl")!, functionCredentialsTableMapping);
@@ -6697,8 +6806,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionExecution = FindEntityType("ConduitLLM.Functions.Entities.FunctionExecution")!;
 
-            var defaultTableMappings34 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionExecution.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings34);
+            var defaultTableMappings35 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionExecution.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings35);
             var conduitLLMFunctionsEntitiesFunctionExecutionTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionExecution", null, relationalModel);
             var actualCostColumnBase = new ColumnBase<ColumnMappingBase>("ActualCost", "numeric(18,8)", conduitLLMFunctionsEntitiesFunctionExecutionTableBase)
             {
@@ -6761,8 +6870,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 IsNullable = true
             };
             conduitLLMFunctionsEntitiesFunctionExecutionTableBase.Columns.Add("RequestJson", requestJsonColumnBase0);
-            var requestedAtColumnBase = new ColumnBase<ColumnMappingBase>("RequestedAt", "timestamp with time zone", conduitLLMFunctionsEntitiesFunctionExecutionTableBase);
-            conduitLLMFunctionsEntitiesFunctionExecutionTableBase.Columns.Add("RequestedAt", requestedAtColumnBase);
+            var requestedAtColumnBase0 = new ColumnBase<ColumnMappingBase>("RequestedAt", "timestamp with time zone", conduitLLMFunctionsEntitiesFunctionExecutionTableBase);
+            conduitLLMFunctionsEntitiesFunctionExecutionTableBase.Columns.Add("RequestedAt", requestedAtColumnBase0);
             var responseJsonColumnBase0 = new ColumnBase<ColumnMappingBase>("ResponseJson", "jsonb", conduitLLMFunctionsEntitiesFunctionExecutionTableBase)
             {
                 IsNullable = true
@@ -6796,7 +6905,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionExecution", conduitLLMFunctionsEntitiesFunctionExecutionTableBase);
             var conduitLLMFunctionsEntitiesFunctionExecutionMappingBase = new TableMappingBase<ColumnMappingBase>(functionExecution, conduitLLMFunctionsEntitiesFunctionExecutionTableBase, null);
             conduitLLMFunctionsEntitiesFunctionExecutionTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionExecutionMappingBase, false);
-            defaultTableMappings34.Add(conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
+            defaultTableMappings35.Add(conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase33, functionExecution.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)actualCostColumnBase, functionExecution.FindProperty("ActualCost")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)completedAtColumnBase2, functionExecution.FindProperty("CompletedAt")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
@@ -6811,7 +6920,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)nextRetryAtColumnBase0, functionExecution.FindProperty("NextRetryAt")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)progressPercentageColumnBase, functionExecution.FindProperty("ProgressPercentage")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)requestJsonColumnBase0, functionExecution.FindProperty("RequestJson")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)requestedAtColumnBase, functionExecution.FindProperty("RequestedAt")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)requestedAtColumnBase0, functionExecution.FindProperty("RequestedAt")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)responseJsonColumnBase0, functionExecution.FindProperty("ResponseJson")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)retryCountColumnBase0, functionExecution.FindProperty("RetryCount")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)startedAtColumnBase1, functionExecution.FindProperty("StartedAt")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
@@ -6822,8 +6931,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)webhookDeliveredColumnBase, functionExecution.FindProperty("WebhookDelivered")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)webhookUrlColumnBase, functionExecution.FindProperty("WebhookUrl")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
 
-            var tableMappings34 = new List<TableMapping>();
-            functionExecution.SetRuntimeAnnotation("Relational:TableMappings", tableMappings34);
+            var tableMappings35 = new List<TableMapping>();
+            functionExecution.SetRuntimeAnnotation("Relational:TableMappings", tableMappings35);
             var functionExecutionsTable = new Table("FunctionExecutions", null, relationalModel);
             var idColumn33 = new Column("Id", "uuid", functionExecutionsTable);
             functionExecutionsTable.Columns.Add("Id", idColumn33);
@@ -6900,9 +7009,9 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             };
             functionExecutionsTable.Columns.Add("RequestJson", requestJsonColumn0);
             requestJsonColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(requestJsonColumn0);
-            var requestedAtColumn = new Column("RequestedAt", "timestamp with time zone", functionExecutionsTable);
-            functionExecutionsTable.Columns.Add("RequestedAt", requestedAtColumn);
-            requestedAtColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(requestedAtColumn);
+            var requestedAtColumn0 = new Column("RequestedAt", "timestamp with time zone", functionExecutionsTable);
+            functionExecutionsTable.Columns.Add("RequestedAt", requestedAtColumn0);
+            requestedAtColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(requestedAtColumn0);
             var responseJsonColumn0 = new Column("ResponseJson", "jsonb", functionExecutionsTable)
             {
                 IsNullable = true
@@ -6945,7 +7054,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("FunctionExecutions", null), functionExecutionsTable);
             var functionExecutionsTableMapping = new TableMapping(functionExecution, functionExecutionsTable, null);
             functionExecutionsTable.AddTypeMapping(functionExecutionsTableMapping, false);
-            tableMappings34.Add(functionExecutionsTableMapping);
+            tableMappings35.Add(functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn33, functionExecution.FindProperty("Id")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(actualCostColumn, functionExecution.FindProperty("ActualCost")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(completedAtColumn2, functionExecution.FindProperty("CompletedAt")!, functionExecutionsTableMapping);
@@ -6960,7 +7069,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(nextRetryAtColumn0, functionExecution.FindProperty("NextRetryAt")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(progressPercentageColumn, functionExecution.FindProperty("ProgressPercentage")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(requestJsonColumn0, functionExecution.FindProperty("RequestJson")!, functionExecutionsTableMapping);
-            RelationalModel.CreateColumnMapping(requestedAtColumn, functionExecution.FindProperty("RequestedAt")!, functionExecutionsTableMapping);
+            RelationalModel.CreateColumnMapping(requestedAtColumn0, functionExecution.FindProperty("RequestedAt")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(responseJsonColumn0, functionExecution.FindProperty("ResponseJson")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(retryCountColumn0, functionExecution.FindProperty("RetryCount")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(startedAtColumn1, functionExecution.FindProperty("StartedAt")!, functionExecutionsTableMapping);
@@ -6989,7 +7098,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_FunctionExecution_AsyncProcessingIx).Add(iX_FunctionExecution_AsyncProcessing);
             functionExecutionsTable.Indexes.Add("IX_FunctionExecution_AsyncProcessing", iX_FunctionExecution_AsyncProcessing);
             var iX_FunctionExecution_RequestedAt = new TableIndex(
-            "IX_FunctionExecution_RequestedAt", functionExecutionsTable, new[] { requestedAtColumn }, false);
+            "IX_FunctionExecution_RequestedAt", functionExecutionsTable, new[] { requestedAtColumn0 }, false);
             iX_FunctionExecution_RequestedAt.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<DateTime>(iX_FunctionExecution_RequestedAt));
             var iX_FunctionExecution_RequestedAtIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Functions.Entities.FunctionExecution",
@@ -7027,8 +7136,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionExecutionAudit = FindEntityType("ConduitLLM.Functions.Entities.FunctionExecutionAudit")!;
 
-            var defaultTableMappings35 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionExecutionAudit.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings35);
+            var defaultTableMappings36 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionExecutionAudit.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings36);
             var conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionExecutionAudit", null, relationalModel);
             var costColumnBase1 = new ColumnBase<ColumnMappingBase>("Cost", "numeric(18,8)", conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase)
             {
@@ -7071,7 +7180,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionExecutionAudit", conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase);
             var conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase = new TableMappingBase<ColumnMappingBase>(functionExecutionAudit, conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase, null);
             conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase, false);
-            defaultTableMappings35.Add(conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
+            defaultTableMappings36.Add(conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase34, functionExecutionAudit.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)costColumnBase1, functionExecutionAudit.FindProperty("Cost")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)eventDetailsColumnBase, functionExecutionAudit.FindProperty("EventDetails")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
@@ -7083,8 +7192,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)timestampColumnBase4, functionExecutionAudit.FindProperty("Timestamp")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase11, functionExecutionAudit.FindProperty("VirtualKeyId")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
 
-            var tableMappings35 = new List<TableMapping>();
-            functionExecutionAudit.SetRuntimeAnnotation("Relational:TableMappings", tableMappings35);
+            var tableMappings36 = new List<TableMapping>();
+            functionExecutionAudit.SetRuntimeAnnotation("Relational:TableMappings", tableMappings36);
             var functionExecutionAuditsTable = new Table("FunctionExecutionAudits", null, relationalModel);
             var idColumn34 = new Column("Id", "uuid", functionExecutionAuditsTable);
             functionExecutionAuditsTable.Columns.Add("Id", idColumn34);
@@ -7137,7 +7246,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("FunctionExecutionAudits", null), functionExecutionAuditsTable);
             var functionExecutionAuditsTableMapping = new TableMapping(functionExecutionAudit, functionExecutionAuditsTable, null);
             functionExecutionAuditsTable.AddTypeMapping(functionExecutionAuditsTableMapping, false);
-            tableMappings35.Add(functionExecutionAuditsTableMapping);
+            tableMappings36.Add(functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn34, functionExecutionAudit.FindProperty("Id")!, functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(costColumn1, functionExecutionAudit.FindProperty("Cost")!, functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(eventDetailsColumn, functionExecutionAudit.FindProperty("EventDetails")!, functionExecutionAuditsTableMapping);

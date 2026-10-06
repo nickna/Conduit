@@ -13,8 +13,9 @@ using Wolverine.Runtime;
 namespace ConduitLLM.Messaging.Wolverine;
 
 /// <summary>One database transaction for receipts/claims and every future Wolverine envelope.</summary>
-public sealed class WebhookDeliveryStore(IWolverineRuntime runtime, ILogger<WebhookDeliveryStore> logger,
-    TimeProvider? clock = null) : IWebhookDeliveryStore
+public sealed partial class WebhookDeliveryStore(IWolverineRuntime runtime, ILogger<WebhookDeliveryStore> logger,
+    TimeProvider? clock = null, ConduitLLM.Core.Services.WebhookDeliveryPolicy? policy = null,
+    WebhookErrorStore? errorStore = null) : IWebhookDeliveryStore, IWebhookRecovery
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
@@ -33,7 +34,7 @@ public sealed class WebhookDeliveryStore(IWolverineRuntime runtime, ILogger<Webh
         {
             Add(insert, "id", id); Add(insert, "event", request.EventId); Add(insert, "task", request.TaskId);
             Add(insert, "owner", request.VirtualKeyId); Add(insert, "json", json); Add(insert, "now", now);
-            Add(insert, "deadline", deadline); Add(insert, "retain", deadline.AddDays(30));
+            Add(insert, "deadline", deadline); Add(insert, "retain", deadline.AddDays(policy?.Options.RetentionDays ?? 30));
             Add(insert, "attempts", Math.Max(0, request.RetryCount)); Add(insert, "cycle", request.DeliveryCycle);
             await insert.ExecuteNonQueryAsync(cancellationToken);
         }
@@ -135,7 +136,8 @@ public sealed class WebhookDeliveryStore(IWolverineRuntime runtime, ILogger<Webh
     private static void Result(NpgsqlCommand command, WebhookSendResult? result)
     {
         command.Parameters.Add(new NpgsqlParameter("status", NpgsqlDbType.Integer) { Value = (object?)result?.StatusCode ?? DBNull.Value });
-        command.Parameters.Add(new NpgsqlParameter("error", NpgsqlDbType.Varchar) { Value = (object?)result?.Error ?? DBNull.Value });
+        var error = result?.Error;
+        command.Parameters.Add(new NpgsqlParameter("error", NpgsqlDbType.Varchar) { Value = (object?)(error?.Length > 512 ? error[..512] : error) ?? DBNull.Value });
     }
 
     private static NpgsqlCommand Command(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql) =>

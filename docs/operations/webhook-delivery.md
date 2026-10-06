@@ -167,3 +167,63 @@ and recovery still handle transport/database faults. Historical `RateLimit` meta
 is not enforced by Wolverine and is not a throughput guarantee. Final concurrency
 recommendations are checked against the WR-7 workload measurements below.
 
+## Restricted recovery and retention (WR-6)
+
+All routes below require Admin's `MasterKeyPolicy`. They expose safe receipt
+metadata, never request JSON, callback URLs, custom headers, or payloads:
+
+* `GET /v1/admin/webhook-deliveries/?owner=1&taskId=...&eventId=...&limit=50`
+  filters by owner/task/event (maximum 100 rows).
+* `GET /v1/admin/webhook-deliveries/backlog` returns retained state counts,
+  reserved attempts, replay cycles, and oldest pending age.
+* `GET /v1/admin/webhook-deliveries/dead-letters?limit=50` lists supported Wolverine
+  error-envelope references linked to delivery records. Admin uses the configured
+  Gateway durability schema (`Webhooks:GatewayDurabilitySchema`, default
+  `wolverine_conduit_gateway`) through Wolverine 6.14's public persistence adapter.
+  This query-only adapter never starts a Gateway listener or joins its node cluster.
+* `POST /v1/admin/webhook-deliveries/{id}/replay` accepts JSON
+  `{"operationId":"<new UUID>","virtualKeyId":1,"expectedCycle":0,"deadLetterId":null}`.
+  Repair the receiver's configuration first; the saved URL/payload/headers remain
+  immutable. Exhausted, retained records alone qualify. A fresh internal cycle and
+  delivery deadline commit with the canonical outbox intent and authenticated actor
+  audit. The receiver EventId stays unchanged. Repeat the same operation ID after an
+  uncertain response. Concurrent calls or stale expected cycles cannot start extra
+  cycles. Delivered events cannot be replayed. An optional matching dead-letter ID
+  is discarded through the supported API after commit; cleanup failure is harmless.
+* `POST /v1/admin/webhook-deliveries/purge?limit=100` deletes expired terminal
+  receipts and replay audit in bounded batches (maximum 1000 each), plus at most 100
+  expired webhook error envelopes using Wolverine's filtered discard API. Pending
+  work is never purged. Run this operator command regularly; retention is eligibility
+  for explicit purge, not an automatic background deletion promise.
+
+`RetentionDays` defaults to 30 (1–365). Payloads and credentials in canonical receipt
+snapshots remain until the delivery deadline plus retention; replay extends that
+deadline. Audit stores actor, operation ID, cycle, time, prior attempts, and optional
+error-envelope reference, with the same bounded retention. Protect database backups
+and access accordingly. A master key shared by operators has actor `master-key`;
+identity claims, when available, provide individual attribution. No bulk replay is
+provided. Error cleanup and application replay have separate transactions; the
+canonical cycle guard makes old error-envelope redelivery harmless.
+
+HTTP telemetry is sourced only from `WebhookMetricsHandler`:
+`conduit_webhook_requests_total{status}`, `conduit_webhook_duration_ms{status}`, and
+`conduit_webhook_active_requests`. Status labels contain numeric HTTP codes or
+`error`/`cancelled`, never URL/owner/task labels. `conduit_webhook_scheduled_total`
+distinguishes `admission` deferrals from `receiver_retry`. The notification service
+refreshes receipt state, oldest age, replay, and reservation gauges each minute;
+use max across replicas for shared-state gauges and sum rates for process HTTP
+counters. Alert on growing pending age/count, exhaustion, and sustained receiver
+failure rates. Reserved attempts conservatively include a crash-before-send slot;
+they are explicitly distinct from measured HTTP invocations.
+
+SignalR event names, payload shapes, and actual receiver statuses remain. Statistics
+now report the authoritative retained delivery snapshot (`period: retained`), not
+overlapping Redis attempt counters or fabricated no-Redis zeros. Response latency
+comes from the HTTP histogram; legacy statistics response-time fields remain zero
+and URL statistics empty because the receipt snapshot does not measure them.
+Metrics and SignalR cannot control delivery scheduling or resend a committed success.
+
+The no-caller audit removed the batch timer/queue, Redis/cached/no-op receipt trackers,
+logging-only delivery service, old synchronous circuits, and duplicate Redis metrics
+writers. Legacy expiring circuit JSON remains readable for serialization compatibility.
+

@@ -19,6 +19,7 @@ public sealed class WebhookDeliveryOptions
     public int RecoveryProbes { get; set; } = 1;
     public int CircuitFailureThreshold { get; set; } = 5;
     public int CircuitOpenSeconds { get; set; } = 60;
+    public int RetentionDays { get; set; } = 30;
 
     public bool IsValid() => AttemptTimeoutSeconds is >= 1 and <= 300 &&
         ConnectTimeoutSeconds >= 1 && ConnectTimeoutSeconds <= AttemptTimeoutSeconds &&
@@ -29,5 +30,5 @@ public sealed class WebhookDeliveryOptions
         double.IsFinite(JitterRatio) && JitterRatio is >= 0 and <= 1 &&
         GlobalConcurrency is >= 1 and <= 10000 && DestinationConcurrency >= 1 &&
         DestinationConcurrency <= GlobalConcurrency && RecoveryProbes >= 1 && RecoveryProbes <= DestinationConcurrency &&
-        CircuitFailureThreshold is >= 1 and <= 1000 && CircuitOpenSeconds is >= 1 and <= 3600;
+        CircuitFailureThreshold is >= 1 and <= 1000 && CircuitOpenSeconds is >= 1 and <= 3600 && RetentionDays is >= 1 and <= 365;
 }

@@ -311,7 +311,7 @@ public sealed class SourceGeneratedJsonCompatibilityTests
     [Fact]
     public void Redis_reliability_payload_is_bidirectionally_compatible()
     {
-        var value = new RedisWebhookCircuitBreaker.CircuitState
+        var value = new LegacyWebhookCircuitState
         {
             State = "Open",
             OpenedAt = FixtureTime,
@@ -322,7 +322,7 @@ public sealed class SourceGeneratedJsonCompatibilityTests
 
         AssertCompatible(
             value,
-            CoreRedisJsonContext.Default.CircuitState,
+            CoreRedisJsonContext.Default.LegacyWebhookCircuitState,
             "redis-webhook-circuit-state.json",
             CaseInsensitivePascalOptions());
     }

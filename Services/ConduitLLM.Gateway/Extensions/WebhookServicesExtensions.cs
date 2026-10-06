@@ -5,7 +5,6 @@ using ConduitLLM.Gateway.Handlers;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Gateway.Services.SpendNotification;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Caching.Memory;
 using StackExchange.Redis;
 using ConduitLLM.Core.Configuration;
 using Microsoft.Extensions.Options;
@@ -23,8 +22,6 @@ public static class WebhookServicesExtensions
     public static IServiceCollection AddWebhookServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddWebhookHttpServices(configuration);
-        // Register Webhook Delivery Service
-        services.AddSingleton<IWebhookDeliveryService, WebhookDeliveryService>();
 
         // Register Distributed Spend Notification Service (Redis-based for multi-instance consistency) - with leader election
         services.AddSingleton<ISpendNotificationService, DistributedSpendNotificationService>();
@@ -32,20 +29,7 @@ public static class WebhookServicesExtensions
             sp => (DistributedSpendNotificationService)sp.GetRequiredService<ISpendNotificationService>(),
             "SpendNotificationService");
 
-        // Register Webhook Metrics Service (Redis-based when available)
-        services.AddSingleton<ConduitLLM.Core.Services.IWebhookMetricsService>(sp =>
-        {
-            var redis = sp.GetService<IConnectionMultiplexer>();
-
-            if (redis != null)
-            {
-                var logger = sp.GetRequiredService<ILogger<ConduitLLM.Core.Services.RedisWebhookMetricsService>>();
-                return new ConduitLLM.Core.Services.RedisWebhookMetricsService(redis, logger);
-            }
-
-            // Return null when Redis is not available - the notification service will handle fallback
-            return null!;
-        });
+        services.AddScoped<IWebhookRecovery, ConduitLLM.Messaging.Wolverine.WebhookDeliveryStore>();
 
         // Register Webhook Connection Tracker (Redis-based when available)
         services.AddSingleton<ConduitLLM.Core.Services.IWebhookConnectionTracker>(sp =>
@@ -76,37 +60,6 @@ public static class WebhookServicesExtensions
         services.AddLeaderElectedHostedService<WebhookDeliveryNotificationService>(
             sp => (WebhookDeliveryNotificationService)sp.GetRequiredService<IWebhookDeliveryNotificationService>(),
             "WebhookDeliveryNotificationService");
-
-        // Register Webhook Circuit Breaker for preventing repeated failures
-        services.AddSingleton<ConduitLLM.Core.Services.IWebhookCircuitBreaker>(sp =>
-        {
-            var redis = sp.GetService<IConnectionMultiplexer>();
-
-            if (redis != null)
-            {
-                // Use Redis-based distributed circuit breaker when available
-                var redisLogger = sp.GetRequiredService<ILogger<ConduitLLM.Core.Services.RedisWebhookCircuitBreaker>>();
-                return new ConduitLLM.Core.Services.RedisWebhookCircuitBreaker(
-                    redis,
-                    redisLogger,
-                    failureThreshold: 5,
-                    openDuration: TimeSpan.FromMinutes(5),
-                    halfOpenTestInterval: TimeSpan.FromSeconds(30));
-            }
-            else
-            {
-                // Fall back to in-memory circuit breaker
-                var cache = sp.GetRequiredService<IMemoryCache>();
-                var logger = sp.GetRequiredService<ILogger<ConduitLLM.Core.Services.WebhookCircuitBreaker>>();
-
-                return new ConduitLLM.Core.Services.WebhookCircuitBreaker(
-                    cache,
-                    logger,
-                    failureThreshold: 5,
-                    openDuration: TimeSpan.FromMinutes(5),
-                    counterResetDuration: TimeSpan.FromMinutes(15));
-            }
-        });
 
         return services;
     }

@@ -95,6 +95,7 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
                 services.AddSingleton(Cache.Object);
                 services.AddScoped<IMediaTaskRecovery, MediaTaskRecovery>();
                 services.AddScoped<IMediaTaskTerminalWriter, MediaTaskTerminalWriter>();
+                services.AddScoped<IWebhookRecovery, WebhookDeliveryStore>();
                 if (webhooks)
                 {
                     services.AddMemoryCache();
@@ -182,7 +183,7 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
             .ReturnsAsync(new VideoGenerationResponse { Created = 1, Data = [] });
         Provider.Setup(p => p.CreateImageAsync(It.IsAny<ImageGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ImageGenerationResponse { Created = 1, Data = [] });
-        await SqlAsync("TRUNCATE TABLE \"AsyncTasks\", \"VirtualKeyGroupTransactions\", \"WebhookDeliveries\"; UPDATE \"VirtualKeyGroups\" SET \"Balance\" = 100");
+        await SqlAsync("TRUNCATE TABLE \"AsyncTasks\", \"VirtualKeyGroupTransactions\", \"WebhookDeliveries\", \"WebhookReplayAudits\"; UPDATE \"VirtualKeyGroups\" SET \"Balance\" = 100");
         // Every host/subprocess from the preceding case has stopped. Isolate the
         // disposable test database's transport queues from historical deliveries.
         await SqlAsync("""

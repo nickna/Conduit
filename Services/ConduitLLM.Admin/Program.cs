@@ -228,6 +228,7 @@ public partial class Program
         app.MapModelSeriesEndpoints();
         app.MapNotificationsEndpoints();
         app.MapAdminTasksEndpoints();
+        app.MapWebhookRecoveryEndpoints();
         app.MapAdminAuthEndpoints();
         app.MapSystemInfoEndpoints();
         app.MapAdminMetricsEndpoints();

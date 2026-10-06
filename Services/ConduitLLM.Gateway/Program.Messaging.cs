@@ -93,14 +93,6 @@ public partial class Program
             }
         });
 
-        // Batch webhook publisher: publishes via IEventBus, so it is backend-agnostic.
-        builder.Services.AddBatchWebhookPublisher(options =>
-        {
-            options.MaxBatchSize = 100;
-            options.MaxBatchDelay = TimeSpan.FromMilliseconds(100);
-            options.ConcurrentPublishers = 3;
-        });
-
         // Gateway liveness heartbeat (#1067): every instance publishes a GatewayHeartbeat via
         // IEventBus so the Admin health dashboard reports the Gateway's real status from
         // staleness (keeps Admin↔Gateway event-only — no synchronous HTTP probe). Registered

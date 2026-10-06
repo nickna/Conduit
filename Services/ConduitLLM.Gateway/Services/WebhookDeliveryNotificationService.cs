@@ -4,7 +4,7 @@ using ConduitLLM.Configuration.DTOs.SignalR;
 using ConduitLLM.Core.Constants;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Gateway.Hubs;
-using ConduitLLM.Core.Services;
+using ConduitLLM.Core.Interfaces;
 
 namespace ConduitLLM.Gateway.Services
 {
@@ -43,20 +43,6 @@ namespace ConduitLLM.Gateway.Services
         /// </summary>
         Task<WebhookStatistics> GetStatisticsAsync(string period = "last_hour");
         
-        /// <summary>
-        /// Records a delivery attempt for statistics.
-        /// </summary>
-        void RecordDeliveryAttempt(string webhookUrl);
-        
-        /// <summary>
-        /// Records a successful delivery for statistics.
-        /// </summary>
-        void RecordDeliverySuccess(string webhookUrl, long responseTimeMs);
-        
-        /// <summary>
-        /// Records a failed delivery for statistics.
-        /// </summary>
-        void RecordDeliveryFailure(string webhookUrl, bool isPermanent);
     }
 
     /// <summary>
@@ -67,7 +53,7 @@ namespace ConduitLLM.Gateway.Services
         private readonly IHubContext<WebhookDeliveryHub> _hubContext;
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<WebhookDeliveryNotificationService> _logger;
-        private IWebhookMetricsService? _metricsService;
+
         
         private Timer? _statisticsTimer;
 
@@ -80,34 +66,12 @@ namespace ConduitLLM.Gateway.Services
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            // Metrics service will be resolved on first use, not in constructor
-            _metricsService = null;
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            // Initialize metrics service now that DI container is fully built
-            using var scope = _serviceProvider.CreateScope();
-            _metricsService = scope.ServiceProvider.GetService<IWebhookMetricsService>();
-
-            if (_metricsService != null)
-            {
-                // Start periodic statistics broadcasting
-                _statisticsTimer = new Timer(
-                    async _ => await BroadcastStatisticsAsync(),
-                    null,
-                    TimeSpan.FromMinutes(1),
-                    TimeSpan.FromMinutes(1));
-            }
-            else
-            {
-                // Without a metrics backend there is nothing measured to broadcast —
-                // pushing all-zero statistics would present fabricated data as real
-                _logger.LogInformation(
-                    "Webhook statistics broadcasting disabled: no metrics backend (Redis) available");
-            }
-
-            _logger.LogInformation("WebhookDeliveryNotificationService started");
+            _statisticsTimer = new Timer(async _ => await BroadcastStatisticsAsync(), null,
+                TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
             return Task.CompletedTask;
         }
 
@@ -141,23 +105,13 @@ namespace ConduitLLM.Gateway.Services
                 var groupName = SignalRConstants.Groups.Webhook(webhookUrl);
                 await _hubContext.Clients.Group(groupName).SendAsync("DeliveryAttempted", attempt);
                 
-                // Record metrics if service is available
-                if (_metricsService != null)
-                {
-                    await _metricsService.RecordAttemptAsync(webhookUrl, taskId, taskType, eventType);
-                }
-                else
-                {
-                    RecordDeliveryAttempt(webhookUrl);
-                }
-                
                 _logger.LogDebug(
                     "Sent delivery attempt notification for {WebhookUrl}, attempt {AttemptNumber}",
-                    webhookUrl, attemptNumber);
+                    DestinationKey(webhookUrl), attemptNumber);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogError(ex, "Error sending delivery attempt notification");
+                _logger.LogWarning( "Error sending delivery attempt notification");
             }
         }
 
@@ -185,23 +139,13 @@ namespace ConduitLLM.Gateway.Services
                 var groupName = SignalRConstants.Groups.Webhook(webhookUrl);
                 await _hubContext.Clients.Group(groupName).SendAsync("DeliverySucceeded", success);
                 
-                // Record metrics if service is available
-                if (_metricsService != null)
-                {
-                    await _metricsService.RecordSuccessAsync(webhookUrl, taskId, responseTimeMs);
-                }
-                else
-                {
-                    RecordDeliverySuccess(webhookUrl, responseTimeMs);
-                }
-                
                 _logger.LogInformation(
                     "Sent delivery success notification for {WebhookUrl}, response time: {ResponseTime}ms",
-                    webhookUrl, responseTimeMs);
+                    DestinationKey(webhookUrl), responseTimeMs);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogError(ex, "Error sending delivery success notification");
+                _logger.LogWarning( "Error sending delivery success notification");
             }
         }
 
@@ -231,23 +175,13 @@ namespace ConduitLLM.Gateway.Services
                 var groupName = SignalRConstants.Groups.Webhook(webhookUrl);
                 await _hubContext.Clients.Group(groupName).SendAsync("DeliveryFailed", failure);
                 
-                // Record metrics if service is available
-                if (_metricsService != null)
-                {
-                    await _metricsService.RecordFailureAsync(webhookUrl, taskId, isPermanent);
-                }
-                else
-                {
-                    RecordDeliveryFailure(webhookUrl, isPermanent);
-                }
-                
                 _logger.LogWarning(
                     "Sent delivery failure notification for {WebhookUrl}, attempt {AttemptNumber}, permanent: {IsPermanent}",
-                    webhookUrl, attemptNumber, isPermanent);
+                    DestinationKey(webhookUrl), attemptNumber, isPermanent);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogError(ex, "Error sending delivery failure notification");
+                _logger.LogWarning( "Error sending delivery failure notification");
             }
         }
 
@@ -278,11 +212,11 @@ namespace ConduitLLM.Gateway.Services
                 
                 _logger.LogInformation(
                     "Sent retry scheduled notification for {WebhookUrl}, retry {RetryNumber}/{MaxRetries} at {RetryTime}",
-                    webhookUrl, retryNumber, maxRetries, retryTime);
+                    DestinationKey(webhookUrl), retryNumber, maxRetries, retryTime);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogError(ex, "Error sending retry scheduled notification");
+                _logger.LogWarning( "Error sending retry scheduled notification");
             }
         }
 
@@ -313,58 +247,28 @@ namespace ConduitLLM.Gateway.Services
                 
                 _logger.LogWarning(
                     "Circuit breaker state changed for {WebhookUrl}: {PreviousState} -> {NewState}, reason: {Reason}",
-                    webhookUrl, previousState, newState, reason);
+                    DestinationKey(webhookUrl), previousState, newState, reason);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogError(ex, "Error sending circuit breaker state change notification");
+                _logger.LogWarning( "Error sending circuit breaker state change notification");
             }
-        }
-
-        public void RecordDeliveryAttempt(string webhookUrl)
-        {
-            // This is now handled by the metrics service when available
-            // Keep as fallback for when Redis is not available
-            _logger.LogDebug("Recording delivery attempt for {WebhookUrl} (fallback mode)", LoggingSanitizer.S(webhookUrl));
-        }
-
-        public void RecordDeliverySuccess(string webhookUrl, long responseTimeMs)
-        {
-            // This is now handled by the metrics service when available
-            // Keep as fallback for when Redis is not available
-            _logger.LogDebug("Recording delivery success for {WebhookUrl} (fallback mode)", LoggingSanitizer.S(webhookUrl));
-        }
-
-        public void RecordDeliveryFailure(string webhookUrl, bool isPermanent)
-        {
-            // This is now handled by the metrics service when available
-            // Keep as fallback for when Redis is not available
-            _logger.LogDebug("Recording delivery failure for {WebhookUrl} (fallback mode)", LoggingSanitizer.S(webhookUrl));
         }
 
         public async Task<WebhookStatistics> GetStatisticsAsync(string period = "last_hour")
         {
-            // Use Redis metrics service if available
-            if (_metricsService != null)
+            using var scope = _serviceProvider.CreateScope();
+            var backlog = await scope.ServiceProvider.GetRequiredService<IWebhookRecovery>().BacklogAsync(CancellationToken.None);
+            WebhookDeliveryTelemetry.Snapshot(backlog);
+            var total = backlog.Pending + backlog.Delivered + backlog.Exhausted;
+            return new WebhookStatistics
             {
-                return await _metricsService.GetStatisticsAsync(period);
-            }
-            
-            // Fallback to basic statistics when Redis is not available
-            var stats = new WebhookStatistics
-            {
-                Period = period,
-                UrlStatistics = new List<WebhookUrlStatistics>(),
-                TotalDeliveries = 0,
-                SuccessfulDeliveries = 0,
-                FailedDeliveries = 0,
-                PendingDeliveries = 0,
-                SuccessRate = 0,
-                AverageResponseTimeMs = 0
+                Period = "retained", TotalDeliveries = (int)Math.Min(int.MaxValue, total),
+                PendingDeliveries = (int)Math.Min(int.MaxValue, backlog.Pending),
+                SuccessfulDeliveries = (int)Math.Min(int.MaxValue, backlog.Delivered),
+                FailedDeliveries = (int)Math.Min(int.MaxValue, backlog.Exhausted),
+                SuccessRate = total == 0 ? 0 : 100.0 * backlog.Delivered / total
             };
-            
-            _logger.LogDebug("Returning empty statistics (Redis metrics service not available)");
-            return stats;
         }
 
         private async Task BroadcastStatisticsAsync()
@@ -374,15 +278,18 @@ namespace ConduitLLM.Gateway.Services
                 var stats = await GetStatisticsAsync();
                 await _hubContext.Clients.All.SendAsync("DeliveryStatisticsUpdated", stats);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogError(ex, "Error broadcasting webhook statistics");
+                _logger.LogWarning( "Error broadcasting webhook statistics");
             }
         }
 
+        private static string DestinationKey(string url) =>
+            Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(url)))[..16];
+
         private static string GenerateWebhookId(string webhookUrl, string taskId)
         {
-            return $"{taskId}_{webhookUrl.GetHashCode():X8}";
+            return $"{taskId}_{DestinationKey(webhookUrl)}";
         }
 
     }

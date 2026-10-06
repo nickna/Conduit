@@ -26,6 +26,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ConduitLLM.Admin.Serialization;
 
+
 /// <summary>
 /// Source-generated metadata for the concrete response contracts advertised by Admin endpoints.
 /// Keeping this separate from request metadata makes OpenAPI endpoint materialization auditable.
@@ -37,6 +38,10 @@ namespace ConduitLLM.Admin.Serialization;
     UseStringEnumConverter = true)]
 [JsonSerializable(typeof(AdminFunctionExecutionDto))]
 [JsonSerializable(typeof(AdminProblemDetails))]
+[JsonSerializable(typeof(List<WebhookDeliveryInspection>))]
+[JsonSerializable(typeof(List<WebhookDeadLetterInspection>))]
+[JsonSerializable(typeof(WebhookReplayResult))]
+[JsonSerializable(typeof(WebhookBacklog))]
 [JsonSerializable(typeof(AllMetricsDto))]
 [JsonSerializable(typeof(AnalyticsCacheInvalidationResponse))]
 [JsonSerializable(typeof(AnalyticsCacheMetricsResponse))]

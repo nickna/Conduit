@@ -92,7 +92,7 @@ public static class RedisKeys
 
     /// <summary>
     /// Keys for webhook circuit breaker state.
-    /// Used by RedisWebhookCircuitBreaker.
+    /// Legacy expiring webhook circuit keys; new admission uses leased hashed keys.
     /// </summary>
     public static class WebhookCircuit
     {

@@ -60,8 +60,11 @@ public sealed class WebhookDeliveryConsumer(IWebhookNotificationService webhookS
         {
             var due = decision.DueAt < claim.Deadline ? decision.DueAt : claim.Deadline;
             if (await store.ScheduleAsync(claim, due, cancellationToken: cancellation))
+            {
+                WebhookDeliveryTelemetry.Schedule(deferral: true);
                 await ReportAsync(() => notifications.NotifyRetryScheduledAsync(request.WebhookUrl, request.TaskId,
                     due, claim.Attempts, _policy.Options.MaxAttempts));
+            }
             return;
         }
 
@@ -104,6 +107,7 @@ public sealed class WebhookDeliveryConsumer(IWebhookNotificationService webhookS
 
         var retryAt = _policy.RetryAt(attempt.Value, claim.Deadline, result.RetryAfter);
         if (!await store.ScheduleAsync(claim, retryAt, result, cancellation)) return;
+        WebhookDeliveryTelemetry.Schedule(deferral: false);
         await ReportAsync(() => notifications.NotifyDeliveryFailureAsync(request.WebhookUrl, request.TaskId,
             result.Error ?? "Receiver attempt failed.", result.StatusCode, attempt.Value, false));
         await ReportAsync(() => notifications.NotifyRetryScheduledAsync(request.WebhookUrl, request.TaskId,

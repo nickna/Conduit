@@ -105,35 +105,5 @@ public partial class Program
             });
         }
 
-        // Register Webhook Delivery Tracker for deduplication and statistics
-        if (!string.IsNullOrEmpty(redisConnectionString))
-        {
-            // Register the Redis tracker as the inner implementation
-            builder.Services.AddSingleton<ConduitLLM.Core.Services.RedisWebhookDeliveryTracker>();
-
-            // Add memory caching
-            builder.Services.AddMemoryCache();
-
-            // Register the cached wrapper as the main interface
-            builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IWebhookDeliveryTracker>(sp =>
-            {
-                var redisTracker = sp.GetRequiredService<ConduitLLM.Core.Services.RedisWebhookDeliveryTracker>();
-                var memoryCache = sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
-                var logger = sp.GetRequiredService<ILogger<ConduitLLM.Core.Services.CachedWebhookDeliveryTracker>>();
-
-                return new ConduitLLM.Core.Services.CachedWebhookDeliveryTracker(redisTracker, memoryCache, logger);
-            });
-        }
-        else
-        {
-            // If no Redis, log warning and use a no-op implementation
-            builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IWebhookDeliveryTracker>(sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<Program>>();
-                logger.LogWarning("No Redis connection configured. Webhook delivery tracking and deduplication will not be available.");
-                var noOpLogger = sp.GetRequiredService<ILogger<ConduitLLM.Gateway.Services.NoOpWebhookDeliveryTracker>>();
-                return new ConduitLLM.Gateway.Services.NoOpWebhookDeliveryTracker(noOpLogger);
-            });
-        }
     }
 }
