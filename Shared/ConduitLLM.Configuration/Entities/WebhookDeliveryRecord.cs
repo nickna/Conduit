@@ -9,11 +9,11 @@ namespace ConduitLLM.Configuration.Entities;
 [Index(nameof(RetainUntil))]
 public sealed class WebhookDeliveryRecord
 {
-    [Key, MaxLength(64)] public string Id { get; set; } = string.Empty;
-    [MaxLength(128)] public string EventId { get; set; } = string.Empty;
-    [MaxLength(50)] public string TaskId { get; set; } = string.Empty;
+    [Key, StringLength(64)] public string Id { get; set; } = string.Empty;
+    [StringLength(128)] public string EventId { get; set; } = string.Empty;
+    [StringLength(50)] public string TaskId { get; set; } = string.Empty;
     public int VirtualKeyId { get; set; }
-    [MaxLength(16)] public string State { get; set; } = "Pending";
+    [StringLength(16)] public string State { get; set; } = "Pending";
     public string RequestJson { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -25,5 +25,5 @@ public sealed class WebhookDeliveryRecord
     public int Attempts { get; set; }
     public int Cycle { get; set; }
     public int? LastStatusCode { get; set; }
-    [MaxLength(512)] public string? LastError { get; set; }
+    [StringLength(512)] public string? LastError { get; set; }
 }
