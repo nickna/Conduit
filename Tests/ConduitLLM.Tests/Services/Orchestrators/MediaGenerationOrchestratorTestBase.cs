@@ -144,6 +144,9 @@ namespace ConduitLLM.Tests.Services.Orchestrators
             TaskServiceMock.Setup(x => x.MarkProviderInvocationStartedAsync(
                     It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
+            TaskServiceMock.Setup(x => x.ExtendTaskLeaseAsync(
+                    It.IsAny<string>(), It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
             TaskServiceMock.Setup(x => x.MarkProviderInvocationCompletedAsync(
                     It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
@@ -407,12 +410,12 @@ namespace ConduitLLM.Tests.Services.Orchestrators
             await Orchestrator.HandleAsync(request, context);
 
             // Assert
-            TaskRegistryMock.Verify(x => x.RegisterTask(
+            TaskRegistryMock.Verify(x => x.RegisterClaimedTask(
                 GetRequestId(request),
                 It.IsAny<CancellationTokenSource>()), Times.Once);
 
             TaskRegistryMock.Verify(x => x.UnregisterTask(
-                GetRequestId(request)), Times.Once);
+                GetRequestId(request), It.IsAny<CancellationTokenSource>()), Times.Once);
         }
 
         [Fact]

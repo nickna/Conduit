@@ -42,7 +42,6 @@
       <Type Name="Internal.Generated.WolverineHandlers.VideoGenerationProgressHandler1306811493" Dynamic="Required All" />
       <Type Name="Internal.Generated.WolverineHandlers.VideoGenerationRequestedHandler1559174860" Dynamic="Required All" />
       <Type Name="Internal.Generated.WolverineHandlers.VideoGenerationStartedHandler1934489511" Dynamic="Required All" />
-      <Type Name="Internal.Generated.WolverineHandlers.VideoProgressCheckRequestedHandler1615435913" Dynamic="Required All" />
       <Type Name="Internal.Generated.WolverineHandlers.VirtualKeyCreatedHandler697639089" Dynamic="Required All" />
       <Type Name="Internal.Generated.WolverineHandlers.VirtualKeyDeletedHandler110958986" Dynamic="Required All" />
       <Type Name="Internal.Generated.WolverineHandlers.VirtualKeyUpdatedHandler1569555928" Dynamic="Required All" />

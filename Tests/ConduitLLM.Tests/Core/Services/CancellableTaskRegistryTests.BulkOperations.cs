@@ -11,6 +11,21 @@ namespace ConduitLLM.Tests.Core.Services
     public partial class CancellableTaskRegistryTests
     {
         [Fact]
+        public void ReplacedClaim_OldCleanupOrCancellationCannotRemoveNewOwnersCancellationSource()
+        {
+            using var old = new CancellationTokenSource();
+            using var replacement = new CancellationTokenSource();
+            _registry.RegisterTask("recovered", old);
+            _registry.RegisterClaimedTask("recovered", replacement);
+            old.Cancel();
+            _registry.UnregisterTask("recovered", old);
+            _registry.TryGetCancellationToken("recovered", out var current).Should().BeTrue();
+            current.Should().Be(replacement.Token);
+            _registry.TryCancel("recovered").Should().BeTrue();
+            replacement.IsCancellationRequested.Should().BeTrue();
+        }
+
+        [Fact]
         public void UnregisterTask_RemovesTaskFromRegistry()
         {
             // Arrange

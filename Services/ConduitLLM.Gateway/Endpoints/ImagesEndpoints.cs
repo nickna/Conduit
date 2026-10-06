@@ -15,6 +15,7 @@ namespace ConduitLLM.Gateway.Endpoints
         private readonly ILogger<ImagesEndpoints> _logger;
         private readonly IModelProviderMappingService _modelMappingService;
         private readonly IAsyncTaskService _taskService;
+        private readonly IMediaTaskSubmission _mediaTaskSubmission;
         private readonly ConduitLLM.Core.Interfaces.IVirtualKeyService _virtualKeyService;
         private readonly IMediaLifecycleService _mediaLifecycleService;
         private readonly IProviderErrorTrackingService _errorTrackingService;
@@ -33,7 +34,8 @@ namespace ConduitLLM.Gateway.Endpoints
             IProviderErrorTrackingService errorTrackingService,
             Base64MediaProcessor base64MediaProcessor,
             UrlMediaProcessor urlMediaProcessor,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            IMediaTaskSubmission mediaTaskSubmission)
             : base(eventPublisher, httpContextAccessor, logger)
         {
             _clientFactory = clientFactory;
@@ -41,6 +43,7 @@ namespace ConduitLLM.Gateway.Endpoints
             _logger = logger;
             _modelMappingService = modelMappingService;
             _taskService = taskService;
+            _mediaTaskSubmission = mediaTaskSubmission;
             _virtualKeyService = virtualKeyService;
             _mediaLifecycleService = mediaLifecycleService;
             _errorTrackingService = errorTrackingService;

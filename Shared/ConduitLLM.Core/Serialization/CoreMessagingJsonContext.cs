@@ -16,7 +16,6 @@ namespace ConduitLLM.Core.Serialization;
 [JsonSerializable(typeof(SpendUpdateRequested))]
 [JsonSerializable(typeof(VideoGenerationRequested))]
 [JsonSerializable(typeof(VideoGenerationCancelled))]
-[JsonSerializable(typeof(VideoProgressCheckRequested))]
 [JsonSerializable(typeof(ImageGenerationRequested))]
 [JsonSerializable(typeof(ImageGenerationCancelled))]
 [JsonSerializable(typeof(VirtualKeyUpdated))]

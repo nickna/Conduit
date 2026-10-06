@@ -81,7 +81,9 @@ public sealed class BillingFaultFixture : IAsyncLifetime
         return (group.Id, key.Id);
     }
 
-    public BatchSpendUpdateService CreateBatchService(IVirtualKeyGroupRepository? repository = null)
+    public BatchSpendUpdateService CreateBatchService(
+        IVirtualKeyGroupRepository? repository = null,
+        ILogger<BatchSpendUpdateService>? logger = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -107,8 +109,47 @@ public sealed class BillingFaultFixture : IAsyncLifetime
                 MaximumIntervalSeconds = 7200,
                 RedisTtlHours = 24
             }),
-            NullLogger<BatchSpendUpdateService>.Instance,
+            logger ?? NullLogger<BatchSpendUpdateService>.Instance,
             Mock.Of<IBillingAlertingService>());
+    }
+
+    public async Task<BatchSpendUpdateService> StartBatchServiceAsync()
+    {
+        var startup = new InitialFlushLogger();
+        var batch = CreateBatchService(logger: startup);
+        try
+        {
+            await batch.StartAsync(CancellationToken.None);
+            // StartAsync does not await ExecuteAsync's initial recovery scan. Let
+            // that scan finish before enqueueing the fault scenario so accounting
+            // assertions cannot observe a DB debit plus its unacknowledged Redis claim.
+            await startup.Completed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            batch.IsHealthy.Should().BeTrue();
+            return batch;
+        }
+        catch
+        {
+            await batch.DisposeAsync();
+            throw;
+        }
+    }
+
+    private sealed class InitialFlushLogger : ILogger<BatchSpendUpdateService>
+    {
+        public TaskCompletionSource Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            var message = formatter(state, exception);
+            if (message == "No pending spend updates to flush" ||
+                message.StartsWith("Flushed ", StringComparison.Ordinal) &&
+                message.EndsWith("pending updates from previous session", StringComparison.Ordinal))
+                Completed.TrySetResult();
+            else if (message == "Error flushing pending updates on startup")
+                Completed.TrySetException(exception ?? new InvalidOperationException(message));
+        }
     }
 
     public VirtualKeyGroupRepository CreateGroupRepository() => new(

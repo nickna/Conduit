@@ -154,7 +154,7 @@ namespace ConduitLLM.Core.Services.Abstractions
             using var taskCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
 
             // Register task for cancellation support
-            _taskRegistry.RegisterTask(GetRequestId(request), taskCts);
+            _taskRegistry.RegisterClaimedTask(GetRequestId(request), taskCts);
 
             try
             {
@@ -234,7 +234,12 @@ namespace ConduitLLM.Core.Services.Abstractions
                 if (!await _taskService.MarkProviderInvocationStartedAsync(
                         GetRequestId(request), workerId, taskCts.Token))
                 {
-                    throw new InvalidOperationException("Media task claim was lost before provider invocation.");
+                    // A replacement owner/cancellation is authoritative. Do not overwrite
+                    // its state or release the reservation shared by this task ID.
+                    reservationHandedOff |= reservationCreated && !await WasSafelyCancelledAsync(GetRequestId(request));
+                    _metrics.UpdateTaskRegistrySize(-1);
+                    _logger.LogWarning("Media task claim was lost before provider invocation for {RequestId}", GetRequestId(request));
+                    return;
                 }
                 providerInvocationStarted = true;
                 var response = await ExecuteGenerationAsync(generationRequest, modelInfo, virtualKey, taskCts.Token);
@@ -280,6 +285,12 @@ namespace ConduitLLM.Core.Services.Abstractions
             }
             catch (OperationCanceledException) when (taskCts.Token.IsCancellationRequested)
             {
+                if (!await CanFinalizeClaimAsync(GetRequestId(request), workerId))
+                {
+                    reservationHandedOff |= reservationCreated && !await WasSafelyCancelledAsync(GetRequestId(request));
+                    _metrics.UpdateTaskRegistrySize(-1);
+                    return;
+                }
                 activity?.SetStatus(ActivityStatusCode.Error, "Cancelled");
                 activity?.SetTag("media.outcome", "cancelled");
                 if (providerInvocationStarted && !providerInvocationCompleted)
@@ -301,6 +312,12 @@ namespace ConduitLLM.Core.Services.Abstractions
             }
             catch (Exception ex)
             {
+                if (!await CanFinalizeClaimAsync(GetRequestId(request), workerId))
+                {
+                    reservationHandedOff |= reservationCreated && !await WasSafelyCancelledAsync(GetRequestId(request));
+                    _metrics.UpdateTaskRegistrySize(-1);
+                    return;
+                }
                 activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                 activity?.SetTag("media.outcome", "failed");
                 activity?.SetTag("media.error_type", ex.GetType().Name);
@@ -349,7 +366,7 @@ namespace ConduitLLM.Core.Services.Abstractions
                 }
 
                 // Always unregister the task from the cancellation registry
-                _taskRegistry.UnregisterTask(GetRequestId(request));
+                _taskRegistry.UnregisterTask(GetRequestId(request), taskCts);
             }
         }
 
@@ -376,6 +393,20 @@ namespace ConduitLLM.Core.Services.Abstractions
                 // Normal completion path.
             }
         }
+
+        private async Task<bool> CanFinalizeClaimAsync(string taskId, string workerId)
+        {
+            // Renew atomically before failure/cancellation writes. A live lease prevents
+            // automatic recovery from replacing this owner during finalization. An old
+            // execution must not overwrite its replacement's terminal state.
+            if (await _taskService.ExtendTaskLeaseAsync(taskId, workerId, TimeSpan.FromMinutes(15), CancellationToken.None))
+                return true;
+            _logger.LogWarning("Skipping stale media task finalization for {RequestId}", taskId);
+            return false;
+        }
+
+        private async Task<bool> WasSafelyCancelledAsync(string taskId) =>
+            (await _taskService.GetTaskStatusAsync(taskId, CancellationToken.None))?.State == TaskState.Cancelled;
 
         // Abstract methods that MUST be implemented by derived classes
         protected abstract bool ShouldProcessRequest(TEventRequest request);

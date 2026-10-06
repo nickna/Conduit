@@ -52,12 +52,30 @@ namespace ConduitLLM.Core.Services
                 _logger.LogDebug("Registered cancellable task {TaskId}", taskId);
                 
                 // Mark as cancelled when the token is cancelled (don't unregister immediately)
-                cts.Token.Register(() => MarkTaskAsCancelled(taskId));
+                cts.Token.Register(() => MarkTaskAsCancelled(taskId, registration));
             }
             else
             {
                 _logger.LogWarning("Task {TaskId} is already registered", taskId);
             }
+        }
+
+        /// <inheritdoc/>
+        public void RegisterClaimedTask(string taskId, CancellationTokenSource cts)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(taskId);
+            ArgumentNullException.ThrowIfNull(cts);
+            var registration = new TaskRegistration { CancellationTokenSource = cts, RegisteredAt = DateTime.UtcNow };
+            _registry[taskId] = registration;
+            cts.Token.Register(() => MarkTaskAsCancelled(taskId, registration));
+        }
+
+        /// <inheritdoc/>
+        public void UnregisterTask(string taskId, CancellationTokenSource owner)
+        {
+            if (_registry.TryGetValue(taskId, out var registration) && ReferenceEquals(registration.CancellationTokenSource, owner)
+                && _registry.TryRemove(new KeyValuePair<string, TaskRegistration>(taskId, registration)))
+                owner.Dispose();
         }
 
         /// <inheritdoc/>
@@ -85,7 +103,7 @@ namespace ConduitLLM.Core.Services
                 catch (ObjectDisposedException)
                 {
                     _logger.LogWarning("Cancellation token source for task {TaskId} was already disposed", taskId);
-                    UnregisterTask(taskId);
+                    UnregisterTask(taskId, registration.CancellationTokenSource);
                     return false;
                 }
             }
@@ -134,7 +152,7 @@ namespace ConduitLLM.Core.Services
                 catch (ObjectDisposedException)
                 {
                     _logger.LogWarning("Cancellation token source for task {TaskId} was disposed", taskId);
-                    UnregisterTask(taskId);
+                    UnregisterTask(taskId, registration.CancellationTokenSource);
                     return false;
                 }
             }
@@ -173,9 +191,9 @@ namespace ConduitLLM.Core.Services
         /// <summary>
         /// Marks a task as cancelled and sets the cancellation time.
         /// </summary>
-        private void MarkTaskAsCancelled(string taskId)
+        private void MarkTaskAsCancelled(string taskId, TaskRegistration registration)
         {
-            if (_registry.TryGetValue(taskId, out var registration))
+            if (_registry.TryGetValue(taskId, out var current) && ReferenceEquals(current, registration))
             {
                 registration.CancelledAt = DateTime.UtcNow;
                 _logger.LogDebug("Marked task {TaskId} as cancelled, will be removed after grace period", taskId);
@@ -188,7 +206,7 @@ namespace ConduitLLM.Core.Services
         private void CleanupExpiredTasks(object? state)
         {
             var now = DateTime.UtcNow;
-            var tasksToRemove = new List<string>();
+            var tasksToRemove = new List<(string Id, CancellationTokenSource Owner)>();
 
             foreach (var kvp in _registry)
             {
@@ -197,15 +215,15 @@ namespace ConduitLLM.Core.Services
                     var timeSinceCancellation = now - kvp.Value.CancelledAt.Value;
                     if (timeSinceCancellation > _gracePeriod)
                     {
-                        tasksToRemove.Add(kvp.Key);
+                        tasksToRemove.Add((kvp.Key, kvp.Value.CancellationTokenSource));
                     }
                 }
             }
 
-            foreach (var taskId in tasksToRemove)
+            foreach (var task in tasksToRemove)
             {
-                UnregisterTask(taskId);
-                _logger.LogDebug("Removed cancelled task {TaskId} after grace period", taskId);
+                UnregisterTask(task.Id, task.Owner);
+                _logger.LogDebug("Removed cancelled task {TaskId} after grace period", task.Id);
             }
         }
 

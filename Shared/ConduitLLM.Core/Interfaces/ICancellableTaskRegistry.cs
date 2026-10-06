@@ -13,6 +13,9 @@ namespace ConduitLLM.Core.Interfaces
         /// <param name="cts">The cancellation token source for the task.</param>
         void RegisterTask(string taskId, CancellationTokenSource cts);
 
+        /// <summary>Installs the cancellation source for the authoritative durable claim, replacing a stale local registration.</summary>
+        void RegisterClaimedTask(string taskId, CancellationTokenSource cts);
+
         /// <summary>
         /// Attempts to cancel a registered task.
         /// </summary>
@@ -26,6 +29,9 @@ namespace ConduitLLM.Core.Interfaces
         /// </summary>
         /// <param name="taskId">The unique identifier for the task to unregister.</param>
         void UnregisterTask(string taskId);
+
+        /// <summary>Removes a registration only if it still belongs to this execution.</summary>
+        void UnregisterTask(string taskId, CancellationTokenSource owner);
 
         /// <summary>
         /// Gets the cancellation token for a registered task.

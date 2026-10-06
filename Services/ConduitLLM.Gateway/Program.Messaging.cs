@@ -46,6 +46,10 @@ public partial class Program
     private static void ConfigureWolverineMessaging(WebApplicationBuilder builder)
     {
         builder.Services.AddWolverineEventBus();
+        builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IMediaTaskSubmission,
+            ConduitLLM.Messaging.Wolverine.MediaTaskSubmission>();
+        builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IMediaTaskRecovery,
+            ConduitLLM.Messaging.Wolverine.MediaTaskRecovery>();
 
         var (_, connectionString) = new ConduitLLM.Core.Data.ConnectionStringManager()
             .GetProviderAndConnectionString("CoreAPI");
