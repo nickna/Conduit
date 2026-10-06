@@ -1,6 +1,7 @@
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Helpers;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Core.Interfaces;
 using ConduitLLM.IntegrationTests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +15,39 @@ namespace ConduitLLM.IntegrationTests.Tests;
 [Trait("Component", "Webhooks")]
 public sealed class WebhookDurableDeliveryTests(MediaDispatchFixture fixture)
 {
+    [Fact]
+    public async Task AdmissionDenial_PersistsDueTimeWithoutHttpAttempt_HealthyDestinationContinues()
+    {
+        await fixture.ResetAsync();
+        await using var blocked = await WebhookReceiver.StartAsync();
+        await using var healthy = await WebhookReceiver.StartAsync();
+        var local = new WebhookAdmission(Microsoft.Extensions.Options.Options.Create(new ConduitLLM.Core.Configuration.WebhookDeliveryOptions()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<WebhookAdmission>.Instance);
+        var admission = new Mock<IWebhookAdmission>();
+        admission.Setup(a => a.AcquireAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns((string url, CancellationToken ct) => url == blocked.Url
+                ? Task.FromResult(new WebhookAdmissionDecision(null, DateTime.UtcNow.AddSeconds(30))) : local.AcquireAsync(url, ct));
+        fixture.ReceiverAdmission = admission.Object;
+        using var host = fixture.Host(worker: false, webhooks: true);
+        await host.StartAsync();
+        try
+        {
+            var request = Request(blocked.Url);
+            await host.Services.GetRequiredService<IMessageBus>().PublishAsync(request);
+            var good = Request(healthy.Url);
+            await host.Services.GetRequiredService<IMessageBus>().PublishAsync(good);
+            await DeliveredAsync(WebhookIdentity.DeliveryKey(good));
+            await MediaDispatchFixture.EventuallyAsync(async () =>
+            {
+                await using var db = fixture.Db();
+                return await db.WebhookDeliveries.AnyAsync(r => r.Id == WebhookIdentity.DeliveryKey(request) &&
+                    r.Attempts == 0 && r.ClaimToken == null && r.NextAttemptAt > DateTime.UtcNow);
+            });
+            Assert.Empty(blocked.Posts); Assert.Single(healthy.Posts);
+        }
+        finally { await host.StopAsync(); }
+    }
+
     private static WebhookDeliveryRequested Request(string url) => new()
     {
         TaskId = "webhook-durable", TaskType = "video", VirtualKeyId = 1, WebhookUrl = url,

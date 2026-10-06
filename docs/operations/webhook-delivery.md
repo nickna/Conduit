@@ -139,3 +139,31 @@ outbox-write rollback, dispatch after host restart, cache/notification failure,
 cancellation races, stale worker fencing, and delayed progress. Existing durable
 acceptance/recovery tests also verify provider markers and spend safeguards.
 
+## Async admission and circuit isolation (WR-5)
+
+`GlobalConcurrency` defaults to 32 and `DestinationConcurrency` to 4. With Redis,
+these are aggregate limits across instances sharing the admission namespace; a
+process-local cap also applies. Without Redis (or during an outage), limits and
+circuits are local: N instances can admit up to N times each configured limit.
+PostgreSQL claims, receipts, and scheduled retries remain authoritative in both
+modes. Optional Redis failures never remove durable work.
+
+Destination scope is SHA-256 of the exact accepted URL, including path/query; no
+URL or authentication data appears in Redis keys. Five retryable failures open the
+destination circuit for 60 seconds (`CircuitFailureThreshold`, `CircuitOpenSeconds`).
+Afterward `RecoveryProbes` (default 1) bounds simultaneous probes across instances.
+Leases expire after attempt timeout plus 30 seconds, including after process exit.
+Atomic async Redis scripts use Redis server time and generation fencing. Late or
+expired results cannot close/reopen a newer circuit. Success of an ordinary older
+request does not erase the open circuit. Unused Redis state expires in 30 minutes;
+local destination state is pruned after 30 minutes and capped at 4096 entries.
+
+Admission never waits for capacity. Denial durably schedules the event and returns
+the worker slot, with no HTTP attempt. Per-destination capacity leaves slots for
+other receivers. Started/progress work retains its five-minute freshness deadline.
+The receiver exception-count listener circuit is removed because exhausted receiver
+events could otherwise pause the whole queue. Wolverine's infrastructure persistence
+and recovery still handle transport/database faults. Historical `RateLimit` metadata
+is not enforced by Wolverine and is not a throughput guarantee. Final concurrency
+recommendations are checked against the WR-7 workload measurements below.
+

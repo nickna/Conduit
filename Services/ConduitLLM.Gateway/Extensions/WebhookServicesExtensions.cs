@@ -119,6 +119,7 @@ public static class WebhookServicesExtensions
             .Validate(options => options.IsValid(), "Invalid webhook delivery options.")
             .ValidateOnStart();
         services.AddSingleton<WebhookDeliveryPolicy>();
+        services.AddSingleton<IWebhookAdmission, WebhookAdmission>();
         services.AddTransient<WebhookMetricsHandler>();
         services.AddHttpClient<IWebhookNotificationService, WebhookNotificationService>(
             "WebhookClient",

@@ -14,6 +14,11 @@ public sealed class WebhookDeliveryOptions
     public int MaxRetryAfterSeconds { get; set; } = 60 * 60;
     public int DeferralSeconds { get; set; } = 30;
     public double JitterRatio { get; set; } = 0.2;
+    public int GlobalConcurrency { get; set; } = 32;
+    public int DestinationConcurrency { get; set; } = 4;
+    public int RecoveryProbes { get; set; } = 1;
+    public int CircuitFailureThreshold { get; set; } = 5;
+    public int CircuitOpenSeconds { get; set; } = 60;
 
     public bool IsValid() => AttemptTimeoutSeconds is >= 1 and <= 300 &&
         ConnectTimeoutSeconds >= 1 && ConnectTimeoutSeconds <= AttemptTimeoutSeconds &&
@@ -21,5 +26,8 @@ public sealed class WebhookDeliveryOptions
         ProgressWindowSeconds >= 1 && ProgressWindowSeconds <= TerminalWindowSeconds &&
         InitialDelaySeconds >= 1 && MaxDelaySeconds >= InitialDelaySeconds && MaxDelaySeconds <= 86400 &&
         MaxRetryAfterSeconds is >= 1 and <= 86400 && DeferralSeconds is >= 1 and <= 3600 &&
-        double.IsFinite(JitterRatio) && JitterRatio is >= 0 and <= 1;
+        double.IsFinite(JitterRatio) && JitterRatio is >= 0 and <= 1 &&
+        GlobalConcurrency is >= 1 and <= 10000 && DestinationConcurrency >= 1 &&
+        DestinationConcurrency <= GlobalConcurrency && RecoveryProbes >= 1 && RecoveryProbes <= DestinationConcurrency &&
+        CircuitFailureThreshold is >= 1 and <= 1000 && CircuitOpenSeconds is >= 1 and <= 3600;
 }

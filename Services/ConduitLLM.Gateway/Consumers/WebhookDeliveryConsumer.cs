@@ -12,7 +12,7 @@ namespace ConduitLLM.Gateway.Consumers;
 
 /// <summary>One bounded receiver attempt; PostgreSQL commits every receipt and future delivery.</summary>
 public sealed class WebhookDeliveryConsumer(IWebhookNotificationService webhookService,
-    IWebhookDeliveryStore store, IWebhookCircuitBreaker circuitBreaker,
+    IWebhookDeliveryStore store, IWebhookAdmission admission,
     IWebhookDeliveryNotificationService notifications, ILogger<WebhookDeliveryConsumer> logger,
     WebhookDeliveryPolicy? policy = null) : IEventHandler<WebhookDeliveryRequested>
 {
@@ -54,9 +54,11 @@ public sealed class WebhookDeliveryConsumer(IWebhookNotificationService webhookS
             return;
         }
 
-        if (circuitBreaker.IsOpen(request.WebhookUrl))
+        var decision = await admission.AcquireAsync(request.WebhookUrl, cancellation);
+        await using var admissionLease = decision.Lease;
+        if (admissionLease == null)
         {
-            var due = _policy.DeferUntil(claim.Deadline);
+            var due = decision.DueAt < claim.Deadline ? decision.DueAt : claim.Deadline;
             if (await store.ScheduleAsync(claim, due, cancellationToken: cancellation))
                 await ReportAsync(() => notifications.NotifyRetryScheduledAsync(request.WebhookUrl, request.TaskId,
                     due, claim.Attempts, _policy.Options.MaxAttempts));
@@ -86,15 +88,14 @@ public sealed class WebhookDeliveryConsumer(IWebhookNotificationService webhookS
         if (result.Success)
         {
             if (!await store.CompleteAsync(claim, result, exhausted: false, cancellation)) return;
-            await ReportAsync(() => { circuitBreaker.RecordSuccess(request.WebhookUrl); return Task.CompletedTask; });
+            await ReportAsync(() => admissionLease.RecordAsync(true));
             await ReportAsync(() => notifications.NotifyDeliverySuccessAsync(request.WebhookUrl, request.TaskId,
                 result.StatusCode ?? 0, stopwatch.ElapsedMilliseconds, attempt.Value));
             return;
         }
 
         var retryable = WebhookDeliveryPolicy.IsRetryable(result);
-        if (retryable)
-            await ReportAsync(() => { circuitBreaker.RecordFailure(request.WebhookUrl); return Task.CompletedTask; });
+        await ReportAsync(() => admissionLease.RecordAsync(retryable ? false : null));
         if (!retryable || attempt.Value >= _policy.Options.MaxAttempts || _policy.UtcNow >= claim.Deadline)
         {
             await ExhaustAsync(claim, result, attempt.Value, cancellation);

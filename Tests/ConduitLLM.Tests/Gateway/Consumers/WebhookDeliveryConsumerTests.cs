@@ -21,7 +21,8 @@ public sealed class WebhookDeliveryConsumerTests
     public async Task HandleAsync_OpenCircuit_DurablyDefersWithoutAttemptOrPermanentFailure()
     {
         var fixture = new Fixture();
-        fixture.CircuitBreaker.Setup(c => c.IsOpen(It.IsAny<string>())).Returns(true);
+        fixture.Admission.Setup(c => c.AcquireAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new WebhookAdmissionDecision(null, DateTime.UtcNow.AddSeconds(30)));
         await fixture.Consumer.HandleAsync(Fixture.Request, fixture.Context);
         var retry = Assert.IsType<WebhookDeliveryRequested>(Assert.Single(fixture.Context.Scheduled).Event);
         Assert.Equal(0, retry.RetryCount);
@@ -64,7 +65,8 @@ public sealed class WebhookDeliveryConsumerTests
     public async Task HandleAsync_SchedulingFailure_PropagatesAndDoesNotExhaust()
     {
         var fixture = new Fixture();
-        fixture.CircuitBreaker.Setup(c => c.IsOpen(It.IsAny<string>())).Returns(true);
+        fixture.Admission.Setup(c => c.AcquireAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new WebhookAdmissionDecision(null, DateTime.UtcNow.AddSeconds(30)));
         fixture.Store.Setup(s => s.ScheduleAsync(It.IsAny<WebhookClaim>(), It.IsAny<DateTime>(),
             It.IsAny<WebhookSendResult?>(), It.IsAny<CancellationToken>())).ThrowsAsync(new IOException("database unavailable"));
         await Assert.ThrowsAsync<IOException>(() => fixture.Consumer.HandleAsync(Fixture.Request, fixture.Context));
@@ -187,7 +189,7 @@ public sealed class WebhookDeliveryConsumerTests
 
         public Mock<IWebhookNotificationService> Webhook { get; } = new();
         public Mock<IWebhookDeliveryStore> Store { get; } = new();
-        public Mock<IWebhookCircuitBreaker> CircuitBreaker { get; } = new();
+        public Mock<IWebhookAdmission> Admission { get; } = new();
         public Mock<IWebhookDeliveryNotificationService> Notifications { get; } = new();
         public TestEventContext Context { get; } = new();
         public WebhookDeliveryConsumer Consumer { get; }
@@ -210,11 +212,12 @@ public sealed class WebhookDeliveryConsumerTests
                     await Context.SchedulePublishAsync(due, claim.Request with { RetryCount = attempts, NextRetryAt = due }, cancellation);
                     return true;
                 });
-            CircuitBreaker.Setup(service => service.IsOpen(It.IsAny<string>())).Returns(false);
+            Admission.Setup(service => service.AcquireAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new WebhookAdmissionDecision(Mock.Of<IWebhookAdmissionLease>(), DateTime.UtcNow.AddSeconds(40)));
             Consumer = new WebhookDeliveryConsumer(
                 Webhook.Object,
                 Store.Object,
-                CircuitBreaker.Object,
+                Admission.Object,
                 Notifications.Object,
                 Mock.Of<ILogger<WebhookDeliveryConsumer>>(),
                 new WebhookDeliveryPolicy(Options.Create(new WebhookDeliveryOptions { MaxAttempts = 4 })));

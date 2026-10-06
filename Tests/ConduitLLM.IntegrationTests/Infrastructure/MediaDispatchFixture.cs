@@ -50,7 +50,7 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     public Func<Task>? BeforeKeyValidation { get; set; }
     public IBatchSpendUpdateService? Reservations { get; set; }
     public Mock<IWebhookDeliveryNotificationService> WebhookNotifications { get; } = new();
-    public IWebhookCircuitBreaker? ReceiverCircuit { get; set; }
+    public IWebhookAdmission? ReceiverAdmission { get; set; }
 
     public ConduitDbContext Db() => new(new DbContextOptionsBuilder<ConduitDbContext>()
         .UseNpgsql(ConnectionString).Options);
@@ -101,8 +101,7 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
                     services.AddWebhookHttpServices(config);
                     services.AddScoped<IWebhookDeliveryStore, WebhookDeliveryStore>();
                     services.AddSingleton(WebhookNotifications.Object);
-                    if (ReceiverCircuit != null) services.AddSingleton(ReceiverCircuit);
-                    else services.AddSingleton<IWebhookCircuitBreaker, WebhookCircuitBreaker>();
+                    if (ReceiverAdmission != null) services.AddSingleton(ReceiverAdmission);
                     services.AddScoped<IEventHandler<WebhookDeliveryRequested>, WebhookDeliveryConsumer>();
                 }
                 if (worker)
@@ -178,7 +177,7 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     {
         Provider.Reset(); Cache.Reset();
         HandledImages = 0; BeforeKeyValidation = null; Reservations = null;
-        ReceiverCircuit = null; WebhookNotifications.Reset();
+        ReceiverAdmission = null; WebhookNotifications.Reset();
         Provider.As<IVideoGenerationClient>().Setup(p => p.CreateVideoAsync(It.IsAny<VideoGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new VideoGenerationResponse { Created = 1, Data = [] });
         Provider.Setup(p => p.CreateImageAsync(It.IsAny<ImageGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
