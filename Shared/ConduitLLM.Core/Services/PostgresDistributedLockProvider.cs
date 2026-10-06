@@ -97,7 +97,9 @@ public sealed class PostgresDistributedLockProvider : IDistributedLockProvider
             {
                 DistributedLockMetrics.ReleaseFailures.WithLabels(_operation).Inc();
                 _logger.LogError(ex, "Distributed lock release failed for {Operation}", _operation);
-                throw;
+                // Preserve the protected operation's cancellation after an already detected loss.
+                // Healthy-release failures still propagate; both failures remain observable.
+                if (!HandleLostToken.IsCancellationRequested) { throw; }
             }
             finally
             {

@@ -21,6 +21,17 @@ share the numeric identity and propagate request/shutdown, 30-minute deadline an
 Storage calls already running at loss can complete; canceled post-storage bookkeeping
 may leave a record for a subsequent idempotent cleanup. No fencing/exactly-once claim.
 
+DL-4 evidence: 10 sync/alert unit tests and two actual PostgreSQL 17 caller tests passed.
+Manual sync still returns HTTP 409 against a scheduled holder. Scheduled ownership is
+released before the schedule interval (the old using block encompassed that sleep).
+Cancellation propagates while a fresh context records only terminal run status with a
+three-second budget. A terminated scheduled session cancels protected work and async
+release preserves that cancellation. An isolated alert send held ownership for >5s;
+even canceled uncooperative send work continued excluding competitors until awaited.
+Redis repository methods have no token API: check before/after each awaited operation;
+do not abandon those calls or redesign mark-before-send/cooldown. Known-loss release
+errors are logged/counted without masking cancellation; healthy release errors propagate.
+
 ## Contract and intentional lifetime change
 
 `IDistributedLockProvider.TryAcquireAsync(key, acquisitionTimeout, cancellationToken)`

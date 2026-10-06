@@ -22,7 +22,7 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>When the run completed (UTC), or null if still running.</summary>
         public DateTime? CompletedAt { get; set; }
 
-        /// <summary>Run status: Running | Completed | Failed.</summary>
+        /// <summary>Run status: Running | Completed | Failed | Cancelled.</summary>
         [StringLength(20)]
         public string Status { get; set; } = "Running";
 

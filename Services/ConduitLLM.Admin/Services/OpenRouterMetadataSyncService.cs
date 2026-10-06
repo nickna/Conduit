@@ -1,3 +1,4 @@
+using ConduitLLM.Core.Extensions;
 using ConduitLLM.Admin.Interfaces;
 using ConduitLLM.Configuration.Options;
 using ConduitLLM.Core.Interfaces;
@@ -17,7 +18,7 @@ namespace ConduitLLM.Admin.Services
     public class OpenRouterMetadataSyncService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
-        private readonly IDistributedLockService _lockService;
+        private readonly IDistributedLockProvider _lockService;
         private readonly OpenRouterSyncOptions _options;
         private readonly ILogger<OpenRouterMetadataSyncService> _logger;
 
@@ -25,7 +26,7 @@ namespace ConduitLLM.Admin.Services
 
         public OpenRouterMetadataSyncService(
             IServiceScopeFactory scopeFactory,
-            IDistributedLockService lockService,
+            IDistributedLockProvider lockService,
             IOptions<OpenRouterSyncOptions> options,
             ILogger<OpenRouterMetadataSyncService> logger)
         {
@@ -50,14 +51,9 @@ namespace ConduitLLM.Admin.Services
             {
                 try
                 {
-                    using var lockHandle = await _lockService.AcquireLockAsync(
-                        LeaderLockKey, TimeSpan.FromMinutes(15), stoppingToken);
-
-                    if (lockHandle != null)
+                    var run = await RunScheduledSyncAsync(stoppingToken);
+                    if (run != null)
                     {
-                        using var scope = _scopeFactory.CreateScope();
-                        var detection = scope.ServiceProvider.GetRequiredService<IOpenRouterDriftDetectionService>();
-                        var run = await detection.RunSyncAsync("Schedule", stoppingToken);
                         _logger.LogInformation(
                             "OpenRouter metadata sync {Status}: {Created} created, {Updated} updated, {AutoResolved} auto-resolved across {Mappings} mappings.",
                             run.Status, run.ItemsCreated, run.ItemsUpdated, run.ItemsAutoResolved, run.MappingsChecked);
@@ -65,7 +61,7 @@ namespace ConduitLLM.Admin.Services
 
                     await Task.Delay(TimeSpan.FromHours(_options.ScheduleIntervalHours), stoppingToken);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
                     break;
                 }
@@ -75,6 +71,19 @@ namespace ConduitLLM.Admin.Services
                     await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
                 }
             }
+        }
+
+        public async Task<ConduitLLM.Admin.Models.ProviderSync.ProviderSyncRunDto?> RunScheduledSyncAsync(CancellationToken stoppingToken)
+        {
+            await using var ownership = await _lockService.TryAcquireAsync(LeaderLockKey, TimeSpan.Zero, stoppingToken);
+            if (ownership is null) { return null; }
+            using var work = ownership.CreateOperationCancellation(stoppingToken, TimeSpan.FromMinutes(15));
+            work.Token.ThrowIfCancellationRequested();
+            using var scope = _scopeFactory.CreateScope();
+            var detection = scope.ServiceProvider.GetRequiredService<IOpenRouterDriftDetectionService>();
+            var run = await detection.RunSyncAsync("Schedule", work.Token);
+            work.Token.ThrowIfCancellationRequested();
+            return run;
         }
     }
 }

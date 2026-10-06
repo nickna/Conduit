@@ -1,3 +1,4 @@
+using ConduitLLM.Core.Extensions;
 using Microsoft.AspNetCore.SignalR;
 using ConduitLLM.Configuration.DTOs.SignalR;
 using ConduitLLM.Core.Constants;
@@ -14,12 +15,12 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
         /// <summary>
         /// Checks budget thresholds and sends alerts if needed
         /// </summary>
-        Task CheckBudgetThresholdsAsync(int virtualKeyId, decimal totalSpend, decimal budget, decimal percentageUsed);
+        Task CheckBudgetThresholdsAsync(int virtualKeyId, decimal totalSpend, decimal budget, decimal percentageUsed, CancellationToken cancellationToken = default);
         
         /// <summary>
         /// Sends a budget alert notification
         /// </summary>
-        Task SendBudgetAlertAsync(int virtualKeyId, int threshold, decimal totalSpend, decimal budget, decimal percentageUsed);
+        Task SendBudgetAlertAsync(int virtualKeyId, int threshold, decimal totalSpend, decimal budget, decimal percentageUsed, CancellationToken cancellationToken = default);
     }
 
     /// <summary>
@@ -29,8 +30,9 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
     {
         private readonly IHubContext<SpendNotificationHub> _hubContext;
         private readonly ISpendDataRepository _repository;
-        private readonly IDistributedLockService _lockService;
+        private readonly IDistributedLockProvider _lockService;
         private readonly ILogger<BudgetAlertManager> _logger;
+        private readonly CancellationToken _shutdownToken;
         
         private readonly int[] _budgetThresholds = { 50, 75, 80, 90, 95, 100 };
         private readonly TimeSpan _alertCooldownPeriod = TimeSpan.FromHours(4);
@@ -39,34 +41,40 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
         public BudgetAlertManager(
             IHubContext<SpendNotificationHub> hubContext,
             ISpendDataRepository repository,
-            IDistributedLockService lockService,
-            ILogger<BudgetAlertManager> logger)
+            IDistributedLockProvider lockService,
+            ILogger<BudgetAlertManager> logger, IHostApplicationLifetime? applicationLifetime = null)
         {
             _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
             _lockService = lockService ?? throw new ArgumentNullException(nameof(lockService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _shutdownToken = applicationLifetime?.ApplicationStopping ?? CancellationToken.None;
         }
 
         public async Task CheckBudgetThresholdsAsync(
-            int virtualKeyId, decimal totalSpend, decimal budget, decimal percentageUsed)
+            int virtualKeyId, decimal totalSpend, decimal budget, decimal percentageUsed, CancellationToken cancellationToken = default)
         {
+            using var request = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownToken);
+            cancellationToken = request.Token;
             try
             {
                 foreach (var threshold in _budgetThresholds)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (percentageUsed >= threshold)
                     {
-                        await ProcessThresholdAlertAsync(virtualKeyId, threshold, totalSpend, budget, percentageUsed);
+                        await ProcessThresholdAlertAsync(virtualKeyId, threshold, totalSpend, budget, percentageUsed, cancellationToken);
                     }
                 }
                 
                 // Reset alerts if spending drops below 50%
                 if (percentageUsed < 50)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     await _repository.ResetBudgetAlertsAsync(virtualKeyId);
                 }
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error checking budget thresholds for VirtualKey {VirtualKeyId}", virtualKeyId);
@@ -74,13 +82,13 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
         }
 
         private async Task ProcessThresholdAlertAsync(
-            int virtualKeyId, int threshold, decimal totalSpend, decimal budget, decimal percentageUsed)
+            int virtualKeyId, int threshold, decimal totalSpend, decimal budget, decimal percentageUsed, CancellationToken cancellationToken)
         {
             var lockKey = RedisKeys.Lock.AlertThreshold(virtualKeyId.ToString(), threshold.ToString());
             
             // Try to acquire distributed lock
-            using var lockHandle = await _lockService.AcquireLockAsync(
-                lockKey, TimeSpan.FromSeconds(5));
+            await using var lockHandle = await _lockService.TryAcquireAsync(
+                lockKey, TimeSpan.Zero, cancellationToken);
             
             if (lockHandle == null)
             {
@@ -88,10 +96,16 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                     virtualKeyId, threshold);
                 return;
             }
+
+            using var work = lockHandle.CreateOperationCancellation(cancellationToken);
+            cancellationToken = work.Token;
+            cancellationToken.ThrowIfCancellationRequested();
             
             // Check if alert is in cooldown
             var cooldownType = $"budget:{threshold}";
-            if (await _repository.IsAlertInCooldownAsync(virtualKeyId, cooldownType))
+            var inCooldown = await _repository.IsAlertInCooldownAsync(virtualKeyId, cooldownType);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (inCooldown)
             {
                 _logger.LogDebug("Alert for VirtualKey {VirtualKeyId} at {Threshold}% is in cooldown", 
                     virtualKeyId, threshold);
@@ -99,7 +113,10 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             }
             
             // Try to mark alert as sent (idempotent operation)
-            if (!await _repository.MarkAlertSentAsync(virtualKeyId, threshold, _alertTtl))
+            cancellationToken.ThrowIfCancellationRequested();
+            var marked = await _repository.MarkAlertSentAsync(virtualKeyId, threshold, _alertTtl);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!marked)
             {
                 _logger.LogDebug("Alert already sent for VirtualKey {VirtualKeyId} at {Threshold}%", 
                     virtualKeyId, threshold);
@@ -107,14 +124,17 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             }
             
             // Set cooldown to prevent alert spam
+            cancellationToken.ThrowIfCancellationRequested();
             await _repository.SetAlertCooldownAsync(virtualKeyId, cooldownType, _alertCooldownPeriod);
             
             // Send the budget alert
-            await SendBudgetAlertAsync(virtualKeyId, threshold, totalSpend, budget, percentageUsed);
+            cancellationToken.ThrowIfCancellationRequested();
+            await SendBudgetAlertAsync(virtualKeyId, threshold, totalSpend, budget, percentageUsed, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         public async Task SendBudgetAlertAsync(
-            int virtualKeyId, int threshold, decimal totalSpend, decimal budget, decimal percentageUsed)
+            int virtualKeyId, int threshold, decimal totalSpend, decimal budget, decimal percentageUsed, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -133,7 +153,9 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                 };
 
                 var groupName = $"vkey-{virtualKeyId}";
-                await _hubContext.Clients.Group(groupName).SendAsync("BudgetAlert", notification);
+                cancellationToken.ThrowIfCancellationRequested();
+                await _hubContext.Clients.Group(groupName).SendAsync("BudgetAlert", notification, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
 
                 _logger.LogWarning(
                     "[BudgetAlert] Sent notification - VirtualKey: {VirtualKeyId}, Threshold: {Threshold}%, " +
@@ -141,6 +163,7 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                     "Severity: {Severity}",
                     virtualKeyId, threshold, totalSpend, budget, alertType, severity);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error sending budget alert for VirtualKey {VirtualKeyId}", virtualKeyId);

@@ -1,3 +1,4 @@
+using ConduitLLM.Core.Extensions;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Interfaces;
@@ -110,18 +111,23 @@ public static class ProviderSyncEndpoints
         return Results.Ok(result);
     }
 
-    private static async Task<IResult> Run(
+    internal static async Task<IResult> Run(
         [FromServices] IOpenRouterDriftDetectionService detectionService,
-        [FromServices] IDistributedLockService lockService,
+        [FromServices] IDistributedLockProvider lockService,
         HttpContext context,
         ILoggerFactory loggerFactory)
     {
-        using var lockHandle = await lockService.AcquireLockAsync(SyncLockKey, TimeSpan.FromMinutes(15));
+        using var request = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted,
+            context.RequestServices.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? CancellationToken.None);
+        await using var lockHandle = await lockService.TryAcquireAsync(SyncLockKey, TimeSpan.Zero, request.Token);
         if (lockHandle is null)
         {
             return AdminResults.Conflict("A sync is already in progress.");
         }
-        var run = await detectionService.RunSyncAsync("Manual");
+        using var work = lockHandle.CreateOperationCancellation(request.Token, TimeSpan.FromMinutes(15));
+        work.Token.ThrowIfCancellationRequested();
+        var run = await detectionService.RunSyncAsync("Manual", work.Token);
+        work.Token.ThrowIfCancellationRequested();
         AdminAudit.Log(context, Logger(loggerFactory), "RanSync", "ProviderMetadataSyncRun", run.Id,
             $"Status: {run.Status}");
         return Results.Ok(run);
