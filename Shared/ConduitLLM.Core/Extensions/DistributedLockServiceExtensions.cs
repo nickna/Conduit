@@ -17,9 +17,8 @@ public static class DistributedLockServiceExtensions
             return new PostgresDistributedLockProvider(connectionString,
                 provider.GetRequiredService<ILogger<PostgresDistributedLockProvider>>());
         });
-        // DL-2: adapter is resolvable, but remains inactive until caller/integration gates.
-        services.TryAddSingleton<IDistributedLockService, PostgresDistributedLockService>();
-        services.TryAddSingleton<IDistributedLockProvider, LegacyDistributedLockProvider>();
+        services.TryAddSingleton<IDistributedLockProvider>(provider =>
+            provider.GetRequiredService<PostgresDistributedLockProvider>());
         return services;
     }
 }

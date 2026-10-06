@@ -37,7 +37,6 @@ namespace ConduitLLM.Tests.Core.Services
             {
                 EnableCoordinatedWarming = true,
                 SignalTimeout = TimeSpan.FromMilliseconds(100),
-                LockExpiry = TimeSpan.FromSeconds(30),
                 StaggerDelay = TimeSpan.FromMilliseconds(10)
             };
 
@@ -357,11 +356,9 @@ namespace ConduitLLM.Tests.Core.Services
         public async Task StartAsync_UsesImmediateAcquisition()
         {
             // Arrange
-            var customExpiry = TimeSpan.FromMinutes(10);
             var options = new ConnectionPoolWarmingOptions
             {
                 EnableCoordinatedWarming = true,
-                LockExpiry = customExpiry,
                 SignalTimeout = TimeSpan.FromMilliseconds(100)
             };
 
@@ -384,7 +381,7 @@ namespace ConduitLLM.Tests.Core.Services
             // Act
             await warmer.StartAsync(CancellationToken.None);
 
-            // Assert - Should use configured lock expiry
+            // Assert - Acquisition never waits for another warmer.
             _lockServiceMock.Verify(
                 l => l.TryAcquireAsync(
                     It.IsAny<string>(),

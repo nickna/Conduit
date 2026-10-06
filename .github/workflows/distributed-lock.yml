@@ -2,7 +2,7 @@ name: Distributed lock ownership
 
 on:
   push:
-    branches: [dev, master, 'codex/epic-1399-distributed-lock']
+    branches: [dev, master]
     paths:
       - 'Shared/**'
       - 'Services/**'

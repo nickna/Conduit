@@ -147,11 +147,10 @@ public static class RedisKeys
 
     /// <summary>
     /// Keys for distributed locking.
-    /// Used by RedisDistributedLockService.
+    /// Stable coordination identities, including the PostgreSQL alert guard.
     /// </summary>
     public static class Lock
     {
-        public static string For(string key) => $"lock:{key}";
         public static string AlertThreshold(string virtualKeyId, string threshold) => $"lock:alert:vk:{virtualKeyId}:threshold:{threshold}";
     }
 

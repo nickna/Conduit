@@ -1,6 +1,6 @@
 # Distributed lock ownership (#1399)
 
-Status: DL-1 compatibility gate; production continues using the legacy backend.
+Status: Accepted; both hosts select the new adapter after the DL-6 evidence gate.
 Baseline: merged FusionCache PR #1413 on `dev`. All seven packages are implemented
 serially, with validation and a commit before advancing.
 
@@ -153,21 +153,33 @@ succeeded. This was an execution permission constraint, not a package diagnostic
 
 ## Migration gates and retirement
 
-DL-2 registers the new concrete adapter but leaves legacy selected. A temporary
+During DL-2, the new concrete adapter was registered while legacy remained selected. A temporary
 `LegacyDistributedLockProvider` bridges migrated callers until DL-6 evidence passes;
-it explicitly retains old 30-minute lease semantics and cannot supply loss notification.
-It is **not** the target contract or a supported final backend and is removed in DL-7.
+it retained old 30-minute lease semantics and could not supply loss notification.
+It was removed in DL-7 after local and Linux evidence passed.
 No dual-handle acquisition or destructive shadow execution. Cutover/rollback require
 quiescing all critical triggers and draining in-flight work; stable IDs alone do not
 make old expiring holders safe. Production deployment is outside this implementation.
 
-Retire 377-line PostgreSQL SQL/timer implementation, old retry/interface metadata,
+DL-7 retires the 377-line PostgreSQL SQL/timer implementation, old retry/interface metadata,
 unregistered Redis/in-memory alternatives (429 lines), and obsolete lease options.
 Replace cleanup test's in-memory dependency with a test-only ownership fake. Preserve
 Redis alerts, warming signals, leader election/fencing/identity and hosted orchestration.
 Report net production, dead alternatives and tests separately, without a 2,200-line claim.
 
-Revised work remains seven serial gates: DL-2 adapter and integration; DL-3 media;
-DL-4 sync/alerts; DL-5 optional coordination; DL-6 fault/resource/native evidence;
-DL-7 composition, runbook and retirement. Caller packages are substantive cancellation
-work, with DL-3 and DL-6 carrying the highest validation effort.
+## Achieved epic gates
+
+- [x] DL-1 #1400: caller matrix, minimal ownership contract, numeric identity and pinned package spike.
+- [x] DL-2 #1401: adapter, bounded diagnostics, independent sessions and actual legacy/new interoperability.
+- [x] DL-3 #1402: media request/shutdown/deadline/loss propagation and healthy full-operation ownership.
+- [x] DL-4 #1403: sync conflict/cancellation, bounded terminal-status persistence and unchanged Redis alert deduplication.
+- [x] DL-5 #1404: optional fallback/skip policies, cancellable cache overload and warming listener/shutdown cleanup.
+- [x] DL-6 #1405: real PG16/17 + Redis, fault/resource bounds, Windows and Linux JIT/native, host analyzer/composition and repository guards.
+- [x] DL-7 #1406: composition selection, obsolete interface/backends/options retirement and isolated drain/rollback policy check.
+
+The [validation report](../operations/distributed-lock-validation.md) records measured
+latency/resources, the rejected monitoring configuration and final maintenance delta.
+The [runbook](../operations/distributed-lock-rollout.md) requires every-instance
+quiescence and actual work drain for cutover **and** rollback. A retained previous
+release artifact provides rollback; no permanent lease bridge/selection flag remains.
+Deployment follows normal authorization and deployment-environment canary evidence.

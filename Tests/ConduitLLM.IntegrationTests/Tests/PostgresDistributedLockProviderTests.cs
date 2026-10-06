@@ -98,8 +98,6 @@ public sealed class PostgresDistributedLockProviderTests(PostgresLockTestContain
 
     private PostgresDistributedLockProvider CreateProvider() => new(fixture.ConnectionString,
         NullLogger<PostgresDistributedLockProvider>.Instance);
-    private PostgresDistributedLockService CreateLegacy() => new(new ContextFactory(fixture.ConnectionString),
-        NullLogger<PostgresDistributedLockService>.Instance);
 
     [Fact]
     public async Task IndependentProviders_ExcludeSameKey_AllowDistinctKeys_ReleaseAsynchronously()
@@ -123,9 +121,8 @@ public sealed class PostgresDistributedLockProviderTests(PostgresLockTestContain
     public async Task LegacyThenNew_AndNewThenLegacy_InteroperateInSingleBigintNamespace()
     {
         const string key = "test:adapter:interop";
-        var legacy = CreateLegacy();
         var provider = CreateProvider();
-        await using (var old = await legacy.AcquireLockAsync(key, TimeSpan.FromMinutes(1)))
+        await using (var old = await LegacyAdvisoryLockFixture.TryAcquireAsync(fixture.ConnectionString, key))
         {
             Assert.NotNull(old);
             Assert.Null(await provider.TryAcquireAsync(key));
@@ -133,7 +130,7 @@ public sealed class PostgresDistributedLockProviderTests(PostgresLockTestContain
         await using (var modern = await provider.TryAcquireAsync(key))
         {
             Assert.NotNull(modern);
-            Assert.Null(await legacy.AcquireLockAsync(key, TimeSpan.FromMinutes(1)));
+            Assert.Null(await LegacyAdvisoryLockFixture.TryAcquireAsync(fixture.ConnectionString, key));
         }
         await using var successor = await provider.TryAcquireAsync(key);
         Assert.NotNull(successor);
@@ -154,6 +151,9 @@ public sealed class PostgresDistributedLockProviderTests(PostgresLockTestContain
         await Task.Delay(350); // Former expiry scaled to 100ms.
         Assert.False(holder.HandleLostToken.IsCancellationRequested);
         Assert.Null(await CreateProvider().TryAcquireAsync(key));
+        await holder.DisposeAsync();
+        await using var successor = await CreateProvider().TryAcquireAsync(key);
+        Assert.NotNull(successor);
     }
 
     [Fact]

@@ -240,12 +240,12 @@ finally { await productionHolder!.DisposeAsync(); await productionHolder.Dispose
 var owners = new List<IDistributedLockOwnership>();
 try
 {
-    var acquisitions = await Task.WhenAll(Enumerable.Range(0, 16).Select(i => CreateProvider().TryAcquireAsync($"probe:pool:{i}")));
-    foreach (var ownership in acquisitions)
+    await Task.WhenAll(Enumerable.Range(0, 16).Select(async i =>
     {
+        var ownership = await CreateProvider().TryAcquireAsync($"probe:pool:{i}");
         Check(ownership is not null, "Concurrent holder acquisition failed");
-        owners.Add(ownership!);
-    }
+        lock (owners) { owners.Add(ownership!); } // Track successful holders even if a sibling acquisition fails.
+    }));
     await using var heldCount = new NpgsqlCommand("SELECT count(*) FROM pg_locks l JOIN pg_stat_activity a USING(pid) WHERE l.locktype = 'advisory' AND a.application_name = 'conduit-distributed-lock'", observer);
     Check(Convert.ToInt32(await heldCount.ExecuteScalarAsync()) == 16, "16 holders did not occupy exactly 16 locking sessions");
     await using var connectionCount = new NpgsqlCommand("SELECT count(*) FROM pg_stat_activity WHERE application_name = 'conduit-distributed-lock'", observer);

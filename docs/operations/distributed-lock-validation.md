@@ -14,7 +14,7 @@ integration collection owns disposable PostgreSQL 17 and Redis containers.
 
 ```powershell
 dotnet test Tests/ConduitLLM.IntegrationTests -c Release --filter 'Component=DistributedLock'
-dotnet test Tests/ConduitLLM.Tests -c Release --filter 'FullyQualifiedName~DistributedLock|FullyQualifiedName~PostgresLockIdentity|FullyQualifiedName~MediaCleanup|FullyQualifiedName~MediaDeletion|FullyQualifiedName~AdminMediaServiceSoftDelete|FullyQualifiedName~AdminVirtualKeyService|FullyQualifiedName~MetadataSyncLock|FullyQualifiedName~BudgetAlertManager|FullyQualifiedName~DistributedCachePopulator|FullyQualifiedName~CoordinatedConnectionPoolWarmer|FullyQualifiedName~Architecture|FullyQualifiedName~HostApplicationCacheComposition|FullyQualifiedName~MediaLifecycleExtensions'
+dotnet test Tests/ConduitLLM.Tests -c Release --filter 'FullyQualifiedName~DistributedLock|FullyQualifiedName~PostgresLockIdentity|FullyQualifiedName~MediaCleanup|FullyQualifiedName~MediaDeletion|FullyQualifiedName~AdminMediaServiceSoftDelete|FullyQualifiedName~AdminVirtualKeyService|FullyQualifiedName~MetadataSyncLock|FullyQualifiedName~OpenRouterDriftDetection|FullyQualifiedName~BudgetAlertManager|FullyQualifiedName~DistributedCachePopulator|FullyQualifiedName~CoordinatedConnectionPoolWarmer|FullyQualifiedName~Architecture|FullyQualifiedName~HostApplicationCacheComposition|FullyQualifiedName~MediaLifecycleExtensions'
 dotnet run --project tools/ConduitLLM.LockProbe -c Release
 dotnet publish tools/ConduitLLM.LockProbe -c Release -r win-x64 -p:PublishAot=true -o artifacts/lock-probe/native
 ./artifacts/lock-probe/native/ConduitLLM.LockProbe.exe
@@ -73,10 +73,18 @@ splits and returns nonzero on an unmet gate.
 | --- | ---: | ---: | ---: | ---: |
 | Windows JIT, PG16 | 763.4 / 927.3 | 1622.4 / 1873.0 | 1006ms | 3ms |
 | Windows JIT, PG17 | 796.6 / 939.5 | 1605.9 / 1732.3 | 1013ms | 4ms |
-| Windows native, PG16 | 675.4 / 1082.6 | 1283.3 / 1563.3 | 1004ms | 2ms |
-| Windows native, PG17 | 615.4 / 785.1 | 1528.3 / 1835.4 | 1013ms | 3ms |
+| Windows native, PG16 | 612.5 / 813.0 | 1321.8 / 1545.7 | 1017ms | 2ms |
+| Windows native, PG17 | 612.5 / 703.7 | 1286.3 / 1413.1 | 1003ms | 2ms |
+| Linux JIT, PG16 | 668.3 / 767.2 | 1482.9 / 1703.9 | 1000ms | 6ms |
+| Linux JIT, PG17 | 450.5 / 490.3 | 953.3 / 1020.0 | 1000ms | 4ms |
+| Linux native, PG16 | 478.8 / 557.1 | 1084.7 / 1160.6 | 999ms | 3ms |
+| Linux native, PG17 | 328.3 / 362.7 | 767.6 / 866.3 | 999ms | 3ms |
 
 These executions pass the declared median/p95 <= baseline * 2 + 1ms limits.
+Linux evidence: [successful DL-6 matrix](https://github.com/nickna/Conduit/actions/runs/37413696384),
+233/233 unit and 18/18 integration tests per version, JIT and native probes both pass.
+The later logging guard correction removed two duplicate cancellation logs; it changed
+no lock/keepalive behavior. Final composition selection runs the matrix again.
 The adapter has more acquisition round trips for the externally owned session; it
 passes the original thresholds, rather than claiming improved latency.
 
@@ -111,3 +119,37 @@ No warning baseline is weakened. Native lock-slice evidence is separate from #13
 full-host boundaries. Fixture teardown owns its connections/containers even on
 assertion failure; the developer's three externally supplied fixtures are removed
 after the final verification.
+
+## Final selection and maintenance outcome
+
+DL-7 selects the singleton adapter in both hosts and removes the old interface,
+PostgreSQL SQL/lease/retry implementation, temporary bridge, Redis/in-memory backends
+and warming expiry option. No live consumers of those surfaces remain. Golden identity
+tests are retained; the former automatic-expiry test is retired in favor of healthy
+full-operation lifetime/context churn. A 47-line test-only fixture preserves frozen
+legacy FNV + single-bigint SQL interoperability without production lease code.
+
+Final local checks: **3,699 passed / 6 existing skips** using the repository unit filter
+`FullyQualifiedName!~IntegrationTests&Category!=TimingSensitive` with isolated Redis
+and PostgreSQL cache fixtures. Final PG16 and PG17 each pass **18/18** integration
+tests, including two drain/rollback tests replacing two legacy implementation tests.
+All four real host composition cases select the adapter with scope validation.
+Admin's RDG guard generates all nine affected media handlers; exception logging guard
+passes. Host analyzer ratchet remains zero first-party diagnostics.
+
+Measured diff from the merged FusionCache `dev` baseline (`91d37d24`):
+
+| Area | Added lines | Deleted lines | Net |
+| --- | ---: | ---: | ---: |
+| Production (`Shared`, `Services`, central package pin) | 632 | 1,224 | **-592** |
+| Included unused Redis/in-memory alternatives | 0 | 429 | -429 |
+| Remaining production adapter/business policy changes | 632 | 795 | -163 |
+| Tests (including infrastructure and project reference) | 1,279 | 239 | +1,040 |
+
+The adapter/identity/contracts/metrics/composition/cancellation helper total 240 lines;
+caller policies and local cache coalescing remain. The 377-line PostgreSQL backend and
+106-line old contract were retired. Documentation, the 290-line native probe/project,
+and CI workflow are reported separately from production reduction; no 2,200-line claim.
+Redis leader election/fencing/identity implementations have no diff. The
+[runbook](distributed-lock-rollout.md) records isolated policy-drill evidence and
+the remaining deployment-environment ingress/scheduler/canary verification.
