@@ -70,7 +70,7 @@ public partial class Program
 
             // Register distributed lock service - prefer PostgreSQL for better consistency
             // PostgreSQL advisory locks are more reliable for cache warming coordination
-            builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IDistributedLockService, PostgresDistributedLockService>();
+            builder.Services.AddConduitDistributedLocks();
 
             // Register cache stampede prevention service (must be registered before caches that depend on it)
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IDistributedCachePopulator, DistributedCachePopulator>();
@@ -108,7 +108,7 @@ public partial class Program
             });
 
             // Register PostgreSQL distributed lock service (works even without Redis)
-            builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IDistributedLockService, ConduitLLM.Core.Services.PostgresDistributedLockService>();
+            builder.Services.AddConduitDistributedLocks();
         }
 
         // Register Webhook Delivery Tracker for deduplication and statistics

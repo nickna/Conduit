@@ -15,9 +15,11 @@ public sealed class PostgresLockTestContainerFixture : IAsyncLifetime
         .WithPassword("conduitpass")
         .Build();
 
-    public string ConnectionString => _container.GetConnectionString();
+    private readonly string? _externalConnectionString = Environment.GetEnvironmentVariable("CONDUIT_LOCK_TEST_POSTGRES");
 
-    public Task InitializeAsync() => _container.StartAsync();
+    public string ConnectionString => _externalConnectionString ?? _container.GetConnectionString();
+
+    public Task InitializeAsync() => _externalConnectionString is null ? _container.StartAsync() : Task.CompletedTask;
 
     public async Task DisposeAsync() => await _container.DisposeAsync();
 }

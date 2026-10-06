@@ -4,6 +4,14 @@ Status: DL-1 compatibility gate; production continues using the legacy backend.
 Baseline: merged FusionCache PR #1413 on `dev`. All seven packages are implemented
 serially, with validation and a commit before advancing.
 
+DL-2 evidence: both host graphs build; 8 PostgreSQL 17 lock integration tests passed
+(six adapter scenarios plus the two retained legacy regressions). Adapter uses only
+upstream acquisition/disposal, with no advisory SQL, timer or retry implementation.
+Bounded metrics report outcome, wait/hold, loss and release failures, never key IDs.
+Legacy/new exclusion is tested using the actual legacy implementation in both directions.
+The integration fixture accepts `CONDUIT_LOCK_TEST_POSTGRES` for PG16/17 matrix runs;
+without it, its owned PostgreSQL 17 container remains the default.
+
 ## Contract and intentional lifetime change
 
 `IDistributedLockProvider.TryAcquireAsync(key, acquisitionTimeout, cancellationToken)`
