@@ -5,6 +5,7 @@ using ConduitLLM.Core.Services;
 using ConduitLLM.IntegrationTests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
 using Xunit;
 
 namespace ConduitLLM.IntegrationTests.Tests;
@@ -14,6 +15,52 @@ namespace ConduitLLM.IntegrationTests.Tests;
 [Trait("Component", "DistributedLock")]
 public sealed class PostgresDistributedLockProviderTests(PostgresLockTestContainerFixture fixture)
 {
+    [Fact]
+    public async Task NetworkBlackhole_NotifiesLossWithinFifteenSeconds_AndTeardownReleasesSession()
+    {
+        const string key = "test:adapter:blackhole";
+        await using (var proxy = new PostgresNetworkProxy(fixture.ConnectionString))
+        {
+            var provider = new PostgresDistributedLockProvider(proxy.ConnectionString, NullLogger<PostgresDistributedLockProvider>.Instance);
+            await using var ownership = await provider.TryAcquireAsync(key);
+            Assert.NotNull(ownership);
+            var lost = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var registration = ownership.HandleLostToken.Register(() => lost.TrySetResult());
+            // Synchronize with a real idle keepalive before injecting the fault.
+            await proxy.WaitForKeepaliveAsync();
+            proxy.Blackhole();
+            await lost.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        }
+        await using var successor = await CreateProvider().TryAcquireAsync(key, TimeSpan.FromSeconds(2));
+        Assert.NotNull(successor);
+    }
+
+    [Fact]
+    public async Task FullPool_CancelsWaitingConnection_RatherThanReturningBusy_AndReusesReleasedSessions()
+    {
+        var owners = new List<IDistributedLockOwnership>();
+        try
+        {
+            for (var i = 0; i < 32; i++)
+            {
+                var ownership = await CreateProvider().TryAcquireAsync($"test:pool:{i}");
+                Assert.NotNull(ownership);
+                owners.Add(ownership);
+            }
+            using var canceled = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateProvider().TryAcquireAsync("test:pool:overflow", cancellationToken: canceled.Token));
+            await owners[0].DisposeAsync();
+            await using var successor = await CreateProvider().TryAcquireAsync("test:pool:overflow");
+            Assert.NotNull(successor);
+        }
+        finally { await Task.WhenAll(owners.Select(ownership => ownership.DisposeAsync().AsTask())); }
+
+        await using var observer = new NpgsqlConnection(fixture.ConnectionString);
+        await observer.OpenAsync();
+        await using var count = new NpgsqlCommand("SELECT count(*) FROM pg_locks l JOIN pg_stat_activity a USING(pid) WHERE l.locktype = 'advisory' AND a.application_name = 'conduit-distributed-lock'", observer);
+        Assert.Equal(0, Convert.ToInt32(await count.ExecuteScalarAsync()));
+    }
+
     [Fact]
     public async Task OptionalHelper_ActualContention_SkipsOrFallsBackAccordingToCallerPolicy()
     {

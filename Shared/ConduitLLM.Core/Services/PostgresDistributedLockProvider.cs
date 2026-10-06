@@ -20,7 +20,7 @@ public sealed class PostgresDistributedLockProvider : IDistributedLockProvider
         _connectionString = new NpgsqlConnectionStringBuilder(connectionString)
         {
             ApplicationName = "conduit-distributed-lock", Pooling = true, MinPoolSize = 0,
-            MaxPoolSize = 32, Timeout = 5, CommandTimeout = 5, KeepAlive = 0,
+            MaxPoolSize = 32, Timeout = 5, CommandTimeout = 5, KeepAlive = 1,
             Enlist = false, Multiplexing = false, NoResetOnClose = false,
         }.ConnectionString;
     }
@@ -36,15 +36,20 @@ public sealed class PostgresDistributedLockProvider : IDistributedLockProvider
         cancellationToken.ThrowIfCancellationRequested();
         var operation = DistributedLockMetrics.Operation(key);
         var watch = Stopwatch.StartNew();
+        NpgsqlConnection? connection = new(_connectionString);
         try
         {
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            // External connection: Npgsql owns idle keepalive; the library observes state loss
+            // without a long-running monitoring query. One independent session per ownership.
             var distributedLock = new PostgresDistributedLock(
-                new PostgresAdvisoryLockKey(PostgresLockIdentity.GetLockId(key)), _connectionString,
-                options => options.UseTransaction(false).UseMultiplexing(false)
-                    .KeepaliveCadence(TimeSpan.FromSeconds(1)));
+                new PostgresAdvisoryLockKey(PostgresLockIdentity.GetLockId(key)), connection);
             var handle = await distributedLock.TryAcquireAsync(acquisitionTimeout, cancellationToken).ConfigureAwait(false);
             DistributedLockMetrics.Acquisitions.WithLabels(operation, handle is null ? "busy" : "acquired").Inc();
-            return handle is null ? null : new Ownership(handle, operation, _logger);
+            if (handle is null) { return null; }
+            var ownership = new Ownership(handle, connection, operation, _logger);
+            connection = null; // Ownership now retains the independently opened session.
+            return ownership;
         }
         catch (OperationCanceledException)
         {
@@ -57,12 +62,17 @@ public sealed class PostgresDistributedLockProvider : IDistributedLockProvider
             _logger.LogError(ex, "Distributed lock acquisition failed for {Operation}", operation);
             throw;
         }
-        finally { DistributedLockMetrics.Wait.WithLabels(operation).Observe(watch.Elapsed.TotalSeconds); }
+        finally
+        {
+            try { if (connection is not null) { await connection.DisposeAsync().ConfigureAwait(false); } }
+            finally { DistributedLockMetrics.Wait.WithLabels(operation).Observe(watch.Elapsed.TotalSeconds); }
+        }
     }
 
     private sealed class Ownership : IDistributedLockOwnership
     {
         private readonly PostgresDistributedLockHandle _handle;
+        private readonly NpgsqlConnection _connection;
         private readonly string _operation;
         private readonly ILogger _logger;
         private readonly Stopwatch _held = Stopwatch.StartNew();
@@ -70,12 +80,13 @@ public sealed class PostgresDistributedLockProvider : IDistributedLockProvider
         private readonly object _gate = new();
         private Task? _dispose;
 
-        public Ownership(PostgresDistributedLockHandle handle, string operation, ILogger logger)
+        public Ownership(PostgresDistributedLockHandle handle, NpgsqlConnection connection, string operation, ILogger logger)
         {
             _handle = handle;
+            _connection = connection;
             _operation = operation;
             _logger = logger;
-            HandleLostToken = handle.HandleLostToken; // Activates upstream loss monitoring.
+            HandleLostToken = handle.HandleLostToken; // Upstream observes Npgsql state changes.
             _lossRegistration = HandleLostToken.Register(() =>
             {
                 DistributedLockMetrics.Losses.WithLabels(operation).Inc();
@@ -92,7 +103,11 @@ public sealed class PostgresDistributedLockProvider : IDistributedLockProvider
 
         private async Task ReleaseAsync()
         {
-            try { await _handle.DisposeAsync().ConfigureAwait(false); }
+            try
+            {
+                try { await _handle.DisposeAsync().ConfigureAwait(false); }
+                finally { await _connection.DisposeAsync().ConfigureAwait(false); }
+            }
             catch (Exception ex)
             {
                 DistributedLockMetrics.ReleaseFailures.WithLabels(_operation).Inc();

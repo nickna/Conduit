@@ -5,8 +5,9 @@ Baseline: merged FusionCache PR #1413 on `dev`. All seven packages are implement
 serially, with validation and a commit before advancing.
 
 DL-2 evidence: both host graphs build; 8 PostgreSQL 17 lock integration tests passed
-(six adapter scenarios plus the two retained legacy regressions). Adapter uses only
-upstream acquisition/disposal, with no advisory SQL, timer or retry implementation.
+(six adapter scenarios plus the two retained legacy regressions). Adapter delegates
+advisory acquisition/disposal to upstream, with no advisory SQL, expiry timer or retry
+implementation. DL-6 refined keepalive ownership (below).
 Bounded metrics report outcome, wait/hold, loss and release failures, never key IDs.
 Legacy/new exclusion is tested using the actual legacy implementation in both directions.
 The integration fixture accepts `CONDUIT_LOCK_TEST_POSTGRES` for PG16/17 matrix runs;
@@ -92,12 +93,24 @@ and [loss API](https://github.com/madelson/DistributedLock/blob/master/docs/Othe
 Use the database connection string owned by configuration, not a scoped DbContext or
 EF transaction. Normalize a separate pool: application name `conduit-distributed-lock`,
 maximum pool size **32**, minimum 0, open/command timeout **5 seconds**. Provider
-keepalive cadence **1 second**; loss-token monitoring is explicitly activated on every
-handle. Multiplexing disabled initially: one locking session per held/waiting acquisition,
+Npgsql keepalive cadence **1 second**; the upstream loss token observes connection state
+changes. Multiplexing disabled: one locking session per held/waiting acquisition,
 bounded by that pool. A blocked pool/acquisition must cancel rather than report busy.
 This retains the baseline occupancy; no reduction/performance claim. Session advisory
-locks only (`UseTransaction(false)`), using `PostgresAdvisoryLockKey(long)` and the exact
+locks only (the library's connection overload), using `PostgresAdvisoryLockKey(long)` and the exact
 UTF-8 FNV-1a signed 64-bit mapping. No table, Redis backend or two-int namespace.
+
+DL-6 rejected the initial library-owned connection/keepalive configuration. Its active
+loss monitor uses `pg_sleep` for one-minute intervals; an established-monitor blackhole
+failed the 15-second gate, and monitoring cancellation caused intermittent release-tail
+latency failures. The chosen path opens one independent pooled Npgsql connection and
+transfers it to ownership. The library sees an externally owned connection, tracks its
+state-change loss token, and owns advisory SQL/acquisition/release. Npgsql's built-in
+idle protocol keepalive owns detection with the five-second command timeout. Ownership
+awaits library release then closes the session in finally, including error paths.
+There is no custom keepalive timer, SQL, polling, or premature cancellation release.
+This small amount of connection lifetime glue is an accepted maintenance tradeoff for
+bounded loss detection; it does not capture EF or override configured encryption.
 
 The library may throw on release after ownership loss while still disposing its session.
 The adapter must record that failure; loss cancellation must remain visible to the caller.

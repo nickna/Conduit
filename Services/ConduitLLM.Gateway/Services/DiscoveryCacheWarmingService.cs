@@ -124,7 +124,6 @@ namespace ConduitLLM.Gateway.Services
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("Cache warming cancelled due to application shutdown");
                 throw;
             }
             catch (Exception ex)

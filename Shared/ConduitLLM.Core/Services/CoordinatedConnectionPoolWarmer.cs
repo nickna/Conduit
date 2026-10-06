@@ -114,7 +114,6 @@ namespace ConduitLLM.Core.Services
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("Connection pool warming cancelled due to shutdown");
                 throw;
             }
             catch (Exception ex)
