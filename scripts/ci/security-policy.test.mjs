@@ -18,6 +18,28 @@ test('exceptions apply only to the exact identity and expire closed', () => {
   for (const field of ['owner', 'reason', 'approval', 'expires'])
     assert.throws(() => enforce([], [{ ...exception, [field]: '' }]), /exception/);
 });
+
+test('development-only exceptions cannot suppress the same identity in production dependencies', () => {
+  const exception = { ...vulnerable, developmentOnly: true, owner: '@nickna', reason: 'Development tooling only',
+    expires: '2026-10-31', approval: 'https://github.com/nickna/Conduit/issues/1467' };
+  const now = new Date('2026-10-07');
+  const development = { ...vulnerable, developmentOnly: true };
+  assert.equal(enforce([development], [exception], 'dependency', now).exceptions, 1);
+  for (const production of [vulnerable, { ...vulnerable, developmentOnly: false }])
+    assert.throws(() => enforce([production], [exception], 'dependency', now), /blocked/);
+  assert.throws(() => enforce([development, { ...development, developmentOnly: false }], [exception], 'dependency', now), /blocked/);
+  for (const developmentOnly of ['true', 1, null, undefined])
+    assert.throws(() => enforce([], [{ ...exception, developmentOnly }], 'dependency', now), /exception/);
+});
+
+test('npm development-only status requires an explicit lockfile dev flag for each affected node', () => {
+  const nodes = ['node_modules/fixture', 'node_modules/parent/node_modules/fixture'];
+  const audit = { auditReportVersion: 2, vulnerabilities: { fixture: { name: 'fixture', nodes,
+    via: [{ url: 'GHSA-fixture', severity: 'high' }] } } };
+  const lock = { packages: { [nodes[0]]: { version: '1.0.0', dev: true }, [nodes[1]]: { version: '1.0.0' } } };
+  const findings = npmFindings(audit, lock, 'WebAdmin');
+  assert.deepEqual(findings.map(finding => finding.developmentOnly), [true, false]);
+});
 test('malformed or unavailable scans never become clean reports', () => {
   assert.throws(() => npmFindings({ error: {} }, {}, 'fixture'));
   assert.throws(() => nugetFindings({ projects: [] }));
@@ -26,7 +48,7 @@ test('malformed or unavailable scans never become clean reports', () => {
 test('real scanner shapes preserve vulnerable dependency identities', () => {
   const npm = npmFindings({ auditReportVersion: 2, vulnerabilities: { fixture: { name: 'fixture', nodes: ['node_modules/fixture'],
     via: [{ url: 'GHSA-fixture', severity: 'high' }] } } }, { packages: { 'node_modules/fixture': { version: '1.0.0' } } }, 'WebAdmin');
-  assert.deepEqual(npm[0], vulnerable);
+  assert.deepEqual(npm[0], { ...vulnerable, developmentOnly: false });
   const nuget = nugetFindings({ version: 1, projects: [{ frameworks: [{ transitivePackages: [{ id: 'SSH.NET', resolvedVersion: '2023.0.0',
     vulnerabilities: [{ severity: 'High', advisoryurl: 'https://github.com/advisories/GHSA-q939-rpr3-3284' }] }] }] }] });
   assert.throws(() => enforce(nuget, []), error => error.message.includes('"package":"SSH.NET"'));
