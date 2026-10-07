@@ -22,10 +22,12 @@ namespace ConduitLLM.Tests.Core.Caching;
 public sealed class FusionMappingCacheTests
 {
     private static ServiceProvider Host(IModelProviderMappingService inner, string? redis = null, string? environment = null,
-        bool enabled = true)
+        bool enabled = true, TimeSpan? outageReadTimeout = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         { ["ApplicationCache:Environment"] = environment ?? $"test-{Guid.NewGuid():N}",
+            ["ApplicationCache:DistributedReadTimeout"] = outageReadTimeout?.ToString()
+                ?? (redis is null ? "00:00:00.250" : RedisCacheTestReadiness.HealthyReadTimeout),
             ["ApplicationCache:Domains:Mappings:Enabled"] = enabled.ToString() }).Build();
         var services = new ServiceCollection().AddLogging();
         services.AddConduitApplicationCache(configuration, "test", redis ?? "");
@@ -126,10 +128,12 @@ public sealed class FusionMappingCacheTests
         Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         var value = Graph(); var inner = Inner(value); var environment = $"test-{Guid.NewGuid():N}";
         using var first = Host(inner.Object, redis, environment); using var firstScope = first.CreateScope();
+        using var second = Host(inner.Object, redis, environment); using var secondScope = second.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(first, ApplicationCacheDomain.Mappings);
+        await RedisCacheTestReadiness.WarmAsync(second, ApplicationCacheDomain.Mappings);
         var writer = firstScope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         await writer.GetMappingByIdAsync(1); await writer.GetMappingByModelAliasAsync("old");
         await writer.GetMappingsByModelAliasAsync("old"); await writer.GetAllMappingsAsync();
-        using var second = Host(inner.Object, redis, environment); using var secondScope = second.CreateScope();
         var reader = secondScope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         AssertGraph((await reader.GetMappingByIdAsync(1))!); AssertGraph((await reader.GetMappingByModelAliasAsync("old"))!);
         AssertGraph((await reader.GetMappingsByModelAliasAsync("old")).Single()); AssertGraph((await reader.GetAllMappingsAsync()).Single());
@@ -149,6 +153,7 @@ public sealed class FusionMappingCacheTests
         inner.Setup(service => service.GetMappingByModelAliasAsync("new")).ReturnsAsync((ModelProviderMapping?)null);
         await writer.DeleteMappingAsync(1);
         using var restart = Host(inner.Object, redis, environment); using var restartScope = restart.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(restart, ApplicationCacheDomain.Mappings);
         var restarted = restartScope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         Assert.Null(await restarted.GetMappingByIdAsync(1)); Assert.Null(await restarted.GetMappingByModelAliasAsync("new"));
         Assert.Empty(await restarted.GetAllMappingsAsync());
@@ -161,6 +166,7 @@ public sealed class FusionMappingCacheTests
         Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         var value = Graph(); var inner = Inner(value); var environment = $"test-{Guid.NewGuid():N}";
         using var first = Host(inner.Object, redis, environment); using var scope = first.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(first, ApplicationCacheDomain.Mappings);
         var cache = scope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         var invalidation = first.GetRequiredService<IModelMappingCacheInvalidator>();
         var discovery = Mock.Of<IDiscoveryCacheService>();
@@ -177,6 +183,7 @@ public sealed class FusionMappingCacheTests
         await new DiscoveryCacheInvalidationHandler(discovery, NullLogger<DiscoveryCacheInvalidationHandler>.Instance, invalidation)
             .HandleAsync(new DiscoveryCacheInvalidationRequested(), new TestEventContext());
         using var second = Host(inner.Object, redis, environment); using var secondScope = second.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(second, ApplicationCacheDomain.Mappings);
         Assert.Equal(8192, (await secondScope.ServiceProvider.GetRequiredService<IModelProviderMappingService>().GetMappingByIdAsync(1))!.ModelProviderTypeAssociation.MaxInputTokens);
         value.ModelProviderTypeAssociation.ModelCost!.InputCostPerMillionTokens = 0.75m;
         await new ModelCostCacheInvalidationHandler(Mock.Of<ConduitLLM.Configuration.Interfaces.IModelCostService>(), null, discovery,
@@ -191,7 +198,8 @@ public sealed class FusionMappingCacheTests
         Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         await using var proxy = new RedisNetworkProxy(redis!);
         var value = Graph(); var inner = Inner(value);
-        using var host = Host(inner.Object, proxy.ConnectionString); using var scope = host.CreateScope();
+        using var host = Host(inner.Object, proxy.ConnectionString, outageReadTimeout: TimeSpan.FromMilliseconds(250)); using var scope = host.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(host, ApplicationCacheDomain.Mappings);
         var cache = scope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         var generations = host.GetRequiredService<ApplicationCacheGeneration>();
         var originalGeneration = await generations.GetAsync(ApplicationCacheDomain.Mappings);
@@ -212,8 +220,10 @@ public sealed class FusionMappingCacheTests
         }
         Assert.NotNull(repairedGeneration);
         Assert.NotEqual(originalGeneration, repairedGeneration);
+        await RedisCacheTestReadiness.WarmAsync(host, ApplicationCacheDomain.Mappings);
         Assert.Equal(value.Provider.BaseUrl, (await cache.GetMappingByIdAsync(1))!.Provider.BaseUrl);
-        await handler.HandleAsync(new ModelMappingChanged(), new TestEventContext());
+        await RedisCacheTestReadiness.RetryRecoveredInvalidationAsync(token =>
+            handler.HandleAsync(new ModelMappingChanged(), new TestEventContext { CancellationToken = token }));
         Assert.Equal(value.Provider.BaseUrl, (await cache.GetMappingByIdAsync(1))!.Provider.BaseUrl);
     }
 

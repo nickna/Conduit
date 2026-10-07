@@ -27,7 +27,8 @@ public sealed class FusionPricingCacheTests
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         { ["ApplicationCache:Environment"] = environment ?? $"test-{Guid.NewGuid():N}",
-            ["ApplicationCache:DistributedReadTimeout"] = (healthyReadTimeout ?? TimeSpan.FromMilliseconds(250)).ToString(),
+            ["ApplicationCache:DistributedReadTimeout"] = healthyReadTimeout?.ToString()
+                ?? (redis is null ? "00:00:00.250" : RedisCacheTestReadiness.HealthyReadTimeout),
             ["ApplicationCache:Domains:Costs:Enabled"] = enabled.ToString(),
             ["ApplicationCache:Domains:PricingRules:Enabled"] = enabled.ToString() }).Build();
         var services = new ServiceCollection().AddLogging();
@@ -190,7 +191,7 @@ public sealed class FusionPricingCacheTests
         Skip.If(string.IsNullOrEmpty(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         await using var proxy = new RedisNetworkProxy(redis!);
         var cost = Cost(); var inner = Inner(cost);
-        using var host = Host(inner.Object, redis: proxy.ConnectionString); using var scope = host.CreateScope();
+        using var host = Host(inner.Object, redis: proxy.ConnectionString, healthyReadTimeout: TimeSpan.FromMilliseconds(250)); using var scope = host.CreateScope();
         await RedisCacheTestReadiness.WarmAsync(host, ApplicationCacheDomain.Costs, ApplicationCacheDomain.PricingRules);
         var cache = scope.ServiceProvider.GetRequiredService<IModelCostService>();
         var rules = host.GetRequiredService<ICachedPricingRulesService>();
@@ -214,14 +215,8 @@ public sealed class FusionPricingCacheTests
         Assert.Equal(0.75m, (await cache.GetCostByIdAsync(42))!.InputCostPerMillionTokens);
         // Prove fencing above before explicitly retrying invalidation. The separate Redis
         // connections can reconnect at different times; successful post-outage writes are eventual.
-        using var recovered = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        for (;;)
-        {
-            try { await cache.ClearCacheAsync(recovered.Token); await rules.InvalidateAllAsync(recovered.Token); break; }
-            catch (ApplicationCacheInvalidationException exception) when (exception.InnerException is RedisException or TimeoutException
-                or FusionCacheDistributedCacheException or FusionCacheBackplaneException)
-            { await Task.Delay(25, recovered.Token); }
-        }
+        await RedisCacheTestReadiness.RetryRecoveredInvalidationAsync(async token =>
+        { await cache.ClearCacheAsync(token); await rules.InvalidateAllAsync(token); });
         Assert.Equal(0.75m, (await cache.GetCostByIdAsync(42))!.InputCostPerMillionTokens);
     }
 

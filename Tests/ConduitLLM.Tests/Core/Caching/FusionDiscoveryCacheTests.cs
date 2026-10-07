@@ -23,6 +23,7 @@ public sealed class FusionDiscoveryCacheTests
     {
         var values = settings ?? [];
         values["ApplicationCache:Environment"] = environment ?? $"test-{Guid.NewGuid():N}";
+        values.TryAdd("ApplicationCache:DistributedReadTimeout", redis is null ? "00:00:00.250" : RedisCacheTestReadiness.HealthyReadTimeout);
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         var services = new ServiceCollection().AddLogging();
         if (clock is not null) services.AddSingleton(clock);
@@ -193,15 +194,20 @@ public sealed class FusionDiscoveryCacheTests
         Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS to run real Redis contracts.");
         var environment = $"test-{Guid.NewGuid():N}";
         using (var writer = Host(redis, environment))
+        {
+            await RedisCacheTestReadiness.WarmAsync(writer, ApplicationCacheDomain.Discovery);
             await writer.GetRequiredService<IDiscoveryCacheService>().SetDiscoveryResultsAsync("all:with_pricing", Payload(true));
+        }
         using (var reader = Host(redis, environment))
         {
+            await RedisCacheTestReadiness.WarmAsync(reader, ApplicationCacheDomain.Discovery);
             var service = reader.GetRequiredService<IDiscoveryCacheService>();
             var result = await service.GetOrLoadAsync("all:with_pricing", _ => throw new InvalidOperationException("L2 must not load"));
             Assert.Equal(0.25m, result.Data[0].GetProperty("pricing").GetProperty("input_cost").GetDecimal());
             await service.InvalidateAllDiscoveryAsync();
         }
         using var restart = Host(redis, environment);
+        await RedisCacheTestReadiness.WarmAsync(restart, ApplicationCacheDomain.Discovery);
         Assert.Null(await restart.GetRequiredService<IDiscoveryCacheService>().GetDiscoveryResultsAsync("all:with_pricing"));
     }
 
@@ -235,6 +241,8 @@ public sealed class FusionDiscoveryCacheTests
         var environment = $"test-{Guid.NewGuid():N}";
         using var admin = Host(redis, environment);
         using var gateway = Host(redis, environment);
+        await RedisCacheTestReadiness.WarmAsync(admin, ApplicationCacheDomain.Discovery);
+        await RedisCacheTestReadiness.WarmAsync(gateway, ApplicationCacheDomain.Discovery);
         var writer = admin.GetRequiredService<IDiscoveryCacheService>();
         var reader = gateway.GetRequiredService<IDiscoveryCacheService>();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -250,6 +258,7 @@ public sealed class FusionDiscoveryCacheTests
         release.SetResult();
         await request.WaitAsync(TimeSpan.FromSeconds(5));
         using var restart = Host(redis, environment);
+        await RedisCacheTestReadiness.WarmAsync(restart, ApplicationCacheDomain.Discovery);
         var current = await restart.GetRequiredService<IDiscoveryCacheService>().GetOrLoadAsync("race",
             _ => Task.FromResult(new DiscoveryModelsResult { Count = 2 }));
         Assert.Equal(2, current.Count);
@@ -262,6 +271,7 @@ public sealed class FusionDiscoveryCacheTests
         Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS to run real Redis contracts.");
         var environment = $"test-{Guid.NewGuid():N}";
         using var writer = Host(redis, environment);
+        await RedisCacheTestReadiness.WarmAsync(writer, ApplicationCacheDomain.Discovery);
         var service = writer.GetRequiredService<IDiscoveryCacheService>();
         await service.SetDiscoveryResultsAsync("clock", Payload());
         var configuration = ConfigurationOptions.Parse(redis);
@@ -276,6 +286,7 @@ public sealed class FusionDiscoveryCacheTests
         await storage.SetAsync(key, serializer.Serialize(envelope), new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) });
         await service.InvalidateAllDiscoveryAsync();
         using var restart = Host(redis, environment);
+        await RedisCacheTestReadiness.WarmAsync(restart, ApplicationCacheDomain.Discovery);
         Assert.Null(await restart.GetRequiredService<IDiscoveryCacheService>().GetDiscoveryResultsAsync("clock"));
     }
 
@@ -302,12 +313,14 @@ public sealed class FusionDiscoveryCacheTests
         Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS to run real Redis contracts.");
         var environment = $"test-{Guid.NewGuid():N}";
         using var writer = Host(redis, environment);
+        await RedisCacheTestReadiness.WarmAsync(writer, ApplicationCacheDomain.Discovery);
         var service = writer.GetRequiredService<IDiscoveryCacheService>();
         await service.SetDiscoveryResultsAsync("all", Payload());
         using var observer = await ConnectionMultiplexer.ConnectAsync(redis);
         var metadataKey = writer.GetRequiredService<ApplicationCacheOptions>().Prefix + "generation:discovery";
         Assert.True(await observer.GetDatabase().KeyDeleteAsync(metadataKey));
         using var restart = Host(redis, environment);
+        await RedisCacheTestReadiness.WarmAsync(restart, ApplicationCacheDomain.Discovery);
         Assert.Null(await restart.GetRequiredService<IDiscoveryCacheService>().GetDiscoveryResultsAsync("all"));
         var deadline = System.Diagnostics.Stopwatch.StartNew();
         while (await service.GetDiscoveryResultsAsync("all") is not null && deadline.Elapsed < TimeSpan.FromSeconds(2))
