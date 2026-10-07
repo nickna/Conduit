@@ -4,6 +4,7 @@
 .loading-dots {
   display: inline-flex;
   align-items: center;
+
   font-size: 1.5rem;
   line-height: 1;
   color: var(--mantine-color-gray-6);
@@ -11,6 +12,7 @@
 
 .loading-dots span {
   display: inline-block;
+
   animation: loading-wave 1.4s ease-in-out infinite;
   animation-fill-mode: both;
 }
@@ -24,17 +26,20 @@
 }
 
 .loading-dots span:nth-child(3) {
-  animation-delay: 0;
+  animation-delay: 0s;
 }
 
 @keyframes loading-wave {
   0%, 60%, 100% {
-    transform: translateY(0);
     opacity: 0.4;
+
+    transform: translateY(0);
   }
+
   30% {
-    transform: translateY(-0.4em);
     opacity: 1;
+
+    transform: translateY(-0.4em);
   }
 }
 
@@ -44,57 +49,70 @@
 }
 
 .chat-message-user {
-  background: var(--mantine-color-conduit-blue-1) !important;
   border-color: var(--mantine-color-conduit-blue-3) !important;
+
+  background: var(--mantine-color-conduit-blue-1) !important;
 }
 
 .chat-message-user:hover {
-  background: var(--mantine-color-conduit-blue-0) !important;
   border-color: var(--mantine-color-conduit-blue-4) !important;
+
+  background: var(--mantine-color-conduit-blue-0) !important;
 }
 
 .chat-message-assistant {
-  background: var(--mantine-color-conduit-gray-1) !important;
   border-color: var(--mantine-color-conduit-gray-3) !important;
+
+  background: var(--mantine-color-conduit-gray-1) !important;
 }
 
 .chat-message-assistant:hover {
-  background: var(--mantine-color-conduit-gray-0) !important;
   border-color: var(--mantine-color-conduit-gray-4) !important;
+
+  background: var(--mantine-color-conduit-gray-0) !important;
 }
 
 /* Dark mode overrides for chat messages */
 [data-mantine-color-scheme="dark"] .chat-message-user {
-  background: var(--conduit-accent-blue-subtle) !important;
   border-color: var(--conduit-border-secondary) !important;
+
   color: var(--conduit-text-primary) !important;
+
+  background: var(--conduit-accent-blue-subtle) !important;
 }
 
 [data-mantine-color-scheme="dark"] .chat-message-user:hover {
-  background: var(--conduit-bg-elevated) !important;
   border-color: var(--conduit-accent-blue) !important;
+
+  background: var(--conduit-bg-elevated) !important;
 }
 
 [data-mantine-color-scheme="dark"] .chat-message-assistant {
-  background: var(--conduit-bg-secondary) !important;
   border-color: var(--conduit-border-primary) !important;
+
   color: var(--conduit-text-primary) !important;
+
+  background: var(--conduit-bg-secondary) !important;
 }
 
 [data-mantine-color-scheme="dark"] .chat-message-assistant:hover {
-  background: var(--conduit-bg-tertiary) !important;
   border-color: var(--conduit-border-secondary) !important;
+
+  background: var(--conduit-bg-tertiary) !important;
 }
 
 .hover-card {
-  transition: all 0.2s ease;
   border: 1px solid var(--mantine-color-conduit-gray-3);
+
+  transition: all 0.2s ease;
 }
 
 .hover-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--mantine-shadow-md);
   border-color: var(--mantine-color-conduit-blue-5);
+
+  box-shadow: var(--mantine-shadow-md);
+
+  transform: translateY(-2px);
 }
 
 .markdown-content {
@@ -110,6 +128,7 @@
 .markdown-content h6 {
   margin-top: 1em;
   margin-bottom: 0.5em;
+
   font-weight: 600;
 }
 
@@ -128,12 +147,14 @@
 }
 
 .markdown-content code {
-  background-color: var(--mantine-color-conduit-gray-2);
-  color: var(--mantine-color-conduit-gray-8);
   padding: 0.125em 0.25em;
-  border-radius: var(--mantine-radius-xs);
-  font-size: 0.875em;
   border: 1px solid var(--mantine-color-conduit-gray-3);
+  border-radius: var(--mantine-radius-xs);
+
+  font-size: 0.875em;
+  color: var(--mantine-color-conduit-gray-8);
+
+  background-color: var(--mantine-color-conduit-gray-2);
 }
 
 /* Dark mode overrides for markdown content */
@@ -151,15 +172,19 @@
 }
 
 [data-mantine-color-scheme="dark"] .markdown-content code {
-  background-color: var(--conduit-bg-elevated);
-  color: var(--conduit-text-primary);
   border-color: var(--conduit-border-secondary);
+
+  color: var(--conduit-text-primary);
+
+  background-color: var(--conduit-bg-elevated);
 }
 
 [data-mantine-color-scheme="dark"] .markdown-content blockquote {
-  background: var(--conduit-accent-blue-subtle);
   border-left-color: var(--conduit-accent-blue);
+
   color: var(--conduit-text-secondary);
+
+  background: var(--conduit-accent-blue-subtle);
 }
 
 [data-mantine-color-scheme="dark"] .markdown-content table {
@@ -172,8 +197,9 @@
 }
 
 [data-mantine-color-scheme="dark"] .markdown-content th {
-  background-color: var(--conduit-bg-elevated);
   color: var(--conduit-text-primary);
+
+  background-color: var(--conduit-bg-elevated);
 }
 
 [data-mantine-color-scheme="dark"] .markdown-content a {
@@ -183,44 +209,50 @@
 .markdown-content pre {
   margin: 0.75em 0;
   border-radius: 0.5em;
+
   overflow-x: auto;
 }
 
 .markdown-content pre code {
-  background-color: transparent;
   padding: 0;
+
+  background-color: transparent;
 }
 
 .markdown-content blockquote {
-  border-left: 4px solid var(--mantine-color-conduit-blue-5);
-  padding-left: 1em;
   margin: 0.75em 0;
-  color: var(--mantine-color-conduit-gray-7);
-  background: var(--mantine-color-conduit-blue-0);
-  border-radius: var(--mantine-radius-xs);
   padding: 0.75rem;
+  border-left: 4px solid var(--mantine-color-conduit-blue-5);
+  border-radius: var(--mantine-radius-xs);
+
+  color: var(--mantine-color-conduit-gray-7);
+
+  background: var(--mantine-color-conduit-blue-0);
 }
 
 .markdown-content table {
-  border-collapse: collapse;
-  margin: 0.75em 0;
   width: 100%;
+  margin: 0.75em 0;
   border: 1px solid var(--mantine-color-conduit-gray-3);
   border-radius: var(--mantine-radius-md);
+
   overflow: hidden;
+  border-collapse: collapse;
 }
 
 .markdown-content th,
 .markdown-content td {
-  border: 1px solid var(--mantine-color-conduit-gray-3);
   padding: 0.5em;
+  border: 1px solid var(--mantine-color-conduit-gray-3);
+
   text-align: left;
 }
 
 .markdown-content th {
-  background-color: var(--mantine-color-conduit-gray-1);
   font-weight: 600;
   color: var(--mantine-color-conduit-gray-8);
+
+  background-color: var(--mantine-color-conduit-gray-1);
 }
 
 .markdown-content a {
@@ -234,103 +266,122 @@
 
 /* Error message styling */
 .chat-message-error {
-  border-style: solid !important;
   border-width: 1px !important;
+  border-style: solid !important;
 }
 
 .chat-message-error-rate-limit {
-  background: var(--mantine-color-orange-0) !important;
   border-color: var(--mantine-color-orange-3) !important;
+
+  background: var(--mantine-color-orange-0) !important;
 }
 
 .chat-message-error-model-not-found {
-  background: var(--mantine-color-blue-0) !important;
   border-color: var(--mantine-color-blue-3) !important;
+
+  background: var(--mantine-color-blue-0) !important;
 }
 
 .chat-message-error-auth-error {
-  background: var(--mantine-color-red-0) !important;
   border-color: var(--mantine-color-red-3) !important;
+
+  background: var(--mantine-color-red-0) !important;
 }
 
 .chat-message-error-network {
-  background: var(--mantine-color-gray-0) !important;
   border-color: var(--mantine-color-gray-3) !important;
+
+  background: var(--mantine-color-gray-0) !important;
 }
 
 .chat-message-error-server {
-  background: var(--mantine-color-red-0) !important;
   border-color: var(--mantine-color-red-3) !important;
+
+  background: var(--mantine-color-red-0) !important;
 }
 
 /* Dark mode error message overrides */
 [data-mantine-color-scheme="dark"] .chat-message-error-rate-limit {
-  background: rgba(255, 152, 0, 0.05) !important;
-  border-color: rgba(255, 152, 0, 0.3) !important;
+  border-color: var(--conduit-chat-warning-border) !important;
+
+  background: var(--conduit-chat-warning-background) !important;
 }
 
 [data-mantine-color-scheme="dark"] .chat-message-error-model-not-found {
-  background: rgba(33, 150, 243, 0.05) !important;
-  border-color: rgba(33, 150, 243, 0.3) !important;
+  border-color: var(--conduit-chat-info-border) !important;
+
+  background: var(--conduit-chat-info-background) !important;
 }
 
 [data-mantine-color-scheme="dark"] .chat-message-error-auth-error {
-  background: rgba(244, 67, 54, 0.05) !important;
-  border-color: rgba(244, 67, 54, 0.3) !important;
+  border-color: var(--conduit-chat-danger-border) !important;
+
+  background: var(--conduit-chat-danger-background) !important;
 }
 
 [data-mantine-color-scheme="dark"] .chat-message-error-network {
-  background: rgba(158, 158, 158, 0.05) !important;
-  border-color: rgba(158, 158, 158, 0.3) !important;
+  border-color: var(--conduit-chat-neutral-border) !important;
+
+  background: var(--conduit-chat-neutral-background) !important;
 }
 
 [data-mantine-color-scheme="dark"] .chat-message-error-server {
-  background: rgba(244, 67, 54, 0.05) !important;
-  border-color: rgba(244, 67, 54, 0.3) !important;
+  border-color: var(--conduit-chat-danger-border) !important;
+
+  background: var(--conduit-chat-danger-background) !important;
 }
 
 /* Error details styling */
 .error-details-box {
-  background: var(--mantine-color-gray-0);
   border: 1px dashed var(--mantine-color-gray-4);
+
+  background: var(--mantine-color-gray-0);
 }
 
 [data-mantine-color-scheme="dark"] .error-details-box {
-  background: var(--conduit-bg-elevated);
   border-color: var(--conduit-border-secondary);
+
+  background: var(--conduit-bg-elevated);
 }
 
 /* Thinking block styling */
 .thinking-block {
-  background: var(--mantine-color-blue-0) !important;
   border-color: var(--mantine-color-blue-2) !important;
+
+  background: var(--mantine-color-blue-0) !important;
 }
 
 .thinking-block:hover {
-  background: var(--mantine-color-blue-1) !important;
   border-color: var(--mantine-color-blue-4) !important;
-  transform: translateY(-1px);
+
+  background: var(--mantine-color-blue-1) !important;
   box-shadow: var(--mantine-shadow-sm);
+
+  transform: translateY(-1px);
 }
 
 [data-mantine-color-scheme="dark"] .thinking-block {
-  background: rgba(33, 150, 243, 0.05) !important;
-  border-color: rgba(33, 150, 243, 0.2) !important;
+  border-color: var(--conduit-thinking-border) !important;
+
+  background: var(--conduit-chat-info-background) !important;
 }
 
 [data-mantine-color-scheme="dark"] .thinking-block:hover {
-  background: rgba(33, 150, 243, 0.1) !important;
-  border-color: rgba(33, 150, 243, 0.4) !important;
+  border-color: var(--conduit-thinking-hover-border) !important;
+
+  background: var(--conduit-thinking-hover-background) !important;
 }
 
 /* Scrollbar styling for chat messages */
+/* stylelint-disable selector-class-pattern -- These selectors are Mantine's public component classes. */
 .mantine-ScrollArea-scrollbar {
   background-color: transparent !important;
 }
 
 .mantine-ScrollArea-thumb {
-  background-color: var(--mantine-color-gray-4) !important;
   border-radius: 4px !important;
+
+  background-color: var(--mantine-color-gray-4) !important;
 }
 
 .mantine-ScrollArea-thumb:hover {
@@ -353,27 +404,33 @@
 .mantine-ActionIcon-root:active {
   transform: scale(0.95);
 }
+/* stylelint-enable selector-class-pattern */
 
 /* Reasoning content styling */
 .reasoning-content {
   position: relative;
+
   font-style: italic;
-  opacity: 0.85;
   color: var(--mantine-color-gray-6);
+
+  opacity: 0.85;
 }
 
 .reasoning-content::before {
-  content: "🤔 Reasoning: ";
-  font-style: normal;
-  font-weight: 600;
-  color: var(--mantine-color-blue-6);
   display: inline-block;
+
   margin-right: 0.5em;
+
   font-size: 0.9em;
+  font-weight: 600;
+  font-style: normal;
+  color: var(--mantine-color-blue-6);
+  content: "🤔 Reasoning: ";
 }
 
 [data-mantine-color-scheme="dark"] .reasoning-content {
-  color: var(--conduit-text-tertiary);
+  color: var(--conduit-text-muted);
+
   opacity: 0.9;
 }
 
@@ -383,23 +440,25 @@
 
 /* Add subtle background for reasoning blocks */
 .markdown-content.reasoning-content {
+  margin-left: -0.5em;
+  padding-left: 1em;
+  border-left: 3px solid var(--mantine-color-blue-3);
+
   background: linear-gradient(
     90deg,
     var(--mantine-color-blue-0) 0%,
     transparent 10%
   );
-  padding-left: 1em;
-  border-left: 3px solid var(--mantine-color-blue-3);
-  margin-left: -0.5em;
 }
 
 [data-mantine-color-scheme="dark"] .markdown-content.reasoning-content {
+  border-left-color: var(--conduit-accent-blue-subtle);
+
   background: linear-gradient(
     90deg,
-    rgba(33, 150, 243, 0.05) 0%,
+    var(--conduit-chat-info-background) 0%,
     transparent 10%
   );
-  border-left-color: var(--conduit-accent-blue-subtle);
 }
 
 /* Resize handle styling */
@@ -420,10 +479,11 @@
 }
 
 [data-mantine-color-scheme="dark"] .chat-resize-handle:active {
-  background: rgba(33, 150, 243, 0.1);
+  background: var(--conduit-thinking-hover-background);
 }
 
 /* Compact mode styles */
+/* stylelint-disable-next-line selector-class-pattern -- Mantine's public Badge class. */
 .chat-compact-mode .mantine-Badge-root {
   display: none;
 }
@@ -434,20 +494,21 @@
 
 /* Sticky header enhancement */
 .chat-sticky-header {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 8px rgb(var(--conduit-shadow-color) / 0.05);
+
   transition: box-shadow 0.2s ease;
 }
 
 .chat-sticky-header.is-stuck {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 12px rgb(var(--conduit-shadow-color) / 0.1);
 }
 
 [data-mantine-color-scheme="dark"] .chat-sticky-header {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgb(var(--conduit-shadow-color) / 0.2);
 }
 
 [data-mantine-color-scheme="dark"] .chat-sticky-header.is-stuck {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 12px rgb(var(--conduit-shadow-color) / 0.3);
 }
 
 /* Rotating icon animation for tool execution */
@@ -459,6 +520,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
