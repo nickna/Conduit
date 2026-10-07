@@ -15,6 +15,7 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace ConduitLLM.Tests.Core.Caching;
 
+[Collection(ApplicationCacheContractCollection.Name)]
 public sealed class FusionPricingCacheTests
 {
     internal sealed class Clock : TimeProvider

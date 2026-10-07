@@ -23,6 +23,7 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace ConduitLLM.Tests.Core.Caching;
 
+[Collection(ApplicationCacheContractCollection.Name)]
 public sealed class FusionFunctionDiscoveryCacheTests
 {
     private static ServiceProvider Host(Mock<IGlobalSettingRepository> settings,

@@ -13,16 +13,19 @@ using ConduitLLM.Tests.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
+using ConduitLLM.Tests.TestHelpers;
 using Moq;
 using ConduitLLM.Configuration.Constants;
 using ZiggyCreatures.Caching.Fusion;
 
 namespace ConduitLLM.Tests.Core.Caching;
 
+[Collection(ApplicationCacheContractCollection.Name)]
 public sealed class FusionMappingCacheTests
 {
     private static ServiceProvider Host(IModelProviderMappingService inner, string? redis = null, string? environment = null,
-        bool enabled = true, TimeSpan? outageReadTimeout = null)
+        bool enabled = true, TimeSpan? outageReadTimeout = null, ILogger<FusionModelProviderMappingService>? logger = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         { ["ApplicationCache:Environment"] = environment ?? $"test-{Guid.NewGuid():N}",
@@ -30,6 +33,7 @@ public sealed class FusionMappingCacheTests
                 ?? (redis is null ? "00:00:00.250" : RedisCacheTestReadiness.HealthyReadTimeout),
             ["ApplicationCache:Domains:Mappings:Enabled"] = enabled.ToString() }).Build();
         var services = new ServiceCollection().AddLogging();
+        if (logger is not null) services.AddSingleton(logger);
         services.AddConduitApplicationCache(configuration, "test", redis ?? "");
         services.AddSingleton<IModelMappingCacheInvalidator, ModelMappingCacheInvalidator>();
         services.AddScoped<IModelProviderMappingService>(provider => ActivatorUtilities.CreateInstance<FusionModelProviderMappingService>(provider, inner));
@@ -127,16 +131,19 @@ public sealed class FusionMappingCacheTests
         var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
         Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         var value = Graph(); var inner = Inner(value); var environment = $"test-{Guid.NewGuid():N}";
-        using var first = Host(inner.Object, redis, environment); using var firstScope = first.CreateScope();
-        using var second = Host(inner.Object, redis, environment); using var secondScope = second.CreateScope();
+        var logger = new Mock<ILogger<FusionModelProviderMappingService>>(); var logs = logger.CaptureLogMessages();
+        using var first = Host(inner.Object, redis, environment, logger: logger.Object); using var firstScope = first.CreateScope();
+        using var second = Host(inner.Object, redis, environment, logger: logger.Object); using var secondScope = second.CreateScope();
         await RedisCacheTestReadiness.WarmAsync(first, ApplicationCacheDomain.Mappings);
         await RedisCacheTestReadiness.WarmAsync(second, ApplicationCacheDomain.Mappings);
         var writer = firstScope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         await writer.GetMappingByIdAsync(1); await writer.GetMappingByModelAliasAsync("old");
         await writer.GetMappingsByModelAliasAsync("old"); await writer.GetAllMappingsAsync();
+        await Task.Delay(150); // Require real L2 lifetime beyond the production 100 ms L1.
         var reader = secondScope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         AssertGraph((await reader.GetMappingByIdAsync(1))!); AssertGraph((await reader.GetMappingByModelAliasAsync("old"))!);
         AssertGraph((await reader.GetMappingsByModelAliasAsync("old")).Single()); AssertGraph((await reader.GetAllMappingsAsync()).Single());
+        Assert.True(logs.Count == 0, string.Join(Environment.NewLine, logs.Select(log => $"{log.Message}: {log.Exception}")));
         inner.Verify(item => item.GetMappingByIdAsync(1), Times.Once);
         inner.Verify(item => item.GetMappingByModelAliasAsync("old"), Times.Once);
         inner.Verify(item => item.GetAllMappingsAsync(), Times.Once);

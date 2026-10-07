@@ -109,6 +109,12 @@ it does not estimate population tail latency. That run's separate backend job
 exposed the Redis test startup assumption tracked in #1474; this reference proves
 the successful controlled browser job only.
 Relative test globs fix Windows `.codex` worktree discovery (#1457).
+The four FusionCache contract classes share an isolated xUnit collection inside
+the required main suite. This keeps real Redis read/reconnect budgets independent
+of unrelated host-startup/JIT contention without excluding cases or retrying value
+assertions. Healthy L2 checks establish readiness and use the supported one-second
+read budget; disconnect fixtures retain 250 ms. The mapping contract also outlives
+L1 explicitly and reports any swallowed cache failure in its assertion (#1474).
 
 Every required .NET lane uses the shared run-tests action: TRX, method identities,
 discovered/executed/passed/failed/skipped counts, execution logs, and requested

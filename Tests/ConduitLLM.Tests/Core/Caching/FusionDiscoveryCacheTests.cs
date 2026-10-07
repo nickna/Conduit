@@ -16,6 +16,7 @@ using ZiggyCreatures.Caching.Fusion.Internals.Distributed;
 
 namespace ConduitLLM.Tests.Core.Caching;
 
+[Collection(ApplicationCacheContractCollection.Name)]
 public sealed class FusionDiscoveryCacheTests
 {
     internal static ServiceProvider Host(string? redis = null, string? environment = null,
