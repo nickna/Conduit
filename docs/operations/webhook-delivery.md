@@ -451,6 +451,15 @@ first-party diagnostics; real native linking retains 147 first-party warnings,
 with no warning group above the existing linker baseline. All four new workload
 acceptance cases pass.
 
+The first PR CI run also caught an outdated compiled startup schema version and a
+model assertion pinned to the prior migration ([#1454](https://github.com/nickna/Conduit/issues/1454)).
+Both are corrected. The complete CI core filter now passes 3,711 tests with six
+existing skips; all five real PostgreSQL release-migration tests and 18 distributed
+lock integration tests pass. The rebuilt native Gateway/Admin test now uses normal
+`Wait` migration mode and requires both `/health/ready` endpoints to succeed before
+exercising delivery and replay. Migration drift validation and idempotent SQL
+generation pass with the current 50 discoverable migrations.
+
 The new Admin contract and WebAdmin-local types are regenerated. Contract
 generation is byte-stable across two isolated runs, and the checked-in contracts
 pass OpenAPI validation with the existing violation allowlist. Reproduce the
@@ -470,4 +479,10 @@ Separate existing issues found during verification remain tracked:
   baseline and native export. Its existing accurate committed Gateway contract is
   retained. Full `generate:offline` currently exposes that unrelated drift;
   determinism verification compares fresh generations without replacing it.
+* [#1455](https://github.com/nickna/Conduit/issues/1455): the migration validator's
+  filesystem fallback counts three existing orphan source files that EF does not
+  discover when its migrations-list subprocess times out.
+* [#1456](https://github.com/nickna/Conduit/issues/1456): optional SQL generation
+  through the EF PowerShell wrapper binds `-o` as an ambiguous common parameter;
+  direct `dotnet ef migrations script --idempotent` succeeds.
 

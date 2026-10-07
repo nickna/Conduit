@@ -44,7 +44,7 @@ public sealed class WebhookNativeRuntimeTests(MediaDispatchFixture fixture, ITes
         IContainer Container(string image, string schema) => new ContainerBuilder().WithImage(image).WithPortBinding(8080, true)
             .WithEnvironment("DATABASE_URL", database)
             .WithEnvironment("REDIS_URL", $"host.docker.internal:{redis.GetMappedPublicPort(6379)}")
-            .WithEnvironment("CONDUIT_API_TO_API_BACKEND_AUTH_KEY", master).WithEnvironment("CONDUIT_MIGRATION_MODE", "Skip")
+            .WithEnvironment("CONDUIT_API_TO_API_BACKEND_AUTH_KEY", master).WithEnvironment("CONDUIT_MIGRATION_MODE", "Wait")
             .WithEnvironment("CONDUIT_ENABLE_HTTPS_REDIRECTION", "false")
             .WithEnvironment("ConduitLLM__Messaging__Wolverine__SchemaName", schema)
             .WithEnvironment("ConduitLLM__Messaging__Wolverine__AutoProvision", "true")
@@ -59,7 +59,11 @@ public sealed class WebhookNativeRuntimeTests(MediaDispatchFixture fixture, ITes
         {
             await gateway.StartAsync(); await admin.StartAsync();
             using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{admin.GetMappedPublicPort(8080)}"), Timeout = TimeSpan.FromSeconds(5) };
-            await MediaDispatchFixture.EventuallyAsync(async () => { try { return (await client.GetAsync("/health/live")).IsSuccessStatusCode; } catch (HttpRequestException) { return false; } });
+            // The release migrator has applied the fixture schema. Both native binaries
+            // must recognize that version through their normal startup readiness gate.
+            using var gatewayClient = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{gateway.GetMappedPublicPort(8080)}"), Timeout = TimeSpan.FromSeconds(5) };
+            foreach (var serviceClient in new[] { client, gatewayClient })
+                await MediaDispatchFixture.EventuallyAsync(async () => { try { return (await serviceClient.GetAsync("/health/ready")).IsSuccessStatusCode; } catch (HttpRequestException) { return false; } });
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/v1/admin/webhook-deliveries/backlog")).StatusCode);
             client.DefaultRequestHeaders.Authorization = new("Bearer", master);
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/v1/admin/webhook-deliveries/backlog")).StatusCode); // #1448
