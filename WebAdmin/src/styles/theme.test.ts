@@ -20,5 +20,5 @@ it('defines the color variables used by global and chat styles in the real Manti
   );
 
   expect([...references].filter(reference => !definitions.has(reference))).toEqual([]);
-  expect(theme.colors?.[theme.primaryColor!]).toBeDefined();
+  expect(theme.colors?.[theme.primaryColor ?? '']).toBeDefined();
 });

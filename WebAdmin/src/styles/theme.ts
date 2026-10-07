@@ -29,6 +29,7 @@ const conduitGray: MantineColorsTuple = [
 export const theme = createTheme({
   primaryColor: 'conduit-blue',
   colors: {
+    // Palette names form the CSS custom-property names consumed by chat styles.
     'conduit-blue': conduitBlue,
     'conduit-gray': conduitGray,
   },
