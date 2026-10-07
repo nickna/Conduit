@@ -40,8 +40,7 @@ PRs changing native Dockerfiles, SDK/build policy, native scripts, or that workf
 Analyzer checks remain required for every PR. Native images remain canaries.
 
 The main test project owns self-contained tests irrespective of class names. Its
-ordinary selector excludes only explicitly owned `ReleaseMigration` and
-`TimingSensitive` traits. Release migrations belong to the mandatory migration
+ordinary selector excludes only explicitly owned `ReleaseMigration` traits. Release migrations belong to the mandatory migration
 workflow. Billing audit (8), refund (7), and temporary-master-key (4) methods run
 in the main lane; `functional-inventory.json` and `verify-functional-results.ps1`
 fail when any promised suite disappears from executed results. These tests use
@@ -85,9 +84,8 @@ Relative test globs fix Windows `.codex` worktree discovery (#1457).
 Every required .NET lane uses the shared run-tests action: TRX, method identities,
 discovered/executed/passed/failed/skipped counts, execution logs, and requested
 coverage are uploaded for 30 days even on failure. Empty execution and unexpected
-skips fail. Core's measured minimum is 3,752 executed cases; its six intentional
-skips are the three S3 replacements pending CI-07, two unsupported concurrent
-tracker tests, and the local tokenizer baseline emitter. Billing invariants allow
+skips fail. Core's measured minimum is 3,752 executed cases; its three intentional
+skips are two unsupported concurrent tracker tests and the local tokenizer baseline emitter. Billing invariants allow
 one baseline-emitter skip. Other required filtered lanes allow zero skips.
 WebAdmin retains Jest JSON and coverage; fewer than 461 executed cases, any failure,
 or any skipped correctness test fails the gate.
@@ -111,7 +109,7 @@ The required Docker job loads the production Admin/Gateway images, migrates a fr
 
 `scripts/ci/critical-path-map.json` assigns each of the 30 legacy facts to a required replacement or a justified manual lane. Its regression fails when any fact loses ownership. The legacy external harness has known false positives (#1464) and is not accepted as automated evidence. Paid-provider checks require explicit operator opt-in, a dedicated account/key with a hard provider spending ceiling, a request/time budget, and an isolated scheduled/manual deployment. They must never inherit production credentials from a PR.
 
-The three permanently skipped AWS mocking cases have been replaced by Component=S3Storage against isolated MinIO: actual small video upload, complete stream bytes/bounds, and partial stream bytes/bounds. Missing emulator infrastructure fails the lane; it cannot report a skip. Unit multipart/short-read checks remain.
+The three permanently skipped AWS mocking cases have been replaced by Component=S3Storage against isolated, digest-pinned Adobe S3Mock: actual small video upload, complete stream bytes/bounds, and partial stream bytes/bounds. Missing emulator infrastructure fails the lane; it cannot report a skip. Unit multipart/short-read checks remain.
 
 The packaged flow exposed Admin's missing capability-service registration (#1462) and cyclic EF graphs preventing Redis virtual-key writes (#1463). Those fixes are covered by real endpoint execution and a reflection-disabled serialization regression. The separate catalog importer retry transaction bug is tracked in #1459.
 
@@ -147,3 +145,14 @@ Recovery procedure:
 4. Existing legacy channels without version labels, mixed versions or missing members fail preflight. An operator must map each legacy digest to verified source/version evidence and repair/adopt a complete labeled set under the same maintenance procedure; the workflow never guesses version order from tag timestamps.
 
 Fault-injection regressions cover every partial channel write, rollback failure, bootstrap recovery, stale-ledger rejection, immutable version conflicts, missing candidates, digest mismatch, required migration success and stable/beta separation. Database migrations cannot be rolled back by retagging images; migration compatibility remains the release owner's responsibility.
+
+
+Dependency and candidate security (#1443)
+
+Every master/dev PR and push runs explicit NuGet (including transitive) and all three locked npm audits as a required job. High/critical dependency findings block; lower severities remain reported. Release scans use Trivy 0.75.0 against the exact three JIT/WebAdmin candidate digests and both independent native digests. Critical image findings block, including unfixed ones; high/lower findings remain visible. Source CodeQL is independently required for both target branches. Reports and normalized findings survive policy failure.
+
+There are initially no approved exceptions. `security-exceptions.json` accepts only exact scope/package/version/advisory identities with an owner, reason, unexpired date and linked approval record. An expired or malformed exception fails closed. An exception suppresses only its exact identity and remains counted in output. Owners must approve exceptions before they are added; no wildcard, package-wide or silent unfixed suppression is used. The outstanding dev-only braces 3.0.3 advisory (#1467) currently blocks the new dependency lane pending its owner's decision. It is absent from the patched standalone image, verified by inspecting its shipped dependency tree.
+
+Compatible npm updates remove the initial critical findings and patch contract-tool advisories. The obsolete redundant rational-order CSS configuration and its legacy Stylelint tree are removed; existing explicit property ordering remains. A targeted compatible brace-expansion override resolves an outdated exact transitive pin. Test-only SSH.NET is pinned to 2026.0.0 to fix both published SCP advisories. Dependency automation configuration and first-batch triage remain #1063's scope.
+
+The negative policy proof scanned an actual Node 18.0.0 Debian fixture by immutable digest: 17 critical findings were rejected. The exact patched production WebAdmin image scan passed the critical gate with no exceptions. All 461 Jest tests, type checks, deterministic contract generation and the packaged business/authenticated Chromium flows pass after updates. The parser regressions also prove introduced vulnerable dependencies, malformed/unavailable scans, narrow exceptions and expiry fail as specified.

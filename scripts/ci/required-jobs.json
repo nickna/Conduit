@@ -13,5 +13,6 @@
   "codeql",
   "s3-storage",
   "contracts",
-  "webadmin"
+  "webadmin",
+  "dependencies"
 ]

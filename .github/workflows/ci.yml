@@ -35,10 +35,45 @@ jobs:
       security-events: write
     uses: ./.github/workflows/codeql-analysis.yml
 
+  dependencies:
+    name: Dependency security policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Restore the consumed NuGet graph
+        run: dotnet restore Conduit.slnx
+      - name: Capture explicit NuGet and npm advisory inventories
+        shell: bash
+        run: |
+          mkdir -p artifacts/security
+          dotnet list Conduit.slnx package --no-restore --vulnerable --include-transitive --format json --output-version 1 > artifacts/security/nuget.json
+          for SCOPE in WebAdmin tools/openapi tools/ci; do
+            FILE=${SCOPE//\//-}
+            # npm returns 1 for findings as well as network failures. The policy
+            # parser rejects failed/malformed audits; advisories remain inspectable.
+            (cd "$SCOPE" && npm audit --package-lock-only --json --fetch-timeout=30000 --fetch-retries=0) > "artifacts/security/$FILE.json" || true
+          done
+      - name: Enforce dependency severity and approved exception policy
+        run: node scripts/ci/security-check.mjs dependency
+      - name: Retain advisory inventories even when blocked
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-security-evidence
+          path: artifacts/security
+          retention-days: 30
+
   required:
     name: CI required
     if: ${{ always() }}
-    needs: [source-ignore-guard, media-dispatch-integration, billing-fault-injection, billing-invariants, signalr-integration, aot-analyzers, validate, wolverine-two-host, docker, s3-storage, contracts, webadmin, migrations, distributed-lock, codeql]
+    needs: [source-ignore-guard, media-dispatch-integration, billing-fault-injection, billing-invariants, signalr-integration, aot-analyzers, validate, wolverine-two-host, docker, s3-storage, contracts, webadmin, migrations, distributed-lock, codeql, dependencies]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

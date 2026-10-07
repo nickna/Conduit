@@ -144,6 +144,41 @@ jobs:
           ADMIN: ${{ steps.images.outputs.admin }}
           GATEWAY: ${{ steps.images.outputs.http }}
           WEBADMIN: ${{ steps.images.outputs.webadmin }}
+      - name: Prepare security evidence
+        run: mkdir -p artifacts/security
+      - name: Scan exact admin release candidate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.75.0
+          image-ref: ${{ steps.images.outputs.admin }}
+          format: json
+          output: artifacts/security/admin.json
+          exit-code: '0'
+      - name: Scan exact http release candidate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.75.0
+          image-ref: ${{ steps.images.outputs.http }}
+          format: json
+          output: artifacts/security/http.json
+          exit-code: '0'
+      - name: Scan exact webadmin release candidate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.75.0
+          image-ref: ${{ steps.images.outputs.webadmin }}
+          format: json
+          output: artifacts/security/webadmin.json
+          exit-code: '0'
+      - name: Enforce candidate severity and approved exception policy
+        run: node scripts/ci/security-check.mjs image artifacts/security/admin.json artifacts/security/http.json artifacts/security/webadmin.json
+      - name: Retain candidate vulnerability reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-image-security-evidence
+          path: artifacts/security
+          retention-days: 30
       - name: Install locked browser tooling
         working-directory: tools/ci
         run: |
@@ -219,14 +254,25 @@ jobs:
             COMMIT_SHA=${{ needs.metadata.outputs.commit_sha }}
             BUILD_TIMESTAMP=${{ needs.metadata.outputs.build_timestamp }}
 
+      - name: Prepare native security evidence
+        run: mkdir -p artifacts/security
       - name: Scan native candidate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          version: v0.75.0
           image-ref: ${{ env.REGISTRY }}/nickna/conduit-${{ matrix.service }}-native@${{ steps.native-build.outputs.digest }}
-          format: table
-          exit-code: '1'
-          ignore-unfixed: true
-          severity: CRITICAL
+          format: json
+          output: artifacts/security/native.json
+          exit-code: '0'
+      - name: Enforce native candidate security policy
+        run: node scripts/ci/security-check.mjs image artifacts/security/native.json
+      - name: Retain native security report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-security-${{ matrix.service }}
+          path: artifacts/security
+          retention-days: 30
 
       - name: Execute exact native candidate entrypoint
         run: |
