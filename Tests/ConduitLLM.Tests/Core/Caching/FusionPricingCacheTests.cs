@@ -219,10 +219,12 @@ public sealed class FusionPricingCacheTests
         Skip.If(string.IsNullOrEmpty(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         var environment = $"test-{Guid.NewGuid():N}"; var cost = Cost(); var inner = Inner(cost);
         using var writer = Host(inner.Object, redis: redis, environment: environment); using var writerScope = writer.CreateScope();
+        using var reader = Host(inner.Object, redis: redis, environment: environment); using var readerScope = reader.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(writer, ApplicationCacheDomain.Costs, ApplicationCacheDomain.PricingRules);
+        await RedisCacheTestReadiness.WarmAsync(reader, ApplicationCacheDomain.Costs, ApplicationCacheDomain.PricingRules);
         var first = writerScope.ServiceProvider.GetRequiredService<IModelCostService>();
         await first.GetCostByIdAsync(42); await first.ListModelCostsAsync();
         await writer.GetRequiredService<ICachedPricingRulesService>().GetConfigAsync(42, Rules);
-        using var reader = Host(inner.Object, redis: redis, environment: environment); using var readerScope = reader.CreateScope();
         var second = readerScope.ServiceProvider.GetRequiredService<IModelCostService>();
         Assert.Equal("model", (await second.GetCostByIdAsync(42))!.ModelProviderTypeAssociations!.Single().Model!.Name);
         Assert.Single(await second.ListModelCostsAsync());
