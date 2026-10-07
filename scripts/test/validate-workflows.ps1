@@ -46,5 +46,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Actions syntax/expression validation failed' }
     & node scripts/ci/workflow-check.mjs
     if ($LASTEXITCODE -ne 0) { throw 'Workflow gating policy failed' }
+    # Exercise the selected executable, including -Actionlint overrides. A newer
+    # validator must not silently keep an obsolete compatibility suppression.
+    & node --test scripts/ci/workflow-policy.test.mjs
+    if ($LASTEXITCODE -ne 0) { throw 'Workflow/queue compatibility regressions failed' }
     Write-Host "Validated $($workflows.Count) active workflows with $($toolVersion[0]) and parsed gating policy."
 } finally { Pop-Location }
