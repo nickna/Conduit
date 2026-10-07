@@ -56,7 +56,10 @@ namespace ConduitLLM.Core.Events
         /// contract. New messages never populate this property.
         /// </summary>
         [JsonExtensionData]
-        public Dictionary<string, JsonElement>? LegacyPayload { get; init; }
+        // Extension data must be assigned after construction. A source-generated
+        // initializer for an init-only extension property becomes a constructor
+        // parameter, which System.Text.Json rejects for extension data.
+        public Dictionary<string, JsonElement>? LegacyPayload { get; set; }
 
         /// <summary>
         /// Partition key for ordered processing per virtual key
