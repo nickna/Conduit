@@ -59,7 +59,11 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Run PostgreSQL and Wolverine crash and dispatch tests
-        run: dotnet test Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj --configuration Release --verbosity normal --filter "Component=MediaDispatch"
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj
+          suite: media-dispatch
+          filter: Component=MediaDispatch
 
   source-ignore-guard:
     name: Source ignore guard
@@ -70,6 +74,8 @@ jobs:
         run: node scripts/ci/native-sdk.mjs
       - name: Exercise validation policy regressions
         run: node --test scripts/ci/*.test.mjs
+      - name: Exercise discovery and coverage regressions
+        run: python scripts/ci/test_test_evidence.py
       - name: Ensure source files are not ignored
         shell: bash
         run: |
@@ -99,7 +105,10 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Run billing durability fault tests
-        run: dotnet test Tests/ConduitLLM.FaultInjectionTests/ConduitLLM.FaultInjectionTests.csproj --configuration Release --verbosity normal
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.FaultInjectionTests/ConduitLLM.FaultInjectionTests.csproj
+          suite: billing-fault-injection
 
   billing-invariants:
     name: Billing invariants
@@ -111,7 +120,11 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Run required billing invariant gate
-        run: dotnet test Tests/ConduitLLM.BillingInvariantTests/ConduitLLM.BillingInvariantTests.csproj --configuration Release --verbosity normal
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.BillingInvariantTests/ConduitLLM.BillingInvariantTests.csproj
+          suite: billing-invariants
+          maximum-skips: '1'
 
   signalr-integration:
     name: SignalR integration
@@ -124,7 +137,11 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Run self-contained SignalR integration tests
-        run: dotnet test Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj --configuration Release --verbosity normal --filter "Component=SignalR"
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj
+          suite: signalr
+          filter: Component=SignalR
 
   # Provider and critical-path integration suites remain manual: they require
   # already-running Conduit services plus provider credentials. The SignalR
@@ -211,21 +228,42 @@ jobs:
         with:
           python-version: '3.13'
       
-      - name: .NET Build & Test
+      - name: .NET Build
         run: |
           dotnet restore
           dotnet build --no-restore
-          # Billing invariants, billing fault injection, and SignalR each run in
-          # isolated jobs above. Keep their infrastructure and timing-sensitive
-          # state out of this shared validation job while retaining the core and
-          # reflection-disabled serialization suites.
-          dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj --no-build --verbosity normal --filter "Component!=ReleaseMigration" --logger 'trx;LogFileName=core.trx' --results-directory artifacts/tests/core
-          dotnet test Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj --no-build --verbosity normal
+
+      - name: Main correctness suite and coverage
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
+          suite: core
+          configuration: Debug
+          no-build: 'true'
+          coverage: 'true'
+          filter: Component!=ReleaseMigration
+          minimum: '3752'
+          maximum-skips: '6'
         env:
           TEST_REDIS_CONNECTION: localhost:6379
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
           CONDUIT_CACHE_TEST_REDIS: localhost:6379
           CONDUIT_CACHE_TEST_POSTGRES: Host=localhost;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
+
+      - name: Reflection-disabled serialization suite
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj
+          suite: serialization
+          configuration: Debug
+          no-build: 'true'
+
+      - name: Enforce measured backend component coverage
+        shell: pwsh
+        run: |
+          $coverage = Get-ChildItem artifacts/tests/core -Recurse -Filter coverage.cobertura.xml | Select-Object -First 1
+          if (-not $coverage) { throw 'Required backend coverage is missing' }
+          python scripts/ci/coverage-ratchet.py dotnet $coverage.FullName
 
       - name: Verify restored functional suite ownership
         shell: pwsh
@@ -302,10 +340,16 @@ jobs:
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
 
       - name: Official OpenAI SDK smoke against Gateway
-        run: |
-          python -m pip install -r tools/openapi/sdk-smoke/requirements.txt
-          cd tools/openapi
-          npm run test:sdk-smoke
+        run: python -m pip install -r tools/openapi/sdk-smoke/requirements.txt
+
+      - name: Execute official SDK clients against real Gateway
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj
+          suite: openai-sdk
+          configuration: Debug
+          no-build: 'true'
+          filter: Component=OpenAiSdkSmoke
 
       - name: WebAdmin Lint, Type Check & Tests
         run: |
@@ -316,7 +360,17 @@ jobs:
           npm run lint
           npm run type-check
           npm run check:api-boundary
-          npm test -- --runInBand
+          npm run test:coverage -- --runInBand --json --outputFile=coverage/test-results.json
+          node ../scripts/ci/jest-evidence.mjs coverage/test-results.json
+          python ../scripts/ci/coverage-ratchet.py jest coverage/coverage-final.json
+
+      - name: Retain WebAdmin results and coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tests-webadmin
+          path: WebAdmin/coverage
+          retention-days: 30
 
   # Two-host Wolverine listener assertion (#961): boots the REAL Gateway + Admin hosts
   # against real Postgres with ConduitLLM:Messaging:Backend=Wolverine and asserts that

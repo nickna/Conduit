@@ -48,14 +48,17 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - name: Caller policy and identity unit tests
-        run: >-
-          dotnet test Tests/ConduitLLM.Tests -c Release
-          --filter 'FullyQualifiedName~DistributedLock|FullyQualifiedName~PostgresLockIdentity|FullyQualifiedName~MediaCleanup|FullyQualifiedName~MediaDeletion|FullyQualifiedName~AdminMediaServiceSoftDelete|FullyQualifiedName~AdminVirtualKeyService|FullyQualifiedName~MetadataSyncLock|FullyQualifiedName~OpenRouterDriftDetection|FullyQualifiedName~BudgetAlertManager|FullyQualifiedName~DistributedCachePopulator|FullyQualifiedName~CoordinatedConnectionPoolWarmer|FullyQualifiedName~Architecture|FullyQualifiedName~HostApplicationCacheComposition|FullyQualifiedName~MediaLifecycleExtensions'
-          --logger 'trx;LogFileName=unit.trx' --results-directory artifacts/lock-probe/test-results
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests
+          suite: lock-unit-pg${{ matrix.postgres }}
+          filter: FullyQualifiedName~DistributedLock|FullyQualifiedName~PostgresLockIdentity|FullyQualifiedName~MediaCleanup|FullyQualifiedName~MediaDeletion|FullyQualifiedName~AdminMediaServiceSoftDelete|FullyQualifiedName~AdminVirtualKeyService|FullyQualifiedName~MetadataSyncLock|FullyQualifiedName~OpenRouterDriftDetection|FullyQualifiedName~BudgetAlertManager|FullyQualifiedName~DistributedCachePopulator|FullyQualifiedName~CoordinatedConnectionPoolWarmer|FullyQualifiedName~Architecture|FullyQualifiedName~HostApplicationCacheComposition|FullyQualifiedName~MediaLifecycleExtensions
       - name: Real PostgreSQL and Redis integration gates
-        run: >-
-          dotnet test Tests/ConduitLLM.IntegrationTests -c Release --filter 'Component=DistributedLock'
-          --logger 'trx;LogFileName=integration.trx' --results-directory artifacts/lock-probe/test-results
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests
+          suite: lock-integration-pg${{ matrix.postgres }}
+          filter: Component=DistributedLock
       - name: JIT production lock probe
         run: dotnet run --project tools/ConduitLLM.LockProbe -c Release
       - name: Install native toolchain

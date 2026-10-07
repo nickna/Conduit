@@ -1,0 +1,15 @@
+{
+  "dotnet": {
+    "ConduitLLM.Core.Services.PerformanceMetricsService": 100,
+    "ConduitLLM.Core.Services.PerformanceMetricsService/StreamingMetricsTracker": 92,
+    "ConduitLLM.Admin.Services.RefundService/<ProcessRefundAsync>d__6": 95,
+    "ConduitLLM.Admin.Services.RefundService/<ExecuteRefundTransactionAsync>d__7": 62,
+    "ConduitLLM.Admin.Services.EphemeralMasterKeyService/<ValidateAndConsumeKeyAsync>d__13": 100,
+    "ConduitLLM.Admin.Security.MasterKeyAuthenticationHandler/<HandleAuthenticateAsync>d__4": 87
+  },
+  "jest": {
+    "app/components/media/MediaGallery/MediaGallery.tsx": 81,
+    "app/components/media/utils/typeGuards.ts": 100,
+    "utils/replicateSchemaConverter.ts": 72
+  }
+}

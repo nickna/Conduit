@@ -81,3 +81,25 @@ updates, and empty states without wall-clock thresholds. The unused all-tests
 performance Jest configuration is retired. Actual browser timings belong to the
 packaged browser lane; unit/jsdom timings are not rendering-performance evidence.
 Relative test globs fix Windows `.codex` worktree discovery (#1457).
+
+Every required .NET lane uses the shared run-tests action: TRX, method identities,
+discovered/executed/passed/failed/skipped counts, execution logs, and requested
+coverage are uploaded for 30 days even on failure. Empty execution and unexpected
+skips fail. Core's measured minimum is 3,752 executed cases; its six intentional
+skips are the three S3 replacements pending CI-07, two unsupported concurrent
+tracker tests, and the local tokenizer baseline emitter. Billing invariants allow
+one baseline-emitter skip. Other required filtered lanes allow zero skips.
+WebAdmin retains Jest JSON and coverage; fewer than 461 executed cases, any failure,
+or any skipped correctness test fails the gate.
+
+`coverage-baseline.json` records component minima measured October 6, 2026 from
+the complete core and Jest suites. .NET uses executable-line coverage; Jest uses
+statement coverage. Minima round measured values down to whole percentage points;
+there is no unmeasured global threshold. Critical refund, master-key, metrics,
+gallery, media guards, and schema conversion components must not regress or vanish.
+Job summaries publish measured values and minima. Raise baselines when coverage
+improves; reductions require an explained review alongside executable evidence.
+The explicit `.runsettings` removes broad Program/Startup/test-name exclusions;
+migrations and build/generated outputs remain excluded. Jest excludes generated
+contract types, which have separate generation/drift validation. The unused
+`coverlet.json` threshold is retired.

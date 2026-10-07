@@ -65,12 +65,12 @@ jobs:
         run: ./scripts/migrations/test-bounded-command.ps1
 
       - name: Exercise release migration gate
-        run: >-
-          dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
-          --configuration Release
-          --filter FullyQualifiedName~ReleaseMigrationCommandTests
-          --logger 'trx;LogFileName=migrations.trx'
-          --results-directory artifacts/migrations
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
+          suite: migrations
+          filter: Component=ReleaseMigration
+          minimum: '5'
 
       - name: Exercise native PostgreSQL persistence probe
         shell: pwsh
