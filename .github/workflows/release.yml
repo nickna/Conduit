@@ -319,6 +319,7 @@ jobs:
     concurrency:
       group: conduit-production-release
       cancel-in-progress: false
+      queue: max
     permissions:
       contents: write
       packages: write

@@ -11,6 +11,11 @@ export function validateWorkflows(workflows, required) {
   for (const [name, workflow] of Object.entries(workflows)) {
     require(workflow.name && workflow.on && workflow.jobs, `${name}: missing workflow structure`);
     require(workflow.permissions?.contents === 'read', `${name}: default token must read contents`);
+    for (const concurrency of [workflow.concurrency, ...Object.values(workflow.jobs).map(job => job.concurrency)]) {
+      if (typeof concurrency !== 'object' || concurrency?.queue === undefined) continue;
+      require(['max', 'single'].includes(concurrency.queue) && !(concurrency.queue === 'max' && concurrency['cancel-in-progress'] !== false),
+        `${name}: unsupported queue or cancellation combination`);
+    }
     for (const [id, job] of Object.entries(workflow.jobs)) {
       if (!job.uses) require(Number.isInteger(job['timeout-minutes']) && job['timeout-minutes'] > 0 && job['timeout-minutes'] <= 90,
         `${name}/${id}: missing bounded timeout`);
@@ -28,7 +33,7 @@ export function validateWorkflows(workflows, required) {
     'Aggregate dependency graph differs from required inventory');
   const release = workflows['release.yml'];
   const production = release.jobs.production, candidates = release.jobs.candidates;
-  require(production?.concurrency?.group === 'conduit-production-release' && production.concurrency['cancel-in-progress'] === false,
+  require(production?.concurrency?.group === 'conduit-production-release' && production.concurrency['cancel-in-progress'] === false && production.concurrency.queue === 'max',
     'Production must serialize across tags without cancelling a running release');
   require(production.environment === 'production' && !production.if && array(production.needs).includes('candidates') &&
     array(production.needs).includes('metadata'), 'Production must require successful validated candidates and exact-SHA metadata');

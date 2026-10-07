@@ -178,4 +178,3 @@ try {
   try { docker(['network', 'rm', run]); } catch { /* network may not have been created */ }
   writeFileSync(`${output}/evidence.json`, JSON.stringify(report, null, 2));
 }
-

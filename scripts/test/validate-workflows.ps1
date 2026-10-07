@@ -32,7 +32,10 @@ try {
     $workflows = Get-ChildItem .github/workflows -File | Where-Object Extension -In '.yml', '.yaml' | ForEach-Object FullName
     # Actionlint validates YAML, Actions schemas, expressions and job/step references.
     # Shellcheck/pyflakes have separate ownership; don't depend on optional local installs.
-    & $Actionlint -shellcheck='' -pyflakes='' @workflows
+    # v1.7.12 predates GitHub's documented concurrency.queue syntax (upstream #746).
+    # Ignore only that exact schema diagnostic; parsed policy validates queue values
+    # and cancellation compatibility for every workflow/job, including fixtures.
+    & $Actionlint -shellcheck='' -pyflakes='' -ignore '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$' @workflows
     if ($LASTEXITCODE -ne 0) { throw 'Actions syntax/expression validation failed' }
     & node scripts/ci/workflow-check.mjs
     if ($LASTEXITCODE -ne 0) { throw 'Workflow gating policy failed' }

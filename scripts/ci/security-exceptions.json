@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "scope": "WebAdmin",
+    "package": "braces",
+    "version": "3.0.3",
+    "advisory": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+    "owner": "@nickna",
+    "reason": "Repository owner approved a temporary exception in the epic implementation chat on 2026-10-07. Development-only Jest/ESLint/Stylelint dependency processes repository-controlled glob patterns; no patched npm version exists and the production standalone image was inspected and contains no braces package. Remove when upstream patches it.",
+    "expires": "2026-11-06",
+    "approval": "https://github.com/nickna/Conduit/issues/1467"
+  }
+]
