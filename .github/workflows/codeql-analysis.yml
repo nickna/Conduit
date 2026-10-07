@@ -1,10 +1,7 @@
 name: "CodeQL"
 
 on:
-  push:
-    branches: [ master, dev ]
-  pull_request:
-    branches: [ master ]
+  workflow_call:
   schedule:
     - cron: '30 5 * * 1'  # Weekly on Monday at 5:30 AM UTC
   workflow_dispatch: # Allow manual runs
@@ -17,6 +14,9 @@ on:
         options:
           - master
           - dev
+
+permissions:
+  contents: read
 
 # IMPORTANT: Never set cancel-in-progress to true for security scans!
 # CodeQL analysis must complete to ensure:

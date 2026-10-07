@@ -1,26 +1,7 @@
 name: Distributed lock ownership
 
 on:
-  push:
-    branches: [dev, master]
-    paths:
-      - 'Shared/**'
-      - 'Services/**'
-      - 'Tests/**'
-      - 'tools/ConduitLLM.LockProbe/**'
-      - 'Directory.*'
-      - 'global.json'
-      - '.github/workflows/distributed-lock.yml'
-  pull_request:
-    branches: [dev, master]
-    paths:
-      - 'Shared/**'
-      - 'Services/**'
-      - 'Tests/**'
-      - 'tools/ConduitLLM.LockProbe/**'
-      - 'Directory.*'
-      - 'global.json'
-      - '.github/workflows/distributed-lock.yml'
+  workflow_call:
   workflow_dispatch:
 
 permissions:

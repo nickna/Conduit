@@ -5,6 +5,10 @@ on:
     branches: [master, dev]
   pull_request:
     branches: [master, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   DOTNET_VERSION: '10.0.x'
@@ -15,6 +19,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  migrations:
+    name: Migration validation
+    uses: ./.github/workflows/migration-validation.yml
+
+  distributed-lock:
+    name: Distributed lock validation
+    uses: ./.github/workflows/distributed-lock.yml
+
+  codeql:
+    name: Security analysis
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: ./.github/workflows/codeql-analysis.yml
+
+  required:
+    name: CI required
+    if: ${{ always() }}
+    needs: [source-ignore-guard, media-dispatch-integration, billing-fault-injection, billing-invariants, signalr-integration, aot-analyzers, validate, wolverine-two-host, docker, migrations, distributed-lock, codeql]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require every validation result
+        run: node scripts/ci/required-check.mjs
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+
   media-dispatch-integration:
     name: Durable media dispatch
     runs-on: ubuntu-latest

@@ -1,28 +1,11 @@
 name: Migration Validation
 
 on:
-  push:
-    branches: [master, dev]
-    paths:
-      - 'Shared/ConduitLLM.Configuration/**'
-      - 'Tests/ConduitLLM.Tests/Configuration/Data/**'
-      - 'Tests/ConduitLLM.PersistenceAotTests/**'
-      - 'tools/ConduitLLM.Migrator/**'
-      - 'scripts/aot/persistence-native-smoke.ps1'
-      - 'scripts/migrations/**'
-      - '.github/workflows/release.yml'
-      - '.github/workflows/migration-validation.yml'
-  pull_request:
-    branches: [master, dev]
-    paths:
-      - 'Shared/ConduitLLM.Configuration/**'
-      - 'Tests/ConduitLLM.Tests/Configuration/Data/**'
-      - 'Tests/ConduitLLM.PersistenceAotTests/**'
-      - 'tools/ConduitLLM.Migrator/**'
-      - 'scripts/aot/persistence-native-smoke.ps1'
-      - 'scripts/migrations/**'
-      - '.github/workflows/release.yml'
-      - '.github/workflows/migration-validation.yml'
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   DOTNET_VERSION: '10.0.x'
