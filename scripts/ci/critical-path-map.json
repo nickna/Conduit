@@ -45,22 +45,22 @@
   },
   "RedisUnavailable_HealthEndpointsStillWork": {
     "lane": "manual",
-    "owner": "Deployment-specific Redis chaos run; follow-up #1464",
+    "owner": "Deployment-specific Redis chaos run (retired harness #1464)",
     "reason": "Legacy expectations mix fail-open and fail-closed configurations. Stop/restart a dedicated deployment Redis only in an isolated chaos environment and assert its configured policy. The required main Fusion cache suite separately exercises Redis disconnect/reconnect and missed backplane convergence."
   },
   "RedisUnavailable_CircuitOpens_Returns503": {
     "lane": "manual",
-    "owner": "Deployment-specific Redis chaos run; follow-up #1464",
+    "owner": "Deployment-specific Redis chaos run (retired harness #1464)",
     "reason": "Legacy expectations mix fail-open and fail-closed configurations. Stop/restart a dedicated deployment Redis only in an isolated chaos environment and assert its configured policy. The required main Fusion cache suite separately exercises Redis disconnect/reconnect and missed backplane convergence."
   },
   "RedisRecovery_CircuitCloses_NormalOperation": {
     "lane": "manual",
-    "owner": "Deployment-specific Redis chaos run; follow-up #1464",
+    "owner": "Deployment-specific Redis chaos run (retired harness #1464)",
     "reason": "Legacy expectations mix fail-open and fail-closed configurations. Stop/restart a dedicated deployment Redis only in an isolated chaos environment and assert its configured policy. The required main Fusion cache suite separately exercises Redis disconnect/reconnect and missed backplane convergence."
   },
   "RedisDown_RequestsStillProcessed_GracefulFallback": {
     "lane": "manual",
-    "owner": "Deployment-specific Redis chaos run; follow-up #1464",
+    "owner": "Deployment-specific Redis chaos run (retired harness #1464)",
     "reason": "Legacy expectations mix fail-open and fail-closed configurations. Stop/restart a dedicated deployment Redis only in an isolated chaos environment and assert its configured policy. The required main Fusion cache suite separately exercises Redis disconnect/reconnect and missed backplane convergence."
   },
   "RedisFlush_ClearsCachedData_TestIsolation": {
@@ -89,8 +89,8 @@
   },
   "ProviderTimeout_ReturnsGatewayTimeout": {
     "lane": "manual",
-    "owner": "Provider-specific timeout acceptance; follow-up #1464",
-    "reason": "The legacy fact only prints settings and never induces a timeout. Vendor-specific long requests require a dedicated provider account, explicit timeout and spending ceiling; the required local smoke uses bounded requests and failures without incurring provider charges."
+    "owner": "Provider-specific timeout acceptance (retired harness #1464)",
+    "reason": "The retired fact only printed settings and never induced a timeout. Vendor-specific long requests require a dedicated provider account, explicit timeout and spending ceiling; the required local smoke uses bounded requests and failures without incurring provider charges."
   },
   "ChatCompletion_NonStreaming_ReturnsCompleteResponse": {
     "lane": "required",

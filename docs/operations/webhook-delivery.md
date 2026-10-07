@@ -484,10 +484,11 @@ Separate issues found during verification:
   fields and required `file`/`model` values. A runtime export regression covers
   the generated shape, and determinism verification now also compares fresh
   contracts and types against the checked-in files.
-* [#1455](https://github.com/nickna/Conduit/issues/1455): the migration validator's
-  filesystem fallback counts three existing orphan source files that EF does not
-  discover when its migrations-list subprocess times out.
-* [#1456](https://github.com/nickna/Conduit/issues/1456): optional SQL generation
-  through the EF PowerShell wrapper binds `-o` as an ambiguous common parameter;
+* [#1455](https://github.com/nickna/Conduit/issues/1455) is resolved: every validation
+  mode requires EF's authoritative inventory and fails on timeout. The three
+  undiscoverable drafts are archived as noncompiled references without changing
+  the active migration IDs or deployment SQL.
+* [#1456](https://github.com/nickna/Conduit/issues/1456) is resolved: SQL generation
+  uses explicit EF argument arrays and preserves output paths containing spaces;
   direct `dotnet ef migrations script --idempotent` succeeds.
 

@@ -62,7 +62,11 @@ jobs:
 
       - name: Verify mandatory timeout and tooling policy
         shell: pwsh
-        run: ./scripts/migrations/test-bounded-command.ps1
+        run: |
+          foreach ($regression in @('test-bounded-command.ps1', 'test-migration-inventory.ps1', 'test-ef-wrapper.ps1')) {
+            pwsh -NoProfile -File "./scripts/migrations/$regression"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       - name: Exercise release migration gate
         uses: ./.github/actions/run-tests
@@ -70,7 +74,7 @@ jobs:
           project: Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
           suite: migrations
           filter: Component=ReleaseMigration
-          minimum: '5'
+          minimum: '7'
 
       - name: Exercise native PostgreSQL persistence probe
         shell: pwsh
