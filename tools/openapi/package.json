@@ -23,7 +23,7 @@
     "validate:invariants": "node validate-openapi.mjs",
     "lint:openapi": "node lint-openapi.mjs",
     "validate:openapi": "npm run validate:ratchet:self-test && npm run lint:openapi && npm run validate:invariants",
-    "verify:offline": "node verify-openapi-determinism.mjs",
+    "verify:offline": "node verify-openapi-determinism.test.mjs && node verify-openapi-determinism.mjs",
     "clean": "rm -rf ../../WebAdmin/src/generated"
   },
   "devDependencies": {

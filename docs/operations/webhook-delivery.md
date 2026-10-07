@@ -460,25 +460,30 @@ lock integration tests pass. The rebuilt native Gateway/Admin test now uses norm
 exercising delivery and replay. Migration drift validation and idempotent SQL
 generation pass with the current 50 discoverable migrations.
 
-The new Admin contract and WebAdmin-local types are regenerated. Contract
-generation is byte-stable across two isolated runs, and the checked-in contracts
-pass OpenAPI validation with the existing violation allowlist. Reproduce the
-Admin contract update with `npm run generate:admin:offline` in `tools/openapi`,
-then `npm run verify:offline` and `npm run validate:openapi`.
+Both API contracts and WebAdmin-local types are regenerated. Contract generation
+is byte-stable across two isolated runs and matches the checked-in artifacts;
+verification fails on either nondeterminism or committed contract/type drift.
+The contracts pass OpenAPI validation with the existing violation allowlist.
+Reproduce with `npm run generate:offline` in `tools/openapi`, then
+`npm run verify:offline` and `npm run validate:openapi`.
 
-Separate existing issues found during verification remain tracked:
+Separate issues found during verification:
 
-* [#1445](https://github.com/nickna/Conduit/issues/1445): Testcontainers pulls a
-  vulnerable SSH.NET test dependency.
-* [#1448](https://github.com/nickna/Conduit/issues/1448): Admin's outer middleware
-  rejects Bearer master keys; use the verified X-API-Key operator path.
-* [#1451](https://github.com/nickna/Conduit/issues/1451): the OpenAPI tooling
-  lockfile has three high-severity vulnerable development packages.
-* [#1452](https://github.com/nickna/Conduit/issues/1452): fresh Gateway audio
-  multipart schema export loses model/language/prompt, also on the unmodified
-  baseline and native export. Its existing accurate committed Gateway contract is
-  retained. Full `generate:offline` currently exposes that unrelated drift;
-  determinism verification compares fresh generations without replacing it.
+* [#1445](https://github.com/nickna/Conduit/issues/1445) is resolved: a central
+  direct pin selects SSH.NET 2026.0.0 for the integration tests, retaining remote
+  Docker SSH support. The integration dependency audit reports no vulnerabilities.
+* [#1448](https://github.com/nickna/Conduit/issues/1448) is resolved: Admin's outer
+  middleware and authentication handler share credential extraction and accept
+  Bearer master keys. Full-pipeline tests cover permanent and single-use
+  ephemeral credentials through Bearer and configured API key headers.
+* [#1451](https://github.com/nickna/Conduit/issues/1451) is already resolved by
+  patched OpenAPI tooling dependencies: brace-expansion 2.1.7, js-yaml 4.3.2, and
+  minimatch 5.1.9. The tooling npm audit reports no vulnerabilities.
+* [#1452](https://github.com/nickna/Conduit/issues/1452) is resolved: fresh Gateway
+  transcription metadata uses a normalized multipart object with all form
+  fields and required `file`/`model` values. A runtime export regression covers
+  the generated shape, and determinism verification now also compares fresh
+  contracts and types against the checked-in files.
 * [#1455](https://github.com/nickna/Conduit/issues/1455): the migration validator's
   filesystem fallback counts three existing orphan source files that EF does not
   discover when its migrations-list subprocess times out.

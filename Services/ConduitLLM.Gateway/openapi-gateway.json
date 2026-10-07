@@ -1828,78 +1828,36 @@
                   "model"
                 ],
                 "type": "object",
-                "allOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "file": {
-                        "$ref": "#/components/schemas/IFormFile"
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "model": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "language": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "prompt": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "response_format": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "temperature": {
-                        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-                        "type": [
-                          "number",
-                          "string"
-                        ],
-                        "format": "double"
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "chunking_strategy": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "stream": {
-                        "type": "boolean"
-                      }
-                    }
-                  }
-                ],
                 "properties": {
+                  "file": {
+                    "$ref": "#/components/schemas/IFormFile"
+                  },
+                  "response_format": {
+                    "type": "string"
+                  },
+                  "temperature": {
+                    "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "format": "double"
+                  },
+                  "chunking_strategy": {
+                    "type": "string"
+                  },
+                  "stream": {
+                    "type": "boolean"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
                   "include": {
                     "type": "array",
                     "items": {
