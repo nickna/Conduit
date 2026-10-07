@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
 
@@ -16,8 +19,10 @@ jobs:
   metadata:
     name: Release metadata
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
+      actions: read
 
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -28,22 +33,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Extract version and channel
+      - name: Validate release tag, master ancestry and exact-SHA CI
         id: version
-        # A tag is a pre-release iff its name contains a hyphen (SemVer rule).
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "commit_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-          echo "build_timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            echo "channel=beta" >> "$GITHUB_OUTPUT"
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "channel=latest" >> "$GITHUB_OUTPUT"
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: node scripts/ci/validate-release.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   docker:
     name: Build candidate - ${{ matrix.service }}
@@ -244,7 +241,7 @@ jobs:
 
     steps:
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3.0.3
         with:
           generate_release_notes: true
           draft: false

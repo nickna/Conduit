@@ -18,3 +18,13 @@ running the script without `-Apply`.
 Run `node --test scripts/ci/*.test.mjs` to check the validation policy, including
 deliberately failed, cancelled, skipped, and missing results. Live workflow and
 protection verification is recorded with the implementation PR.
+
+Releases accept `vMAJOR.MINOR.PATCH` and SemVer prerelease suffixes (beta channel).
+Build metadata is intentionally unsupported because `+` is invalid in Docker tags.
+Before building candidates or accessing production, the tagged commit must be an
+ancestor of current master and have a completed successful **master push** CI run
+for that exact SHA, including `CI required`. PR merge revisions and dev runs do
+not qualify. Missing/pending runs wait at most ten minutes; failed, cancelled,
+skipped, or timed-out validation fails immediately. GitHub API errors fail closed.
+Production's environment policy permits only `v*` tags; ancestry/version/CI policy
+is enforced by the release job, with no added human approval requirement.
