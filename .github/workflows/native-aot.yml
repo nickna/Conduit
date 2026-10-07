@@ -3,6 +3,14 @@ name: NativeAOT
 on:
   push:
     branches: [master]
+  pull_request:
+    branches: [master, dev]
+    paths:
+      - 'global.json'
+      - 'Directory.*'
+      - 'Services/**/Dockerfile.native'
+      - 'scripts/aot/**'
+      - '.github/workflows/native-aot.yml'
   schedule:
     - cron: '23 8 * * 1'
   workflow_dispatch:

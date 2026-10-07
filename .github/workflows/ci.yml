@@ -66,6 +66,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check native Docker SDK compatibility
+        run: node scripts/ci/native-sdk.mjs
+      - name: Exercise validation policy regressions
+        run: node --test scripts/ci/*.test.mjs
       - name: Ensure source files are not ignored
         shell: bash
         run: |
