@@ -9183,6 +9183,781 @@
         ]
       }
     },
+    "/v1/admin/webhook-deliveries": {
+      "get": {
+        "tags": [
+          "Webhook recovery"
+        ],
+        "summary": "Inspect retained webhook delivery receipts",
+        "operationId": "Webhooks_Inspect",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eventId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "1-based page number.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Items per page (maximum 100).",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "data",
+                    "pagination"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WebhookDeliveryInspection"
+                      }
+                    },
+                    "pagination": {
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "totalItems",
+                        "totalPages"
+                      ],
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "totalItems": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "totalPages": {
+                          "type": "integer",
+                          "format": "int32"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "MasterKey": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/admin/webhook-deliveries/backlog": {
+      "get": {
+        "tags": [
+          "Webhook recovery"
+        ],
+        "summary": "Read the retained webhook delivery backlog",
+        "operationId": "Webhooks_Backlog",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookBacklog"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "MasterKey": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/admin/webhook-deliveries/dead-letters": {
+      "get": {
+        "tags": [
+          "Webhook recovery"
+        ],
+        "summary": "List exhausted webhook error-envelope references",
+        "operationId": "Webhooks_DeadLetters",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "1-based page number.",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Items per page (maximum 100).",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "data",
+                    "pagination"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WebhookDeadLetterInspection"
+                      }
+                    },
+                    "pagination": {
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "totalItems",
+                        "totalPages"
+                      ],
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "totalItems": {
+                          "type": "integer",
+                          "format": "int32"
+                        },
+                        "totalPages": {
+                          "type": "integer",
+                          "format": "int32"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "MasterKey": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/admin/webhook-deliveries/{id}/replay": {
+      "post": {
+        "tags": [
+          "Webhook recovery"
+        ],
+        "summary": "Start one audited replay cycle for an exhausted webhook delivery",
+        "operationId": "Webhooks_Replay",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookReplayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookReplayResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "MasterKey": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/admin/webhook-deliveries/purge": {
+      "post": {
+        "tags": [
+          "Webhook recovery"
+        ],
+        "summary": "Purge a bounded batch of expired webhook receipts and audit",
+        "operationId": "Webhooks_Purge",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "MasterKey": [ ]
+          }
+        ]
+      }
+    },
     "/v1/admin/providers": {
       "get": {
         "tags": [
@@ -24184,7 +24959,6 @@
             "type": "boolean"
           },
           "mappings": {
-            "minItems": 1,
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/BulkModelMappingItemDto"
@@ -24298,7 +25072,6 @@
         "type": "object",
         "properties": {
           "mappings": {
-            "minItems": 1,
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/BulkModelMappingItemDto"
@@ -24803,6 +25576,7 @@
           },
           "configurationName": {
             "maxLength": 200,
+            "minLength": 0,
             "type": "string"
           },
           "purpose": {
@@ -24813,6 +25587,7 @@
           },
           "baseUrl": {
             "maxLength": 500,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -24858,6 +25633,7 @@
           },
           "description": {
             "maxLength": 1000,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -24988,14 +25764,17 @@
         "properties": {
           "key": {
             "maxLength": 100,
+            "minLength": 0,
             "type": "string"
           },
           "value": {
             "maxLength": 2000,
+            "minLength": 0,
             "type": "string"
           },
           "description": {
             "maxLength": 500,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -25177,6 +25956,7 @@
         "properties": {
           "costName": {
             "maxLength": 255,
+            "minLength": 0,
             "type": "string"
           },
           "pricingModel": {
@@ -25195,6 +25975,7 @@
           },
           "modelType": {
             "maxLength": 50,
+            "minLength": 0,
             "type": "string"
           },
           "priority": {
@@ -25203,6 +25984,7 @@
           },
           "description": {
             "maxLength": 500,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -25552,6 +26334,7 @@
           },
           "toolName": {
             "maxLength": 100,
+            "minLength": 0,
             "type": "string"
           },
           "toolParameters": {
@@ -25571,6 +26354,7 @@
           },
           "billingUnit": {
             "maxLength": 50,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -25578,6 +26362,7 @@
           },
           "costDescription": {
             "maxLength": 200,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -25596,10 +26381,12 @@
         "properties": {
           "groupName": {
             "maxLength": 200,
+            "minLength": 0,
             "type": "string"
           },
           "externalGroupId": {
             "maxLength": 100,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -25625,6 +26412,7 @@
         "properties": {
           "keyName": {
             "maxLength": 100,
+            "minLength": 0,
             "type": "string"
           },
           "allowedModels": {
@@ -26877,14 +27665,17 @@
           },
           "key": {
             "maxLength": 100,
+            "minLength": 0,
             "type": "string"
           },
           "value": {
             "maxLength": 2000,
+            "minLength": 0,
             "type": "string"
           },
           "description": {
             "maxLength": 500,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -28818,6 +29609,7 @@
           },
           "costName": {
             "maxLength": 255,
+            "minLength": 0,
             "type": "string"
           },
           "pricingModel": {
@@ -28875,6 +29667,7 @@
           },
           "modelType": {
             "maxLength": 50,
+            "minLength": 0,
             "type": "string"
           },
           "isActive": {
@@ -28893,6 +29686,7 @@
           },
           "description": {
             "maxLength": 500,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -30447,13 +31241,19 @@
             "type": "boolean"
           },
           "errors": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "$ref": "#/components/schemas/ValidationError"
             }
           },
           "warnings": {
-            "type": "array",
+            "type": [
+              "null",
+              "array"
+            ],
             "items": {
               "type": "string"
             }
@@ -30848,6 +31648,7 @@
         "properties": {
           "name": {
             "maxLength": 100,
+            "minLength": 0,
             "type": "string"
           },
           "enabled": {
@@ -30858,6 +31659,7 @@
           },
           "modelPattern": {
             "maxLength": 200,
+            "minLength": 0,
             "type": "string"
           },
           "strategy": {
@@ -30870,7 +31672,6 @@
             ]
           },
           "injectionPoints": {
-            "maxItems": 4,
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CacheInjectionPoint"
@@ -31502,6 +32303,7 @@
           },
           "toolName": {
             "maxLength": 100,
+            "minLength": 0,
             "type": "string"
           },
           "toolParameters": {
@@ -31521,6 +32323,7 @@
           },
           "billingUnit": {
             "maxLength": 50,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -31528,6 +32331,7 @@
           },
           "costDescription": {
             "maxLength": 200,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -31758,10 +32562,12 @@
           },
           "reason": {
             "maxLength": 500,
+            "minLength": 0,
             "type": "string"
           },
           "providerOperationId": {
             "maxLength": 200,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -32556,6 +33362,7 @@
         "properties": {
           "configurationName": {
             "maxLength": 200,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -32583,6 +33390,7 @@
           },
           "baseUrl": {
             "maxLength": 500,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -32631,6 +33439,7 @@
           },
           "description": {
             "maxLength": 1000,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -32770,14 +33579,17 @@
         "properties": {
           "key": {
             "maxLength": 100,
+            "minLength": 0,
             "type": "string"
           },
           "value": {
             "maxLength": 2000,
+            "minLength": 0,
             "type": "string"
           },
           "description": {
             "maxLength": 500,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -32790,6 +33602,7 @@
         "properties": {
           "value": {
             "maxLength": 2000,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -32797,6 +33610,7 @@
           },
           "description": {
             "maxLength": 500,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -33036,6 +33850,7 @@
         "properties": {
           "costName": {
             "maxLength": 255,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -33067,6 +33882,7 @@
           },
           "modelType": {
             "maxLength": 50,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -33081,6 +33897,7 @@
           },
           "description": {
             "maxLength": 500,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -33527,6 +34344,7 @@
           },
           "billingUnit": {
             "maxLength": 50,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -33534,6 +34352,7 @@
           },
           "costDescription": {
             "maxLength": 200,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -33560,6 +34379,7 @@
         "properties": {
           "groupName": {
             "maxLength": 200,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -33567,6 +34387,7 @@
           },
           "externalGroupId": {
             "maxLength": 100,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -33615,6 +34436,7 @@
         "properties": {
           "keyName": {
             "maxLength": 100,
+            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -34645,6 +35467,190 @@
           }
         },
         "description": "DTO for warning error information"
+      },
+      "WebhookBacklog": {
+        "required": [
+          "pending",
+          "delivered",
+          "exhausted",
+          "reservedAttempts",
+          "oldestPendingSeconds"
+        ],
+        "type": "object",
+        "properties": {
+          "pending": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "delivered": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "exhausted": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reservedAttempts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "oldestPendingSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "replayCycles": {
+            "type": "integer",
+            "format": "int64",
+            "default": 0
+          }
+        }
+      },
+      "WebhookDeadLetterInspection": {
+        "required": [
+          "envelopeId",
+          "deliveryId",
+          "sentAt"
+        ],
+        "type": "object",
+        "properties": {
+          "envelopeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deliveryId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sentAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WebhookDeliveryInspection": {
+        "required": [
+          "id",
+          "eventId",
+          "taskId",
+          "virtualKeyId",
+          "state",
+          "attempts",
+          "cycle",
+          "createdAt",
+          "updatedAt",
+          "deadline",
+          "nextAttemptAt",
+          "retainUntil",
+          "statusCode",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "virtualKeyId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "state": {
+            "type": "string"
+          },
+          "attempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cycle": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nextAttemptAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "retainUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "statusCode": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "WebhookReplayRequest": {
+        "required": [
+          "operationId",
+          "virtualKeyId",
+          "expectedCycle"
+        ],
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "virtualKeyId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "expectedCycle": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "deadLetterId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "WebhookReplayResult": {
+        "required": [
+          "outcome",
+          "cycle"
+        ],
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string"
+          },
+          "cycle": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -34710,6 +35716,9 @@
     },
     {
       "name": "Media Cleanup"
+    },
+    {
+      "name": "Webhook recovery"
     },
     {
       "name": "Provider Credentials"

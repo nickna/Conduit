@@ -438,3 +438,36 @@ and removes its own PostgreSQL container, and writes JSON to
 deployment hardware before increasing concurrency; instance scaling without Redis
 also scales the fallback admission caps.
 
+## Final verification and tracked follow-ups
+
+The final gate passed 134 targeted unit/regression tests, 45 PostgreSQL/Redis/HTTP
+and process-recovery cases, 14 source-generated serialization compatibility cases,
+and the opt-in native Gateway/Admin case. The native case performs a real 503,
+persisted retry to a permanent 400, restricted inspection/error lookup, and a 202
+operator replay with the same receiver event ID. Both native images publish; both
+export OpenAPI, including all five recovery routes and their request/response
+schemas. Static handler generation has no drift. The analyzer audit reports zero
+first-party diagnostics; real native linking retains 147 first-party warnings,
+with no warning group above the existing linker baseline. All four new workload
+acceptance cases pass.
+
+The new Admin contract and WebAdmin-local types are regenerated. Contract
+generation is byte-stable across two isolated runs, and the checked-in contracts
+pass OpenAPI validation with the existing violation allowlist. Reproduce the
+Admin contract update with `npm run generate:admin:offline` in `tools/openapi`,
+then `npm run verify:offline` and `npm run validate:openapi`.
+
+Separate existing issues found during verification remain tracked:
+
+* [#1445](https://github.com/nickna/Conduit/issues/1445): Testcontainers pulls a
+  vulnerable SSH.NET test dependency.
+* [#1448](https://github.com/nickna/Conduit/issues/1448): Admin's outer middleware
+  rejects Bearer master keys; use the verified X-API-Key operator path.
+* [#1451](https://github.com/nickna/Conduit/issues/1451): the OpenAPI tooling
+  lockfile has three high-severity vulnerable development packages.
+* [#1452](https://github.com/nickna/Conduit/issues/1452): fresh Gateway audio
+  multipart schema export loses model/language/prompt, also on the unmodified
+  baseline and native export. Its existing accurate committed Gateway contract is
+  retained. Full `generate:offline` currently exposes that unrelated drift;
+  determinism verification compares fresh generations without replacing it.
+

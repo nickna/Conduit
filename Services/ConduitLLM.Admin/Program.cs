@@ -105,6 +105,8 @@ public partial class Program
         {
             builder.Services.AddScoped<ConduitLLM.Configuration.Interfaces.IModelAuthorRepository,
                 ConduitLLM.Configuration.Repositories.ModelAuthorRepository>();
+            builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IWebhookRecovery,
+                ConduitLLM.Messaging.Wolverine.WebhookDeliveryStore>();
             builder.Services.AddAuthorization(options =>
                 options.AddPolicy("MasterKeyPolicy", policy => policy.RequireAssertion(_ => true)));
             var openApiApp = builder.Build();
@@ -125,6 +127,7 @@ public partial class Program
             openApiApp.MapProviderSyncEndpoints();
             openApiApp.MapGlobalSettingsEndpoints();
             openApiApp.MapMediaEndpoints();
+            openApiApp.MapWebhookRecoveryEndpoints();
             ProviderCredentialsEndpoints.MapProviderCredentialsEndpoints(openApiApp);
             ModelEndpoints.MapModelEndpoints(openApiApp);
             VirtualKeyGroupsEndpoints.MapVirtualKeyGroupsEndpoints(openApiApp);
