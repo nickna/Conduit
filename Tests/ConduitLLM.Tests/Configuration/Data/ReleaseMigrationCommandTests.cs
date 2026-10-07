@@ -16,6 +16,7 @@ namespace ConduitLLM.Tests.Configuration.Data;
 /// server. CI supplies DATABASE_URL; local runs skip when it is absent.
 /// </summary>
 [Collection("MigrationEnvironment")]
+[Trait("Component", "ReleaseMigration")]
 public sealed class ReleaseMigrationCommandTests
 {
     [SkippableFact]

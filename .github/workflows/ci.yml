@@ -215,13 +215,17 @@ jobs:
           # isolated jobs above. Keep their infrastructure and timing-sensitive
           # state out of this shared validation job while retaining the core and
           # reflection-disabled serialization suites.
-          dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj --no-build --verbosity normal --filter "FullyQualifiedName!~IntegrationTests&Category!=TimingSensitive"
+          dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj --no-build --verbosity normal --filter "Component!=ReleaseMigration&Category!=TimingSensitive" --logger 'trx;LogFileName=core.trx' --results-directory artifacts/tests/core
           dotnet test Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj --no-build --verbosity normal
         env:
           TEST_REDIS_CONNECTION: localhost:6379
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
           CONDUIT_CACHE_TEST_REDIS: localhost:6379
           CONDUIT_CACHE_TEST_POSTGRES: Host=localhost;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
+
+      - name: Verify restored functional suite ownership
+        shell: pwsh
+        run: ./scripts/ci/verify-functional-results.ps1 -Results artifacts/tests/core/core.trx
 
       - name: Admin media request-delegate generation guard
         shell: pwsh
