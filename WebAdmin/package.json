@@ -16,6 +16,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "check:dead-code": "knip --include files,dependencies --no-progress",
+    "check:dependency-overrides": "node scripts/check-dependency-overrides.mjs --installed",
     "check:api-boundary": "node scripts/api-boundary-rules.test.mjs && node scripts/check-api-boundary.mjs",
     "check:admin-boundary": "npm run check:api-boundary"
   },
