@@ -55,3 +55,16 @@ empty inventory, and timeouts fail. Pending-model output and migration TRX are
 retained even on failure. The complete workflow is bounded to 30 minutes. A
 configured PostgreSQL database must be reachable; only local runs with no database
 configured may skip. CI explicitly promises the infrastructure.
+
+All active workflows default to `contents: read`, as do repository Actions tokens.
+Workflow tokens cannot approve PR reviews. CodeQL alone receives security-event
+write access; candidate/promotion jobs receive package write; the release job
+receives content write; merged-dev issue automation receives issue write and PR
+read. These intentional exceptions are scoped to their jobs/workflow.
+
+External actions use reviewed immutable revisions in `action-versions.json`, with
+human-readable version comments. Checkout/setup/cache/artifact/Docker actions now
+use their Node 24 releases, and CodeQL uses v4. Resolve updates from upstream tag
+commits, inspect action runtime metadata, update the inventory and workflow pins
+together, then run the pin regression test and actionlint. Group action updates
+under #1063's dependency automation ownership; archived workflows are inactive.
