@@ -38,7 +38,7 @@ jobs:
   required:
     name: CI required
     if: ${{ always() }}
-    needs: [source-ignore-guard, media-dispatch-integration, billing-fault-injection, billing-invariants, signalr-integration, aot-analyzers, validate, wolverine-two-host, docker, migrations, distributed-lock, codeql]
+    needs: [source-ignore-guard, media-dispatch-integration, billing-fault-injection, billing-invariants, signalr-integration, aot-analyzers, validate, wolverine-two-host, docker, s3-storage, migrations, distributed-lock, codeql]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -143,9 +143,21 @@ jobs:
           suite: signalr
           filter: Component=SignalR
 
-  # Provider and critical-path integration suites remain manual: they require
-  # already-running Conduit services plus provider credentials. The SignalR
-  # component is self-contained through Testcontainers and is required in CI.
+  s3-storage:
+    name: S3 video operations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj
+          suite: s3-storage
+          filter: Component=S3Storage
+          minimum: '3'
 
   aot-analyzers:
     name: NativeAOT analyzer ratchet
@@ -243,7 +255,7 @@ jobs:
           coverage: 'true'
           filter: Component!=ReleaseMigration
           minimum: '3752'
-          maximum-skips: '6'
+          maximum-skips: '3'
         env:
           TEST_REDIS_CONNECTION: localhost:6379
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
@@ -426,41 +438,50 @@ jobs:
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
           REDIS_URL: redis://localhost:6379
 
-  # Build Docker images for validation only — never pushed from CI.
-  # All image publishing happens from `v*` tags in release.yml.
+  # Build and execute the same packaged applications used by release candidates.
   docker:
-    name: Docker - ${{ matrix.service }}
+    name: Packaged application business flows
     runs-on: ubuntu-latest
-    needs: validate
-    permissions:
-      contents: read
-    strategy:
-      matrix:
-        include:
-          - service: webadmin
-            context: .
-            dockerfile: WebAdmin/Dockerfile
-          - service: http
-            context: .
-            dockerfile: Services/ConduitLLM.Gateway/Dockerfile
-          - service: admin
-            context: .
-            dockerfile: Services/ConduitLLM.Admin/Dockerfile
-
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      # Dockerfile and production-build breakage (notably WebAdmin's `next build`,
-      # which runs nowhere else in CI) before it can reach a release.
-      - name: Build (validation only, no push)
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build admin production image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
+          context: .
+          file: Services/ConduitLLM.Admin/Dockerfile
           platforms: linux/amd64
-          push: false
-          tags: conduit-${{ matrix.service }}:ci
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+          load: true
+          tags: conduit-admin:ci
+          cache-from: type=gha,scope=admin
+          cache-to: type=gha,scope=admin,mode=max
+      - name: Build http production image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Services/ConduitLLM.Gateway/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: conduit-http:ci
+          cache-from: type=gha,scope=http
+          cache-to: type=gha,scope=http,mode=max
+      - name: Build webadmin production image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: WebAdmin/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: conduit-webadmin:ci
+          cache-from: type=gha,scope=webadmin
+          cache-to: type=gha,scope=webadmin,mode=max
+      - name: Execute packaged business flows
+        run: node scripts/ci/container-smoke.mjs
+      - name: Retain packaged execution evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: packaged-application-evidence
+          path: artifacts/container-smoke
+          retention-days: 30

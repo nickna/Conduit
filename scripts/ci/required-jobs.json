@@ -10,5 +10,6 @@
   "docker",
   "migrations",
   "distributed-lock",
-  "codeql"
+  "codeql",
+  "s3-storage"
 ]

@@ -27,6 +27,20 @@ namespace ConduitLLM.SerializationTests;
 
 public sealed class SourceGeneratedJsonCompatibilityTests
 {
+    [Fact]
+    public void Redis_virtual_key_omits_cyclic_navigation_graphs_and_preserves_group_policy()
+    {
+        var group = new VirtualKeyGroup { Id = 7, GroupName = "CI", Balance = 2.5m, RateLimitRpm = 50 };
+        var key = new VirtualKey { Id = 8, KeyHash = "ci-hash", VirtualKeyGroupId = 7, VirtualKeyGroup = group };
+        group.VirtualKeys.Add(key);
+        var json = JsonSerializer.Serialize(key, GatewayRedisJsonContext.CachedVirtualKey);
+        Assert.DoesNotContain("VirtualKeys", json);
+        var restored = JsonSerializer.Deserialize(json, GatewayRedisJsonContext.CachedVirtualKey)!;
+        Assert.Equal(key.KeyHash, restored.KeyHash);
+        Assert.Equal(2.5m, restored.VirtualKeyGroup.Balance);
+        Assert.Equal(50, restored.VirtualKeyGroup.RateLimitRpm);
+    }
+
     private static readonly DateTime FixtureTime =
         new(2026, 7, 27, 12, 34, 56, DateTimeKind.Utc);
 

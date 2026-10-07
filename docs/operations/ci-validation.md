@@ -103,3 +103,14 @@ The explicit `.runsettings` removes broad Program/Startup/test-name exclusions;
 migrations and build/generated outputs remain excluded. Jest excludes generated
 contract types, which have separate generation/drift validation. The unused
 `coverlet.json` threshold is retired.
+
+
+Packaged business and S3 proof (#1437)
+
+The required Docker job loads the production Admin/Gateway images, migrates a fresh PostgreSQL database, and runs authenticated public-API flows against Redis and a deterministic local OpenAI-compatible provider. It verifies exact asynchronous charges, non-billable malformed/unknown-model/provider errors, recovery, RPM/RPD limits, depleted balance, key disable/enable, routing and cross-host discovery invalidation. No paid credentials are used. All containers belong to a unique run and are removed after logs and image identities are retained.
+
+`scripts/ci/critical-path-map.json` assigns each of the 30 legacy facts to a required replacement or a justified manual lane. Its regression fails when any fact loses ownership. The legacy external harness has known false positives (#1464) and is not accepted as automated evidence. Paid-provider checks require explicit operator opt-in, a dedicated account/key with a hard provider spending ceiling, a request/time budget, and an isolated scheduled/manual deployment. They must never inherit production credentials from a PR.
+
+The three permanently skipped AWS mocking cases have been replaced by Component=S3Storage against isolated MinIO: actual small video upload, complete stream bytes/bounds, and partial stream bytes/bounds. Missing emulator infrastructure fails the lane; it cannot report a skip. Unit multipart/short-read checks remain.
+
+The packaged flow exposed Admin's missing capability-service registration (#1462) and cyclic EF graphs preventing Redis virtual-key writes (#1463). Those fixes are covered by real endpoint execution and a reflection-disabled serialization regression. The separate catalog importer retry transaction bug is tracked in #1459.

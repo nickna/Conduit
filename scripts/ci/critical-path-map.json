@@ -1,0 +1,127 @@
+{
+  "VirtualKey_CreateAndValidate_SucceedsWithValidCredentials": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "VirtualKey_Disabled_ReturnsUnauthorized": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "VirtualKey_ZeroBalance_Returns402PaymentRequired": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "RateLimitRPM_ExceedsLimit_Returns429WithRetryAfter": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "RateLimitRPD_ExceedsLimit_Returns429": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "SpendTracking_AfterChatRequest_DeductsCorrectAmount": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "SpendTracking_BatchFlush_UpdatesBalanceCorrectly": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "AuthFromBearerToken_ValidatesSuccessfully": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "AuthFromXApiKeyHeader_ValidatesSuccessfully": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "AuthMissing_Returns401Unauthorized": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "AuthInvalidToken_Returns401Unauthorized": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "RedisUnavailable_HealthEndpointsStillWork": {
+    "lane": "manual",
+    "owner": "Deployment-specific Redis chaos run; follow-up #1464",
+    "reason": "Legacy expectations mix fail-open and fail-closed configurations. Stop/restart a dedicated deployment Redis only in an isolated chaos environment and assert its configured policy. The required main Fusion cache suite separately exercises Redis disconnect/reconnect and missed backplane convergence."
+  },
+  "RedisUnavailable_CircuitOpens_Returns503": {
+    "lane": "manual",
+    "owner": "Deployment-specific Redis chaos run; follow-up #1464",
+    "reason": "Legacy expectations mix fail-open and fail-closed configurations. Stop/restart a dedicated deployment Redis only in an isolated chaos environment and assert its configured policy. The required main Fusion cache suite separately exercises Redis disconnect/reconnect and missed backplane convergence."
+  },
+  "RedisRecovery_CircuitCloses_NormalOperation": {
+    "lane": "manual",
+    "owner": "Deployment-specific Redis chaos run; follow-up #1464",
+    "reason": "Legacy expectations mix fail-open and fail-closed configurations. Stop/restart a dedicated deployment Redis only in an isolated chaos environment and assert its configured policy. The required main Fusion cache suite separately exercises Redis disconnect/reconnect and missed backplane convergence."
+  },
+  "RedisDown_RequestsStillProcessed_GracefulFallback": {
+    "lane": "manual",
+    "owner": "Deployment-specific Redis chaos run; follow-up #1464",
+    "reason": "Legacy expectations mix fail-open and fail-closed configurations. Stop/restart a dedicated deployment Redis only in an isolated chaos environment and assert its configured policy. The required main Fusion cache suite separately exercises Redis disconnect/reconnect and missed backplane convergence."
+  },
+  "RedisFlush_ClearsCachedData_TestIsolation": {
+    "lane": "required",
+    "owner": "Packaged smoke: fresh disposable Redis per run; main Fusion cache integration tests"
+  },
+  "ProviderWithInvalidKey_FailsGracefully": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "ProviderDisabled_Returns404": {
+    "lane": "required",
+    "owner": "Required main DatabaseAwareLLMClientFactoryTests.GetClientForChatAsync_WithDisabledProvider_ThrowsModelNotFoundException"
+  },
+  "ModelMappingDisabled_Returns404": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "ConsecutiveFailures_StillAcceptsRequests": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "RecoveryAfterFailure_SuccessfulRequest": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "ProviderTimeout_ReturnsGatewayTimeout": {
+    "lane": "manual",
+    "owner": "Provider-specific timeout acceptance; follow-up #1464",
+    "reason": "The legacy fact only prints settings and never induces a timeout. Vendor-specific long requests require a dedicated provider account, explicit timeout and spending ceiling; the required local smoke uses bounded requests and failures without incurring provider charges."
+  },
+  "ChatCompletion_NonStreaming_ReturnsCompleteResponse": {
+    "lane": "required",
+    "owner": "Required Component=OpenAiSdkSmoke: official Python/JavaScript clients against real Gateway streaming and final usage"
+  },
+  "ChatCompletion_Streaming_ReturnsSSEEvents": {
+    "lane": "required",
+    "owner": "Required Component=OpenAiSdkSmoke: official Python/JavaScript clients against real Gateway streaming and final usage"
+  },
+  "ChatCompletion_Streaming_ExtractsUsageFromFinalChunk": {
+    "lane": "required",
+    "owner": "Required Component=OpenAiSdkSmoke: official Python/JavaScript clients against real Gateway streaming and final usage"
+  },
+  "ModelRouting_ValidAlias_RoutesToCorrectProvider": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "ModelRouting_UnknownModel_Returns404": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "ClientError_400BadRequest_DoesNotDeductSpend": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "RateLimited_429_DoesNotDeductSpend": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  },
+  "Success_200_DeductsSpend": {
+    "lane": "required",
+    "owner": "scripts/ci/container-smoke.mjs"
+  }
+}
