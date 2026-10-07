@@ -17,6 +17,25 @@ public sealed class AuthoritativeContractTests : IDisposable
     private readonly JsonDocument _gateway = LoadContract("Services", "ConduitLLM.Gateway", "openapi-gateway.json");
 
     [Fact]
+    public void Contracts_UseCanonicalLineEndingsInSchemaDocumentation()
+    {
+        foreach (var document in new[] { _admin, _gateway })
+        {
+            foreach (var component in document.RootElement.GetProperty("components").GetProperty("schemas").EnumerateObject())
+            {
+                var schemas = new List<JsonElement> { component.Value };
+                if (component.Value.TryGetProperty("properties", out var properties))
+                    schemas.AddRange(properties.EnumerateObject().Select(property => property.Value));
+                foreach (var schema in schemas)
+                {
+                    if (schema.TryGetProperty("description", out var value))
+                        value.GetString().Should().NotContain("\r", "documentation must export identically on Windows and Linux");
+                }
+            }
+        }
+    }
+
+    [Fact]
     public void Contracts_PublishStableGeneratedAndExplicitOperationIds()
     {
         Operation(_admin, "/v1/admin/virtual-keys", "get").GetProperty("operationId").GetString()

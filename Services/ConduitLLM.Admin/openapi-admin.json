@@ -25847,7 +25847,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "Secret-valued structured settings declared by the provider type (for example an AWS secret\r\naccess key), keyed by setting key. Stored encrypted and never returned by any read."
+            "description": "Secret-valued structured settings declared by the provider type (for example an AWS secret\naccess key), keyed by setting key. Stored encrypted and never returned by any read."
           },
           "isPrimary": {
             "type": "boolean"
@@ -27816,7 +27816,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "Identifier for the incident. Derived from the incident's subject and window rather than\r\nrandomly generated, so the same incident keeps the same id across dashboard polls."
+            "description": "Identifier for the incident. Derived from the incident's subject and window rather than\nrandomly generated, so the same incident keeps the same id across dashboard polls."
           },
           "title": {
             "type": "string",
@@ -27849,7 +27849,7 @@
           },
           "affectedService": {
             "type": "string",
-            "description": "Identifier of the affected service, matching an entry in the service health response\r\n(e.g. core-api)."
+            "description": "Identifier of the affected service, matching an entry in the service health response\n(e.g. core-api)."
           },
           "affectedModel": {
             "type": [
@@ -28741,7 +28741,7 @@
               "null",
               "string"
             ],
-            "description": "The timestamp of the last cleanup run (UTC).\r\nNull if no cleanup has run yet.",
+            "description": "The timestamp of the last cleanup run (UTC).\nNull if no cleanup has run yet.",
             "format": "date-time"
           },
           "lastRunStatus": {
@@ -28891,7 +28891,7 @@
               "null",
               "integer"
             ],
-            "description": "Simple retention override in days.\r\nWhen set, all media is deleted after this many days regardless of account balance.\r\nNull means using policy-based retention.",
+            "description": "Simple retention override in days.\nWhen set, all media is deleted after this many days regardless of account balance.\nNull means using policy-based retention.",
             "format": "int32"
           },
           "isSimpleRetentionOverrideActive": {
@@ -28899,7 +28899,7 @@
             "description": "Whether the simple retention override is active."
           }
         },
-        "description": "Status information for the media cleanup service.\r\nProvides operational visibility into cleanup runs, budget usage, and configuration."
+        "description": "Status information for the media cleanup service.\nProvides operational visibility into cleanup runs, budget usage, and configuration."
       },
       "MediaDeletionResponseDto": {
         "type": "object",
@@ -30091,7 +30091,7 @@
               "null",
               "integer"
             ],
-            "description": "The provider type that uses this identifier as an enum value\r\n(OpenAI = 1, Groq = 2, Replicate = 3, etc.)",
+            "description": "The provider type that uses this identifier as an enum value\n(OpenAI = 1, Groq = 2, Replicate = 3, etc.)",
             "format": "int32"
           },
           "isPrimary": {
@@ -32153,10 +32153,10 @@
               "null",
               "string"
             ],
-            "description": "Optional regular-expression source the value must match. The backend remains authoritative;\r\nclients use this only to fail fast before submitting."
+            "description": "Optional regular-expression source the value must match. The backend remains authoritative;\nclients use this only to fail fast before submitting."
           }
         },
-        "description": "A single structured, provider-scoped setting an operator supplies in addition to the API key\r\n(for example a Cloudflare account ID)."
+        "description": "A single structured, provider-scoped setting an operator supplies in addition to the API key\n(for example a Cloudflare account ID)."
       },
       "ProviderSettingsSchemaDto": {
         "type": "object",
@@ -32208,7 +32208,7 @@
             "description": "The declared settings, in the order they should be presented."
           }
         },
-        "description": "The configuration and presentation metadata a provider type declares, projected from the\r\nbackend provider registry so administrative UIs do not maintain a second provider catalog."
+        "description": "The configuration and presentation metadata a provider type declares, projected from the\nbackend provider registry so administrative UIs do not maintain a second provider catalog."
       },
       "ProviderSyncRunDto": {
         "required": [
@@ -33021,7 +33021,7 @@
               "null",
               "string"
             ],
-            "description": "Logical service version, `mixed` when active instances do not match, or null\r\nfor dependencies that do not expose an application version."
+            "description": "Logical service version, `mixed` when active instances do not match, or null\nfor dependencies that do not expose an application version."
           },
           "instances": {
             "type": "array",
@@ -33036,7 +33036,7 @@
               "null",
               "string"
             ],
-            "description": "How long the service has been running, or `null` when it is not known\r\n(e.g. a service reporting via heartbeat that has not been seen yet)."
+            "description": "How long the service has been running, or `null` when it is not known\n(e.g. a service reporting via heartbeat that has not been seen yet)."
           },
           "lastCheck": {
             "type": "string",
@@ -33048,7 +33048,7 @@
               "null",
               "integer"
             ],
-            "description": "Health check response time in milliseconds, or `null` when a response time is\r\nnot applicable (e.g. liveness derived from a heartbeat rather than a probe).",
+            "description": "Health check response time in milliseconds, or `null` when a response time is\nnot applicable (e.g. liveness derived from a heartbeat rather than a probe).",
             "format": "int32"
           },
           "details": {
@@ -33690,7 +33690,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "Secret-valued structured settings. Object members merge recursively; null removes the\r\nentire settings object or an individual member at that member's path."
+            "description": "Secret-valued structured settings. Object members merge recursively; null removes the\nentire settings object or an individual member at that member's path."
           },
           "isPrimary": {
             "type": [
@@ -34052,7 +34052,7 @@
               "null",
               "boolean"
             ],
-            "description": "Clears directional metadata and marks it unknown. This is distinct from\r\nsupplying empty arrays, which explicitly means no modalities are supported."
+            "description": "Clears directional metadata and marks it unknown. This is distinct from\nsupplying empty arrays, which explicitly means no modalities are supported."
           },
           "supportsChat": {
             "type": [
@@ -34671,7 +34671,7 @@
           "parameterSchema": {
             "type": "object",
             "additionalProperties": { },
-            "description": "Optional parameter schema JSON for standalone validation. The model-cost-scoped\r\nendpoint ignores this value and uses persisted associated-model schemas."
+            "description": "Optional parameter schema JSON for standalone validation. The model-cost-scoped\nendpoint ignores this value and uses persisted associated-model schemas."
           }
         },
         "description": "Request model for validating pricing rules"
