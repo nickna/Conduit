@@ -68,3 +68,16 @@ use their Node 24 releases, and CodeQL uses v4. Resolve updates from upstream ta
 commits, inspect action runtime metadata, update the inventory and workflow pins
 together, then run the pin regression test and actionlint. Group action updates
 under #1063's dependency automation ownership; archived workflows are inactive.
+
+All 23 formerly excluded `TimingSensitive` methods now run in ordinary CI. Ten
+calculate supplied durations; eleven test streaming metrics with FakeTimeProvider;
+two test invalidation dispatch with controlled timers/explicit completion. The
+checked-in timing inventory guards every method, including theory discovery.
+Liveness waits have generous ten-second bounds and never assert machine speed.
+The restored suite also fixes first-token timestamp zero losing an interval (#1458).
+
+MediaGallery's ordinary Jest tests assert rendered cards, virtualization decisions,
+updates, and empty states without wall-clock thresholds. The unused all-tests
+performance Jest configuration is retired. Actual browser timings belong to the
+packaged browser lane; unit/jsdom timings are not rendering-performance evidence.
+Relative test globs fix Windows `.codex` worktree discovery (#1457).

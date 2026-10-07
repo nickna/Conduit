@@ -219,7 +219,7 @@ jobs:
           # isolated jobs above. Keep their infrastructure and timing-sensitive
           # state out of this shared validation job while retaining the core and
           # reflection-disabled serialization suites.
-          dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj --no-build --verbosity normal --filter "Component!=ReleaseMigration&Category!=TimingSensitive" --logger 'trx;LogFileName=core.trx' --results-directory artifacts/tests/core
+          dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj --no-build --verbosity normal --filter "Component!=ReleaseMigration" --logger 'trx;LogFileName=core.trx' --results-directory artifacts/tests/core
           dotnet test Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj --no-build --verbosity normal
         env:
           TEST_REDIS_CONNECTION: localhost:6379

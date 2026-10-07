@@ -16,3 +16,9 @@ foreach ($suite in $inventory.Keys) {
     }
     Write-Host "$suite : $($methods.Count) methods executed"
 }
+$timingInventory = Get-Content (Join-Path $PSScriptRoot 'timing-inventory.json') -Raw | ConvertFrom-Json
+$executedMethods = @($executed | ForEach-Object { "$($definitions[$_.testId].className).$($definitions[$_.testId].name)" })
+foreach ($method in $timingInventory) {
+    if ($method -notin $executedMethods) { throw "Restored timing method did not execute: $method" }
+}
+Write-Host "All $($timingInventory.Count) previously excluded timing methods executed."

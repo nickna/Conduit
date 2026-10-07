@@ -7,7 +7,6 @@ namespace ConduitLLM.Tests.Core.Services
     public partial class PerformanceMetricsServiceTests
     {
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void CreateStreamingTracker_CreatesValidTracker()
         {
             // Act
@@ -19,12 +18,11 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void StreamingTracker_RecordFirstToken_RecordsTimeToFirstToken()
         {
             // Arrange
             var tracker = _service.CreateStreamingTracker("OpenAI", "gpt-4");
-            Thread.Sleep(50);
+            _clock.Advance(TimeSpan.FromMilliseconds(50));
 
             // Act
             tracker.RecordFirstToken();
@@ -39,7 +37,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void StreamingTracker_RecordFirstToken_OnlyRecordsOnce()
         {
             // Arrange
@@ -47,7 +44,7 @@ namespace ConduitLLM.Tests.Core.Services
             
             // Act
             tracker.RecordFirstToken();
-            Thread.Sleep(100);
+            _clock.Advance(TimeSpan.FromMilliseconds(100));
             tracker.RecordFirstToken(); // Should be ignored
             var metrics = tracker.GetMetrics();
 
@@ -57,7 +54,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void StreamingTracker_RecordToken_TracksTokens()
         {
             // Arrange
@@ -67,7 +63,7 @@ namespace ConduitLLM.Tests.Core.Services
             // Act
             for (int i = 0; i < 10; i++)
             {
-                Thread.Sleep(10);
+                _clock.Advance(TimeSpan.FromMilliseconds(10));
                 tracker.RecordToken();
             }
             var metrics = tracker.GetMetrics();
@@ -78,7 +74,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void StreamingTracker_CalculatesInterTokenLatency()
         {
             // Arrange
@@ -88,7 +83,7 @@ namespace ConduitLLM.Tests.Core.Services
             // Act
             for (int i = 0; i < 5; i++)
             {
-                Thread.Sleep(20);
+                _clock.Advance(TimeSpan.FromMilliseconds(20));
                 tracker.RecordToken();
             }
             var metrics = tracker.GetMetrics();
@@ -101,14 +96,13 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void StreamingTracker_NoTokens_ReturnsBasicMetrics()
         {
             // Arrange
             var tracker = _service.CreateStreamingTracker("OpenAI", "gpt-4");
 
             // Act
-            Thread.Sleep(10);
+            _clock.Advance(TimeSpan.FromMilliseconds(10));
             var metrics = tracker.GetMetrics();
 
             // Assert
@@ -119,7 +113,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void StreamingTracker_WithUsageData_UsesActualTokenCounts()
         {
             // Arrange
@@ -136,7 +129,7 @@ namespace ConduitLLM.Tests.Core.Services
             };
 
             // Act
-            Thread.Sleep(100);
+            _clock.Advance(TimeSpan.FromMilliseconds(100));
             var metrics = tracker.GetMetrics(usage);
 
             // Assert
@@ -148,7 +141,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void StreamingTracker_PromptTokensPerSecond_RequiresTimeToFirstToken()
         {
             // Arrange
@@ -163,6 +155,7 @@ namespace ConduitLLM.Tests.Core.Services
             };
 
             // Act
+            _clock.Advance(TimeSpan.FromMilliseconds(100));
             var metrics = tracker.GetMetrics(usage);
 
             // Assert
@@ -171,7 +164,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void StreamingTracker_VeryFastTokenGeneration_HandlesHighThroughput()
         {
             // Arrange
@@ -183,7 +175,7 @@ namespace ConduitLLM.Tests.Core.Services
             {
                 tracker.RecordToken();
             }
-            Thread.Sleep(10); // Ensure some elapsed time
+            _clock.Advance(TimeSpan.FromMilliseconds(10)); // Ensure some elapsed time
             var metrics = tracker.GetMetrics();
 
             // Assert
@@ -192,7 +184,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void StreamingTracker_SingleToken_NoInterTokenLatency()
         {
             // Arrange
@@ -207,7 +198,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void StreamingTracker_MultipleCalls_StopsTimerOnFirstGetMetrics()
         {
             // Arrange
@@ -216,11 +206,23 @@ namespace ConduitLLM.Tests.Core.Services
 
             // Act
             var firstMetrics = tracker.GetMetrics();
-            Thread.Sleep(100); // Wait
+            _clock.Advance(TimeSpan.FromMilliseconds(100)); // Wait
             var secondMetrics = tracker.GetMetrics();
 
             // Assert
             Assert.Equal(firstMetrics.TotalLatencyMs, secondMetrics.TotalLatencyMs);
+        }
+
+        [Fact]
+        public void StreamingTracker_FirstTokenAtZero_PreservesFirstInterval()
+        {
+            var tracker = _service.CreateStreamingTracker("OpenAI", "gpt-4");
+            tracker.RecordFirstToken();
+            _clock.Advance(TimeSpan.FromMilliseconds(10));
+            tracker.RecordToken();
+            _clock.Advance(TimeSpan.FromMilliseconds(30));
+            tracker.RecordToken();
+            Assert.Equal(20, tracker.GetMetrics().AvgInterTokenLatencyMs);
         }
 
         [Fact(Skip = "StreamingMetricsTracker is not thread-safe by design - it's meant to be used from a single streaming context")]

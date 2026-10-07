@@ -21,6 +21,7 @@
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Moq" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Moq.Contrib.HttpClient" />
     <!-- Test-only hosts exercise dynamic Wolverine configurations independently
          of the production services' committed static adapters. -->
