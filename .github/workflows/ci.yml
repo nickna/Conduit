@@ -450,6 +450,7 @@ jobs:
           npm run type-check
           npm run check:api-boundary
           node --test scripts/check-runtime-dependencies.test.mjs
+          node --test scripts/coverage-config.test.mjs
           npm run test:coverage -- --runInBand --json --outputFile=coverage/test-results.json
           node ../scripts/ci/jest-evidence.mjs coverage/test-results.json
           python ../scripts/ci/coverage-ratchet.py jest coverage/coverage-final.json
