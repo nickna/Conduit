@@ -8,6 +8,6 @@
     "owner": "@nickna",
     "reason": "Repository owner approved a temporary exception in the epic implementation chat on 2026-10-07. Development-only Next ESLint/Stylelint dependency processes repository-controlled glob patterns; no patched npm version exists and the production standalone image was inspected and contains no braces package. Jest no longer depends on braces. Remove when upstream patches it.",
     "expires": "2026-11-06",
-    "approval": "https://github.com/nickna/Conduit/issues/1467"
+    "approval": "https://github.com/nickna/Conduit/issues/1467#issuecomment-6030023231"
   }
 ]
