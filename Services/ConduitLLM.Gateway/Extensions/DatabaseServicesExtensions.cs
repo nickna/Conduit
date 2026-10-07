@@ -2,6 +2,9 @@ using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Interceptors;
 using ConduitLLM.Core.Data;
 using Microsoft.EntityFrameworkCore;
+#if CONDUIT_NATIVE_AOT
+using Npgsql;
+#endif
 
 namespace ConduitLLM.Gateway.Extensions;
 
@@ -25,6 +28,13 @@ public static class DatabaseServicesExtensions
         {
             throw new InvalidOperationException($"Only PostgreSQL is supported. Invalid provider: {dbProvider}");
         }
+
+#if CONDUIT_NATIVE_AOT
+        // Native request paths use fixed-shape Npgsql repositories rather than EF query
+        // composition. Other Gateway slices still register EF while their boundaries are
+        // extracted incrementally, so keep this data source independent for now.
+        services.AddSingleton(_ => NpgsqlDataSource.Create(dbConnectionString));
+#endif
 
         // Register DbContext Factory with query monitoring interceptor
         services.AddDbContextFactory<ConduitDbContext>((sp, options) =>

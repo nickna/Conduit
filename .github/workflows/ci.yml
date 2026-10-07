@@ -220,6 +220,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify generated compiled-model normalization
+        shell: pwsh
+        run: ./scripts/aot/normalize-compiled-model.ps1 -Check
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -231,6 +234,9 @@ jobs:
       - name: Run analyzer-only AOT audit
         shell: pwsh
         run: ./scripts/aot/aot-audit.ps1 -NoRestore
+      - name: Verify native promotion gate contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-promotion.ps1
       - name: Add diagnostic counts to job summary
         if: always()
         shell: pwsh

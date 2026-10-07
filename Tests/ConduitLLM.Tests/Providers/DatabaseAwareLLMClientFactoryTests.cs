@@ -11,6 +11,8 @@ using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Providers;
 using ConduitLLM.Providers.OpenAI;
 using ConduitLLM.Providers.Vertex;
+using ConduitLLM.Persistence;
+using ConduitLLM.Persistence.Interfaces;
 
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging;
@@ -148,6 +150,46 @@ namespace ConduitLLM.Tests.Providers
 
             await Assert.ThrowsAsync<ServiceUnavailableException>(
                 () => _factory.GetClientForChatAsync(request));
+        }
+
+        [Fact]
+        public async Task GetClientForChatAsync_UsesRuntimeStoreForPersistedRoutePolicy()
+        {
+            var request = NewChatRequest();
+            _mockMappingService.Setup(x => x.GetMappingsByModelAliasAsync(request.Model))
+                .ReturnsAsync([NewRoutableMapping(1)]);
+            _mockCredentialService.Setup(x => x.GetProviderByIdAsync(1))
+                .ReturnsAsync((Provider?)null);
+            var runtimeStore = new Mock<IModelProviderMappingRuntimeStore>();
+            runtimeStore.Setup(store => store.GetRoutePolicyAsync(
+                    request.Model, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ModelRoutePolicyRuntimeRecord
+                {
+                    Id = 4,
+                    ModelAlias = request.Model,
+                    Strategy = "Balanced",
+                    CostWeight = 0.6m,
+                    SpeedWeight = 0.2m,
+                    QualityWeight = 0.2m,
+                    CacheAffinityEnabled = false,
+                    AffinityTtlSeconds = 600,
+                    MaxAffinityScorePenalty = 0.05m,
+                    IsEnabled = true
+                });
+            var factory = new DatabaseAwareLLMClientFactory(
+                _mockCredentialService.Object,
+                _mockMappingService.Object,
+                _mockLoggerFactory.Object,
+                _mockHttpClientFactory.Object,
+                _mockLogger.Object,
+                Mock.Of<IServiceProvider>(),
+                runtimeMappingStore: runtimeStore.Object);
+
+            await Assert.ThrowsAsync<ServiceUnavailableException>(
+                () => factory.GetClientForChatAsync(request));
+
+            runtimeStore.Verify(store => store.GetRoutePolicyAsync(
+                request.Model, It.IsAny<CancellationToken>()), Times.Once);
         }
 
         private static ConduitLLM.Core.Models.ChatCompletionRequest NewChatRequest() => new()

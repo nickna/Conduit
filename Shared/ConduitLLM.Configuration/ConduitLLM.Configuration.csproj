@@ -35,6 +35,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ConduitLLM.Contracts\ConduitLLM.Contracts.csproj" />
     <ProjectReference Include="..\ConduitLLM.Functions\ConduitLLM.Functions.csproj" />
+    <ProjectReference Include="..\ConduitLLM.Persistence.Abstractions\ConduitLLM.Persistence.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>

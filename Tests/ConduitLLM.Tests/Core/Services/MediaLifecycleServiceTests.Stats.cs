@@ -1,5 +1,4 @@
-using ConduitLLM.Configuration.Entities;
-using ConduitLLM.Configuration.Models;
+using ConduitLLM.Persistence;
 
 using Moq;
 
@@ -14,17 +13,17 @@ namespace ConduitLLM.Tests.Core.Services
         {
             // Arrange
             var storageKey = "image/test.jpg";
-            var mediaRecord = new MediaRecord
+            var mediaRecord = new MediaRuntimeRecord
             {
                 Id = Guid.NewGuid(),
                 StorageKey = storageKey,
                 AccessCount = 5
             };
 
-            _mockMediaRepository.Setup(x => x.GetByStorageKeyAsync(storageKey))
+            _mockMediaStore.Setup(x => x.GetByStorageKeyAsync(storageKey, false, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(mediaRecord);
 
-            _mockMediaRepository.Setup(x => x.UpdateAccessStatsAsync(mediaRecord.Id))
+            _mockMediaStore.Setup(x => x.UpdateAccessStatsAsync(mediaRecord.Id, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
 
             // Act
@@ -32,8 +31,8 @@ namespace ConduitLLM.Tests.Core.Services
 
             // Assert
             Assert.True(result);
-            _mockMediaRepository.Verify(x => x.GetByStorageKeyAsync(storageKey), Times.Once);
-            _mockMediaRepository.Verify(x => x.UpdateAccessStatsAsync(mediaRecord.Id), Times.Once);
+            _mockMediaStore.Verify(x => x.GetByStorageKeyAsync(storageKey, false, It.IsAny<CancellationToken>()), Times.Once);
+            _mockMediaStore.Verify(x => x.UpdateAccessStatsAsync(mediaRecord.Id, It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Fact]
@@ -42,16 +41,16 @@ namespace ConduitLLM.Tests.Core.Services
             // Arrange
             var storageKey = "image/non-existent.jpg";
 
-            _mockMediaRepository.Setup(x => x.GetByStorageKeyAsync(storageKey))
-                .ReturnsAsync((MediaRecord)null);
+            _mockMediaStore.Setup(x => x.GetByStorageKeyAsync(storageKey, false, It.IsAny<CancellationToken>()))
+                .ReturnsAsync((MediaRuntimeRecord?)null);
 
             // Act
             var result = await _service.UpdateAccessStatsAsync(storageKey);
 
             // Assert
             Assert.False(result);
-            _mockMediaRepository.Verify(x => x.GetByStorageKeyAsync(storageKey), Times.Once);
-            _mockMediaRepository.Verify(x => x.UpdateAccessStatsAsync(It.IsAny<Guid>()), Times.Never);
+            _mockMediaStore.Verify(x => x.GetByStorageKeyAsync(storageKey, false, It.IsAny<CancellationToken>()), Times.Once);
+            _mockMediaStore.Verify(x => x.UpdateAccessStatsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Theory]
@@ -65,7 +64,10 @@ namespace ConduitLLM.Tests.Core.Services
 
             // Assert
             Assert.False(result);
-            _mockMediaRepository.Verify(x => x.GetByStorageKeyAsync(It.IsAny<string>()), Times.Never);
+            _mockMediaStore.Verify(x => x.GetByStorageKeyAsync(
+                It.IsAny<string>(),
+                It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Fact]
@@ -74,7 +76,7 @@ namespace ConduitLLM.Tests.Core.Services
             // Arrange
             var storageKey = "image/test.jpg";
 
-            _mockMediaRepository.Setup(x => x.GetByStorageKeyAsync(storageKey))
+            _mockMediaStore.Setup(x => x.GetByStorageKeyAsync(storageKey, false, It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new Exception("Repository error"));
 
             // Act
@@ -93,23 +95,23 @@ namespace ConduitLLM.Tests.Core.Services
         {
             // Arrange
             var virtualKeyId = 1;
-            var mediaRecords = new List<MediaRecord>
+            var mediaRecords = new List<MediaRuntimeRecord>
             {
-                new MediaRecord 
+                new MediaRuntimeRecord
                 { 
                     Id = Guid.NewGuid(), 
                     VirtualKeyId = virtualKeyId, 
                     MediaType = "image", 
                     SizeBytes = 1024 
                 },
-                new MediaRecord 
+                new MediaRuntimeRecord
                 { 
                     Id = Guid.NewGuid(), 
                     VirtualKeyId = virtualKeyId, 
                     MediaType = "image", 
                     SizeBytes = 2048 
                 },
-                new MediaRecord 
+                new MediaRuntimeRecord
                 { 
                     Id = Guid.NewGuid(), 
                     VirtualKeyId = virtualKeyId, 
@@ -118,7 +120,7 @@ namespace ConduitLLM.Tests.Core.Services
                 }
             };
 
-            _mockMediaRepository.Setup(x => x.GetByVirtualKeyIdAsync(virtualKeyId))
+            _mockMediaStore.Setup(x => x.GetByVirtualKeyIdAsync(virtualKeyId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(mediaRecords);
 
             // Act
@@ -143,8 +145,8 @@ namespace ConduitLLM.Tests.Core.Services
             // Arrange
             var virtualKeyId = 1;
 
-            _mockMediaRepository.Setup(x => x.GetByVirtualKeyIdAsync(virtualKeyId))
-                .ReturnsAsync(new List<MediaRecord>());
+            _mockMediaStore.Setup(x => x.GetByVirtualKeyIdAsync(virtualKeyId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<MediaRuntimeRecord>());
 
             // Act
             var result = await _service.GetStorageStatsByVirtualKeyAsync(virtualKeyId);
@@ -162,16 +164,16 @@ namespace ConduitLLM.Tests.Core.Services
         {
             // Arrange
             var virtualKeyId = 1;
-            var mediaRecords = new List<MediaRecord>
+            var mediaRecords = new List<MediaRuntimeRecord>
             {
-                new MediaRecord 
+                new MediaRuntimeRecord
                 { 
                     Id = Guid.NewGuid(), 
                     VirtualKeyId = virtualKeyId, 
                     MediaType = "image", 
                     SizeBytes = null 
                 },
-                new MediaRecord 
+                new MediaRuntimeRecord
                 { 
                     Id = Guid.NewGuid(), 
                     VirtualKeyId = virtualKeyId, 
@@ -180,7 +182,7 @@ namespace ConduitLLM.Tests.Core.Services
                 }
             };
 
-            _mockMediaRepository.Setup(x => x.GetByVirtualKeyIdAsync(virtualKeyId))
+            _mockMediaStore.Setup(x => x.GetByVirtualKeyIdAsync(virtualKeyId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(mediaRecords);
 
             // Act
@@ -208,26 +210,26 @@ namespace ConduitLLM.Tests.Core.Services
                 ["minimax"] = 2000000
             };
 
-            var allMedia = new List<MediaRecord>
+            var allMedia = new List<MediaRuntimeRecord>
             {
-                new MediaRecord { Id = Guid.NewGuid(), MediaType = "image", SizeBytes = 200000 },
-                new MediaRecord { Id = Guid.NewGuid(), MediaType = "image", SizeBytes = 300000 },
-                new MediaRecord { Id = Guid.NewGuid(), MediaType = "video", SizeBytes = 2500000 }
+                new MediaRuntimeRecord { Id = Guid.NewGuid(), MediaType = "image", SizeBytes = 200000 },
+                new MediaRuntimeRecord { Id = Guid.NewGuid(), MediaType = "image", SizeBytes = 300000 },
+                new MediaRuntimeRecord { Id = Guid.NewGuid(), MediaType = "video", SizeBytes = 2500000 }
             };
 
-            _mockMediaRepository.Setup(x => x.GetAggregateStorageStatsAsync(
+            _mockMediaStore.Setup(x => x.GetAggregateStorageStatsAsync(
                     null,
                     100,
                     It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new MediaStorageAggregateStats
+                .ReturnsAsync(new MediaRuntimeStorageAggregate
                 {
                     TotalFiles = allMedia.Count,
                     TotalSizeBytes = allMedia.Sum(media => media.SizeBytes ?? 0),
                     ByProvider = byProvider,
                     ByMediaType =
                     [
-                        new MediaTypeStorageAggregate("image", 2, 500000),
-                        new MediaTypeStorageAggregate("video", 1, 2500000)
+                        new MediaRuntimeTypeAggregate("image", 2, 500000),
+                        new MediaRuntimeTypeAggregate("video", 1, 2500000)
                     ]
                 });
 
@@ -247,11 +249,6 @@ namespace ConduitLLM.Tests.Core.Services
             Assert.Equal(500000, result.ByMediaType["image"].SizeBytes);
             Assert.Equal(1, result.ByMediaType["video"].FileCount);
             Assert.Equal(2500000, result.ByMediaType["video"].SizeBytes);
-            _mockMediaRepository.Verify(
-                repository => repository.GetMediaOlderThanAsync(
-                    It.IsAny<DateTime>(),
-                    It.IsAny<CancellationToken>()),
-                Times.Never);
         }
 
         #endregion
@@ -263,13 +260,13 @@ namespace ConduitLLM.Tests.Core.Services
         {
             // Arrange
             var virtualKeyId = 1;
-            var mediaRecords = new List<MediaRecord>
+            var mediaRecords = new List<MediaRuntimeRecord>
             {
-                new MediaRecord { Id = Guid.NewGuid(), VirtualKeyId = virtualKeyId },
-                new MediaRecord { Id = Guid.NewGuid(), VirtualKeyId = virtualKeyId }
+                new MediaRuntimeRecord { Id = Guid.NewGuid(), VirtualKeyId = virtualKeyId },
+                new MediaRuntimeRecord { Id = Guid.NewGuid(), VirtualKeyId = virtualKeyId }
             };
 
-            _mockMediaRepository.Setup(x => x.GetByVirtualKeyIdAsync(virtualKeyId))
+            _mockMediaStore.Setup(x => x.GetByVirtualKeyIdAsync(virtualKeyId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(mediaRecords);
 
             // Act
@@ -278,7 +275,7 @@ namespace ConduitLLM.Tests.Core.Services
             // Assert
             Assert.NotNull(result);
             Assert.Equal(2, result.Count);
-            Assert.Equal(mediaRecords, result);
+            Assert.Equal(mediaRecords.Select(media => media.Id), result.Select(media => media.Id));
         }
 
         [Fact]
@@ -287,7 +284,7 @@ namespace ConduitLLM.Tests.Core.Services
             // Arrange
             var virtualKeyId = 1;
 
-            _mockMediaRepository.Setup(x => x.GetByVirtualKeyIdAsync(virtualKeyId))
+            _mockMediaStore.Setup(x => x.GetByVirtualKeyIdAsync(virtualKeyId, It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new Exception("Repository error"));
 
             // Act & Assert

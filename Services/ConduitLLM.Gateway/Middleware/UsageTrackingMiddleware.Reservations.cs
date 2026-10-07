@@ -12,7 +12,7 @@ public partial class UsageTrackingMiddleware
         int virtualKeyId,
         decimal actualCost,
         IBatchSpendUpdateService batchSpendService,
-        IVirtualKeyService virtualKeyService)
+        IVirtualKeyRuntimeService virtualKeyService)
     {
         var accountingContext = context.GetOrCreateRequestAccountingContext();
         var snapshot = accountingContext.Snapshot();

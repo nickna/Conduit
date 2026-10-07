@@ -8,280 +8,366 @@ using Microsoft.Extensions.Logging;
 namespace ConduitLLM.Configuration.Repositories;
 
 /// <summary>
-/// Repository implementation for ProviderKeyCredential operations.
-/// Extends RepositoryBase for standard CRUD operations and implements domain-specific methods.
+/// EF Core reference implementation of provider-credential persistence.
 /// </summary>
-public class ProviderKeyCredentialRepository : RepositoryBase<ProviderKeyCredential, int>, IProviderKeyCredentialRepository
+public sealed class ProviderKeyCredentialRepository : IProviderKeyCredentialRepository
 {
-    /// <summary>
-    /// Creates a new instance of the repository.
-    /// </summary>
-    /// <param name="dbContextFactory">The database context factory</param>
-    /// <param name="logger">The logger</param>
+    private const int DefaultPageSize = 20;
+    private const int MaxPageSize = 100;
+    private const int SlowQueryThresholdMs = 500;
+
+    private readonly IDbContextFactory<ConduitDbContext> _dbContextFactory;
+    private readonly ILogger<ProviderKeyCredentialRepository> _logger;
+
     public ProviderKeyCredentialRepository(
         IDbContextFactory<ConduitDbContext> dbContextFactory,
         ILogger<ProviderKeyCredentialRepository> logger)
-        : base(dbContextFactory, logger)
     {
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <inheritdoc/>
-    protected override DbSet<ProviderKeyCredential> GetDbSet(ConduitDbContext context)
-        => context.ProviderKeyCredentials;
-
-    /// <inheritdoc/>
-    protected override IQueryable<ProviderKeyCredential> ApplyDefaultIncludes(IQueryable<ProviderKeyCredential> query)
+    /// <inheritdoc />
+    public async Task<(List<ProviderKeyCredential> Items, int TotalCount)> GetPaginatedAsync(
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
     {
-        return query.Include(c => c.Provider);
+        (page, pageSize) = NormalizePagination(page, pageSize);
+        return await ExecuteAsync(async context =>
+        {
+            var query = context.ProviderKeyCredentials
+                .AsNoTracking()
+                .Include(credential => credential.Provider);
+            var totalCount = await query.CountAsync(cancellationToken);
+            var items = await query
+                .OrderBy(credential => credential.ProviderId)
+                .ThenByDescending(credential => credential.IsPrimary)
+                .ThenBy(credential => credential.ProviderAccountGroup)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+            return (items, totalCount);
+        }, $"getting paginated credentials (page {page}, size {pageSize})", cancellationToken);
     }
 
-    /// <inheritdoc/>
-    protected override IQueryable<ProviderKeyCredential> ApplyDefaultOrdering(IQueryable<ProviderKeyCredential> query)
-    {
-        return query
-            .OrderBy(k => k.ProviderId)
-            .ThenByDescending(k => k.IsPrimary)
-            .ThenBy(k => k.ProviderAccountGroup);
-    }
-
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public async Task<(List<ProviderKeyCredential> Items, int TotalCount)> GetByProviderIdPaginatedAsync(
         int providerId,
         int pageNumber,
         int pageSize,
         CancellationToken cancellationToken = default)
     {
-        return await GetFilteredPaginatedAsync(
-            k => k.ProviderId == providerId,
-            pageNumber,
-            pageSize,
-            q => q.OrderByDescending(k => k.IsPrimary).ThenBy(k => k.ProviderAccountGroup),
-            cancellationToken,
-            $"getting paginated credentials for provider {providerId}");
-    }
-
-    /// <inheritdoc/>
-    public async Task<ProviderKeyCredential?> GetPrimaryKeyAsync(int providerId)
-    {
+        (pageNumber, pageSize) = NormalizePagination(pageNumber, pageSize);
         return await ExecuteAsync(async context =>
-            await GetDbSet(context)
-                .AsNoTracking()
-                .FirstOrDefaultAsync(k => k.ProviderId == providerId
-                    && k.IsPrimary
-                    && k.IsEnabled));
-    }
-
-    /// <inheritdoc/>
-    public async Task<List<ProviderKeyCredential>> GetEnabledKeysByProviderIdAsync(int providerId)
-    {
-        return await ExecuteAsync(async context =>
-            await GetDbSet(context)
-                .AsNoTracking()
-                .Where(k => k.ProviderId == providerId && k.IsEnabled)
-                .OrderByDescending(k => k.IsPrimary)
-                .ThenBy(k => k.ProviderAccountGroup)
-                .ToListAsync());
-    }
-
-    /// <summary>
-    /// Creates a new key credential with automatic primary key assignment.
-    /// If this is the only enabled key for the provider, it will be automatically set as primary.
-    /// </summary>
-    public override async Task<int> CreateAsync(ProviderKeyCredential entity, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(entity);
-
-        return await ExecuteWriteAsync(async context =>
         {
-            OnBeforeCreate(entity);
+            var query = context.ProviderKeyCredentials
+                .AsNoTracking()
+                .Include(credential => credential.Provider)
+                .Where(credential => credential.ProviderId == providerId);
+            var totalCount = await query.CountAsync(cancellationToken);
+            var items = await query
+                .OrderByDescending(credential => credential.IsPrimary)
+                .ThenBy(credential => credential.ProviderAccountGroup)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+            return (items, totalCount);
+        }, $"getting paginated credentials for provider {providerId}", cancellationToken);
+    }
 
-            if (entity.IsEnabled && entity.IsPrimary)
+    /// <inheritdoc />
+    public async Task<ProviderKeyCredential?> GetByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default) =>
+        await ExecuteAsync(
+            context => context.ProviderKeyCredentials
+                .AsNoTracking()
+                .Include(credential => credential.Provider)
+                .FirstOrDefaultAsync(credential => credential.Id == id, cancellationToken),
+            $"getting credential by ID {id}",
+            cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<int> CreateAsync(
+        ProviderKeyCredential credential,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(credential);
+
+        return await ExecuteAsync(async context =>
+        {
+            var now = DateTime.UtcNow;
+            if (credential.CreatedAt == default)
             {
-                // Demote existing primary key so the new one can take over
-                var existingPrimary = await GetDbSet(context)
-                    .FirstOrDefaultAsync(k => k.ProviderId == entity.ProviderId && k.IsPrimary, cancellationToken);
+                credential.CreatedAt = now;
+            }
+            credential.UpdatedAt = now;
 
-                if (existingPrimary != null)
+            if (credential.IsEnabled && credential.IsPrimary)
+            {
+                var existingPrimary = await context.ProviderKeyCredentials
+                    .FirstOrDefaultAsync(
+                        candidate => candidate.ProviderId == credential.ProviderId && candidate.IsPrimary,
+                        cancellationToken);
+                if (existingPrimary is not null)
                 {
                     existingPrimary.IsPrimary = false;
-                    existingPrimary.UpdatedAt = DateTime.UtcNow;
-                    Logger.LogInformation("Demoted existing primary key {KeyId} for provider {ProviderId}",
-                        existingPrimary.Id, entity.ProviderId);
+                    existingPrimary.UpdatedAt = now;
+                    _logger.LogInformation(
+                        "Demoted existing primary key {KeyId} for provider {ProviderId}",
+                        existingPrimary.Id,
+                        credential.ProviderId);
                 }
             }
-            else if (entity.IsEnabled && !entity.IsPrimary)
+            else if (credential.IsEnabled)
             {
-                // Check if this should be automatically set as primary
-                var enabledKeysCount = await GetDbSet(context)
-                    .CountAsync(k => k.ProviderId == entity.ProviderId && k.IsEnabled, cancellationToken);
-
-                // If this will be the only enabled key, set it as primary
+                var enabledKeysCount = await context.ProviderKeyCredentials.CountAsync(
+                    candidate => candidate.ProviderId == credential.ProviderId && candidate.IsEnabled,
+                    cancellationToken);
                 if (enabledKeysCount == 0)
                 {
-                    entity.IsPrimary = true;
-                    Logger.LogInformation("Automatically setting key as primary since it's the only enabled key for provider {ProviderId}",
-                        entity.ProviderId);
+                    credential.IsPrimary = true;
+                    _logger.LogInformation(
+                        "Automatically setting key as primary since it is the only enabled key for provider {ProviderId}",
+                        credential.ProviderId);
                 }
             }
 
-            GetDbSet(context).Add(entity);
+            context.ProviderKeyCredentials.Add(credential);
             await context.SaveChangesAsync(cancellationToken);
-
-            Logger.LogInformation("Created key credential {KeyId} for provider {ProviderId} (IsPrimary: {IsPrimary})",
-                entity.Id, entity.ProviderId, entity.IsPrimary);
-
-            return entity.Id;
-        }, $"creating for provider {entity.ProviderId}", cancellationToken);
+            _logger.LogInformation(
+                "Created key credential {KeyId} for provider {ProviderId} (IsPrimary: {IsPrimary})",
+                credential.Id,
+                credential.ProviderId,
+                credential.IsPrimary);
+            return credential.Id;
+        }, $"creating credential for provider {credential.ProviderId}", cancellationToken);
     }
 
-    /// <summary>
-    /// Updates an existing key credential with automatic primary key assignment.
-    /// If this becomes the only enabled key when being enabled, it will be automatically set as primary.
-    /// </summary>
-    public override async Task<bool> UpdateAsync(ProviderKeyCredential entity, CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public async Task<bool> UpdateAsync(
+        ProviderKeyCredential credential,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(credential);
 
-        return await ExecuteWriteAsync(async context =>
+        return await ExecuteAsync(async context =>
         {
-            var existingKey = await GetDbSet(context)
-                .FirstOrDefaultAsync(k => k.Id == entity.Id, cancellationToken);
-
-            if (existingKey == null)
-                return false;
-
-            bool wasEnabled = existingKey.IsEnabled;
-            bool willBeEnabled = entity.IsEnabled;
-
-            // Update properties
-            existingKey.ProviderAccountGroup = entity.ProviderAccountGroup;
-            existingKey.ApiKey = entity.ApiKey;
-            existingKey.BaseUrl = entity.BaseUrl;
-            existingKey.IsPrimary = entity.IsPrimary;
-            existingKey.IsEnabled = entity.IsEnabled;
-            existingKey.UpdatedAt = DateTime.UtcNow;
-
-            if (entity.IsPrimary && entity.IsEnabled)
+            var existing = await context.ProviderKeyCredentials
+                .FirstOrDefaultAsync(candidate => candidate.Id == credential.Id, cancellationToken);
+            if (existing is null)
             {
-                // Demote existing primary key so this one can become primary
-                var otherPrimary = await GetDbSet(context)
-                    .FirstOrDefaultAsync(k => k.ProviderId == existingKey.ProviderId && k.IsPrimary && k.Id != existingKey.Id, cancellationToken);
+                return false;
+            }
 
-                if (otherPrimary != null)
+            var wasEnabled = existing.IsEnabled;
+            var now = DateTime.UtcNow;
+            existing.ProviderAccountGroup = credential.ProviderAccountGroup;
+            existing.ApiKey = credential.ApiKey;
+            existing.BaseUrl = credential.BaseUrl;
+            existing.SecretSettings = credential.SecretSettings;
+            existing.KeyName = credential.KeyName;
+            existing.IsPrimary = credential.IsPrimary;
+            existing.IsEnabled = credential.IsEnabled;
+            existing.UpdatedAt = now;
+
+            if (credential.IsPrimary && credential.IsEnabled)
+            {
+                var otherPrimary = await context.ProviderKeyCredentials.FirstOrDefaultAsync(
+                    candidate => candidate.ProviderId == existing.ProviderId &&
+                        candidate.IsPrimary &&
+                        candidate.Id != existing.Id,
+                    cancellationToken);
+                if (otherPrimary is not null)
                 {
                     otherPrimary.IsPrimary = false;
-                    otherPrimary.UpdatedAt = DateTime.UtcNow;
-                    Logger.LogInformation("Demoted existing primary key {KeyId} for provider {ProviderId}",
-                        otherPrimary.Id, existingKey.ProviderId);
+                    otherPrimary.UpdatedAt = now;
+                    _logger.LogInformation(
+                        "Demoted existing primary key {KeyId} for provider {ProviderId}",
+                        otherPrimary.Id,
+                        existing.ProviderId);
                 }
             }
-            else if (!wasEnabled && willBeEnabled && !entity.IsPrimary)
+            else if (!wasEnabled && credential.IsEnabled && !credential.IsPrimary)
             {
-                // Check if this should be automatically set as primary when being enabled
-                var enabledKeysCount = await GetDbSet(context)
-                    .CountAsync(k => k.ProviderId == existingKey.ProviderId && k.IsEnabled && k.Id != existingKey.Id, cancellationToken);
-
-                // If this will be the only enabled key, set it as primary
+                var enabledKeysCount = await context.ProviderKeyCredentials.CountAsync(
+                    candidate => candidate.ProviderId == existing.ProviderId &&
+                        candidate.IsEnabled &&
+                        candidate.Id != existing.Id,
+                    cancellationToken);
                 if (enabledKeysCount == 0)
                 {
-                    existingKey.IsPrimary = true;
-                    Logger.LogInformation("Automatically setting key {KeyId} as primary since it's the only enabled key for provider {ProviderId}",
-                        existingKey.Id, existingKey.ProviderId);
+                    existing.IsPrimary = true;
+                    _logger.LogInformation(
+                        "Automatically setting key {KeyId} as primary since it is the only enabled key for provider {ProviderId}",
+                        existing.Id,
+                        existing.ProviderId);
                 }
             }
 
             await context.SaveChangesAsync(cancellationToken);
-
-            Logger.LogInformation("Updated key credential {KeyId} for provider {ProviderId} (IsPrimary: {IsPrimary})",
-                entity.Id, entity.ProviderId, existingKey.IsPrimary);
-
+            credential.ProviderId = existing.ProviderId;
+            credential.IsPrimary = existing.IsPrimary;
+            credential.UpdatedAt = existing.UpdatedAt;
+            _logger.LogInformation(
+                "Updated key credential {KeyId} for provider {ProviderId} (IsPrimary: {IsPrimary})",
+                existing.Id,
+                existing.ProviderId,
+                existing.IsPrimary);
             return true;
-        }, $"updating ID {entity.Id}", cancellationToken);
+        }, $"updating credential ID {credential.Id}", cancellationToken);
     }
 
-    /// <summary>
-    /// Deletes a key credential by ID.
-    /// </summary>
-    public override async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
-    {
-        return await ExecuteAsync(async context =>
+    /// <inheritdoc />
+    public async Task<bool> DeleteAsync(
+        int id,
+        CancellationToken cancellationToken = default) =>
+        await ExecuteAsync(async context =>
         {
-            var keyCredential = await GetDbSet(context)
-                .FirstOrDefaultAsync(k => k.Id == id, cancellationToken);
-
-            if (keyCredential == null)
-                return false;
-
-            GetDbSet(context).Remove(keyCredential);
-            await context.SaveChangesAsync(cancellationToken);
-
-            Logger.LogInformation("Deleted key credential {KeyId} for provider {ProviderId}",
-                id, keyCredential.ProviderId);
-
-            return true;
-        }, cancellationToken);
-    }
-
-    /// <inheritdoc/>
-    public async Task<bool> SetPrimaryKeyAsync(int providerId, int keyId)
-    {
-        return await ExecuteAsync(async context =>
-        {
-            // Runs through the execution strategy (EnableRetryOnFailure): the whole
-            // delegate re-runs on transient failure, so it re-reads before writing.
-            return await context.ExecuteInTransactionAsync(async _ =>
+            var credential = await context.ProviderKeyCredentials
+                .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            if (credential is null)
             {
-                // Validate the target before changing the current primary. A missing
-                // or wrong-provider key is a no-op and must not clear a valid primary.
-                var newPrimaryKey = await GetDbSet(context)
-                    .FirstOrDefaultAsync(k => k.Id == keyId && k.ProviderId == providerId);
+                return false;
+            }
 
-                if (newPrimaryKey == null)
+            context.ProviderKeyCredentials.Remove(credential);
+            await context.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation(
+                "Deleted key credential {KeyId} for provider {ProviderId}",
+                id,
+                credential.ProviderId);
+            return true;
+        }, $"deleting credential ID {id}", cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<ProviderKeyCredential?> GetPrimaryKeyAsync(
+        int providerId,
+        CancellationToken cancellationToken = default) =>
+        await ExecuteAsync(
+            context => context.ProviderKeyCredentials
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    credential => credential.ProviderId == providerId &&
+                        credential.IsPrimary &&
+                        credential.IsEnabled,
+                    cancellationToken),
+            $"getting primary credential for provider {providerId}",
+            cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<List<ProviderKeyCredential>> GetEnabledKeysByProviderIdAsync(
+        int providerId,
+        CancellationToken cancellationToken = default) =>
+        await ExecuteAsync(
+            context => context.ProviderKeyCredentials
+                .AsNoTracking()
+                .Where(credential => credential.ProviderId == providerId && credential.IsEnabled)
+                .OrderByDescending(credential => credential.IsPrimary)
+                .ThenBy(credential => credential.ProviderAccountGroup)
+                .ToListAsync(cancellationToken),
+            $"getting enabled credentials for provider {providerId}",
+            cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<bool> SetPrimaryKeyAsync(
+        int providerId,
+        int keyId,
+        CancellationToken cancellationToken = default) =>
+        await ExecuteAsync(
+            context => context.ExecuteInTransactionAsync(async transactionCancellationToken =>
+            {
+                var newPrimary = await context.ProviderKeyCredentials.FirstOrDefaultAsync(
+                    credential => credential.Id == keyId && credential.ProviderId == providerId,
+                    transactionCancellationToken);
+                if (newPrimary is null)
+                {
                     return false;
-
-                // First, unset any existing primary keys
-                var existingPrimaryKeys = await GetDbSet(context)
-                    .Where(k => k.ProviderId == providerId && k.IsPrimary)
-                    .ToListAsync();
-
-                foreach (var key in existingPrimaryKeys)
-                {
-                    key.IsPrimary = false;
-                    key.UpdatedAt = DateTime.UtcNow;
                 }
 
-                // Save changes to unset primary keys first to avoid constraint violation
-                if (existingPrimaryKeys.Count > 0)
+                var existingPrimaries = await context.ProviderKeyCredentials
+                    .Where(credential => credential.ProviderId == providerId && credential.IsPrimary)
+                    .ToListAsync(transactionCancellationToken);
+                var now = DateTime.UtcNow;
+                foreach (var credential in existingPrimaries)
                 {
-                    await context.SaveChangesAsync();
+                    credential.IsPrimary = false;
+                    credential.UpdatedAt = now;
                 }
 
-                newPrimaryKey.IsPrimary = true;
-                newPrimaryKey.UpdatedAt = DateTime.UtcNow;
+                if (existingPrimaries.Count > 0)
+                {
+                    await context.SaveChangesAsync(transactionCancellationToken);
+                }
 
-                await context.SaveChangesAsync();
-
-                Logger.LogInformation("Set key {KeyId} as primary for provider {ProviderId}",
-                    keyId, providerId);
-
+                newPrimary.IsPrimary = true;
+                newPrimary.UpdatedAt = now;
+                await context.SaveChangesAsync(transactionCancellationToken);
+                _logger.LogInformation(
+                    "Set key {KeyId} as primary for provider {ProviderId}",
+                    keyId,
+                    providerId);
                 return true;
-            });
-        });
+            }, cancellationToken),
+            $"setting primary credential {keyId} for provider {providerId}",
+            cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<bool> HasKeyCredentialsAsync(
+        int providerId,
+        CancellationToken cancellationToken = default) =>
+        await ExecuteAsync(
+            context => context.ProviderKeyCredentials.AnyAsync(
+                credential => credential.ProviderId == providerId,
+                cancellationToken),
+            $"checking credentials for provider {providerId}",
+            cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<int> CountByProviderIdAsync(
+        int providerId,
+        CancellationToken cancellationToken = default) =>
+        await ExecuteAsync(
+            context => context.ProviderKeyCredentials.CountAsync(
+                credential => credential.ProviderId == providerId,
+                cancellationToken),
+            $"counting credentials for provider {providerId}",
+            cancellationToken);
+
+    private static (int Page, int PageSize) NormalizePagination(int page, int pageSize)
+    {
+        if (page < 1)
+        {
+            page = 1;
+        }
+
+        if (pageSize < 1)
+        {
+            pageSize = DefaultPageSize;
+        }
+
+        return (page, Math.Min(pageSize, MaxPageSize));
     }
 
-    /// <inheritdoc/>
-    public async Task<bool> HasKeyCredentialsAsync(int providerId)
+    private async Task<TResult> ExecuteAsync<TResult>(
+        Func<ConduitDbContext, Task<TResult>> operation,
+        string operationName,
+        CancellationToken cancellationToken)
     {
-        return await ExecuteAsync(async context =>
-            await GetDbSet(context)
-                .AnyAsync(k => k.ProviderId == providerId));
-    }
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var result = await operation(context);
+        stopwatch.Stop();
 
-    /// <inheritdoc/>
-    public async Task<int> CountByProviderIdAsync(int providerId)
-    {
-        return await ExecuteAsync(async context =>
-            await GetDbSet(context)
-                .CountAsync(k => k.ProviderId == providerId));
+        if (stopwatch.ElapsedMilliseconds > SlowQueryThresholdMs)
+        {
+            _logger.LogWarning(
+                "Slow repository operation: {OperationName} ProviderKeyCredential took {ElapsedMs}ms",
+                operationName,
+                stopwatch.ElapsedMilliseconds);
+        }
+
+        return result;
     }
 }

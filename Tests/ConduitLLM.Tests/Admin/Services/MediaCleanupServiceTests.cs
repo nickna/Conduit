@@ -9,9 +9,11 @@ using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Options;
+using ConduitLLM.Configuration.Repositories;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Persistence.Interfaces;
 using ConduitLLM.Tests.TestInfrastructure;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -114,6 +116,8 @@ namespace ConduitLLM.Tests.Admin.Services
             services.AddSingleton(_mockStorageService.Object);
             services.AddSingleton(_mockBudgetService.Object);
             services.AddSingleton(_mockMediaRepository.Object);
+            services.AddSingleton<IMediaRuntimeStore>(
+                new EfMediaRuntimeStore(_mockMediaRepository.Object, _context));
             services.AddSingleton(_mockStatusService.Object);
             services.AddSingleton(_mockApprovalService.Object);
             services.AddSingleton(_mockStorageGuard.Object);

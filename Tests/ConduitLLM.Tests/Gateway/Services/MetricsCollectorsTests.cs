@@ -2,8 +2,9 @@ using System.Text;
 
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
-using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Configuration.Repositories;
 using ConduitLLM.Gateway.Services;
+using ConduitLLM.Persistence.Interfaces;
 using ConduitLLM.Tests.TestInfrastructure;
 
 using Microsoft.EntityFrameworkCore;
@@ -125,10 +126,7 @@ public sealed class MetricsCollectorsTests : IDisposable
             await context.SaveChangesAsync();
         }
 
-        var virtualKeys = new Mock<IVirtualKeyRepository>();
-        virtualKeys.Setup(repository => repository.CountActiveAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(4);
-        await using var provider = CreateServices(options, virtualKeys.Object).BuildServiceProvider();
+        await using var provider = CreateServices(options).BuildServiceProvider();
         var service = new BusinessMetricsService(
             provider.GetRequiredService<IServiceScopeFactory>(),
             Mock.Of<ILogger<BusinessMetricsService>>());
@@ -194,16 +192,11 @@ public sealed class MetricsCollectorsTests : IDisposable
         });
     }
 
-    private static ServiceCollection CreateServices(
-        DbContextOptions<ConduitDbContext> options,
-        IVirtualKeyRepository? virtualKeys = null)
+    private static ServiceCollection CreateServices(DbContextOptions<ConduitDbContext> options)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IDbContextFactory<ConduitDbContext>>(new TestDbContextFactory(options));
-        if (virtualKeys != null)
-        {
-            services.AddSingleton(virtualKeys);
-        }
+        services.AddScoped<IGatewayMetricsStore, EfGatewayMetricsStore>();
         return services;
     }
 

@@ -101,6 +101,9 @@ public partial class Program
         // ========== Audit Services ==========
 
         builder.Services.AddAuditServices();
+#if CONDUIT_NATIVE_AOT
+        builder.Services.UseNativeRuntimePersistence();
+#endif
 
         // ========== Webhook Services ==========
 

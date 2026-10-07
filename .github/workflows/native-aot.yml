@@ -8,8 +8,17 @@ on:
     paths:
       - 'global.json'
       - 'Directory.*'
+      - 'Conduit.slnx'
+      - 'Shared/**'
+      - 'Services/**/*.cs'
+      - 'Services/**/*.csproj'
       - 'Services/**/Dockerfile.native'
+      - 'Tests/ConduitLLM.GatewayNativeAotTests/**'
+      - 'Tests/ConduitLLM.PersistenceAotTests/**'
+      - 'tools/ConduitLLM.Migrator/**'
+      - 'tools/WolverineSmokePublisher/**'
       - 'scripts/aot/**'
+      - 'scripts/test/wolverine-two-host-smoke.ps1'
       - '.github/workflows/native-aot.yml'
   schedule:
     - cron: '23 8 * * 1'
@@ -58,10 +67,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Verify generated compiled-model normalization
+        shell: pwsh
+        run: ./scripts/aot/normalize-compiled-model.ps1 -Check
+
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Verify native promotion gate contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-promotion.ps1
 
       - name: Install NativeAOT toolchain
         run: |
@@ -77,6 +94,23 @@ jobs:
         shell: pwsh
         run: ./scripts/aot/native-smoke.ps1
 
+      - name: Native PostgreSQL persistence contracts
+        shell: pwsh
+        run: ./scripts/aot/persistence-native-smoke.ps1
+        env:
+          DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
+
+      - name: Shared EF and Npgsql persistence parity
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests
+          suite: native-persistence-parity
+          filter: FullyQualifiedName~PersistenceParityTests|FullyQualifiedName~GlobalSettingRepositoryParityTests|FullyQualifiedName~IpFilterRepositoryParityTests|FullyQualifiedName~ProviderPersistenceParityTests
+          minimum: '9'
+        env:
+          CONDUIT_LOCK_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
+          CONDUIT_LOCK_TEST_REDIS: 127.0.0.1:6379
+
       - name: Build release-owned migration and message probes
         run: |
           dotnet build tools/ConduitLLM.Migrator --configuration Release
@@ -89,12 +123,23 @@ jobs:
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
           REDIS_URL: redis://localhost:6379
 
+      - name: Launch S3-compatible media storage
+        run: >-
+          docker run --detach --name native-aot-minio --publish 9000:9000
+          --env MINIO_ROOT_USER=nativeaotminio
+          --env MINIO_ROOT_PASSWORD=nativeaotminiosecret
+          minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+
       - name: Native Gateway supported protocol and infrastructure boundary
         shell: pwsh
         run: ./scripts/aot/gateway-native-parity.ps1 -NoBuild -ArtifactDirectory artifacts/native-aot
         env:
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
           REDIS_URL: redis://localhost:6379
+          CONDUIT_S3_ENDPOINT: http://localhost:9000
+          CONDUIT_S3_ACCESS_KEY_ID: nativeaotminio
+          CONDUIT_S3_SECRET_ACCESS_KEY: nativeaotminiosecret
+          CONDUIT_S3_BUCKET_NAME: conduit-native-aot-media
 
       - name: Publish native baseline summary
         if: always()

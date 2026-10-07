@@ -113,7 +113,15 @@ public partial class Program
             var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ConduitLLM.Configuration.Options.BatchSpendingOptions>>();
             var alertingService = serviceProvider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IBillingAlertingService>();
             var circuitBreaker = serviceProvider.GetService<ConduitLLM.Configuration.Interfaces.IRedisCircuitBreaker>();
-            var batchService = new ConduitLLM.Configuration.Services.BatchSpendUpdateService(serviceScopeFactory, redisConnectionFactory, options, logger, alertingService, circuitBreaker);
+            var runtimeStore = serviceProvider.GetRequiredService<ConduitLLM.Persistence.Interfaces.IVirtualKeyRuntimeStore>();
+            var batchService = new ConduitLLM.Configuration.Services.BatchSpendUpdateService(
+                serviceScopeFactory,
+                redisConnectionFactory,
+                options,
+                logger,
+                alertingService,
+                circuitBreaker,
+                runtimeStore);
 
             // Wire up cache invalidation event if Redis cache is available
             var cache = serviceProvider.GetService<ConduitLLM.Core.Interfaces.IVirtualKeyCache>();

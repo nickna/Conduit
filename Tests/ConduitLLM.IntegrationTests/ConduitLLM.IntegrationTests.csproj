@@ -36,6 +36,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Shared\ConduitLLM.Configuration\ConduitLLM.Configuration.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Core\ConduitLLM.Core.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Abstractions\ConduitLLM.Persistence.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Npgsql\ConduitLLM.Persistence.Npgsql.csproj" />
     <ProjectReference Include="..\..\Services\ConduitLLM.Gateway\ConduitLLM.Gateway.csproj" />
     <ProjectReference Include="..\..\Services\ConduitLLM.Admin\ConduitLLM.Admin.csproj" />
     <ProjectReference Include="../../tools/ConduitLLM.MediaDispatchProbe/ConduitLLM.MediaDispatchProbe.csproj" ReferenceOutputAssembly="false" />

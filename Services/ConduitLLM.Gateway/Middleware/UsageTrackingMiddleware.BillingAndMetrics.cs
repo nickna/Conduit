@@ -111,7 +111,7 @@ namespace ConduitLLM.Gateway.Middleware
             string model,
             Usage usage,
             decimal cost,
-            IRequestLogService requestLogService,
+            IRequestLogRuntimeWriter requestLogService,
             string? metadata = null)
         {
             try

@@ -7,11 +7,11 @@ namespace ConduitLLM.Gateway.Endpoints;
 /// <summary>Minimal-API balance check for billable Gateway endpoints.</summary>
 public sealed class RequireBalanceEndpointFilter : IEndpointFilter
 {
-    private readonly IVirtualKeyService _virtualKeyService;
+    private readonly IVirtualKeyRuntimeService _virtualKeyService;
     private readonly ILogger<RequireBalanceEndpointFilter> _logger;
 
     public RequireBalanceEndpointFilter(
-        IVirtualKeyService virtualKeyService,
+        IVirtualKeyRuntimeService virtualKeyService,
         ILogger<RequireBalanceEndpointFilter> logger)
     {
         _virtualKeyService = virtualKeyService;

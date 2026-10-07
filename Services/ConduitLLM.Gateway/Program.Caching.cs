@@ -77,8 +77,10 @@ public partial class Program
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IModelCostCache, RedisModelCostCache>();
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IProviderToolCache, RedisProviderToolCache>();
 
-            // Register CachedApiVirtualKeyService with event publishing dependency
-            builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyService>(serviceProvider =>
+            // Register one scoped implementation behind separate request-time and
+            // management contracts. Native builds can replace only the runtime
+            // contract without rooting management CRUD in the data plane.
+            builder.Services.AddScoped<CachedApiVirtualKeyService>(serviceProvider =>
             {
                 var virtualKeyRepository = serviceProvider.GetRequiredService<IVirtualKeyRepository>();
                 var spendHistoryRepository = serviceProvider.GetRequiredService<IVirtualKeySpendHistoryRepository>();
@@ -89,21 +91,33 @@ public partial class Program
 
                 return new CachedApiVirtualKeyService(virtualKeyRepository, spendHistoryRepository, groupRepository, cache, eventBus, logger);
             });
+            builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyService>(serviceProvider =>
+                serviceProvider.GetRequiredService<CachedApiVirtualKeyService>());
         }
         else
         {
             // Fall back to direct database Virtual Key service
-            builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyService>(sp =>
+            builder.Services.AddScoped<DirectApiVirtualKeyService>(sp =>
             {
                 var virtualKeyRepository = sp.GetRequiredService<IVirtualKeyRepository>();
                 var groupRepository = sp.GetRequiredService<IVirtualKeyGroupRepository>();
                 var spendHistoryRepository = sp.GetRequiredService<IVirtualKeySpendHistoryRepository>();
                 var eventBus = sp.GetService<ConduitLLM.Configuration.Messaging.IEventBus>(); // Optional
                 var logger = sp.GetRequiredService<ILogger<ConduitLLM.Gateway.Services.DirectApiVirtualKeyService>>();
-                return new ConduitLLM.Gateway.Services.DirectApiVirtualKeyService(
+                return new DirectApiVirtualKeyService(
                     virtualKeyRepository, groupRepository, spendHistoryRepository, eventBus, logger);
             });
+            builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyService>(sp =>
+                sp.GetRequiredService<DirectApiVirtualKeyService>());
         }
 
+#if CONDUIT_NATIVE_AOT
+        // Native requests use fixed-shape persistence; management keeps its EF contract.
+        builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyRuntimeService,
+            StoreBackedVirtualKeyRuntimeService>();
+#else
+        builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyRuntimeService>(sp =>
+            sp.GetRequiredService<ConduitLLM.Core.Interfaces.IVirtualKeyService>());
+#endif
     }
 }

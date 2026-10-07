@@ -48,7 +48,15 @@ namespace ConduitLLM.Admin.Services
 
                 // Delegate core validation to shared helper
                 var validationResult = await VirtualKeyValidationHelper.ValidateVirtualKeyAsync(
-                    virtualKey, requestedModel, checkBalance: true, _groupRepository, _logger);
+                    virtualKey,
+                    requestedModel,
+                    checkBalance: true,
+                    async value =>
+                    {
+                        var group = await _groupRepository.GetByIdAsync(value.VirtualKeyGroupId);
+                        return (group, PendingSpend: 0m);
+                    },
+                    _logger);
 
                 if (!validationResult.IsValid)
                 {

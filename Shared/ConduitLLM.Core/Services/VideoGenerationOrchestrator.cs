@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Configuration;
-using IVirtualKeyService = ConduitLLM.Core.Interfaces.IVirtualKeyService;
+using IVirtualKeyRuntimeService = ConduitLLM.Core.Interfaces.IVirtualKeyRuntimeService;
 using IModelProviderMappingService = ConduitLLM.Configuration.Interfaces.IModelProviderMappingService;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Interfaces;
@@ -52,7 +52,7 @@ namespace ConduitLLM.Core.Services
             IMediaStorageService storageService,
             IEventBus eventBus,
             IModelProviderMappingService modelMappingService,
-            IVirtualKeyService virtualKeyService,
+            IVirtualKeyRuntimeService virtualKeyService,
             ICostCalculationService costService,
             ICancellableTaskRegistry taskRegistry,
             IWebhookNotificationService webhookService,

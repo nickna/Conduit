@@ -4,10 +4,16 @@
 
 Admin and Gateway NativeAOT images are release candidates, not production defaults.
 [ADR 0006](../decisions/0006-native-aot-persistence.md) keeps the production data
-plane on JIT while EF Core NativeAOT query execution is experimental. The native
-Gateway capability matrix also deliberately excludes the full authentication,
-provider, storage, and persistence paths. These are hard promotion blockers even if
-a synthetic benchmark shows an improvement.
+plane on JIT while EF Core NativeAOT query execution is experimental. The Gateway's
+declared native feature matrix now process-tests authentication, provider HTTP/SSE,
+request accounting, async tasks, S3 media, PostgreSQL/Wolverine, Redis, and JSON
+SignalR paths. It continues to exclude MessagePack, broad EF query execution, the
+Redis virtual-key authentication cache, and full readiness/database-health parity.
+
+The first-party linker ratchet is now empty. Promotion nevertheless remains blocked
+because the EF-backed Admin path is not approved for production NativeAOT and no
+digest-pinned production benchmark, ordered soak, or rollback evidence has been
+collected. A synthetic benchmark alone cannot clear these blockers.
 
 The release workflow therefore publishes only immutable candidate tags:
 
@@ -72,7 +78,8 @@ steady-state, and peak working set, throughput, p50/p95/p99 latency, failures, a
 the native publish time/artifact size from the Phase 0 baseline. Run at least five
 times after one unrecorded warm-up and retain the median report plus host CPU, RAM,
 Docker, kernel, PostgreSQL, and Redis versions with the canary evidence. Do not
-compare runs from unlike hosts.
+compare runs from unlike hosts. `-NativeBaselinePath` is required for a promotion
+decision even though the measurement script permits a benchmark-only run without it.
 
 No production comparison is accepted yet. The existing ~102–103 MiB native
 executable baseline did not exercise the production database workload, so it cannot
@@ -105,11 +112,13 @@ idle-memory reduction, no throughput loss, no more than 5% p99 regression, error
 rate at or below 0.1%, 24 consecutive healthy monitoring windows, full feature
 coverage, and tested automatic and manual rollback. Admin must complete its seven-day
 soak before a Gateway canary starts. Gateway then completes its own seven-day soak
-with every row of `gateway-native-aot-feature-matrix.md` supported and passing.
-The evaluator also requires digest-pinned zero-failure benchmark inputs, matching JIT
-and backing-service evidence, dashboard and alert links, critical-vulnerability
-review, and verified SBOM/provenance attestations. Claimed soak hours cannot exceed
-the recorded timestamps.
+with every row declared supported in `gateway-native-aot-feature-matrix.md` passing.
+The evaluator also requires digest-pinned zero-failure benchmark inputs; every raw
+size, readiness, memory, throughput, and latency measurement; a matching linux-x64
+native publish baseline; matching JIT and backing-service evidence; dashboard and
+alert links; critical-vulnerability review; and verified SBOM/provenance attestations.
+It independently recalculates every comparison percentage and rejects inconsistent or
+incomplete reports. Claimed soak hours cannot exceed the recorded timestamps.
 
 ## Canary procedure
 

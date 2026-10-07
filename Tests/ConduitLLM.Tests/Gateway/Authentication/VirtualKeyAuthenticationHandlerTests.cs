@@ -84,6 +84,7 @@ namespace ConduitLLM.Tests.Http.Authentication
             // Verify context items are set
             Assert.Equal(1, _httpContext.Items["VirtualKeyId"]);
             Assert.Equal(keyValue, _httpContext.Items["VirtualKey"]);
+            Assert.Same(virtualKey, _httpContext.Items["VirtualKeyEntity"]);
             Assert.NotNull(_httpContext.Items["RequestStartTime"]);
             
             _virtualKeyServiceMock.Verify(s => s.ValidateVirtualKeyForAuthenticationAsync(keyValue, null), Times.Once);

@@ -15,7 +15,7 @@ using ConduitLLM.Core.Policies;
 using ConduitLLM.Core.Validation;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using IVirtualKeyService = ConduitLLM.Core.Interfaces.IVirtualKeyService;
+using IVirtualKeyRuntimeService = ConduitLLM.Core.Interfaces.IVirtualKeyRuntimeService;
 using IModelProviderMappingService = ConduitLLM.Configuration.Interfaces.IModelProviderMappingService;
 using IBatchSpendUpdateService = ConduitLLM.Configuration.Interfaces.IBatchSpendUpdateService;
 
@@ -49,7 +49,7 @@ namespace ConduitLLM.Core.Services.Abstractions
         protected readonly IMediaStorageService _storageService;
         protected readonly IEventBus _eventBus;
         protected readonly IModelProviderMappingService _modelMappingService;
-        protected readonly IVirtualKeyService _virtualKeyService;
+        protected readonly IVirtualKeyRuntimeService _virtualKeyService;
         protected readonly ICostCalculationService _costService;
         protected readonly ICancellableTaskRegistry _taskRegistry;
         protected readonly IWebhookNotificationService _webhookService;
@@ -69,7 +69,7 @@ namespace ConduitLLM.Core.Services.Abstractions
             IMediaStorageService storageService,
             IEventBus eventBus,
             IModelProviderMappingService modelMappingService,
-            IVirtualKeyService virtualKeyService,
+            IVirtualKeyRuntimeService virtualKeyService,
             ICostCalculationService costService,
             ICancellableTaskRegistry taskRegistry,
             IWebhookNotificationService webhookService,
