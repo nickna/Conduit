@@ -14,6 +14,14 @@ The protected `CI required` check must succeed on every pull request and master/
 
 CI publishes no deployment images. Release candidates use unique run/attempt names; official version tags are immutable. Stable versions advance `latest`, prereleases advance `beta`. Production serialization covers migration, all three repositories and GitHub Release creation, with older-channel rejection and a retained recovery ledger. Deploy from the complete verified image-set artifact, using digests. See [CI policy and recovery](../../docs/operations/ci-validation.md) and [native canary policy](../../docs/operations/native-aot-canary.md).
 
+Manual CI's `measure_previous_scheduling` input defaults false. For a paired timing
+experiment, run true then false on the identical revision: before-mode restores the
+serialized packaged-build start and two repeated 233-case selections while keeping
+all required proofs. `scripts/ci/ci-timings.mjs --compare BEFORE_ID AFTER_ID` verifies
+the controls and records wall time, runner minutes and packaged-lane elapsed time.
+The packaged browser lane also retains a dedicated fixed-fixture benchmark with two
+warmups, seven samples, measured reference comparisons and environment identities.
+
 Before cutting a release, merge its source/version update to master and wait for that exact SHA's `CI required` success. Then push a valid tag such as `v3.1.0` or `v3.2.0-beta.1`. The production environment admits version tags and requires `CONDUIT_RELEASE_DATABASE_URL`. A failed preflight, smoke, scan or migration cannot promote official images. Do not trigger a release to test PR changes.
 
 Tests have not moved to archive. Use `scripts/ci/run-tests.ps1 -Project PROJECT -Suite NAME -Filter 'Component=TRAIT'` for retained TRX/counts/logs, with isolated Docker/PostgreSQL/Redis infrastructure where required. Main tests run Debug with matching build configuration; release-migration components have separate required ownership. See the CI policy for exact inventories, intentional skips, coverage minima and paid-provider opt-in rules.

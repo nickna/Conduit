@@ -28,6 +28,10 @@ export function validateWorkflows(workflows, required) {
       `CI must validate all ${event} changes on master/dev`);
   }
   const gate = ci.jobs.required;
+  const timingInput = ci.on.workflow_dispatch?.inputs?.measure_previous_scheduling;
+  require(timingInput?.type === 'boolean' && timingInput.default === false &&
+    ci.jobs['distributed-lock'].with?.repeat_policy_tests === "${{ github.event_name == 'workflow_dispatch' && inputs.measure_previous_scheduling }}",
+    'Scheduling comparison must be opt-in and manual without changing ordinary validation');
   require(gate.name === 'CI required' && gate.if === '${{ always() }}', 'Aggregate must always report with its protected name');
   require(JSON.stringify([...array(gate.needs)].sort()) === JSON.stringify([...required].sort()) && required.every(id => ci.jobs[id]),
     'Aggregate dependency graph differs from required inventory');

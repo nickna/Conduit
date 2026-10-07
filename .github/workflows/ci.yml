@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [master, dev]
   workflow_dispatch:
+    inputs:
+      measure_previous_scheduling:
+        description: 'Controlled measurement only: restore serialized packaged builds and duplicate lock-policy runs'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,6 +31,8 @@ jobs:
   distributed-lock:
     name: Distributed lock validation
     uses: ./.github/workflows/distributed-lock.yml
+    with:
+      repeat_policy_tests: ${{ github.event_name == 'workflow_dispatch' && inputs.measure_previous_scheduling }}
 
   codeql:
     name: Security analysis
@@ -292,7 +299,7 @@ jobs:
           no-build: 'true'
           coverage: 'true'
           filter: Component!=ReleaseMigration
-          minimum: '3752'
+          minimum: '3753'
           maximum-skips: '3'
         env:
           TEST_REDIS_CONNECTION: localhost:6379
@@ -524,8 +531,16 @@ jobs:
     name: Packaged application business flows
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Controlled previous scheduling barrier
+        if: github.event_name == 'workflow_dispatch' && inputs.measure_previous_scheduling
+        run: node scripts/ci/measure-scheduling.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Verify digest-preserving registry promotion
         run: node scripts/ci/registry-copy-smoke.mjs

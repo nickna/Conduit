@@ -2,6 +2,8 @@ import { chromium } from 'playwright';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
+import { browserMethod } from '../../scripts/ci/browser-performance-policy.mjs';
+import { benchmark } from './browser-benchmark.mjs';
 
 // A fresh signing key exercises Clerk's supported offline JWT verification.
 // These credentials exist only for this isolated deployment; no auth bypass is used.
@@ -43,7 +45,9 @@ export async function smoke({ start, admin, env, master, output, report }) {
   report.checks.push('Unsigned, forged, and non-admin sessions rejected');
 
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ extraHTTPHeaders: { Authorization: `Bearer ${session}` } });
+  const context = await browser.newContext({ extraHTTPHeaders: { Authorization: `Bearer ${session}` },
+    viewport: browserMethod.viewport, deviceScaleFactor: browserMethod.deviceScaleFactor,
+    locale: browserMethod.locale, timezoneId: browserMethod.timezoneId, colorScheme: 'light' });
   await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
   const page = await context.newPage();
   const errors = [];
@@ -70,6 +74,8 @@ export async function smoke({ start, admin, env, master, output, report }) {
     }, { resource, credential });
     assert.equal(roundTrip.status, 200, JSON.stringify(roundTrip.data));
     assert.ok([401, 403].includes(roundTrip.replay), 'Ephemeral master keys must be single use');
+    report.browserBenchmark = await benchmark({ page, url: `${webadmin}/virtualkeys`, browser, images: report.images, output });
+    assert.deepEqual(errors, [], 'The packaged browser must not report JavaScript errors');
     await context.setExtraHTTPHeaders({});
     const signedOut = await context.request.get(`${webadmin}/virtualkeys`, { maxRedirects: 0 });
     assert.ok([302, 303, 307, 308, 401].includes(signedOut.status()), 'Removing the session must revoke page access');

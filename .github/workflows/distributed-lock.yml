@@ -2,7 +2,17 @@ name: Distributed lock ownership
 
 on:
   workflow_call:
+    inputs:
+      repeat_policy_tests:
+        description: 'Controlled before-scheduling measurement only'
+        type: boolean
+        default: false
   workflow_dispatch:
+    inputs:
+      repeat_policy_tests:
+        description: 'Controlled before-scheduling measurement only'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -47,6 +57,22 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '10.0.x'
+      - name: Build repeated-policy selector
+        id: repeated-policy
+        if: inputs.repeat_policy_tests
+        shell: pwsh
+        run: |
+          $classes = (Get-Content scripts/ci/lock-unit-ownership.json -Raw | ConvertFrom-Json).PSObject.Properties.Name
+          $filter = ($classes | ForEach-Object { "FullyQualifiedName~$_" }) -join '|'
+          "filter=$filter" | Add-Content $env:GITHUB_OUTPUT
+      - name: Repeat main-owned lock policy cases
+        if: inputs.repeat_policy_tests
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests
+          suite: repeated-lock-policy-pg${{ matrix.postgres }}
+          filter: ${{ steps.repeated-policy.outputs.filter }}
+          minimum: '233'
       # Pure policy/caller tests belong to main correctness; their executed inventory
       # is asserted there. Keep all real database cases and both runtime probes here.
       - name: Real PostgreSQL and Redis integration gates

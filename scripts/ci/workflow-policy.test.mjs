@@ -14,6 +14,8 @@ for (const [name, mutate] of [
   ['missing required job', w => w['ci.yml'].jobs.required.needs.pop()],
   ['docs-only path filtering', w => w['ci.yml'].on.pull_request['paths-ignore'] = ['docs/**']],
   ['skipped aggregate', w => w['ci.yml'].jobs.required.if = '${{ success() }}'],
+  ['default timing experiment', w => w['ci.yml'].on.workflow_dispatch.inputs.measure_previous_scheduling.default = true],
+  ['PR timing experiment', w => w['ci.yml'].jobs['distributed-lock'].with.repeat_policy_tests = '${{ true }}'],
   ['per-tag production lock', w => w['release.yml'].jobs.production.concurrency.group = '${{ github.ref }}'],
   ['pending release replacement', w => delete w['release.yml'].jobs.production.concurrency.queue],
   ['invalid queue value', w => w['ci.yml'].concurrency.queue = 'unlimited'],

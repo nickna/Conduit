@@ -79,12 +79,32 @@ MediaGallery's ordinary Jest tests assert rendered cards, virtualization decisio
 updates, and empty states without wall-clock thresholds. The unused all-tests
 performance Jest configuration is retired. Actual browser timings belong to the
 packaged browser lane; unit/jsdom timings are not rendering-performance evidence.
+
+The dedicated `tools/ci/browser-benchmark.mjs` measurement runs in the packaged
+browser lane with Chromium from the locked Playwright installation. It uses an
+isolated database with four named keys, the local deterministic provider, a
+1280x720 viewport, device scale 1, en-US locale and UTC. Two warmup navigations
+precede seven measured navigations. Each sample measures navigation start until
+all four real key rows are rendered; median, p95 and the complete sample set are
+retained in `browser-benchmark.json`, alongside browser/CPU/runner-image identity
+and the three exact application image IDs. It runs independently of Jest.
+
+`scripts/ci/browser-performance-baseline.json` records the measured CI reference.
+Compatible browser and runner inputs produce reported median/p95 ratios. Changed
+browser, CPU or runner-image identities report an explicit incomparable environment
+and both raw distributions remain available. Hosted-runner contention still varies;
+these measurements establish a repeatable baseline, with no machine-speed pass/fail
+threshold. Update the reference only from a successful controlled report using
+`node scripts/ci/record-browser-baseline.mjs PATH_TO_REPORT`; its method, all seven
+samples, source run/SHA and exact image identities must validate. Retain the prior
+reference in Git and explain the update in its PR.
 Relative test globs fix Windows `.codex` worktree discovery (#1457).
 
 Every required .NET lane uses the shared run-tests action: TRX, method identities,
 discovered/executed/passed/failed/skipped counts, execution logs, and requested
 coverage are uploaded for 30 days even on failure. Empty execution and unexpected
-skips fail. Core's measured minimum is 3,752 executed cases; its three intentional
+skips fail. Core's measured minimum is 3,753 executed cases, including the retained
+cache-hit regression added in #1472; its three intentional
 skips are two unsupported concurrent tracker tests and the local tokenizer baseline emitter. Billing invariants allow
 one baseline-emitter skip. Other required filtered lanes allow zero skips.
 WebAdmin retains Jest JSON and coverage; fewer than 461 executed cases, any failure,
@@ -128,6 +148,23 @@ The main suite now explicitly proves execution of the 233 lock/caller/policy cas
 WebAdmin correctness, contracts/official SDK clients, backend correctness and packaged-image builds start independently. Docker no longer waits for the serialized backend/WebAdmin chain. Required jobs have explicit bounds. Locked npm caches are scoped to their own dependency files; production artifacts are rebuilt from the tested source instead of sharing mutable build directories across security/runtime modes.
 
 `scripts/ci/ci-timings.mjs RUN_ID...` records actual GitHub job wall seconds and summed runner minutes (job elapsed time, not rounded billing) in artifacts. Historical runs 324/329 are retained as the audited baseline; the new graph adds required migrations, security, storage and packaged/browser execution, so total cost comparisons must disclose that expanded proof inventory. Final branch-run measurements are recorded after GitHub execution.
+
+For comparable scheduling evidence, manually dispatch CI twice on the same source
+revision. Set `measure_previous_scheduling=true` for the before run, then false for
+the after run after the first completes. Before-mode waits for Validate, WebAdmin
+and contracts before starting packaged builds and repeats the 233 main-owned
+policy cases in each PostgreSQL job. Both modes retain the complete identical
+required proof inventory, PostgreSQL/native probes and security gates. The input
+defaults false and applies only to manual dispatch; ordinary PR/master/dev behavior
+stays parallel and deduplicated. The barrier fails on unsuccessful predecessors and
+has a 25-minute bound. Each repeated selection retains actual execution evidence.
+
+Run `node scripts/ci/ci-timings.mjs --compare BEFORE_ID AFTER_ID`. It rejects mixed
+controls, different source SHAs, unsuccessful runs or different job inventories,
+then reports overall wall time, runner minutes and packaged-lane elapsed time.
+These paired runs control source, proof inventory, runner class and workflow
+configuration. Public-runner placement/cache/CPU contention still vary; report
+that uncertainty and the CodeQL critical path alongside any observed reduction.
 
 Immutable release promotion and recovery (#1441)
 
