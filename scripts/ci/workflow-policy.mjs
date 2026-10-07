@@ -22,6 +22,9 @@ export function validateWorkflows(workflows, required) {
     }
   }
   const ci = workflows['ci.yml'];
+  const packagedCheckout = array(ci.jobs.docker.steps).filter(step => step.uses?.startsWith('actions/checkout@'));
+  require(packagedCheckout.length === 1 && packagedCheckout[0].with?.['persist-credentials'] === false,
+    'Packaged builds must not retain checkout credentials for dependency/build steps');
   for (const event of ['push', 'pull_request']) {
     const trigger = ci.on[event];
     require(['master', 'dev'].every(b => trigger?.branches?.includes(b)) && !trigger.paths && !trigger['paths-ignore'],

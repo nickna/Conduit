@@ -18,6 +18,9 @@ running the script without `-Apply`.
 Run `node --test scripts/ci/*.test.mjs` to check the validation policy, including
 deliberately failed, cancelled, skipped, and missing results. Live workflow and
 protection verification is recorded with the implementation PR.
+The packaged-build checkout disables credential persistence; dependency installation
+and Docker builds need no Git credentials. Its scheduling lookup receives an
+explicit read-only Actions token only for that step.
 
 Releases accept `vMAJOR.MINOR.PATCH` and SemVer prerelease suffixes (beta channel).
 Build metadata is intentionally unsupported because `+` is invalid in Docker tags.

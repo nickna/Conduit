@@ -14,6 +14,8 @@ for (const [name, mutate] of [
   ['missing required job', w => w['ci.yml'].jobs.required.needs.pop()],
   ['docs-only path filtering', w => w['ci.yml'].on.pull_request['paths-ignore'] = ['docs/**']],
   ['skipped aggregate', w => w['ci.yml'].jobs.required.if = '${{ success() }}'],
+  ['default packaged checkout credentials', w => delete w['ci.yml'].jobs.docker.steps[0].with],
+  ['persisted packaged checkout credentials', w => w['ci.yml'].jobs.docker.steps[0].with['persist-credentials'] = true],
   ['default timing experiment', w => w['ci.yml'].on.workflow_dispatch.inputs.measure_previous_scheduling.default = true],
   ['PR timing experiment', w => w['ci.yml'].jobs['distributed-lock'].with.repeat_policy_tests = '${{ true }}'],
   ['per-tag production lock', w => w['release.yml'].jobs.production.concurrency.group = '${{ github.ref }}'],
