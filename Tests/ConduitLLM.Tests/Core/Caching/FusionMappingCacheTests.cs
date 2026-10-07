@@ -14,6 +14,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using ConduitLLM.Configuration.Constants;
+using ZiggyCreatures.Caching.Fusion;
 
 namespace ConduitLLM.Tests.Core.Caching;
 
@@ -75,6 +77,11 @@ public sealed class FusionMappingCacheTests
         inner.Setup(service => service.GetMappingByModelAliasAsync("old")).Returns(async () =>
         { entered.TrySetResult(); await release.Task; return source; });
         using var host = Host(inner.Object);
+        var stored = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        host.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey).Events.Memory.Set += (_, entry) =>
+        {
+            if (entry.Key.EndsWith(CacheKeys.ModelMapping.ByAlias("old"), StringComparison.Ordinal)) stored.TrySetResult();
+        };
         using var scope = host.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         var requests = Enumerable.Range(0, 32).Select(_ => service.GetMappingByModelAliasAsync("old")).ToArray();
@@ -84,12 +91,32 @@ public sealed class FusionMappingCacheTests
         inner.Verify(item => item.GetMappingByModelAliasAsync("old"), Times.Once);
         release.SetResult();
         var results = await Task.WhenAll(requests);
-        var cached = await service.GetMappingByModelAliasAsync("old");
+        await stored.Task.WaitAsync(TimeSpan.FromSeconds(5));
         results[0]!.Provider.Settings!.Clear();
         results[0]!.ModelProviderTypeAssociation.Model.SupportsImageGeneration = false;
         source.Provider.Settings!.Clear();
         Assert.All(results.Skip(1), value => AssertGraph(value!));
+    }
+
+    [Fact]
+    public async Task RetainedCacheHitOwnsItsGraphAndNeverReloads()
+    {
+        var source = Graph();
+        var inner = Inner(source);
+        using var host = Host(inner.Object);
+        using var scope = host.CreateScope();
+        var generation = await host.GetRequiredService<ApplicationCacheGeneration>().GetAsync(ApplicationCacheDomain.Mappings);
+        // This tests retained reads independently of the production 100 ms write TTL.
+        await host.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey).SetAsync<List<MappingCacheSnapshot>>(
+            $"mappings:{generation}:{CacheKeys.ModelMapping.ByAlias("old")}", [MappingCacheSnapshot.From(source)],
+            new FusionCacheEntryOptions { Duration = TimeSpan.FromMinutes(1) });
+        var service = scope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
+        var first = await service.GetMappingByModelAliasAsync("old");
+        first!.Provider.Settings!.Clear();
+        source.Provider.Settings!.Clear();
+        var cached = await service.GetMappingByModelAliasAsync("old");
         AssertGraph(cached!);
+        inner.Verify(item => item.GetMappingByModelAliasAsync("old"), Times.Never);
     }
 
     [SkippableFact]

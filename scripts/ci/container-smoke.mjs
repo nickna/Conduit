@@ -122,8 +122,13 @@ try {
   await api(stub, '/control', 'POST', { failRate: 0 });
   assert.equal((await chat()).status, 200, 'Provider recovers after consecutive failures');
   await billed(2);
+  let requestsDuringKeyInvalidation = 0;
   await adminApi(`/virtual-keys/${key.id}`, 'PATCH', { isEnabled: false });
-  await until('Disabled key invalidates authentication cache', async () => (await chat()).status === 401);
+  await until('Disabled key invalidates authentication cache', async () => {
+    const response = await chat();
+    if (response.status === 200) requestsDuringKeyInvalidation++;
+    return response.status === 401;
+  });
   await adminApi(`/virtual-keys/${key.id}`, 'PATCH', { isEnabled: true });
   await until('Re-enabled key restores authentication', async () =>
     (await api(gateway, '/v1/models', 'GET', undefined, authorization)).status === 200);
@@ -139,7 +144,7 @@ try {
     assert.ok(rejected.headers.get('retry-after'));
     report.checks.push(`${limit} rejects excess requests`);
   }
-  await billed(4);
+  await billed(4 + requestsDuringKeyInvalidation);
   assert.equal((await api(gateway, '/v1/models', 'GET', undefined, authorization)).status, 200);
   assert.ok(docker(['exec', `${run}-redis`, 'redis-cli', '--scan', '--pattern', 'vkey:*']),
     'A successful authenticated read must write a real Redis cache entry');
@@ -157,7 +162,7 @@ try {
   }, 10_000);
   await adminApi('/model-provider-mappings/bulk/enable', 'POST', [mapping.id]);
   await until('Route recovers after cache invalidation', async () => (await chat()).status === 200, 10_000);
-  await billed(5 + requestsDuringInvalidation);
+  await billed(5 + requestsDuringKeyInvalidation + requestsDuringInvalidation);
   // The browser extension uses these same real hosts before teardown.
   if (process.env.CI_BROWSER_MODULE) {
     const browser = await import(pathToFileURL(resolve(process.env.CI_BROWSER_MODULE)).href);

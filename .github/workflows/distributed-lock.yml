@@ -57,17 +57,22 @@ jobs:
           filter: Component=DistributedLock
           minimum: '18'
       - name: JIT production lock probe
-        run: dotnet run --project tools/ConduitLLM.LockProbe -c Release
+        run: |
+          mkdir -p artifacts/lock-probe/evidence
+          dotnet run --project tools/ConduitLLM.LockProbe -c Release | tee artifacts/lock-probe/evidence/jit.log
       - name: Install native toolchain
         run: sudo apt-get update && sudo apt-get install --yes clang zlib1g-dev
       - name: Publish exact production lock slice with reflection disabled
         run: dotnet publish tools/ConduitLLM.LockProbe -c Release -r linux-x64 -p:PublishAot=true -o artifacts/lock-probe/native
       - name: Native production lock probe
-        run: artifacts/lock-probe/native/ConduitLLM.LockProbe
+        run: |
+          artifacts/lock-probe/native/ConduitLLM.LockProbe | tee artifacts/lock-probe/evidence/native.log
+          sha256sum artifacts/lock-probe/native/ConduitLLM.LockProbe > artifacts/lock-probe/evidence/native.sha256
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: distributed-lock-pg${{ matrix.postgres }}
-          path: artifacts/lock-probe/test-results
+          path: artifacts/lock-probe/evidence
+          if-no-files-found: error
           retention-days: 14
