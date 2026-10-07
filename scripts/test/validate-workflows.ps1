@@ -4,8 +4,9 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Push-Location $root
 try {
+    $configuration = Get-Content scripts/ci/actionlint-config.json -Raw | ConvertFrom-Json
+    $version = $configuration.version
     if (!$Actionlint) {
-        $version = '1.7.12'
         $directory = Join-Path $root 'artifacts/tools/actionlint'
         if ($IsWindows) {
             $asset = "actionlint_${version}_windows_amd64.zip"
@@ -28,16 +29,22 @@ try {
             if ($LASTEXITCODE -ne 0) { throw 'Could not extract verified actionlint' }
         }
     }
+    $toolVersion = @(& $Actionlint -version)
+    if ($LASTEXITCODE -ne 0 -or !$toolVersion.Count) { throw 'Could not identify actionlint executable' }
     $env:ACTIONLINT = $Actionlint
     $workflows = Get-ChildItem .github/workflows -File | Where-Object Extension -In '.yml', '.yaml' | ForEach-Object FullName
     # Actionlint validates YAML, Actions schemas, expressions and job/step references.
     # Shellcheck/pyflakes have separate ownership; don't depend on optional local installs.
-    # v1.7.12 predates GitHub's documented concurrency.queue syntax (upstream #746).
+    # v1.7.12 predates GitHub's documented concurrency.queue syntax (upstream PR #654).
     # Ignore only that exact schema diagnostic; parsed policy validates queue values
     # and cancellation compatibility for every workflow/job, including fixtures.
-    & $Actionlint -shellcheck='' -pyflakes='' -ignore '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$' @workflows
+    $arguments = @('-shellcheck=', '-pyflakes=')
+    if ($configuration.queueCompatibilityDiagnostic) {
+        $arguments += @('-ignore', $configuration.queueCompatibilityDiagnostic)
+    }
+    & $Actionlint @arguments @workflows
     if ($LASTEXITCODE -ne 0) { throw 'Actions syntax/expression validation failed' }
     & node scripts/ci/workflow-check.mjs
     if ($LASTEXITCODE -ne 0) { throw 'Workflow gating policy failed' }
-    Write-Host "Validated $($workflows.Count) active workflows with actionlint $version and parsed gating policy."
+    Write-Host "Validated $($workflows.Count) active workflows with $($toolVersion[0]) and parsed gating policy."
 } finally { Pop-Location }

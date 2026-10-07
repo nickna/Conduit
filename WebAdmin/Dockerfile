@@ -52,6 +52,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/WebAdmin/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/WebAdmin/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/WebAdmin/public ./public
 USER nextjs
+# Enforce #1467's development-only exception against the final shipped tree.
+RUN --mount=type=bind,source=WebAdmin/scripts/check-runtime-dependencies.mjs,target=/tmp/check-runtime-dependencies.mjs \
+    node /tmp/check-runtime-dependencies.mjs /app
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1
