@@ -169,7 +169,8 @@ store instead of re-entering EF in native builds.
 
 Local verification uses .NET SDK 10.0.401, `win-x64`, PostgreSQL 17, Redis 7.4, and
 pinned MinIO. The Release solution build, empty analyzer/linker ratchets, both native
-OpenAPI smokes, native persistence probe, nine shared EF/Npgsql contracts, and the
+OpenAPI smokes, two-host native Wolverine dispatch, native persistence probe,
+nine shared EF/Npgsql contracts, and the
 published Gateway provider/SSE/accounting/storage/JSON-SignalR matrix pass. The core
 suite, billing invariants and fault injection, and 26 durable media/webhook cases
 also pass. Offline OpenAPI and client types match the checked-in contracts across
