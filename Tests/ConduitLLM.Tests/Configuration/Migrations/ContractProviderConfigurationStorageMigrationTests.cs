@@ -35,14 +35,19 @@ public sealed class ContractProviderConfigurationStorageMigrationTests
     }
 
     [Fact]
-    public void TargetModel_MatchesTheCurrentContextModel()
+    public void LatestMigration_TargetModelMatchesTheCurrentContextModel()
     {
         using var context = CreateContext();
 
         var differ = context.GetService<IMigrationsModelDiffer>();
         var currentModel = context.GetService<IDesignTimeModel>().Model;
+        var migrationsAssembly = context.GetService<IMigrationsAssembly>();
+        var latestMigration = migrationsAssembly.Migrations
+            .OrderBy(migration => migration.Key, StringComparer.Ordinal)
+            .Last();
+        var migration = migrationsAssembly.CreateMigration(latestMigration.Value, context.Database.ProviderName!);
         var targetModel = context.GetService<IModelRuntimeInitializer>()
-            .Initialize(new AddAsyncTaskRetryDispatchId().TargetModel, designTime: true);
+            .Initialize(migration.TargetModel, designTime: true);
 
         Assert.False(differ.HasDifferences(
             targetModel.GetRelationalModel(),
