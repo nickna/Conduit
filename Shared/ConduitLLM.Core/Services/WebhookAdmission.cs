@@ -70,7 +70,7 @@ public sealed class WebhookAdmission(IOptions<WebhookDeliveryOptions> options, I
         {
             var result = (RedisResult[])(await redis.GetDatabase().ScriptEvaluateAsync(AcquireScript, Keys(key),
                 [Millis(now), Millis(expires), token, _options.GlobalConcurrency, _options.DestinationConcurrency,
-                    _options.RecoveryProbes, _options.DeferralSeconds * 1000]))!;
+                    _options.RecoveryProbes, _options.CapacityDeferralMilliseconds]))!;
             if ((int)result[0] == 0)
             {
                 await local.Lease.DisposeAsync();
@@ -103,7 +103,7 @@ public sealed class WebhookAdmission(IOptions<WebhookDeliveryOptions> options, I
             var destination = _active.Values.Where(l => l.Key == key).ToArray();
             if (_active.Count >= _options.GlobalConcurrency || destination.Length >= _options.DestinationConcurrency ||
                 (probe && destination.Count(l => l.Probe) >= _options.RecoveryProbes))
-                return new(null, now.AddSeconds(_options.DeferralSeconds));
+                return new(null, now.AddMilliseconds(_options.CapacityDeferralMilliseconds));
             _active[token] = new(key, expires, state.Generation, probe);
             return new(new Lease(this, key, token, null, state.Generation, probe), expires, probe);
         }

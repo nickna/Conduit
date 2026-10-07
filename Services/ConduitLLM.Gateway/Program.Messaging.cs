@@ -39,7 +39,7 @@ public partial class Program
     /// route through the shared queue topology (<c>ConduitMessagingTopology</c>): the four
     /// tuned queues carry the <c>ConduitEndpointPolicies</c> descriptors translated by
     /// <c>WolverineEndpointPolicy</c> (strict ordering for spend/image, concurrency cap +
-    /// circuit breaker for webhooks, per-type retry rules), everything else rides
+    /// destination admission for webhooks, per-type retry rules), everything else rides
     /// <c>gateway-events</c>. Cross-service delivery (Admin→Gateway) flows over the same
     /// queues.
     /// </summary>
@@ -88,6 +88,10 @@ public partial class Program
             // #928) routes everything to local queues instead.
             if (postgresTransport)
             {
+                // Capacity deferrals are ordinary durable scheduled messages. Keep
+                // the scan cadence close to their 250ms default instead of adding
+                // seconds of scheduler delay to otherwise healthy callback bursts.
+                opts.Durability.ScheduledJobPollingTime = TimeSpan.FromMilliseconds(250);
                 ConduitLLM.Core.Messaging.ConduitMessagingTopology.ApplyConduitPublishRouting(opts);
                 ConduitLLM.Core.Messaging.ConduitMessagingTopology.ListenAsConduitGateway(opts);
             }

@@ -30,10 +30,13 @@ public sealed class WebhookAdmissionTests
     [Fact]
     public async Task LocalAdmission_BoundsDestinationsAndLeavesCapacityForHealthyReceiver()
     {
-        var admission = Create(new Clock(), global: 3, destination: 2);
+        var clock = new Clock();
+        var admission = Create(clock, global: 3, destination: 2);
         var first = await admission.AcquireAsync("noisy");
         var second = await admission.AcquireAsync("noisy");
-        Assert.Null((await admission.AcquireAsync("noisy")).Lease);
+        var capacityDenied = await admission.AcquireAsync("noisy");
+        Assert.Null(capacityDenied.Lease);
+        Assert.Equal(clock.Now.UtcDateTime.AddMilliseconds(250), capacityDenied.DueAt);
         var healthy = await admission.AcquireAsync("healthy");
         Assert.NotNull(healthy.Lease);
         Assert.Null((await admission.AcquireAsync("third")).Lease);

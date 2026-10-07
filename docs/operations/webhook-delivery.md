@@ -36,7 +36,7 @@ in 351.59 ms, then **4 POSTs in 14,018.07 ms** for the unavailable callback. Aft
 WR-1: 20 healthy POSTs in 5.21 ms, then **1 POST in 0.19 ms** for the unavailable
 callback. These are small diagnostic samples with different warmup effects, not a
 healthy-path throughput comparison. They establish removal of hidden retry
-amplification. The final WR-7 gate must measure database-backed delivery, restart,
+amplification. The WR-7 gate below measures database-backed delivery, restart,
 one/two instances, mixed destinations, resource use, and latency distributions.
 
 Reproduce the HTTP regression suite with:
@@ -141,7 +141,7 @@ acceptance/recovery tests also verify provider markers and spend safeguards.
 
 ## Async admission and circuit isolation (WR-5)
 
-`GlobalConcurrency` defaults to 32 and `DestinationConcurrency` to 4. With Redis,
+`GlobalConcurrency` defaults to 32 and `DestinationConcurrency` to 8. With Redis,
 these are aggregate limits across instances sharing the admission namespace; a
 process-local cap also applies. Without Redis (or during an outage), limits and
 circuits are local: N instances can admit up to N times each configured limit.
@@ -160,7 +160,14 @@ local destination state is pruned after 30 minutes and capped at 4096 entries.
 
 Admission never waits for capacity. Denial durably schedules the event and returns
 the worker slot, with no HTTP attempt. Per-destination capacity leaves slots for
-other receivers. Started/progress work retains its five-minute freshness deadline.
+other receivers. Capacity denial uses `CapacityDeferralMilliseconds` (default 250,
+10–60000); an open circuit uses its remaining open interval. The longer
+`DeferralSeconds` (default 30) applies when the bounded local destination registry
+is full. Separating capacity from circuit delays keeps healthy bursts from waiting
+30 seconds for a short-lived HTTP slot. Gateway scans durable scheduled work every
+250 ms so short capacity deferrals are not stretched by a multi-second scheduler
+cadence. This adds up to four idle scheduled-work polls per second per Gateway.
+Started/progress work retains its five-minute freshness deadline.
 The receiver exception-count listener circuit is removed because exhausted receiver
 events could otherwise pause the whole queue. Wolverine's infrastructure persistence
 and recovery still handle transport/database faults. Historical `RateLimit` metadata
@@ -226,4 +233,208 @@ Metrics and SignalR cannot control delivery scheduling or resend a committed suc
 The no-caller audit removed the batch timer/queue, Redis/cached/no-op receipt trackers,
 logging-only delivery service, old synchronous circuits, and duplicate Redis metrics
 writers. Legacy expiring circuit JSON remains readable for serialization compatibility.
+
+## Deployment and rollback
+
+1. Back up the database and use the release migrator to apply the additive
+   `20261006230550_AddDurableWebhookDeliveries` and
+   `20261006232832_AddWebhookReplayAudit` migrations. Keep Wolverine's shared
+   transport schema and separate Admin/Gateway durability schemas. Regenerated
+   static handlers and the native EF model ship with this release.
+2. Stop or drain the previous Gateway workers before enabling the new workers.
+   Deploy the complete implementation together. Previous workers do not consult
+   these receipts and must not compete with new workers for callbacks. Deploy Admin
+   recovery endpoints with the matching Gateway durability schema setting.
+3. Resume workers and inspect retained backlog/oldest age, actual HTTP statuses,
+   POST rates, exhaustion, and admission deferrals. Verify one authenticated callback
+   against a controlled receiver before expanding a canary. Native images retain
+   the repository's canary-only promotion status.
+
+Legacy scheduled messages keep their original logical EventId and timestamp;
+missing owner/cycle/start fields default to zero/zero/null. The original timestamp
+starts their freshness window, and legacy RetryCount conservatively consumes the
+attempt budget. Old progress beyond five minutes expires without POSTing. Old
+terminal work outside the delivery window becomes inspectable exhaustion, rather
+than silently receiving a fresh unlimited window. Historical terminal tasks are
+never blindly backfilled: their receiver may already have accepted a callback.
+
+For rollback, stop new workers, snapshot receipt/replay state and queued/scheduled
+work, and retain the additive tables. Avoid running an older worker over active
+replay cycles: it does not enforce the cycle fence or receipt. Resolve/drain the
+active callback backlog with this version before a coordinated application
+rollback. Restoring the previous application also restores its earlier HTTP retry
+and terminal intent behavior; removing the new tables does not make that safe.
+
+Use `X-API-Key: <master-key>` for Admin operator calls. The existing outer Admin
+security middleware rejects Bearer-only requests despite authentication-handler
+support; that separate issue is tracked in [#1448](https://github.com/nickna/Conduit/issues/1448).
+
+## Combined reliability gate (WR-7)
+
+The integration suite uses disposable PostgreSQL 17 databases, real Wolverine
+outbox/inbox persistence and production static bridges, the production
+`CoreMessagingJsonContext`, and a controllable Kestrel HTTP receiver. Redis cases
+use Redis 7.4; other cases deliberately omit it. Process tests kill a separate
+`MediaDispatchProbe` executable, rather than simulating a restart with mock calls.
+
+Coverage includes image/video termination on both sides of the terminal
+transaction commit; process death after retry commit and before acknowledgment;
+claim-owner death before send and after receiver acceptance; expired leases and
+late owners; duplicate events on two hosts; 25 expired progress events mixed with
+a valid final event; unavailable admission and bounded Redis probes; optional
+notification failure; actual status codes, Retry-After, connection reset, timeout,
+redirects, cookies, and oversized/slow response bodies. Accepted image/video jobs
+also traverse their production orchestrators through real HTTP callbacks, with
+custom headers, exactly one provider call and one idempotent debit.
+
+The acceptance fault test now injects transport failures into the actual
+`wolverine_queues` schema (#1449). It ages the dead publisher's heartbeat only in
+the isolated fixture to avoid a 60-second control-command timeout; Wolverine must
+still recover the untouched persisted outgoing envelope. Source-generated direct
+and legacy video messages are separately round-tripped (#1450).
+
+Reproduce from a Windows checkout with Docker Desktop Linux containers:
+
+```powershell
+dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj -m:2 --filter 'FullyQualifiedName~Webhook|FullyQualifiedName~GenerationOrchestrator|FullyQualifiedName~HybridAsyncTask|FullyQualifiedName~MediaGenerationEventContract|FullyQualifiedName~WolverineEndpointPolicy|FullyQualifiedName~MasterKeyAuthentication'
+dotnet test Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj -m:2
+dotnet test Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj -m:2 --filter 'FullyQualifiedName~Webhook|FullyQualifiedName~MediaDurable|FullyQualifiedName~MediaTerminal'
+pwsh -File scripts/generate-wolverine-code.ps1 -Verify
+pwsh -File scripts/aot/aot-audit.ps1
+```
+
+The native gate additionally starts the actual Linux x64 Gateway and Admin
+executables against PostgreSQL/Redis. It verifies authenticated HTTP delivery,
+retained inspection, Wolverine's public dead-letter adapter, restricted replay,
+and the unchanged receiver event ID. Build current images before opting in:
+
+```powershell
+docker build -f Services/ConduitLLM.Gateway/Dockerfile.native -t conduit-http-native:epic-1419 .
+docker build -f Services/ConduitLLM.Admin/Dockerfile.native -t conduit-admin-native:epic-1419 .
+$env:CONDUIT_WEBHOOK_NATIVE_TEST = '1'
+dotnet test Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj --filter 'FullyQualifiedName~WebhookNativeRuntimeTests' -m:2
+```
+
+The default integration run explicitly skips this image-dependent case. Analyzer
+builds and real native publishes are separate gates: existing first-party linker
+warnings remain subject to `scripts/aot/linker-warning-baseline.json`; successful
+publication does not mean zero linker warnings or general native promotion.
+
+## Matched HTTP workload
+
+The runner compiles the same harness against archived baseline `7b3a471d` and this
+implementation. Each runs one and two Wolverine hosts, 75 queue workers per host,
+20 healthy warmup events, then a 200-event burst observed for ten seconds. Payloads
+have 1024 bytes of JSON padding. Four healthy destination URLs return 202 after
+10 ms. The outage case offers 160 events to one destination returning 503 after
+200 ms, then 40 healthy events. Both implementations use identical queue and
+scheduled polling (250 ms); current production Gateway uses that scheduled cadence.
+The baseline also receives this faster cadence, rather than benefiting the new
+implementation alone.
+Auxiliary spend/statistics hosted services are excluded; the production webhook
+consumer, HTTP sender, queue policy, and current receipt adapter remain in the path.
+
+Final results (milliseconds, rounded; outage offers contain 40 healthy events):
+
+| Hosts | Workload | Version | Delivered | Useful/s | POSTs | Healthy first p95 | Success p95 | Healthy drain |
+|---:|---|---|---:|---:|---:|---:|---:|---:|
+| 1 | healthy | before | 200 | 19.95 | 200 | 268 | 284 | 302 |
+| 1 | outage | before | 0 | 0.00 | 225 | — | — | >10000 |
+| 2 | healthy | before | 200 | 19.91 | 200 | 155 | 174 | 199 |
+| 2 | outage | before | 24 | 2.40 | 435 | 61 | 74 | >10000 |
+| 1 | healthy | new | 200 | 19.95 | 200 | 631 | 650 | 740 |
+| 1 | outage | new | 40 | 3.99 | 48 | 279 | 296 | 314 |
+| 2 | healthy | new | 200 | 19.95 | 200 | 460 | 476 | 561 |
+| 2 | outage | new | 40 | 3.98 | 56 | 191 | 218 | 285 |
+
+All four new cases pass the tolerances below. Healthy-only goodput is unchanged
+at this offered rate; p95 increases by 365/301 ms for one/two hosts. Durable
+claim/watchdog, attempt, and receipt writes plus destination admission explain
+this measured cost. There is no healthy-path speedup claim. Under outage, all
+healthy events now finish, rather than zero/24 of 40. The baseline two-host success
+percentile includes only those 24 successes and excludes the 16 unfinished healthy
+events; it cannot establish a better healthy-service latency bound.
+
+Total outage POSTs fall from 225/435 to 48/56 (79%/87% lower). POSTs per offered
+event are 1.125/2.175 before and 0.24/0.28 after. The 160 failed-destination events
+remain durably pending behind the open circuit; these ratios reflect bounded
+admission during the ten-second outage observation, not delivery or loss of those
+events. Oldest pending work is approximately ten seconds in all outage cases.
+Transport queue depth is zero at each final sample; raw pending counts are
+200/176 before and 160/160 after, as scheduled and in-flight work lives elsewhere.
+
+Resource observations for the same windows (MiB, aggregate managed process):
+
+| Hosts | Workload | Version | CPU ms | Allocated MiB | Peak resident MiB | Peak thread-pool queue/threads | PostgreSQL calls |
+|---:|---|---|---:|---:|---:|---:|---:|
+| 1 | healthy | before | 3062 | 21.9 | 181.2 | 32/29 | 2532 |
+| 1 | outage | before | 3219 | 12.7 | 187.6 | 61/29 | 2030 |
+| 2 | healthy | before | 4000 | 22.2 | 199.7 | 33/34 | 3018 |
+| 2 | outage | before | 1844 | 18.1 | 197.0 | 41/48 | 2735 |
+| 1 | healthy | new | 4609 | 34.4 | 169.9 | 21/28 | 6439 |
+| 1 | outage | new | 4828 | 30.1 | 182.4 | 15/40 | 5494 |
+| 2 | healthy | new | 3688 | 32.9 | 193.9 | 20/43 | 6394 |
+| 2 | outage | new | 2125 | 35.6 | 195.5 | 16/48 | 6488 |
+
+PostgreSQL calls and allocations increase with authoritative receipts and atomic
+scheduling. One-host CPU also increases; two-host CPU varies with background
+durability activity. These are single matched samples, not confidence intervals.
+Do not extrapolate their resource ratios or burst drain to fleet capacity.
+
+Full p50/p95/p99 and resource observations are retained in
+[baseline.json](webhook-validation/baseline.json),
+[current.json](webhook-validation/current.json), and
+[environment.json](webhook-validation/environment.json).
+
+Hardware: Intel Core i7-14700T, 28 logical processors, Windows x64, .NET 10.0.401,
+Docker Desktop Linux. PostgreSQL 17 Alpine has a two-CPU/two-GiB container limit
+and `pg_stat_statements` enabled. Hosts and receiver share one managed process on
+the host machine; two hosts exercise shared queue/receipt coordination, not two
+independent machines. PostgreSQL calls count SQL statements for the full window;
+CPU, allocation, resident memory and thread-pool samples cover the aggregate
+managed process. Redis is deliberately absent (zero calls); shared Redis admission
+and outage behavior are verified separately by the integration suite. Builds and
+other fault tests do not run during measurement.
+
+This is fixed-burst goodput, not a saturation or maximum-throughput claim. Reported
+20 useful events/second for a healthy run is capped by 200 offers over ten seconds;
+healthy drain time and latency reveal the meaningful burst behavior. First-attempt
+latency starts before enqueueing and ends at receiver arrival. End-to-end latency
+ends after the success receipt and notification callback; failed destinations have
+no successful end-to-end observation. Raw reports include p50/p95/p99, healthy-only
+first-attempt samples, transport depth, unfinished logical work/oldest age, POSTs,
+resource samples, and database calls. Transport depth alone excludes scheduled and
+in-flight work, so zero transport depth does not imply an empty logical backlog.
+
+Acceptance tolerances for this asynchronous callback gate are: every healthy offer
+completes within two seconds of enqueueing; healthy-only p95 is at most 1.5 seconds,
+ten-second goodput at least 19.5/s (2.5% below offered rate), and exactly one POST per
+healthy event; mixed-outage healthy work also drains within two seconds and total
+POSTs stay below 100 for 200 offers. These absolute latency bounds allow the added
+receipt/lease transactions and bounded destination admission while keeping callback
+delay small relative to the five-minute freshness window. They do not permit lost
+healthy work or retry amplification. The runner fails when these bounds are missed.
+
+An initial four-slot destination configuration produced 1.47-second healthy p95
+and a 2.04-second drain on one host. Eight destination slots use the existing
+32-slot global cap more effectively across four healthy URLs, while a failing
+destination can still occupy only a quarter of that cap. Capacity deferral is
+250 ms rather than the original 30 seconds, with matching production scheduled
+polling. The final comparison above validates those defaults; it does not assume
+that durable receipts make the healthy path faster.
+
+Reproduce with the same SDK and Docker resources:
+
+```powershell
+New-Item -ItemType Directory -Force artifacts/webhook-baseline | Out-Null
+git archive -o artifacts/webhook-baseline.zip 7b3a471d
+Expand-Archive artifacts/webhook-baseline.zip artifacts/webhook-baseline -Force
+pwsh -File scripts/benchmarks/webhook-delivery.ps1
+```
+
+The runner accepts only the isolated `conduit_webhook_bench` database name, creates
+and removes its own PostgreSQL container, and writes JSON to
+`artifacts/webhook-benchmark`. Never substitute an application database. Repeat on
+deployment hardware before increasing concurrency; instance scaling without Redis
+also scales the fallback admission caps.
 
