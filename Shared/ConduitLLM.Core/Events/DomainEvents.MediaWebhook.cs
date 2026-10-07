@@ -117,6 +117,12 @@ namespace ConduitLLM.Core.Events
     /// </summary>
     public record WebhookDeliveryRequested : DomainEvent
     {
+        /// <summary>Owner captured by the producer; zero denotes a legacy event without ownership metadata.</summary>
+        public int VirtualKeyId { get; init; }
+        /// <summary>Internal retry cycle. Operator replay increments this without changing EventId.</summary>
+        public int DeliveryCycle { get; init; }
+        /// <summary>Original start of this retry cycle. Null uses the legacy event Timestamp.</summary>
+        public DateTime? DeliveryStartedAt { get; init; }
         /// <summary>
         /// Unique task identifier (e.g., video/image generation request ID)
         /// </summary>

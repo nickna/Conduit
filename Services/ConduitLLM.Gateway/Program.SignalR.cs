@@ -27,9 +27,6 @@ public partial class Program
             // Register the Redis-based SignalR rate limit service
             builder.Services.AddSingleton<ConduitLLM.Core.Services.ISignalRRateLimitService, ConduitLLM.Core.Services.RedisSignalRRateLimitService>();
             
-            // Register webhook metrics service (required for distributed tracking)
-            builder.Services.AddSingleton<ConduitLLM.Core.Services.IWebhookMetricsService, ConduitLLM.Core.Services.RedisWebhookMetricsService>();
-            
         }
         else
         {

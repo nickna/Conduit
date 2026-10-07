@@ -112,6 +112,7 @@ namespace ConduitLLM.Tests.Services.Orchestrators
                 VirtualKeyId = "1",  // Must be a valid integer string for parsing
                 IsAsync = true,
                 WebhookUrl = "https://example.com/webhook",
+                WebhookHeaders = new() { ["Authorization"] = "Bearer callback-test" },
                 CorrelationId = "test-correlation-id"
             };
         }

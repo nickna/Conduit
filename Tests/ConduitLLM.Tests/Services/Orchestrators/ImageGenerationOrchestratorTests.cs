@@ -68,6 +68,7 @@ namespace ConduitLLM.Tests.Services.Orchestrators
                     ResponseFormat = "url"
                 },
                 WebhookUrl = "https://example.com/webhook",
+                WebhookHeaders = new() { ["Authorization"] = "Bearer callback-test" },
                 CorrelationId = "test-correlation-id"
             };
         }

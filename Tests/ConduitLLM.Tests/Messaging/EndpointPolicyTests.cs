@@ -26,7 +26,7 @@ namespace ConduitLLM.Tests.Messaging
             p.QuorumQueue.Should().BeTrue();
             p.SingleActiveConsumer.Should().BeFalse();
             p.Retry.Should().BeNull();
-            p.CircuitBreaker.Should().Be(new CircuitBreakerPolicy(TimeSpan.FromMinutes(1), 15, 10, TimeSpan.FromMinutes(5)));
+        p.CircuitBreaker.Should().BeNull("receiver exhaustion must not pause healthy destinations");
             p.RateLimit.Should().Be(new RateLimitPolicy(100, TimeSpan.FromSeconds(1)));
             p.QueueArguments!["x-delivery-limit"].Should().Be(10);
             p.QueueArguments!["x-max-length"].Should().Be(50000);

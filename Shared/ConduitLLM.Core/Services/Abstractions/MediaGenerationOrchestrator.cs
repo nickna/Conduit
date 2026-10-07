@@ -60,6 +60,8 @@ namespace ConduitLLM.Core.Services.Abstractions
         protected readonly ILogger _logger;
         protected readonly IProviderErrorTranslator _providerErrorTranslator;
         private readonly IBatchSpendUpdateService? _batchSpendService;
+        private readonly IMediaTaskTerminalWriter? _terminalWriter;
+        private string? _workerId;
 
         protected MediaGenerationOrchestrator(
             ILLMClientFactory clientFactory,
@@ -77,7 +79,8 @@ namespace ConduitLLM.Core.Services.Abstractions
             IProviderErrorTrackingService errorTrackingService,
             ILogger logger,
             IBatchSpendUpdateService? batchSpendService = null,
-            IProviderErrorTranslator? providerErrorTranslator = null)
+            IProviderErrorTranslator? providerErrorTranslator = null,
+            IMediaTaskTerminalWriter? terminalWriter = null)
         {
             _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
             _taskService = taskService ?? throw new ArgumentNullException(nameof(taskService));
@@ -94,6 +97,7 @@ namespace ConduitLLM.Core.Services.Abstractions
             _errorTrackingService = errorTrackingService ?? throw new ArgumentNullException(nameof(errorTrackingService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _batchSpendService = batchSpendService;
+            _terminalWriter = terminalWriter;
             // Default to External so an unwired construction sanitizes rather than leaks.
             _providerErrorTranslator = providerErrorTranslator
                 ?? new ProviderErrorTranslator(new CustomerErrorOptions());
@@ -113,6 +117,8 @@ namespace ConduitLLM.Core.Services.Abstractions
             var reservationId = GetRequestId(request);
             var reservationVirtualKeyId = 0;
             var workerId = $"{Environment.MachineName}:{Guid.NewGuid():N}";
+            _workerId = workerId;
+            var terminalCommitStarted = false;
 
             // Check if request should be processed
             if (!ShouldProcessRequest(request))
@@ -269,13 +275,8 @@ namespace ConduitLLM.Core.Services.Abstractions
                 var processedMedia = await ProcessMediaAsync(response, request, modelInfo, virtualKey, taskCts.Token);
 
                 // 12. Complete the task
+                terminalCommitStarted = true;
                 await CompleteTaskAsync(request, processedMedia, cost, modelInfo, stopwatch);
-
-                // 13. Send webhook notification if configured
-                if (!string.IsNullOrEmpty(GetWebhookUrl(request)))
-                {
-                    await SendWebhookNotificationAsync(request, processedMedia, stopwatch, "completed");
-                }
 
                 activity?.SetTag("media.cost", cost);
                 activity?.SetTag("media.duration_seconds", stopwatch.Elapsed.TotalSeconds);
@@ -312,6 +313,9 @@ namespace ConduitLLM.Core.Services.Abstractions
             }
             catch (Exception ex)
             {
+                // A terminal commit may have succeeded even when confirmation failed.
+                // Never manufacture a contradictory failure after provider completion.
+                if (terminalCommitStarted) throw;
                 if (!await CanFinalizeClaimAsync(GetRequestId(request), workerId))
                 {
                     reservationHandedOff |= reservationCreated && !await WasSafelyCancelledAsync(GetRequestId(request));
@@ -638,13 +642,8 @@ namespace ConduitLLM.Core.Services.Abstractions
             // Update task registry size
             _metrics.UpdateTaskRegistrySize(-1);
 
-            await _taskService.UpdateTaskStatusAsync(
-                GetRequestId(request),
-                TaskState.Completed,
-                progress: 100,
-                result: result);
-
-            await PublishCompletedEventAsync(request, media, cost, modelInfo, stopwatch.Elapsed);
+            if (await CommitTerminalOutcomeAsync(request, TaskState.Completed, stopwatch, media, result, progress: 100))
+                await ReportTerminalAsync(() => PublishCompletedEventAsync(request, media, cost, modelInfo, stopwatch.Elapsed));
         }
 
         protected virtual async Task HandleCancellationAsync(TEventRequest request, Stopwatch stopwatch, GenerationModelInfo? modelInfo)
@@ -678,15 +677,8 @@ namespace ConduitLLM.Core.Services.Abstractions
             // Update task registry size
             _metrics.UpdateTaskRegistrySize(-1);
             
-            await _taskService.UpdateTaskStatusAsync(
-                GetRequestId(request),
-                TaskState.Cancelled,
+            await CommitTerminalOutcomeAsync(request, TaskState.Cancelled, stopwatch,
                 error: "Task was cancelled by user request");
-            
-            if (!string.IsNullOrEmpty(GetWebhookUrl(request)))
-            {
-                await SendWebhookNotificationAsync(request, null, stopwatch, "cancelled");
-            }
         }
 
         protected virtual async Task HandleFailureAsync(
@@ -740,20 +732,12 @@ namespace ConduitLLM.Core.Services.Abstractions
             // The raw exception stays in the log above and in provider error tracking.
             var customerError = ToCustomerError(ex, modelInfo);
 
-            await _taskService.UpdateTaskStatusAsync(
-                GetRequestId(request),
-                TaskState.Failed,
-                error: customerError.Message);
+            if (!await CommitTerminalOutcomeAsync(request, TaskState.Failed, stopwatch, error: customerError.Message)) return;
 
             // Track in provider error system for dashboard visibility and auto-disable policies
             await TrackProviderErrorFromExceptionAsync(ex, modelInfo);
 
-            await PublishFailedEventAsync(request, customerError, isRetryable, 0, 0);
-
-            if (!string.IsNullOrEmpty(GetWebhookUrl(request)))
-            {
-                await SendWebhookNotificationAsync(request, null, stopwatch, "failed", customerError.Message);
-            }
+            await ReportTerminalAsync(() => PublishFailedEventAsync(request, customerError, isRetryable, 0, 0));
         }
 
         /// <summary>
@@ -841,7 +825,31 @@ namespace ConduitLLM.Core.Services.Abstractions
             });
         }
 
-        protected virtual async Task SendWebhookNotificationAsync(TEventRequest request, ProcessedMedia? media, Stopwatch stopwatch, string status, string? error = null)
+        private async Task<bool> CommitTerminalOutcomeAsync(TEventRequest request, TaskState state, Stopwatch stopwatch,
+            ProcessedMedia? media = null, object? result = null, int? progress = null, string? error = null)
+        {
+            var webhook = string.IsNullOrWhiteSpace(GetWebhookUrl(request)) ? null :
+                CreateWebhookDelivery(request, media, stopwatch, state.ToString().ToLowerInvariant(), error);
+            if (_terminalWriter != null)
+            {
+                var json = result == null ? null : System.Text.Json.JsonSerializer.Serialize(result, result.GetType(),
+                    Serialization.AsyncTaskJsonContext.Default);
+                return await _terminalWriter.CommitAsync(new(GetRequestId(request), state, _workerId, progress, json, error, webhook));
+            }
+            // Compatibility for directly constructed orchestrators outside the Gateway.
+            // Production composition always supplies the PostgreSQL writer.
+            await _taskService.UpdateTaskStatusAsync(GetRequestId(request), state, progress, result, error);
+            if (webhook != null) await _eventBus.PublishAsync(webhook);
+            return true;
+        }
+
+        private async Task ReportTerminalAsync(Func<Task> report)
+        {
+            try { await report(); }
+            catch (Exception) { _logger.LogWarning("Optional terminal media notification failed for {MediaType}", GetMediaType()); }
+        }
+
+        protected virtual WebhookDeliveryRequested CreateWebhookDelivery(TEventRequest request, ProcessedMedia? media, Stopwatch stopwatch, string status, string? error = null)
         {
             var payload = CreateWebhookPayload(request, media ?? new ProcessedMedia(), stopwatch.Elapsed, status, error);
             
@@ -853,23 +861,17 @@ namespace ConduitLLM.Core.Services.Abstractions
                 _ => WebhookEventType.TaskProgress
             };
             
-            await _eventBus.PublishAsync(new WebhookDeliveryRequested
+            return new WebhookDeliveryRequested
             {
+                VirtualKeyId = int.Parse(GetVirtualKeyId(request)),
                 TaskId = GetRequestId(request),
                 TaskType = GetMediaType().ToLowerInvariant(),
                 WebhookUrl = GetWebhookUrl(request)!,
                 EventType = eventType,
-                PayloadJson = System.Text.Json.JsonSerializer.Serialize(
-                    payload,
-                    Serialization.CoreJsonTypeInfo.Require(
-                        payload.GetType(),
-                        Serialization.ConduitJsonOptions.Compact)),
+                PayloadJson = Helpers.WebhookPayloadHelper.SerializePayload(payload),
                 Headers = GetWebhookHeaders(request),
                 CorrelationId = GetCorrelationId(request) ?? Guid.NewGuid().ToString()
-            });
-            
-            _logger.LogDebug("Published webhook delivery event for {Status} {MediaType} task {RequestId}",
-                status, GetMediaType(), GetRequestId(request));
+            };
         }
 
         /// <summary>

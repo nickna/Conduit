@@ -37,6 +37,8 @@ namespace ConduitLLM.Core.Services
         protected override string GetPrompt(ImageGenerationRequested request) => request.Request.Prompt;
         protected override string GetVirtualKeyId(ImageGenerationRequested request) => request.VirtualKeyId.ToString();
         protected override string? GetWebhookUrl(ImageGenerationRequested request) => request.WebhookUrl;
+        protected override Dictionary<string, string>? GetWebhookHeaders(ImageGenerationRequested request) =>
+            request.WebhookHeaders == null ? null : new(request.WebhookHeaders);
         protected override string? GetCorrelationId(ImageGenerationRequested request) => request.CorrelationId;
         protected override bool GetIsAsync(ImageGenerationRequested request) => true; // Images are always async
 
@@ -56,11 +58,12 @@ namespace ConduitLLM.Core.Services
             IProviderErrorTrackingService errorTrackingService,
             ILogger<ImageGenerationOrchestrator> logger,
             ConduitLLM.Configuration.Interfaces.IBatchSpendUpdateService? batchSpendService = null,
-            IProviderErrorTranslator? providerErrorTranslator = null)
+            IProviderErrorTranslator? providerErrorTranslator = null,
+            IMediaTaskTerminalWriter? terminalWriter = null)
             : base(clientFactory, taskService, storageService, eventBus,
                    modelMappingService, virtualKeyService, costService, taskRegistry,
                    webhookService, httpClientFactory, parameterValidator, metrics,
-                   errorTrackingService, logger, batchSpendService, providerErrorTranslator)
+                   errorTrackingService, logger, batchSpendService, providerErrorTranslator, terminalWriter)
         {
 
             // Initialize processing strategies

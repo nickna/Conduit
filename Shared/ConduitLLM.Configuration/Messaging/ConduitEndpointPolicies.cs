@@ -21,7 +21,9 @@ namespace ConduitLLM.Configuration.Messaging
             ConcurrentMessageLimit: 75,
             QuorumQueue: true,
             Retry: null,
-            CircuitBreaker: new CircuitBreakerPolicy(TimeSpan.FromMinutes(1), TripThreshold: 15, ActiveThreshold: 10, TimeSpan.FromMinutes(5)),
+            // Receiver failures are isolated by destination admission. A queue-wide
+            // exception-count circuit would pause healthy destinations on exhaustion.
+            CircuitBreaker: null,
             RateLimit: new RateLimitPolicy(100, TimeSpan.FromSeconds(1)),
             QueueArguments: new Dictionary<string, object>
             {

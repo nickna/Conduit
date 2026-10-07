@@ -28,11 +28,21 @@ public partial class Program
         _ = MessagingBackendResolver.Resolve(builder.Configuration);
 
         builder.Services.AddWolverineEventBus();
+        builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IWebhookRecovery, ConduitLLM.Messaging.Wolverine.WebhookDeliveryStore>();
+        builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IMediaTaskTerminalWriter, ConduitLLM.Messaging.Wolverine.MediaTaskTerminalWriter>();
+        builder.Services.AddOptions<ConduitLLM.Core.Configuration.WebhookDeliveryOptions>()
+            .Bind(builder.Configuration.GetSection(ConduitLLM.Core.Configuration.WebhookDeliveryOptions.SectionName))
+            .Validate(o => o.IsValid(), "Invalid webhook delivery options.").ValidateOnStart();
+        builder.Services.AddSingleton<ConduitLLM.Core.Services.WebhookDeliveryPolicy>();
 
         var (_, wolverineConnectionString) = new ConduitLLM.Core.Data.ConnectionStringManager()
             .GetProviderAndConnectionString("AdminAPI", msg => startupLogger.LogInformation("{Message}", msg));
 
         var postgresTransport = !WolverineMessagingExtensions.UsesInMemoryTransport(builder.Configuration);
+        if (postgresTransport)
+            builder.Services.AddSingleton(sp => new ConduitLLM.Messaging.Wolverine.WebhookErrorStore(
+                sp.GetRequiredService<Wolverine.Runtime.IWolverineRuntime>(), wolverineConnectionString,
+                builder.Configuration["Webhooks:GatewayDurabilitySchema"] ?? "wolverine_conduit_gateway"));
 
         builder.Host.AddConduitWolverine(builder.Configuration, wolverineConnectionString, "conduit-admin", opts =>
         {

@@ -13,12 +13,14 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Metrics;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Core.Serialization;
 using ConduitLLM.Core.Validation;
 using ConduitLLM.Messaging.Wolverine;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -29,6 +31,9 @@ using Testcontainers.PostgreSql;
 using Wolverine;
 using Wolverine.Postgresql;
 using Wolverine.Runtime;
+using ConduitLLM.Gateway.Extensions;
+using ConduitLLM.Gateway.Services;
+using ConduitLLM.Gateway.Consumers;
 
 namespace ConduitLLM.IntegrationTests.Infrastructure;
 
@@ -46,6 +51,8 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     public int HandledImages;
     public Func<Task>? BeforeKeyValidation { get; set; }
     public IBatchSpendUpdateService? Reservations { get; set; }
+    public Mock<IWebhookDeliveryNotificationService> WebhookNotifications { get; } = new();
+    public IWebhookAdmission? ReceiverAdmission { get; set; }
 
     public ConduitDbContext Db() => new(new DbContextOptionsBuilder<ConduitDbContext>()
         .UseNpgsql(ConnectionString).Options);
@@ -64,15 +71,15 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     }
     public async Task DisposeAsync() => await _postgres.DisposeAsync();
 
-    public IHost Host(bool worker, bool notificationsFail = false)
+    public IHost Host(bool worker, bool notificationsFail = false, bool webhooks = false, string durabilitySchema = "wolverine_media_test")
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [WolverineMessagingExtensions.SchemaNameKey] = "wolverine_media_test",
+            [WolverineMessagingExtensions.SchemaNameKey] = durabilitySchema,
             [WolverineMessagingExtensions.AutoProvisionKey] = "true"
         }).Build();
         return Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
-            .ConfigureLogging(log => log.ClearProviders())
+            .ConfigureLogging(log => { log.ClearProviders(); if (Environment.GetEnvironmentVariable("CONDUIT_MEDIA_TEST_LOG") == "1") log.AddConsole(); })
             .ConfigureServices(services =>
             {
                 services.AddWolverineEventBus();
@@ -82,16 +89,30 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
                     var failedBus = new Mock<IEventBus>();
                     failedBus.Setup(bus => bus.PublishAsync(It.IsAny<AsyncTaskCreated>(), It.IsAny<CancellationToken>()))
                         .ThrowsAsync(new IOException("Optional notification unavailable"));
+                    failedBus.Setup(bus => bus.PublishAsync(It.IsAny<AsyncTaskUpdated>(), It.IsAny<CancellationToken>()))
+                        .ThrowsAsync(new IOException("Optional terminal notification unavailable"));
                     services.AddSingleton(failedBus.Object);
                 }
                 services.AddScoped<IMediaTaskSubmission, MediaTaskSubmission>();
                 services.AddSingleton(Cache.Object);
                 services.AddScoped<IMediaTaskRecovery, MediaTaskRecovery>();
+                services.AddScoped<IMediaTaskTerminalWriter, MediaTaskTerminalWriter>();
+                services.AddScoped<IWebhookRecovery, WebhookDeliveryStore>();
+                if (webhooks)
+                {
+                    services.AddMemoryCache();
+                    services.AddWebhookHttpServices(config);
+                    services.AddScoped<IWebhookDeliveryStore, WebhookDeliveryStore>();
+                    services.AddSingleton(WebhookNotifications.Object);
+                    if (ReceiverAdmission != null) services.AddSingleton(ReceiverAdmission);
+                    services.AddScoped<IEventHandler<WebhookDeliveryRequested>, WebhookDeliveryConsumer>();
+                }
                 if (worker)
                 {
                     AddOrchestratorDependencies(services);
                     services.AddScoped<IAsyncTaskService>(sp => new HybridAsyncTaskService(
-                        Repository(), Cache.Object, sp.GetRequiredService<IEventBus>(), NullLogger<HybridAsyncTaskService>.Instance));
+                        Repository(), Cache.Object, sp.GetRequiredService<IEventBus>(), NullLogger<HybridAsyncTaskService>.Instance,
+                        sp.GetRequiredService<IMediaTaskTerminalWriter>()));
                     services.AddScoped<ImageGenerationOrchestrator>();
                     services.AddScoped<IEventHandler<ImageGenerationRequested>>(sp => new ObservedImages(sp.GetRequiredService<ImageGenerationOrchestrator>(), this));
                     services.AddScoped<IEventHandler<VideoGenerationRequested>, VideoGenerationOrchestrator>();
@@ -101,7 +122,23 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
             .AddConduitWolverine(config, ConnectionString, "media-dispatch-test", options =>
             {
                 options.ApplicationAssembly = typeof(ConduitLLM.Gateway.Endpoints.ImagesEndpoints).Assembly;
+                options.UseSystemTextJsonForSerialization(json =>
+                    json.TypeInfoResolverChain.Insert(0, CoreMessagingJsonContext.Default));
+                // Accelerate only the disposable fixture's dead-node/outbox scan;
+                // production defaults can legitimately exceed a 45s test window.
+                options.Durability.FirstHealthCheckExecution = TimeSpan.FromMilliseconds(100);
+                options.Durability.HealthCheckPollingTime = TimeSpan.FromSeconds(1);
+                options.Durability.StaleNodeTimeout = TimeSpan.FromSeconds(5);
+                options.Durability.FirstNodeReassignmentExecution = TimeSpan.FromMilliseconds(100);
+                options.Durability.NodeReassignmentPollingTime = TimeSpan.FromSeconds(1);
+                options.Durability.OutboxStaleTime = TimeSpan.FromSeconds(1);
                 options.ApplyConduitPublishRouting();
+                if (webhooks)
+                {
+                    options.Durability.ScheduledJobPollingTime = TimeSpan.FromMilliseconds(100);
+                    options.AddEventBridge<WebhookDeliveryRequested>();
+                    options.ListenWithPolicy(ConduitEndpointPolicies.WebhookDelivery, [typeof(WebhookDeliveryRequested)]);
+                }
                 if (worker)
                 {
                     options.AddEventBridge<ImageGenerationRequested>();
@@ -141,8 +178,8 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
         if (Reservations != null) services.AddSingleton(Reservations);
         services.AddSingleton(Mock.Of<IMediaStorageService>());
         services.AddSingleton<ICancellableTaskRegistry, CancellableTaskRegistry>();
-        services.AddSingleton(Mock.Of<IWebhookNotificationService>());
-        services.AddSingleton(Mock.Of<IHttpClientFactory>());
+        services.TryAddSingleton(Mock.Of<IWebhookNotificationService>());
+        services.TryAddSingleton(Mock.Of<IHttpClientFactory>());
         services.AddSingleton(Mock.Of<IProviderErrorTrackingService>());
         services.AddSingleton(new MinimalParameterValidator(NullLogger<MinimalParameterValidator>.Instance));
         services.AddSingleton<MediaGenerationMetrics>();
@@ -153,18 +190,19 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     {
         Provider.Reset(); Cache.Reset();
         HandledImages = 0; BeforeKeyValidation = null; Reservations = null;
+        ReceiverAdmission = null; WebhookNotifications.Reset();
         Provider.As<IVideoGenerationClient>().Setup(p => p.CreateVideoAsync(It.IsAny<VideoGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new VideoGenerationResponse { Created = 1, Data = [] });
         Provider.Setup(p => p.CreateImageAsync(It.IsAny<ImageGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ImageGenerationResponse { Created = 1, Data = [] });
-        await SqlAsync("TRUNCATE TABLE \"AsyncTasks\", \"VirtualKeyGroupTransactions\"; UPDATE \"VirtualKeyGroups\" SET \"Balance\" = 100");
+        await SqlAsync("TRUNCATE TABLE \"AsyncTasks\", \"VirtualKeyGroupTransactions\", \"WebhookDeliveries\", \"WebhookReplayAudits\"; UPDATE \"VirtualKeyGroups\" SET \"Balance\" = 100");
         // Every host/subprocess from the preceding case has stopped. Isolate the
         // disposable test database's transport queues from historical deliveries.
         await SqlAsync("""
             TRUNCATE TABLE wolverine_media_test.wolverine_incoming_envelopes, wolverine_media_test.wolverine_outgoing_envelopes;
             DO $$ DECLARE row record; BEGIN
-            FOR row IN SELECT tablename FROM pg_tables WHERE schemaname = 'wolverine_transport' LOOP
-              EXECUTE format('TRUNCATE TABLE wolverine_transport.%I CASCADE', row.tablename);
+            FOR row IN SELECT tablename FROM pg_tables WHERE schemaname = 'wolverine_queues' LOOP
+              EXECUTE format('TRUNCATE TABLE wolverine_queues.%I CASCADE', row.tablename);
             END LOOP; END $$;
             """);
     }
@@ -180,15 +218,21 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     public async Task<(Process Process, string Id)> StartPublisherAsync(string type)
     {
         var process = StartProbe(type);
-        var line = await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(30));
-        if (line?.StartsWith("ACCEPTED:", StringComparison.Ordinal) != true)
+        try
+        {
+            var line = await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(30));
+            if (line?.StartsWith("ACCEPTED:", StringComparison.Ordinal) != true)
+                throw new InvalidOperationException($"Publisher returned unexpected output: {line}");
+            return (process, line[9..]);
+        }
+        catch (Exception failure)
         {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
             var error = await process.StandardError.ReadToEndAsync();
             process.Dispose();
-            throw new InvalidOperationException($"Publisher failed: {line} {error}");
+            throw new InvalidOperationException($"Publisher failed: {error}", failure);
         }
-        return (process, line[9..]);
     }
 
     public Process StartProbe(params string[] args)
