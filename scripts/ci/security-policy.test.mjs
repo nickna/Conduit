@@ -29,7 +29,7 @@ test('real scanner shapes preserve vulnerable dependency identities', () => {
   assert.deepEqual(npm[0], vulnerable);
   const nuget = nugetFindings({ version: 1, projects: [{ frameworks: [{ transitivePackages: [{ id: 'SSH.NET', resolvedVersion: '2023.0.0',
     vulnerabilities: [{ severity: 'High', advisoryurl: 'https://github.com/advisories/GHSA-q939-rpr3-3284' }] }] }] }] });
-  assert.throws(() => enforce(nuget, []), /SSH.NET/);
+  assert.throws(() => enforce(nuget, []), error => error.message.includes('"package":"SSH.NET"'));
   const image = imageFindings({ ArtifactName: `image@sha256:${'a'.repeat(64)}`, Results: [{ Vulnerabilities: [{ PkgName: 'fixture',
     InstalledVersion: '1.0.0', VulnerabilityID: 'CVE-fixture', Severity: 'CRITICAL' }] }] }, 'release-image');
   assert.throws(() => enforce(image, [], 'image'), /CVE-fixture/);

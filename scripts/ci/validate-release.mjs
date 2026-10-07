@@ -18,7 +18,7 @@ async function get(path) {
 
 const deadline = Date.now() + 10 * 60_000;
 let run;
-while (!run) {
+for (;;) {
   const response = await get(`actions/workflows/ci.yml/runs?event=push&branch=master&head_sha=${sha}&per_page=100`);
   run = validatedRun(response.workflow_runs, sha);
   if (run) break;
