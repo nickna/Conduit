@@ -11,5 +11,7 @@
   "migrations",
   "distributed-lock",
   "codeql",
-  "s3-storage"
+  "s3-storage",
+  "contracts",
+  "webadmin"
 ]

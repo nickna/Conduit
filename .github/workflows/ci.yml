@@ -38,7 +38,7 @@ jobs:
   required:
     name: CI required
     if: ${{ always() }}
-    needs: [source-ignore-guard, media-dispatch-integration, billing-fault-injection, billing-invariants, signalr-integration, aot-analyzers, validate, wolverine-two-host, docker, s3-storage, migrations, distributed-lock, codeql]
+    needs: [source-ignore-guard, media-dispatch-integration, billing-fault-injection, billing-invariants, signalr-integration, aot-analyzers, validate, wolverine-two-host, docker, s3-storage, contracts, webadmin, migrations, distributed-lock, codeql]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -68,6 +68,7 @@ jobs:
   source-ignore-guard:
     name: Source ignore guard
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check native Docker SDK compatibility
@@ -113,6 +114,7 @@ jobs:
   billing-invariants:
     name: Billing invariants
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup .NET
@@ -195,6 +197,7 @@ jobs:
   validate:
     name: Validate
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -226,15 +229,6 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: |
-            tools/openapi/package-lock.json
-            WebAdmin/package-lock.json
-
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -280,6 +274,9 @@ jobs:
       - name: Verify restored functional suite ownership
         shell: pwsh
         run: ./scripts/ci/verify-functional-results.ps1 -Results artifacts/tests/core/core.trx
+
+      - name: Verify main ownership of lock policy cases
+        run: python scripts/ci/verify-lock-ownership.py artifacts/tests/core/core.json
 
       - name: Admin media request-delegate generation guard
         shell: pwsh
@@ -331,6 +328,23 @@ jobs:
             fi
           done
 
+  contracts:
+    name: Contracts and official SDK clients
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tools/openapi/package-lock.json
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
       - name: OpenAPI contract validation and drift check
         # Export both contracts without infrastructure, prove generation is byte-stable,
         # regenerate WebAdmin contract types, validate the contracts, and fail on drift.
@@ -360,9 +374,19 @@ jobs:
           project: Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj
           suite: openai-sdk
           configuration: Debug
-          no-build: 'true'
           filter: Component=OpenAiSdkSmoke
 
+  webadmin:
+    name: WebAdmin correctness and coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: WebAdmin/package-lock.json
       - name: WebAdmin Lint, Type Check & Tests
         run: |
           cd WebAdmin
@@ -394,6 +418,7 @@ jobs:
   wolverine-two-host:
     name: Wolverine Two-Host Smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
