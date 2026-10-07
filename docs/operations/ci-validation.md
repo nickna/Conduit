@@ -46,3 +46,12 @@ workflow. Billing audit (8), refund (7), and temporary-master-key (4) methods ru
 in the main lane; `functional-inventory.json` and `verify-functional-results.ps1`
 fail when any promised suite disappears from executed results. These tests use
 SQLite/TestServer and need neither provider credentials nor developer services.
+
+Migration verification runs for every CI revision, including tooling/dependency-only
+and documentation changes. Required mode never substitutes filesystem enumeration
+for EF's migration inventory (#1455). EF inventory and pending-model subprocesses
+have 30-second limits with process-tree termination; nonzero exits, missing tools,
+empty inventory, and timeouts fail. Pending-model output and migration TRX are
+retained even on failure. The complete workflow is bounded to 30 minutes. A
+configured PostgreSQL database must be reachable; only local runs with no database
+configured may skip. CI explicitly promises the infrastructure.

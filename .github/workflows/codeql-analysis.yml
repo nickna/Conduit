@@ -24,7 +24,7 @@ permissions:
 # - Complete code coverage for security issues
 # - Consistent security reporting
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: codeql-${{ github.ref }}
   cancel-in-progress: false
 
 env:

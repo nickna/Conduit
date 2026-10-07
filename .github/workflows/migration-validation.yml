@@ -11,16 +11,18 @@ env:
   DOTNET_VERSION: '10.0.x'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: migration-validation-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   validate-migrations:
     name: Validate migrations
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
       ConduitEfTooling: 'true'
+      CONDUIT_CI_REQUIRED_INFRASTRUCTURE: 'true'
     services:
       postgres:
         image: postgres:16
@@ -58,11 +60,17 @@ jobs:
         shell: pwsh
         run: ./scripts/migrations/validate-migrations.ps1 -CheckPending
 
+      - name: Verify mandatory timeout and tooling policy
+        shell: pwsh
+        run: ./scripts/migrations/test-bounded-command.ps1
+
       - name: Exercise release migration gate
         run: >-
           dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
           --configuration Release
           --filter FullyQualifiedName~ReleaseMigrationCommandTests
+          --logger 'trx;LogFileName=migrations.trx'
+          --results-directory artifacts/migrations
 
       - name: Exercise native PostgreSQL persistence probe
         shell: pwsh
@@ -83,3 +91,13 @@ jobs:
           name: conduit-migrations-idempotent
           path: artifacts/conduit-migrations-idempotent.sql
           retention-days: 90
+
+      - name: Upload migration failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-validation-evidence
+          path: |
+            artifacts/migrations
+            artifacts/persistence-native
+          retention-days: 30

@@ -29,7 +29,10 @@ param(
     [switch]$CheckPending,
 
     [Parameter()]
-    [switch]$GenerateScript
+    [switch]$GenerateScript,
+
+    [ValidateRange(1, 600)]
+    [int]$PendingTimeoutSeconds = 30
 )
 
 $ErrorActionPreference = 'Stop'
@@ -45,6 +48,7 @@ if (Test-Path $devLibPath) {
 }
 
 $configurationProject = Join-Path $projectRoot 'Shared' 'ConduitLLM.Configuration'
+. (Join-Path $PSScriptRoot 'BoundedCommand.ps1')
 
 Write-Host "==============================================" -ForegroundColor Cyan
 Write-Host "EF Core Migration Validation" -ForegroundColor Cyan
@@ -67,7 +71,7 @@ try {
         Write-Host "ERROR: EF Core tools not installed" -ForegroundColor Red
         # Surface the underlying dotnet error - without this the real cause is invisible in CI
         Write-Host "dotnet ef --version output: $efVersion"
-        Write-Host "Install with: dotnet tool install --global dotnet-ef"
+        Write-Host "Restore the repository tool manifest with: dotnet tool restore"
         exit 1
     }
 
@@ -77,17 +81,12 @@ try {
 
     $migrations = @()
 
-    # Try EF tool first, with timeout
-    $job = Start-Job -ScriptBlock {
-        param($path)
-        Set-Location $path
-        dotnet ef migrations list --no-build 2>&1
-    } -ArgumentList $configurationProject
-
-    $completed = Wait-Job $job -Timeout 10
-    if ($completed) {
-        $efOutput = Receive-Job $job
-        Remove-Job $job -Force
+    # Required verification uses EF's authoritative inventory. Filesystem fallback
+    # can include undiscoverable historical sources (#1455), so it is local-only.
+    $listing = Invoke-BoundedCommand -FilePath 'dotnet' -WorkingDirectory $configurationProject `
+        -Arguments @('ef', 'migrations', 'list', '--no-build', '--no-connect') -TimeoutSeconds 30
+    if (-not $listing.TimedOut -and $listing.ExitCode -eq 0) {
+        $efOutput = $listing.Output -split "`r?`n"
 
         # Extract migration names and strip status indicators
         $migrationsEf = $efOutput | Where-Object { $_ -match '^\d{14}_' } | ForEach-Object {
@@ -98,13 +97,14 @@ try {
             $migrations = $migrationsEf
             Write-Host "Migrations from EF tool:"
         }
-    } else {
-        Stop-Job $job -ErrorAction SilentlyContinue
-        Remove-Job $job -Force -ErrorAction SilentlyContinue
+    } elseif ($CheckPending) {
+        Write-Host $listing.Output
+        throw "Required EF migration inventory failed (timeout=$($listing.TimedOut), exit=$($listing.ExitCode))."
     }
 
     # Fallback: get migrations from filesystem
     if ($migrations.Count -eq 0) {
+        if ($CheckPending) { throw 'EF discovered no migrations; required validation cannot use a filesystem fallback.' }
         $migrationsPath = Join-Path $configurationProject 'Migrations'
         if (Test-Path $migrationsPath) {
             $migrationsFs = Get-ChildItem -Path $migrationsPath -Filter '*.cs' -File |
@@ -170,38 +170,16 @@ try {
     Write-Host ""
     Write-Host "Step 5: Checking for pending model changes..." -ForegroundColor Yellow
 
-    $pendingJob = Start-Job -ScriptBlock {
-        param($path)
-        Set-Location $path
-        $output = dotnet ef migrations has-pending-model-changes --no-build 2>&1
-        # Exit code is authoritative (0 = no pending changes, 1 = pending changes).
-        # Do NOT string-match the output: "No changes have been made..." matches
-        # 'Changes have been made' case-insensitively.
-        [pscustomobject]@{ Output = ($output | Out-String); ExitCode = $LASTEXITCODE }
-    } -ArgumentList $configurationProject
-
-    $pendingCompleted = Wait-Job $pendingJob -Timeout 30
-    if ($pendingCompleted) {
-        $pendingResult = Receive-Job $pendingJob
-        Remove-Job $pendingJob -Force
-
-        if ($pendingResult.ExitCode -ne 0) {
-            Write-Host $pendingResult.Output
-            Write-Host "WARNING: Model has pending changes not included in migrations" -ForegroundColor Yellow
-            if ($CheckPending) {
-                Write-Host "ERROR: Pending model changes detected (--check-pending flag set)" -ForegroundColor Red
-                exit 1
-            }
-        } else {
-            Write-Host "[OK] No pending model changes" -ForegroundColor Green
-        }
-    } else {
-        Stop-Job $pendingJob -ErrorAction SilentlyContinue
-        Remove-Job $pendingJob -Force -ErrorAction SilentlyContinue
-        Write-Host "[!] Cannot check pending changes (EF tool timeout or database unavailable)" -ForegroundColor Yellow
-        if ($CheckPending) {
-            Write-Host "WARNING: Cannot verify pending changes due to EF tool issues" -ForegroundColor Yellow
-        }
+    $pendingResult = Invoke-BoundedCommand -FilePath 'dotnet' -WorkingDirectory $configurationProject `
+        -Arguments @('ef', 'migrations', 'has-pending-model-changes', '--no-build') -TimeoutSeconds $PendingTimeoutSeconds
+    $diagnosticDirectory = Join-Path $projectRoot 'artifacts/migrations'
+    New-Item -ItemType Directory -Force $diagnosticDirectory | Out-Null
+    $pendingResult.Output | Set-Content (Join-Path $diagnosticDirectory 'pending-model.log')
+    Write-Host $pendingResult.Output
+    if ($CheckPending) {
+        Assert-PendingModelVerification $pendingResult
+    } elseif ($pendingResult.TimedOut -or $pendingResult.ExitCode -ne 0) {
+        Write-Warning 'Pending-model verification did not succeed; use -CheckPending for mandatory verification.'
     }
 
     # Step 6: Generate migration script (optional)
