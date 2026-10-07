@@ -27,7 +27,7 @@ export async function POST() {
     // we return the master key directly without calling the Admin API
     // In production, this would call the Admin API to generate a real ephemeral key
 
-    const isDevelopment = process.env.CLERK_AUTH_ENABLED !== 'true';
+    const isDevelopment = process.env.NODE_ENV === 'development' && process.env.CLERK_AUTH_ENABLED !== 'true';
     
     if (isDevelopment) {
       // Development mode: return the master key directly

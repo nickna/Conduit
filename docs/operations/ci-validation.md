@@ -114,3 +114,11 @@ The required Docker job loads the production Admin/Gateway images, migrates a fr
 The three permanently skipped AWS mocking cases have been replaced by Component=S3Storage against isolated MinIO: actual small video upload, complete stream bytes/bounds, and partial stream bytes/bounds. Missing emulator infrastructure fails the lane; it cannot report a skip. Unit multipart/short-read checks remain.
 
 The packaged flow exposed Admin's missing capability-service registration (#1462) and cyclic EF graphs preventing Redis virtual-key writes (#1463). Those fixes are covered by real endpoint execution and a reflection-disabled serialization regression. The separate catalog importer retry transaction bug is tracked in #1459.
+
+Packaged browser and native entrypoints (#1438)
+
+CI starts the production WebAdmin image alongside the same Admin/Gateway candidates, then runs locked Chromium against real HTTP endpoints. An ephemeral RSA public key is supplied through Clerk's supported jwtKey option (`CLERK_JWT_KEY`); the test signs short-lived isolated session JWTs. It verifies unauthenticated redirect, rejection of a forged signature and non-admin role, authenticated key listing and creation dialog, browser-to-Admin single-use credentials, and session removal. This tests middleware/session boundaries without paid credentials or a production authentication bypass; Clerk's hosted sign-in UI remains an identity-provider acceptance concern.
+
+All three exact image identities, Docker health statuses, application logs, screenshot, Chromium version/navigation timings, and browser trace are retained. Timings are measured evidence, with no invented jsdom millisecond threshold. Production health is public and independent of Clerk; its IPv4 probe matches the server listener (#1460). Production ephemeral issuance cannot return the permanent key (#1461). The real browser exposed and now covers Admin's unregistered collection-wrapper metadata (#1465).
+
+Native image verification now executes the actual non-root container entrypoint and packaged libraries, exports a real contract into the container's writable temporary directory, and retains identity/logs/contracts. Local images exported 191 Admin and 34 Gateway paths successfully. This complements the existing normal native process protocol/infrastructure and JIT parity lanes; native images remain canary-only.

@@ -8,6 +8,7 @@ using ConduitLLM.Admin.Serialization;
 using ConduitLLM.Admin.Models.ModelAuthors;
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.DTOs;
+using ConduitLLM.Configuration.DTOs.VirtualKey;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.DTOs.SignalR;
 using ConduitLLM.Configuration.Serialization;
@@ -27,6 +28,18 @@ namespace ConduitLLM.SerializationTests;
 
 public sealed class SourceGeneratedJsonCompatibilityTests
 {
+    [Fact]
+    public void Admin_collection_wrapper_resolves_runtime_dto_items_without_reflection()
+    {
+        var page = new PagedResult<object>
+        {
+            Data = [new VirtualKeyDto { Id = 9, KeyName = "CI browser key" }],
+            Pagination = PaginationMetadata.Create(1, 50, 1)
+        };
+        var json = JsonSerializer.Serialize(page, AdminHttpResponseJsonContext.Default.PagedResultObject);
+        Assert.Contains("CI browser key", json);
+    }
+
     [Fact]
     public void Redis_virtual_key_omits_cyclic_navigation_graphs_and_preserves_group_policy()
     {

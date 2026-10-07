@@ -476,8 +476,15 @@ jobs:
           tags: conduit-webadmin:ci
           cache-from: type=gha,scope=webadmin
           cache-to: type=gha,scope=webadmin,mode=max
-      - name: Execute packaged business flows
+      - name: Install locked browser tooling
+        working-directory: tools/ci
+        run: |
+          npm ci
+          node node_modules/playwright/cli.js install --with-deps chromium
+      - name: Execute packaged business and browser flows
         run: node scripts/ci/container-smoke.mjs
+        env:
+          CI_BROWSER_MODULE: tools/ci/browser-smoke.mjs
       - name: Retain packaged execution evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

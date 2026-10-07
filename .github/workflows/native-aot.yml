@@ -187,3 +187,11 @@ jobs:
       - name: Verify minimal native runtime image
         shell: pwsh
         run: ./scripts/aot/verify-native-image.ps1 -Image conduit-${{ matrix.service }}-native:ci -Service ${{ matrix.service }}
+
+      - name: Retain packaged native entrypoint evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-container-${{ matrix.service }}
+          path: artifacts/native-containers
+          retention-days: 30

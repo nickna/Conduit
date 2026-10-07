@@ -155,6 +155,7 @@ namespace ConduitLLM.Admin.Serialization;
 [JsonSerializable(typeof(PagedResult<ModelDto>))]
 [JsonSerializable(typeof(PagedResult<PricingAuditEventDto>))]
 [JsonSerializable(typeof(PagedResult<VirtualKeyGroupDto>))]
+[JsonSerializable(typeof(PagedResult<object>))]
 [JsonSerializable(typeof(PagedResult<VirtualKeyGroupTransactionDto>))]
 [JsonSerializable(typeof(PricingAuditSummary))]
 [JsonSerializable(typeof(PricingRulesConfig))]

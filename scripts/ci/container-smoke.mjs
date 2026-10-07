@@ -11,6 +11,7 @@ const containers = [];
 const report = { images: {}, checks: [], startedAt: new Date().toISOString() };
 const images = { admin: process.env.CI_ADMIN_IMAGE ?? 'conduit-admin:ci',
   http: process.env.CI_GATEWAY_IMAGE ?? 'conduit-http:ci' };
+if (process.env.CI_BROWSER_MODULE) images.webadmin = process.env.CI_WEBADMIN_IMAGE ?? 'conduit-webadmin:ci';
 const master = 'conduit-ci-isolated-master-key-32-bytes';
 function docker(args) { return execFileSync('docker', args, { encoding: 'utf8', timeout: 180_000 }).trim(); }
 function start(service, image, port, env = {}, extra = [], command = []) {
@@ -162,7 +163,7 @@ try {
     const browser = await import(pathToFileURL(resolve(process.env.CI_BROWSER_MODULE)).href);
     await browser.smoke({ start, admin, gateway, env, master, group, key, output, report });
   }
-  for (const service of ['admin', 'gateway']) {
+  for (const service of ['admin', 'gateway', ...(images.webadmin ? ['webadmin'] : [])]) {
     await until(`${service} packaged Docker healthcheck`, () => JSON.parse(docker(['inspect', `${run}-${service}`]))[0].State.Health.Status === 'healthy');
   }
   report.succeeded = true;
