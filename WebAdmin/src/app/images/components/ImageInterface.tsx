@@ -11,6 +11,7 @@ import {
   Paper,
 } from '@mantine/core';
 import { IconSettings } from '@tabler/icons-react';
+import { useRouter } from 'next/navigation';
 import { useImageStore } from '../hooks/useImageStore';
 import { ErrorDisplay } from '@/components/common/ErrorDisplay';
 import { DynamicParameters } from '@/components/parameters/DynamicParameters';
@@ -22,6 +23,7 @@ import ImageGallery from './ImageGallery';
 import { MediaGenerationStatus } from '@/app/types/media';
 
 export default function ImageInterface() {
+  const router = useRouter();
   const {
     status,
     error,
@@ -78,13 +80,13 @@ export default function ImageInterface() {
           actions={[
             {
               label: 'Configure Providers',
-              onClick: () => window.location.href = '/llm-providers',
+              onClick: () => router.push('/llm-providers'),
               color: 'blue',
               variant: 'filled',
             },
             {
               label: 'Add Model Mappings', 
-              onClick: () => window.location.href = '/model-mappings',
+              onClick: () => router.push('/model-mappings'),
               color: 'blue',
               variant: 'light',
             }
@@ -134,7 +136,7 @@ export default function ImageInterface() {
           actions={[
             {
               label: 'Configure Providers',
-              onClick: () => window.location.href = '/llm-providers',
+              onClick: () => router.push('/llm-providers'),
               color: 'blue',
               variant: 'light',
             }

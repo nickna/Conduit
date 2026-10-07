@@ -1,6 +1,7 @@
 'use client';
 
 import { Stack, Paper, LoadingOverlay, Text } from '@mantine/core';
+import { useRouter } from 'next/navigation';
 import { useVideoStore } from '../hooks/useVideoStore';
 import { ErrorDisplay } from '@/components/common/ErrorDisplay';
 import { DynamicParameters } from '@/components/parameters/DynamicParameters';
@@ -11,6 +12,7 @@ import VideoGallery from './VideoGallery';
 import VideoQueue from './VideoQueue';
 
 export default function VideoInterface() {
+  const router = useRouter();
   const {
     error,
     settings,
@@ -64,13 +66,13 @@ export default function VideoInterface() {
           actions={[
             {
               label: 'Configure Providers',
-              onClick: () => window.location.href = '/llm-providers',
+              onClick: () => router.push('/llm-providers'),
               color: 'blue',
               variant: 'filled',
             },
             {
               label: 'Add Model Mappings', 
-              onClick: () => window.location.href = '/model-mappings',
+              onClick: () => router.push('/model-mappings'),
               color: 'blue',
               variant: 'light',
             }
@@ -110,7 +112,7 @@ export default function VideoInterface() {
           actions={[
             {
               label: 'Configure Providers',
-              onClick: () => window.location.href = '/llm-providers',
+              onClick: () => router.push('/llm-providers'),
               color: 'blue',
               variant: 'light',
             }

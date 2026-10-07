@@ -27,14 +27,34 @@ export function imageFindings(report, scope) {
   return report.Results.flatMap(result => (result.Vulnerabilities ?? []).map(v => ({ scope, package: v.PkgName,
     version: v.InstalledVersion, advisory: v.VulnerabilityID, severity: v.Severity.toLowerCase(), fixedVersion: v.FixedVersion })));
 }
+function validApproval(value) {
+  try {
+    const url = new URL(value);
+    // Reject normalization (whitespace, dot segments, credentials, default ports),
+    // queries and trailing path text; only explicit GitHub approval anchors apply.
+    if (url.origin !== 'https://github.com' || value !== `${url.origin}${url.pathname}${url.hash}` ||
+        !/^\/nickna\/Conduit\/(?:issues|pull)\/[1-9]\d*$/.test(url.pathname)) return false;
+    return !url.hash || /^#issuecomment-[1-9]\d*$/.test(url.hash) ||
+      (url.pathname.startsWith('/nickna/Conduit/pull/') && /^#(?:discussion_r|pullrequestreview-)[1-9]\d*$/.test(url.hash));
+  } catch { return false; }
+}
+
+function expiryBoundary(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return NaN;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) return NaN;
+  return date.getTime() + 86_400_000;
+}
+
 export function enforce(findings, exceptions, mode = 'dependency', now = new Date()) {
+  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new Error('Require a valid policy evaluation time');
   const fields = ['scope', 'package', 'version', 'advisory'];
   for (const exception of exceptions) {
+    const expiry = expiryBoundary(exception.expires);
     if ([...fields, 'owner', 'reason', 'expires', 'approval'].some(f => typeof exception[f] !== 'string' || !exception[f].trim()) ||
-        !/^https:\/\/github.com\/nickna\/Conduit\/(?:pull|issues)\/\d+/.test(exception.approval) ||
+        !validApproval(exception.approval) ||
         (Object.hasOwn(exception, 'developmentOnly') && typeof exception.developmentOnly !== 'boolean') ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(exception.expires) || !Number.isFinite(Date.parse(exception.expires)) ||
-        new Date(`${exception.expires}T23:59:59Z`) < now)
+        !Number.isFinite(expiry) || now.getTime() >= expiry)
       throw new Error('Security exception needs exact identity, owner, reason, unexpired date and approval record');
   }
   const isExcepted = finding => exceptions.some(exception => fields.every(field => exception[field] === finding[field]) &&

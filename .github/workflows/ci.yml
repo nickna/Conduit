@@ -54,6 +54,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
+      - name: Verify scoped npm override resolution in the locked graph
+        run: node WebAdmin/scripts/check-dependency-overrides.mjs
       - name: Restore the consumed NuGet graph
         run: dotnet restore Conduit.slnx
       - name: Capture explicit NuGet and npm advisory inventories
@@ -444,6 +446,7 @@ jobs:
         run: |
           cd WebAdmin
           npm ci
+          npm run check:dependency-overrides
           # Clean any stale .next directory before type checking
           rm -rf .next
           npm run lint
@@ -451,6 +454,7 @@ jobs:
           npm run check:api-boundary
           node --test scripts/check-runtime-dependencies.test.mjs
           node --test scripts/coverage-config.test.mjs
+          node --test scripts/dependency-overrides.test.mjs
           npm run test:coverage -- --runInBand --json --outputFile=coverage/test-results.json
           node ../scripts/ci/jest-evidence.mjs coverage/test-results.json
           python ../scripts/ci/coverage-ratchet.py jest coverage/coverage-final.json
