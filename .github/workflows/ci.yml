@@ -5,6 +5,15 @@ on:
     branches: [master, dev]
   pull_request:
     branches: [master, dev]
+  workflow_dispatch:
+    inputs:
+      measure_previous_scheduling:
+        description: 'Controlled measurement only: restore serialized packaged builds and duplicate lock-policy runs'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 env:
   DOTNET_VERSION: '10.0.x'
@@ -15,24 +24,110 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  migrations:
+    name: Migration validation
+    uses: ./.github/workflows/migration-validation.yml
+
+  distributed-lock:
+    name: Distributed lock validation
+    uses: ./.github/workflows/distributed-lock.yml
+    with:
+      repeat_policy_tests: ${{ github.event_name == 'workflow_dispatch' && inputs.measure_previous_scheduling }}
+
+  codeql:
+    name: Security analysis
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: ./.github/workflows/codeql-analysis.yml
+
+  dependencies:
+    name: Dependency security policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Restore the consumed NuGet graph
+        run: dotnet restore Conduit.slnx
+      - name: Capture explicit NuGet and npm advisory inventories
+        shell: bash
+        run: |
+          mkdir -p artifacts/security
+          dotnet list Conduit.slnx package --no-restore --vulnerable --include-transitive --format json --output-version 1 > artifacts/security/nuget.json
+          for SCOPE in WebAdmin tools/openapi tools/ci; do
+            FILE=${SCOPE//\//-}
+            # npm returns 1 for findings as well as network failures. The policy
+            # parser rejects failed/malformed audits; advisories remain inspectable.
+            (cd "$SCOPE" && npm audit --package-lock-only --json --fetch-timeout=30000 --fetch-retries=0) > "artifacts/security/$FILE.json" || true
+          done
+      - name: Enforce dependency severity and approved exception policy
+        run: node scripts/ci/security-check.mjs dependency
+      - name: Retain advisory inventories even when blocked
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-security-evidence
+          path: artifacts/security
+          retention-days: 30
+
+  required:
+    name: CI required
+    if: ${{ always() }}
+    needs: [source-ignore-guard, media-dispatch-integration, billing-fault-injection, billing-invariants, signalr-integration, aot-analyzers, validate, wolverine-two-host, docker, s3-storage, contracts, webadmin, migrations, distributed-lock, codeql, dependencies]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Require every validation result
+        run: node scripts/ci/required-check.mjs
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+
   media-dispatch-integration:
     name: Durable media dispatch
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Run PostgreSQL and Wolverine crash and dispatch tests
-        run: dotnet test Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj --configuration Release --verbosity normal --filter "Component=MediaDispatch"
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj
+          suite: media-dispatch
+          filter: Component=MediaDispatch
 
   source-ignore-guard:
     name: Source ignore guard
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tools/ci/package-lock.json
+      - name: Install parsed workflow tooling
+        run: npm ci --prefix tools/ci
+      - name: Validate Actions syntax, expressions and required job graph
+        run: pwsh ./scripts/test/validate-workflows.ps1
+      - name: Check native Docker SDK compatibility
+        run: node scripts/ci/native-sdk.mjs
+      - name: Exercise validation policy regressions
+        run: node --test scripts/ci/*.test.mjs
+      - name: Exercise discovery and coverage regressions
+        run: python scripts/ci/test_test_evidence.py
       - name: Ensure source files are not ignored
         shell: bash
         run: |
@@ -56,51 +151,75 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Run billing durability fault tests
-        run: dotnet test Tests/ConduitLLM.FaultInjectionTests/ConduitLLM.FaultInjectionTests.csproj --configuration Release --verbosity normal
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.FaultInjectionTests/ConduitLLM.FaultInjectionTests.csproj
+          suite: billing-fault-injection
 
   billing-invariants:
     name: Billing invariants
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Run required billing invariant gate
-        run: dotnet test Tests/ConduitLLM.BillingInvariantTests/ConduitLLM.BillingInvariantTests.csproj --configuration Release --verbosity normal
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.BillingInvariantTests/ConduitLLM.BillingInvariantTests.csproj
+          suite: billing-invariants
+          maximum-skips: '1'
 
   signalr-integration:
     name: SignalR integration
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Run self-contained SignalR integration tests
-        run: dotnet test Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj --configuration Release --verbosity normal --filter "Component=SignalR"
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj
+          suite: signalr
+          filter: Component=SignalR
 
-  # Provider and critical-path integration suites remain manual: they require
-  # already-running Conduit services plus provider credentials. The SignalR
-  # component is self-contained through Testcontainers and is required in CI.
+  s3-storage:
+    name: S3 video operations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj
+          suite: s3-storage
+          filter: Component=S3Storage
+          minimum: '3'
 
   aot-analyzers:
     name: NativeAOT analyzer ratchet
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Restore service graphs
@@ -119,7 +238,7 @@ jobs:
           }
       - name: Upload AOT analyzer diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: aot-analyzer-diagnostics
           path: artifacts/aot-audit
@@ -129,6 +248,7 @@ jobs:
   validate:
     name: Validate
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -153,42 +273,61 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: |
-            tools/openapi/package-lock.json
-            WebAdmin/package-lock.json
-
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
       
-      - name: .NET Build & Test
+      - name: .NET Build
         run: |
           dotnet restore
           dotnet build --no-restore
-          # Billing invariants, billing fault injection, and SignalR each run in
-          # isolated jobs above. Keep their infrastructure and timing-sensitive
-          # state out of this shared validation job while retaining the core and
-          # reflection-disabled serialization suites.
-          dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj --no-build --verbosity normal --filter "FullyQualifiedName!~IntegrationTests&Category!=TimingSensitive"
-          dotnet test Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj --no-build --verbosity normal
+
+      - name: Main correctness suite and coverage
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
+          suite: core
+          configuration: Debug
+          no-build: 'true'
+          coverage: 'true'
+          filter: Component!=ReleaseMigration
+          minimum: '3753'
+          maximum-skips: '3'
         env:
           TEST_REDIS_CONNECTION: localhost:6379
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
           CONDUIT_CACHE_TEST_REDIS: localhost:6379
           CONDUIT_CACHE_TEST_POSTGRES: Host=localhost;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
+
+      - name: Reflection-disabled serialization suite
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj
+          suite: serialization
+          configuration: Debug
+          no-build: 'true'
+
+      - name: Enforce measured backend component coverage
+        shell: pwsh
+        run: |
+          $coverage = Get-ChildItem artifacts/tests/core -Recurse -Filter coverage.cobertura.xml | Select-Object -First 1
+          if (-not $coverage) { throw 'Required backend coverage is missing' }
+          python scripts/ci/coverage-ratchet.py dotnet $coverage.FullName
+
+      - name: Verify restored functional suite ownership
+        shell: pwsh
+        run: ./scripts/ci/verify-functional-results.ps1 -Results artifacts/tests/core/core.trx
+
+      - name: Verify main ownership of lock policy cases
+        run: python scripts/ci/verify-lock-ownership.py artifacts/tests/core/core.json
 
       - name: Admin media request-delegate generation guard
         shell: pwsh
@@ -240,10 +379,29 @@ jobs:
             fi
           done
 
+  contracts:
+    name: Contracts and official SDK clients
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tools/openapi/package-lock.json
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
       - name: OpenAPI contract validation and drift check
         # Export both contracts without infrastructure, prove generation is byte-stable,
         # regenerate WebAdmin contract types, validate the contracts, and fail on drift.
         run: |
+          dotnet restore Services/ConduitLLM.Admin/ConduitLLM.Admin.csproj
+          dotnet restore Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj
           cd tools/openapi
           npm ci
           npm run verify:offline
@@ -261,11 +419,27 @@ jobs:
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
 
       - name: Official OpenAI SDK smoke against Gateway
-        run: |
-          python -m pip install -r tools/openapi/sdk-smoke/requirements.txt
-          cd tools/openapi
-          npm run test:sdk-smoke
+        run: python -m pip install -r tools/openapi/sdk-smoke/requirements.txt
 
+      - name: Execute official SDK clients against real Gateway
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj
+          suite: openai-sdk
+          configuration: Debug
+          filter: Component=OpenAiSdkSmoke
+
+  webadmin:
+    name: WebAdmin correctness and coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: WebAdmin/package-lock.json
       - name: WebAdmin Lint, Type Check & Tests
         run: |
           cd WebAdmin
@@ -275,7 +449,27 @@ jobs:
           npm run lint
           npm run type-check
           npm run check:api-boundary
-          npm test -- --runInBand
+          npm run test:coverage -- --runInBand --json --outputFile=coverage/test-results.json
+          node ../scripts/ci/jest-evidence.mjs coverage/test-results.json
+          python ../scripts/ci/coverage-ratchet.py jest coverage/coverage-final.json
+
+      - name: Enforce measured CSS budgets and unused-code cleanliness
+        working-directory: .
+        run: node scripts/ci/webadmin-hygiene.mjs
+      - name: Retain CSS and unused-code reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: webadmin-hygiene-evidence
+          path: artifacts/webadmin-hygiene
+          retention-days: 30
+      - name: Retain WebAdmin results and coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tests-webadmin
+          path: WebAdmin/coverage
+          retention-days: 30
 
   # Two-host Wolverine listener assertion (#961): boots the REAL Gateway + Admin hosts
   # against real Postgres with ConduitLLM:Messaging:Backend=Wolverine and asserts that
@@ -287,6 +481,7 @@ jobs:
   wolverine-two-host:
     name: Wolverine Two-Host Smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -311,10 +506,10 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -331,43 +526,71 @@ jobs:
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
           REDIS_URL: redis://localhost:6379
 
-  # Build Docker images for validation only — never pushed from CI.
-  # All image publishing happens from `v*` tags in release.yml.
+  # Build and execute the same packaged applications used by release candidates.
   docker:
-    name: Docker - ${{ matrix.service }}
+    name: Packaged application business flows
     runs-on: ubuntu-latest
-    needs: validate
+    timeout-minutes: 40
     permissions:
       contents: read
-    strategy:
-      matrix:
-        include:
-          - service: webadmin
-            context: .
-            dockerfile: WebAdmin/Dockerfile
-          - service: http
-            context: .
-            dockerfile: Services/ConduitLLM.Gateway/Dockerfile
-          - service: admin
-            context: .
-            dockerfile: Services/ConduitLLM.Admin/Dockerfile
-
+      actions: read
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Build-only validation — images are never pushed from CI. This still catches
-      # Dockerfile and production-build breakage (notably WebAdmin's `next build`,
-      # which runs nowhere else in CI) before it can reach a release.
-      - name: Build (validation only, no push)
-        uses: docker/build-push-action@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
+          persist-credentials: false
+      - name: Controlled previous scheduling barrier
+        if: github.event_name == 'workflow_dispatch' && inputs.measure_previous_scheduling
+        run: node scripts/ci/measure-scheduling.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Verify digest-preserving registry promotion
+        run: node scripts/ci/registry-copy-smoke.mjs
+      - name: Build admin production image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Services/ConduitLLM.Admin/Dockerfile
           platforms: linux/amd64
-          push: false
-          tags: conduit-${{ matrix.service }}:ci
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+          load: true
+          tags: conduit-admin:ci
+          cache-from: type=gha,scope=admin
+          cache-to: type=gha,scope=admin,mode=max
+      - name: Build http production image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Services/ConduitLLM.Gateway/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: conduit-http:ci
+          cache-from: type=gha,scope=http
+          cache-to: type=gha,scope=http,mode=max
+      - name: Build webadmin production image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: WebAdmin/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: conduit-webadmin:ci
+          cache-from: type=gha,scope=webadmin
+          cache-to: type=gha,scope=webadmin,mode=max
+      - name: Install locked browser tooling
+        working-directory: tools/ci
+        run: |
+          npm ci
+          node node_modules/playwright/cli.js install --with-deps chromium
+      - name: Execute packaged business and browser flows
+        run: node scripts/ci/container-smoke.mjs
+        env:
+          CI_BROWSER_MODULE: tools/ci/browser-smoke.mjs
+      - name: Retain packaged execution evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: packaged-application-evidence
+          path: |
+            artifacts/container-smoke
+            artifacts/registry-copy
+          retention-days: 30

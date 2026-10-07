@@ -65,3 +65,5 @@ if ($errors.Count -gt 0) {
 }
 
 Write-Host "Verified ${Image}: linux-x64, non-root, direct executable, health checked, and free of SDK/design/debug content."
+node (Join-Path $PSScriptRoot 'native-container-smoke.mjs') $Image $Service
+if ($LASTEXITCODE -ne 0) { throw 'Packaged native entrypoint smoke failed.' }

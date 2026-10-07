@@ -1,43 +1,28 @@
 name: Migration Validation
 
 on:
-  push:
-    branches: [master, dev]
-    paths:
-      - 'Shared/ConduitLLM.Configuration/**'
-      - 'Tests/ConduitLLM.Tests/Configuration/Data/**'
-      - 'Tests/ConduitLLM.PersistenceAotTests/**'
-      - 'tools/ConduitLLM.Migrator/**'
-      - 'scripts/aot/persistence-native-smoke.ps1'
-      - 'scripts/migrations/**'
-      - '.github/workflows/release.yml'
-      - '.github/workflows/migration-validation.yml'
-  pull_request:
-    branches: [master, dev]
-    paths:
-      - 'Shared/ConduitLLM.Configuration/**'
-      - 'Tests/ConduitLLM.Tests/Configuration/Data/**'
-      - 'Tests/ConduitLLM.PersistenceAotTests/**'
-      - 'tools/ConduitLLM.Migrator/**'
-      - 'scripts/aot/persistence-native-smoke.ps1'
-      - 'scripts/migrations/**'
-      - '.github/workflows/release.yml'
-      - '.github/workflows/migration-validation.yml'
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   DOTNET_VERSION: '10.0.x'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: migration-validation-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   validate-migrations:
     name: Validate migrations
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
       ConduitEfTooling: 'true'
+      CONDUIT_CI_REQUIRED_INFRASTRUCTURE: 'true'
     services:
       postgres:
         image: postgres:16
@@ -53,10 +38,10 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -75,11 +60,17 @@ jobs:
         shell: pwsh
         run: ./scripts/migrations/validate-migrations.ps1 -CheckPending
 
+      - name: Verify mandatory timeout and tooling policy
+        shell: pwsh
+        run: ./scripts/migrations/test-bounded-command.ps1
+
       - name: Exercise release migration gate
-        run: >-
-          dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
-          --configuration Release
-          --filter FullyQualifiedName~ReleaseMigrationCommandTests
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
+          suite: migrations
+          filter: Component=ReleaseMigration
+          minimum: '5'
 
       - name: Exercise native PostgreSQL persistence probe
         shell: pwsh
@@ -95,8 +86,18 @@ jobs:
       # Reviewable, rerunnable artifact — the escape hatch for DBA review or
       # manual application when the release-hook migrator is not used.
       - name: Upload idempotent script artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: conduit-migrations-idempotent
           path: artifacts/conduit-migrations-idempotent.sql
           retention-days: 90
+
+      - name: Upload migration failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: migration-validation-evidence
+          path: |
+            artifacts/migrations
+            artifacts/persistence-native
+          retention-days: 30

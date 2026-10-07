@@ -75,11 +75,13 @@
     "jest-environment-jsdom": "^30.2.0",
     "knip": "^6.32.2",
     "stylelint": "^17.1.0",
-    "stylelint-config-rational-order": "^0.1.2",
     "stylelint-config-standard": "^40.0.0",
     "stylelint-order": "^7.0.1",
     "stylelint-scss": "^7.0.0",
     "ts-jest": "^29.4.6",
     "typescript-eslint": "^8.54.0"
+  },
+  "overrides": {
+    "brace-expansion@1.1.12": "1.1.21"
   }
 }

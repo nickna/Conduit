@@ -16,6 +16,7 @@ namespace ConduitLLM.Tests.Configuration.Data;
 /// server. CI supplies DATABASE_URL; local runs skip when it is absent.
 /// </summary>
 [Collection("MigrationEnvironment")]
+[Trait("Component", "ReleaseMigration")]
 public sealed class ReleaseMigrationCommandTests
 {
     [SkippableFact]
@@ -153,6 +154,12 @@ public sealed class ReleaseMigrationCommandTests
         public static async Task<TemporaryDatabase> CreateAsync()
         {
             var configured = Environment.GetEnvironmentVariable("DATABASE_URL");
+            if (string.IsNullOrWhiteSpace(configured) &&
+                (Environment.GetEnvironmentVariable("CI") == "true" ||
+                 Environment.GetEnvironmentVariable("CONDUIT_CI_REQUIRED_INFRASTRUCTURE") == "true"))
+            {
+                throw new InvalidOperationException("Required CI migration database DATABASE_URL is missing.");
+            }
             Skip.If(
                 string.IsNullOrWhiteSpace(configured),
                 "DATABASE_URL is required for release migration integration tests.");
@@ -171,14 +178,9 @@ public sealed class ReleaseMigrationCommandTests
             };
 
             await using var connection = new NpgsqlConnection(adminBuilder.ConnectionString);
-            try
-            {
-                await connection.OpenAsync();
-            }
-            catch (Exception ex)
-            {
-                Skip.If(true, $"DATABASE_URL is not reachable: {ex.Message}");
-            }
+            // A configured database is a promise, including in local runs. Never
+            // turn an infrastructure outage into a successful skipped CI gate.
+            await connection.OpenAsync();
 
             await using var command = new NpgsqlCommand(
                 $"CREATE DATABASE \"{databaseName}\"",

@@ -1,27 +1,18 @@
 name: Distributed lock ownership
 
 on:
-  push:
-    branches: [dev, master]
-    paths:
-      - 'Shared/**'
-      - 'Services/**'
-      - 'Tests/**'
-      - 'tools/ConduitLLM.LockProbe/**'
-      - 'Directory.*'
-      - 'global.json'
-      - '.github/workflows/distributed-lock.yml'
-  pull_request:
-    branches: [dev, master]
-    paths:
-      - 'Shared/**'
-      - 'Services/**'
-      - 'Tests/**'
-      - 'tools/ConduitLLM.LockProbe/**'
-      - 'Directory.*'
-      - 'global.json'
-      - '.github/workflows/distributed-lock.yml'
+  workflow_call:
+    inputs:
+      repeat_policy_tests:
+        description: 'Controlled before-scheduling measurement only'
+        type: boolean
+        default: false
   workflow_dispatch:
+    inputs:
+      repeat_policy_tests:
+        description: 'Controlled before-scheduling measurement only'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -62,31 +53,52 @@ jobs:
       CONDUIT_CACHE_TEST_REDIS: 127.0.0.1:6379
       CONDUIT_LOCK_PROBE_POSTGRES: Host=127.0.0.1;Port=5432;Database=locktest;Username=locktest;Password=locktest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: '10.0.x'
-      - name: Caller policy and identity unit tests
-        run: >-
-          dotnet test Tests/ConduitLLM.Tests -c Release
-          --filter 'FullyQualifiedName~DistributedLock|FullyQualifiedName~PostgresLockIdentity|FullyQualifiedName~MediaCleanup|FullyQualifiedName~MediaDeletion|FullyQualifiedName~AdminMediaServiceSoftDelete|FullyQualifiedName~AdminVirtualKeyService|FullyQualifiedName~MetadataSyncLock|FullyQualifiedName~OpenRouterDriftDetection|FullyQualifiedName~BudgetAlertManager|FullyQualifiedName~DistributedCachePopulator|FullyQualifiedName~CoordinatedConnectionPoolWarmer|FullyQualifiedName~Architecture|FullyQualifiedName~HostApplicationCacheComposition|FullyQualifiedName~MediaLifecycleExtensions'
-          --logger 'trx;LogFileName=unit.trx' --results-directory artifacts/lock-probe/test-results
+      - name: Build repeated-policy selector
+        id: repeated-policy
+        if: inputs.repeat_policy_tests
+        shell: pwsh
+        run: |
+          $classes = (Get-Content scripts/ci/lock-unit-ownership.json -Raw | ConvertFrom-Json).PSObject.Properties.Name
+          $filter = ($classes | ForEach-Object { "FullyQualifiedName~$_" }) -join '|'
+          "filter=$filter" | Add-Content $env:GITHUB_OUTPUT
+      - name: Repeat main-owned lock policy cases
+        if: inputs.repeat_policy_tests
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests
+          suite: repeated-lock-policy-pg${{ matrix.postgres }}
+          filter: ${{ steps.repeated-policy.outputs.filter }}
+          minimum: '233'
+      # Pure policy/caller tests belong to main correctness; their executed inventory
+      # is asserted there. Keep all real database cases and both runtime probes here.
       - name: Real PostgreSQL and Redis integration gates
-        run: >-
-          dotnet test Tests/ConduitLLM.IntegrationTests -c Release --filter 'Component=DistributedLock'
-          --logger 'trx;LogFileName=integration.trx' --results-directory artifacts/lock-probe/test-results
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests
+          suite: lock-integration-pg${{ matrix.postgres }}
+          filter: Component=DistributedLock
+          minimum: '18'
       - name: JIT production lock probe
-        run: dotnet run --project tools/ConduitLLM.LockProbe -c Release
+        run: |
+          mkdir -p artifacts/lock-probe/evidence
+          dotnet run --project tools/ConduitLLM.LockProbe -c Release | tee artifacts/lock-probe/evidence/jit.log
       - name: Install native toolchain
         run: sudo apt-get update && sudo apt-get install --yes clang zlib1g-dev
       - name: Publish exact production lock slice with reflection disabled
         run: dotnet publish tools/ConduitLLM.LockProbe -c Release -r linux-x64 -p:PublishAot=true -o artifacts/lock-probe/native
       - name: Native production lock probe
-        run: artifacts/lock-probe/native/ConduitLLM.LockProbe
+        run: |
+          artifacts/lock-probe/native/ConduitLLM.LockProbe | tee artifacts/lock-probe/evidence/native.log
+          sha256sum artifacts/lock-probe/native/ConduitLLM.LockProbe > artifacts/lock-probe/evidence/native.sha256
       - name: Upload evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: distributed-lock-pg${{ matrix.postgres }}
-          path: artifacts/lock-probe/test-results
+          path: artifacts/lock-probe/evidence
+          if-no-files-found: error
           retention-days: 14

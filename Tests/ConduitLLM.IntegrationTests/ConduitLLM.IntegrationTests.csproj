@@ -18,6 +18,7 @@
     <PackageReference Include="Moq" />
     <PackageReference Include="Testcontainers.Redis" />
     <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="SSH.NET" />
   </ItemGroup>
 
   <ItemGroup>

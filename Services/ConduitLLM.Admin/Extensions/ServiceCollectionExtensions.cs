@@ -68,6 +68,8 @@ public static class ServiceCollectionExtensions
             });
         });
 
+        services.AddModelCapabilityServices(configuration);
+
         // Register AdminVirtualKeyService (optional deps use default parameter values)
         services.AddScoped<IAdminVirtualKeyService, AdminVirtualKeyService>();
         // Register AdminModelProviderMappingService (optional deps use default parameter values)

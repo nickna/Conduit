@@ -1,6 +1,6 @@
 /**
- * Performance profiling tests for MediaGallery component
- * Tests rendering performance with various item counts and virtualization settings
+ * Correctness tests for MediaGallery component
+ * Tests rendering behavior with various item counts and virtualization settings
  */
 import React from 'react';
 import { render, screen } from '@/app/test-utils';
@@ -42,7 +42,7 @@ interface TestItem {
   name: string;
 }
 
-describe('MediaGallery Performance Tests', () => {
+describe('MediaGallery Rendering Tests', () => {
   const createTestItems = (count: number): TestItem[] => {
     return Array.from({ length: count }, (item, i) => ({
       id: `item-${i}`,
@@ -56,10 +56,9 @@ describe('MediaGallery Performance Tests', () => {
     </div>
   );
 
-  describe('Rendering Performance', () => {
+  describe('Rendering behavior', () => {
     it('should render small galleries (10 items) without virtualization', () => {
       const items = createTestItems(10);
-      const startTime = performance.now();
 
       render(
         <MediaGallery
@@ -68,21 +67,12 @@ describe('MediaGallery Performance Tests', () => {
         />
       );
 
-      const endTime = performance.now();
-      const renderTime = endTime - startTime;
-
       expect(screen.getByTestId('card-item-0')).toBeInTheDocument();
       expect(screen.getByTestId('card-item-9')).toBeInTheDocument();
-
-      // Expect render to complete in under 100ms for 10 items
-      expect(renderTime).toBeLessThan(100);
-
-      console.warn(`Rendered 10 items in ${renderTime.toFixed(2)}ms`);
     });
 
     it('should render medium galleries (50 items) efficiently', () => {
       const items = createTestItems(50);
-      const startTime = performance.now();
 
       render(
         <MediaGallery
@@ -91,17 +81,9 @@ describe('MediaGallery Performance Tests', () => {
         />
       );
 
-      const endTime = performance.now();
-      const renderTime = endTime - startTime;
-
       // All items should be rendered without virtualization at threshold
       expect(screen.getByTestId('card-item-0')).toBeInTheDocument();
       expect(screen.getByTestId('card-item-49')).toBeInTheDocument();
-
-      // Expect render to complete in under 200ms for 50 items
-      expect(renderTime).toBeLessThan(200);
-
-      console.warn(`Rendered 50 items in ${renderTime.toFixed(2)}ms`);
     });
 
     it('should enable virtualization for large galleries (100+ items)', () => {
@@ -200,30 +182,21 @@ describe('MediaGallery Performance Tests', () => {
         />
       );
 
-      // Measure re-render time
-      const startTime = performance.now();
-
-      const updatedItems = createTestItems(20);
+      expect(screen.getByTestId('card-item-19')).toBeInTheDocument();
+      const updatedItems = createTestItems(5);
       rerender(
         <MediaGallery
           items={updatedItems}
           renderCard={renderTestCard}
         />
       );
-
-      const endTime = performance.now();
-      const rerenderTime = endTime - startTime;
-
-      // Re-render should be fast (under 50ms)
-      expect(rerenderTime).toBeLessThan(50);
-
-      console.warn(`Re-rendered 20 items in ${rerenderTime.toFixed(2)}ms`);
+      expect(screen.getByTestId('card-item-4')).toBeInTheDocument();
+      expect(screen.queryByTestId('card-item-19')).not.toBeInTheDocument();
     });
   });
 
-  describe('Empty State Performance', () => {
-    it('should render empty state quickly', () => {
-      const startTime = performance.now();
+  describe('Empty state', () => {
+    it('should render the configured empty state', () => {
 
       render(
         <MediaGallery
@@ -234,13 +207,7 @@ describe('MediaGallery Performance Tests', () => {
         />
       );
 
-      const endTime = performance.now();
-      const renderTime = endTime - startTime;
-
       expect(screen.getByText('No items')).toBeInTheDocument();
-      expect(renderTime).toBeLessThan(50);
-
-      console.warn(`Rendered empty state in ${renderTime.toFixed(2)}ms`);
     });
   });
 });

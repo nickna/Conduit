@@ -13,19 +13,27 @@ using ConduitLLM.Tests.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
+using ConduitLLM.Tests.TestHelpers;
 using Moq;
+using ConduitLLM.Configuration.Constants;
+using ZiggyCreatures.Caching.Fusion;
 
 namespace ConduitLLM.Tests.Core.Caching;
 
+[Collection(ApplicationCacheContractCollection.Name)]
 public sealed class FusionMappingCacheTests
 {
     private static ServiceProvider Host(IModelProviderMappingService inner, string? redis = null, string? environment = null,
-        bool enabled = true)
+        bool enabled = true, TimeSpan? outageReadTimeout = null, ILogger<FusionModelProviderMappingService>? logger = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         { ["ApplicationCache:Environment"] = environment ?? $"test-{Guid.NewGuid():N}",
+            ["ApplicationCache:DistributedReadTimeout"] = outageReadTimeout?.ToString()
+                ?? (redis is null ? "00:00:00.250" : RedisCacheTestReadiness.HealthyReadTimeout),
             ["ApplicationCache:Domains:Mappings:Enabled"] = enabled.ToString() }).Build();
         var services = new ServiceCollection().AddLogging();
+        if (logger is not null) services.AddSingleton(logger);
         services.AddConduitApplicationCache(configuration, "test", redis ?? "");
         services.AddSingleton<IModelMappingCacheInvalidator, ModelMappingCacheInvalidator>();
         services.AddScoped<IModelProviderMappingService>(provider => ActivatorUtilities.CreateInstance<FusionModelProviderMappingService>(provider, inner));
@@ -66,7 +74,7 @@ public sealed class FusionMappingCacheTests
     }
 
     [Fact]
-    public async Task ConcurrentMissesLoadOnceAndEveryGraphIsOwnedByItsCaller()
+    public async Task ConcurrentMissesCoalesceAndEveryGraphIsOwnedByItsCaller()
     {
         var source = Graph();
         var inner = Inner(source);
@@ -75,17 +83,46 @@ public sealed class FusionMappingCacheTests
         inner.Setup(service => service.GetMappingByModelAliasAsync("old")).Returns(async () =>
         { entered.TrySetResult(); await release.Task; return source; });
         using var host = Host(inner.Object);
+        var stored = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        host.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey).Events.Memory.Set += (_, entry) =>
+        {
+            if (entry.Key.EndsWith(CacheKeys.ModelMapping.ByAlias("old"), StringComparison.Ordinal)) stored.TrySetResult();
+        };
         using var scope = host.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         var requests = Enumerable.Range(0, 32).Select(_ => service.GetMappingByModelAliasAsync("old")).ToArray();
-        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); release.SetResult();
-        var results = await Task.WhenAll(requests);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        // All 32 calls are pending on the same loader. Check coalescing while it is
+        // blocked: draining the continuations can outlive the production 100 ms TTL.
         inner.Verify(item => item.GetMappingByModelAliasAsync("old"), Times.Once);
+        release.SetResult();
+        var results = await Task.WhenAll(requests);
+        await stored.Task.WaitAsync(TimeSpan.FromSeconds(5));
         results[0]!.Provider.Settings!.Clear();
         results[0]!.ModelProviderTypeAssociation.Model.SupportsImageGeneration = false;
         source.Provider.Settings!.Clear();
         Assert.All(results.Skip(1), value => AssertGraph(value!));
-        AssertGraph((await service.GetMappingByModelAliasAsync("old"))!);
+    }
+
+    [Fact]
+    public async Task RetainedCacheHitOwnsItsGraphAndNeverReloads()
+    {
+        var source = Graph();
+        var inner = Inner(source);
+        using var host = Host(inner.Object);
+        using var scope = host.CreateScope();
+        var generation = await host.GetRequiredService<ApplicationCacheGeneration>().GetAsync(ApplicationCacheDomain.Mappings);
+        // This tests retained reads independently of the production 100 ms write TTL.
+        await host.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey).SetAsync<List<MappingCacheSnapshot>>(
+            $"mappings:{generation}:{CacheKeys.ModelMapping.ByAlias("old")}", [MappingCacheSnapshot.From(source)],
+            new FusionCacheEntryOptions { Duration = TimeSpan.FromMinutes(1) });
+        var service = scope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
+        var first = await service.GetMappingByModelAliasAsync("old");
+        first!.Provider.Settings!.Clear();
+        source.Provider.Settings!.Clear();
+        var cached = await service.GetMappingByModelAliasAsync("old");
+        AssertGraph(cached!);
+        inner.Verify(item => item.GetMappingByModelAliasAsync("old"), Times.Never);
     }
 
     [SkippableFact]
@@ -94,14 +131,19 @@ public sealed class FusionMappingCacheTests
         var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
         Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         var value = Graph(); var inner = Inner(value); var environment = $"test-{Guid.NewGuid():N}";
-        using var first = Host(inner.Object, redis, environment); using var firstScope = first.CreateScope();
+        var logger = new Mock<ILogger<FusionModelProviderMappingService>>(); var logs = logger.CaptureLogMessages();
+        using var first = Host(inner.Object, redis, environment, logger: logger.Object); using var firstScope = first.CreateScope();
+        using var second = Host(inner.Object, redis, environment, logger: logger.Object); using var secondScope = second.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(first, ApplicationCacheDomain.Mappings);
+        await RedisCacheTestReadiness.WarmAsync(second, ApplicationCacheDomain.Mappings);
         var writer = firstScope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         await writer.GetMappingByIdAsync(1); await writer.GetMappingByModelAliasAsync("old");
         await writer.GetMappingsByModelAliasAsync("old"); await writer.GetAllMappingsAsync();
-        using var second = Host(inner.Object, redis, environment); using var secondScope = second.CreateScope();
+        await Task.Delay(150); // Require real L2 lifetime beyond the production 100 ms L1.
         var reader = secondScope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         AssertGraph((await reader.GetMappingByIdAsync(1))!); AssertGraph((await reader.GetMappingByModelAliasAsync("old"))!);
         AssertGraph((await reader.GetMappingsByModelAliasAsync("old")).Single()); AssertGraph((await reader.GetAllMappingsAsync()).Single());
+        Assert.True(logs.Count == 0, string.Join(Environment.NewLine, logs.Select(log => $"{log.Message}: {log.Exception}")));
         inner.Verify(item => item.GetMappingByIdAsync(1), Times.Once);
         inner.Verify(item => item.GetMappingByModelAliasAsync("old"), Times.Once);
         inner.Verify(item => item.GetAllMappingsAsync(), Times.Once);
@@ -118,6 +160,7 @@ public sealed class FusionMappingCacheTests
         inner.Setup(service => service.GetMappingByModelAliasAsync("new")).ReturnsAsync((ModelProviderMapping?)null);
         await writer.DeleteMappingAsync(1);
         using var restart = Host(inner.Object, redis, environment); using var restartScope = restart.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(restart, ApplicationCacheDomain.Mappings);
         var restarted = restartScope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         Assert.Null(await restarted.GetMappingByIdAsync(1)); Assert.Null(await restarted.GetMappingByModelAliasAsync("new"));
         Assert.Empty(await restarted.GetAllMappingsAsync());
@@ -130,6 +173,7 @@ public sealed class FusionMappingCacheTests
         Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         var value = Graph(); var inner = Inner(value); var environment = $"test-{Guid.NewGuid():N}";
         using var first = Host(inner.Object, redis, environment); using var scope = first.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(first, ApplicationCacheDomain.Mappings);
         var cache = scope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         var invalidation = first.GetRequiredService<IModelMappingCacheInvalidator>();
         var discovery = Mock.Of<IDiscoveryCacheService>();
@@ -146,6 +190,7 @@ public sealed class FusionMappingCacheTests
         await new DiscoveryCacheInvalidationHandler(discovery, NullLogger<DiscoveryCacheInvalidationHandler>.Instance, invalidation)
             .HandleAsync(new DiscoveryCacheInvalidationRequested(), new TestEventContext());
         using var second = Host(inner.Object, redis, environment); using var secondScope = second.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(second, ApplicationCacheDomain.Mappings);
         Assert.Equal(8192, (await secondScope.ServiceProvider.GetRequiredService<IModelProviderMappingService>().GetMappingByIdAsync(1))!.ModelProviderTypeAssociation.MaxInputTokens);
         value.ModelProviderTypeAssociation.ModelCost!.InputCostPerMillionTokens = 0.75m;
         await new ModelCostCacheInvalidationHandler(Mock.Of<ConduitLLM.Configuration.Interfaces.IModelCostService>(), null, discovery,
@@ -160,7 +205,8 @@ public sealed class FusionMappingCacheTests
         Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         await using var proxy = new RedisNetworkProxy(redis!);
         var value = Graph(); var inner = Inner(value);
-        using var host = Host(inner.Object, proxy.ConnectionString); using var scope = host.CreateScope();
+        using var host = Host(inner.Object, proxy.ConnectionString, outageReadTimeout: TimeSpan.FromMilliseconds(250)); using var scope = host.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(host, ApplicationCacheDomain.Mappings);
         var cache = scope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         var generations = host.GetRequiredService<ApplicationCacheGeneration>();
         var originalGeneration = await generations.GetAsync(ApplicationCacheDomain.Mappings);
@@ -181,8 +227,10 @@ public sealed class FusionMappingCacheTests
         }
         Assert.NotNull(repairedGeneration);
         Assert.NotEqual(originalGeneration, repairedGeneration);
+        await RedisCacheTestReadiness.WarmAsync(host, ApplicationCacheDomain.Mappings);
         Assert.Equal(value.Provider.BaseUrl, (await cache.GetMappingByIdAsync(1))!.Provider.BaseUrl);
-        await handler.HandleAsync(new ModelMappingChanged(), new TestEventContext());
+        await RedisCacheTestReadiness.RetryRecoveredInvalidationAsync(token =>
+            handler.HandleAsync(new ModelMappingChanged(), new TestEventContext { CancellationToken = token }));
         Assert.Equal(value.Provider.BaseUrl, (await cache.GetMappingByIdAsync(1))!.Provider.BaseUrl);
     }
 
