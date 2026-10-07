@@ -20,6 +20,40 @@ public sealed class MediaTerminalWebhookTests(MediaDispatchFixture fixture)
     private const string Worker = "terminal-webhook-worker";
 
     [Theory]
+    [InlineData("image")] [InlineData("video")]
+    public async Task AcceptedMedia_RealOrchestratorSendsOriginalHeadersAndPayload_ProviderAndSpendRunOnce(string type)
+    {
+        await fixture.ResetAsync();
+        await using var receiver = await WebhookReceiver.StartAsync();
+        using var host = fixture.Host(worker: true, webhooks: true);
+        await host.StartAsync();
+        try
+        {
+            var metadata = new TaskMetadata(1) { Model = "test-model", Prompt = "test", WebhookUrl = receiver.Url,
+                ExtensionData = new() { ["VirtualKey"] = "test-key" } };
+            var headers = new Dictionary<string, string> { ["Authorization"] = "Bearer accepted-media" };
+            var submission = host.Services.GetRequiredService<IMediaTaskSubmission>();
+            var id = type == "image" ? await submission.SubmitAsync(new ImageGenerationRequested { VirtualKeyId = 1,
+                Request = new() { Model = "test-model", Prompt = "test" }, WebhookUrl = receiver.Url, WebhookHeaders = headers }, metadata)
+                : await submission.SubmitAsync(new VideoGenerationRequested { VirtualKeyId = "1", IsAsync = true,
+                    Request = new() { Model = "test-model", Prompt = "test" }, WebhookUrl = receiver.Url, WebhookHeaders = headers }, metadata);
+            await MediaDispatchFixture.EventuallyAsync(async () => { await using var db = fixture.Db();
+                return receiver.Posts.Any(p => p.Json.Contains("completed")) && await db.VirtualKeyGroupTransactions.AnyAsync(); });
+            var post = Assert.Single(receiver.Posts, p => p.Json.Contains("completed"));
+            Assert.Equal("Bearer accepted-media", post.Authorization);
+            using var payload = System.Text.Json.JsonDocument.Parse(post.Json);
+            Assert.Equal(id, payload.RootElement.GetProperty("task_id").GetString());
+            Assert.Equal("completed", payload.RootElement.GetProperty("status").GetString());
+            await using var db = fixture.Db();
+            Assert.Single(await db.VirtualKeyGroupTransactions.ToListAsync());
+            Assert.Equal(99.99m, (await db.VirtualKeyGroups.SingleAsync()).Balance);
+            if (type == "image") fixture.Provider.Verify(p => p.CreateImageAsync(It.IsAny<ImageGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+            else fixture.Provider.As<IVideoGenerationClient>().Verify(p => p.CreateVideoAsync(It.IsAny<VideoGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        }
+        finally { await host.StopAsync(); }
+    }
+
+    [Theory]
     [InlineData("image", TaskState.Completed)] [InlineData("video", TaskState.Completed)]
     [InlineData("image", TaskState.Failed)] [InlineData("video", TaskState.Failed)]
     [InlineData("image", TaskState.Cancelled)] [InlineData("video", TaskState.Cancelled)]

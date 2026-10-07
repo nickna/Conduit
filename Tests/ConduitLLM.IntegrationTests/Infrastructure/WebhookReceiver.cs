@@ -19,11 +19,11 @@ public sealed class WebhookReceiver(WebApplication app) : IAsyncDisposable
         context.Response.StatusCode = 204;
         return Task.CompletedTask;
     };
-    public static async Task<WebhookReceiver> StartAsync()
+    public static async Task<WebhookReceiver> StartAsync(bool containerAccessible = false)
     {
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
-        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
+        builder.WebHost.ConfigureKestrel(options => options.Listen(containerAccessible ? IPAddress.Any : IPAddress.Loopback, 0));
         var app = builder.Build();
         var receiver = new WebhookReceiver(app);
         app.Run(async context =>

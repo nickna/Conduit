@@ -121,6 +121,29 @@ public sealed class WebhookDurableDeliveryTests(MediaDispatchFixture fixture)
         finally { await first.StopAsync(); await second.StopAsync(); }
     }
 
+    [Fact]
+    public async Task ExpiredProgressBacklog_DoesNotConsumeHttpAttemptsOrSuppressFreshFinalEvents()
+    {
+        await fixture.ResetAsync();
+        await using var receiver = await WebhookReceiver.StartAsync();
+        using var host = fixture.Host(worker: false, webhooks: true);
+        await host.StartAsync();
+        try
+        {
+            var bus = host.Services.GetRequiredService<IMessageBus>();
+            for (var i = 0; i < 25; i++) await bus.PublishAsync(Request(receiver.Url) with
+            { EventId = Guid.NewGuid().ToString(), EventType = WebhookEventType.TaskProgress, Timestamp = DateTime.UtcNow.AddMinutes(-10) });
+            var final = Request(receiver.Url);
+            await bus.PublishAsync(final);
+            await DeliveredAsync(WebhookIdentity.DeliveryKey(final));
+            await MediaDispatchFixture.EventuallyAsync(async () => { await using var db = fixture.Db(); return await db.WebhookDeliveries.CountAsync(r => r.State == "Exhausted") == 25; });
+            Assert.Single(receiver.Posts);
+            await using var db = fixture.Db();
+            Assert.All(await db.WebhookDeliveries.Where(r => r.State == "Exhausted").ToListAsync(), row => Assert.Equal(0, row.Attempts));
+        }
+        finally { await host.StopAsync(); }
+    }
+
     private async Task DeliveredAsync(string id) => await MediaDispatchFixture.EventuallyAsync(async () =>
     {
         await using var db = fixture.Db();

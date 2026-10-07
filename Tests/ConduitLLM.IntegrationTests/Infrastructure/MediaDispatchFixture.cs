@@ -13,12 +13,14 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Metrics;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Core.Serialization;
 using ConduitLLM.Core.Validation;
 using ConduitLLM.Messaging.Wolverine;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -69,15 +71,15 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     }
     public async Task DisposeAsync() => await _postgres.DisposeAsync();
 
-    public IHost Host(bool worker, bool notificationsFail = false, bool webhooks = false)
+    public IHost Host(bool worker, bool notificationsFail = false, bool webhooks = false, string durabilitySchema = "wolverine_media_test")
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [WolverineMessagingExtensions.SchemaNameKey] = "wolverine_media_test",
+            [WolverineMessagingExtensions.SchemaNameKey] = durabilitySchema,
             [WolverineMessagingExtensions.AutoProvisionKey] = "true"
         }).Build();
         return Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
-            .ConfigureLogging(log => log.ClearProviders())
+            .ConfigureLogging(log => { log.ClearProviders(); if (Environment.GetEnvironmentVariable("CONDUIT_MEDIA_TEST_LOG") == "1") log.AddConsole(); })
             .ConfigureServices(services =>
             {
                 services.AddWolverineEventBus();
@@ -120,6 +122,16 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
             .AddConduitWolverine(config, ConnectionString, "media-dispatch-test", options =>
             {
                 options.ApplicationAssembly = typeof(ConduitLLM.Gateway.Endpoints.ImagesEndpoints).Assembly;
+                options.UseSystemTextJsonForSerialization(json =>
+                    json.TypeInfoResolverChain.Insert(0, CoreMessagingJsonContext.Default));
+                // Accelerate only the disposable fixture's dead-node/outbox scan;
+                // production defaults can legitimately exceed a 45s test window.
+                options.Durability.FirstHealthCheckExecution = TimeSpan.FromMilliseconds(100);
+                options.Durability.HealthCheckPollingTime = TimeSpan.FromSeconds(1);
+                options.Durability.StaleNodeTimeout = TimeSpan.FromSeconds(5);
+                options.Durability.FirstNodeReassignmentExecution = TimeSpan.FromMilliseconds(100);
+                options.Durability.NodeReassignmentPollingTime = TimeSpan.FromSeconds(1);
+                options.Durability.OutboxStaleTime = TimeSpan.FromSeconds(1);
                 options.ApplyConduitPublishRouting();
                 if (webhooks)
                 {
@@ -166,8 +178,8 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
         if (Reservations != null) services.AddSingleton(Reservations);
         services.AddSingleton(Mock.Of<IMediaStorageService>());
         services.AddSingleton<ICancellableTaskRegistry, CancellableTaskRegistry>();
-        services.AddSingleton(Mock.Of<IWebhookNotificationService>());
-        services.AddSingleton(Mock.Of<IHttpClientFactory>());
+        services.TryAddSingleton(Mock.Of<IWebhookNotificationService>());
+        services.TryAddSingleton(Mock.Of<IHttpClientFactory>());
         services.AddSingleton(Mock.Of<IProviderErrorTrackingService>());
         services.AddSingleton(new MinimalParameterValidator(NullLogger<MinimalParameterValidator>.Instance));
         services.AddSingleton<MediaGenerationMetrics>();
@@ -189,8 +201,8 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
         await SqlAsync("""
             TRUNCATE TABLE wolverine_media_test.wolverine_incoming_envelopes, wolverine_media_test.wolverine_outgoing_envelopes;
             DO $$ DECLARE row record; BEGIN
-            FOR row IN SELECT tablename FROM pg_tables WHERE schemaname = 'wolverine_transport' LOOP
-              EXECUTE format('TRUNCATE TABLE wolverine_transport.%I CASCADE', row.tablename);
+            FOR row IN SELECT tablename FROM pg_tables WHERE schemaname = 'wolverine_queues' LOOP
+              EXECUTE format('TRUNCATE TABLE wolverine_queues.%I CASCADE', row.tablename);
             END LOOP; END $$;
             """);
     }
@@ -206,15 +218,21 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     public async Task<(Process Process, string Id)> StartPublisherAsync(string type)
     {
         var process = StartProbe(type);
-        var line = await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(30));
-        if (line?.StartsWith("ACCEPTED:", StringComparison.Ordinal) != true)
+        try
+        {
+            var line = await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(30));
+            if (line?.StartsWith("ACCEPTED:", StringComparison.Ordinal) != true)
+                throw new InvalidOperationException($"Publisher returned unexpected output: {line}");
+            return (process, line[9..]);
+        }
+        catch (Exception failure)
         {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
             var error = await process.StandardError.ReadToEndAsync();
             process.Dispose();
-            throw new InvalidOperationException($"Publisher failed: {line} {error}");
+            throw new InvalidOperationException($"Publisher failed: {error}", failure);
         }
-        return (process, line[9..]);
     }
 
     public Process StartProbe(params string[] args)

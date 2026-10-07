@@ -62,8 +62,8 @@ public sealed class MediaDurableAcceptanceTests(MediaDispatchFixture fixture)
             CREATE OR REPLACE FUNCTION reject_media_transport() RETURNS trigger AS $$
             BEGIN RAISE EXCEPTION 'injected transport publication failure'; END; $$ LANGUAGE plpgsql;
             DO $$ DECLARE row record; BEGIN
-            FOR row IN SELECT tablename FROM pg_tables WHERE schemaname = 'wolverine_transport' LOOP
-              EXECUTE format('CREATE TRIGGER reject_media_transport BEFORE INSERT ON wolverine_transport.%I FOR EACH ROW EXECUTE FUNCTION reject_media_transport()', row.tablename);
+            FOR row IN SELECT tablename FROM pg_tables WHERE schemaname = 'wolverine_queues' LOOP
+              EXECUTE format('CREATE TRIGGER reject_media_transport BEFORE INSERT ON wolverine_queues.%I FOR EACH ROW EXECUTE FUNCTION reject_media_transport()', row.tablename);
             END LOOP; END $$;
             """);
         string id;
@@ -79,12 +79,17 @@ public sealed class MediaDurableAcceptanceTests(MediaDispatchFixture fixture)
         {
             await fixture.SqlAsync("""
                 DO $$ DECLARE row record; BEGIN
-                FOR row IN SELECT tablename FROM pg_tables WHERE schemaname = 'wolverine_transport' LOOP
-                  EXECUTE format('DROP TRIGGER reject_media_transport ON wolverine_transport.%I', row.tablename);
+                FOR row IN SELECT tablename FROM pg_tables WHERE schemaname = 'wolverine_queues' LOOP
+                  EXECUTE format('DROP TRIGGER reject_media_transport ON wolverine_queues.%I', row.tablename);
                 END LOOP; END $$;
                 DROP FUNCTION reject_media_transport();
                 """);
         }
+        // The killed publisher's node can still look live during the first
+        // leadership assignment and consume a 60s remote-command timeout. Advance
+        // only its heartbeat in this isolated database, as if that timeout elapsed.
+        // The outgoing envelopes themselves must be recovered by Wolverine.
+        await fixture.SqlAsync("UPDATE wolverine_media_test.wolverine_nodes SET health_check = CURRENT_TIMESTAMP - INTERVAL '10 minutes'");
         using var worker = fixture.Host(worker: true);
         await worker.StartAsync();
         try

@@ -153,6 +153,21 @@ public sealed class WebhookHttpTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task ProductionClient_ConnectionResetIsOneRetryableNetworkFailure()
+    {
+        var posts = 0;
+        await using var receiver = await Receiver.StartAsync(context =>
+        {
+            Interlocked.Increment(ref posts); context.Abort(); return Task.CompletedTask;
+        });
+        using var services = Services();
+        var result = await services.GetRequiredService<IWebhookNotificationService>().SendTaskCompletionWebhookAsync(receiver.Url, Payload);
+        Assert.False(result.Success);
+        Assert.Equal(WebhookFailureKind.Network, result.FailureKind);
+        Assert.Equal(1, posts);
+    }
+
+    [Fact]
     public async Task ProductionClient_ConfiguredTimeoutTakesEffect()
     {
         await using var receiver = await Receiver.StartAsync(async context =>

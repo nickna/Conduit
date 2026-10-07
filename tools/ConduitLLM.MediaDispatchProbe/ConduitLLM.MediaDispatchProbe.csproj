@@ -2,5 +2,6 @@
   <PropertyGroup><OutputType>Exe</OutputType><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../Shared/ConduitLLM.Messaging.Wolverine/ConduitLLM.Messaging.Wolverine.csproj" />
+    <ProjectReference Include="../../Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj" />
   </ItemGroup>
 </Project>
