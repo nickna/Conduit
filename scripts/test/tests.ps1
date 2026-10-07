@@ -6,7 +6,9 @@
 
 .DESCRIPTION
     Simple test runner wrapper that runs dotnet test with appropriate options.
-    Integration tests have been moved to archive.
+    Active infrastructure tests live in Tests/ConduitLLM.IntegrationTests.
+    Use scripts/ci/run-tests.ps1 with the documented Component traits and isolated
+    Docker/PostgreSQL/Redis infrastructure for the same execution evidence as CI.
 
 .PARAMETER Filter
     Optional test filter to run specific tests.

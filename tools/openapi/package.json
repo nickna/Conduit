@@ -21,7 +21,7 @@
     "validate:ratchet:self-test": "node validate-openapi.mjs --self-test",
     "test:sdk-smoke": "dotnet test ../../Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj --no-build --no-restore --filter Component=OpenAiSdkSmoke",
     "validate:invariants": "node validate-openapi.mjs",
-    "lint:openapi": "redocly lint --config ../../redocly.yaml ../../Services/ConduitLLM.Admin/openapi-admin.json ../../Services/ConduitLLM.Gateway/openapi-gateway.json",
+    "lint:openapi": "node lint-openapi.mjs",
     "validate:openapi": "npm run validate:ratchet:self-test && npm run lint:openapi && npm run validate:invariants",
     "verify:offline": "node verify-openapi-determinism.mjs",
     "clean": "rm -rf ../../WebAdmin/src/generated"

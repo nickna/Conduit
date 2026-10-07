@@ -1,133 +1,21 @@
-# GitHub Actions Workflows
+# GitHub Actions workflows
 
-This repository uses a simplified, industry-standard CI/CD pipeline.
+The protected `CI required` check must succeed on every pull request and master/dev push, including documentation-only changes. Local validation: `npm ci --prefix tools/ci`, then `pwsh scripts/test/validate-workflows.ps1` and `node --test scripts/ci/*.test.mjs`. The validator verifies its actionlint download by SHA-256, validates real Actions syntax/expressions, and parses the required job graph. Archived workflows are inactive.
 
-## Active Workflows
+| Workflow | Active triggers | Executed proof |
+|---|---|---|
+| CI (`ci.yml`) | master/dev push, master/dev PR, manual | Sixteen required job groups: backend correctness/coverage, functional and deterministic timing inventories, serialization, billing fault/invariants, durable media, SignalR, Wolverine two-host, analyzers, contracts/official SDKs, WebAdmin correctness/CSS/dead code, dependency audits, real S3 storage, packaged production images/Chromium, plus reusable migrations, locks and CodeQL. |
+| Migration validation | Called by CI; manual | Real EF inventory and pending-model checks, fresh migrations, repeated/partial migrations and packaged migrator idempotence against isolated PostgreSQL. Missing promised infrastructure/tooling fails. |
+| Distributed lock ownership | Called by CI; manual | PostgreSQL 16/17 integration and JIT/native production lock probes. Main CI owns the ordinary 233 lock/caller cases. |
+| CodeQL | Called by CI for both master/dev pushes and PRs; weekly; manual master/dev | Required C# and JavaScript analysis. The C# build remains instrumented and separate from normal/native builds. |
+| NativeAOT | master push; master/dev PR changing native build/SDK inputs; weekly; manual | Both linux-x64 native publishes, normal protocol/infrastructure probes and parity, packaged non-root entrypoint execution, image checks and retained logs/metrics/symbols. A smoke failure fails its job; artifacts are still retained. Native remains canary-only. |
+| Release | `v*` tag push | Strict SemVer/master ancestry/exact-SHA successful master CI; immutable candidate manifest; three digest-addressed security scans and real packaged/browser proof; serialized production preflight, migration, verified promotion and GitHub Release. Independent native canaries are scanned/executed and never promoted to default channels. |
+| Close dev issues | dev push; manual | Closes only explicit closing-keyword references in merged PRs. Manual backfill defaults to dry-run. |
 
-### 1. CI (`ci.yml`)
-**Triggers:** Push to `master` or `dev`, Pull requests to `master`
+CI publishes no deployment images. Release candidates use unique run/attempt names; official version tags are immutable. Stable versions advance `latest`, prereleases advance `beta`. Production serialization covers migration, all three repositories and GitHub Release creation, with older-channel rejection and a retained recovery ledger. Deploy from the complete verified image-set artifact, using digests. See [CI policy and recovery](../../docs/operations/ci-validation.md) and [native canary policy](../../docs/operations/native-aot-canary.md).
 
-**What it does:**
-- Validates code builds and tests pass (.NET and WebAdmin lint/type-check)
-- Runs the analyzer-only NativeAOT warning ratchet on every PR without native linking
-- Builds all three Docker images for validation only — **never pushes** (this still
-  catches Dockerfile / production-build breakage, notably WebAdmin's `next build`,
-  which runs nowhere else in CI)
+Before cutting a release, merge its source/version update to master and wait for that exact SHA's `CI required` success. Then push a valid tag such as `v3.1.0` or `v3.2.0-beta.1`. The production environment admits version tags and requires `CONDUIT_RELEASE_DATABASE_URL`. A failed preflight, smoke, scan or migration cannot promote official images. Do not trigger a release to test PR changes.
 
-CI publishes nothing. Docker images are published from a `v*` tag by the Release workflow.
+Tests have not moved to archive. Use `scripts/ci/run-tests.ps1 -Project PROJECT -Suite NAME -Filter 'Component=TRAIT'` for retained TRX/counts/logs, with isolated Docker/PostgreSQL/Redis infrastructure where required. Main tests run Debug with matching build configuration; release-migration components have separate required ownership. See the CI policy for exact inventories, intentional skips, coverage minima and paid-provider opt-in rules.
 
-### 2. NativeAOT (`native-aot.yml`)
-
-**Triggers:** Push to `master`, weekly schedule, manual dispatch
-
-**What it does:**
-- Publishes Admin and Gateway as `linux-x64` NativeAOT executables
-- Launches each executable through the infrastructure-free OpenAPI path
-- Builds both parallel NativeAOT runtime images and verifies that they are non-root,
-  directly executable, health checked, and free of build/debug content
-- Retains publish duration, executable size, OpenAPI readiness, peak working set,
-  exact publish/smoke logs, runtime artifacts, and separately packaged symbols
-
-Native smoke failures are recorded but do not prevent artifact retention while the
-later NativeAOT phases burn down the known runtime incompatibilities.
-
-### 3. Release (`release.yml`)
-**Triggers:** Push of a tag matching `v*` (cut from `master`)
-
-Two channels, decided by the tag name — a tag is a **pre-release** iff its name
-contains a hyphen (SemVer rule):
-
-| Tag | Channel | Docker | GitHub Release |
-|---|---|---|---|
-| `v3.0.0` | stable | `:3.0.0` + `:latest` | Latest |
-| `v3.0.0-beta.1` | beta | `:3.0.0-beta.1` + `:beta` | Pre-release |
-
-**What it does:**
-- Creates a GitHub Release with auto-generated notes (pre-release for beta tags;
-  only a stable tag becomes the repo's "Latest")
-- Builds and pushes the three versioned Docker images plus the channel tag
-  (`:latest` / `:beta`)
-- Independently builds `linux-x64` Admin and Gateway NativeAOT canary candidates with
-  SBOM/provenance, a blocking critical-vulnerability scan, and separate short-lived
-  symbol artifacts. These candidates are deliberately excluded from JIT promotion.
-The Git tag drives the GitHub release and Docker image versions.
-
-Native candidate promotion is governed by
-`docs/operations/native-aot-canary.md` and remains blocked by ADR 0006. No native
-candidate receives a version, `latest`, or `beta` tag from this workflow.
-
-### 4. CodeQL (`codeql-analysis.yml`)
-**Triggers:** Push to `master` or `dev`, Weekly schedule, Manual dispatch
-
-**What it does:**
-- Scans for security vulnerabilities
-- Results appear in Security tab
-- Non-blocking, informational only
-
-### 5. Close dev issues (`close-dev-issues.yml`)
-**Triggers:** Push to `dev`, Manual dispatch
-
-GitHub only honours `Closes #N` for PRs merged into the **default** branch (`master`).
-Every PR here targets `dev`, so those references never fire and completed issues sit
-open until someone closes them by hand. This workflow closes them.
-
-**What it does:**
-- Finds every merged PR in the pushed commit range
-- Reads closing keywords (`close[sd]`, `fix(e[sd])`, `resolve[sd]`) from each PR's title
-  and body, including the comma/`and`-separated list form used here
-  (`Closes #1205, #1206, #1207.`) that GitHub only ever honours for the first number
-- Closes each referenced open issue with a comment pointing at the PR and merge commit
-
-**What it deliberately does not close:**
-- References without a closing keyword — `Advances #1182`, `Completes epic #1204`,
-  `part of #800`. Partial progress stays open; write a closing keyword only when the
-  issue is actually done.
-- Issues already closed, PR numbers, and numbers inside words (`prefixes #99`)
-
-**Backfilling:** run it manually with a PR number to process an older merged PR.
-`dry_run` defaults to **true** on manual runs — it lists what it would close without
-closing anything. Set it to false to act.
-
-## Release Process
-
-Releases are cut from `master` by pushing a version tag.
-
-1. **Bump the version** in `Directory.Build.props`, commit, and merge to `master`.
-2. **Stable release:**
-   ```bash
-   git tag v3.0.0
-   git push origin v3.0.0
-   ```
-   Publishes Docker `:3.0.0` + `:latest`.
-3. **Beta release** — any pre-release suffix (a `-…`):
-   ```bash
-   git tag v3.0.0-beta.1
-   git push origin v3.0.0-beta.1
-   ```
-   Publishes Docker `:3.0.0-beta.1` + `:beta`.
-   A beta never moves `:latest`.
-
-## Artifact Locations
-
-- **Docker Images:** https://github.com/users/nickna/packages
-- **Security Results:** https://github.com/nickna/Conduit/security/code-scanning
-
-## Design Principles
-
-1. **YAGNI (You Ain't Gonna Need It):** Only essential workflows
-2. **DRY (Don't Repeat Yourself):** No duplicate logic across workflows
-3. **Industry Standard:** Using official actions, no custom parsing
-4. **Simple:** ~300 lines total vs previous 2,187 lines
-
-## Required Secrets
-
-- `GITHUB_TOKEN`: Automatically provided by GitHub Actions
-
-## Archived Workflows
-
-Old workflows are archived in `.github/workflows/archive-2024-08/` for reference.
-These were replaced due to:
-- Overcomplexity (2,187 lines of YAML)
-- Custom SARIF parsing that broke with format changes
-- Duplicate logic across multiple workflows
-- Manual security gating that failed silently
+All active workflows default to read-only contents permissions; package/content/security-event writes are limited to the jobs that need them. External actions use reviewed immutable SHAs in `scripts/ci/action-versions.json`. Updates must refresh the inventory and pass validation. Dependency update automation belongs to #1063; candidate scans, package audits and CodeQL provide separate evidence.

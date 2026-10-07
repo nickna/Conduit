@@ -146,6 +146,16 @@ Recovery procedure:
 
 Fault-injection regressions cover every partial channel write, rollback failure, bootstrap recovery, stale-ledger rejection, immutable version conflicts, missing candidates, digest mismatch, required migration success and stable/beta separation. Database migrations cannot be rolled back by retagging images; migration compatibility remains the release owner's responsibility.
 
+Workflow validation and hygiene (#1444)
+
+The required source guard runs checksum-pinned actionlint 1.7.12 for real YAML, Actions schema, expressions and references, then parses YAML for the protected gate, all-change master/dev triggers, time bounds, reusable concurrency, release ordering and digest-based scans. Negative fixtures cover malformed YAML, duplicate keys, invalid expressions/references, missing aggregate dependencies, docs-only filtering, skipped gates and unsafe production serialization. Routine cancellable test jobs are valid.
+
+WebAdmin now runs Stylelint and Knip in its required job. Knip has zero unused files/dependencies and any finding fails. CSS has 219 existing findings across 13 file/rule budgets, tracked in #1468; new files/rules or increased counts fail, and malformed configuration/CSS fails regardless of budget. Reports survive failure. Reduce `css-warning-budget.json` when fixing debt; changes to budgets require an explained code review and rendering checks.
+
+Redocly currently reports 379 warnings (325 Admin, 54 Gateway). `--max-problems` only truncates output; it cannot enforce warning failure. The wrapper requests the complete JSON inventory, rejects truncated/malformed reports and errors, and fails on any new rule/location/message identity outside `redocly-warning-baseline.json`. Its negative regression introduces a warning with zero CLI errors and proves failure. Existing custom OpenAPI ratchets remain: 1,004 known violations, including 727 missing-4xx, 272 summaries, three media types and two property casing cases; no allowance was silently removed. #1088 owns remaining warning cleanup and eventual zero debt.
+
+Measured GitHub execution after the scheduling change (run 37562579173): all 18 executed jobs passed; 3,752 main cases passed with three documented skips, 461 Jest cases passed, all three S3 operations and packaged Chromium passed. Wall time was 605 seconds versus historical 761/885 seconds; summed runner time was 56.2 minutes versus 29.05/29.77. This is not a controlled speedup claim: the new required graph adds migrations, both CodeQL languages, both PostgreSQL variants, S3 and packaged browser proof. Backend Validate decreased to 512 seconds from 604/739; CodeQL C# (596 seconds) now dominates wall time. Final PR-run measurements supersede this intermediate measurement when available.
+
 
 Dependency and candidate security (#1443)
 

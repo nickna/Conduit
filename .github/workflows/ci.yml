@@ -106,6 +106,15 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tools/ci/package-lock.json
+      - name: Install parsed workflow tooling
+        run: npm ci --prefix tools/ci
+      - name: Validate Actions syntax, expressions and required job graph
+        run: pwsh ./scripts/test/validate-workflows.ps1
       - name: Check native Docker SDK compatibility
         run: node scripts/ci/native-sdk.mjs
       - name: Exercise validation policy regressions
@@ -437,6 +446,16 @@ jobs:
           node ../scripts/ci/jest-evidence.mjs coverage/test-results.json
           python ../scripts/ci/coverage-ratchet.py jest coverage/coverage-final.json
 
+      - name: Enforce measured CSS budgets and unused-code cleanliness
+        working-directory: .
+        run: node scripts/ci/webadmin-hygiene.mjs
+      - name: Retain CSS and unused-code reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: webadmin-hygiene-evidence
+          path: artifacts/webadmin-hygiene
+          retention-days: 30
       - name: Retain WebAdmin results and coverage
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
