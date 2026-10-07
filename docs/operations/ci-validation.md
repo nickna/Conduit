@@ -98,6 +98,13 @@ threshold. Update the reference only from a successful controlled report using
 `node scripts/ci/record-browser-baseline.mjs PATH_TO_REPORT`; its method, all seven
 samples, source run/SHA and exact image identities must validate. Retain the prior
 reference in Git and explain the update in its PR.
+The initial reference is the successful packaged job in
+[run 37569962592](https://github.com/nickna/Conduit/actions/runs/37569962592):
+median 468.5 ms, p95 528.6 ms, Chromium 153.0.8010.12 on the recorded four-vCPU
+Linux runner. The p95 uses nearest rank and is the largest of seven samples;
+it does not estimate population tail latency. That run's separate backend job
+exposed the Redis test startup assumption tracked in #1474; this reference proves
+the successful controlled browser job only.
 Relative test globs fix Windows `.codex` worktree discovery (#1457).
 
 Every required .NET lane uses the shared run-tests action: TRX, method identities,
@@ -165,6 +172,9 @@ then reports overall wall time, runner minutes and packaged-lane elapsed time.
 These paired runs control source, proof inventory, runner class and workflow
 configuration. Public-runner placement/cache/CPU contention still vary; report
 that uncertainty and the CodeQL critical path alongside any observed reduction.
+The before-mode barrier polls every 15 seconds, adding up to one polling interval
+of scheduling uncertainty; this is a controlled comparison of those two audited
+costs, not a reconstruction of every historical workflow change.
 
 Immutable release promotion and recovery (#1441)
 
