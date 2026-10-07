@@ -32,7 +32,10 @@ param(
     [switch]$GenerateScript,
 
     [ValidateRange(1, 600)]
-    [int]$PendingTimeoutSeconds = 30
+    [int]$PendingTimeoutSeconds = 30,
+
+    [ValidateRange(1, 600)]
+    [int]$InventoryTimeoutSeconds = 30
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,6 +52,7 @@ if (Test-Path $devLibPath) {
 
 $configurationProject = Join-Path $projectRoot 'Shared' 'ConduitLLM.Configuration'
 . (Join-Path $PSScriptRoot 'BoundedCommand.ps1')
+. (Join-Path $PSScriptRoot 'MigrationInventory.ps1')
 
 Write-Host "==============================================" -ForegroundColor Cyan
 Write-Host "EF Core Migration Validation" -ForegroundColor Cyan
@@ -79,45 +83,15 @@ try {
     Write-Host ""
     Write-Host "Step 2: Listing migrations..." -ForegroundColor Yellow
 
-    $migrations = @()
-
-    # Required verification uses EF's authoritative inventory. Filesystem fallback
-    # can include undiscoverable historical sources (#1455), so it is local-only.
+    # EF metadata is authoritative in every mode. A timeout must never change the
+    # inventory to timestamped files that EF would not apply to deployed databases.
     $listing = Invoke-BoundedCommand -FilePath 'dotnet' -WorkingDirectory $configurationProject `
-        -Arguments @('ef', 'migrations', 'list', '--no-build', '--no-connect') -TimeoutSeconds 30
-    if (-not $listing.TimedOut -and $listing.ExitCode -eq 0) {
-        $efOutput = $listing.Output -split "`r?`n"
-
-        # Extract migration names and strip status indicators
-        $migrationsEf = $efOutput | Where-Object { $_ -match '^\d{14}_' } | ForEach-Object {
-            $_ -replace ' \(Pending\)$', '' -replace ' \(Applied\)$', ''
-        }
-
-        if ($migrationsEf) {
-            $migrations = $migrationsEf
-            Write-Host "Migrations from EF tool:"
-        }
-    } elseif ($CheckPending) {
-        Write-Host $listing.Output
-        throw "Required EF migration inventory failed (timeout=$($listing.TimedOut), exit=$($listing.ExitCode))."
-    }
-
-    # Fallback: get migrations from filesystem
-    if ($migrations.Count -eq 0) {
-        if ($CheckPending) { throw 'EF discovered no migrations; required validation cannot use a filesystem fallback.' }
-        $migrationsPath = Join-Path $configurationProject 'Migrations'
-        if (Test-Path $migrationsPath) {
-            $migrationsFs = Get-ChildItem -Path $migrationsPath -Filter '*.cs' -File |
-                Where-Object { $_.Name -match '^\d{14}_' -and $_.Name -notmatch '\.Designer\.cs$' } |
-                ForEach-Object { $_.BaseName } |
-                Sort-Object
-
-            if ($migrationsFs) {
-                $migrations = $migrationsFs
-                Write-Host "Migrations from filesystem (EF tool unavailable):"
-            }
-        }
-    }
+        -Arguments @('ef', 'migrations', 'list', '--no-build', '--no-connect') -TimeoutSeconds $InventoryTimeoutSeconds
+    $diagnosticDirectory = Join-Path $projectRoot 'artifacts/migrations'
+    New-Item -ItemType Directory -Force $diagnosticDirectory | Out-Null
+    $listing.Output | Set-Content (Join-Path $diagnosticDirectory 'inventory.log')
+    $migrations = @(Get-VerifiedMigrationInventory -Result $listing)
+    Write-Host 'Migrations from EF tool:'
 
     $migrations | ForEach-Object { Write-Host "  $_" }
 
@@ -142,29 +116,9 @@ try {
     Write-Host ""
     Write-Host "Step 4: Validating migration files..." -ForegroundColor Yellow
 
-    $missingFiles = 0
     $migrationsPath = Join-Path $configurationProject 'Migrations'
-
-    foreach ($migration in $migrations) {
-        $mainFile = Join-Path $migrationsPath "$migration.cs"
-        $designerFile = Join-Path $migrationsPath "$migration.Designer.cs"
-
-        if (-not (Test-Path $mainFile)) {
-            Write-Host "ERROR: Missing migration file: $migration.cs" -ForegroundColor Red
-            $missingFiles++
-        }
-        if (-not (Test-Path $designerFile)) {
-            Write-Host "ERROR: Missing designer file: $migration.Designer.cs" -ForegroundColor Red
-            $missingFiles++
-        }
-    }
-
-    if ($missingFiles -eq 0) {
-        Write-Host "[OK] All migration files present" -ForegroundColor Green
-    } else {
-        Write-Host "ERROR: $missingFiles migration files missing" -ForegroundColor Red
-        exit 1
-    }
+    Assert-MigrationSourceInventory -Migrations $migrations -MigrationsPath $migrationsPath
+    Write-Host '[OK] All migration sources match EF inventory and have designers' -ForegroundColor Green
 
     # Step 5: Check for pending model changes
     Write-Host ""
@@ -192,19 +146,13 @@ try {
 
         $efWrapperPath = Join-Path $scriptDir 'ef-wrapper.ps1'
         if (Test-Path $efWrapperPath) {
-            & $efWrapperPath migrations script --no-build -o $outputFile
+            & $efWrapperPath -Command @('migrations', 'script', '--no-build', '-o', $outputFile)
         } else {
             dotnet ef migrations script --no-build -o $outputFile
         }
 
-        if (Test-Path $outputFile) {
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $outputFile)) {
             Write-Host "[OK] Migration script generated: $outputFile" -ForegroundColor Green
-
-            # Validate SQL syntax (basic check)
-            $sqlContent = Get-Content $outputFile -Raw
-            if ($sqlContent -match '(syntax error|ERROR)') {
-                Write-Host "WARNING: Potential SQL errors detected in migration script" -ForegroundColor Yellow
-            }
         } else {
             Write-Host "ERROR: Failed to generate migration script" -ForegroundColor Red
             exit 1

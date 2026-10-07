@@ -35,6 +35,13 @@
       }
     ],
     "declaration-block-no-redundant-longhand-properties": true,
+    "declaration-empty-line-before": [
+      "always",
+      {
+        "except": ["first-nested"],
+        "ignore": ["after-declaration", "after-comment", "inside-single-line-block"]
+      }
+    ],
     "declaration-property-value-disallowed-list": {
       "color": [
         "/^#/",

@@ -97,6 +97,7 @@ public partial class Program
             options.AddSchemaTransformer<ConduitLLM.Admin.OpenApi.StructuredJsonSchemaTransformer>();
             options.AddSchemaTransformer<ConduitLLM.Admin.OpenApi.FunctionExecutionSchemaTransformer>();
             options.AddDocumentTransformer<ConduitLLM.Core.OpenApi.OperationIdValidationDocumentTransformer>();
+            options.AddDocumentTransformer<ConduitLLM.Core.OpenApi.DocumentationLineEndingDocumentTransformer>();
         });
 
         // The build-time exporter needs endpoint metadata, not infrastructure. Avoid Postgres,

@@ -1,15 +1,1 @@
-{
-  "src/app/globals.css:order/properties-order": 8,
-  "src/app/globals.css:color-no-hex": 28,
-  "src/app/globals.css:font-family-name-quotes": 1,
-  "src/app/globals.css:no-duplicate-selectors": 1,
-  "src/app/globals.css:rule-empty-line-before": 1,
-  "src/app/chat/styles.css:order/properties-order": 121,
-  "src/app/chat/styles.css:color-function-alias-notation": 20,
-  "src/app/chat/styles.css:color-function-notation": 20,
-  "src/app/chat/styles.css:declaration-block-no-shorthand-property-overrides": 1,
-  "src/app/chat/styles.css:declaration-property-value-disallowed-list": 7,
-  "src/app/chat/styles.css:declaration-property-value-no-unknown": 1,
-  "src/app/chat/styles.css:rule-empty-line-before": 2,
-  "src/app/chat/styles.css:selector-class-pattern": 8
-}
+{}

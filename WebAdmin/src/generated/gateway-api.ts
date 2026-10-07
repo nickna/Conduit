@@ -2501,28 +2501,20 @@ export interface operations {
     requestBody: {
       content: {
         "multipart/form-data": {
+          file: components["schemas"]["IFormFile"];
+          response_format?: string;
+          /** Format: double */
+          temperature?: number | string;
+          chunking_strategy?: string;
+          stream?: boolean;
+          model: string;
+          language?: string;
+          prompt?: string;
           include?: string[];
           known_speaker_names?: string[];
           timestamp_granularities?: string[];
           known_speaker_references?: string[];
-        } & ({
-          file: components["schemas"]["IFormFile"];
-        } & {
-          model: string;
-        } & {
-          language?: string;
-        } & {
-          prompt?: string;
-        } & {
-          response_format?: string;
-        } & {
-          /** Format: double */
-          temperature?: number | string;
-        } & {
-          chunking_strategy?: string;
-        } & {
-          stream?: boolean;
-        });
+        };
       };
     };
     responses: {

@@ -7,7 +7,6 @@ using Microsoft.Extensions.Options;
 using ConduitLLM.Admin.Metrics;
 using ConduitLLM.Admin.Services;
 using ConduitLLM.Core.Utilities;
-using ConduitLLM.Security;
 using ConduitLLM.Security.Cryptography;
 using ConduitLLM.Security.Options;
 
@@ -45,11 +44,7 @@ namespace ConduitLLM.Admin.Security
                 ?? configuration["AdminApi:MasterKey"];
             _ephemeralMasterKeyService = ephemeralMasterKeyService ?? throw new ArgumentNullException(nameof(ephemeralMasterKeyService));
             ArgumentNullException.ThrowIfNull(securityOptions);
-            _keyHeaders = new[] { securityOptions.Value.ApiAuth.ApiKeyHeader }
-                .Concat(securityOptions.Value.ApiAuth.AlternativeHeaders)
-                .Where(header => !string.IsNullOrWhiteSpace(header))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            _keyHeaders = MasterKeyCredentialReader.GetKeyHeaders(securityOptions.Value.ApiAuth);
         }
 
         /// <summary>
@@ -79,31 +74,7 @@ namespace ConduitLLM.Admin.Security
                 return AuthenticateResult.Success(ticket);
             }
 
-            // Check for master key in headers
-            string? providedKey = null;
-
-            foreach (var headerName in _keyHeaders)
-            {
-                if (Context.Request.Headers.TryGetValue(headerName, out var keyValues))
-                {
-                    providedKey = keyValues.FirstOrDefault();
-                    if (!string.IsNullOrWhiteSpace(providedKey))
-                    {
-                        break;
-                    }
-                }
-            }
-
-            // Check Authorization header for Bearer token
-            if (string.IsNullOrWhiteSpace(providedKey) &&
-                Context.Request.Headers.TryGetValue(SecurityHeaderNames.Authorization, out var authValues))
-            {
-                var authHeader = authValues.FirstOrDefault();
-                if (!string.IsNullOrEmpty(authHeader))
-                {
-                    providedKey = SpanHelper.ExtractBearerToken(authHeader);
-                }
-            }
+            var providedKey = MasterKeyCredentialReader.Read(Context.Request, _keyHeaders);
 
             if (string.IsNullOrEmpty(providedKey))
             {

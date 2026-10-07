@@ -31,7 +31,9 @@ internal sealed class GatewayEndpointTestHost : IAsyncDisposable
         Client = host.GetTestClient();
     }
 
-    public static async Task<GatewayEndpointTestHost> StartAsync(Action<IServiceCollection>? configure = null)
+    public static async Task<GatewayEndpointTestHost> StartAsync(
+        Action<IServiceCollection>? configure = null,
+        bool exposeOpenApi = false)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -74,7 +76,12 @@ internal sealed class GatewayEndpointTestHost : IAsyncDisposable
                     // Mirrors Program.Middleware.cs: the error middleware sits below auth and above
                     // the endpoints, so endpoint exceptions map to OpenAI-shaped error responses.
                     app.UseOpenAIErrorHandling();
-                    app.UseEndpoints(endpoints => endpoints.MapGatewayApiEndpoints());
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapGatewayApiEndpoints();
+                        if (exposeOpenApi)
+                            endpoints.MapOpenApi();
+                    });
                 });
             })
             .StartAsync();
