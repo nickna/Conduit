@@ -1,9 +1,12 @@
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Data;
+using ConduitLLM.Configuration.ModelCatalogs;
 using ConduitLLM.Migrator;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Npgsql;
 
@@ -91,6 +94,76 @@ public sealed class ReleaseMigrationCommandTests
         var exitCode = await MigrationRunner.RunAsync();
 
         Assert.Equal(1, exitCode);
+    }
+
+    [SkippableFact]
+    public async Task BundledCatalog_ProductionRetryStrategy_ImportsAndRepeatsIdempotently()
+    {
+        await using var database = await TemporaryDatabase.CreateAsync();
+        await using var context = CreateContext(database.ConnectionString);
+        await context.Database.MigrateAsync();
+        var importer = new BundledModelCatalogImporter(
+            new RetryingCatalogContextFactory(database.ConnectionString),
+            new BundledModelCatalog(), NullLogger<BundledModelCatalogImporter>.Instance);
+
+        var imported = await importer.ImportAsync(onlyWhenIdentifierCatalogIsEmpty: true);
+        Assert.NotNull(imported);
+        Assert.True(imported.Created.Identifiers > 0);
+        Assert.Null(await importer.ImportAsync(onlyWhenIdentifierCatalogIsEmpty: true));
+        var repeated = await importer.ImportAsync(onlyWhenIdentifierCatalogIsEmpty: false);
+        Assert.NotNull(repeated);
+        Assert.Equal(0, repeated.Created.Identifiers);
+        Assert.Equal(imported.Created.Identifiers, repeated.SkippedExistingIdentifiers);
+        Assert.Equal(imported.Created.Identifiers, await context.ModelProviderTypeAssociations.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task BundledCatalog_FailureAfterSave_RetriesWholeTransactionWithFreshContext()
+    {
+        await using var database = await TemporaryDatabase.CreateAsync();
+        await using var context = CreateContext(database.ConnectionString);
+        await context.Database.MigrateAsync();
+        var failure = new FailFirstCatalogSave();
+        var factory = new RetryingCatalogContextFactory(database.ConnectionString, failure);
+        var importer = new BundledModelCatalogImporter(factory,
+            new BundledModelCatalog(), NullLogger<BundledModelCatalogImporter>.Instance);
+
+        var imported = await importer.ImportAsync(onlyWhenIdentifierCatalogIsEmpty: true);
+
+        Assert.NotNull(imported);
+        Assert.Equal(2, failure.Saves);
+        Assert.Equal(3, factory.ContextsCreated); // Strategy plus one context per attempt.
+        Assert.Equal(imported.Created.Identifiers, await context.ModelProviderTypeAssociations.CountAsync());
+        Assert.Equal(imported.Created.Models, await context.Models.CountAsync());
+    }
+
+    private sealed class RetryingCatalogContextFactory(string connectionString, SaveChangesInterceptor? interceptor = null)
+        : IDbContextFactory<ConduitDbContext>
+    {
+        public int ContextsCreated { get; private set; }
+
+        public ConduitDbContext CreateDbContext()
+        {
+            ContextsCreated++;
+            var options = new DbContextOptionsBuilder<ConduitDbContext>()
+                .UseNpgsql(connectionString, postgres => postgres.EnableRetryOnFailure(
+                    maxRetryCount: 2, maxRetryDelay: TimeSpan.Zero, errorCodesToAdd: null));
+            if (interceptor is not null) options.AddInterceptors(interceptor);
+            return new ConduitDbContext(options.Options);
+        }
+    }
+
+    private sealed class FailFirstCatalogSave : SaveChangesInterceptor
+    {
+        public int Saves { get; private set; }
+
+        public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData,
+            int result, CancellationToken cancellationToken = default)
+        {
+            if (++Saves == 1)
+                throw new PostgresException("Injected serialization failure after save", "ERROR", "ERROR", "40001");
+            return ValueTask.FromResult(result);
+        }
     }
 
     private static ConduitDbContext CreateContext(string connectionString)
