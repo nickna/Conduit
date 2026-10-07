@@ -16,20 +16,17 @@ public sealed class S3StorageCollection : ICollectionFixture<S3StorageFixture>;
 public sealed class S3StorageFixture : IAsyncLifetime
 {
     private readonly IContainer _container = new ContainerBuilder()
-        .WithImage("minio/minio:RELEASE.2025-04-22T22-12-26Z")
-        .WithEnvironment("MINIO_ROOT_USER", "conduitci")
-        .WithEnvironment("MINIO_ROOT_PASSWORD", "conduit-ci-storage-only")
-        .WithCommand("server", "/data")
-        .WithPortBinding(9000, true)
+        .WithImage("adobe/s3mock:5.2.3@sha256:ab01a6946750f451ca215a47e91030695b260e4003b8a5a6201d25029b8fca92")
+        .WithPortBinding(9090, true)
         .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(request => request
-            .ForPort(9000).ForPath("/minio/health/ready")))
+            .ForPort(9090).ForPath("/favicon.ico")))
         .Build();
 
     public async Task InitializeAsync() => await _container.StartAsync();
     public async Task DisposeAsync() => await _container.DisposeAsync();
     public S3MediaStorageService CreateService()
     {
-        var endpoint = $"http://{_container.Hostname}:{_container.GetMappedPublicPort(9000)}";
+        var endpoint = $"http://{_container.Hostname}:{_container.GetMappedPublicPort(9090)}";
         var options = new S3StorageOptions
         {
             AccessKey = "conduitci", SecretKey = "conduit-ci-storage-only",

@@ -66,7 +66,7 @@ public sealed class FusionMappingCacheTests
     }
 
     [Fact]
-    public async Task ConcurrentMissesLoadOnceAndEveryGraphIsOwnedByItsCaller()
+    public async Task ConcurrentMissesCoalesceAndEveryGraphIsOwnedByItsCaller()
     {
         var source = Graph();
         var inner = Inner(source);
@@ -78,14 +78,18 @@ public sealed class FusionMappingCacheTests
         using var scope = host.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IModelProviderMappingService>();
         var requests = Enumerable.Range(0, 32).Select(_ => service.GetMappingByModelAliasAsync("old")).ToArray();
-        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); release.SetResult();
-        var results = await Task.WhenAll(requests);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        // All 32 calls are pending on the same loader. Check coalescing while it is
+        // blocked: draining the continuations can outlive the production 100 ms TTL.
         inner.Verify(item => item.GetMappingByModelAliasAsync("old"), Times.Once);
+        release.SetResult();
+        var results = await Task.WhenAll(requests);
+        var cached = await service.GetMappingByModelAliasAsync("old");
         results[0]!.Provider.Settings!.Clear();
         results[0]!.ModelProviderTypeAssociation.Model.SupportsImageGeneration = false;
         source.Provider.Settings!.Clear();
         Assert.All(results.Skip(1), value => AssertGraph(value!));
-        AssertGraph((await service.GetMappingByModelAliasAsync("old"))!);
+        AssertGraph(cached!);
     }
 
     [SkippableFact]

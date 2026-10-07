@@ -349,6 +349,8 @@ jobs:
         # Export both contracts without infrastructure, prove generation is byte-stable,
         # regenerate WebAdmin contract types, validate the contracts, and fail on drift.
         run: |
+          dotnet restore Services/ConduitLLM.Admin/ConduitLLM.Admin.csproj
+          dotnet restore Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj
           cd tools/openapi
           npm ci
           npm run verify:offline
