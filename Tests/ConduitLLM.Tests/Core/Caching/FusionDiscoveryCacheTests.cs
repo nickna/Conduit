@@ -59,7 +59,8 @@ public sealed class FusionDiscoveryCacheTests
         var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
         Skip.If(string.IsNullOrEmpty(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         var clock = new FusionPricingCacheTests.Clock(); var environment = $"test-{Guid.NewGuid():N}";
-        using var first = Host(redis, environment, clock: clock); using var second = Host(redis, environment, clock: clock);
+        using var first = Host(redis, environment, settings: new() { ["ApplicationCache:DistributedReadTimeout"] = "00:00:01" }, clock: clock);
+        using var second = Host(redis, environment, settings: new() { ["ApplicationCache:DistributedReadTimeout"] = "00:00:01" }, clock: clock);
         await RedisCacheTestReadiness.WarmAsync(first, ApplicationCacheDomain.Discovery);
         await RedisCacheTestReadiness.WarmAsync(second, ApplicationCacheDomain.Discovery);
         var old = Payload(pricing: true); old.PricingRefreshAt = clock.Now.AddSeconds(10).UtcDateTime;
