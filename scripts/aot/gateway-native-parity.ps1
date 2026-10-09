@@ -13,6 +13,7 @@ param(
     [string]$DatabaseUrl = $env:DATABASE_URL,
     [string]$RedisUrl = $env:REDIS_URL,
     [string]$S3Endpoint = $env:CONDUIT_S3_ENDPOINT,
+    [string]$S3HealthPath = '/minio/health/live',
     [string]$S3AccessKeyId = $env:CONDUIT_S3_ACCESS_KEY_ID,
     [string]$S3SecretAccessKey = $env:CONDUIT_S3_SECRET_ACCESS_KEY,
     [string]$S3BucketName = $env:CONDUIT_S3_BUCKET_NAME,
@@ -125,7 +126,7 @@ if ($IsWindows) {
     $env:Logging__EventLog__LogLevel__Default = 'None'
 }
 
-Wait-ForHttp "$($S3Endpoint.TrimEnd('/'))/minio/health/live" 'S3-compatible media storage'
+Wait-ForHttp "$($S3Endpoint.TrimEnd('/'))/$($S3HealthPath.TrimStart('/'))" 'S3-compatible media storage'
 
 Write-Host 'Applying migrations before native process startup...'
 dotnet (Join-Path $migratorProject 'bin/Release/net10.0/ConduitLLM.Migrator.dll')

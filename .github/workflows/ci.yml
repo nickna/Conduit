@@ -229,8 +229,8 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Restore service graphs
         run: |
-          dotnet restore Services/ConduitLLM.Admin/ConduitLLM.Admin.csproj
-          dotnet restore Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj
+          dotnet restore Services/ConduitLLM.Admin/ConduitLLM.Admin.csproj -p:ConduitAotAudit=true
+          dotnet restore Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj -p:ConduitAotAudit=true
       - name: Run analyzer-only AOT audit
         shell: pwsh
         run: ./scripts/aot/aot-audit.ps1 -NoRestore
