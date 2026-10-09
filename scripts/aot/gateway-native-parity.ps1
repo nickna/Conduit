@@ -133,13 +133,17 @@ dotnet (Join-Path $migratorProject 'bin/Release/net10.0/ConduitLLM.Migrator.dll'
 if ($LASTEXITCODE -ne 0) { throw 'Standalone migrator failed.' }
 
 Write-Host 'Seeding typed-store authentication and IP-filter fixtures...'
-dotnet (Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll') --seed
+$probeName = if ($IsWindows) { 'ConduitLLM.GatewayNativeAotTests.exe' } else { 'ConduitLLM.GatewayNativeAotTests' }
+$nativeProbe = Join-Path $runtimeRoot 'probe' $probeName
+if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
+    & $nativeProbe --seed
+} else {
+    dotnet (Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll') --seed
+}
 if ($LASTEXITCODE -ne 0) { throw 'Native Gateway parity fixture seed failed.' }
 
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 try {
-    $probeName = if ($IsWindows) { 'ConduitLLM.GatewayNativeAotTests.exe' } else { 'ConduitLLM.GatewayNativeAotTests' }
-    $nativeProbe = Join-Path $runtimeRoot 'probe' $probeName
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
         $provider = Start-LoggedProcess 'provider' $nativeProbe @('--mock-provider') (Split-Path $nativeProbe) $null
     } else {
