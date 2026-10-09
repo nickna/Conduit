@@ -82,7 +82,7 @@ public sealed class StoreBackedRequestLogRuntimeWriterTests
         Assert.Equal(request.CachedInputTokens, captured.CachedInputTokens);
         Assert.Equal(request.CachedWriteTokens, captured.CachedWriteTokens);
         Assert.Equal(request.Cost, captured.Cost);
-        Assert.Equal((int)request.BillingMethod.Value, captured.BillingMethod);
+        Assert.Equal((int)RequestBillingMethod.ProviderReportedCost, captured.BillingMethod);
         Assert.Equal(request.ProviderReportedCostUsd, captured.ProviderReportedCostUsd);
         Assert.Equal(request.ProviderCostMarkupMultiplier, captured.ProviderCostMarkupMultiplier);
         Assert.Equal(timestamp, captured.BilledAtUtc);

@@ -165,26 +165,25 @@ internal sealed class NativeSignalRClient : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        try
+        using (_socket)
         {
-            if (_socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            try
             {
-                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                await _socket.CloseAsync(
-                    WebSocketCloseStatus.NormalClosure,
-                    "native parity probe complete",
-                    timeout.Token);
+                if (_socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+                {
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    await _socket.CloseAsync(
+                        WebSocketCloseStatus.NormalClosure,
+                        "native parity probe complete",
+                        timeout.Token);
+                }
             }
-        }
-        catch (Exception exception) when (
-            exception is WebSocketException or OperationCanceledException)
-        {
-            // Disposing the socket is sufficient when the peer already closed or the
-            // process gate is intentionally testing a rejected connection.
-        }
-        finally
-        {
-            _socket.Dispose();
+            catch (Exception exception) when (
+                exception is WebSocketException or OperationCanceledException)
+            {
+                // Disposing the socket is sufficient when the peer already closed or the
+                // process gate is intentionally testing a rejected connection.
+            }
         }
     }
 

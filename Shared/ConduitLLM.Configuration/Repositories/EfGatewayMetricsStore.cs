@@ -112,7 +112,7 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
                 group.Count(),
                 group.Where(task => task.CompletedAt.HasValue).Any()
                     ? group.Where(task => task.CompletedAt.HasValue)
-                        .Average(task => (double)(task.CompletedAt!.Value - task.CreatedAt).TotalSeconds)
+                        .Average(task => (task.CompletedAt!.Value - task.CreatedAt).TotalSeconds)
                     : null))
             .ToListAsync(cancellationToken);
     }

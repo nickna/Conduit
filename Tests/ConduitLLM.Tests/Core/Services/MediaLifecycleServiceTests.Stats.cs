@@ -42,7 +42,7 @@ namespace ConduitLLM.Tests.Core.Services
             var storageKey = "image/non-existent.jpg";
 
             _mockMediaStore.Setup(x => x.GetByStorageKeyAsync(storageKey, false, It.IsAny<CancellationToken>()))
-                .ReturnsAsync((MediaRuntimeRecord?)null);
+                .ReturnsAsync(() => null);
 
             // Act
             var result = await _service.UpdateAccessStatsAsync(storageKey);

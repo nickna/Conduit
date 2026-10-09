@@ -364,9 +364,8 @@ public sealed class AotDependencyBoundaryTests
             typeof(SpendUpdatedHandler)
         };
 
-        foreach (var requestPathType in requestPathTypes)
-        {
-            var parameters = requestPathType.GetConstructors()
+        var parameterSets = requestPathTypes.Select(requestPathType =>
+            requestPathType.GetConstructors()
                 .Cast<MethodBase>()
                 .Concat(requestPathType.GetMethods(
                     BindingFlags.Instance |
@@ -376,8 +375,10 @@ public sealed class AotDependencyBoundaryTests
                     BindingFlags.DeclaredOnly))
                 .SelectMany(method => method.GetParameters())
                 .Select(parameter => parameter.ParameterType)
-                .ToArray();
+                .ToArray());
 
+        foreach (var parameters in parameterSets)
+        {
             Assert.Contains(typeof(IVirtualKeyRuntimeService), parameters);
             Assert.DoesNotContain(typeof(IVirtualKeyService), parameters);
         }
@@ -396,9 +397,8 @@ public sealed class AotDependencyBoundaryTests
         {
             typeof(UsageTrackingMiddleware)
         };
-        foreach (var requestPathType in requestPathTypes)
-        {
-            var parameterTypes = requestPathType.GetMethods(
+        var parameterSets = requestPathTypes.Select(requestPathType =>
+            requestPathType.GetMethods(
                     BindingFlags.Instance |
                     BindingFlags.Static |
                     BindingFlags.Public |
@@ -406,7 +406,10 @@ public sealed class AotDependencyBoundaryTests
                     BindingFlags.DeclaredOnly)
                 .SelectMany(method => method.GetParameters())
                 .Select(parameter => parameter.ParameterType)
-                .ToArray();
+                .ToArray());
+
+        foreach (var parameterTypes in parameterSets)
+        {
             Assert.Contains(typeof(IRequestLogRuntimeWriter), parameterTypes);
             Assert.DoesNotContain(typeof(IRequestLogService), parameterTypes);
         }
@@ -452,12 +455,14 @@ public sealed class AotDependencyBoundaryTests
             typeof(DownloadsEndpoints)
         };
 
-        foreach (var requestPathType in requestPathTypes)
-        {
-            var constructorParameters = requestPathType.GetConstructors()
+        var constructorParameterSets = requestPathTypes.Select(requestPathType =>
+            requestPathType.GetConstructors()
                 .SelectMany(constructor => constructor.GetParameters())
                 .Select(parameter => parameter.ParameterType)
-                .ToArray();
+                .ToArray());
+
+        foreach (var constructorParameters in constructorParameterSets)
+        {
             Assert.Contains(typeof(IMediaRuntimeStore), constructorParameters);
             Assert.DoesNotContain(typeof(IMediaRecordRepository), constructorParameters);
             Assert.DoesNotContain(typeof(IConfigurationDbContext), constructorParameters);

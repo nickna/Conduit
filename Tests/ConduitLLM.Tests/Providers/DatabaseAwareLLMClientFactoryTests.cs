@@ -146,7 +146,7 @@ namespace ConduitLLM.Tests.Providers
             _mockMappingService.Setup(x => x.GetMappingsByModelAliasAsync(request.Model))
                 .ReturnsAsync([NewRoutableMapping(1)]);
             _mockCredentialService.Setup(x => x.GetProviderByIdAsync(1))
-                .ReturnsAsync((Provider?)null);
+                .ReturnsAsync(() => null);
 
             await Assert.ThrowsAsync<ServiceUnavailableException>(
                 () => _factory.GetClientForChatAsync(request));

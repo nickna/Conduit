@@ -656,7 +656,7 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             True(true, "authenticated TaskHub JSON group invocations");
         }
 
-        await using (var spend = await NativeSignalRClient.ConnectAsync(
+        await using (await NativeSignalRClient.ConnectAsync(
                          settings.Gateway,
                          "/hubs/spend",
                          NativeParityFixture.VirtualKey,

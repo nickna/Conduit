@@ -31,7 +31,7 @@ internal static class NativeProviderStub
                 $"The native provider stub must use a loopback HTTP address, received '{baseAddress}'.");
         }
 
-        var listener = new TcpListener(IPAddress.Loopback, baseAddress.Port);
+        using var listener = new TcpListener(IPAddress.Loopback, baseAddress.Port);
         listener.Start();
         Console.WriteLine($"Native provider stub listening on {baseAddress.GetLeftPart(UriPartial.Authority)}");
 
