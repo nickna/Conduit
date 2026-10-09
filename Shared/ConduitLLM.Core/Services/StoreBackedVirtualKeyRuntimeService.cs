@@ -104,7 +104,16 @@ public sealed class StoreBackedVirtualKeyRuntimeService : IVirtualKeyRuntimeServ
                 adjustment.NewBalance);
             return true;
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Error updating spend for key ID {KeyId}.", keyId);
+            return false;
+        }
+        catch (TimeoutException ex)
         {
             _logger.LogError(ex, "Error updating spend for key ID {KeyId}.", keyId);
             return false;
