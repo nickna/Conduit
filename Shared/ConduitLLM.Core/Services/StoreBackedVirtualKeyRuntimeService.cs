@@ -78,8 +78,8 @@ public sealed class StoreBackedVirtualKeyRuntimeService : IVirtualKeyRuntimeServ
                     BillingWindowStartUtc: billingTimestamp.Date.AddHours(billingTimestamp.Hour)));
 
             // The charge is already durable at this point. Timestamp maintenance is
-            // best-effort so a concurrent key deletion cannot turn a successful debit
-            // into a reported failure and cause the fallback queue to debit it again.
+            // best-effort, including cancellation, so timestamp maintenance cannot
+            // report a failed debit and cause the fallback queue to debit it again.
             try
             {
                 if (!await _store.TouchAsync(keyId, DateTime.UtcNow))
@@ -89,7 +89,7 @@ public sealed class StoreBackedVirtualKeyRuntimeService : IVirtualKeyRuntimeServ
                         keyId);
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex)
             {
                 _logger.LogWarning(
                     ex,

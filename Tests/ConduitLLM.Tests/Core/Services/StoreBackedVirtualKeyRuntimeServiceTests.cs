@@ -1,6 +1,7 @@
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Gateway.Middleware;
 using ConduitLLM.Persistence;
 using ConduitLLM.Persistence.Interfaces;
 
@@ -192,6 +193,43 @@ public sealed class StoreBackedVirtualKeyRuntimeServiceTests
     }
 
     [Fact]
+    public async Task UpdateSpend_TouchCancellationAfterDurableDebitDoesNotQueueFallback()
+    {
+        var record = CreateRecord();
+        _batchSpendService.Setup(value => value.IsHealthy).Returns(false);
+        _store.Setup(value => value.GetByIdAsync(record.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(record);
+        _store.Setup(value => value.AdjustBalanceAsync(
+                It.IsAny<VirtualKeyBalanceAdjustment>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new VirtualKeyBalanceAdjustmentResult(49m, 11m, Applied: true));
+        _store.Setup(value => value.TouchAsync(
+                record.Id,
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException("timestamp update canceled"));
+
+        await SpendUpdateHelper.UpdateSpendAsync(
+            record.Id,
+            1m,
+            _batchSpendService.Object,
+            _service,
+            Mock.Of<ILogger>());
+
+        _store.Verify(value => value.AdjustBalanceAsync(
+            It.IsAny<VirtualKeyBalanceAdjustment>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _store.Verify(value => value.TouchAsync(
+            record.Id,
+            It.IsAny<DateTime>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _batchSpendService.Verify(value => value.QueueFallbackUpdate(
+            It.IsAny<int>(),
+            It.IsAny<decimal>(),
+            It.IsAny<DateTime?>()), Times.Never);
+    }
+
+    [Fact]
     public async Task UpdateSpend_AdjustmentFailureReportsFalseAndDoesNotTouchKey()
     {
         var record = CreateRecord();
@@ -205,6 +243,26 @@ public sealed class StoreBackedVirtualKeyRuntimeServiceTests
         var result = await _service.UpdateSpendAsync(record.Id, 1m);
 
         Assert.False(result);
+        _store.Verify(value => value.TouchAsync(
+            It.IsAny<int>(),
+            It.IsAny<DateTime>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateSpend_AdjustmentCancellationPropagatesWithoutTouchingKey()
+    {
+        var record = CreateRecord();
+        _store.Setup(value => value.GetByIdAsync(record.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(record);
+        _store.Setup(value => value.AdjustBalanceAsync(
+                It.IsAny<VirtualKeyBalanceAdjustment>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OperationCanceledException("debit canceled"));
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => _service.UpdateSpendAsync(record.Id, 1m));
+
         _store.Verify(value => value.TouchAsync(
             It.IsAny<int>(),
             It.IsAny<DateTime>(),
