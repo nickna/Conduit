@@ -26195,9 +26195,11 @@
         "type": "object",
         "properties": {
           "name": {
+            "examples": [
+              "gpt-4-turbo"
+            ],
             "type": "string",
-            "description": "Gets or sets the canonical name of the model to create.\nThe canonical model name.",
-            "example": "gpt-4-turbo"
+            "description": "Gets or sets the canonical name of the model to create.\nThe canonical model name."
           },
           "modelSeriesId": {
             "type": "integer",
@@ -30671,9 +30673,11 @@
         "type": "object",
         "properties": {
           "providerModelId": {
+            "examples": [
+              "gpt-4-0613"
+            ],
             "type": "string",
-            "description": "Gets or sets the provider-specific identifier for this model.\nThe provider-specific model identifier.",
-            "example": "gpt-4-0613"
+            "description": "Gets or sets the provider-specific identifier for this model.\nThe provider-specific model identifier."
           },
           "id": {
             "type": "integer",

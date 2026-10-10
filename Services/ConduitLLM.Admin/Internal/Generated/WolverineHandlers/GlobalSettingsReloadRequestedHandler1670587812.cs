@@ -18,11 +18,10 @@ namespace Internal.Generated.WolverineHandlers
             _loggerOfWolverineHandlerBridgeOfGlobalSettingsReloadRequested = loggerOfWolverineHandlerBridgeOfGlobalSettingsReloadRequested;
         }
 
-
-
         public override async System.Threading.Tasks.Task HandleAsync(Wolverine.Runtime.MessageContext context, System.Threading.CancellationToken cancellation)
         {
             await using var serviceScope = _serviceScopeFactory.CreateAsyncScope();
+            Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<Wolverine.Runtime.ScopedMessageContextHolder>(serviceScope.ServiceProvider).Context = context;
             // This service has been marked as requiring service location independent of Wolverine's ability to use constructor injection of everything else
             var eventHandlerOfGlobalSettingsReloadRequestedIEnumerable = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<ConduitLLM.Configuration.Messaging.IEventHandler<ConduitLLM.Core.Events.GlobalSettingsReloadRequested>>>(serviceScope.ServiceProvider);
             // The actual message body
@@ -34,9 +33,7 @@ namespace Internal.Generated.WolverineHandlers
 
             // The actual message execution
             await wolverineHandlerBridgeOfGlobalSettingsReloadRequested.Handle(globalSettingsReloadRequested, context, cancellation).ConfigureAwait(false);
-
         }
-
     }
 
     // END: GlobalSettingsReloadRequestedHandler1670587812
