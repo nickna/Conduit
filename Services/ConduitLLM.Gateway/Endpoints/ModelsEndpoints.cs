@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
@@ -19,11 +20,15 @@ public static class ModelsEndpoints
 
         group.MapGet("/models", ListModels)
             .WithName("Models_ListModels")
+            .WithSummary("List models available to the virtual key")
+            .WithDescription("Lists model aliases permitted by the authenticated virtual key. Disabled or unavailable mappings are excluded.")
             .Produces<ModelListResponse>(StatusCodes.Status200OK)
             .Produces<OpenAIErrorResponse>(StatusCodes.Status500InternalServerError);
 
         group.MapGet("/models/{model}", RetrieveModel)
             .WithName("Models_RetrieveModel")
+            .WithDescription("Returns an accessible model alias or 404 if the model is unavailable to this virtual key.")
+            .WithParameterDescription("model", "Model alias exposed by Conduit.")
             .WithSummary("Retrieve a model")
             .Produces<ModelListItemDto>(StatusCodes.Status200OK)
             .Produces<OpenAIErrorResponse>(StatusCodes.Status404NotFound)
@@ -34,6 +39,8 @@ public static class ModelsEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Models")
             .WithName("Models_GetModelMetadata")
+            .WithSummary("Get metadata for an available model")
+            .WithParameterDescription("modelId", "Identifier of the model.")
             .Produces<ModelMetadataResponse>(StatusCodes.Status200OK)
             .Produces<OpenAIErrorResponse>(StatusCodes.Status404NotFound)
             .Produces<OpenAIErrorResponse>(StatusCodes.Status500InternalServerError);

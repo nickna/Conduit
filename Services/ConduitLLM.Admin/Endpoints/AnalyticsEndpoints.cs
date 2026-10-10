@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ConduitLLM.Admin.Extensions;
@@ -46,31 +47,77 @@ public class AnalyticsEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Analytics");
         group.MapGet("/logs", ([FromServices] AnalyticsEndpoints e, int page = 1, int pageSize = 50, DateTime? startDate = null, DateTime? endDate = null, string? model = null, int? virtualKeyId = null, int? status = null) => e.GetLogs(page, pageSize, startDate, endDate, model, virtualKeyId, status))
-            .WithName("Analytics_GetLogs").Produces<PagedResult<LogRequestDto>>().Produces(StatusCodes.Status400BadRequest);
+            .WithName("Analytics_GetLogs")
+            .WithParameterDescription("status", "Filter drift items by review status.")
+            .WithSummary("Gets paginated request logs")
+            .WithParameterDescription("page", "The page number (1-based)")
+            .WithParameterDescription("pageSize", "The number of items per page")
+            .WithParameterDescription("startDate", "Optional filter by start date")
+            .WithParameterDescription("endDate", "Optional filter by end date")
+            .WithParameterDescription("model", "Optional filter by model")
+            .WithParameterDescription("virtualKeyId", "Optional filter by virtual key ID")
+            .WithParameterDescription("status", "Optional filter by status code").Produces<PagedResult<LogRequestDto>>().Produces(StatusCodes.Status400BadRequest);
         group.MapGet("/logs/{id:int}", ([FromServices] AnalyticsEndpoints e, int id) => e.GetLogById(id))
-            .WithName("Analytics_GetLogById").Produces<LogRequestDto>().Produces(StatusCodes.Status404NotFound);
+            .WithName("Analytics_GetLogById")
+            .WithSummary("Gets a single log entry by ID")
+            .WithParameterDescription("id", "The ID of the log to retrieve").Produces<LogRequestDto>().Produces(StatusCodes.Status404NotFound);
         group.MapGet("/logs/models", ([FromServices] AnalyticsEndpoints e) => e.GetDistinctModels())
-            .WithName("Analytics_GetDistinctModels").Produces<IEnumerable<string>>();
+            .WithName("Analytics_GetDistinctModels")
+            .WithSummary("Gets a list of distinct model names from request logs").Produces<IEnumerable<string>>();
         group.MapGet("/costs/summary", ([FromServices] AnalyticsEndpoints e, string timeframe = "daily", DateTime? startDate = null, DateTime? endDate = null) => e.GetCostSummary(timeframe, startDate, endDate))
-            .WithName("Analytics_GetCostSummary").Produces<CostDashboardDto>().Produces(StatusCodes.Status400BadRequest);
+            .WithName("Analytics_GetCostSummary")
+            .WithSummary("Gets cost dashboard summary data")
+            .WithParameterDescription("timeframe", "The timeframe for the summary (daily, weekly, monthly)")
+            .WithParameterDescription("startDate", "The start date for the summary")
+            .WithParameterDescription("endDate", "The end date for the summary").Produces<CostDashboardDto>().Produces(StatusCodes.Status400BadRequest);
         group.MapGet("/costs/trends", ([FromServices] AnalyticsEndpoints e, string period = "daily", DateTime? startDate = null, DateTime? endDate = null) => e.GetCostTrends(period, startDate, endDate))
-            .WithName("Analytics_GetCostTrends").Produces<CostTrendDto>().Produces(StatusCodes.Status400BadRequest);
+            .WithName("Analytics_GetCostTrends")
+            .WithSummary("Gets cost trend data")
+            .WithParameterDescription("period", "The period for the trend (daily, weekly, monthly)")
+            .WithParameterDescription("startDate", "The start date for the trend")
+            .WithParameterDescription("endDate", "The end date for the trend").Produces<CostTrendDto>().Produces(StatusCodes.Status400BadRequest);
         group.MapGet("/costs/models", ([FromServices] AnalyticsEndpoints e, DateTime? startDate = null, DateTime? endDate = null, int topN = 10) => e.GetModelCosts(startDate, endDate, topN))
-            .WithName("Analytics_GetModelCosts").Produces<ModelCostBreakdownDto>();
+            .WithName("Analytics_GetModelCosts")
+            .WithSummary("Gets costs grouped by model")
+            .WithParameterDescription("startDate", "The start date for the analysis")
+            .WithParameterDescription("endDate", "The end date for the analysis")
+            .WithParameterDescription("topN", "Number of top models to return").Produces<ModelCostBreakdownDto>();
         group.MapGet("/costs/virtualkeys", ([FromServices] AnalyticsEndpoints e, DateTime? startDate = null, DateTime? endDate = null, int topN = 10) => e.GetVirtualKeyCosts(startDate, endDate, topN))
-            .WithName("Analytics_GetVirtualKeyCosts").Produces<VirtualKeyCostBreakdownDto>();
+            .WithName("Analytics_GetVirtualKeyCosts")
+            .WithSummary("Gets costs grouped by virtual key")
+            .WithParameterDescription("startDate", "The start date for the analysis")
+            .WithParameterDescription("endDate", "The end date for the analysis")
+            .WithParameterDescription("topN", "Number of top virtual keys to return").Produces<VirtualKeyCostBreakdownDto>();
         group.MapGet("/summary", ([FromServices] AnalyticsEndpoints e, string timeframe = "daily", DateTime? startDate = null, DateTime? endDate = null) => e.GetAnalyticsSummary(timeframe, startDate, endDate))
-            .WithName("Analytics_GetAnalyticsSummary").Produces<AnalyticsSummaryDto>().Produces(StatusCodes.Status400BadRequest);
+            .WithName("Analytics_GetAnalyticsSummary")
+            .WithSummary("Gets comprehensive analytics summary")
+            .WithParameterDescription("timeframe", "The timeframe for the summary (daily, weekly, monthly)")
+            .WithParameterDescription("startDate", "The start date for the summary")
+            .WithParameterDescription("endDate", "The end date for the summary").Produces<AnalyticsSummaryDto>().Produces(StatusCodes.Status400BadRequest);
         group.MapGet("/virtual-keys/{virtualKeyId:int}/usage", ([FromServices] AnalyticsEndpoints e, int virtualKeyId, DateTime? startDate = null, DateTime? endDate = null) => e.GetVirtualKeyUsage(virtualKeyId, startDate, endDate))
-            .WithName("Analytics_GetVirtualKeyUsage").Produces<UsageStatisticsDto>();
+            .WithName("Analytics_GetVirtualKeyUsage")
+            .WithSummary("Gets usage statistics for a specific virtual key")
+            .WithParameterDescription("virtualKeyId", "The virtual key ID")
+            .WithParameterDescription("startDate", "The start date for the analysis")
+            .WithParameterDescription("endDate", "The end date for the analysis").Produces<UsageStatisticsDto>();
         group.MapGet("/export", ([FromServices] AnalyticsEndpoints e, string format = "csv", DateTime? startDate = null, DateTime? endDate = null, string? model = null, int? virtualKeyId = null) => e.ExportAnalytics(format, startDate, endDate, model, virtualKeyId))
-            .WithName("Analytics_ExportAnalytics").Produces(StatusCodes.Status200OK, typeof(void), "text/csv", "application/json").Produces(StatusCodes.Status400BadRequest);
+            .WithName("Analytics_ExportAnalytics")
+            .WithSummary("Exports analytics data")
+            .WithParameterDescription("format", "Export format (csv, json)")
+            .WithParameterDescription("startDate", "The start date for the export")
+            .WithParameterDescription("endDate", "The end date for the export")
+            .WithParameterDescription("model", "Optional model filter")
+            .WithParameterDescription("virtualKeyId", "Optional virtual key filter").Produces(StatusCodes.Status200OK, typeof(void), "text/csv", "application/json").Produces(StatusCodes.Status400BadRequest);
         group.MapGet("/metrics/cache", ([FromServices] AnalyticsEndpoints e) => e.GetCacheMetrics())
-            .WithName("Analytics_GetCacheMetrics").Produces<AnalyticsCacheMetricsResponse>().Produces(StatusCodes.Status404NotFound);
+            .WithName("Analytics_GetCacheMetrics")
+            .WithSummary("Gets analytics cache metrics").Produces<AnalyticsCacheMetricsResponse>().Produces(StatusCodes.Status404NotFound);
         group.MapGet("/metrics/operations", ([FromServices] AnalyticsEndpoints e) => e.GetOperationMetrics())
-            .WithName("Analytics_GetOperationMetrics").Produces<Dictionary<string, double>>().Produces(StatusCodes.Status404NotFound);
+            .WithName("Analytics_GetOperationMetrics")
+            .WithSummary("Gets analytics operation performance metrics").Produces<Dictionary<string, double>>().Produces(StatusCodes.Status404NotFound);
         group.MapPost("/cache/invalidate", ([FromServices] AnalyticsEndpoints e, string reason = "Manual invalidation") => e.InvalidateCache(reason))
-            .WithName("Analytics_InvalidateCache").Produces<AnalyticsCacheInvalidationResponse>();
+            .WithName("Analytics_InvalidateCache")
+            .WithSummary("Invalidates analytics cache")
+            .WithParameterDescription("reason", "Reason for cache invalidation").Produces<AnalyticsCacheInvalidationResponse>();
         return app;
     }
 

@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
@@ -51,12 +52,17 @@ namespace ConduitLLM.Admin.Endpoints
                 .WithTags("Health Monitoring");
             group.MapGet("/services", GetServiceHealth)
                 .WithName("HealthMonitoring_GetServiceHealth")
+                .WithSummary("Gets current service health status.")
                 .Produces<ServiceHealthResponse>();
             group.MapGet("/incidents", GetIncidents)
                 .WithName("HealthMonitoring_GetIncidents")
+                .WithSummary("Gets incident history.")
+                .WithParameterDescription("days", "Number of days to look back (default: 7).")
                 .Produces<IncidentsResponse>();
             group.MapGet("/history", GetHealthHistory)
                 .WithName("HealthMonitoring_GetHealthHistory")
+                .WithSummary("Gets health history data.")
+                .WithParameterDescription("hours", "Number of hours to look back (default: 24).")
                 .Produces<HealthHistoryResponse>();
             return app;
         }

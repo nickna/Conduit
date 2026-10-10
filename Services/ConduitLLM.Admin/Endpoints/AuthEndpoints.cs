@@ -15,6 +15,7 @@ public static class AuthEndpoints
             .WithTags("Auth");
         group.MapPost("/ephemeral-master-key", Generate)
             .WithName("Auth_GenerateEphemeralMasterKey")
+            .WithSummary("Generate an ephemeral master key")
             .Produces<EphemeralMasterKeyResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized);
         return app;

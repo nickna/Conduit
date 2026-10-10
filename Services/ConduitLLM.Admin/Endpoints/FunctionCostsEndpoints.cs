@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using System.Text.Json;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Admin.DTOs;
@@ -23,21 +24,32 @@ public static class FunctionCostsEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("FunctionCosts");
 
-        group.MapGet("/", List).WithName("FunctionCosts_List").Produces<List<FunctionCostDto>>();
+        group.MapGet("/", List).WithName("FunctionCosts_List")
+            .WithSummary("List function pricing records").Produces<List<FunctionCostDto>>();
         group.MapGet("/{id:int}", GetById).WithName("FunctionCosts_GetById")
+            .WithSummary("Get a function pricing record")
+            .WithParameterDescription("id", "Identifier of the FunctionCosts resource.")
             .Produces<FunctionCostDto>().Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapGet("/configuration/{functionConfigurationId:int}", GetByConfiguration)
             .WithName("FunctionCosts_GetByConfiguration")
+            .WithSummary("List prices for a function configuration")
+            .WithParameterDescription("functionConfigurationId", "Identifier of the function configuration.")
             .Produces<FunctionCostDto>().Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapPost("/", Create).WithName("FunctionCosts_Create")
+            .WithSummary("Create a function pricing record")
             .Produces<FunctionCostDto>(StatusCodes.Status201Created)
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         group.MapPatch("/{id:int}", Update).AcceptsJsonMergePatch<UpdateFunctionCostDto>().WithName("FunctionCosts_Update")
+            .WithSummary("Update a function pricing record")
+            .WithParameterDescription("id", "Identifier of the FunctionCosts resource.")
             .Produces<FunctionCostDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapDelete("/{id:int}", Delete).WithName("FunctionCosts_Delete")
+            .WithSummary("Delete a function pricing record")
+            .WithParameterDescription("id", "Identifier of the FunctionCosts resource.")
             .Produces(StatusCodes.Status204NoContent).Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapPost("/cache/clear", ClearCache).WithName("FunctionCosts_ClearCache")
+            .WithSummary("Clear cached function prices")
             .Produces<FunctionCostCacheClearResultDto>();
         return app;
     }

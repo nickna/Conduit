@@ -16,6 +16,8 @@ These four cover the system end to end:
   session affinity, and the kill switch behave.
 - **[Multimodal chat](./api-guides/multimodal-chat.md)** — the ordered image, PDF, audio, and video
   request contract, PDF parsing, limits, and capability discovery.
+- **[API contracts and documentation](./api-guides/openapi-maintenance.md)** — authoritative contracts,
+  authentication, error handling, request examples, and regeneration/validation.
 - **[Monitoring](./monitoring.md)** — health checks, metrics, real-time streams, and alerting.
 
 Deeper operational runbooks stand on their own and are linked from Monitoring:

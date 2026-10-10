@@ -11,8 +11,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List model authors */
     get: operations["ModelAuthors_List"];
     put?: never;
+    /** Create a model author */
     post: operations["ModelAuthors_Create"];
     delete?: never;
     options?: never;
@@ -27,12 +29,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get a model author */
     get: operations["ModelAuthors_GetById"];
     put?: never;
     post?: never;
+    /** Delete a model author */
     delete: operations["ModelAuthors_Delete"];
     options?: never;
     head?: never;
+    /** Update a model author */
     patch: operations["ModelAuthors_Update"];
     trace?: never;
   };
@@ -43,6 +48,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List model series published by an author */
     get: operations["ModelAuthors_ListSeries"];
     put?: never;
     post?: never;
@@ -59,8 +65,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List model series */
     get: operations["ModelSeries_GetAll"];
     put?: never;
+    /** Create a model series */
     post: operations["ModelSeries_Create"];
     delete?: never;
     options?: never;
@@ -75,12 +83,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get a model series */
     get: operations["ModelSeries_GetById"];
     put?: never;
     post?: never;
+    /** Delete a model series */
     delete: operations["ModelSeries_Delete"];
     options?: never;
     head?: never;
+    /** Update a model series */
     patch: operations["ModelSeries_Update"];
     trace?: never;
   };
@@ -91,6 +102,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List models in a series */
     get: operations["ModelSeries_GetModels"];
     put?: never;
     post?: never;
@@ -107,8 +119,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List administrative notifications */
     get: operations["Notifications_GetAll"];
     put?: never;
+    /** Create an administrative notification */
     post: operations["Notifications_Create"];
     delete?: never;
     options?: never;
@@ -123,6 +137,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List unread administrative notifications */
     get: operations["Notifications_GetUnread"];
     put?: never;
     post?: never;
@@ -139,12 +154,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get an administrative notification */
     get: operations["Notifications_GetById"];
     put?: never;
     post?: never;
+    /** Delete an administrative notification */
     delete: operations["Notifications_Delete"];
     options?: never;
     head?: never;
+    /** Update an administrative notification */
     patch: operations["Notifications_Update"];
     trace?: never;
   };
@@ -157,6 +175,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Mark an administrative notification as read */
     post: operations["Notifications_MarkAsRead"];
     delete?: never;
     options?: never;
@@ -173,6 +192,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Mark all administrative notifications as read */
     post: operations["Notifications_MarkAllAsRead"];
     delete?: never;
     options?: never;
@@ -189,6 +209,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /**
+     * Archive and delete old asynchronous tasks
+     * @description Archives completed tasks older than the requested threshold and deletes records according to task retention policy. The response retains the legacy cleaned_up and older_than_hours field names.
+     */
     post: operations["Tasks_Cleanup"];
     delete?: never;
     options?: never;
@@ -203,7 +227,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** List indeterminate async media tasks */
+    /**
+     * List indeterminate async media tasks
+     * @description Lists tasks in the indeterminate state for operator review. Other state filters are rejected.
+     */
     get: operations["Tasks_List"];
     put?: never;
     post?: never;
@@ -222,6 +249,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /**
+     * Resolve an indeterminate asynchronous task
+     * @description Records an operator decision for an indeterminate task. Returns 202 when resolution is accepted or 204 when no further work is required.
+     */
     post: operations["Tasks_ResolveIndeterminate"];
     delete?: never;
     options?: never;
@@ -238,6 +269,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Generate an ephemeral master key */
     post: operations["Auth_GenerateEphemeralMasterKey"];
     delete?: never;
     options?: never;
@@ -252,6 +284,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get deployment and system information */
     get: operations["SystemInfo_GetInfo"];
     put?: never;
     post?: never;
@@ -268,6 +301,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get system health information */
     get: operations["SystemInfo_GetHealth"];
     put?: never;
     post?: never;
@@ -286,6 +320,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Invalidate the model discovery cache */
     post: operations["SystemInfo_InvalidateDiscoveryCache"];
     delete?: never;
     options?: never;
@@ -300,6 +335,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get function discovery cache statistics */
     get: operations["SystemInfo_GetFunctionDiscoveryCacheStats"];
     put?: never;
     post?: never;
@@ -318,6 +354,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Invalidate the function discovery cache */
     post: operations["SystemInfo_InvalidateFunctionDiscoveryCache"];
     delete?: never;
     options?: never;
@@ -332,6 +369,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /**
+     * Scrape Prometheus metrics
+     * @description The deployment's metrics middleware serves Prometheus or OpenMetrics text at /metrics before this endpoint handler runs. Supply the Admin master key; the middleware also checks network/authentication context.
+     */
     get: operations["Metrics_GetAllMetrics"];
     put?: never;
     post?: never;
@@ -348,6 +389,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /**
+     * Get routing configuration and statistics
+     * @description Returns provider mappings, load-balancer information, routing statistics, and per-alias policies.
+     */
     get: operations["Configuration_GetRouting"];
     put?: never;
     post?: never;
@@ -364,7 +409,12 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get default routing policy */
     get: operations["Configuration_GetRoutingDefaults"];
+    /**
+     * Replace default routing policy
+     * @description Replaces the default provider-selection weights and routing strategy. Per-alias policies can override these defaults.
+     */
     put: operations["Configuration_UpdateRoutingDefaults"];
     post?: never;
     delete?: never;
@@ -380,7 +430,12 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get routing policy for a model alias */
     get: operations["Configuration_GetAliasRouting"];
+    /**
+     * Replace routing policy for a model alias
+     * @description Replaces provider-selection policy for the specified model alias. Returns 404 when the alias does not exist.
+     */
     put: operations["Configuration_UpdateAliasRouting"];
     post?: never;
     delete?: never;
@@ -398,6 +453,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Import the bundled model catalog */
     post: operations["BundledModelCatalog_Import"];
     delete?: never;
     options?: never;
@@ -412,6 +468,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get a function execution */
     get: operations["FunctionExecutions_GetById"];
     put?: never;
     post?: never;
@@ -428,6 +485,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List function executions for a virtual key */
     get: operations["FunctionExecutions_GetByVirtualKey"];
     put?: never;
     post?: never;
@@ -444,6 +502,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List function executions for a configuration */
     get: operations["FunctionExecutions_GetByConfiguration"];
     put?: never;
     post?: never;
@@ -460,6 +519,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List function executions in a given state */
     get: operations["FunctionExecutions_GetByState"];
     put?: never;
     post?: never;
@@ -476,6 +536,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List function executions with expired leases */
     get: operations["FunctionExecutions_GetExpiredLeases"];
     put?: never;
     post?: never;
@@ -492,6 +553,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List function executions ready for retry */
     get: operations["FunctionExecutions_GetReadyForRetry"];
     put?: never;
     post?: never;
@@ -511,6 +573,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
+    /** Delete old function execution records */
     delete: operations["FunctionExecutions_Cleanup"];
     options?: never;
     head?: never;
@@ -524,8 +587,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List function pricing records */
     get: operations["FunctionCosts_List"];
     put?: never;
+    /** Create a function pricing record */
     post: operations["FunctionCosts_Create"];
     delete?: never;
     options?: never;
@@ -540,12 +605,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get a function pricing record */
     get: operations["FunctionCosts_GetById"];
     put?: never;
     post?: never;
+    /** Delete a function pricing record */
     delete: operations["FunctionCosts_Delete"];
     options?: never;
     head?: never;
+    /** Update a function pricing record */
     patch: operations["FunctionCosts_Update"];
     trace?: never;
   };
@@ -556,6 +624,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List prices for a function configuration */
     get: operations["FunctionCosts_GetByConfiguration"];
     put?: never;
     post?: never;
@@ -574,6 +643,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Clear cached function prices */
     post: operations["FunctionCosts_ClearCache"];
     delete?: never;
     options?: never;
@@ -588,8 +658,16 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /**
+     * List function provider credentials
+     * @description Returns credential metadata with protected API keys masked; plaintext secrets are not returned.
+     */
     get: operations["FunctionCredentials_List"];
     put?: never;
+    /**
+     * Create a function provider credential
+     * @description Creates credential metadata and masks the API key in the response. Configuration-scoped secrets are encrypted before storage; provider-global credentials use their existing storage policy.
+     */
     post: operations["FunctionCredentials_Create"];
     delete?: never;
     options?: never;
@@ -604,6 +682,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /**
+     * List credentials for a function configuration
+     * @description Returns masked credentials for the provider type used by this function configuration.
+     */
     get: operations["FunctionCredentials_GetByConfiguration"];
     put?: never;
     post?: never;
@@ -620,12 +702,21 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /**
+     * Get a function provider credential
+     * @description Returns credential metadata with the protected API key masked.
+     */
     get: operations["FunctionCredentials_GetById"];
     put?: never;
     post?: never;
+    /** Delete a function provider credential */
     delete: operations["FunctionCredentials_Delete"];
     options?: never;
     head?: never;
+    /**
+     * Update a function provider credential
+     * @description Applies a JSON Merge Patch and masks the API key in the response. Configuration-scoped secrets are encrypted before storage; provider-global credentials use their existing storage policy.
+     */
     patch: operations["FunctionCredentials_Update"];
     trace?: never;
   };
@@ -638,6 +729,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Test a function provider credential */
     post: operations["FunctionCredentials_Test"];
     delete?: never;
     options?: never;
@@ -654,6 +746,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /**
+     * Request a flush of pending spending updates
+     * @description Publishes a flush request to the event bus. Acceptance does not mean all pending spending updates have completed.
+     */
     post: operations["BatchSpending_Flush"];
     delete?: never;
     options?: never;
@@ -668,6 +764,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get batch spending system status */
     get: operations["BatchSpending_GetStatus"];
     put?: never;
     post?: never;
@@ -684,6 +781,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get batch spending administration information */
     get: operations["BatchSpending_GetInformation"];
     put?: never;
     post?: never;
@@ -700,7 +798,9 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get prompt caching configuration */
     get: operations["PromptCaching_GetConfig"];
+    /** Update prompt caching configuration */
     put: operations["PromptCaching_UpdateConfig"];
     post?: never;
     delete?: never;
@@ -716,6 +816,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get provider prompt caching capabilities */
     get: operations["PromptCaching_GetCapabilities"];
     put?: never;
     post?: never;
@@ -732,6 +833,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get prompt caching usage analytics */
     get: operations["PromptCaching_GetAnalytics"];
     put?: never;
     post?: never;
@@ -748,6 +850,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List detected provider configuration drift */
     get: operations["ProviderSync_ListDrift"];
     put?: never;
     post?: never;
@@ -764,6 +867,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get a provider configuration drift item */
     get: operations["ProviderSync_GetDrift"];
     put?: never;
     post?: never;
@@ -782,6 +886,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Apply a provider configuration drift item */
     post: operations["ProviderSync_ApplyDrift"];
     delete?: never;
     options?: never;
@@ -798,6 +903,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Dismiss a provider configuration drift item */
     post: operations["ProviderSync_DismissDrift"];
     delete?: never;
     options?: never;
@@ -814,6 +920,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Apply multiple provider configuration drift items */
     post: operations["ProviderSync_ApplyDriftBulk"];
     delete?: never;
     options?: never;
@@ -830,6 +937,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Dismiss multiple provider configuration drift items */
     post: operations["ProviderSync_DismissDriftBulk"];
     delete?: never;
     options?: never;
@@ -846,6 +954,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Run provider configuration synchronization */
     post: operations["ProviderSync_Run"];
     delete?: never;
     options?: never;
@@ -860,6 +969,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List provider synchronization runs */
     get: operations["ProviderSync_ListRuns"];
     put?: never;
     post?: never;
@@ -876,8 +986,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List global setting values */
     get: operations["GlobalSettings_List"];
     put?: never;
+    /** Create a global setting */
     post: operations["GlobalSettings_Create"];
     delete?: never;
     options?: never;
@@ -909,12 +1021,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get a global setting by ID */
     get: operations["GlobalSettings_GetById"];
     put?: never;
     post?: never;
+    /** Delete a global setting by ID */
     delete: operations["GlobalSettings_Delete"];
     options?: never;
     head?: never;
+    /** Update a global setting by ID */
     patch: operations["GlobalSettings_Update"];
     trace?: never;
   };
@@ -925,9 +1040,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get a global setting by key */
     get: operations["GlobalSettings_GetByKey"];
     put?: never;
     post?: never;
+    /** Delete a global setting by key */
     delete: operations["GlobalSettings_DeleteByKey"];
     options?: never;
     head?: never;
@@ -942,6 +1059,7 @@ export interface paths {
       cookie?: never;
     };
     get?: never;
+    /** Update a global setting by key */
     put: operations["GlobalSettings_UpdateByKey"];
     post?: never;
     delete?: never;
@@ -957,6 +1075,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get global settings cache statistics */
     get: operations["GlobalSettings_GetCacheStats"];
     put?: never;
     post?: never;
@@ -975,6 +1094,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Reload the global settings cache */
     post: operations["GlobalSettings_ReloadCache"];
     delete?: never;
     options?: never;
@@ -991,6 +1111,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Invalidate the global settings cache */
     post: operations["GlobalSettings_InvalidateCache"];
     delete?: never;
     options?: never;
@@ -1005,6 +1126,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get aggregate media storage statistics */
     get: operations["Media_GetOverallStats"];
     put?: never;
     post?: never;
@@ -1021,6 +1143,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get media storage statistics for a virtual key */
     get: operations["Media_GetStatsByVirtualKey"];
     put?: never;
     post?: never;
@@ -1037,6 +1160,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get media storage totals by provider */
     get: operations["Media_GetStatsByProvider"];
     put?: never;
     post?: never;
@@ -1053,6 +1177,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get media storage totals by media type */
     get: operations["Media_GetStatsByMediaType"];
     put?: never;
     post?: never;
@@ -1069,6 +1194,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** List media owned by a virtual key */
     get: operations["Media_GetByVirtualKey"];
     put?: never;
     post?: never;
@@ -1085,6 +1211,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Search stored media records */
     get: operations["Media_Search"];
     put?: never;
     post?: never;
@@ -1104,6 +1231,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
+    /** Delete a media record */
     delete: operations["Media_Delete"];
     options?: never;
     head?: never;
@@ -1119,7 +1247,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Restore soft-deleted media within its recovery window */
+    /**
+     * Restore soft-deleted media within its recovery window
+     * @description Restores a soft-deleted record during its grace period. Returns 409 once the recovery window has elapsed or recovery is unavailable.
+     */
     post: operations["Media_Restore"];
     delete?: never;
     options?: never;
@@ -1136,6 +1267,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Clean up expired media */
     post: operations["Media_CleanupExpired"];
     delete?: never;
     options?: never;
@@ -1152,7 +1284,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Reconcile storage objects against MediaRecord tracking rows */
+    /**
+     * Reconcile storage objects against MediaRecord tracking rows
+     * @description Compares storage inventory with tracked media records. The legacy orphaned-cleanup route now performs storage reconciliation.
+     */
     post: operations["Media_ReconcileStorage"];
     delete?: never;
     options?: never;
@@ -1169,7 +1304,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Preview the files and bytes matched by a prune operation */
+    /**
+     * Preview the files and bytes matched by a prune operation
+     * @description Returns the files and bytes matching a prune scope without deleting them.
+     */
     post: operations["Media_PreviewPrune"];
     delete?: never;
     options?: never;
@@ -1186,6 +1324,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Prune old media */
     post: operations["Media_Prune"];
     delete?: never;
     options?: never;
@@ -1200,6 +1339,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get scheduled media cleanup status */
     get: operations["MediaCleanup_GetStatus"];
     put?: never;
     post?: never;
@@ -1216,8 +1356,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get whether scheduled media cleanup is enabled */
     get: operations["MediaCleanup_GetEnabled"];
     put?: never;
+    /** Enable or disable scheduled media cleanup */
     post: operations["MediaCleanup_SetEnabled"];
     delete?: never;
     options?: never;
@@ -1232,8 +1374,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get simplified media retention settings */
     get: operations["MediaCleanup_GetSimpleRetention"];
     put?: never;
+    /** Update simplified media retention settings */
     post: operations["MediaCleanup_SetSimpleRetention"];
     delete?: never;
     options?: never;
@@ -1267,7 +1411,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Approve a fresh execution of a large scheduled cleanup scope */
+    /**
+     * Approve a fresh execution of a large scheduled cleanup scope
+     * @description Approves a fresh execution of the scheduled cleanup scope. The worker re-evaluates the scope before deletion.
+     */
     post: operations["MediaCleanup_Approve"];
     delete?: never;
     options?: never;
@@ -1352,7 +1499,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Start one audited replay cycle for an exhausted webhook delivery */
+    /**
+     * Start one audited replay cycle for an exhausted webhook delivery
+     * @description Requests another delivery attempt for a failed webhook. Replay uses the stored delivery payload.
+     */
     post: operations["Webhooks_Replay"];
     delete?: never;
     options?: never;
@@ -1384,8 +1534,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all provider configurations with pagination */
     get: operations["ProviderCredentials_GetAll"];
     put?: never;
+    /** Creates a new provider */
     post: operations["ProviderCredentials_Create"];
     delete?: never;
     options?: never;
@@ -1420,12 +1572,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets a provider by ID */
     get: operations["ProviderCredentials_GetById"];
     put?: never;
     post?: never;
+    /** Deletes a provider */
     delete: operations["ProviderCredentials_Delete"];
     options?: never;
     head?: never;
+    /** Updates a provider */
     patch: operations["ProviderCredentials_Update"];
     trace?: never;
   };
@@ -1436,8 +1591,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all key credentials for a specific provider */
     get: operations["ProviderCredentials_GetKeys"];
     put?: never;
+    /** Creates a new key credential for a provider */
     post: operations["ProviderCredentials_CreateKey"];
     delete?: never;
     options?: never;
@@ -1452,12 +1609,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets a specific key credential */
     get: operations["ProviderCredentials_GetKey"];
     put?: never;
     post?: never;
+    /** Deletes a key credential */
     delete: operations["ProviderCredentials_DeleteKey"];
     options?: never;
     head?: never;
+    /** Updates a key credential */
     patch: operations["ProviderCredentials_UpdateKey"];
     trace?: never;
   };
@@ -1470,6 +1630,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Sets a key as the primary key for a provider */
     post: operations["ProviderCredentials_SetPrimaryKey"];
     delete?: never;
     options?: never;
@@ -1486,6 +1647,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Tests the connection to a provider */
     post: operations["ProviderCredentials_Test"];
     delete?: never;
     options?: never;
@@ -1502,6 +1664,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Tests a provider connection without saving */
     post: operations["ProviderCredentials_TestCredentials"];
     delete?: never;
     options?: never;
@@ -1518,6 +1681,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Tests a specific key credential */
     post: operations["ProviderCredentials_TestKey"];
     delete?: never;
     options?: never;
@@ -1532,8 +1696,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all models with their capabilities. Supports optional search and filtering. */
     get: operations["Model_GetAll"];
     put?: never;
+    /** Creates a new model */
     post: operations["Model_Create"];
     delete?: never;
     options?: never;
@@ -1548,6 +1714,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets a paginated page of models with optional search and filtering. */
     get: operations["Model_GetPaged"];
     put?: never;
     post?: never;
@@ -1564,12 +1731,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets a specific model by ID */
     get: operations["Model_GetById"];
     put?: never;
     post?: never;
+    /** Deletes a model */
     delete: operations["Model_Delete"];
     options?: never;
     head?: never;
+    /** Updates an existing model */
     patch: operations["Model_Update"];
     trace?: never;
   };
@@ -1580,6 +1750,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Searches for models by name */
     get: operations["Model_Search"];
     put?: never;
     post?: never;
@@ -1596,6 +1767,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets models available from a specific provider */
     get: operations["Model_GetByProvider"];
     put?: never;
     post?: never;
@@ -1612,8 +1784,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets model identifiers for a specific model */
     get: operations["Model_GetIdentifiers"];
     put?: never;
+    /** Creates a new model identifier for a specific model */
     post: operations["Model_CreateIdentifier"];
     delete?: never;
     options?: never;
@@ -1628,6 +1802,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get model associations with configured providers */
     get: operations["Model_GetAvailableProviders"];
     put?: never;
     post?: never;
@@ -1647,9 +1822,11 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
+    /** Deletes a model identifier */
     delete: operations["Model_DeleteIdentifier"];
     options?: never;
     head?: never;
+    /** Updates a model identifier */
     patch: operations["Model_UpdateIdentifier"];
     trace?: never;
   };
@@ -1660,8 +1837,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all provider mappings for a specific model */
     get: operations["Model_GetProviderMappings"];
     put?: never;
+    /** Creates a new provider mapping for a specific model */
     post: operations["Model_CreateProviderMapping"];
     delete?: never;
     options?: never;
@@ -1679,9 +1858,11 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
+    /** Deletes a provider mapping for a specific model */
     delete: operations["Model_DeleteProviderMapping"];
     options?: never;
     head?: never;
+    /** Updates a provider mapping for a specific model */
     patch: operations["Model_UpdateProviderMapping"];
     trace?: never;
   };
@@ -1692,8 +1873,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get all virtual key groups with pagination */
     get: operations["VirtualKeyGroups_GetAll"];
     put?: never;
+    /** Create a new virtual key group */
     post: operations["VirtualKeyGroups_Create"];
     delete?: never;
     options?: never;
@@ -1708,12 +1891,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get a specific virtual key group by ID */
     get: operations["VirtualKeyGroups_GetById"];
     put?: never;
     post?: never;
+    /** Delete a virtual key group */
     delete: operations["VirtualKeyGroups_Delete"];
     options?: never;
     head?: never;
+    /** Update a virtual key group */
     patch: operations["VirtualKeyGroups_Update"];
     trace?: never;
   };
@@ -1726,6 +1912,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Adjust the balance of a virtual key group */
     post: operations["VirtualKeyGroups_AdjustBalance"];
     delete?: never;
     options?: never;
@@ -1740,6 +1927,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get transaction history for a virtual key group */
     get: operations["VirtualKeyGroups_GetTransactions"];
     put?: never;
     post?: never;
@@ -1756,6 +1944,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get virtual keys in a group */
     get: operations["VirtualKeyGroups_GetKeys"];
     put?: never;
     post?: never;
@@ -1774,6 +1963,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Process a refund for a virtual key group */
     post: operations["VirtualKeyGroups_Refund"];
     delete?: never;
     options?: never;
@@ -1788,8 +1978,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Retrieves a list of all virtual keys */
     get: operations["VirtualKeys_GetAll"];
     put?: never;
+    /** Generates a new virtual API key */
     post: operations["VirtualKeys_Generate"];
     delete?: never;
     options?: never;
@@ -1804,12 +1996,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Retrieves details for a specific virtual key by ID */
     get: operations["VirtualKeys_GetById"];
     put?: never;
     post?: never;
+    /** Deletes a virtual key by ID */
     delete: operations["VirtualKeys_Delete"];
     options?: never;
     head?: never;
+    /** Updates an existing virtual key */
     patch: operations["VirtualKeys_Update"];
     trace?: never;
   };
@@ -1822,6 +2017,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Validates a virtual key */
     post: operations["VirtualKeys_Validate"];
     delete?: never;
     options?: never;
@@ -1836,6 +2032,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets detailed information about a virtual key for validation purposes */
     get: operations["VirtualKeys_GetValidationInfo"];
     put?: never;
     post?: never;
@@ -1854,6 +2051,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /**
+     * Performs maintenance tasks on all virtual keys
+     * @description This endpoint performs the following maintenance tasks: - Disables keys that have passed their expiration date Budget resets are no longer performed in the bank account model. This is typically called by a background service.
+     */
     post: operations["VirtualKeys_Maintenance"];
     delete?: never;
     options?: never;
@@ -1868,6 +2069,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Previews the discovery results for a virtual key */
     get: operations["VirtualKeys_PreviewDiscovery"];
     put?: never;
     post?: never;
@@ -1884,6 +2086,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get the virtual key group for a specific key */
     get: operations["VirtualKeys_GetGroup"];
     put?: never;
     post?: never;
@@ -1900,7 +2103,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Get a virtual key's current rate limit usage */
+    /**
+     * Get a virtual key's current rate limit usage
+     * @description The limits themselves live in the database, but what has been spent against them lives only in the shared window store — so "is this key near its limit right now?" is a question nothing else can answer. Reads only; it never admits or rejects anything.
+     */
     get: operations["VirtualKeys_GetRateLimitUsage"];
     put?: never;
     post?: never;
@@ -1917,6 +2123,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /**
+     * Get usage information for a virtual key by its key value
+     * @description This endpoint allows administrators to check the usage and balance of a virtual key using the actual key value instead of the database ID. This is useful for support scenarios where users provide their key value.
+     */
     get: operations["VirtualKeys_GetUsageByKey"];
     put?: never;
     post?: never;
@@ -1933,8 +2143,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all IP filters */
     get: operations["IpFilter_GetAll"];
     put?: never;
+    /** Creates a new IP filter */
     post: operations["IpFilter_Create"];
     delete?: never;
     options?: never;
@@ -1949,6 +2161,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all enabled IP filters */
     get: operations["IpFilter_GetEnabled"];
     put?: never;
     post?: never;
@@ -1965,6 +2178,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets the IP filters scoped to a specific virtual key */
     get: operations["IpFilter_GetByVirtualKey"];
     put?: never;
     post?: never;
@@ -1981,12 +2195,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets an IP filter by ID */
     get: operations["IpFilter_GetById"];
     put?: never;
     post?: never;
+    /** Deletes an IP filter */
     delete: operations["IpFilter_Delete"];
     options?: never;
     head?: never;
+    /** Updates an existing IP filter */
     patch: operations["IpFilter_Update"];
     trace?: never;
   };
@@ -1997,7 +2214,9 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets the current IP filter settings */
     get: operations["IpFilter_GetSettings"];
+    /** Updates the IP filter settings */
     put: operations["IpFilter_UpdateSettings"];
     post?: never;
     delete?: never;
@@ -2013,6 +2232,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Checks if an IP address is allowed based on current filter rules */
     get: operations["IpFilter_Check"];
     put?: never;
     post?: never;
@@ -2029,6 +2249,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets current service health status. */
     get: operations["HealthMonitoring_GetServiceHealth"];
     put?: never;
     post?: never;
@@ -2045,6 +2266,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets incident history. */
     get: operations["HealthMonitoring_GetIncidents"];
     put?: never;
     post?: never;
@@ -2061,6 +2283,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets health history data. */
     get: operations["HealthMonitoring_GetHealthHistory"];
     put?: never;
     post?: never;
@@ -2077,6 +2300,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets paginated request logs */
     get: operations["Analytics_GetLogs"];
     put?: never;
     post?: never;
@@ -2093,6 +2317,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets a single log entry by ID */
     get: operations["Analytics_GetLogById"];
     put?: never;
     post?: never;
@@ -2109,6 +2334,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets a list of distinct model names from request logs */
     get: operations["Analytics_GetDistinctModels"];
     put?: never;
     post?: never;
@@ -2125,6 +2351,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets cost dashboard summary data */
     get: operations["Analytics_GetCostSummary"];
     put?: never;
     post?: never;
@@ -2141,6 +2368,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets cost trend data */
     get: operations["Analytics_GetCostTrends"];
     put?: never;
     post?: never;
@@ -2157,6 +2385,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets costs grouped by model */
     get: operations["Analytics_GetModelCosts"];
     put?: never;
     post?: never;
@@ -2173,6 +2402,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets costs grouped by virtual key */
     get: operations["Analytics_GetVirtualKeyCosts"];
     put?: never;
     post?: never;
@@ -2189,6 +2419,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets comprehensive analytics summary */
     get: operations["Analytics_GetAnalyticsSummary"];
     put?: never;
     post?: never;
@@ -2205,6 +2436,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets usage statistics for a specific virtual key */
     get: operations["Analytics_GetVirtualKeyUsage"];
     put?: never;
     post?: never;
@@ -2221,6 +2453,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Exports analytics data */
     get: operations["Analytics_ExportAnalytics"];
     put?: never;
     post?: never;
@@ -2237,6 +2470,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets analytics cache metrics */
     get: operations["Analytics_GetCacheMetrics"];
     put?: never;
     post?: never;
@@ -2253,6 +2487,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets analytics operation performance metrics */
     get: operations["Analytics_GetOperationMetrics"];
     put?: never;
     post?: never;
@@ -2271,6 +2506,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Invalidates analytics cache */
     post: operations["Analytics_InvalidateCache"];
     delete?: never;
     options?: never;
@@ -2285,8 +2521,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all function configurations. */
     get: operations["FunctionConfigurations_GetAll"];
     put?: never;
+    /** Creates a new function configuration. */
     post: operations["FunctionConfigurations_Create"];
     delete?: never;
     options?: never;
@@ -2301,12 +2539,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets a function configuration by ID. */
     get: operations["FunctionConfigurations_GetById"];
     put?: never;
     post?: never;
+    /** Deletes a function configuration. */
     delete: operations["FunctionConfigurations_Delete"];
     options?: never;
     head?: never;
+    /** Updates an existing function configuration. */
     patch: operations["FunctionConfigurations_Update"];
     trace?: never;
   };
@@ -2317,6 +2558,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets function configurations by provider type. */
     get: operations["FunctionConfigurations_GetByProvider"];
     put?: never;
     post?: never;
@@ -2333,6 +2575,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets function configurations by purpose. */
     get: operations["FunctionConfigurations_GetByPurpose"];
     put?: never;
     post?: never;
@@ -2349,7 +2592,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** @description Returns a bounded tail window of the most recent provider errors; this is intentionally not a paged collection. */
+    /**
+     * Get recent errors across all providers
+     * @description Returns a bounded tail window of the most recent provider errors; this is intentionally not a paged collection.
+     */
     get: operations["ProviderErrors_GetRecent"];
     put?: never;
     post?: never;
@@ -2366,6 +2612,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get error summary for all providers */
     get: operations["ProviderErrors_GetSummary"];
     put?: never;
     post?: never;
@@ -2382,6 +2629,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get detailed error information for a specific key */
     get: operations["ProviderErrors_GetKeyErrors"];
     put?: never;
     post?: never;
@@ -2400,6 +2648,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Clear errors and optionally re-enable a key */
     post: operations["ProviderErrors_ClearKeyErrors"];
     delete?: never;
     options?: never;
@@ -2414,6 +2663,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get error statistics for dashboard */
     get: operations["ProviderErrors_GetStatistics"];
     put?: never;
     post?: never;
@@ -2430,6 +2680,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get error counts by key for a specific provider */
     get: operations["ProviderErrors_GetCountsByKey"];
     put?: never;
     post?: never;
@@ -2448,6 +2699,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Manually disable a key due to errors */
     post: operations["ProviderErrors_DisableKey"];
     delete?: never;
     options?: never;
@@ -2462,8 +2714,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get all media retention policies. */
     get: operations["MediaRetention_GetPolicies"];
     put?: never;
+    /** Create a new media retention policy. */
     post: operations["MediaRetention_CreatePolicy"];
     delete?: never;
     options?: never;
@@ -2478,12 +2732,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get a specific media retention policy by ID. */
     get: operations["MediaRetention_GetPolicy"];
     put?: never;
     post?: never;
+    /** Delete a media retention policy. */
     delete: operations["MediaRetention_DeletePolicy"];
     options?: never;
     head?: never;
+    /** Update an existing media retention policy. */
     patch: operations["MediaRetention_UpdatePolicy"];
     trace?: never;
   };
@@ -2496,6 +2753,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Assign a retention policy to a virtual key group. */
     post: operations["MediaRetention_AssignPolicyToGroup"];
     delete?: never;
     options?: never;
@@ -2512,6 +2770,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Sets a policy as the new default retention policy. Only one policy can be the default at a time. */
     post: operations["MediaRetention_SetDefaultPolicy"];
     delete?: never;
     options?: never;
@@ -2528,6 +2787,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /**
+     * Check manual media cleanup availability
+     * @description Manual cleanup is not implemented. This operation returns 501; use the scheduled cleanup system. No successful response is advertised.
+     */
     post: operations["MediaRetention_TriggerCleanup"];
     delete?: never;
     options?: never;
@@ -2542,8 +2805,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all provider tools. */
     get: operations["ProviderTools_GetAll"];
     put?: never;
+    /** Creates a new provider tool. */
     post: operations["ProviderTools_Create"];
     delete?: never;
     options?: never;
@@ -2558,12 +2823,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets a specific provider tool by ID. */
     get: operations["ProviderTools_GetById"];
     put?: never;
     post?: never;
+    /** Deletes a provider tool. */
     delete: operations["ProviderTools_Delete"];
     options?: never;
     head?: never;
+    /** Updates an existing provider tool. */
     patch: operations["ProviderTools_Update"];
     trace?: never;
   };
@@ -2574,6 +2842,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets available provider types that support tools. */
     get: operations["ProviderTools_GetProviders"];
     put?: never;
     post?: never;
@@ -2590,6 +2859,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets available billing units. */
     get: operations["ProviderTools_GetBillingUnits"];
     put?: never;
     post?: never;
@@ -2608,6 +2878,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Bulk import provider tools from a JSON array. */
     post: operations["ProviderTools_Import"];
     delete?: never;
     options?: never;
@@ -2622,6 +2893,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Exports all provider tools as JSON. */
     get: operations["ProviderTools_Export"];
     put?: never;
     post?: never;
@@ -2638,6 +2910,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get available pricing types */
     get: operations["Pricing_GetTypes"];
     put?: never;
     post?: never;
@@ -2654,6 +2927,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get available condition operators */
     get: operations["Pricing_GetOperators"];
     put?: never;
     post?: never;
@@ -2670,6 +2944,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get pricing configuration template */
     get: operations["Pricing_GetTemplate"];
     put?: never;
     post?: never;
@@ -2688,6 +2963,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Validate pricing configuration JSON */
     post: operations["Pricing_Validate"];
     delete?: never;
     options?: never;
@@ -2704,6 +2980,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Simulate pricing calculation with test parameters */
     post: operations["Pricing_Simulate"];
     delete?: never;
     options?: never;
@@ -2718,6 +2995,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Query pricing audit events */
     get: operations["Pricing_QueryAudit"];
     put?: never;
     post?: never;
@@ -2734,6 +3012,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get pricing audit summary */
     get: operations["Pricing_GetAuditSummary"];
     put?: never;
     post?: never;
@@ -2750,6 +3029,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get pricing audit events by request ID */
     get: operations["Pricing_GetAuditByRequestId"];
     put?: never;
     post?: never;
@@ -2766,8 +3046,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all model provider mappings */
     get: operations["ModelProviderMapping_GetAll"];
     put?: never;
+    /** Creates a new model provider mapping */
     post: operations["ModelProviderMapping_Create"];
     delete?: never;
     options?: never;
@@ -2782,12 +3064,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets a specific model provider mapping by ID */
     get: operations["ModelProviderMapping_GetById"];
     put?: never;
     post?: never;
+    /** Deletes a model provider mapping */
     delete: operations["ModelProviderMapping_Delete"];
     options?: never;
     head?: never;
+    /** Updates an existing model provider mapping */
     patch: operations["ModelProviderMapping_Update"];
     trace?: never;
   };
@@ -2798,6 +3083,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all available providers */
     get: operations["ModelProviderMapping_GetProviders"];
     put?: never;
     post?: never;
@@ -2816,6 +3102,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Resolves model associations and conflicts before bulk creation. */
     post: operations["ModelProviderMapping_PreviewBulk"];
     delete?: never;
     options?: never;
@@ -2832,6 +3119,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /**
+     * Resolve and create multiple model provider mappings
+     * @description Uses partial-success semantics. Equivalent existing mappings satisfy retries without creating duplicates.
+     */
     post: operations["ModelProviderMapping_CreateBulk"];
     delete?: never;
     options?: never;
@@ -2848,6 +3139,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Deletes multiple model provider mappings in a single operation */
     post: operations["ModelProviderMapping_DeleteBulk"];
     delete?: never;
     options?: never;
@@ -2864,6 +3156,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Enables multiple model provider mappings in a single operation */
     post: operations["ModelProviderMapping_EnableBulk"];
     delete?: never;
     options?: never;
@@ -2880,6 +3173,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Disables multiple model provider mappings in a single operation */
     post: operations["ModelProviderMapping_DisableBulk"];
     delete?: never;
     options?: never;
@@ -2894,8 +3188,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all model costs with optional pagination and filtering */
     get: operations["ModelCosts_GetAll"];
     put?: never;
+    /** Creates a new model cost */
     post: operations["ModelCosts_Create"];
     delete?: never;
     options?: never;
@@ -2910,12 +3206,15 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets a model cost by ID */
     get: operations["ModelCosts_GetById"];
     put?: never;
     post?: never;
+    /** Deletes a model cost */
     delete: operations["ModelCosts_Delete"];
     options?: never;
     head?: never;
+    /** Updates a model cost */
     patch: operations["ModelCosts_Update"];
     trace?: never;
   };
@@ -2926,6 +3225,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets model costs by provider ID */
     get: operations["ModelCosts_GetByProvider"];
     put?: never;
     post?: never;
@@ -2942,6 +3242,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets a model cost by cost name */
     get: operations["ModelCosts_GetByName"];
     put?: never;
     post?: never;
@@ -2958,6 +3259,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets model cost overview data for a specific time period */
     get: operations["ModelCosts_GetOverview"];
     put?: never;
     post?: never;
@@ -2976,6 +3278,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Imports model costs from a list of DTOs */
     post: operations["ModelCosts_Import"];
     delete?: never;
     options?: never;
@@ -2990,6 +3293,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Exports model costs in CSV format */
     get: operations["ModelCosts_ExportCsv"];
     put?: never;
     post?: never;
@@ -3006,6 +3310,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Exports model costs in JSON format */
     get: operations["ModelCosts_ExportJson"];
     put?: never;
     post?: never;
@@ -3024,6 +3329,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Imports model costs from CSV file */
     post: operations["ModelCosts_ImportCsv"];
     delete?: never;
     options?: never;
@@ -3040,6 +3346,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Imports model costs from JSON file */
     post: operations["ModelCosts_ImportJson"];
     delete?: never;
     options?: never;
@@ -3056,6 +3363,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Validates a pricing rules configuration JSON */
     post: operations["ModelCosts_ValidatePricingRules"];
     delete?: never;
     options?: never;
@@ -3072,6 +3380,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Validates a pricing rules configuration JSON without a model cost context */
     post: operations["ModelCosts_ValidatePricingRulesStandalone"];
     delete?: never;
     options?: never;
@@ -3091,7 +3400,7 @@ export interface components {
     AdminFunctionExecutionDto: {
       admin?: components["schemas"]["FunctionExecutionAdminDetailsDto"];
     } & components["schemas"]["FunctionExecutionDto"];
-    /** @description RFC 9457 error response used by every Admin API error path. */
+    /** @description RFC 9457 error response used by Admin endpoint and exception handling. */
     AdminProblemDetails: {
       type?: null | string;
       title?: null | string;
@@ -3107,18 +3416,6 @@ export interface components {
       errors?: null | {
         [key: string]: string[];
       };
-    };
-    /** @description Comprehensive application metrics including database, application, and system metrics. */
-    AllMetricsDto: {
-      /**
-       * Format: date-time
-       * @description UTC timestamp when the metrics were captured.
-       */
-      timestamp?: string;
-      /** @description Application identity information. */
-      application?: components["schemas"]["ApplicationInfoDto"];
-      /** @description Host system metrics for the current process. */
-      system?: components["schemas"]["SystemMetricsDto"];
     };
     AnalyticsCacheInvalidationResponse: {
       message: string;
@@ -3241,15 +3538,6 @@ export interface components {
       | "rateLimited"
       | "unknownError"
       | "configuration";
-    /** @description Application identity information. */
-    ApplicationInfoDto: {
-      /** @description The application name. */
-      name?: string;
-      /** @description The application assembly version. */
-      version?: string;
-      /** @description The ASP.NET Core environment name. */
-      environment?: string;
-    };
     /** @description A configured provider instance that can serve a model identifier. */
     AvailableProviderDto: {
       /**
@@ -3472,10 +3760,6 @@ export interface components {
       message: string;
       /** Format: date-time */
       timestamp: string;
-      note: string;
-    };
-    CacheServiceUnavailableResponse: {
-      message: string;
       note: string;
     };
     CacheStats: {
@@ -5732,6 +6016,15 @@ export interface components {
       | "system"
       | "providerKeyDisabled"
       | "providerKeyReenabled";
+    OpenAIErrorResponse: {
+      error: {
+        message: string;
+        type: string;
+        param?: null | string;
+        code?: null | string;
+        metadata?: unknown;
+      };
+    };
     /** @description Information about a condition operator */
     OperatorInfo: {
       /** @description The operator identifier */
@@ -5991,14 +6284,6 @@ export interface components {
       errors?: string[];
       /** @description Validation warnings if any */
       warnings?: string[];
-    };
-    ProblemDetails: {
-      type?: null | string;
-      title?: null | string;
-      /** Format: int32 */
-      status?: null | number;
-      detail?: null | string;
-      instance?: null | string;
     };
     ProcessRefundRequestDto: {
       modelId?: string;
@@ -6585,6 +6870,11 @@ export interface components {
       uptime?: string;
       customerMode?: string;
     };
+    SecurityErrorResponse: {
+      error: null | string;
+      /** Format: int32 */
+      code: null | number;
+    };
     /** @description Simplified model information for display within a series context. */
     SeriesSimpleModelDto: {
       /**
@@ -6732,31 +7022,6 @@ export interface components {
       database?: components["schemas"]["DatabaseInfo"];
       runtime?: components["schemas"]["RuntimeInfo"];
       recordCounts?: components["schemas"]["RecordCountsDto"];
-    };
-    /** @description Host system metrics for the current process. */
-    SystemMetricsDto: {
-      /**
-       * Format: int32
-       * @description Number of logical processors available.
-       */
-      cpuCount?: number;
-      /**
-       * Format: int64
-       * @description Process working set size in megabytes.
-       */
-      workingSetMb?: number;
-      /**
-       * Format: int64
-       * @description Total memory tracked by the garbage collector in megabytes.
-       */
-      gcMemoryMb?: number;
-      /**
-       * Format: int32
-       * @description Number of threads in the current process.
-       */
-      threadCount?: number;
-      /** @description Time elapsed since the process started. */
-      uptime?: string;
     };
     /** @description Response returned when old asynchronous tasks are cleaned up. */
     TaskCleanupResponseDto: {
@@ -7619,6 +7884,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -7667,6 +7989,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -7685,6 +8064,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the ModelAuthor resource. */
         id: number;
       };
       cookie?: never;
@@ -7702,6 +8082,41 @@ export interface operations {
           "application/json": components["schemas"]["ModelAuthorDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -7711,6 +8126,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -7731,6 +8168,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the ModelAuthor resource. */
         id: number;
       };
       cookie?: never;
@@ -7757,6 +8195,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -7766,6 +8228,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -7786,6 +8270,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the ModelAuthor resource. */
         id: number;
       };
       cookie?: never;
@@ -7818,6 +8303,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -7827,6 +8336,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -7852,6 +8394,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description Identifier of the ModelAuthor resource. */
         id: number;
       };
       cookie?: never;
@@ -7881,6 +8424,41 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -7890,6 +8468,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -7942,6 +8542,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -7990,6 +8647,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Conflict */
       409: {
         headers: {
@@ -7999,6 +8680,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8019,6 +8733,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the ModelSeries resource. */
         id: number;
       };
       cookie?: never;
@@ -8036,6 +8751,41 @@ export interface operations {
           "application/json": components["schemas"]["ModelSeriesDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -8045,6 +8795,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8065,6 +8837,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the ModelSeries resource. */
         id: number;
       };
       cookie?: never;
@@ -8079,6 +8852,41 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
       };
       /** @description Not Found */
       404: {
@@ -8102,6 +8910,28 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -8120,6 +8950,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the ModelSeries resource. */
         id: number;
       };
       cookie?: never;
@@ -8152,6 +8983,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -8172,6 +9027,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8197,6 +9085,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description Identifier of the ModelSeries resource. */
         id: number;
       };
       cookie?: never;
@@ -8226,6 +9115,41 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -8235,6 +9159,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8287,6 +9233,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -8333,6 +9336,63 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8385,6 +9445,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -8403,6 +9520,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the Notifications resource. */
         id: number;
       };
       cookie?: never;
@@ -8420,6 +9538,41 @@ export interface operations {
           "application/json": components["schemas"]["NotificationDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -8429,6 +9582,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8449,6 +9624,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the Notifications resource. */
         id: number;
       };
       cookie?: never;
@@ -8464,6 +9640,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -8473,6 +9684,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8493,6 +9726,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the Notifications resource. */
         id: number;
       };
       cookie?: never;
@@ -8525,6 +9759,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -8534,6 +9792,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8554,6 +9845,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the Notifications resource. */
         id: number;
       };
       cookie?: never;
@@ -8569,6 +9861,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -8578,6 +9905,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8613,6 +9962,52 @@ export interface operations {
           "application/json": number;
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -8629,6 +10024,7 @@ export interface operations {
   Tasks_Cleanup: {
     parameters: {
       query: {
+        /** @description Task age threshold in hours; zero selects the 24-hour default and negative values are clamped to 1. */
         olderThanHours: number;
       };
       header?: never;
@@ -8648,6 +10044,63 @@ export interface operations {
           "application/json": components["schemas"]["TaskCleanupResponseDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -8664,8 +10117,11 @@ export interface operations {
   Tasks_List: {
     parameters: {
       query?: {
+        /** @description Execution or task state to filter by. */
         state?: string;
+        /** @description Page number, starting at 1. */
         page?: number;
+        /** @description Number of records per page; values are normalized to the supported pagination range. */
         pageSize?: number;
       };
       header?: never;
@@ -8696,7 +10152,7 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -8705,9 +10161,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -8716,6 +10173,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Too Many Requests */
@@ -8723,10 +10181,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8747,6 +10216,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier returned when the asynchronous task was accepted. */
         taskId: string;
       };
       cookie?: never;
@@ -8788,6 +10258,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -8797,6 +10291,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8832,7 +10359,7 @@ export interface operations {
           "application/json": components["schemas"]["EphemeralMasterKeyResponse"];
         };
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -8841,6 +10368,41 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8876,6 +10438,52 @@ export interface operations {
           "application/json": components["schemas"]["SystemInfoDto"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -8907,6 +10515,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["HealthStatusDto"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -8942,6 +10596,52 @@ export interface operations {
           "application/json": components["schemas"]["CacheInvalidationPublishedResponse"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -8975,6 +10675,30 @@ export interface operations {
           "application/json": components["schemas"]["CacheStats"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -8984,6 +10708,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -9019,6 +10765,52 @@ export interface operations {
           "application/json": components["schemas"]["CacheInvalidationPublishedResponse"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -9049,7 +10841,54 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["AllMetricsDto"];
+          "text/plain": string;
+          "application/openmetrics-text": string;
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -9085,6 +10924,52 @@ export interface operations {
           "application/json": components["schemas"]["RoutingConfigurationDto"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -9116,6 +11001,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["RoutingDefaultsDto"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -9166,6 +11097,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -9184,6 +11172,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Model alias whose routing policy is being addressed. */
         alias: string;
       };
       cookie?: never;
@@ -9201,6 +11190,41 @@ export interface operations {
           "application/json": components["schemas"]["RoutePolicyDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -9210,6 +11234,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -9230,6 +11276,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Model alias whose routing policy is being addressed. */
         alias: string;
       };
       cookie?: never;
@@ -9262,6 +11309,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -9271,6 +11342,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -9306,6 +11410,52 @@ export interface operations {
           "application/json": components["schemas"]["BundledModelCatalogImportResult"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -9324,6 +11474,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the FunctionExecutions resource. */
         id: string;
       };
       cookie?: never;
@@ -9341,6 +11492,41 @@ export interface operations {
           "application/json": components["schemas"]["AdminFunctionExecutionDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -9350,6 +11536,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -9375,6 +11583,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description Identifier of the virtual key. */
         virtualKeyId: number;
       };
       cookie?: never;
@@ -9404,6 +11613,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -9427,6 +11693,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description Identifier of the function configuration. */
         functionConfigurationId: number;
       };
       cookie?: never;
@@ -9456,6 +11723,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -9479,6 +11803,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description Execution or task state to filter by. */
         state: string;
       };
       cookie?: never;
@@ -9517,6 +11842,52 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -9569,6 +11940,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -9619,6 +12047,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -9635,6 +12120,7 @@ export interface operations {
   FunctionExecutions_Cleanup: {
     parameters: {
       query?: {
+        /** @description Minimum record age in days for cleanup. */
         olderThanDays?: number;
       };
       header?: never;
@@ -9663,6 +12149,52 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -9715,6 +12247,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -9763,6 +12352,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -9781,6 +12427,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the FunctionCosts resource. */
         id: number;
       };
       cookie?: never;
@@ -9798,6 +12445,41 @@ export interface operations {
           "application/json": components["schemas"]["FunctionCostDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -9807,6 +12489,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -9827,6 +12531,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the FunctionCosts resource. */
         id: number;
       };
       cookie?: never;
@@ -9842,6 +12547,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -9851,6 +12591,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -9871,6 +12633,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the FunctionCosts resource. */
         id: number;
       };
       cookie?: never;
@@ -9903,6 +12666,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -9912,6 +12699,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -9932,6 +12752,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the function configuration. */
         functionConfigurationId: number;
       };
       cookie?: never;
@@ -9949,6 +12770,41 @@ export interface operations {
           "application/json": components["schemas"]["FunctionCostDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -9958,6 +12814,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -9991,6 +12869,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["FunctionCostCacheClearResultDto"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10043,6 +12967,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -10091,6 +13072,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -10114,6 +13152,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description Identifier of the function configuration. */
         functionConfigurationId: number;
       };
       cookie?: never;
@@ -10143,6 +13182,41 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -10152,6 +13226,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10172,6 +13268,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the FunctionCredentials resource. */
         id: number;
       };
       cookie?: never;
@@ -10189,6 +13286,41 @@ export interface operations {
           "application/json": components["schemas"]["FunctionCredentialDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -10198,6 +13330,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10218,6 +13372,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the FunctionCredentials resource. */
         id: number;
       };
       cookie?: never;
@@ -10233,6 +13388,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -10242,6 +13432,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10262,6 +13474,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the FunctionCredentials resource. */
         id: number;
       };
       cookie?: never;
@@ -10294,6 +13507,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -10303,6 +13540,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10353,6 +13623,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -10369,9 +13696,13 @@ export interface operations {
   BatchSpending_Flush: {
     parameters: {
       query?: {
+        /** @description Optional reason recorded for the requested operation. */
         reason?: string;
+        /** @description Flush priority; Normal is the default and High requests urgent processing. */
         priority?: components["schemas"]["FlushPriority"];
+        /** @description Optional flush timeout in seconds, from 1 to 300. */
         timeoutSeconds?: number;
+        /** @description Include processing statistics in the flush request. */
         includeStatistics?: boolean;
       };
       header?: never;
@@ -10400,6 +13731,52 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10435,6 +13812,52 @@ export interface operations {
           "application/json": components["schemas"]["BatchSpendingStatusResponse"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -10466,6 +13889,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["BatchSpendingInformationResponse"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10501,6 +13970,30 @@ export interface operations {
           "application/json": components["schemas"]["PromptCachingConfigDto"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Conflict */
       409: {
         headers: {
@@ -10510,6 +14003,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10558,6 +14073,63 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10610,6 +14182,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -10626,10 +14255,15 @@ export interface operations {
   PromptCaching_GetAnalytics: {
     parameters: {
       query?: {
+        /** @description Start of the reporting interval in UTC. */
         from?: null | string;
+        /** @description End of the reporting interval in UTC. */
         to?: null | string;
+        /** @description Model alias whose routing policy is being addressed. */
         alias?: string;
+        /** @description Filter by provider type. */
         provider?: string;
+        /** @description Filter analytics by model-provider mapping identifier. */
         mappingId?: number;
       };
       header?: never;
@@ -10660,6 +14294,52 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -10687,10 +14367,15 @@ export interface operations {
   ProviderSync_ListDrift: {
     parameters: {
       query?: {
+        /** @description Filter drift items by review status. */
         status?: string;
+        /** @description Filter by the type of detected configuration drift. */
         driftType?: string;
+        /** @description Identifier of the configured provider account. */
         providerId?: number;
+        /** @description Page number, starting at 1. */
         page?: number;
+        /** @description Number of records per page; values are normalized to the supported pagination range. */
         pageSize?: number;
       };
       header?: never;
@@ -10722,6 +14407,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -10740,6 +14482,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the ProviderSync resource. */
         id: number;
       };
       cookie?: never;
@@ -10757,6 +14500,41 @@ export interface operations {
           "application/json": components["schemas"]["DriftItemDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -10766,6 +14544,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10786,6 +14586,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the ProviderSync resource. */
         id: number;
       };
       cookie?: never;
@@ -10801,6 +14602,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["DriftActionResultDto"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10821,6 +14679,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the ProviderSync resource. */
         id: number;
       };
       cookie?: never;
@@ -10836,6 +14695,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["DriftActionResultDto"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10886,6 +14802,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -10934,6 +14907,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -10967,6 +14997,30 @@ export interface operations {
           "application/json": components["schemas"]["ProviderSyncRunDto"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Conflict */
       409: {
         headers: {
@@ -10976,6 +15030,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -10994,7 +15070,9 @@ export interface operations {
   ProviderSync_ListRuns: {
     parameters: {
       query?: {
+        /** @description Page number, starting at 1. */
         page?: number;
+        /** @description Number of records per page; values are normalized to the supported pagination range. */
         pageSize?: number;
       };
       header?: never;
@@ -11024,6 +15102,63 @@ export interface operations {
               totalPages: number;
             };
           };
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -11076,6 +15211,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -11122,6 +15314,63 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -11174,7 +15423,18 @@ export interface operations {
           };
         };
       };
-      /** @description Unauthorized */
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -11183,9 +15443,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -11194,6 +15455,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Too Many Requests */
@@ -11201,10 +15463,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -11225,6 +15498,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the GlobalSettings resource. */
         id: number;
       };
       cookie?: never;
@@ -11242,6 +15516,41 @@ export interface operations {
           "application/json": components["schemas"]["GlobalSettingDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -11251,6 +15560,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -11271,6 +15602,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the GlobalSettings resource. */
         id: number;
       };
       cookie?: never;
@@ -11286,6 +15618,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -11295,6 +15662,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -11315,6 +15704,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the GlobalSettings resource. */
         id: number;
       };
       cookie?: never;
@@ -11347,6 +15737,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -11356,6 +15770,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -11376,6 +15823,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Global setting key. */
         key: string;
       };
       cookie?: never;
@@ -11393,6 +15841,41 @@ export interface operations {
           "application/json": components["schemas"]["GlobalSettingDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -11402,6 +15885,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -11422,6 +15927,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Global setting key. */
         key: string;
       };
       cookie?: never;
@@ -11437,6 +15943,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -11446,6 +15987,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -11494,6 +16057,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -11525,6 +16145,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CacheStats"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -11560,6 +16226,52 @@ export interface operations {
           "application/json": components["schemas"]["GlobalSettingsReloadAcceptedResponse"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -11578,6 +16290,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Global setting key. */
         key: string;
       };
       cookie?: never;
@@ -11592,6 +16305,63 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
       };
       /** @description Internal Server Error */
       500: {
@@ -11609,6 +16379,7 @@ export interface operations {
   Media_GetOverallStats: {
     parameters: {
       query?: {
+        /** @description Identifier of the virtual-key balance group. */
         virtualKeyGroupId?: number;
       };
       header?: never;
@@ -11626,6 +16397,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OverallMediaStorageStats"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -11646,6 +16474,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the virtual key. */
         virtualKeyId: number;
       };
       cookie?: never;
@@ -11661,6 +16490,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["MediaStorageStats"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -11698,6 +16584,52 @@ export interface operations {
           };
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -11733,6 +16665,52 @@ export interface operations {
           };
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -11749,6 +16727,7 @@ export interface operations {
   Media_GetByVirtualKey: {
     parameters: {
       query?: {
+        /** @description Include soft-deleted media records when true. */
         includeDeleted?: boolean;
         /** @description 1-based page number. */
         page?: number;
@@ -11757,6 +16736,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description Identifier of the virtual key. */
         virtualKeyId: number;
       };
       cookie?: never;
@@ -11786,6 +16766,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -11802,6 +16839,7 @@ export interface operations {
   Media_Search: {
     parameters: {
       query?: {
+        /** @description Storage-key search pattern; omit to list recent media. */
         pattern?: string;
         /** @description 1-based page number. */
         page?: number;
@@ -11848,6 +16886,52 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -11866,6 +16950,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the tracked media record. */
         mediaId: string;
       };
       cookie?: never;
@@ -11883,6 +16968,41 @@ export interface operations {
           "application/json": components["schemas"]["MediaDeletionResponseDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -11892,6 +17012,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -11912,6 +17054,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the tracked media record. */
         mediaId: string;
       };
       cookie?: never;
@@ -11929,8 +17072,8 @@ export interface operations {
           "application/json": components["schemas"]["MediaRestoreResponseDto"];
         };
       };
-      /** @description Unauthorized */
-      401: {
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -11940,7 +17083,19 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Forbidden */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -11949,6 +17104,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -11978,10 +17134,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12000,6 +17167,7 @@ export interface operations {
   Media_CleanupExpired: {
     parameters: {
       query?: {
+        /** @description Override the normal cleanup safety check when true. */
         force?: boolean;
       };
       header?: never;
@@ -12019,6 +17187,41 @@ export interface operations {
           "application/json": components["schemas"]["MediaCleanupResponseDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Conflict */
       409: {
         headers: {
@@ -12028,6 +17231,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12046,6 +17271,7 @@ export interface operations {
   Media_ReconcileStorage: {
     parameters: {
       query?: {
+        /** @description Override the normal cleanup safety check when true. */
         force?: boolean;
       };
       header?: never;
@@ -12065,6 +17291,41 @@ export interface operations {
           "application/json": components["schemas"]["MediaCleanupResponseDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Conflict */
       409: {
         headers: {
@@ -12074,6 +17335,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12124,7 +17407,7 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12133,10 +17416,23 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -12151,10 +17447,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12205,6 +17512,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Conflict */
       409: {
         headers: {
@@ -12214,6 +17545,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12249,6 +17613,52 @@ export interface operations {
           "application/json": components["schemas"]["MediaCleanupStatusDto"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -12280,6 +17690,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["MediaCleanupEnabledDto"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12319,6 +17775,74 @@ export interface operations {
           "application/json": components["schemas"]["MediaCleanupEnabledChangedDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -12350,6 +17874,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SimpleRetentionResponse"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12387,6 +17957,74 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SimpleRetentionResponse"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12439,7 +18077,18 @@ export interface operations {
           };
         };
       };
-      /** @description Unauthorized */
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12448,9 +18097,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12459,6 +18109,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Too Many Requests */
@@ -12466,10 +18117,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12490,6 +18152,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Unique identifier of the pending cleanup approval. */
         approvalId: string;
       };
       cookie?: never;
@@ -12507,8 +18170,8 @@ export interface operations {
           "application/json": components["schemas"]["MediaCleanupApprovalActionDto"];
         };
       };
-      /** @description Unauthorized */
-      401: {
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -12518,7 +18181,19 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Forbidden */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12527,6 +18202,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -12545,10 +18221,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12569,6 +18256,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Unique identifier of the pending cleanup approval. */
         approvalId: string;
       };
       cookie?: never;
@@ -12586,8 +18274,8 @@ export interface operations {
           "application/json": components["schemas"]["MediaCleanupApprovalActionDto"];
         };
       };
-      /** @description Unauthorized */
-      401: {
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -12597,7 +18285,19 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Forbidden */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12606,6 +18306,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -12624,10 +18325,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12646,9 +18358,13 @@ export interface operations {
   Webhooks_Inspect: {
     parameters: {
       query?: {
+        /** @description Logical owner of the webhook delivery. */
         owner?: number;
+        /** @description Identifier returned when the asynchronous task was accepted. */
         taskId?: string;
+        /** @description Identifier of the event that produced the webhook delivery. */
         eventId?: string;
+        /** @description Maximum number of matching records to return. */
         limit?: number;
         /** @description 1-based page number. */
         page?: number;
@@ -12684,7 +18400,18 @@ export interface operations {
           };
         };
       };
-      /** @description Unauthorized */
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12693,9 +18420,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12704,6 +18432,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Too Many Requests */
@@ -12711,10 +18440,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12750,7 +18490,7 @@ export interface operations {
           "application/json": components["schemas"]["WebhookBacklog"];
         };
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12759,9 +18499,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12770,6 +18511,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Too Many Requests */
@@ -12777,10 +18519,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12799,6 +18552,7 @@ export interface operations {
   Webhooks_DeadLetters: {
     parameters: {
       query?: {
+        /** @description Maximum number of matching records to return. */
         limit?: number;
         /** @description 1-based page number. */
         page?: number;
@@ -12834,7 +18588,18 @@ export interface operations {
           };
         };
       };
-      /** @description Unauthorized */
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12843,9 +18608,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12854,6 +18620,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Too Many Requests */
@@ -12861,10 +18628,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12885,6 +18663,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the Webhook recovery resource. */
         id: string;
       };
       cookie?: never;
@@ -12917,7 +18696,7 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12926,9 +18705,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -12937,6 +18717,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -12961,8 +18742,8 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Too Many Requests */
-      429: {
+      /** @description The request Content-Type is not supported. */
+      415: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -12970,6 +18751,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -12988,6 +18791,7 @@ export interface operations {
   Webhooks_Purge: {
     parameters: {
       query?: {
+        /** @description Maximum number of matching records to return. */
         limit?: number;
       };
       header?: never;
@@ -13007,7 +18811,18 @@ export interface operations {
           "application/json": number;
         };
       };
-      /** @description Unauthorized */
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -13016,9 +18831,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -13027,6 +18843,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Too Many Requests */
@@ -13034,10 +18851,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13056,7 +18884,9 @@ export interface operations {
   ProviderCredentials_GetAll: {
     parameters: {
       query?: {
+        /** @description Page number (1-based, default: 1) */
         page?: number;
+        /** @description Number of items per page (default: 50, max: 100) */
         pageSize?: number;
       };
       header?: never;
@@ -13074,6 +18904,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["PagedResultOfProviderDto"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13124,6 +19011,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -13157,7 +19101,7 @@ export interface operations {
           "application/json": components["schemas"]["ProviderSettingsSchemaDto"][];
         };
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -13166,9 +19110,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -13177,6 +19122,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Too Many Requests */
@@ -13184,10 +19130,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13208,6 +19165,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the provider */
         id: number;
       };
       cookie?: never;
@@ -13225,6 +19183,41 @@ export interface operations {
           "application/json": components["schemas"]["ProviderDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -13234,6 +19227,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13254,6 +19269,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the provider to delete */
         id: number;
       };
       cookie?: never;
@@ -13269,6 +19285,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -13278,6 +19329,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13298,6 +19371,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the provider to update */
         id: number;
       };
       cookie?: never;
@@ -13330,6 +19404,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -13339,6 +19437,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13364,6 +19495,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description The ID of the provider */
         providerId: number;
       };
       cookie?: never;
@@ -13393,6 +19525,41 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -13402,6 +19569,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13422,6 +19611,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the provider */
         providerId: number;
       };
       cookie?: never;
@@ -13454,6 +19644,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -13476,6 +19690,39 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -13494,7 +19741,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the provider */
         providerId: number;
+        /** @description The ID of the key */
         keyId: number;
       };
       cookie?: never;
@@ -13512,6 +19761,41 @@ export interface operations {
           "application/json": components["schemas"]["ProviderKeyCredentialDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -13521,6 +19805,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13541,7 +19847,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the provider */
         providerId: number;
+        /** @description The ID of the key to delete */
         keyId: number;
       };
       cookie?: never;
@@ -13557,6 +19865,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -13566,6 +19909,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13586,7 +19951,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the provider */
         providerId: number;
+        /** @description The ID of the key */
         keyId: number;
       };
       cookie?: never;
@@ -13619,6 +19986,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -13628,6 +20019,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13648,7 +20072,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the provider */
         providerId: number;
+        /** @description The ID of the key to set as primary */
         keyId: number;
       };
       cookie?: never;
@@ -13675,6 +20101,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -13684,6 +20134,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13704,6 +20176,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the provider to test */
         id: number;
       };
       cookie?: never;
@@ -13721,6 +20194,41 @@ export interface operations {
           "application/json": components["schemas"]["StandardApiKeyTestResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -13730,6 +20238,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13780,6 +20310,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -13798,7 +20385,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the provider */
         providerId: number;
+        /** @description The ID of the key to test */
         keyId: number;
       };
       cookie?: never;
@@ -13816,6 +20405,41 @@ export interface operations {
           "application/json": components["schemas"]["StandardApiKeyTestResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -13825,6 +20449,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13843,8 +20489,11 @@ export interface operations {
   Model_GetAll: {
     parameters: {
       query?: {
+        /** @description Optional search term for model name (case-insensitive partial match) */
         search?: string;
+        /** @description Optional operation or directional modality filter. */
         capability?: string;
+        /** @description Optional filter: true = only models with identifiers, false = without */
         hasProviders?: boolean;
         /** @description 1-based page number. */
         page?: number;
@@ -13878,6 +20527,63 @@ export interface operations {
               totalPages: number;
             };
           };
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13928,6 +20634,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Conflict */
       409: {
         headers: {
@@ -13937,6 +20667,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13955,10 +20718,15 @@ export interface operations {
   Model_GetPaged: {
     parameters: {
       query?: {
+        /** @description Page number (1-based). */
         page?: number;
+        /** @description Items per page (max 100). */
         pageSize?: number;
+        /** @description Optional search term for model name (case-insensitive partial match) */
         search?: string;
+        /** @description Optional operation or directional modality filter. */
         capability?: string;
+        /** @description Optional filter: true = only models with identifiers, false = without */
         hasProviders?: boolean;
       };
       header?: never;
@@ -13976,6 +20744,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["PagedResultOfModelDto"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -13996,6 +20821,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The model ID */
         id: number;
       };
       cookie?: never;
@@ -14013,6 +20839,41 @@ export interface operations {
           "application/json": components["schemas"]["ModelDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -14022,6 +20883,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -14042,6 +20925,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The model ID */
         id: number;
       };
       cookie?: never;
@@ -14056,6 +20940,41 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
       };
       /** @description Not Found */
       404: {
@@ -14079,6 +20998,28 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -14097,6 +21038,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The model ID */
         id: number;
       };
       cookie?: never;
@@ -14129,6 +21071,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -14151,6 +21117,39 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -14167,6 +21166,7 @@ export interface operations {
   Model_Search: {
     parameters: {
       query?: {
+        /** @description The search query */
         query?: string;
         /** @description 1-based page number. */
         page?: number;
@@ -14202,6 +21202,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -14225,6 +21282,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description The provider name (e.g., "groq", "openai", "anthropic") */
         provider: string;
       };
       cookie?: never;
@@ -14265,6 +21323,52 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -14288,6 +21392,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description The model ID */
         id: number;
       };
       cookie?: never;
@@ -14317,6 +21422,41 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -14326,6 +21466,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -14346,6 +21508,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The model ID */
         id: number;
       };
       cookie?: never;
@@ -14378,6 +21541,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -14398,6 +21585,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -14423,6 +21643,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description The model ID */
         id: number;
       };
       cookie?: never;
@@ -14452,6 +21673,41 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -14461,6 +21717,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -14481,7 +21759,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The model ID */
         id: number;
+        /** @description The identifier ID to delete */
         identifierId: number;
       };
       cookie?: never;
@@ -14497,6 +21777,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -14506,6 +21821,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -14526,7 +21863,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The model ID */
         id: number;
+        /** @description The identifier ID */
         identifierId: number;
       };
       cookie?: never;
@@ -14559,6 +21898,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -14579,6 +21942,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -14604,6 +22000,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description The model ID */
         id: number;
       };
       cookie?: never;
@@ -14633,6 +22030,41 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -14642,6 +22074,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -14662,6 +22116,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The model ID */
         id: number;
       };
       cookie?: never;
@@ -14694,6 +22149,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -14716,6 +22195,39 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -14734,7 +22246,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The model ID */
         id: number;
+        /** @description The mapping ID to delete */
         mappingId: number;
       };
       cookie?: never;
@@ -14750,6 +22264,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -14759,6 +22308,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -14779,7 +22350,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The model ID */
         id: number;
+        /** @description The mapping ID */
         mappingId: number;
       };
       cookie?: never;
@@ -14812,6 +22385,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -14821,6 +22418,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -14839,7 +22469,9 @@ export interface operations {
   VirtualKeyGroups_GetAll: {
     parameters: {
       query?: {
+        /** @description Page number (1-based, default: 1) */
         page?: number;
+        /** @description Number of items per page (default: 50, max: 100) */
         pageSize?: number;
       };
       header?: never;
@@ -14857,6 +22489,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["PagedResultOfVirtualKeyGroupDto"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -14896,6 +22585,74 @@ export interface operations {
           "application/json": components["schemas"]["VirtualKeyGroupDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -14914,6 +22671,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the Virtual Key Groups resource. */
         id: number;
       };
       cookie?: never;
@@ -14933,6 +22691,41 @@ export interface operations {
           "application/json": components["schemas"]["VirtualKeyGroupDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -14942,6 +22735,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -14965,6 +22780,7 @@ export interface operations {
         "If-Match": string;
       };
       path: {
+        /** @description Identifier of the Virtual Key Groups resource. */
         id: number;
       };
       cookie?: never;
@@ -14991,6 +22807,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -15022,6 +22862,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15045,6 +22907,7 @@ export interface operations {
         "If-Match": string;
       };
       path: {
+        /** @description Identifier of the Virtual Key Groups resource. */
         id: number;
       };
       cookie?: never;
@@ -15064,6 +22927,41 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["VirtualKeyGroupDto"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -15088,6 +22986,17 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
       /** @description Precondition Required */
       428: {
         headers: {
@@ -15097,6 +23006,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15120,6 +23051,7 @@ export interface operations {
         "If-Match": string;
       };
       path: {
+        /** @description Identifier of the Virtual Key Groups resource. */
         id: number;
       };
       cookie?: never;
@@ -15152,6 +23084,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -15174,6 +23130,17 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
       /** @description Precondition Required */
       428: {
         headers: {
@@ -15183,6 +23150,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15201,11 +23190,14 @@ export interface operations {
   VirtualKeyGroups_GetTransactions: {
     parameters: {
       query?: {
+        /** @description Page number, starting at 1. */
         page?: number;
+        /** @description Number of records per page; values are normalized to the supported pagination range. */
         pageSize?: number;
       };
       header?: never;
       path: {
+        /** @description Identifier of the Virtual Key Groups resource. */
         id: number;
       };
       cookie?: never;
@@ -15225,6 +23217,41 @@ export interface operations {
           "application/json": components["schemas"]["PagedResultOfVirtualKeyGroupTransactionDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -15234,6 +23261,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15259,6 +23308,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description Identifier of the Virtual Key Groups resource. */
         id: number;
       };
       cookie?: never;
@@ -15290,6 +23340,41 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -15299,6 +23384,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15318,11 +23425,13 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /** @description Client-supplied key for deduplicating repeated requests. Reuse the same key only for the same intended operation. */
         "Idempotency-Key"?: string;
         /** @description ETag returned by the latest resource read. Use * only when any current version is acceptable. */
         "If-Match": string;
       };
       path: {
+        /** @description The virtual key group ID */
         id: number;
       };
       cookie?: never;
@@ -15353,6 +23462,30 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -15388,6 +23521,17 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
       /** @description Precondition Required */
       428: {
         headers: {
@@ -15397,6 +23541,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15415,6 +23581,7 @@ export interface operations {
   VirtualKeys_GetAll: {
     parameters: {
       query?: {
+        /** @description Optional filter by virtual key group ID */
         virtualKeyGroupId?: number;
         /** @description 1-based page number. */
         page?: number;
@@ -15448,6 +23615,63 @@ export interface operations {
               totalPages: number;
             };
           };
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15498,8 +23722,32 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -15509,15 +23757,26 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Forbidden */
-      403: {
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15538,6 +23797,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the key to retrieve */
         id: number;
       };
       cookie?: never;
@@ -15557,6 +23817,41 @@ export interface operations {
           "application/json": components["schemas"]["VirtualKeyDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -15566,6 +23861,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15589,6 +23906,7 @@ export interface operations {
         "If-Match": string;
       };
       path: {
+        /** @description The ID of the key to delete */
         id: number;
       };
       cookie?: never;
@@ -15604,8 +23922,8 @@ export interface operations {
         };
         content?: never;
       };
-      /** @description Unauthorized */
-      401: {
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -15615,7 +23933,19 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Forbidden */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -15624,6 +23954,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -15659,6 +23990,28 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -15680,6 +24033,7 @@ export interface operations {
         "If-Match": string;
       };
       path: {
+        /** @description The ID of the key to update */
         id: number;
       };
       cookie?: never;
@@ -15712,7 +24066,7 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -15721,9 +24075,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -15732,6 +24087,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -15756,6 +24112,17 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
       /** @description Precondition Required */
       428: {
         headers: {
@@ -15765,6 +24132,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15815,6 +24204,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -15833,6 +24279,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the virtual key */
         id: number;
       };
       cookie?: never;
@@ -15852,6 +24299,41 @@ export interface operations {
           "application/json": components["schemas"]["VirtualKeyValidationInfoDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -15861,6 +24343,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15894,7 +24398,7 @@ export interface operations {
         };
         content?: never;
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -15903,9 +24407,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -15914,6 +24419,29 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15932,10 +24460,12 @@ export interface operations {
   VirtualKeys_PreviewDiscovery: {
     parameters: {
       query?: {
+        /** @description Optional capability filter (e.g. "chat", "vision", "audio_transcription") */
         capability?: string;
       };
       header?: never;
       path: {
+        /** @description The ID of the virtual key */
         id: number;
       };
       cookie?: never;
@@ -15955,6 +24485,41 @@ export interface operations {
           "application/json": components["schemas"]["DiscoveryModelsResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -15964,6 +24529,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -15984,6 +24571,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the virtual key */
         id: number;
       };
       cookie?: never;
@@ -16003,6 +24591,41 @@ export interface operations {
           "application/json": components["schemas"]["VirtualKeyGroupDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -16012,6 +24635,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -16032,6 +24677,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the Virtual Keys resource. */
         id: number;
       };
       cookie?: never;
@@ -16051,8 +24697,8 @@ export interface operations {
           "application/json": components["schemas"]["VirtualKeyRateLimitUsageDto"];
         };
       };
-      /** @description Unauthorized */
-      401: {
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -16062,7 +24708,19 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Forbidden */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -16071,6 +24729,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -16089,10 +24748,21 @@ export interface operations {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -16113,6 +24783,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The virtual key value (with prefix) */
         key: string;
       };
       cookie?: never;
@@ -16141,7 +24812,7 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -16150,9 +24821,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -16161,6 +24833,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -16172,6 +24845,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -16224,6 +24919,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -16272,8 +25024,32 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -16283,15 +25059,26 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Forbidden */
-      403: {
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -16344,6 +25131,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -16367,6 +25211,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description The virtual key ID */
         virtualKeyId: number;
       };
       cookie?: never;
@@ -16396,6 +25241,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -16414,6 +25316,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the filter to get */
         id: number;
       };
       cookie?: never;
@@ -16433,6 +25336,41 @@ export interface operations {
           "application/json": components["schemas"]["IpFilterDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -16442,6 +25380,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -16465,6 +25425,7 @@ export interface operations {
         "If-Match": string;
       };
       path: {
+        /** @description The ID of the filter to delete */
         id: number;
       };
       cookie?: never;
@@ -16480,8 +25441,8 @@ export interface operations {
         };
         content?: never;
       };
-      /** @description Unauthorized */
-      401: {
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -16491,7 +25452,19 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Forbidden */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -16500,6 +25473,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -16535,6 +25509,28 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -16556,6 +25552,7 @@ export interface operations {
         "If-Match": string;
       };
       path: {
+        /** @description The ID of the filter to update */
         id: number;
       };
       cookie?: never;
@@ -16588,7 +25585,7 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -16597,9 +25594,10 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
-      /** @description Forbidden */
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -16608,6 +25606,7 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -16632,6 +25631,17 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
       /** @description Precondition Required */
       428: {
         headers: {
@@ -16641,6 +25651,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -16674,6 +25706,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["IpFilterSettingsDto"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -16722,8 +25800,32 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Unauthorized */
+      /** @description Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
       401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Forbidden Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -16733,15 +25835,26 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
-      /** @description Forbidden */
-      403: {
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -16762,6 +25875,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The IP address to check */
         ipAddress: string;
       };
       cookie?: never;
@@ -16788,6 +25902,52 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -16823,6 +25983,52 @@ export interface operations {
           "application/json": components["schemas"]["ServiceHealthResponse"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -16839,6 +26045,7 @@ export interface operations {
   HealthMonitoring_GetIncidents: {
     parameters: {
       query?: {
+        /** @description Number of days to look back (default: 7). */
         days?: number;
       };
       header?: never;
@@ -16858,6 +26065,63 @@ export interface operations {
           "application/json": components["schemas"]["IncidentsResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -16874,6 +26138,7 @@ export interface operations {
   HealthMonitoring_GetHealthHistory: {
     parameters: {
       query?: {
+        /** @description Number of hours to look back (default: 24). */
         hours?: number;
       };
       header?: never;
@@ -16893,6 +26158,63 @@ export interface operations {
           "application/json": components["schemas"]["HealthHistoryResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -16909,12 +26231,19 @@ export interface operations {
   Analytics_GetLogs: {
     parameters: {
       query?: {
+        /** @description The page number (1-based) */
         page?: number;
+        /** @description The number of items per page */
         pageSize?: number;
+        /** @description Optional filter by start date */
         startDate?: null | string;
+        /** @description Optional filter by end date */
         endDate?: null | string;
+        /** @description Optional filter by model */
         model?: string;
+        /** @description Optional filter by virtual key ID */
         virtualKeyId?: number;
+        /** @description Optional filter by status code */
         status?: number;
       };
       header?: never;
@@ -16945,6 +26274,52 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -16963,6 +26338,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the log to retrieve */
         id: number;
       };
       cookie?: never;
@@ -16980,6 +26356,41 @@ export interface operations {
           "application/json": components["schemas"]["LogRequestDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -16989,6 +26400,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -17041,6 +26474,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -17057,8 +26547,11 @@ export interface operations {
   Analytics_GetCostSummary: {
     parameters: {
       query?: {
+        /** @description The timeframe for the summary (daily, weekly, monthly) */
         timeframe?: string;
+        /** @description The start date for the summary */
         startDate?: null | string;
+        /** @description The end date for the summary */
         endDate?: null | string;
       };
       header?: never;
@@ -17089,6 +26582,52 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -17105,8 +26644,11 @@ export interface operations {
   Analytics_GetCostTrends: {
     parameters: {
       query?: {
+        /** @description The period for the trend (daily, weekly, monthly) */
         period?: string;
+        /** @description The start date for the trend */
         startDate?: null | string;
+        /** @description The end date for the trend */
         endDate?: null | string;
       };
       header?: never;
@@ -17137,6 +26679,52 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -17153,8 +26741,11 @@ export interface operations {
   Analytics_GetModelCosts: {
     parameters: {
       query?: {
+        /** @description The start date for the analysis */
         startDate?: null | string;
+        /** @description The end date for the analysis */
         endDate?: null | string;
+        /** @description Number of top models to return */
         topN?: number;
       };
       header?: never;
@@ -17174,6 +26765,63 @@ export interface operations {
           "application/json": components["schemas"]["ModelCostBreakdownDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -17190,8 +26838,11 @@ export interface operations {
   Analytics_GetVirtualKeyCosts: {
     parameters: {
       query?: {
+        /** @description The start date for the analysis */
         startDate?: null | string;
+        /** @description The end date for the analysis */
         endDate?: null | string;
+        /** @description Number of top virtual keys to return */
         topN?: number;
       };
       header?: never;
@@ -17211,6 +26862,63 @@ export interface operations {
           "application/json": components["schemas"]["VirtualKeyCostBreakdownDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -17227,8 +26935,11 @@ export interface operations {
   Analytics_GetAnalyticsSummary: {
     parameters: {
       query?: {
+        /** @description The timeframe for the summary (daily, weekly, monthly) */
         timeframe?: string;
+        /** @description The start date for the summary */
         startDate?: null | string;
+        /** @description The end date for the summary */
         endDate?: null | string;
       };
       header?: never;
@@ -17259,6 +26970,52 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -17275,11 +27032,14 @@ export interface operations {
   Analytics_GetVirtualKeyUsage: {
     parameters: {
       query?: {
+        /** @description The start date for the analysis */
         startDate?: null | string;
+        /** @description The end date for the analysis */
         endDate?: null | string;
       };
       header?: never;
       path: {
+        /** @description The virtual key ID */
         virtualKeyId: number;
       };
       cookie?: never;
@@ -17295,6 +27055,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["UsageStatisticsDto"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -17313,10 +27130,15 @@ export interface operations {
   Analytics_ExportAnalytics: {
     parameters: {
       query?: {
+        /** @description Export format (csv, json) */
         format?: string;
+        /** @description The start date for the export */
         startDate?: null | string;
+        /** @description The end date for the export */
         endDate?: null | string;
+        /** @description Optional model filter */
         model?: string;
+        /** @description Optional virtual key filter */
         virtualKeyId?: number;
       };
       header?: never;
@@ -17346,6 +27168,52 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -17381,6 +27249,30 @@ export interface operations {
           "application/json": components["schemas"]["AnalyticsCacheMetricsResponse"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -17390,6 +27282,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -17427,6 +27341,30 @@ export interface operations {
           };
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -17436,6 +27374,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -17454,6 +27414,7 @@ export interface operations {
   Analytics_InvalidateCache: {
     parameters: {
       query?: {
+        /** @description Reason for cache invalidation */
         reason?: string;
       };
       header?: never;
@@ -17471,6 +27432,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AnalyticsCacheInvalidationResponse"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -17523,6 +27541,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -17571,6 +27646,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -17589,6 +27721,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the function configuration */
         id: number;
       };
       cookie?: never;
@@ -17606,6 +27739,41 @@ export interface operations {
           "application/json": components["schemas"]["FunctionConfigurationDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -17615,6 +27783,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -17635,6 +27825,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the function configuration to delete */
         id: number;
       };
       cookie?: never;
@@ -17650,6 +27841,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -17659,6 +27885,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -17679,6 +27927,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the function configuration to update */
         id: number;
       };
       cookie?: never;
@@ -17711,6 +27960,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -17720,6 +27993,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -17745,6 +28051,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description The provider type (e.g., "Exa") */
         providerType: string;
       };
       cookie?: never;
@@ -17774,6 +28081,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -17797,6 +28161,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description The purpose (e.g., "Search", "Answer", "Enrich") */
         purpose: string;
       };
       cookie?: never;
@@ -17826,6 +28191,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -17842,8 +28264,11 @@ export interface operations {
   ProviderErrors_GetRecent: {
     parameters: {
       query?: {
+        /** @description Optional provider ID filter */
         providerId?: number;
+        /** @description Optional key ID filter */
         keyId?: number;
+        /** @description Maximum number of errors to return (default: 100) */
         limit?: number;
       };
       header?: never;
@@ -17861,6 +28286,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ProviderErrorDto"][];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -17924,6 +28406,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -17953,6 +28492,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description ID of the key */
         keyId: number;
       };
       cookie?: never;
@@ -17970,6 +28510,41 @@ export interface operations {
           "application/json": components["schemas"]["KeyErrorDetailsDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -17979,6 +28554,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18010,6 +28607,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description ID of the key */
         keyId: number;
       };
       cookie?: never;
@@ -18042,6 +28640,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -18069,6 +28724,7 @@ export interface operations {
   ProviderErrors_GetStatistics: {
     parameters: {
       query?: {
+        /** @description Time window in hours (default: 24) */
         hours?: number;
       };
       header?: never;
@@ -18086,6 +28742,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ErrorStatisticsDto"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18115,10 +28828,12 @@ export interface operations {
   ProviderErrors_GetCountsByKey: {
     parameters: {
       query?: {
+        /** @description Time window in hours (default: 1) */
         hours?: number;
       };
       header?: never;
       path: {
+        /** @description Provider ID */
         providerId: number;
       };
       cookie?: never;
@@ -18136,6 +28851,63 @@ export interface operations {
           "application/json": {
             [key: string]: number;
           };
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18165,10 +28937,12 @@ export interface operations {
   ProviderErrors_DisableKey: {
     parameters: {
       query: {
+        /** @description Reason for disabling */
         reason: string;
       };
       header?: never;
       path: {
+        /** @description ID of the key to disable */
         keyId: number;
       };
       cookie?: never;
@@ -18199,6 +28973,63 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18262,6 +29093,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -18310,6 +29198,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -18328,6 +29273,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Policy ID */
         id: number;
       };
       cookie?: never;
@@ -18345,6 +29291,41 @@ export interface operations {
           "application/json": components["schemas"]["MediaRetentionPolicyDetailDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -18354,6 +29335,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18374,6 +29377,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Policy ID */
         id: number;
       };
       cookie?: never;
@@ -18400,6 +29404,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -18409,6 +29437,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18429,6 +29479,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Policy ID */
         id: number;
       };
       cookie?: never;
@@ -18461,6 +29512,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -18470,6 +29545,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18490,7 +29598,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Virtual key group ID */
         groupId: number;
+        /** @description Retention policy ID */
         policyId: number;
       };
       cookie?: never;
@@ -18508,6 +29618,41 @@ export interface operations {
           "application/json": components["schemas"]["MessageResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -18517,6 +29662,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18537,6 +29704,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Policy ID to set as default */
         id: number;
       };
       cookie?: never;
@@ -18554,6 +29722,41 @@ export interface operations {
           "application/json": components["schemas"]["MessageResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -18563,6 +29766,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18581,16 +29806,75 @@ export interface operations {
   MediaRetention_TriggerCleanup: {
     parameters: {
       query?: {
+        /** @description Whether to perform a dry run (default: true) */
         dryRun?: boolean;
       };
       header?: never;
       path: {
+        /** @description Virtual key group ID */
         groupId: number;
       };
       cookie?: never;
     };
     requestBody?: never;
     responses: {
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -18618,7 +29902,9 @@ export interface operations {
   ProviderTools_GetAll: {
     parameters: {
       query?: {
+        /** @description Optional provider type filter */
         provider?: components["schemas"]["ProviderType"];
+        /** @description Optional active status filter */
         isActive?: boolean;
         /** @description 1-based page number. */
         page?: number;
@@ -18652,6 +29938,63 @@ export interface operations {
               totalPages: number;
             };
           };
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18702,6 +30045,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -18720,6 +30120,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Tool ID */
         id: number;
       };
       cookie?: never;
@@ -18737,6 +30138,41 @@ export interface operations {
           "application/json": components["schemas"]["ProviderToolDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -18746,6 +30182,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18766,6 +30224,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Tool ID */
         id: number;
       };
       cookie?: never;
@@ -18781,6 +30240,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -18790,6 +30284,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18810,6 +30326,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Tool ID */
         id: number;
       };
       cookie?: never;
@@ -18842,6 +30359,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -18851,6 +30392,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -18903,6 +30477,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -18953,6 +30584,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -18988,6 +30676,74 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ProviderToolImportResultDto"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -19040,6 +30796,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -19088,6 +30901,63 @@ export interface operations {
               totalPages: number;
             };
           };
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -19140,6 +31010,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -19156,6 +31083,7 @@ export interface operations {
   Pricing_GetTemplate: {
     parameters: {
       query?: {
+        /** @description The pricing type to get template for */
         pricingType?: string;
       };
       header?: never;
@@ -19173,6 +31101,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["PricingRulesConfig"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -19223,6 +31208,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -19271,6 +31313,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -19287,12 +31386,19 @@ export interface operations {
   Pricing_QueryAudit: {
     parameters: {
       query: {
+        /** @description Start of the reporting interval in UTC. */
         from: string;
+        /** @description End of the reporting interval in UTC. */
         to: string;
+        /** @description Identifier of the virtual key. */
         virtualKeyId?: number;
+        /** @description Identifier of the model. */
         modelId?: string;
+        /** @description Filter audit records by pricing type. */
         pricingType?: string;
+        /** @description Page number, starting at 1. */
         page?: number;
+        /** @description Number of records per page; values are normalized to the supported pagination range. */
         pageSize?: number;
       };
       header?: never;
@@ -19323,6 +31429,52 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -19339,7 +31491,9 @@ export interface operations {
   Pricing_GetAuditSummary: {
     parameters: {
       query?: {
+        /** @description Start of the reporting interval in UTC. */
         from?: string;
+        /** @description End of the reporting interval in UTC. */
         to?: string;
       };
       header?: never;
@@ -19370,6 +31524,52 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -19393,6 +31593,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description Request identifier used to correlate pricing audit records. */
         requestId: string;
       };
       cookie?: never;
@@ -19422,6 +31623,41 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -19431,6 +31667,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -19483,6 +31741,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -19531,6 +31846,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Conflict */
       409: {
         headers: {
@@ -19540,6 +31879,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -19560,6 +31932,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the mapping to retrieve */
         id: number;
       };
       cookie?: never;
@@ -19577,6 +31950,41 @@ export interface operations {
           "application/json": components["schemas"]["ModelProviderMappingDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -19586,6 +31994,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -19606,6 +32036,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the mapping to delete */
         id: number;
       };
       cookie?: never;
@@ -19621,6 +32052,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -19630,6 +32096,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -19650,6 +32138,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the mapping to update */
         id: number;
       };
       cookie?: never;
@@ -19682,6 +32171,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -19702,6 +32215,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -19754,6 +32300,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -19800,6 +32403,63 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -19850,6 +32510,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -19896,6 +32613,63 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -19946,6 +32720,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -19994,6 +32825,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -20010,10 +32898,15 @@ export interface operations {
   ModelCosts_GetAll: {
     parameters: {
       query?: {
+        /** @description Page number (1-based) */
         page?: number;
+        /** @description Number of items per page */
         pageSize?: number;
+        /** @description Optional filter by model type (chat, image, video, embedding, audio) */
         modelType?: string;
+        /** @description Optional provider identifier filter */
         providerId?: number;
+        /** @description Optional active-state filter */
         isActive?: boolean;
       };
       header?: never;
@@ -20031,6 +32924,63 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["PagedResultOfModelCostDto"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -20081,6 +33031,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -20099,6 +33106,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the model cost */
         id: number;
       };
       cookie?: never;
@@ -20116,6 +33124,41 @@ export interface operations {
           "application/json": components["schemas"]["ModelCostDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -20125,6 +33168,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -20145,6 +33210,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the model cost to delete */
         id: number;
       };
       cookie?: never;
@@ -20160,6 +33226,41 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -20169,6 +33270,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -20189,6 +33312,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the model cost to update */
         id: number;
       };
       cookie?: never;
@@ -20221,6 +33345,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -20230,6 +33378,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -20255,6 +33436,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @description The ID of the provider */
         providerId: number;
       };
       cookie?: never;
@@ -20284,6 +33466,63 @@ export interface operations {
           };
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -20302,6 +33541,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The cost name */
         costName: string;
       };
       cookie?: never;
@@ -20319,6 +33559,41 @@ export interface operations {
           "application/json": components["schemas"]["ModelCostDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -20328,6 +33603,28 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -20346,7 +33643,9 @@ export interface operations {
   ModelCosts_GetOverview: {
     parameters: {
       query?: {
+        /** @description The start date for the period (inclusive) */
         startDate?: string;
+        /** @description The end date for the period (inclusive) */
         endDate?: string;
         /** @description 1-based page number. */
         page?: number;
@@ -20391,6 +33690,52 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -20441,6 +33786,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -20457,6 +33859,7 @@ export interface operations {
   ModelCosts_ExportCsv: {
     parameters: {
       query?: {
+        /** @description Optional provider ID to filter by */
         providerId?: number;
       };
       header?: never;
@@ -20476,6 +33879,63 @@ export interface operations {
           "text/csv": string;
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -20492,6 +33952,7 @@ export interface operations {
   ModelCosts_ExportJson: {
     parameters: {
       query?: {
+        /** @description Optional provider ID to filter by */
         providerId?: number;
       };
       header?: never;
@@ -20509,6 +33970,63 @@ export interface operations {
         };
         content: {
           "application/json": string;
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -20535,7 +34053,7 @@ export interface operations {
     requestBody: {
       content: {
         "multipart/form-data": {
-          file?: components["schemas"]["IFormFile"];
+          file: components["schemas"]["IFormFile"];
         };
       };
     };
@@ -20560,6 +34078,63 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -20586,7 +34161,7 @@ export interface operations {
     requestBody: {
       content: {
         "multipart/form-data": {
-          file?: components["schemas"]["IFormFile"];
+          file: components["schemas"]["IFormFile"];
         };
       };
     };
@@ -20613,6 +34188,63 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -20631,6 +34263,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the model cost (used to retrieve associated model's parameter schema) */
         id: number;
       };
       cookie?: never;
@@ -20663,6 +34296,30 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -20672,6 +34329,39 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */
@@ -20720,6 +34410,63 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The master key is missing, invalid, or expired. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an authorization or IP access policy. Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description The request exceeded an applicable rate limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Minimum delay in seconds before retrying. */
+          "Retry-After"?: number;
+          /** @description Maximum requests in the applicable rate-limit window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (for example ip). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
       /** @description Internal Server Error */

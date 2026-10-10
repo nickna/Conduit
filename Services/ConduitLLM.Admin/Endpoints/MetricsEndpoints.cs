@@ -13,7 +13,9 @@ public static class MetricsEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Metrics");
         group.MapGet("/", GetAllMetrics).WithName("Metrics_GetAllMetrics")
-            .Produces<AllMetricsDto>(StatusCodes.Status200OK);
+            .WithSummary("Scrape Prometheus metrics")
+            .WithDescription("The deployment's metrics middleware serves Prometheus or OpenMetrics text at /metrics before this endpoint handler runs. Supply the Admin master key; the middleware also checks network/authentication context.")
+            .Produces<string>(StatusCodes.Status200OK, "text/plain", "application/openmetrics-text");
 
         return app;
     }

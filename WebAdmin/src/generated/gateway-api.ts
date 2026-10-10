@@ -11,6 +11,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /**
+     * List models available to the virtual key
+     * @description Lists model aliases permitted by the authenticated virtual key. Disabled or unavailable mappings are excluded.
+     */
     get: operations["Models_ListModels"];
     put?: never;
     post?: never;
@@ -27,7 +31,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Retrieve a model */
+    /**
+     * Retrieve a model
+     * @description Returns an accessible model alias or 404 if the model is unavailable to this virtual key.
+     */
     get: operations["Models_RetrieveModel"];
     put?: never;
     post?: never;
@@ -44,6 +51,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Get metadata for an available model */
     get: operations["Models_GetModelMetadata"];
     put?: never;
     post?: never;
@@ -62,6 +70,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Generate an ephemeral key for the authenticated virtual key */
     post: operations["Auth_GenerateEphemeralKey"];
     delete?: never;
     options?: never;
@@ -78,6 +87,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Scores and orders documents by relevance to a query. */
     post: operations["Rerank_Create"];
     delete?: never;
     options?: never;
@@ -94,6 +104,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Creates embeddings for the given input. */
     post: operations["Embeddings_Create"];
     delete?: never;
     options?: never;
@@ -110,6 +121,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /**
+     * Creates a chat completion.
+     * @description Returns a chat completion as application/json. Set stream=true to receive text/event-stream chunks. Models and capabilities depend on the virtual key and configured provider.
+     */
     post: operations["Chat_CreateCompletion"];
     delete?: never;
     options?: never;
@@ -126,7 +141,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Create a stateless model response */
+    /**
+     * Create a stateless model response
+     * @description Creates a stateless response using the configured chat provider. Set stream=true for text/event-stream events. Stateful response retrieval and storage are not supported.
+     */
     post: operations["Responses_Create"];
     delete?: never;
     options?: never;
@@ -141,6 +159,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all discovered models and their capabilities for authenticated virtual keys. */
     get: operations["Discovery_GetModels"];
     put?: never;
     post?: never;
@@ -157,6 +176,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all available capabilities in the system. */
     get: operations["Discovery_GetCapabilities"];
     put?: never;
     post?: never;
@@ -173,6 +193,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets UI parameters for a specific model to enable dynamic UI generation. */
     get: operations["Discovery_GetModelParameters"];
     put?: never;
     post?: never;
@@ -189,6 +210,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets all available function configurations for authenticated virtual keys. */
     get: operations["Discovery_GetFunctions"];
     put?: never;
     post?: never;
@@ -205,6 +227,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /**
+     * Get the parameter schema for a function configuration
+     * @description Use the schema to generate input controls for function execution.
+     */
     get: operations["Discovery_GetFunctionParameters"];
     put?: never;
     post?: never;
@@ -221,6 +247,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets the status of a specific task. */
     get: operations["Tasks_GetStatus"];
     put?: never;
     post?: never;
@@ -239,6 +266,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Cancels a running task. */
     post: operations["Tasks_Cancel"];
     delete?: never;
     options?: never;
@@ -253,6 +281,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /**
+     * Polls a task until it completes or times out.
+     * @description Waits for task status changes up to the requested timeout. Access is restricted to tasks owned by the authenticated virtual key.
+     */
     get: operations["Tasks_Poll"];
     put?: never;
     post?: never;
@@ -271,6 +303,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Executes a function with the provided parameters. */
     post: operations["Functions_Execute"];
     delete?: never;
     options?: never;
@@ -285,6 +318,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets the status and result of a function execution. */
     get: operations["Functions_GetExecution"];
     put?: never;
     post?: never;
@@ -303,6 +337,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /**
+     * Transcribes uploaded audio to text (OpenAI /audio/transcriptions compatible).
+     * @description Accepts multipart audio with required file and model fields. The request body limit is 25 MiB. Response format, streaming, and diarization support depend on the model/provider.
+     */
     post: operations["Audio_CreateTranscription"];
     delete?: never;
     options?: never;
@@ -319,6 +357,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /**
+     * Synthesizes speech from text (OpenAI /audio/speech compatible). Returns raw audio bytes.
+     * @description Returns generated audio bytes. The response_format selects the encoding; supported formats depend on the configured provider.
+     */
     post: operations["Audio_CreateSpeech"];
     delete?: never;
     options?: never;
@@ -335,6 +377,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /**
+     * Uploads a media file and returns the storage URL.
+     * @description Uploads a required file and returns its storage key and URL. The optional media_type overrides extension-based detection. Limits are 100 MiB for images, 200 MiB for audio, and 500 MiB for video.
+     */
     post: operations["Media_Upload"];
     delete?: never;
     options?: never;
@@ -349,6 +395,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets metadata information about a media file. */
     get: operations["Media_GetInfo"];
     put?: never;
     post?: never;
@@ -365,11 +412,19 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /**
+     * Retrieves a media file by its storage key.
+     * @description Retrieves media by storage key. No virtual key is required; IP security policies still apply. Video retrieval supports byte ranges.
+     */
     get: operations["Media_Get"];
     put?: never;
     post?: never;
     delete?: never;
     options?: never;
+    /**
+     * Checks if a media file exists.
+     * @description Checks whether a media object exists without returning its body. No virtual key is required; IP security policies still apply.
+     */
     head: operations["Media_Head"];
     patch?: never;
     trace?: never;
@@ -381,6 +436,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets metadata information about a file. */
     get: operations["Downloads_GetMetadata"];
     put?: never;
     post?: never;
@@ -399,6 +455,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Generates a temporary download URL for a file. */
     post: operations["Downloads_GenerateUrl"];
     delete?: never;
     options?: never;
@@ -413,11 +470,16 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /**
+     * Downloads a file by its identifier with support for range requests.
+     * @description Downloads a file accessible to the authenticated virtual key. Set inline=true for inline Content-Disposition.
+     */
     get: operations["Downloads_Get"];
     put?: never;
     post?: never;
     delete?: never;
     options?: never;
+    /** Checks if a file exists. */
     head: operations["Downloads_Head"];
     patch?: never;
     trace?: never;
@@ -431,6 +493,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Creates one or more images given a prompt. */
     post: operations["Images_Create"];
     delete?: never;
     options?: never;
@@ -447,6 +510,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /**
+     * Creates an async image generation task.
+     * @description Accepts an image generation job and returns a task ID. Poll the task status endpoint for completion; acceptance is not the final generation result.
+     */
     post: operations["Images_CreateImageAsync"];
     delete?: never;
     options?: never;
@@ -461,6 +528,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets the status of an async image generation task. */
     get: operations["Images_GetStatus"];
     put?: never;
     post?: never;
@@ -480,6 +548,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
+    /** Cancels an async image generation task. */
     delete: operations["Images_Cancel"];
     options?: never;
     head?: never;
@@ -495,6 +564,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /**
+     * Starts an asynchronous video generation task.
+     * @description Accepts a video generation job and returns a task ID. Status, retry, and cancellation are scoped to the authenticated virtual key.
+     */
     post: operations["Videos_GenerateAsync"];
     delete?: never;
     options?: never;
@@ -509,6 +582,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** Gets the status of a video generation task. */
     get: operations["Videos_GetTaskStatus"];
     put?: never;
     post?: never;
@@ -527,6 +601,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** Manually retries a failed video generation task. */
     post: operations["Videos_RetryTask"];
     delete?: never;
     options?: never;
@@ -544,6 +619,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
+    /** Cancels a video generation task. */
     delete: operations["Videos_CancelTask"];
     options?: never;
     head?: never;
@@ -1266,6 +1342,11 @@ export interface components {
       /** Format: int32 */
       chunked_document_count?: number | string;
     };
+    SecurityErrorResponse: {
+      error: null | string;
+      /** Format: int32 */
+      code: null | number | string;
+    };
     StreamOptions: {
       include_usage?: boolean;
     };
@@ -1471,7 +1552,7 @@ export interface operations {
           "application/json": components["schemas"]["ModelListResponse"];
         };
       };
-      /** @description Authentication failed. */
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -1482,7 +1563,7 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The authenticated key is not authorized for this operation. */
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -1490,7 +1571,9 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["OpenAIErrorResponse"];
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description The request timed out. */
@@ -1515,13 +1598,21 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The request exceeded an applicable rate limit. */
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
       429: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -1539,13 +1630,13 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The service is temporarily unavailable. */
+      /** @description Required infrastructure is temporarily unavailable. */
       503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -1559,6 +1650,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Model alias exposed by Conduit. */
         model: string;
       };
       cookie?: never;
@@ -1576,7 +1668,18 @@ export interface operations {
           "application/json": components["schemas"]["ModelListItemDto"];
         };
       };
-      /** @description Authentication failed. */
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -1587,7 +1690,7 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The authenticated key is not authorized for this operation. */
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
       403: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -1595,7 +1698,9 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["OpenAIErrorResponse"];
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -1631,13 +1736,21 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The request exceeded an applicable rate limit. */
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
       429: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -1655,13 +1768,13 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The service is temporarily unavailable. */
+      /** @description Required infrastructure is temporarily unavailable. */
       503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -1675,6 +1788,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier of the model. */
         modelId: string;
       };
       cookie?: never;
@@ -1692,6 +1806,41 @@ export interface operations {
           "application/json": components["schemas"]["ModelMetadataResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -1703,11 +1852,45 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -1742,6 +1925,17 @@ export interface operations {
           "application/json": components["schemas"]["EphemeralKeyResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Unauthorized */
       401: {
         headers: {
@@ -1753,11 +1947,69 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -1790,6 +2042,108 @@ export interface operations {
           "application/json": components["schemas"]["RerankResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Payment Required */
+      402: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Embeddings_Create: {
@@ -1801,6 +2155,10 @@ export interface operations {
     };
     requestBody: {
       content: {
+        /** @example {
+         *       "model": "your-embedding-alias",
+         *       "input": "Text to embed"
+         *     } */
         "application/json": components["schemas"]["EmbeddingRequest"];
       };
     };
@@ -1827,7 +2185,7 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description Authentication failed. */
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -1838,8 +2196,8 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The authenticated key is not authorized for this operation. */
-      403: {
+      /** @description Payment Required */
+      402: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -1847,6 +2205,19 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -1882,13 +2253,32 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The request exceeded an applicable rate limit. */
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
       429: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -1906,13 +2296,13 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The service is temporarily unavailable. */
+      /** @description Required infrastructure is temporarily unavailable. */
       503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -1930,6 +2320,16 @@ export interface operations {
     };
     requestBody: {
       content: {
+        /** @example {
+         *       "model": "your-model-alias",
+         *       "messages": [
+         *         {
+         *           "role": "user",
+         *           "content": "Hello"
+         *         }
+         *       ],
+         *       "stream": false
+         *     } */
         "application/json": components["schemas"]["ChatCompletionRequest"];
       };
     };
@@ -1957,7 +2357,7 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description Authentication failed. */
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -1968,8 +2368,8 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The authenticated key is not authorized for this operation. */
-      403: {
+      /** @description Payment Required */
+      402: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -1977,6 +2377,19 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -2012,13 +2425,32 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The request exceeded an applicable rate limit. */
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
       429: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -2036,13 +2468,13 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The service is temporarily unavailable. */
+      /** @description Required infrastructure is temporarily unavailable. */
       503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -2060,6 +2492,11 @@ export interface operations {
     };
     requestBody: {
       content: {
+        /** @example {
+         *       "model": "your-model-alias",
+         *       "input": "Hello",
+         *       "stream": false
+         *     } */
         "application/json": components["schemas"]["CreateResponseRequest"];
       };
     };
@@ -2117,7 +2554,9 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["OpenAIErrorResponse"];
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -2153,13 +2592,32 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Too Many Requests */
       429: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -2177,13 +2635,13 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The service is temporarily unavailable. */
+      /** @description Required infrastructure is temporarily unavailable. */
       503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -2195,6 +2653,7 @@ export interface operations {
   Discovery_GetModels: {
     parameters: {
       query?: {
+        /** @description Optional capability filter (e.g., "video_generation", "vision") */
         capability?: string;
       };
       header?: never;
@@ -2212,6 +2671,86 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["DiscoveryModelsResponse"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
     };
@@ -2236,6 +2775,75 @@ export interface operations {
           "application/json": components["schemas"]["DiscoveryCapabilitiesResponse"];
         };
       };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Discovery_GetModelParameters: {
@@ -2243,6 +2851,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The model alias or identifier to get parameters for */
         model: string;
       };
       cookie?: never;
@@ -2260,12 +2869,105 @@ export interface operations {
           "application/json": components["schemas"]["ModelParametersResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Discovery_GetFunctions: {
     parameters: {
       query?: {
+        /** @description Optional purpose filter (e.g., "Search", "Answer", "RAG_Search") */
         purpose?: string;
+        /** @description Optional provider type filter (e.g., "Exa", "Perplexity") */
         providerType?: string;
       };
       header?: never;
@@ -2285,6 +2987,86 @@ export interface operations {
           "application/json": components["schemas"]["FunctionDiscoveryResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Discovery_GetFunctionParameters: {
@@ -2292,6 +3074,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The function configuration ID */
         functionConfigurationId: number | string;
       };
       cookie?: never;
@@ -2309,6 +3092,97 @@ export interface operations {
           "application/json": components["schemas"]["FunctionParametersResponseDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Tasks_GetStatus: {
@@ -2316,6 +3190,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the task to retrieve. */
         taskId: string;
       };
       cookie?: never;
@@ -2333,6 +3208,97 @@ export interface operations {
           "application/json": components["schemas"]["AsyncTaskStatus"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Tasks_Cancel: {
@@ -2340,6 +3306,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The ID of the task to cancel. */
         taskId: string;
       };
       cookie?: never;
@@ -2355,16 +3322,110 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Tasks_Poll: {
     parameters: {
       query?: {
+        /** @description Maximum time to wait in seconds (default: 300, max: 600). */
         timeout?: number | string;
+        /** @description Polling interval in seconds (default: 2, min: 1). */
         interval?: number | string;
       };
       header?: never;
       path: {
+        /** @description The ID of the task to poll. */
         taskId: string;
       };
       cookie?: never;
@@ -2382,12 +3443,115 @@ export interface operations {
           "application/json": components["schemas"]["AsyncTaskStatus"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Functions_Execute: {
     parameters: {
       query?: never;
       header?: {
+        /** @description Client-supplied key for deduplicating repeated requests. Reuse the same key only for the same intended operation. */
         "Idempotency-Key"?: string;
       };
       path?: never;
@@ -2421,11 +3585,78 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Payment Required */
+      402: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -2443,6 +3674,19 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Functions_GetExecution: {
@@ -2450,6 +3694,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The execution ID */
         executionId: string;
       };
       cookie?: never;
@@ -2467,6 +3712,52 @@ export interface operations {
           "application/json": components["schemas"]["FunctionExecutionDto"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Payment Required */
+      402: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
@@ -2478,11 +3769,45 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -2529,7 +3854,18 @@ export interface operations {
           "application/json": components["schemas"]["AudioTranscriptionResponse"];
         };
       };
-      /** @description Authentication failed. */
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -2540,8 +3876,8 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The authenticated key is not authorized for this operation. */
-      403: {
+      /** @description Payment Required */
+      402: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -2549,6 +3885,19 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description The request timed out. */
@@ -2573,26 +3922,56 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The request exceeded an applicable rate limit. */
-      429: {
+      /** @description The request Content-Type is not supported. */
+      415: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
-          /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The service is temporarily unavailable. */
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
       503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -2631,7 +4010,18 @@ export interface operations {
           "application/octet-stream": string;
         };
       };
-      /** @description Authentication failed. */
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -2642,8 +4032,8 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The authenticated key is not authorized for this operation. */
-      403: {
+      /** @description Payment Required */
+      402: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -2651,6 +4041,19 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description The request timed out. */
@@ -2675,26 +4078,56 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The request exceeded an applicable rate limit. */
-      429: {
+      /** @description The request Content-Type is not supported. */
+      415: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
-          /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The service is temporarily unavailable. */
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
       503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -2710,11 +4143,11 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    /** @description Optional media type (image/video/audio). */
+    /** @description Required media file and optional media_type (image/video/audio). */
     requestBody: {
       content: {
         "multipart/form-data": {
-          file?: components["schemas"]["IFormFile"];
+          file: components["schemas"]["IFormFile"];
         } & {
           media_type?: string;
         };
@@ -2732,6 +4165,97 @@ export interface operations {
           "application/json": components["schemas"]["MediaUploadResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Media_GetInfo: {
@@ -2739,6 +4263,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The unique storage key. */
         storageKey: string;
       };
       cookie?: never;
@@ -2756,6 +4281,97 @@ export interface operations {
           "application/json": components["schemas"]["MediaInfo"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Media_Get: {
@@ -2763,6 +4379,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The unique storage key. */
         storageKey: string;
       };
       cookie?: never;
@@ -2780,6 +4397,97 @@ export interface operations {
           "application/octet-stream": string;
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Range Not Satisfiable */
+      416: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Media_Head: {
@@ -2787,6 +4495,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The unique storage key. */
         storageKey: string;
       };
       cookie?: never;
@@ -2802,6 +4511,72 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
     };
   };
   Downloads_GetMetadata: {
@@ -2809,6 +4584,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The file identifier. */
         fileId: string;
       };
       cookie?: never;
@@ -2824,6 +4600,97 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["FileMetadataResponse"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
     };
@@ -2852,15 +4719,119 @@ export interface operations {
           "application/json": components["schemas"]["DownloadUrlResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Downloads_Get: {
     parameters: {
       query?: {
+        /** @description Whether to display inline (true) or force download (false). */
         inline?: boolean;
       };
       header?: never;
       path: {
+        /** @description The file identifier (storage key or URL). */
         fileId: string;
       };
       cookie?: never;
@@ -2878,6 +4849,97 @@ export interface operations {
           "application/octet-stream": string;
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Downloads_Head: {
@@ -2885,6 +4947,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The file identifier. */
         fileId: string;
       };
       cookie?: never;
@@ -2900,6 +4963,81 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
     };
   };
   Images_Create: {
@@ -2911,6 +5049,11 @@ export interface operations {
     };
     requestBody: {
       content: {
+        /** @example {
+         *       "model": "your-image-alias",
+         *       "prompt": "A lighthouse at sunrise",
+         *       "n": 1
+         *     } */
         "application/json": components["schemas"]["ImageGenerationRequest"];
       };
     };
@@ -2926,7 +5069,18 @@ export interface operations {
           "application/json": components["schemas"]["ImageGenerationResponse"];
         };
       };
-      /** @description Authentication failed. */
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
       401: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
@@ -2937,8 +5091,8 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The authenticated key is not authorized for this operation. */
-      403: {
+      /** @description Payment Required */
+      402: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -2946,6 +5100,19 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description The request timed out. */
@@ -2970,26 +5137,56 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The request exceeded an applicable rate limit. */
-      429: {
+      /** @description The request Content-Type is not supported. */
+      415: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
-          /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description The service is temporarily unavailable. */
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
       503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -3007,6 +5204,11 @@ export interface operations {
     };
     requestBody: {
       content: {
+        /** @example {
+         *       "model": "your-image-alias",
+         *       "prompt": "A lighthouse at sunrise",
+         *       "n": 1
+         *     } */
         "application/json": components["schemas"]["ImageGenerationRequest"];
       };
     };
@@ -3022,6 +5224,108 @@ export interface operations {
           "application/json": components["schemas"]["AsyncTaskResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Payment Required */
+      402: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Images_GetStatus: {
@@ -3029,6 +5333,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The task ID. */
         taskId: string;
       };
       cookie?: never;
@@ -3046,6 +5351,108 @@ export interface operations {
           "application/json": components["schemas"]["AsyncTaskStatusResponse"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Payment Required */
+      402: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Images_Cancel: {
@@ -3053,6 +5460,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description The task ID to cancel. */
         taskId: string;
       };
       cookie?: never;
@@ -3068,6 +5476,108 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["TaskCancellationResponse"];
+        };
+      };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Payment Required */
+      402: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description An unexpected error occurred. */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
     };
@@ -3118,8 +5628,32 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description Payment Required */
+      402: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Forbidden */
       403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -3135,7 +5669,15 @@ export interface operations {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
           /** @description Delay in seconds before retrying the request. */
-          "Retry-After"?: string;
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3153,6 +5695,19 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Videos_GetTaskStatus: {
@@ -3160,6 +5715,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier returned when the asynchronous task was accepted. */
         taskId: string;
       };
       cookie?: never;
@@ -3177,6 +5733,17 @@ export interface operations {
           "application/json": components["schemas"]["VideoGenerationTaskStatus"];
         };
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Unauthorized */
       401: {
         headers: {
@@ -3188,11 +5755,56 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description Payment Required */
+      402: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3210,6 +5822,19 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Videos_RetryTask: {
@@ -3217,6 +5842,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier returned when the asynchronous task was accepted. */
         taskId: string;
       };
       cookie?: never;
@@ -3256,11 +5882,56 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description Payment Required */
+      402: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
       /** @description Not Found */
       404: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3278,6 +5949,19 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
     };
   };
   Videos_CancelTask: {
@@ -3285,6 +5969,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Identifier returned when the asynchronous task was accepted. */
         taskId: string;
       };
       cookie?: never;
@@ -3300,6 +5985,17 @@ export interface operations {
         };
         content?: never;
       };
+      /** @description Invalid request parameters or body. Parameter binding may return an empty body. */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Unauthorized */
       401: {
         headers: {
@@ -3309,6 +6005,30 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Payment Required */
+      402: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
         };
       };
       /** @description Not Found */
@@ -3333,11 +6053,45 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {

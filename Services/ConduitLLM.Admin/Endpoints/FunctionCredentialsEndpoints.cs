@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Configuration.DTOs;
@@ -19,21 +20,37 @@ public static class FunctionCredentialsEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("FunctionCredentials");
 
-        group.MapGet("/", List).WithName("FunctionCredentials_List").Produces<List<FunctionCredentialDto>>();
+        group.MapGet("/", List).WithName("FunctionCredentials_List")
+            .WithSummary("List function provider credentials")
+            .WithDescription("Returns credential metadata with protected API keys masked; plaintext secrets are not returned.").Produces<List<FunctionCredentialDto>>();
         group.MapGet("/configuration/{functionConfigurationId:int}", GetByConfiguration)
-            .WithName("FunctionCredentials_GetByConfiguration").Produces<List<FunctionCredentialDto>>()
+            .WithName("FunctionCredentials_GetByConfiguration")
+            .WithSummary("List credentials for a function configuration")
+            .WithDescription("Returns masked credentials for the provider type used by this function configuration.")
+            .WithParameterDescription("functionConfigurationId", "Identifier of the function configuration.").Produces<List<FunctionCredentialDto>>()
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapGet("/{id:int}", GetById).WithName("FunctionCredentials_GetById")
+            .WithSummary("Get a function provider credential")
+            .WithDescription("Returns credential metadata with the protected API key masked.")
+            .WithParameterDescription("id", "Identifier of the FunctionCredentials resource.")
             .Produces<FunctionCredentialDto>().Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapPost("/", Create).WithName("FunctionCredentials_Create")
+            .WithSummary("Create a function provider credential")
+            .WithDescription("Creates credential metadata and masks the API key in the response. Configuration-scoped secrets are encrypted before storage; provider-global credentials use their existing storage policy.")
             .Produces<FunctionCredentialDto>(StatusCodes.Status201Created)
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         group.MapPatch("/{id:int}", Update).AcceptsJsonMergePatch<UpdateFunctionCredentialRequest>().WithName("FunctionCredentials_Update")
+            .WithSummary("Update a function provider credential")
+            .WithDescription("Applies a JSON Merge Patch and masks the API key in the response. Configuration-scoped secrets are encrypted before storage; provider-global credentials use their existing storage policy.")
+            .WithParameterDescription("id", "Identifier of the FunctionCredentials resource.")
             .Produces<FunctionCredentialDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapDelete("/{id:int}", Delete).WithName("FunctionCredentials_Delete")
+            .WithSummary("Delete a function provider credential")
+            .WithParameterDescription("id", "Identifier of the FunctionCredentials resource.")
             .Produces(StatusCodes.Status204NoContent).Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapPost("/test", Test).WithName("FunctionCredentials_Test")
+            .WithSummary("Test a function provider credential")
             .Produces<FunctionCredentialTestResultDto>()
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         return app;

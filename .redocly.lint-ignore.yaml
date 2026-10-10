@@ -1,0 +1,5 @@
+# This compatibility endpoint has no implementation and always returns 501.
+# Keep its honest failure-only contract; never invent a 2xx response to satisfy lint.
+Services/ConduitLLM.Admin/openapi-admin.json:
+  operation-2xx-response:
+    - '#/paths/~1v1~1admin~1media-retention-policies~1{groupId}~1cleanup-jobs/post/responses'
