@@ -14,6 +14,7 @@ namespace ConduitLLM.Tests.Admin.Security
 {
     [Trait("Category", "Unit")]
     [Trait("Component", "Security")]
+    [Collection("AdminMasterKeyEnvironment")]
     public class MasterKeyAuthenticationHandlerTests : IDisposable
     {
         private readonly Mock<IEphemeralMasterKeyService> _ephemeralKeyServiceMock;

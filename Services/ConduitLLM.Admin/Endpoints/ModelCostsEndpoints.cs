@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using System.Text;
 using System.Text.Json;
 
@@ -52,23 +53,53 @@ namespace ConduitLLM.Admin.Endpoints
         public static IEndpointRouteBuilder MapModelCostsEndpoints(IEndpointRouteBuilder app)
         {
             var g = app.MapGroup("/v1/admin/model-costs").RequireAuthorization("MasterKeyPolicy").AddEndpointFilter<OperationLoggingEndpointFilter>().WithTags("Model Costs");
-            g.MapGet("/", ([FromServices] ModelCostsEndpoints e, int? page=null, int? pageSize=null, string? modelType=null, int? providerId=null, bool? isActive=null) => e.GetAllModelCosts(page,pageSize,modelType,providerId,isActive)).WithName("ModelCosts_GetAll").Produces<PagedResult<ModelCostDto>>();
-            g.MapGet("/{id:int}", ([FromServices] ModelCostsEndpoints e,int id)=>e.GetModelCostById(id)).WithName("ModelCosts_GetById").Produces<ModelCostDto>().Produces(StatusCodes.Status404NotFound);
-            g.MapGet("/provider/costs/{providerId:int}", ([FromServices] ModelCostsEndpoints e,int providerId)=>e.GetModelCostsByProvider(providerId)).WithName("ModelCosts_GetByProvider").Produces<IEnumerable<ModelCostDto>>();
+            g.MapGet("/", ([FromServices] ModelCostsEndpoints e, int? page=null, int? pageSize=null, string? modelType=null, int? providerId=null, bool? isActive=null) => e.GetAllModelCosts(page,pageSize,modelType,providerId,isActive)).WithName("ModelCosts_GetAll")
+                .WithSummary("Gets all model costs with optional pagination and filtering")
+                .WithParameterDescription("page", "Page number (1-based)")
+                .WithParameterDescription("pageSize", "Number of items per page")
+                .WithParameterDescription("modelType", "Optional filter by model type (chat, image, video, embedding, audio)")
+                .WithParameterDescription("providerId", "Optional provider identifier filter")
+                .WithParameterDescription("isActive", "Optional active-state filter").Produces<PagedResult<ModelCostDto>>();
+            g.MapGet("/{id:int}", ([FromServices] ModelCostsEndpoints e,int id)=>e.GetModelCostById(id)).WithName("ModelCosts_GetById")
+                .WithSummary("Gets a model cost by ID")
+                .WithParameterDescription("id", "The ID of the model cost").Produces<ModelCostDto>().Produces(StatusCodes.Status404NotFound);
+            g.MapGet("/provider/costs/{providerId:int}", ([FromServices] ModelCostsEndpoints e,int providerId)=>e.GetModelCostsByProvider(providerId)).WithName("ModelCosts_GetByProvider")
+                .WithSummary("Gets model costs by provider ID")
+                .WithParameterDescription("providerId", "The ID of the provider").Produces<IEnumerable<ModelCostDto>>();
             g.MapGet("/provider/{providerId:int}", ([FromServices] ModelCostsEndpoints e,int providerId)=>e.GetModelCostsByProvider(providerId)).ExcludeFromDescription();
-            g.MapGet("/name/costs/{costName}", ([FromServices] ModelCostsEndpoints e,string costName)=>e.GetModelCostByCostName(costName)).WithName("ModelCosts_GetByName").Produces<ModelCostDto>().Produces(StatusCodes.Status404NotFound);
+            g.MapGet("/name/costs/{costName}", ([FromServices] ModelCostsEndpoints e,string costName)=>e.GetModelCostByCostName(costName)).WithName("ModelCosts_GetByName")
+                .WithSummary("Gets a model cost by cost name")
+                .WithParameterDescription("costName", "The cost name").Produces<ModelCostDto>().Produces(StatusCodes.Status404NotFound);
             g.MapGet("/name/{costName}", ([FromServices] ModelCostsEndpoints e,string costName)=>e.GetModelCostByCostName(costName)).ExcludeFromDescription();
-            g.MapPost("/", ([FromServices] ModelCostsEndpoints e,CreateModelCostDto d)=>e.CreateModelCost(d)).WithName("ModelCosts_Create").Produces<ModelCostDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest);
-            g.MapPatch("/{id:int}", ([FromServices] ModelCostsEndpoints e, int id, JsonMergePatch<UpdateModelCostDto> patch) => e.UpdateModelCost(id, patch.Value)).AcceptsJsonMergePatch<UpdateModelCostDto>().WithName("ModelCosts_Update").Produces<ModelCostDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
-            g.MapDelete("/{id:int}", ([FromServices] ModelCostsEndpoints e,int id)=>e.DeleteModelCost(id)).WithName("ModelCosts_Delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
-            g.MapGet("/overview", ([FromServices] ModelCostsEndpoints e,DateTime? startDate=null,DateTime? endDate=null)=>e.GetModelCostOverview(startDate ?? default,endDate ?? default)).WithName("ModelCosts_GetOverview").Produces<IEnumerable<ModelCostOverviewDto>>().Produces(StatusCodes.Status400BadRequest);
-            g.MapPost("/import", ([FromServices] ModelCostsEndpoints e,IEnumerable<CreateModelCostDto> d)=>e.ImportModelCosts(d)).WithName("ModelCosts_Import").Accepts<IEnumerable<CreateModelCostDto>>("application/json").Produces<BulkImportResult>().Produces(StatusCodes.Status400BadRequest);
-            g.MapGet("/export/csv", ([FromServices] ModelCostsEndpoints e,int? providerId=null)=>e.ExportCsv(providerId)).WithName("ModelCosts_ExportCsv").Produces(StatusCodes.Status200OK,typeof(void),"text/csv");
-            g.MapGet("/export/json", ([FromServices] ModelCostsEndpoints e,int? providerId=null)=>e.ExportJson(providerId)).WithName("ModelCosts_ExportJson").Produces(StatusCodes.Status200OK,typeof(void),"application/json");
-            g.MapPost("/import/csv", ([FromServices] ModelCostsEndpoints e,IFormFile file)=>e.ImportCsv(file)).WithName("ModelCosts_ImportCsv").DisableAntiforgery().Accepts<IFormFile>("multipart/form-data").Produces<BulkImportResult>().Produces(StatusCodes.Status400BadRequest);
-            g.MapPost("/import/json", ([FromServices] ModelCostsEndpoints e,IFormFile file)=>e.ImportJson(file)).WithName("ModelCosts_ImportJson").DisableAntiforgery().Accepts<IFormFile>("multipart/form-data").Produces<BulkImportResult>().Produces(StatusCodes.Status400BadRequest);
-            g.MapPost("/{id:int}/validate-pricing-rules", ([FromServices] ModelCostsEndpoints e,int id,ValidatePricingRulesRequest d)=>e.ValidatePricingRules(id,d)).WithName("ModelCosts_ValidatePricingRules").Produces<PricingRulesValidationResult>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
-            g.MapPost("/validate-pricing-rules", ([FromServices] ModelCostsEndpoints e,ValidatePricingRulesRequest d)=>e.ValidatePricingRulesStandalone(d)).WithName("ModelCosts_ValidatePricingRulesStandalone").Produces<PricingRulesValidationResult>().Produces(StatusCodes.Status400BadRequest);
+            g.MapPost("/", ([FromServices] ModelCostsEndpoints e,CreateModelCostDto d)=>e.CreateModelCost(d)).WithName("ModelCosts_Create")
+                .WithSummary("Creates a new model cost").Produces<ModelCostDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest);
+            g.MapPatch("/{id:int}", ([FromServices] ModelCostsEndpoints e, int id, JsonMergePatch<UpdateModelCostDto> patch) => e.UpdateModelCost(id, patch.Value)).AcceptsJsonMergePatch<UpdateModelCostDto>().WithName("ModelCosts_Update")
+                .WithSummary("Updates a model cost")
+                .WithParameterDescription("id", "The ID of the model cost to update").Produces<ModelCostDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
+            g.MapDelete("/{id:int}", ([FromServices] ModelCostsEndpoints e,int id)=>e.DeleteModelCost(id)).WithName("ModelCosts_Delete")
+                .WithSummary("Deletes a model cost")
+                .WithParameterDescription("id", "The ID of the model cost to delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
+            g.MapGet("/overview", ([FromServices] ModelCostsEndpoints e,DateTime? startDate=null,DateTime? endDate=null)=>e.GetModelCostOverview(startDate ?? default,endDate ?? default)).WithName("ModelCosts_GetOverview")
+                .WithSummary("Gets model cost overview data for a specific time period")
+                .WithParameterDescription("startDate", "The start date for the period (inclusive)")
+                .WithParameterDescription("endDate", "The end date for the period (inclusive)").Produces<IEnumerable<ModelCostOverviewDto>>().Produces(StatusCodes.Status400BadRequest);
+            g.MapPost("/import", ([FromServices] ModelCostsEndpoints e,IEnumerable<CreateModelCostDto> d)=>e.ImportModelCosts(d)).WithName("ModelCosts_Import")
+                .WithSummary("Imports model costs from a list of DTOs").Accepts<IEnumerable<CreateModelCostDto>>("application/json").Produces<BulkImportResult>().Produces(StatusCodes.Status400BadRequest);
+            g.MapGet("/export/csv", ([FromServices] ModelCostsEndpoints e,int? providerId=null)=>e.ExportCsv(providerId)).WithName("ModelCosts_ExportCsv")
+                .WithSummary("Exports model costs in CSV format")
+                .WithParameterDescription("providerId", "Optional provider ID to filter by").Produces(StatusCodes.Status200OK,typeof(void),"text/csv");
+            g.MapGet("/export/json", ([FromServices] ModelCostsEndpoints e,int? providerId=null)=>e.ExportJson(providerId)).WithName("ModelCosts_ExportJson")
+                .WithSummary("Exports model costs in JSON format")
+                .WithParameterDescription("providerId", "Optional provider ID to filter by").Produces(StatusCodes.Status200OK,typeof(void),"application/json");
+            g.MapPost("/import/csv", ([FromServices] ModelCostsEndpoints e,IFormFile file)=>e.ImportCsv(file)).WithName("ModelCosts_ImportCsv")
+                .WithSummary("Imports model costs from CSV file").DisableAntiforgery().Accepts<IFormFile>("multipart/form-data").Produces<BulkImportResult>().Produces(StatusCodes.Status400BadRequest);
+            g.MapPost("/import/json", ([FromServices] ModelCostsEndpoints e,IFormFile file)=>e.ImportJson(file)).WithName("ModelCosts_ImportJson")
+                .WithSummary("Imports model costs from JSON file").DisableAntiforgery().Accepts<IFormFile>("multipart/form-data").Produces<BulkImportResult>().Produces(StatusCodes.Status400BadRequest);
+            g.MapPost("/{id:int}/validate-pricing-rules", ([FromServices] ModelCostsEndpoints e,int id,ValidatePricingRulesRequest d)=>e.ValidatePricingRules(id,d)).WithName("ModelCosts_ValidatePricingRules")
+                .WithSummary("Validates a pricing rules configuration JSON")
+                .WithParameterDescription("id", "The ID of the model cost (used to retrieve associated model's parameter schema)").Produces<PricingRulesValidationResult>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
+            g.MapPost("/validate-pricing-rules", ([FromServices] ModelCostsEndpoints e,ValidatePricingRulesRequest d)=>e.ValidatePricingRulesStandalone(d)).WithName("ModelCosts_ValidatePricingRulesStandalone")
+                .WithSummary("Validates a pricing rules configuration JSON without a model cost context").Produces<PricingRulesValidationResult>().Produces(StatusCodes.Status400BadRequest);
             return app;
         }
 

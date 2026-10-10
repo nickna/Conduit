@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Core.Extensions;
 using System.Diagnostics.CodeAnalysis;
 using ConduitLLM.Admin.Auditing;
@@ -25,22 +26,37 @@ public static class MediaEndpoints
             .WithTags("Media");
 
         media.MapGet("/stats", GetOverallStats).WithName("Media_GetOverallStats")
+            .WithSummary("Get aggregate media storage statistics")
+            .WithParameterDescription("virtualKeyGroupId", "Identifier of the virtual-key balance group.")
             .Produces<OverallMediaStorageStats>();
         media.MapGet("/stats/virtual-key/{virtualKeyId}", GetStatsByVirtualKey).WithName("Media_GetStatsByVirtualKey")
+            .WithSummary("Get media storage statistics for a virtual key")
+            .WithParameterDescription("virtualKeyId", "Identifier of the virtual key.")
             .Produces<MediaStorageStats>();
         media.MapGet("/stats/by-provider", GetStatsByProvider).WithName("Media_GetStatsByProvider")
+            .WithSummary("Get media storage totals by provider")
             .Produces<Dictionary<string, long>>();
         media.MapGet("/stats/by-type", GetStatsByMediaType).WithName("Media_GetStatsByMediaType")
+            .WithSummary("Get media storage totals by media type")
             .Produces<Dictionary<string, long>>();
         media.MapGet("/virtual-key/{virtualKeyId}", GetMediaByVirtualKey).WithName("Media_GetByVirtualKey")
+            .WithParameterDescription("includeDeleted", "Include soft-deleted media records when true.")
+            .WithSummary("List media owned by a virtual key")
+            .WithParameterDescription("virtualKeyId", "Identifier of the virtual key.")
             .Produces<List<MediaRecordResponse>>();
         media.MapGet("/search", SearchMedia).WithName("Media_Search")
+            .WithParameterDescription("pattern", "Required nonblank storage-key search pattern. Missing or blank values return 400.")
+            .WithSummary("Search stored media records")
             .Produces<List<MediaRecordResponse>>()
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         media.MapDelete("/{mediaId}", DeleteMedia).WithName("Media_Delete")
+            .WithSummary("Delete a media record")
+            .WithParameterDescription("mediaId", "Identifier of the tracked media record.")
             .Produces<MediaDeletionResponseDto>()
             .Produces(StatusCodes.Status404NotFound);
         media.MapPost("/restore/{mediaId}", RestoreMedia).WithName("Media_Restore")
+            .WithDescription("Restores a soft-deleted record during its grace period. Returns 409 once the recovery window has elapsed or recovery is unavailable.")
+            .WithParameterDescription("mediaId", "Identifier of the tracked media record.")
             .WithSummary("Restore soft-deleted media within its recovery window")
             .Produces<MediaRestoreResponseDto>()
             .Produces(StatusCodes.Status404NotFound)
@@ -49,14 +65,19 @@ public static class MediaEndpoints
             .Produces<AdminProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status429TooManyRequests, "application/problem+json");
         media.MapPost("/cleanup/expired", CleanupExpiredMedia).WithName("Media_CleanupExpired")
+            .WithParameterDescription("force", "Override the normal cleanup safety check when true.")
+            .WithSummary("Clean up expired media")
             .Produces<MediaCleanupResponseDto>()
             .Produces<AdminProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json");
         // Keep the legacy route for compatibility; it now performs storage-side reconciliation.
         media.MapPost("/cleanup/orphaned", ReconcileStorage).WithName("Media_ReconcileStorage")
+            .WithParameterDescription("force", "Override the normal cleanup safety check when true.")
+            .WithDescription("Compares storage inventory with tracked media records. The legacy orphaned-cleanup route now performs storage reconciliation.")
             .WithSummary("Reconcile storage objects against MediaRecord tracking rows")
             .Produces<MediaCleanupResponseDto>()
             .Produces<AdminProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json");
         media.MapPost("/cleanup/prune/preview", PreviewPruneMedia).WithName("Media_PreviewPrune")
+            .WithDescription("Returns the files and bytes matching a prune scope without deleting them.")
             .WithSummary("Preview the files and bytes matched by a prune operation")
             .Produces<MediaCleanupPreviewDto>()
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
@@ -64,6 +85,7 @@ public static class MediaEndpoints
             .Produces<AdminProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status429TooManyRequests, "application/problem+json");
         media.MapPost("/cleanup/prune", PruneOldMedia).WithName("Media_Prune")
+            .WithSummary("Prune old media")
             .Produces<MediaCleanupResponseDto>()
             .Produces<AdminProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
@@ -74,14 +96,19 @@ public static class MediaEndpoints
             .WithTags("Media Cleanup");
 
         cleanup.MapGet("/status", GetCleanupStatus).WithName("MediaCleanup_GetStatus")
+            .WithSummary("Get scheduled media cleanup status")
             .Produces<MediaCleanupStatusDto>();
         cleanup.MapGet("/enabled", GetCleanupEnabled).WithName("MediaCleanup_GetEnabled")
+            .WithSummary("Get whether scheduled media cleanup is enabled")
             .Produces<MediaCleanupEnabledDto>();
         cleanup.MapPost("/enabled", SetCleanupEnabled).WithName("MediaCleanup_SetEnabled")
+            .WithSummary("Enable or disable scheduled media cleanup")
             .Produces<MediaCleanupEnabledChangedDto>();
         cleanup.MapGet("/simple-retention", GetSimpleRetention).WithName("MediaCleanup_GetSimpleRetention")
+            .WithSummary("Get simplified media retention settings")
             .Produces<SimpleRetentionResponse>();
         cleanup.MapPost("/simple-retention", SetSimpleRetention).WithName("MediaCleanup_SetSimpleRetention")
+            .WithSummary("Update simplified media retention settings")
             .Produces<SimpleRetentionResponse>();
         cleanup.MapGet("/approvals", GetPendingApprovals)
             .WithName("MediaCleanup_GetPendingApprovals")
@@ -92,6 +119,8 @@ public static class MediaEndpoints
             .Produces<AdminProblemDetails>(StatusCodes.Status429TooManyRequests, "application/problem+json");
         cleanup.MapPost("/approvals/{approvalId:guid}/approve", ApproveCleanup)
             .WithName("MediaCleanup_Approve")
+            .WithDescription("Approves a fresh execution of the scheduled cleanup scope. The worker re-evaluates the scope before deletion.")
+            .WithParameterDescription("approvalId", "Unique identifier of the pending cleanup approval.")
             .WithSummary("Approve a fresh execution of a large scheduled cleanup scope")
             .Produces<MediaCleanupApprovalActionDto>()
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")
@@ -100,6 +129,7 @@ public static class MediaEndpoints
             .Produces<AdminProblemDetails>(StatusCodes.Status429TooManyRequests, "application/problem+json");
         cleanup.MapPost("/approvals/{approvalId:guid}/reject", RejectCleanup)
             .WithName("MediaCleanup_Reject")
+            .WithParameterDescription("approvalId", "Unique identifier of the pending cleanup approval.")
             .WithSummary("Reject a large scheduled cleanup scope")
             .Produces<MediaCleanupApprovalActionDto>()
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")

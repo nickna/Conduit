@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Admin.DTOs;
@@ -20,20 +21,38 @@ public static class ProviderSyncEndpoints
             .RequireAuthorization("MasterKeyPolicy")
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("ProviderSync");
-        group.MapGet("/drift", ListDrift).WithName("ProviderSync_ListDrift").Produces<List<DriftItemDto>>();
+        group.MapGet("/drift", ListDrift).WithName("ProviderSync_ListDrift")
+            .WithParameterDescription("status", "Filter drift items by review status.")
+            .WithParameterDescription("driftType", "Filter by the type of detected configuration drift.")
+            .WithSummary("List detected provider configuration drift")
+            .WithParameterDescription("providerId", "Identifier of the configured provider account.")
+            .WithParameterDescription("page", "Page number, starting at 1.")
+            .WithParameterDescription("pageSize", "Number of records per page; values are normalized to the supported pagination range.").Produces<List<DriftItemDto>>();
         group.MapGet("/drift/{id:int}", GetDrift).WithName("ProviderSync_GetDrift")
+            .WithSummary("Get a provider configuration drift item")
+            .WithParameterDescription("id", "Identifier of the ProviderSync resource.")
             .Produces<DriftItemDto>().Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapPost("/drift/{id:int}/apply", Apply).WithName("ProviderSync_ApplyDrift")
+            .WithSummary("Apply a provider configuration drift item")
+            .WithParameterDescription("id", "Identifier of the ProviderSync resource.")
             .Produces<DriftActionResultDto>();
         group.MapPost("/drift/{id:int}/dismiss", Dismiss).WithName("ProviderSync_DismissDrift")
+            .WithSummary("Dismiss a provider configuration drift item")
+            .WithParameterDescription("id", "Identifier of the ProviderSync resource.")
             .Produces<DriftActionResultDto>();
         group.MapPost("/drift/bulk/apply", ApplyBulk).WithName("ProviderSync_ApplyDriftBulk")
+            .WithSummary("Apply multiple provider configuration drift items")
             .Produces<BulkDriftActionResponse>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         group.MapPost("/drift/bulk/dismiss", DismissBulk).WithName("ProviderSync_DismissDriftBulk")
+            .WithSummary("Dismiss multiple provider configuration drift items")
             .Produces<BulkDriftActionResponse>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         group.MapPost("/run", Run).WithName("ProviderSync_Run")
+            .WithSummary("Run provider configuration synchronization")
             .Produces<ProviderSyncRunDto>().Produces<AdminProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json");
-        group.MapGet("/runs", ListRuns).WithName("ProviderSync_ListRuns").Produces<List<ProviderSyncRunDto>>();
+        group.MapGet("/runs", ListRuns).WithName("ProviderSync_ListRuns")
+            .WithSummary("List provider synchronization runs")
+            .WithParameterDescription("page", "Page number, starting at 1.")
+            .WithParameterDescription("pageSize", "Number of records per page; values are normalized to the supported pagination range.").Produces<List<ProviderSyncRunDto>>();
         return app;
     }
 

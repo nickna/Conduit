@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using System.Diagnostics.CodeAnalysis;
 
 using Microsoft.AspNetCore.Authorization;
@@ -58,24 +59,45 @@ namespace ConduitLLM.Admin.Endpoints
                 .WithTags("Virtual Key Groups");
 
             group.MapGet("/", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default) => endpoints.GetAllGroups(page, pageSize, cancellationToken))
-                .WithName("VirtualKeyGroups_GetAll").Produces<PagedResult<VirtualKeyGroupDto>>();
+                .WithName("VirtualKeyGroups_GetAll")
+                .WithSummary("Get all virtual key groups with pagination")
+                .WithParameterDescription("page", "Page number (1-based, default: 1)")
+                .WithParameterDescription("pageSize", "Number of items per page (default: 50, max: 100)").Produces<PagedResult<VirtualKeyGroupDto>>();
             group.MapGet("/{id}", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id) => endpoints.GetGroup(id))
-                .WithName("VirtualKeyGroups_GetById").Produces<VirtualKeyGroupDto>().Produces(StatusCodes.Status404NotFound);
+                .WithName("VirtualKeyGroups_GetById")
+                .WithSummary("Get a specific virtual key group by ID")
+                .WithParameterDescription("id", "Identifier of the Virtual Key Groups resource.").Produces<VirtualKeyGroupDto>().Produces(StatusCodes.Status404NotFound);
             group.MapPost("/", ([FromServices] VirtualKeyGroupsEndpoints endpoints, CreateVirtualKeyGroupRequestDto request) => endpoints.CreateGroup(request))
-                .WithName("VirtualKeyGroups_Create").Produces<VirtualKeyGroupDto>(StatusCodes.Status201Created);
+                .WithName("VirtualKeyGroups_Create")
+                .WithSummary("Create a new virtual key group").Produces<VirtualKeyGroupDto>(StatusCodes.Status201Created);
             group.MapPatch("/{id}", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id, JsonMergePatch<UpdateVirtualKeyGroupRequestDto> patch) => endpoints.UpdateGroup(id, patch.Value))
                 .AcceptsJsonMergePatch<UpdateVirtualKeyGroupRequestDto>()
-                .WithName("VirtualKeyGroups_Update").Produces<VirtualKeyGroupDto>().Produces(StatusCodes.Status404NotFound);
+                .WithName("VirtualKeyGroups_Update")
+                .WithSummary("Update a virtual key group")
+                .WithParameterDescription("id", "Identifier of the Virtual Key Groups resource.").Produces<VirtualKeyGroupDto>().Produces(StatusCodes.Status404NotFound);
             group.MapPost("/{id}/adjust-balance", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id, AdjustBalanceDto request) => endpoints.AdjustBalance(id, request))
-                .WithName("VirtualKeyGroups_AdjustBalance").Produces<VirtualKeyGroupDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
+                .WithName("VirtualKeyGroups_AdjustBalance")
+                .WithSummary("Adjust the balance of a virtual key group")
+                .WithParameterDescription("id", "Identifier of the Virtual Key Groups resource.").Produces<VirtualKeyGroupDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
             group.MapDelete("/{id}", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id) => endpoints.DeleteGroup(id))
-                .WithName("VirtualKeyGroups_Delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
+                .WithName("VirtualKeyGroups_Delete")
+                .WithSummary("Delete a virtual key group")
+                .WithParameterDescription("id", "Identifier of the Virtual Key Groups resource.").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
             group.MapGet("/{id}/transactions", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id, int page = 1, int pageSize = 50) => endpoints.GetTransactionHistory(id, page, pageSize))
-                .WithName("VirtualKeyGroups_GetTransactions").Produces<PagedResult<VirtualKeyGroupTransactionDto>>().Produces(StatusCodes.Status404NotFound);
+                .WithName("VirtualKeyGroups_GetTransactions")
+                .WithSummary("Get transaction history for a virtual key group")
+                .WithParameterDescription("id", "Identifier of the Virtual Key Groups resource.")
+                .WithParameterDescription("page", "Page number, starting at 1.")
+                .WithParameterDescription("pageSize", "Number of records per page; values are normalized to the supported pagination range.").Produces<PagedResult<VirtualKeyGroupTransactionDto>>().Produces(StatusCodes.Status404NotFound);
             group.MapGet("/{id}/keys", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id) => endpoints.GetKeysInGroup(id))
-                .WithName("VirtualKeyGroups_GetKeys").Produces<List<VirtualKeyDto>>().Produces(StatusCodes.Status404NotFound);
+                .WithName("VirtualKeyGroups_GetKeys")
+                .WithSummary("Get virtual keys in a group")
+                .WithParameterDescription("id", "Identifier of the Virtual Key Groups resource.").Produces<List<VirtualKeyDto>>().Produces(StatusCodes.Status404NotFound);
             group.MapPost("/{id}/refund", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id, ProcessRefundRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey) => endpoints.ProcessRefund(id, request, idempotencyKey))
-                .WithName("VirtualKeyGroups_Refund").Produces<RefundResultDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status409Conflict);
+                .WithName("VirtualKeyGroups_Refund")
+                .WithParameterDescription("Idempotency-Key", "Client-supplied key for deduplicating repeated requests. Reuse the same key only for the same intended operation.")
+                .WithSummary("Process a refund for a virtual key group")
+                .WithParameterDescription("id", "The virtual key group ID").Produces<RefundResultDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status409Conflict);
             return app;
         }
 

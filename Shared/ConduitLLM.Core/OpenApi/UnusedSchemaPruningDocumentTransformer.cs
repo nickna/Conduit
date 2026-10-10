@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
-namespace ConduitLLM.Gateway.OpenApi;
+namespace ConduitLLM.Core.OpenApi;
 
 /// <summary>Drops component schemas that no published operation can reach.</summary>
 public sealed class UnusedSchemaPruningDocumentTransformer : IOpenApiDocumentTransformer

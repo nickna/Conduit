@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Interfaces;
@@ -21,7 +22,8 @@ public static class GlobalSettingsEndpoints
             .RequireAuthorization("MasterKeyPolicy")
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("GlobalSettings");
-        group.MapGet("/", List).WithName("GlobalSettings_List").Produces<IEnumerable<GlobalSettingDto>>();
+        group.MapGet("/", List).WithName("GlobalSettings_List")
+            .WithSummary("List global setting values").Produces<IEnumerable<GlobalSettingDto>>();
         group.MapGet("/definitions", GetDefinitions)
             .WithName("GlobalSettings_GetDefinitions")
             .WithSummary("List typed global setting definitions")
@@ -30,28 +32,44 @@ public static class GlobalSettingsEndpoints
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status429TooManyRequests);
         group.MapGet("/{id:int}", GetById).WithName("GlobalSettings_GetById")
+            .WithSummary("Get a global setting by ID")
+            .WithParameterDescription("id", "Identifier of the GlobalSettings resource.")
             .Produces<GlobalSettingDto>().Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapGet("/by-key/{key}", GetByKey).WithName("GlobalSettings_GetByKey")
+            .WithSummary("Get a global setting by key")
+            .WithParameterDescription("key", "Global setting key.")
             .Produces<GlobalSettingDto>().Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapPost("/", Create).WithName("GlobalSettings_Create")
+            .WithSummary("Create a global setting")
             .Produces<GlobalSettingDto>(StatusCodes.Status201Created)
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         group.MapPatch("/{id:int}", Update).AcceptsJsonMergePatch<UpdateGlobalSettingDto>().WithName("GlobalSettings_Update")
+            .WithSummary("Update a global setting by ID")
+            .WithParameterDescription("id", "Identifier of the GlobalSettings resource.")
             .Produces<GlobalSettingDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapPut("/by-key", UpdateByKey).WithName("GlobalSettings_UpdateByKey")
+            .WithSummary("Update a global setting by key")
             .Produces(StatusCodes.Status204NoContent).Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         group.MapDelete("/{id:int}", Delete).WithName("GlobalSettings_Delete")
+            .WithSummary("Delete a global setting by ID")
+            .WithParameterDescription("id", "Identifier of the GlobalSettings resource.")
             .Produces(StatusCodes.Status204NoContent).Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapDelete("/by-key/{key}", DeleteByKey).WithName("GlobalSettings_DeleteByKey")
+            .WithSummary("Delete a global setting by key")
+            .WithParameterDescription("key", "Global setting key.")
             .Produces(StatusCodes.Status204NoContent).Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapGet("/cache/stats", GetCacheStats).WithName("GlobalSettings_GetCacheStats")
+            .WithSummary("Get global settings cache statistics")
             .WithMetadata(new ObsoleteAttribute(
                 "Use conduit cache metrics in the Infrastructure Grafana dashboard."))
             .Produces<CacheStats>();
         group.MapPost("/cache/reload", ReloadCache).WithName("GlobalSettings_ReloadCache")
+            .WithSummary("Reload the global settings cache")
             .Produces<GlobalSettingsReloadAcceptedResponse>(StatusCodes.Status202Accepted);
         group.MapPost("/cache/invalidate/{key}", InvalidateCache).WithName("GlobalSettings_InvalidateCache")
+            .WithSummary("Invalidate the global settings cache")
+            .WithParameterDescription("key", "Global setting key.")
             .Produces(StatusCodes.Status204NoContent);
         return app;
     }

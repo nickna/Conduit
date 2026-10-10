@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using System.Diagnostics.CodeAnalysis;
 
 using ConduitLLM.Configuration.DTOs;
@@ -45,14 +46,31 @@ namespace ConduitLLM.Admin.Endpoints
                 .RequireAuthorization("MasterKeyPolicy")
                 .AddEndpointFilter<OperationLoggingEndpointFilter>()
                 .WithTags("Media Retention");
-            group.MapGet("", ([FromServices] MediaRetentionEndpoints e) => e.GetPolicies()).WithName("MediaRetention_GetPolicies").Produces<List<MediaRetentionPolicyDto>>();
-            group.MapGet("/{id}", ([FromServices] MediaRetentionEndpoints e, int id) => e.GetPolicy(id)).WithName("MediaRetention_GetPolicy").Produces<MediaRetentionPolicyDetailDto>().Produces(StatusCodes.Status404NotFound);
-            group.MapPost("", ([FromServices] MediaRetentionEndpoints e, CreateMediaRetentionPolicyRequest request) => e.CreatePolicy(request)).WithName("MediaRetention_CreatePolicy").Produces<MediaRetentionPolicyDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest);
-            group.MapPatch("/{id}", ([FromServices] MediaRetentionEndpoints e, int id, JsonMergePatch<UpdateMediaRetentionPolicyRequest> patch) => e.UpdatePolicy(id, patch.Value)).AcceptsJsonMergePatch<UpdateMediaRetentionPolicyRequest>().WithName("MediaRetention_UpdatePolicy").Produces<MediaRetentionPolicyDto>().Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status400BadRequest);
-            group.MapDelete("/{id}", ([FromServices] MediaRetentionEndpoints e, int id) => e.DeletePolicy(id)).WithName("MediaRetention_DeletePolicy").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status400BadRequest);
-            group.MapPost("/{policyId}/group-assignments/{groupId}", ([FromServices] MediaRetentionEndpoints e, int groupId, int policyId) => e.AssignPolicyToGroup(groupId, policyId)).WithName("MediaRetention_AssignPolicyToGroup").Produces<MessageResponse>().Produces(StatusCodes.Status404NotFound);
-            group.MapPost("/{id}/set-default", ([FromServices] MediaRetentionEndpoints e, int id) => e.SetDefaultPolicy(id)).WithName("MediaRetention_SetDefaultPolicy").Produces<MessageResponse>().Produces(StatusCodes.Status404NotFound);
-            group.MapPost("/{groupId}/cleanup-jobs", ([FromServices] MediaRetentionEndpoints e, int groupId, bool dryRun = true) => e.TriggerCleanup(groupId, dryRun)).WithName("MediaRetention_TriggerCleanup").Produces<AdminProblemDetails>(StatusCodes.Status501NotImplemented, "application/problem+json");
+            group.MapGet("", ([FromServices] MediaRetentionEndpoints e) => e.GetPolicies()).WithName("MediaRetention_GetPolicies")
+                .WithSummary("Get all media retention policies.").Produces<List<MediaRetentionPolicyDto>>();
+            group.MapGet("/{id}", ([FromServices] MediaRetentionEndpoints e, int id) => e.GetPolicy(id)).WithName("MediaRetention_GetPolicy")
+                .WithSummary("Get a specific media retention policy by ID.")
+                .WithParameterDescription("id", "Policy ID").Produces<MediaRetentionPolicyDetailDto>().Produces(StatusCodes.Status404NotFound);
+            group.MapPost("", ([FromServices] MediaRetentionEndpoints e, CreateMediaRetentionPolicyRequest request) => e.CreatePolicy(request)).WithName("MediaRetention_CreatePolicy")
+                .WithSummary("Create a new media retention policy.").Produces<MediaRetentionPolicyDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest);
+            group.MapPatch("/{id}", ([FromServices] MediaRetentionEndpoints e, int id, JsonMergePatch<UpdateMediaRetentionPolicyRequest> patch) => e.UpdatePolicy(id, patch.Value)).AcceptsJsonMergePatch<UpdateMediaRetentionPolicyRequest>().WithName("MediaRetention_UpdatePolicy")
+                .WithSummary("Update an existing media retention policy.")
+                .WithParameterDescription("id", "Policy ID").Produces<MediaRetentionPolicyDto>().Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status400BadRequest);
+            group.MapDelete("/{id}", ([FromServices] MediaRetentionEndpoints e, int id) => e.DeletePolicy(id)).WithName("MediaRetention_DeletePolicy")
+                .WithSummary("Delete a media retention policy.")
+                .WithParameterDescription("id", "Policy ID").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status400BadRequest);
+            group.MapPost("/{policyId}/group-assignments/{groupId}", ([FromServices] MediaRetentionEndpoints e, int groupId, int policyId) => e.AssignPolicyToGroup(groupId, policyId)).WithName("MediaRetention_AssignPolicyToGroup")
+                .WithSummary("Assign a retention policy to a virtual key group.")
+                .WithParameterDescription("groupId", "Virtual key group ID")
+                .WithParameterDescription("policyId", "Retention policy ID").Produces<MessageResponse>().Produces(StatusCodes.Status404NotFound);
+            group.MapPost("/{id}/set-default", ([FromServices] MediaRetentionEndpoints e, int id) => e.SetDefaultPolicy(id)).WithName("MediaRetention_SetDefaultPolicy")
+                .WithSummary("Sets a policy as the new default retention policy. Only one policy can be the default at a time.")
+                .WithParameterDescription("id", "Policy ID to set as default").Produces<MessageResponse>().Produces(StatusCodes.Status404NotFound);
+            group.MapPost("/{groupId}/cleanup-jobs", ([FromServices] MediaRetentionEndpoints e, int groupId, bool dryRun = true) => e.TriggerCleanup(groupId, dryRun)).WithName("MediaRetention_TriggerCleanup")
+                .WithSummary("Check manual media cleanup availability")
+                .WithDescription("Manual cleanup is not implemented. This operation returns 501; use the scheduled cleanup system. No successful response is advertised.")
+                .WithParameterDescription("groupId", "Virtual key group ID")
+                .WithParameterDescription("dryRun", "Whether to perform a dry run (default: true)").Produces<AdminProblemDetails>(StatusCodes.Status501NotImplemented, "application/problem+json");
             return app;
         }
 

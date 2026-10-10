@@ -17,6 +17,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace ConduitLLM.Tests.Admin.Integration
 {
+    [Collection("AdminMasterKeyEnvironment")]
     public class EphemeralMasterKeyIntegrationTests : IDisposable
     {
         private readonly TestServer _server;
