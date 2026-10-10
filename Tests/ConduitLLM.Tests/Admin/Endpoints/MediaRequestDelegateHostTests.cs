@@ -424,7 +424,7 @@ internal sealed class MediaRequestDelegateHostFactory : WebApplicationFactory<Co
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseContentRoot(Path.Combine(RepositoryRoot, "Services", "ConduitLLM.Admin"));
+        builder.UseContentRoot(Path.Join(RepositoryRoot, "Services", "ConduitLLM.Admin"));
         builder.UseEnvironment("Testing");
         // Default Windows host logging includes EventLog, which requires machine
         // permissions. Console logging preserves middleware diagnostics in CI.
