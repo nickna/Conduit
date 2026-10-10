@@ -189,9 +189,17 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                 await _repository.RegisterInstanceAsync(InstanceId, instanceData);
                 _logger.LogInformation("Registered spend notification instance: {InstanceId}", InstanceId);
             }
-            catch (Exception ex)
+            catch (OperationCanceledException)
             {
-                _logger.LogWarning(ex, "Failed to register spend notification instance; notification processing will continue");
+                // Cancellation is expected during shutdown/startup race conditions.
+            }
+            catch (TimeoutException ex)
+            {
+                _logger.LogWarning(ex, "Timed out registering spend notification instance; notification processing will continue");
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Failed to register spend notification instance due to invalid operation; notification processing will continue");
             }
         }
 
