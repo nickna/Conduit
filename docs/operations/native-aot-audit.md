@@ -38,6 +38,99 @@ inventory, regenerate it with:
 Do not update the baseline to hide a regression. The later NativeAOT phases should
 normally only reduce it.
 
+## Epic #1368 assessment: 2026-10-09
+
+Reviewed [#1368](https://github.com/nickna/Conduit/issues/1368), all seven child
+issues, merged NativeAOT work through [#1489](https://github.com/nickna/Conduit/pull/1489),
+and commit `e71f8d61556e38ddd0de2eda5f7654c35e6468fd`. The children still have unchecked
+criteria describing several already implemented changes. Keep the parent open:
+warning cleanliness and the bounded feature probe do not establish full native
+workload readiness.
+
+### Verified evidence
+
+- The local .NET SDK 10.0.401 analyzer audit rebuilt both service graphs and
+  reported **0** first-party trim/AOT diagnostics. Existing nullable compiler
+  warnings are separate from this inventory.
+- [Linux NativeAOT run 38024991341](https://github.com/nickna/Conduit/actions/runs/38024991341)
+  on the reviewed commit passed both native publishes/OpenAPI smokes, the native
+  persistence probe, nine shared EF/Npgsql PostgreSQL contracts without skips,
+  two-host Wolverine delivery, the bounded Gateway protocol probe, and both
+  non-root packaged native entrypoints. Its retained `linker-diagnostics.json`
+  has `rid: linux-x64`, `total: 0`, and no first-party diagnostics.
+- That run measured Admin/Gateway executable sizes of 100,567,984 / 93,453,392
+  bytes, publish times of 482,308 / 294,734 ms, and infrastructure-free OpenAPI
+  readiness of 685 / 203 ms. These are publish/boot baselines, not production
+  workload comparisons. [Main CI](https://github.com/nickna/Conduit/actions/runs/38024991331)
+  also passed on the same commit.
+- The successful native run's retained process logs still show real unsupported
+  workload failures. `wolverine-two-host-*/ConduitLLM.Gateway.out.log` records
+  unprecompiled EF queries in function-audit cleanup and billing reconciliation;
+  the Admin logs record global-setting load, pricing audit/canary, and operations
+  metrics failures. The probe does not assert those background operations.
+  Expected provider-error and connection-limit test logs are separate from these
+  failures.
+- Both services disable reflection JSON defaults and use generated resolver chains;
+  no production `DefaultJsonTypeInfoResolver` remains. The serialization fixture
+  project has 16 representative tests. The broad unit/integration test executables
+  do not inherit the services' reflection-disabled feature switch.
+- Microsoft's [current EF NativeAOT documentation](https://learn.microsoft.com/en-us/ef/core/performance/nativeaot-and-precompiled-queries)
+  still describes the EF query path as experimental and unsuitable for production,
+  with dynamic queries unsupported. [Npgsql itself supports NativeAOT](https://www.npgsql.org/doc/compatibility.html);
+  this does not make the EF provider/query workload proven. ADRs 0006 and 0009
+  remain applicable.
+
+### Phase disposition
+
+| Child | Current state | Work required before closeout |
+|---|---|---|
+| [#1369](https://github.com/nickna/Conduit/issues/1369), analyzer/publish gates | Implemented and verified. Empty analyzer/linker ratchets, SDK checks, Linux process/image gates, symbols separation, and retained baselines exist. | Reconcile the issue checklist with the linked run; retain the gates for subsequent slices. |
+| [#1370](https://github.com/nickna/Conduit/issues/1370), serialization/validation | Original reflection fallbacks, enum boot failure, and validation warnings are resolved. [ADR 0004](../decisions/0004-json-source-generation-contract-inventory.md) now distinguishes its historical scope from current generated contracts. | Exercise the remaining endpoint/provider graphs with reflection disabled; representative fixtures and OpenAPI materialization are insufficient for every runtime payload. |
+| [#1371](https://github.com/nickna/Conduit/issues/1371), reflection/discovery | Static handler bridges/registries, provider capabilities, decorator traversal, and production `RunAsync` replace the original application discovery paths. | Review and retain bounded third-party Wolverine/EF metadata exceptions; remove them only with upstream support and passing native tests. |
+| [#1372](https://github.com/nickna/Conduit/issues/1372), dependency boundaries | Neutral Contracts and Persistence.Abstractions plus optional adapter projects are extracted; generation tooling is opt-in. | Configuration still owns EF and references Functions, and Core/Providers still depend on it. Guard transitive publish dependencies as well as direct assembly references. Native MessagePack registration is excluded, but its package reference remains unconditional. |
+| [#1373](https://github.com/nickna/Conduit/issues/1373), persistence | Standalone migrator, schema-version seam, two accepted ADRs, typed stores, and real database/native probes exist. | Complete the [remaining operation inventory](persistence-aot-query-inventory.md), including Admin workloads and Gateway workers/new discovery consumers. The 25 method-scoped query exceptions remain unsupported work, not completed queries. |
+| [#1374](https://github.com/nickna/Conduit/issues/1374), runtime parity | OpenAI-compatible chat/SSE/accounting/image storage, authenticated JSON hubs, Redis backplane, and bounded Wolverine delivery pass natively. | Prove normal readiness, invalidation, tools/functions, additional providers/media, durable recovery and failures, and native aggregate values. See the [feature matrix](gateway-native-aot-feature-matrix.md) for exact evidence limits. |
+| [#1375](https://github.com/nickna/Conduit/issues/1375), rollout | Minimal candidate-image, scan/attestation, benchmark and promotion-policy machinery exists. No release-workflow runs or production canary evidence were found during this audit. | Representative digest-pinned benchmarks, successor persistence approval, release evidence, dashboards/alerts, rollback rehearsals, then ordered 168-hour Admin and Gateway soaks. Keep `promotion-policy.json` blocked and JIT deployable. |
+
+### Recommended next work and completion criteria
+
+1. **Make native startup and scheduled work trustworthy (#1373/#1374).** Extract
+   function audit/retention and billing-reconciliation operations behind named
+   stores; cover checkpoint advancement, concurrent workers, rollback/retry, and
+   retention boundaries with shared EF/Npgsql contracts and a published native
+   worker test. Replace Admin startup reads/audit/metrics before treating Admin
+   liveness as readiness. Require successful worker outcomes and classify unexpected
+   process-log failures explicitly instead of accepting a probe pass alone.
+2. **Prove readiness and invalidation (#1374).** Run the process gate in `Wait`
+   mode; assert missing/stale schema holds `/health/ready` at 503, a migrated schema
+   becomes ready, and unreachable PostgreSQL/Redis fails readiness. Exercise
+   cross-host key disablement/credential rotation/cache invalidation on subsequent
+   HTTP and hub operations. Remove exclusions only after these assertions pass.
+3. **Close database and protocol gaps by operation (#1370/#1373/#1374).** Cover
+   `/v1/discovery` and tool/function execution, durable outbox/inbox redelivery,
+   worker restart/recovery, and supported video/audio/provider contracts. Add
+   native seeded aggregate assertions: `/metrics` returning `# HELP` currently
+   proves exposition only. Replace/prove all 25 excepted Admin/reporting methods
+   and the remaining management/retention workload. Each selected native store
+   needs one shared PostgreSQL contract plus published-process evidence.
+4. **Finish graph ownership (#1372).** Continue ADR 0009's slice extraction,
+   separate remaining persistence/domain dependencies, and verify the actual
+   transitive publish graph. Remove native-only unused protocol packages without
+   dropping JIT functionality. Admin has real provider testing, function credential,
+   and S3 cleanup consumers; blanket dependency removal is inappropriate.
+5. **Collect operational evidence (#1375).** Replace the health-only load driver
+   with representative authenticated workloads and identical host/load inputs;
+   retain repeated JIT/native measurements tied to image digests. Obtain the
+   successor persistence decision, release security/SBOM/provenance and monitoring
+   evidence, and rehearsed automatic/manual JIT rollback. Only then start Admin's
+   seven-day soak followed by Gateway's separate seven-day soak.
+
+This follow-up fixes one reproduced promotion-check defect: unlike request counts
+or concurrency could previously pass. Both are now required to be equal positive
+integers, with positive and negative regression fixtures. It also refreshes the
+contract/query/feature/runbook documentation. It does not mark the epic complete or
+turn a health-endpoint benchmark into production workload evidence.
+
 ## Analyzer ratchet
 
 The 2026-08-12 post-phase audit contains **0** unique first-party diagnostics,
