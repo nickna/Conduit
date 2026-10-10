@@ -102,7 +102,7 @@ public sealed class MediaRequestDelegateHostTests : IDisposable
     {
         _factory.Media.Setup(service => service.DeleteMediaAsync(
                 It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((AdminMediaDeleteResult)null);
+            .ReturnsAsync(null);
         _factory.Media.Setup(service => service.RestoreMediaAsync(
                 It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(MediaRestoreOutcome.NotFound);
