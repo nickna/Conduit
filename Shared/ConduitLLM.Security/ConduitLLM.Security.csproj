@@ -10,6 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
     <PackageReference Include="StackExchange.Redis" />
   </ItemGroup>
 
