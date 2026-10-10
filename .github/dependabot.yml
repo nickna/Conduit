@@ -1,11 +1,11 @@
-# Keep this configuration on master (the default branch); update PRs target dev.
+# Keep this configuration on master (the default and active development branch).
 # GitHub Actions updates remain manual because reviewed SHAs must also be updated
 # in scripts/ci/action-versions.json. See docs/operations/dependency-updates.md.
 version: 2
 updates:
   - package-ecosystem: nuget
     directory: /
-    target-branch: dev
+    target-branch: master
     schedule:
       interval: weekly
       day: monday
@@ -47,7 +47,7 @@ updates:
 
   - package-ecosystem: npm
     directory: /WebAdmin
-    target-branch: dev
+    target-branch: master
     schedule:
       interval: weekly
       day: monday
@@ -74,7 +74,7 @@ updates:
 
   - package-ecosystem: npm
     directory: /tools/openapi
-    target-branch: dev
+    target-branch: master
     schedule:
       interval: weekly
       day: monday
@@ -86,7 +86,7 @@ updates:
 
   - package-ecosystem: npm
     directory: /tools/ci
-    target-branch: dev
+    target-branch: master
     schedule:
       interval: weekly
       day: monday
