@@ -16902,7 +16902,7 @@ export interface operations {
   Media_Search: {
     parameters: {
       query?: {
-        /** @description Storage-key search pattern; omit to list recent media. */
+        /** @description Required nonblank storage-key search pattern. Missing or blank values return 400. */
         pattern?: string;
         /** @description 1-based page number. */
         page?: number;

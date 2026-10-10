@@ -45,10 +45,10 @@ public abstract class ApiDocumentTransformer : IOpenApiDocumentTransformer
         };
         // A relative server keeps the contract usable for self-hosted deployments.
         document.Servers = [new OpenApiServer { Url = "/", Description = "This Conduit deployment" }];
-        foreach (var tag in document.Tags ?? new HashSet<OpenApiTag>())
+        foreach (var tag in (document.Tags ?? new HashSet<OpenApiTag>())
+            .Where(tag => tag.Name is not null && TagDescriptions.ContainsKey(tag.Name)))
         {
-            if (tag.Name is not null && TagDescriptions.TryGetValue(tag.Name, out var description))
-                tag.Description = description;
+            tag.Description = TagDescriptions[tag.Name!];
         }
 
         document.Components ??= new OpenApiComponents();

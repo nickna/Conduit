@@ -48,7 +48,6 @@ public class AnalyticsEndpoints
             .WithTags("Analytics");
         group.MapGet("/logs", ([FromServices] AnalyticsEndpoints e, int page = 1, int pageSize = 50, DateTime? startDate = null, DateTime? endDate = null, string? model = null, int? virtualKeyId = null, int? status = null) => e.GetLogs(page, pageSize, startDate, endDate, model, virtualKeyId, status))
             .WithName("Analytics_GetLogs")
-            .WithParameterDescription("status", "Filter drift items by review status.")
             .WithSummary("Gets paginated request logs")
             .WithParameterDescription("page", "The page number (1-based)")
             .WithParameterDescription("pageSize", "The number of items per page")

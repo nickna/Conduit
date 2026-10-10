@@ -34,10 +34,10 @@ public sealed class OperationMetadataTransformer : IOpenApiOperationTransformer
         foreach (var documentation in context.Description.ActionDescriptor.EndpointMetadata
             .OfType<EndpointParameterDescription>())
         {
-            foreach (var parameter in operation.Parameters?.OfType<OpenApiParameter>() ?? [])
+            foreach (var parameter in (operation.Parameters?.OfType<OpenApiParameter>() ?? [])
+                .Where(parameter => string.Equals(parameter.Name, documentation.Name, StringComparison.Ordinal)))
             {
-                if (string.Equals(parameter.Name, documentation.Name, StringComparison.Ordinal))
-                    parameter.Description = documentation.Description;
+                parameter.Description = documentation.Description;
             }
         }
 

@@ -45,7 +45,7 @@ public static class MediaEndpoints
             .WithParameterDescription("virtualKeyId", "Identifier of the virtual key.")
             .Produces<List<MediaRecordResponse>>();
         media.MapGet("/search", SearchMedia).WithName("Media_Search")
-            .WithParameterDescription("pattern", "Storage-key search pattern; omit to list recent media.")
+            .WithParameterDescription("pattern", "Required nonblank storage-key search pattern. Missing or blank values return 400.")
             .WithSummary("Search stored media records")
             .Produces<List<MediaRecordResponse>>()
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");

@@ -20,14 +20,14 @@ public static class ModelsEndpoints
 
         group.MapGet("/models", ListModels)
             .WithName("Models_ListModels")
-            .WithSummary("List models available to the virtual key")
-            .WithDescription("Lists model aliases permitted by the authenticated virtual key. Disabled or unavailable mappings are excluded.")
+            .WithSummary("List enabled model aliases")
+            .WithDescription("Lists configured aliases of enabled model-provider mappings.")
             .Produces<ModelListResponse>(StatusCodes.Status200OK)
             .Produces<OpenAIErrorResponse>(StatusCodes.Status500InternalServerError);
 
         group.MapGet("/models/{model}", RetrieveModel)
             .WithName("Models_RetrieveModel")
-            .WithDescription("Returns an accessible model alias or 404 if the model is unavailable to this virtual key.")
+            .WithDescription("Returns a model alias when its mapping is enabled, or 404 when the mapping is absent or disabled.")
             .WithParameterDescription("model", "Model alias exposed by Conduit.")
             .WithSummary("Retrieve a model")
             .Produces<ModelListItemDto>(StatusCodes.Status200OK)

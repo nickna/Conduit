@@ -12,7 +12,7 @@ public sealed class CoreApiDocumentTransformer : ApiDocumentTransformer
     protected override IReadOnlyDictionary<string, string> TagDescriptions { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Models"] = "Models available to the authenticated virtual key and their metadata.",
+            ["Models"] = "Model aliases and their metadata.",
             ["Authentication"] = "Short-lived virtual-key credentials.",
             ["Rerank"] = "Relevance ranking of documents against a query.",
             ["Embeddings"] = "Vector embeddings for text input.",

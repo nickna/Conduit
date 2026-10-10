@@ -25,8 +25,8 @@
         "tags": [
           "Models"
         ],
-        "summary": "List models available to the virtual key",
-        "description": "Lists model aliases permitted by the authenticated virtual key. Disabled or unavailable mappings are excluded.",
+        "summary": "List enabled model aliases",
+        "description": "Lists configured aliases of enabled model-provider mappings.",
         "operationId": "Models_ListModels",
         "responses": {
           "200": {
@@ -235,7 +235,7 @@
           "Models"
         ],
         "summary": "Retrieve a model",
-        "description": "Returns an accessible model alias or 404 if the model is unavailable to this virtual key.",
+        "description": "Returns a model alias when its mapping is enabled, or 404 when the mapping is absent or disabled.",
         "operationId": "Models_RetrieveModel",
         "parameters": [
           {
@@ -12345,7 +12345,7 @@
   "tags": [
     {
       "name": "Models",
-      "description": "Models available to the authenticated virtual key and their metadata."
+      "description": "Model aliases and their metadata."
     },
     {
       "name": "Authentication",

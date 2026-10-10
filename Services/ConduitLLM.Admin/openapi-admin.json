@@ -17992,7 +17992,7 @@
           {
             "name": "pattern",
             "in": "query",
-            "description": "Storage-key search pattern; omit to list recent media.",
+            "description": "Required nonblank storage-key search pattern. Missing or blank values return 400.",
             "schema": {
               "type": "string"
             }

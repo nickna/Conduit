@@ -11,7 +11,7 @@ The contracts describe endpoint definitions and middleware behavior. They also g
 
 ## Using the API
 
-Replace the deployment URLs and credentials below with your own. Discover the model aliases available to your virtual key before making a billable request.
+Replace the deployment URLs and credentials below with your own. List configured model aliases before making a billable request. The model listing includes enabled mappings; access to a model is checked when you make a billable request.
 
 ```bash
 curl 'http://localhost:5000/v1/models' \

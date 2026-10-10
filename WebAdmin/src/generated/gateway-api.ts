@@ -12,8 +12,8 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * List models available to the virtual key
-     * @description Lists model aliases permitted by the authenticated virtual key. Disabled or unavailable mappings are excluded.
+     * List enabled model aliases
+     * @description Lists configured aliases of enabled model-provider mappings.
      */
     get: operations["Models_ListModels"];
     put?: never;
@@ -33,7 +33,7 @@ export interface paths {
     };
     /**
      * Retrieve a model
-     * @description Returns an accessible model alias or 404 if the model is unavailable to this virtual key.
+     * @description Returns a model alias when its mapping is enabled, or 404 when the mapping is absent or disabled.
      */
     get: operations["Models_RetrieveModel"];
     put?: never;
@@ -2155,10 +2155,12 @@ export interface operations {
     };
     requestBody: {
       content: {
-        /** @example {
+        /**
+         * @example {
          *       "model": "your-embedding-alias",
          *       "input": "Text to embed"
-         *     } */
+         *     }
+         */
         "application/json": components["schemas"]["EmbeddingRequest"];
       };
     };
@@ -2320,7 +2322,8 @@ export interface operations {
     };
     requestBody: {
       content: {
-        /** @example {
+        /**
+         * @example {
          *       "model": "your-model-alias",
          *       "messages": [
          *         {
@@ -2329,7 +2332,8 @@ export interface operations {
          *         }
          *       ],
          *       "stream": false
-         *     } */
+         *     }
+         */
         "application/json": components["schemas"]["ChatCompletionRequest"];
       };
     };
@@ -2492,11 +2496,13 @@ export interface operations {
     };
     requestBody: {
       content: {
-        /** @example {
+        /**
+         * @example {
          *       "model": "your-model-alias",
          *       "input": "Hello",
          *       "stream": false
-         *     } */
+         *     }
+         */
         "application/json": components["schemas"]["CreateResponseRequest"];
       };
     };
@@ -5049,11 +5055,13 @@ export interface operations {
     };
     requestBody: {
       content: {
-        /** @example {
+        /**
+         * @example {
          *       "model": "your-image-alias",
          *       "prompt": "A lighthouse at sunrise",
          *       "n": 1
-         *     } */
+         *     }
+         */
         "application/json": components["schemas"]["ImageGenerationRequest"];
       };
     };
@@ -5204,11 +5212,13 @@ export interface operations {
     };
     requestBody: {
       content: {
-        /** @example {
+        /**
+         * @example {
          *       "model": "your-image-alias",
          *       "prompt": "A lighthouse at sunrise",
          *       "n": 1
-         *     } */
+         *     }
+         */
         "application/json": components["schemas"]["ImageGenerationRequest"];
       };
     };
