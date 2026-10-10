@@ -102,16 +102,16 @@ public sealed class MediaRequestDelegateHostTests : IDisposable
     {
         _factory.Media.Setup(service => service.DeleteMediaAsync(
                 It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(null);
+            .ReturnsAsync(() => null);
         _factory.Media.Setup(service => service.RestoreMediaAsync(
                 It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(MediaRestoreOutcome.NotFound);
         _factory.Approvals.Setup(service => service.ApproveAsync(
                 It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((MediaCleanupApproval)null);
+            .ReturnsAsync(() => null);
         _factory.Approvals.Setup(service => service.RejectAsync(
                 It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((MediaCleanupApproval)null);
+            .ReturnsAsync(() => null);
 
         using var response = operation switch
         {
@@ -158,7 +158,7 @@ public sealed class MediaRequestDelegateHostTests : IDisposable
     {
         _factory.Locks.Setup(service => service.TryAcquireAsync(
                 It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IDistributedLockOwnership)null);
+            .ReturnsAsync(() => null);
         using var body = route == "prune" ? JsonBody("{\"daysToKeep\":7}") : null;
         using var response = await _client.PostAsync($"/v1/admin/media-assets/cleanup/{route}", body);
         using var json = await ReadJsonAsync(response, HttpStatusCode.Conflict, "application/problem+json");
