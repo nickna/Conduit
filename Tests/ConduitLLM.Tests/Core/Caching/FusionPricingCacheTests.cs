@@ -63,10 +63,18 @@ public sealed class FusionPricingCacheTests
         { entered.TrySetResult(); await release.Task; return cost; });
         using var host = Host(inner.Object); using var scope = host.CreateScope();
         var cache = scope.ServiceProvider.GetRequiredService<IModelCostService>();
-        var requests = Enumerable.Range(0, 32).Select(_ => cache.GetCostForModelAsync("model")).ToArray();
-        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); release.SetResult();
+        var first = cache.GetCostForModelAsync("model");
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var requests = Enumerable.Range(0, 31).Select(_ => cache.GetCostForModelAsync("model")).Prepend(first).ToArray();
+        try
+        {
+            Assert.All(requests, request => Assert.False(request.IsCompleted));
+            // Assert coalescing while the repository call is blocked. After release, the
+            // 100 ms L1 entry may legitimately expire before every waiter is scheduled.
+            inner.Verify(service => service.GetCostForModelAsync("model", It.IsAny<CancellationToken>()), Times.Once);
+        }
+        finally { release.SetResult(); }
         var results = await Task.WhenAll(requests);
-        inner.Verify(service => service.GetCostForModelAsync("model", It.IsAny<CancellationToken>()), Times.Once);
         results[0]!.InputCostPerMillionTokens = 99;
         results[0]!.ModelProviderTypeAssociations!.Single().Model!.Name = "changed";
         cost.ModelProviderTypeAssociations!.Clear();
