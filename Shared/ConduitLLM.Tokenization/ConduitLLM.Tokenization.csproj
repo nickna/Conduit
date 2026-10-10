@@ -6,6 +6,7 @@
   <ItemGroup>
     <!-- Direct reference lifts the vulnerable version pulled transitively by the tokenizer package. -->
     <PackageReference Include="Microsoft.Bcl.Memory" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.ML.Tokenizers" />
     <PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" />
     <PackageReference Include="Microsoft.ML.Tokenizers.Data.O200kBase" />
