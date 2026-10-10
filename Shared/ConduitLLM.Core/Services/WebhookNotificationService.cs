@@ -1,147 +1,88 @@
 using System.Net.Http.Json;
-using Microsoft.Extensions.Logging;
+using System.Text.Json;
+using ConduitLLM.Core.Configuration;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Serialization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
-namespace ConduitLLM.Core.Services
+namespace ConduitLLM.Core.Services;
+
+/// <summary>One bounded POST. Durable delivery owns retries and receiver admission.</summary>
+public class WebhookNotificationService : IWebhookNotificationService
 {
-    /// <summary>
-    /// Service for sending webhook notifications to external endpoints.
-    /// </summary>
-    public class WebhookNotificationService : IWebhookNotificationService
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<WebhookNotificationService> _logger;
+    private readonly WebhookDeliveryOptions _options;
+    private readonly TimeProvider _clock;
+
+    public WebhookNotificationService(HttpClient httpClient, ILogger<WebhookNotificationService> logger,
+        IOptions<WebhookDeliveryOptions>? options = null, TimeProvider? clock = null)
     {
-        private readonly HttpClient _httpClient;
-        private readonly ILogger<WebhookNotificationService> _logger;
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _options = options?.Value ?? new();
+        if (!_options.IsValid()) throw new ArgumentException("Invalid webhook delivery timeouts.", nameof(options));
+        _clock = clock ?? TimeProvider.System;
+    }
 
-        public WebhookNotificationService(
-            HttpClient httpClient,
-            ILogger<WebhookNotificationService> logger)
+    public Task<WebhookSendResult> SendTaskCompletionWebhookAsync(string webhookUrl, object payload,
+        Dictionary<string, string>? headers = null, CancellationToken cancellationToken = default) =>
+        SendAsync(webhookUrl, payload, headers, "completion", null, cancellationToken);
+
+    public Task<WebhookSendResult> SendTaskProgressWebhookAsync(string webhookUrl, object payload,
+        Dictionary<string, string>? headers = null, CancellationToken cancellationToken = default) =>
+        SendAsync(webhookUrl, payload, headers, "progress", null, cancellationToken);
+
+    public Task<WebhookSendResult> SendWebhookAsync(string webhookUrl, object payload,
+        Dictionary<string, string>? headers = null, TimeSpan? customTimeout = null,
+        CancellationToken cancellationToken = default) =>
+        SendAsync(webhookUrl, payload, headers, "custom", customTimeout, cancellationToken);
+
+    private async Task<WebhookSendResult> SendAsync(string webhookUrl, object payload,
+        Dictionary<string, string>? headers, string type, TimeSpan? customTimeout, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var timeout = customTimeout ?? TimeSpan.FromSeconds(_options.AttemptTimeoutSeconds);
+        if (timeout <= TimeSpan.Zero || timeout > TimeSpan.FromSeconds(300) ||
+            !Uri.TryCreate(webhookUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            return WebhookSendResult.Failed(null, "Invalid callback URL or timeout.", WebhookFailureKind.InvalidRequest);
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(timeout);
+        try
         {
-            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            
-            // Set reasonable timeout for webhook calls
-            _httpClient.Timeout = TimeSpan.FromSeconds(30);
+            using var request = new HttpRequestMessage(HttpMethod.Post, uri);
+            if (headers != null)
+                foreach (var header in headers)
+                    request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            request.Headers.TryAddWithoutValidation("X-Webhook-Type", type);
+            request.Headers.TryAddWithoutValidation("X-Webhook-Timestamp", _clock.GetUtcNow().ToUnixTimeSeconds().ToString());
+            request.Content = JsonContent.Create(payload,
+                CoreJsonTypeInfo.Require(payload.GetType(), ConduitJsonOptions.Wire));
+            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            var status = (int)response.StatusCode;
+            if (response.IsSuccessStatusCode) return WebhookSendResult.Ok(status);
+
+            var retryAfter = response.Headers.RetryAfter;
+            var delay = retryAfter?.Delta ?? (retryAfter?.Date is { } date ? date - _clock.GetUtcNow() : (TimeSpan?)null);
+            return WebhookSendResult.Failed(status, $"Endpoint returned HTTP {status}.", WebhookFailureKind.Http, delay);
         }
-
-        /// <inheritdoc/>
-        public async Task<WebhookSendResult> SendTaskCompletionWebhookAsync(
-            string webhookUrl,
-            object payload,
-            Dictionary<string, string>? headers = null,
-            CancellationToken cancellationToken = default)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException)
         {
-            return await SendWebhookAsync(webhookUrl, payload, headers, "completion", null, cancellationToken);
+            return WebhookSendResult.Failed(null, "Receiver attempt timed out.", WebhookFailureKind.Timeout);
         }
-
-        /// <inheritdoc/>
-        public async Task<WebhookSendResult> SendTaskProgressWebhookAsync(
-            string webhookUrl,
-            object payload,
-            Dictionary<string, string>? headers = null,
-            CancellationToken cancellationToken = default)
+        catch (HttpRequestException)
         {
-            return await SendWebhookAsync(webhookUrl, payload, headers, "progress", null, cancellationToken);
+            _logger.LogDebug("Webhook receiver connection failed");
+            return WebhookSendResult.Failed(null, "Receiver connection failed.", WebhookFailureKind.Network);
         }
-
-        /// <summary>
-        /// Sends a webhook with custom timeout support.
-        /// </summary>
-        public async Task<WebhookSendResult> SendWebhookAsync(
-            string webhookUrl,
-            object payload,
-            Dictionary<string, string>? headers = null,
-            TimeSpan? customTimeout = null,
-            CancellationToken cancellationToken = default)
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or JsonException or NotSupportedException)
         {
-            return await SendWebhookAsync(webhookUrl, payload, headers, "custom", customTimeout, cancellationToken);
-        }
-
-        private async Task<WebhookSendResult> SendWebhookAsync(
-            string webhookUrl,
-            object payload,
-            Dictionary<string, string>? headers,
-            string webhookType,
-            TimeSpan? customTimeout,
-            CancellationToken cancellationToken)
-        {
-            try
-            {
-                _logger.LogInformation("Sending {WebhookType} webhook to {WebhookUrl} with timeout {Timeout}s", 
-                    webhookType, webhookUrl, customTimeout?.TotalSeconds ?? _httpClient.Timeout.TotalSeconds);
-
-                using var request = new HttpRequestMessage(HttpMethod.Post, webhookUrl);
-                
-                // Add custom headers if provided
-                if (headers != null)
-                {
-                    foreach (var header in headers)
-                    {
-                        request.Headers.TryAddWithoutValidation(header.Key, header.Value);
-                    }
-                }
-
-                // Add standard webhook headers
-                request.Headers.TryAddWithoutValidation("X-Webhook-Type", webhookType);
-                request.Headers.TryAddWithoutValidation("X-Webhook-Timestamp", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString());
-
-                // Add content
-                request.Content = JsonContent.Create(
-                    payload,
-                    CoreJsonTypeInfo.Require(payload.GetType(), ConduitJsonOptions.Wire));
-
-                // Apply custom timeout if specified
-                using var cts = customTimeout.HasValue 
-                    ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
-                    : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                
-                if (customTimeout.HasValue)
-                {
-                    cts.CancelAfter(customTimeout.Value);
-                }
-
-                // Send the webhook
-                using var response = await _httpClient.SendAsync(request, cts.Token);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    _logger.LogInformation("Successfully sent {WebhookType} webhook to {WebhookUrl} with status {StatusCode}",
-                        webhookType, webhookUrl, response.StatusCode);
-                    return WebhookSendResult.Ok((int)response.StatusCode);
-                }
-                else
-                {
-                    _logger.LogWarning("Failed to send {WebhookType} webhook to {WebhookUrl}. Status: {StatusCode}, Reason: {ReasonPhrase}",
-                        webhookType, webhookUrl, response.StatusCode, response.ReasonPhrase);
-                    return WebhookSendResult.Failed(
-                        (int)response.StatusCode,
-                        $"Endpoint returned {(int)response.StatusCode} {response.ReasonPhrase}");
-                }
-            }
-            catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException || customTimeout.HasValue)
-            {
-                var timeoutDuration = customTimeout?.TotalSeconds ?? _httpClient.Timeout.TotalSeconds;
-                _logger.LogWarning("Webhook request to {WebhookUrl} timed out after {Timeout}s",
-                    webhookUrl, timeoutDuration);
-                return WebhookSendResult.Failed(null, $"Request timed out after {timeoutDuration}s");
-            }
-            catch (TaskCanceledException)
-            {
-                _logger.LogInformation("Webhook request to {WebhookUrl} was cancelled", webhookUrl);
-                return WebhookSendResult.Failed(null, "Request was cancelled");
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError(ex, "HTTP error sending {WebhookType} webhook to {WebhookUrl}. Error: {ErrorMessage}",
-                    webhookType, webhookUrl, ex.Message);
-                return WebhookSendResult.Failed(null, ex.Message);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error sending {WebhookType} webhook to {WebhookUrl}",
-                    webhookType, webhookUrl);
-                return WebhookSendResult.Failed(null, ex.Message);
-            }
+            // Neither receiver reason phrases nor exception text are safe diagnostics.
+            return WebhookSendResult.Failed(null, "Invalid callback request or payload.", WebhookFailureKind.InvalidRequest);
         }
     }
 }

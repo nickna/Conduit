@@ -13,7 +13,11 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 }
 
 $project = Join-Path $repoRoot "Tests/ConduitLLM.PersistenceAotTests/ConduitLLM.PersistenceAotTests.csproj"
-dotnet publish $project -c Release -r $Runtime --self-contained true -o $OutputDirectory -p:PublishAot=true
+# Native linking launches architecture-specific MSBuild tasks. Disabling node and
+# compiler-server reuse keeps the documented smoke deterministic in restricted local
+# runners while matching the single-project CI workload.
+dotnet publish $project -c Release -r $Runtime --self-contained true -o $OutputDirectory `
+    -p:PublishAot=true -p:UseSharedCompilation=false -m:1 -nr:false
 if ($LASTEXITCODE -ne 0) { throw "Native persistence probe publish failed." }
 
 $executable = Join-Path $OutputDirectory "ConduitLLM.PersistenceAotTests"

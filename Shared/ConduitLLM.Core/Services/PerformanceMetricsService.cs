@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 
@@ -9,6 +8,12 @@ namespace ConduitLLM.Core.Services
     /// </summary>
     public class PerformanceMetricsService : IPerformanceMetricsService
     {
+        private readonly TimeProvider _timeProvider;
+
+        public PerformanceMetricsService(TimeProvider? timeProvider = null)
+        {
+            _timeProvider = timeProvider ?? TimeProvider.System;
+        }
         /// <summary>
         /// Calculates performance metrics for a completed chat completion.
         /// </summary>
@@ -47,7 +52,7 @@ namespace ConduitLLM.Core.Services
         /// </summary>
         public IStreamingMetricsTracker CreateStreamingTracker(string provider, string model)
         {
-            return new StreamingMetricsTracker(provider, model);
+            return new StreamingMetricsTracker(provider, model, _timeProvider);
         }
 
         /// <summary>
@@ -55,19 +60,23 @@ namespace ConduitLLM.Core.Services
         /// </summary>
         private class StreamingMetricsTracker : IStreamingMetricsTracker
         {
-            private readonly Stopwatch _stopwatch;
+            private readonly TimeProvider _timeProvider;
+            private readonly long _startedAt;
+            private TimeSpan? _completedElapsed;
+            private TimeSpan Elapsed => _completedElapsed ?? _timeProvider.GetElapsedTime(_startedAt);
             private readonly string _provider;
             private readonly string _model;
             private long? _timeToFirstTokenMs;
             private int _tokenCount;
             private readonly List<long> _interTokenLatencies;
-            private long _lastTokenTime;
+            private long? _lastTokenTime;
 
-            public StreamingMetricsTracker(string provider, string model)
+            public StreamingMetricsTracker(string provider, string model, TimeProvider timeProvider)
             {
                 _provider = provider;
                 _model = model;
-                _stopwatch = Stopwatch.StartNew();
+                _timeProvider = timeProvider;
+                _startedAt = _timeProvider.GetTimestamp();
                 _interTokenLatencies = new List<long>();
                 _tokenCount = 0;
             }
@@ -76,18 +85,18 @@ namespace ConduitLLM.Core.Services
             {
                 if (!_timeToFirstTokenMs.HasValue)
                 {
-                    _timeToFirstTokenMs = _stopwatch.ElapsedMilliseconds;
-                    _lastTokenTime = _stopwatch.ElapsedMilliseconds;
+                    _timeToFirstTokenMs = (long)Elapsed.TotalMilliseconds;
+                    _lastTokenTime = _timeToFirstTokenMs;
                     _tokenCount = 1;
                 }
             }
 
             public void RecordToken()
             {
-                var currentTime = _stopwatch.ElapsedMilliseconds;
-                if (_lastTokenTime > 0)
+                var currentTime = (long)Elapsed.TotalMilliseconds;
+                if (_lastTokenTime.HasValue)
                 {
-                    _interTokenLatencies.Add(currentTime - _lastTokenTime);
+                    _interTokenLatencies.Add(currentTime - _lastTokenTime.Value);
                 }
                 _lastTokenTime = currentTime;
                 _tokenCount++;
@@ -95,11 +104,11 @@ namespace ConduitLLM.Core.Services
 
             public PerformanceMetrics GetMetrics(Usage? usage = null)
             {
-                _stopwatch.Stop();
+                _completedElapsed ??= Elapsed;
                 
                 var metrics = new PerformanceMetrics
                 {
-                    TotalLatencyMs = _stopwatch.ElapsedMilliseconds,
+                    TotalLatencyMs = (long)Elapsed.TotalMilliseconds,
                     TimeToFirstTokenMs = _timeToFirstTokenMs,
                     Provider = _provider,
                     Model = _model,
@@ -113,7 +122,7 @@ namespace ConduitLLM.Core.Services
                 }
 
                 // Calculate tokens per second
-                var totalSeconds = _stopwatch.Elapsed.TotalSeconds;
+                var totalSeconds = Elapsed.TotalSeconds;
                 if (totalSeconds > 0)
                 {
                     if (usage?.CompletionTokens != null && usage.CompletionTokens > 0)

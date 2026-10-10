@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Interfaces;
@@ -17,6 +18,18 @@ namespace ConduitLLM.Tests.Core.Services
         private readonly Mock<ILogger<BatchCacheInvalidationService>> _mockLogger;
         private readonly BatchCacheInvalidationService _service;
         private readonly BatchInvalidationOptions _options;
+        private readonly ObservedTimeProvider _clock = new();
+
+        private sealed class ObservedTimeProvider : FakeTimeProvider
+        {
+            public TaskCompletionSource TimerCreated { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public override ITimer CreateTimer(TimerCallback callback, object state, TimeSpan dueTime, TimeSpan period)
+            {
+                var timer = base.CreateTimer(callback, state, dueTime, period);
+                TimerCreated.TrySetResult();
+                return timer;
+            }
+        }
 
         public BatchCacheInvalidationServiceTests()
         {
@@ -48,7 +61,8 @@ namespace ConduitLLM.Tests.Core.Services
             _service = new BatchCacheInvalidationService(
                 _mockServiceProvider.Object,
                 mockOptions.Object,
-                _mockLogger.Object);
+                _mockLogger.Object,
+                _clock);
         }
 
         [Theory]
@@ -164,14 +178,13 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public async Task Critical_Priority_Should_Trigger_Immediate_Processing()
         {
             // Arrange
-            var resetEvent = new ManualResetEventSlim(false);
+            var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             _mockVirtualKeyCache
                 .Setup(x => x.InvalidateVirtualKeyAsync(It.IsAny<string>()))
-                .Callback(() => resetEvent.Set())
+                .Callback(() => processed.TrySetResult())
                 .Returns(Task.CompletedTask);
 
             var @event = new VirtualKeyDeleted // Critical priority event
@@ -185,8 +198,7 @@ namespace ConduitLLM.Tests.Core.Services
             await _service.QueueInvalidationAsync(@event.KeyHash, @event, CacheType.VirtualKey);
 
             // Assert - Should process immediately without waiting for batch window
-            var processed = resetEvent.Wait(TimeSpan.FromMilliseconds(500));
-            Assert.True(processed, "Critical invalidation should be processed immediately");
+            await processed.Task.WaitAsync(TimeSpan.FromSeconds(10));
         }
 
         [Fact]
@@ -290,7 +302,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public async Task BatchWindow_Should_Trigger_Processing()
         {
             // Arrange
@@ -302,10 +313,10 @@ namespace ConduitLLM.Tests.Core.Services
             };
             _service.Configure(options);
 
-            var resetEvent = new ManualResetEventSlim(false);
+            var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             _mockVirtualKeyCache
                 .Setup(x => x.InvalidateVirtualKeyAsync(It.IsAny<string>()))
-                .Callback(() => resetEvent.Set())
+                .Callback(() => processed.TrySetResult())
                 .Returns(Task.CompletedTask);
 
             var @event = new VirtualKeyCreated
@@ -318,18 +329,14 @@ namespace ConduitLLM.Tests.Core.Services
             // Start the service
             var cts = new CancellationTokenSource();
             var serviceTask = _service.StartAsync(cts.Token);
+            await _clock.TimerCreated.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
             // Act
             await _service.QueueInvalidationAsync(@event.KeyHash, @event, CacheType.VirtualKey);
 
-            // Assert - Should process within 2x batch window
-            // Retry logic to handle timing variance on slow/busy systems
-            var processed = false;
-            for (int i = 0; i < 5 && !processed; i++)
-            {
-                processed = resetEvent.Wait(TimeSpan.FromMilliseconds(100));
-            }
-            Assert.True(processed, "Batch should be processed after batch window expires");
+            Assert.False(processed.Task.IsCompleted);
+            _clock.Advance(options.BatchWindow);
+            await processed.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
             // Cleanup
             cts.Cancel();

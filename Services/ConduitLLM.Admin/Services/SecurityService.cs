@@ -7,6 +7,7 @@ using ConduitLLM.Security.Options;
 using ConduitLLM.Security.Services;
 using ConduitLLM.Security.Cryptography;
 using ConduitLLM.Admin.Interfaces;
+using ConduitLLM.Admin.Security;
 
 namespace ConduitLLM.Admin.Services
 {
@@ -19,6 +20,7 @@ namespace ConduitLLM.Admin.Services
         private readonly AdminSecurityOptions _options;
         private readonly IConfiguration _configuration;
         private readonly IServiceScopeFactory? _serviceScopeFactory;
+        private readonly IReadOnlyList<string> _keyHeaders;
 
         /// <inheritdoc/>
         protected override string ServiceName => "admin-api";
@@ -41,6 +43,7 @@ namespace ConduitLLM.Admin.Services
             _options = options.Value;
             _configuration = configuration;
             _serviceScopeFactory = serviceScopeFactory;
+            _keyHeaders = MasterKeyCredentialReader.GetKeyHeaders(_options.ApiAuth);
         }
 
         /// <inheritdoc/>
@@ -132,28 +135,8 @@ namespace ConduitLLM.Admin.Services
 
         private async Task<bool> IsApiKeyValidAsync(HttpContext context)
         {
-            // Check primary header
-            if (context.Request.Headers.TryGetValue(_options.ApiAuth.ApiKeyHeader, out var apiKey))
-            {
-                if (await IsProvidedKeyValidAsync(apiKey.ToString()))
-                {
-                    return true;
-                }
-            }
-
-            // Check alternative headers for backward compatibility
-            foreach (var header in _options.ApiAuth.AlternativeHeaders)
-            {
-                if (context.Request.Headers.TryGetValue(header, out var altKey))
-                {
-                    if (await IsProvidedKeyValidAsync(altKey.ToString()))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
+            var providedKey = MasterKeyCredentialReader.Read(context.Request, _keyHeaders);
+            return !string.IsNullOrEmpty(providedKey) && await IsProvidedKeyValidAsync(providedKey);
         }
 
         private async Task<bool> IsProvidedKeyValidAsync(string providedKey)

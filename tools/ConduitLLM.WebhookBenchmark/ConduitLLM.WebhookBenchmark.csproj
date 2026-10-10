@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><IsPackable>false</IsPackable>
+    <DefineConstants Condition="'$(WebhookBenchmarkBaseline)' == 'true'">$(DefineConstants);WEBHOOK_BASELINE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj" /></ItemGroup>
+</Project>

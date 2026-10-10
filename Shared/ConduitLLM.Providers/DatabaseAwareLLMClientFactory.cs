@@ -9,6 +9,7 @@ using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Providers.Configuration;
+using ConduitLLM.Persistence.Interfaces;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
@@ -40,6 +41,7 @@ namespace ConduitLLM.Providers
         private readonly IServiceProvider _serviceProvider;
         private readonly IDbContextFactory<ConduitDbContext>? _dbContextFactory;
         private readonly IDistributedCache? _distributedCache;
+        private readonly IModelProviderMappingRuntimeStore? _runtimeMappingStore;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DatabaseAwareLLMClientFactory"/> class.
@@ -53,7 +55,8 @@ namespace ConduitLLM.Providers
             IServiceProvider serviceProvider,
             IPerformanceMetricsService? performanceMetricsService = null,
             IDbContextFactory<ConduitDbContext>? dbContextFactory = null,
-            IDistributedCache? distributedCache = null)
+            IDistributedCache? distributedCache = null,
+            IModelProviderMappingRuntimeStore? runtimeMappingStore = null)
         {
             _credentialService = credentialService ?? throw new ArgumentNullException(nameof(credentialService));
             _mappingService = mappingService ?? throw new ArgumentNullException(nameof(mappingService));
@@ -64,6 +67,7 @@ namespace ConduitLLM.Providers
             _performanceMetricsService = performanceMetricsService;
             _dbContextFactory = dbContextFactory;
             _distributedCache = distributedCache;
+            _runtimeMappingStore = runtimeMappingStore;
         }
 
         public async Task<ILLMClient> GetClientForChatAsync(
@@ -148,7 +152,29 @@ namespace ConduitLLM.Providers
 
         private async Task<ModelRoutePolicy> GetRoutePolicyAsync(string alias, CancellationToken cancellationToken)
         {
-            if (_dbContextFactory is not null)
+            if (_runtimeMappingStore is not null)
+            {
+                var persisted = await _runtimeMappingStore.GetRoutePolicyAsync(alias, cancellationToken);
+                if (persisted is not null && persisted.IsEnabled)
+                {
+                    return new ModelRoutePolicy
+                    {
+                        Id = persisted.Id,
+                        ModelAlias = persisted.ModelAlias,
+                        Strategy = persisted.Strategy,
+                        CostWeight = persisted.CostWeight,
+                        SpeedWeight = persisted.SpeedWeight,
+                        QualityWeight = persisted.QualityWeight,
+                        CacheAffinityEnabled = persisted.CacheAffinityEnabled,
+                        AffinityTtlSeconds = persisted.AffinityTtlSeconds,
+                        MaxAffinityScorePenalty = persisted.MaxAffinityScorePenalty,
+                        IsEnabled = persisted.IsEnabled,
+                        CreatedAt = persisted.CreatedAt,
+                        UpdatedAt = persisted.UpdatedAt
+                    };
+                }
+            }
+            else if (_dbContextFactory is not null)
             {
                 await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
                 var persisted = await context.ModelRoutePolicies.AsNoTracking()

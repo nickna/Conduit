@@ -1,7 +1,7 @@
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
-using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Gateway.DTOs;
+using ConduitLLM.Persistence.Interfaces;
 
 namespace ConduitLLM.Gateway.Endpoints
 {
@@ -11,7 +11,7 @@ namespace ConduitLLM.Gateway.Endpoints
     public class DownloadsEndpoints : GatewayEndpointHandlerBase
     {
         private readonly IFileRetrievalService _fileRetrievalService;
-        private readonly IMediaRecordRepository _mediaRecordRepository;
+        private readonly IMediaRuntimeStore _mediaStore;
 
         /// <summary>
         /// Initializes the Downloads endpoint handler.
@@ -20,11 +20,11 @@ namespace ConduitLLM.Gateway.Endpoints
             IFileRetrievalService fileRetrievalService,
             ILogger<DownloadsEndpoints> logger,
             IHttpContextAccessor httpContextAccessor,
-            IMediaRecordRepository mediaRecordRepository)
+            IMediaRuntimeStore mediaStore)
             : base(null, httpContextAccessor, logger)
         {
             _fileRetrievalService = fileRetrievalService ?? throw new ArgumentNullException(nameof(fileRetrievalService));
-            _mediaRecordRepository = mediaRecordRepository ?? throw new ArgumentNullException(nameof(mediaRecordRepository));
+            _mediaStore = mediaStore ?? throw new ArgumentNullException(nameof(mediaStore));
         }
 
         /// <summary>
@@ -51,28 +51,26 @@ namespace ConduitLLM.Gateway.Endpoints
                 return OpenAIError(404, "File not found", "not_found", "not_found_error");
             }
 
-            using (result)
+            // Set appropriate headers. The ASP.NET file result owns the stream after
+            // this method returns and disposes it after the response is written.
+            if (!inline && !string.IsNullOrEmpty(result.Metadata.FileName))
             {
-                // Set appropriate headers
-                if (!inline && !string.IsNullOrEmpty(result.Metadata.FileName))
-                {
-                    Response.Headers["Content-Disposition"] = $"attachment; filename=\"{result.Metadata.FileName}\"";
-                }
-
-                // Set cache headers
-                if (!string.IsNullOrEmpty(result.Metadata.ETag))
-                {
-                    Response.Headers["ETag"] = result.Metadata.ETag;
-                    Response.Headers["Cache-Control"] = "private, max-age=3600";
-                }
-
-                // Return file with range processing support
-                return File(
-                    result.ContentStream,
-                    result.Metadata.ContentType,
-                    result.Metadata.FileName,
-                    enableRangeProcessing: result.Metadata.SupportsRangeRequests);
+                Response.Headers["Content-Disposition"] = $"attachment; filename=\"{result.Metadata.FileName}\"";
             }
+
+            // Set cache headers
+            if (!string.IsNullOrEmpty(result.Metadata.ETag))
+            {
+                Response.Headers["ETag"] = result.Metadata.ETag;
+                Response.Headers["Cache-Control"] = "private, max-age=3600";
+            }
+
+            // Do not dispose result before the framework has copied ContentStream.
+            return File(
+                result.ContentStream,
+                result.Metadata.ContentType,
+                result.Metadata.FileName,
+                enableRangeProcessing: result.Metadata.SupportsRangeRequests);
         }
 
         /// <summary>
@@ -207,7 +205,7 @@ namespace ConduitLLM.Gateway.Endpoints
             }
 
             // Check if the file exists in our media records
-            var mediaRecord = await _mediaRecordRepository.GetByStorageKeyAsync(fileId);
+            var mediaRecord = await _mediaStore.GetByStorageKeyAsync(fileId);
 
             if (mediaRecord == null)
             {

@@ -1,7 +1,10 @@
+using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Enums;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Messaging;
 using ConduitLLM.Core.Events;
+using ConduitLLM.Persistence;
+using ConduitLLM.Persistence.Interfaces;
 
 namespace ConduitLLM.Gateway.EventHandlers
 {
@@ -60,28 +63,54 @@ namespace ConduitLLM.Gateway.EventHandlers
 
             // Create a scope to get the repositories
             using var scope = _serviceScopeFactory.CreateScope();
-            var virtualKeyRepository = scope.ServiceProvider.GetService<IVirtualKeyRepository>();
-            var groupRepository = scope.ServiceProvider.GetService<IVirtualKeyGroupRepository>();
-
-            if (virtualKeyRepository == null || groupRepository == null)
+            var runtimeStore = scope.ServiceProvider.GetService<IVirtualKeyRuntimeStore>();
+#if !CONDUIT_NATIVE_AOT
+            IVirtualKeyGroupRepository? groupRepository = null;
+#endif
+            VirtualKey? virtualKey;
+            VirtualKeyGroup? group;
+            if (runtimeStore is not null)
             {
-                _logger.LogError(
-                    "Virtual key or group repository not available - spend update for key {KeyId} cannot be processed",
-                    request.KeyId);
-
-                // Do not acknowledge the durable request when its debit cannot be applied.
-                // Throwing lets the endpoint retry policy retain/retry the original,
-                // idempotent SpendUpdateRequested message instead of replacing it with an
-                // unhandled notification and silently losing the charge.
+                var snapshot = await runtimeStore.GetByIdAsync(request.KeyId);
+                virtualKey = snapshot is null ? null : new VirtualKey
+                {
+                    Id = snapshot.Id,
+                    KeyName = snapshot.KeyName,
+                    KeyHash = snapshot.KeyHash,
+                    VirtualKeyGroupId = snapshot.VirtualKeyGroupId
+                };
+                group = snapshot is null ? null : new VirtualKeyGroup
+                {
+                    Id = snapshot.Group.Id,
+                    Balance = snapshot.Group.Balance
+                };
+            }
+            else
+            {
+#if CONDUIT_NATIVE_AOT
                 throw new InvalidOperationException(
-                    "Spend updates require both IVirtualKeyRepository and IVirtualKeyGroupRepository.");
+                    "NativeAOT spend updates require IVirtualKeyRuntimeStore.");
+#else
+                var virtualKeyRepository = scope.ServiceProvider.GetService<IVirtualKeyRepository>();
+                groupRepository = scope.ServiceProvider.GetService<IVirtualKeyGroupRepository>();
+                if (virtualKeyRepository is null || groupRepository is null)
+                {
+                    _logger.LogError(
+                        "Virtual key or group repository not available - spend update for key {KeyId} cannot be processed",
+                        request.KeyId);
+                    // Retain the durable message for retry if its debit cannot be applied.
+                    throw new InvalidOperationException(
+                        "Spend updates require both IVirtualKeyRepository and IVirtualKeyGroupRepository.");
+                }
+                virtualKey = await virtualKeyRepository.GetByIdAsync(request.KeyId);
+                group = virtualKey is null ? null : await groupRepository.GetByIdAsync(virtualKey.VirtualKeyGroupId);
+#endif
             }
 
             _logger.LogDebug("Processing spend update request for key {KeyId}: amount {Amount}, requestId {RequestId}",
                 request.KeyId, request.Amount, request.RequestId);
 
             // Get current virtual key state
-            var virtualKey = await virtualKeyRepository.GetByIdAsync(request.KeyId);
             if (virtualKey == null)
             {
                 _logger.LogWarning("Spend update request for non-existent virtual key {KeyId} - ignoring", request.KeyId);
@@ -89,7 +118,6 @@ namespace ConduitLLM.Gateway.EventHandlers
             }
 
             // Get the key's group
-            var group = await groupRepository.GetByIdAsync(virtualKey.VirtualKeyGroupId);
             if (group == null)
             {
                 _logger.LogError("Virtual key {KeyId} has invalid group ID {GroupId}", request.KeyId, virtualKey.VirtualKeyGroupId);
@@ -102,16 +130,33 @@ namespace ConduitLLM.Gateway.EventHandlers
             // Debit the group exactly once per RequestId (#927): the idempotency key
             // rides the ledger row inside the same atomic save as the balance change,
             // so an at-least-once redelivery cannot double-charge.
-            BalanceAdjustmentResult result;
-            result = await groupRepository.AdjustBalanceIdempotentAsync(
-                group.Id,
-                -request.Amount,
-                SpendIdempotency.KeyFor(request.RequestId),
-                description,
-                "System",
-                ReferenceType.VirtualKey,
-                request.KeyId.ToString(),
-                new DateTime(request.Timestamp.Year, request.Timestamp.Month, request.Timestamp.Day, request.Timestamp.Hour, 0, 0, DateTimeKind.Utc));
+            var billingWindow = new DateTime(request.Timestamp.Year, request.Timestamp.Month, request.Timestamp.Day, request.Timestamp.Hour, 0, 0, DateTimeKind.Utc);
+            VirtualKeyBalanceAdjustmentResult result;
+            if (runtimeStore is not null)
+            {
+                result = await runtimeStore.AdjustBalanceAsync(new VirtualKeyBalanceAdjustment(
+                    group.Id, -request.Amount, description, "System",
+                    VirtualKeyBalanceReferenceType.VirtualKey, request.KeyId.ToString(),
+                    SpendIdempotency.KeyFor(request.RequestId), billingWindow));
+            }
+            else
+            {
+#if CONDUIT_NATIVE_AOT
+                throw new InvalidOperationException("NativeAOT spend updates require IVirtualKeyRuntimeStore.");
+#else
+                var legacyResult = await groupRepository!.AdjustBalanceIdempotentAsync(
+                    group.Id,
+                    -request.Amount,
+                    SpendIdempotency.KeyFor(request.RequestId),
+                    description,
+                    "System",
+                    ReferenceType.VirtualKey,
+                    request.KeyId.ToString(),
+                    billingWindow);
+                result = new VirtualKeyBalanceAdjustmentResult(
+                    legacyResult.NewBalance, legacyResult.LifetimeSpent, legacyResult.Applied);
+#endif
+            }
 
             var newBalance = result.NewBalance;
             var newSpend = result.LifetimeSpent;

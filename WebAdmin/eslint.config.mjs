@@ -115,7 +115,8 @@ export default tseslint.config(
           format: ['camelCase', 'PascalCase', 'UPPER_CASE', 'snake_case'],
           leadingUnderscore: 'forbid',
           filter: {
-            regex: '^(Content-Type|Content-Disposition|content-type|content-disposition|X-Master-Key|X-API-Key|custom-rag|openai-compatible|deep-infra|eleven-labs|samba-nova|workers-ai|open-router|meta-ai|_retry|max_tokens|top_p|presence_penalty|response_format|aspect_ratio|webhook_url|supportsFunctionCalling|supportsVision|supportsImageGeneration|supportsAudioTranscription|supportsTextToSpeech|supportsRealtimeAudio|supportsStreaming|supportsVideoGeneration|supportsEmbeddings|maxContextLength|maxOutputTokens|isDefault|defaultCapabilityType|_note)$',
+            // Mantine palette keys also define the public CSS variable names.
+            regex: '^(Content-Type|Content-Disposition|content-type|content-disposition|X-Master-Key|X-API-Key|custom-rag|openai-compatible|deep-infra|eleven-labs|samba-nova|workers-ai|open-router|meta-ai|conduit-blue|conduit-gray|_retry|max_tokens|top_p|presence_penalty|response_format|aspect_ratio|webhook_url|supportsFunctionCalling|supportsVision|supportsImageGeneration|supportsAudioTranscription|supportsTextToSpeech|supportsRealtimeAudio|supportsStreaming|supportsVideoGeneration|supportsEmbeddings|maxContextLength|maxOutputTokens|isDefault|defaultCapabilityType|_note)$',
             match: false,
           },
         },

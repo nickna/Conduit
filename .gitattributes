@@ -1,3 +1,9 @@
 # Ensure shell scripts always have LF line endings on all platforms
 *.sh text eol=lf
 .husky/* text eol=lf
+
+# Generated artifacts are compared byte-for-byte with isolated OpenAPI exports.
+Services/ConduitLLM.Admin/openapi-admin.json text eol=lf
+Services/ConduitLLM.Gateway/openapi-gateway.json text eol=lf
+WebAdmin/src/generated/admin-api.ts text eol=lf
+WebAdmin/src/generated/gateway-api.ts text eol=lf

@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "method": {
+    "id": "authenticated-virtualkeys-ready-v1",
+    "warmups": 2,
+    "samples": 7,
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "deviceScaleFactor": 1,
+    "locale": "en-US",
+    "timezoneId": "UTC",
+    "fixtureKeys": [
+      "CI business key",
+      "CI empty key",
+      "CI rateLimitRpm",
+      "CI rateLimitRpd"
+    ]
+  },
+  "samplesMs": [
+    393.29999999998836,
+    491.29999999998836,
+    470.79999999998836,
+    528.5999999999767,
+    411.1000000000349,
+    468.5,
+    430.3999999999651
+  ],
+  "summary": {
+    "medianMs": 468.5,
+    "p95Ms": 528.5999999999767,
+    "minimumMs": 393.29999999998836,
+    "maximumMs": 528.5999999999767
+  },
+  "metric": "navigation start to all four real fixture keys rendered; milliseconds",
+  "engine": "153.0.8010.12",
+  "environment": {
+    "platform": "linux",
+    "architecture": "x64",
+    "cpuCount": 4,
+    "cpuModel": "AMD EPYC 7763 64-Core Processor",
+    "runnerImage": "20260927.320.1"
+  },
+  "source": {
+    "sha": "31a2df803179ccfdd2f5e2363189d807baf867b1",
+    "runUrl": "https://github.com/nickna/Conduit/actions/runs/37569962592"
+  },
+  "images": {
+    "admin": {
+      "reference": "conduit-admin:ci",
+      "id": "sha256:66d622cbbfce1e3723a62630be753d0884de38d4cd4b7ee2b76322bccc87a141",
+      "digests": []
+    },
+    "http": {
+      "reference": "conduit-http:ci",
+      "id": "sha256:c7ddeb7f6c81af9944916305d7cab3adc4422b70032c9df0682d6aeb3fce1b29",
+      "digests": []
+    },
+    "webadmin": {
+      "reference": "conduit-webadmin:ci",
+      "id": "sha256:f1309adcf77b2bcdc13e55ddd70e626b6024024efe5091f84c57c248f25ac7d3",
+      "digests": []
+    }
+  },
+  "succeeded": true
+}

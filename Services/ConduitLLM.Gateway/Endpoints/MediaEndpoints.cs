@@ -1,6 +1,6 @@
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
-using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Persistence.Interfaces;
 using Microsoft.Net.Http.Headers;
 using ConduitLLM.Gateway.DTOs;
 
@@ -12,17 +12,17 @@ namespace ConduitLLM.Gateway.Endpoints
     public class MediaEndpoints : GatewayEndpointHandlerBase
     {
         private readonly IMediaStorageService _storageService;
-        private readonly IMediaRecordRepository _mediaRepository;
+        private readonly IMediaRuntimeStore _mediaStore;
 
         public MediaEndpoints(
             IMediaStorageService storageService,
-            IMediaRecordRepository mediaRepository,
+            IMediaRuntimeStore mediaStore,
             IHttpContextAccessor httpContextAccessor,
             ILogger<MediaEndpoints> logger)
             : base(null, httpContextAccessor, logger)
         {
             _storageService = storageService;
-            _mediaRepository = mediaRepository;
+            _mediaStore = mediaStore;
         }
 
         /// <summary>
@@ -225,8 +225,9 @@ namespace ConduitLLM.Gateway.Endpoints
 
         private async Task<bool> IsTombstonedAsync(string storageKey)
         {
-            var mediaRecord = await _mediaRepository
-                .GetByStorageKeyIncludingDeletedAsync(storageKey);
+            var mediaRecord = await _mediaStore.GetByStorageKeyAsync(
+                storageKey,
+                includeDeleted: true);
             return mediaRecord?.DeletedAt != null;
         }
 

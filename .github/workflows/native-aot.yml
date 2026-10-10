@@ -3,9 +3,29 @@ name: NativeAOT
 on:
   push:
     branches: [master]
+  pull_request:
+    branches: [master, dev]
+    paths:
+      - 'global.json'
+      - 'Directory.*'
+      - 'Conduit.slnx'
+      - 'Shared/**'
+      - 'Services/**/*.cs'
+      - 'Services/**/*.csproj'
+      - 'Services/**/Dockerfile.native'
+      - 'Tests/ConduitLLM.GatewayNativeAotTests/**'
+      - 'Tests/ConduitLLM.PersistenceAotTests/**'
+      - 'tools/ConduitLLM.Migrator/**'
+      - 'tools/WolverineSmokePublisher/**'
+      - 'scripts/aot/**'
+      - 'scripts/test/wolverine-two-host-smoke.ps1'
+      - '.github/workflows/native-aot.yml'
   schedule:
     - cron: '23 8 * * 1'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   DOTNET_VERSION: '10.0.x'
@@ -45,12 +65,26 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Launch S3-compatible media storage
+        run: |
+          docker run --pull=always --detach --name native-aot-s3 --publish 127.0.0.1:9000:9090 \
+            adobe/s3mock:5.2.3@sha256:ab01a6946750f451ca215a47e91030695b260e4003b8a5a6201d25029b8fca92
+          curl --fail --retry 30 --retry-all-errors --retry-delay 1 http://127.0.0.1:9000/favicon.ico
+
+      - name: Verify generated compiled-model normalization
+        shell: pwsh
+        run: ./scripts/aot/normalize-compiled-model.ps1 -Check
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Verify native promotion gate contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-promotion.ps1
 
       - name: Install NativeAOT toolchain
         run: |
@@ -66,6 +100,23 @@ jobs:
         shell: pwsh
         run: ./scripts/aot/native-smoke.ps1
 
+      - name: Native PostgreSQL persistence contracts
+        shell: pwsh
+        run: ./scripts/aot/persistence-native-smoke.ps1
+        env:
+          DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
+
+      - name: Shared EF and Npgsql persistence parity
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests
+          suite: native-persistence-parity
+          filter: FullyQualifiedName~PersistenceParityTests|FullyQualifiedName~GlobalSettingRepositoryParityTests|FullyQualifiedName~IpFilterRepositoryParityTests|FullyQualifiedName~ProviderPersistenceParityTests
+          minimum: '9'
+        env:
+          CONDUIT_LOCK_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
+          CONDUIT_LOCK_TEST_REDIS: 127.0.0.1:6379
+
       - name: Build release-owned migration and message probes
         run: |
           dotnet build tools/ConduitLLM.Migrator --configuration Release
@@ -80,10 +131,15 @@ jobs:
 
       - name: Native Gateway supported protocol and infrastructure boundary
         shell: pwsh
-        run: ./scripts/aot/gateway-native-parity.ps1 -NoBuild -ArtifactDirectory artifacts/native-aot
+        run: ./scripts/aot/gateway-native-parity.ps1 -NoBuild -ArtifactDirectory artifacts/native-aot -S3HealthPath /favicon.ico
         env:
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
           REDIS_URL: redis://localhost:6379
+          CONDUIT_S3_ENDPOINT: http://localhost:9000
+          CONDUIT_S3_ACCESS_KEY_ID: nativeaots3
+          CONDUIT_S3_SECRET_ACCESS_KEY: nativeaots3secret
+          CONDUIT_S3_BUCKET_NAME: conduit-native-aot-media
+          ConduitLLM__Storage__S3__AutoConfigureCors: 'false'
 
       - name: Publish native baseline summary
         if: always()
@@ -108,21 +164,21 @@ jobs:
             Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Upload Admin native runtime
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: conduit-admin-linux-x64-native
           path: artifacts/native-aot/runtime/admin
           retention-days: 30
 
       - name: Upload Gateway native runtime
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: conduit-gateway-linux-x64-native
           path: artifacts/native-aot/runtime/gateway
           retention-days: 30
 
       - name: Upload native symbols
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: conduit-linux-x64-native-symbols
           path: artifacts/native-aot/symbols
@@ -130,7 +186,7 @@ jobs:
 
       - name: Upload native diagnostics and baselines
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: conduit-linux-x64-native-reports
           path: artifacts/native-aot/reports
@@ -153,13 +209,13 @@ jobs:
             dockerfile: Services/ConduitLLM.Gateway/Dockerfile.native
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build linux-x64 native image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -176,3 +232,11 @@ jobs:
       - name: Verify minimal native runtime image
         shell: pwsh
         run: ./scripts/aot/verify-native-image.ps1 -Image conduit-${{ matrix.service }}-native:ci -Service ${{ matrix.service }}
+
+      - name: Retain packaged native entrypoint evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-container-${{ matrix.service }}
+          path: artifacts/native-containers
+          retention-days: 30

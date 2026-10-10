@@ -2,9 +2,7 @@ using Microsoft.AspNetCore.SignalR;
 using ConduitLLM.Configuration.DTOs.SignalR;
 using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Configuration.Entities;
-using ConduitLLM.Configuration.Interfaces;
-
-using IVirtualKeyService = ConduitLLM.Core.Interfaces.IVirtualKeyService;
+using ConduitLLM.Core.Interfaces;
 namespace ConduitLLM.Gateway.Hubs
 {
     /// <summary>
@@ -15,8 +13,7 @@ namespace ConduitLLM.Gateway.Hubs
     {
         private readonly SignalRMetrics _metrics;
         private readonly ILogger<VirtualKeyManagementHub> _logger;
-        private readonly IVirtualKeyService _virtualKeyService;
-        private readonly IVirtualKeyGroupRepository _groupRepository;
+        private readonly IVirtualKeyRuntimeService _virtualKeyService;
         
         /// <summary>
         /// Initializes a new instance of the <see cref="VirtualKeyManagementHub"/> class.
@@ -24,19 +21,16 @@ namespace ConduitLLM.Gateway.Hubs
         /// <param name="metrics">SignalR metrics collector.</param>
         /// <param name="logger">Logger instance.</param>
         /// <param name="serviceProvider">Service provider for dependency injection.</param>
-        /// <param name="virtualKeyService">Virtual key service for key operations.</param>
-        /// <param name="groupRepository">Virtual key group repository.</param>
+        /// <param name="virtualKeyService">Request-time virtual key service.</param>
         public VirtualKeyManagementHub(
             SignalRMetrics metrics,
             ILogger<VirtualKeyManagementHub> logger,
             IServiceProvider serviceProvider,
-            IVirtualKeyService virtualKeyService,
-            IVirtualKeyGroupRepository groupRepository) : base(logger, serviceProvider)
+            IVirtualKeyRuntimeService virtualKeyService) : base(logger, serviceProvider)
         {
             _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _virtualKeyService = virtualKeyService ?? throw new ArgumentNullException(nameof(virtualKeyService));
-            _groupRepository = groupRepository ?? throw new ArgumentNullException(nameof(groupRepository));
         }
 
         /// <summary>
@@ -87,9 +81,9 @@ namespace ConduitLLM.Gateway.Hubs
                     // Check if the requesting key has admin privileges
                     if (!await IsAdminAsync())
                     {
-                        await Clients.Caller.SendAsync("Error", new
+                        await Clients.Caller.SendAsync("Error", new HubErrorNotification
                         {
-                            message = "Unauthorized: Admin privileges required"
+                            Message = "Unauthorized: Admin privileges required"
                         });
                         return;
                     }
@@ -98,9 +92,9 @@ namespace ConduitLLM.Gateway.Hubs
                     var targetKey = await _virtualKeyService.GetVirtualKeyInfoForValidationAsync(targetKeyId);
                     if (targetKey == null)
                     {
-                        await Clients.Caller.SendAsync("Error", new
+                        await Clients.Caller.SendAsync("Error", new HubErrorNotification
                         {
-                            message = $"Virtual key {targetKeyId} not found"
+                            Message = $"Virtual key {targetKeyId} not found"
                         });
                         return;
                     }
@@ -124,9 +118,9 @@ namespace ConduitLLM.Gateway.Hubs
                         new("hub", "VirtualKeyManagementHub"),
                         new("error_type", ex.GetType().Name));
                     _logger.LogError(ex, "Error subscribing to key management for {TargetKeyId}", targetKeyId);
-                    await Clients.Caller.SendAsync("Error", new
+                    await Clients.Caller.SendAsync("Error", new HubErrorNotification
                     {
-                        message = "Failed to subscribe to key management"
+                        Message = "Failed to subscribe to key management"
                     });
                 }
             }
@@ -173,18 +167,18 @@ namespace ConduitLLM.Gateway.Hubs
                 }
                 else
                 {
-                    await Clients.Caller.SendAsync("Error", new
+                    await Clients.Caller.SendAsync("Error", new HubErrorNotification
                     {
-                        message = "Virtual key not found"
+                        Message = "Virtual key not found"
                     });
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting current key status for {VirtualKeyId}", virtualKeyId);
-                await Clients.Caller.SendAsync("Error", new
+                await Clients.Caller.SendAsync("Error", new HubErrorNotification
                 {
-                    message = "Failed to get key status"
+                    Message = "Failed to get key status"
                 });
             }
         }
@@ -402,9 +396,11 @@ namespace ConduitLLM.Gateway.Hubs
         /// </summary>
         private async Task SendKeyStatusToClient(VirtualKey virtualKey)
         {
-            // Get the key's group for balance information
-            var group = await _groupRepository.GetByIdAsync(virtualKey.VirtualKeyGroupId);
-            
+            // Runtime key snapshots already carry the complete group balance needed by
+            // this notification. Re-querying the management repository here pulled EF
+            // back into every native SignalR connection.
+            var group = virtualKey.VirtualKeyGroup;
+
             var status = new VirtualKeyStatusNotification
             {
                 KeyId = virtualKey.Id,

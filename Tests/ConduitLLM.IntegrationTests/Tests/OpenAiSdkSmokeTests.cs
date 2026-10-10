@@ -22,6 +22,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using Moq;
+using Testcontainers.Redis;
 
 namespace ConduitLLM.IntegrationTests.Tests;
 
@@ -38,6 +39,16 @@ public sealed class OpenAiSdkSmokeTests
     [Trait("Component", "OpenAiSdkSmoke")]
     public async Task Official_sdks_complete_against_the_real_gateway()
     {
+        var redisConnectionString = Environment.GetEnvironmentVariable("TEST_REDIS_CONNECTION");
+        await using var redis = string.IsNullOrWhiteSpace(redisConnectionString)
+            ? new RedisBuilder().WithImage("redis:7.4-alpine").Build()
+            : null;
+        if (redis is not null)
+        {
+            await redis.StartAsync();
+            redisConnectionString = redis.GetConnectionString();
+        }
+
         using var environment = new EnvironmentScope(new Dictionary<string, string?>
         {
             ["ASPNETCORE_ENVIRONMENT"] = "Test",
@@ -49,7 +60,7 @@ public sealed class OpenAiSdkSmokeTests
             ["Logging__EventLog__LogLevel__Default"] = "None",
             ["DATABASE_URL"] = "postgresql://smoke:smoke@127.0.0.1:1/conduit_sdk_smoke",
             ["REDIS_URL"] = null,
-            ["CONDUIT_REDIS_CONNECTION_STRING"] = null
+            ["CONDUIT_REDIS_CONNECTION_STRING"] = redisConnectionString
         });
 
         var counters = new GatewayInvocationCounters();

@@ -23,14 +23,18 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace ConduitLLM.Tests.Core.Caching;
 
+[Collection(ApplicationCacheContractCollection.Name)]
 public sealed class FusionFunctionDiscoveryCacheTests
 {
     private static ServiceProvider Host(Mock<IGlobalSettingRepository> settings,
-        Mock<IFunctionConfigurationRepository>? configurations = null, string? redis = null, string? environment = null)
+        Mock<IFunctionConfigurationRepository>? configurations = null, string? redis = null, string? environment = null,
+        TimeSpan? outageReadTimeout = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ApplicationCache:Environment"] = environment ?? $"test-{Guid.NewGuid():N}",
+            ["ApplicationCache:DistributedReadTimeout"] = outageReadTimeout?.ToString()
+                ?? (redis is null ? "00:00:00.250" : RedisCacheTestReadiness.HealthyReadTimeout),
         }).Build();
         var services = new ServiceCollection().AddLogging();
         services.AddScoped(_ => settings.Object);
@@ -63,11 +67,13 @@ public sealed class FusionFunctionDiscoveryCacheTests
         Skip.If(string.IsNullOrEmpty(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         var environment = $"test-{Guid.NewGuid():N}";
         using var writer = Host(Settings(), redis: redis, environment: environment);
+        await RedisCacheTestReadiness.WarmAsync(writer, ApplicationCacheDomain.Functions);
         var generation = await writer.GetRequiredService<ApplicationCacheGeneration>().GetAsync(ApplicationCacheDomain.Functions);
         List<Tool> incomplete = nullFunction ? [new() { Function = null! }] : [null!];
         await writer.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey)
             .SetAsync($"functions:{generation}:configs:1", incomplete, tags: ["functions"]);
         using var reader = Host(Settings(), redis: redis, environment: environment);
+        await RedisCacheTestReadiness.WarmAsync(reader, ApplicationCacheDomain.Functions);
         using var scope = reader.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IFunctionDiscoveryCacheService>();
         Assert.Null(await service.GetCachedToolsAsync([1]));
@@ -164,6 +170,7 @@ public sealed class FusionFunctionDiscoveryCacheTests
             { Id = id, ConfigurationName = $"Config {id}", ProviderType = FunctionProviderType.Exa, IsEnabled = true,
                 CacheTtlMinutes = id == 1 ? 3 : 2, ParameterSchema = """{"type":"object","required":["query"]}""" }).ToList()));
         using var first = Host(Settings(), configs, redis, environment);
+        await RedisCacheTestReadiness.WarmAsync(first, ApplicationCacheDomain.Functions);
         using var firstScope = first.CreateScope();
         var cache = firstScope.ServiceProvider.GetRequiredService<IFunctionDiscoveryCacheService>();
         var service = new FunctionDiscoveryService(configs.Object, Mock.Of<IFunctionClientFactory>(), cache,
@@ -175,6 +182,7 @@ public sealed class FusionFunctionDiscoveryCacheTests
         configs.Verify(repo => repo.GetByIdsAsync(It.IsAny<List<int>>(), It.IsAny<CancellationToken>()), Times.Once);
         await cache.GetOrLoadAsync([2, 3], Load);
         using var second = Host(Settings(), configs, redis, environment);
+        await RedisCacheTestReadiness.WarmAsync(second, ApplicationCacheDomain.Functions);
         using var secondScope = second.CreateScope();
         var reader = secondScope.ServiceProvider.GetRequiredService<IFunctionDiscoveryCacheService>();
         Assert.Equal(cold[0].Function.Parameters!.ToJsonString(), (await reader.GetCachedToolsAsync([1, 2]))![0].Function.Parameters!.ToJsonString());
@@ -193,6 +201,7 @@ public sealed class FusionFunctionDiscoveryCacheTests
         Assert.Null(await reader.GetCachedToolsAsync([1, 2]));
         Assert.Null(await reader.GetCachedToolsAsync([2, 3]));
         using var restart = Host(Settings(), configs, redis, environment);
+        await RedisCacheTestReadiness.WarmAsync(restart, ApplicationCacheDomain.Functions);
         using var restartScope = restart.CreateScope();
         Assert.Null(await restartScope.ServiceProvider.GetRequiredService<IFunctionDiscoveryCacheService>().GetCachedToolsAsync([1, 2]));
     }
@@ -214,6 +223,7 @@ public sealed class FusionFunctionDiscoveryCacheTests
         var factory = new Mock<IFunctionClientFactory>();
         factory.Setup(item => item.GetClientAsync(FunctionProviderType.Mcp, 42)).ReturnsAsync(client.Object);
         using var writer = Host(Settings(), configs, redis, environment);
+        await RedisCacheTestReadiness.WarmAsync(writer, ApplicationCacheDomain.Functions);
         using var scope = writer.CreateScope();
         var service = new FunctionDiscoveryService(configs.Object, factory.Object,
             scope.ServiceProvider.GetRequiredService<IFunctionDiscoveryCacheService>(), NullLogger<FunctionDiscoveryService>.Instance);
@@ -221,6 +231,7 @@ public sealed class FusionFunctionDiscoveryCacheTests
         var warm = await service.GetToolsForFunctionConfigurationsAsync([42], 2);
         Assert.Equal(new[] { "acme_mcp__search", "acme_mcp__fetch" }, cold.Select(tool => tool.Function.Name));
         using var reader = Host(Settings(), configs, redis, environment);
+        await RedisCacheTestReadiness.WarmAsync(reader, ApplicationCacheDomain.Functions);
         using var readerScope = reader.CreateScope();
         var l2 = await readerScope.ServiceProvider.GetRequiredService<IFunctionDiscoveryCacheService>().GetCachedToolsAsync([42]);
         Assert.Equal(cold.Select(tool => tool.Function.Parameters!.ToJsonString()), l2!.Select(tool => tool.Function.Parameters!.ToJsonString()));
@@ -252,7 +263,8 @@ public sealed class FusionFunctionDiscoveryCacheTests
         var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
         Skip.If(string.IsNullOrWhiteSpace(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         await using var proxy = new RedisNetworkProxy(redis!);
-        using var host = Host(Settings(), redis: proxy.ConnectionString);
+        using var host = Host(Settings(), redis: proxy.ConnectionString, outageReadTimeout: TimeSpan.FromMilliseconds(250));
+        await RedisCacheTestReadiness.WarmAsync(host, ApplicationCacheDomain.Functions);
         using var scope = host.CreateScope();
         var cache = scope.ServiceProvider.GetRequiredService<IFunctionDiscoveryCacheService>();
         await cache.GetOrLoadAsync([1], Load);

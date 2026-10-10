@@ -17,7 +17,8 @@ namespace ConduitLLM.Core.Services
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<BatchCacheInvalidationService> _logger;
         private readonly ConcurrentDictionary<CacheType, CacheTypeStats> _stats;
-        private Timer? _batchTimer;
+        private ITimer? _batchTimer;
+        private readonly TimeProvider _timeProvider;
         private BatchInvalidationOptions _options;
         private readonly SemaphoreSlim _processingSemaphore;
         private long _totalQueued;
@@ -30,10 +31,12 @@ namespace ConduitLLM.Core.Services
         public BatchCacheInvalidationService(
             IServiceProvider serviceProvider,
             IOptions<BatchInvalidationOptions> options,
-            ILogger<BatchCacheInvalidationService> logger)
+            ILogger<BatchCacheInvalidationService> logger,
+            TimeProvider? timeProvider = null)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _timeProvider = timeProvider ?? TimeProvider.System;
             _options = options?.Value ?? new BatchInvalidationOptions();
             
             _queues = new ConcurrentDictionary<CacheType, ConcurrentQueue<InvalidationRequest>>();
@@ -202,7 +205,7 @@ namespace ConduitLLM.Core.Services
 
             _logger.LogInformation("Starting batch cache invalidation service");
 
-            _batchTimer = new Timer(
+            _batchTimer = _timeProvider.CreateTimer(
                 callback: async _ => await ProcessAllBatches(),
                 state: null,
                 dueTime: _options.BatchWindow,
