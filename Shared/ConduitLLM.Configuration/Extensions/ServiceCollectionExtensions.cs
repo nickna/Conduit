@@ -8,6 +8,7 @@ using ConduitLLM.Functions.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ConduitLLM.Persistence.Interfaces;
 
 namespace ConduitLLM.Configuration.Extensions
 {
@@ -30,6 +31,10 @@ namespace ConduitLLM.Configuration.Extensions
             // Register repositories
             services.AddScoped<IVirtualKeyRepository, VirtualKeyRepository>();
             services.AddScoped<IVirtualKeyGroupRepository, VirtualKeyGroupRepository>();
+#if !CONDUIT_NATIVE_AOT
+            services.AddSingleton<IVirtualKeyRuntimeStore, EfVirtualKeyRuntimeStore>();
+            services.AddScoped<IGatewayMetricsStore, EfGatewayMetricsStore>();
+#endif
             services.AddScoped<IProviderRepository, ProviderRepository>();
             services.AddScoped<IProviderKeyCredentialRepository, ProviderKeyCredentialRepository>();
             services.AddScoped<IGlobalSettingRepository, GlobalSettingRepository>();
@@ -50,9 +55,11 @@ namespace ConduitLLM.Configuration.Extensions
 
             // Register async task repository
             services.AddScoped<IAsyncTaskRepository, AsyncTaskRepository>();
+            services.AddScoped<IAsyncTaskRuntimeStore, EfAsyncTaskRuntimeStore>();
 
             // Register media record repository
             services.AddScoped<IMediaRecordRepository, MediaRecordRepository>();
+            services.AddScoped<IMediaRuntimeStore, EfMediaRuntimeStore>();
 
             // Register Function repositories
             services.AddScoped<IFunctionConfigurationRepository, FunctionConfigurationRepository>();

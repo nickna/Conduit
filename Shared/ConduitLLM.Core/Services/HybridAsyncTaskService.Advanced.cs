@@ -4,6 +4,7 @@ using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Serialization;
 using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Persistence;
 
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
@@ -22,8 +23,9 @@ namespace ConduitLLM.Core.Services
             TimeSpan leaseDuration,
             CancellationToken cancellationToken = default)
         {
-            var result = await _repository.TryClaimTaskAsync(
+            var runtimeResult = await _store.TryClaimTaskAsync(
                 taskId, workerId, leaseDuration, cancellationToken);
+            var result = (AsyncTaskClaimResult)(int)runtimeResult;
             if (result == AsyncTaskClaimResult.Claimed)
             {
                 try { await _cache.RemoveAsync(GetTaskKey(taskId), cancellationToken); }
@@ -37,7 +39,7 @@ namespace ConduitLLM.Core.Services
             string taskId,
             string workerId,
             CancellationToken cancellationToken = default)
-            => _repository.MarkProviderInvocationStartedAsync(taskId, workerId, cancellationToken);
+            => _store.MarkProviderInvocationStartedAsync(taskId, workerId, cancellationToken);
 
         /// <inheritdoc/>
         public Task<bool> MarkProviderInvocationCompletedAsync(
@@ -45,7 +47,7 @@ namespace ConduitLLM.Core.Services
             string workerId,
             string? providerOperationId = null,
             CancellationToken cancellationToken = default)
-            => _repository.MarkProviderInvocationCompletedAsync(
+            => _store.MarkProviderInvocationCompletedAsync(
                 taskId, workerId, providerOperationId, cancellationToken);
 
         /// <inheritdoc/>
@@ -54,7 +56,7 @@ namespace ConduitLLM.Core.Services
             string workerId,
             TimeSpan extension,
             CancellationToken cancellationToken = default)
-            => _repository.ExtendLeaseAsync(taskId, workerId, extension, cancellationToken);
+            => _store.ExtendLeaseAsync(taskId, workerId, extension, cancellationToken);
 
         /// <inheritdoc/>
         public async Task<AsyncTaskSummaryPage> GetTasksByStateAsync(
@@ -65,8 +67,10 @@ namespace ConduitLLM.Core.Services
         {
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 100);
-            var (tasks, totalCount) = await _repository.GetByStateAsync(
+            var pageResult = await _store.GetByStateAsync(
                 (int)state, page, pageSize, cancellationToken);
+            var tasks = pageResult.Tasks;
+            var totalCount = pageResult.TotalCount;
             var summaries = new List<AsyncTaskSummary>(tasks.Count);
             foreach (var task in tasks)
             {
@@ -112,7 +116,7 @@ namespace ConduitLLM.Core.Services
             CancellationToken cancellationToken = default)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(reason);
-            var updated = await _repository.FailIndeterminateTaskWithoutChargeAsync(
+            var updated = await _store.FailIndeterminateTaskWithoutChargeAsync(
                 taskId, reason, providerOperationId, cancellationToken);
             if (updated)
             {
@@ -137,7 +141,7 @@ namespace ConduitLLM.Core.Services
             string reason,
             CancellationToken cancellationToken = default)
         {
-            var result = await _repository.PrepareIndeterminateTaskRetryAsync(
+            var result = await _store.PrepareIndeterminateTaskRetryAsync(
                 taskId, dispatchId, reason, cancellationToken);
             if (result.Task != null)
             {
@@ -146,12 +150,12 @@ namespace ConduitLLM.Core.Services
 
             var status = result.Status switch
             {
-                IndeterminateTaskRetryPreparationStatus.Prepared => MediaTaskRetryPreparationStatus.Prepared,
-                IndeterminateTaskRetryPreparationStatus.AlreadyPrepared => MediaTaskRetryPreparationStatus.AlreadyPrepared,
-                IndeterminateTaskRetryPreparationStatus.Missing => MediaTaskRetryPreparationStatus.Missing,
-                IndeterminateTaskRetryPreparationStatus.NotIndeterminate => MediaTaskRetryPreparationStatus.NotIndeterminate,
-                IndeterminateTaskRetryPreparationStatus.UnsupportedTaskType => MediaTaskRetryPreparationStatus.UnsupportedTaskType,
-                IndeterminateTaskRetryPreparationStatus.RetryLimitExceeded => MediaTaskRetryPreparationStatus.RetryLimitExceeded,
+                AsyncTaskRuntimeRetryStatus.Prepared => MediaTaskRetryPreparationStatus.Prepared,
+                AsyncTaskRuntimeRetryStatus.AlreadyPrepared => MediaTaskRetryPreparationStatus.AlreadyPrepared,
+                AsyncTaskRuntimeRetryStatus.Missing => MediaTaskRetryPreparationStatus.Missing,
+                AsyncTaskRuntimeRetryStatus.NotIndeterminate => MediaTaskRetryPreparationStatus.NotIndeterminate,
+                AsyncTaskRuntimeRetryStatus.UnsupportedTaskType => MediaTaskRetryPreparationStatus.UnsupportedTaskType,
+                AsyncTaskRuntimeRetryStatus.RetryLimitExceeded => MediaTaskRetryPreparationStatus.RetryLimitExceeded,
                 _ => throw new ArgumentOutOfRangeException()
             };
             var metadata = result.Task?.Metadata is { Length: > 0 } json
@@ -174,7 +178,7 @@ namespace ConduitLLM.Core.Services
             await _cache.RemoveAsync(key, cancellationToken);
             
             // Delete from database
-            await _repository.DeleteAsync(taskId, cancellationToken);
+            await _store.DeleteAsync(taskId, cancellationToken);
             
             // Publish event if event bus is available
             if (_eventBus != null)
@@ -202,7 +206,7 @@ namespace ConduitLLM.Core.Services
                 throw new ArgumentOutOfRangeException(nameof(policy.ArchiveStaleAfter));
 
             var batchSize = Math.Clamp(policy.BatchSize, 1, 10_000);
-            var archivedCount = await _repository.ArchiveOldTasksAsync(
+            var archivedCount = await _store.ArchiveOldTasksAsync(
                 policy.ArchiveCompletedAfter,
                 policy.ArchiveStaleAfter,
                 cancellationToken);
@@ -210,15 +214,14 @@ namespace ConduitLLM.Core.Services
             var deletedTotal = 0;
             while (true)
             {
-                var tasksToDelete = await _repository.GetTasksForCleanupAsync(
+                var taskIds = await _store.GetTaskIdsForCleanupAsync(
                     policy.DeleteArchivedAfter,
                     batchSize,
                     cancellationToken);
-                if (tasksToDelete.Count == 0)
+                if (taskIds.Count == 0)
                     break;
 
-                var taskIds = tasksToDelete.Select(task => task.Id).ToArray();
-                var deletedCount = await _repository.BulkDeleteAsync(taskIds, cancellationToken);
+                var deletedCount = await _store.BulkDeleteAsync(taskIds, cancellationToken);
                 if (deletedCount == 0)
                     break;
 

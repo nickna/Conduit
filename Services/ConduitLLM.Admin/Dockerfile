@@ -10,6 +10,7 @@ COPY Conduit.slnx Directory.Build.props Directory.Packages.props NuGet.Config ./
 # Copy project files to correct locations
 COPY Services/ConduitLLM.Gateway/*.csproj ./Services/ConduitLLM.Gateway/
 COPY Shared/ConduitLLM.Configuration/*.csproj ./Shared/ConduitLLM.Configuration/
+COPY Shared/ConduitLLM.Persistence.Abstractions/*.csproj ./Shared/ConduitLLM.Persistence.Abstractions/
 COPY Shared/ConduitLLM.Core/*.csproj ./Shared/ConduitLLM.Core/
 COPY Shared/ConduitLLM.Security/*.csproj ./Shared/ConduitLLM.Security/
 COPY Shared/ConduitLLM.Providers/*.csproj ./Shared/ConduitLLM.Providers/

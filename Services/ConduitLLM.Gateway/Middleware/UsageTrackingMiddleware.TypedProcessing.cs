@@ -9,7 +9,7 @@ using ConduitLLM.Gateway.Services;
 using ConduitLLM.Gateway.UsageTracking;
 using ConduitLLM.Core.Serialization;
 using ConduitLLM.Gateway.Serialization;
-using IVirtualKeyService = ConduitLLM.Core.Interfaces.IVirtualKeyService;
+using IVirtualKeyRuntimeService = ConduitLLM.Core.Interfaces.IVirtualKeyRuntimeService;
 
 namespace ConduitLLM.Gateway.Middleware;
 
@@ -19,8 +19,8 @@ public partial class UsageTrackingMiddleware
         HttpContext context,
         ICostCalculationService costCalculationService,
         IBatchSpendUpdateService batchSpendService,
-        IRequestLogService requestLogService,
-        IVirtualKeyService virtualKeyService,
+        IRequestLogRuntimeWriter requestLogService,
+        IVirtualKeyRuntimeService virtualKeyService,
         IBillingAuditService billingAuditService,
         IToolCostCalculationService toolCostCalculationService)
     {
@@ -82,8 +82,8 @@ public partial class UsageTrackingMiddleware
         RequestAccountingSnapshot snapshot,
         ICostCalculationService costCalculationService,
         IBatchSpendUpdateService batchSpendService,
-        IRequestLogService requestLogService,
-        IVirtualKeyService virtualKeyService,
+        IRequestLogRuntimeWriter requestLogService,
+        IVirtualKeyRuntimeService virtualKeyService,
         IBillingAuditService billingAuditService,
         IToolCostCalculationService toolCostCalculationService)
     {
@@ -245,8 +245,8 @@ public partial class UsageTrackingMiddleware
         RequestAccountingSnapshot snapshot,
         ICostCalculationService costCalculationService,
         IBatchSpendUpdateService batchSpendService,
-        IRequestLogService requestLogService,
-        IVirtualKeyService virtualKeyService,
+        IRequestLogRuntimeWriter requestLogService,
+        IVirtualKeyRuntimeService virtualKeyService,
         IBillingAuditService billingAuditService)
     {
         if (snapshot.ProviderUsage is not { } evidence || snapshot.VirtualKeyId is not int virtualKeyId)
@@ -308,8 +308,8 @@ public partial class UsageTrackingMiddleware
         HttpContext context,
         RequestAccountingSnapshot snapshot,
         IBatchSpendUpdateService batchSpendService,
-        IRequestLogService requestLogService,
-        IVirtualKeyService virtualKeyService,
+        IRequestLogRuntimeWriter requestLogService,
+        IVirtualKeyRuntimeService virtualKeyService,
         IBillingAuditService billingAuditService)
     {
         if (snapshot.DirectCost is not { } directCost || snapshot.VirtualKeyId is not int virtualKeyId)

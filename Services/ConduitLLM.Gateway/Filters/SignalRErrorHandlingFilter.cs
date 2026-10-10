@@ -152,8 +152,11 @@ namespace ConduitLLM.Gateway.Filters
                 _logger.LogError(ex,
                     "Error during OnConnectedAsync for {Hub} on connection {ConnectionId}",
                     hubName, context.Context.ConnectionId);
-                
-                // Don't re-throw - let the connection fail gracefully
+
+                // Connection filters use exceptions to reject unauthenticated or
+                // rate-limited clients. Swallowing the exception leaves the transport
+                // open even though the rest of the connection pipeline never ran.
+                throw;
             }
         }
 

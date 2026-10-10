@@ -7,4 +7,9 @@
   <ItemGroup>
     <PackageReference Include="Npgsql" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Abstractions\ConduitLLM.Persistence.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Npgsql\ConduitLLM.Persistence.Npgsql.csproj" />
+  </ItemGroup>
 </Project>

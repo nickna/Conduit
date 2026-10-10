@@ -25,16 +25,11 @@ public static class MediaGenerationExtensions
             options.JitterPercentage = configuration.GetValue<int>("VideoGeneration:JitterPercentage", 20);
         });
 
-        // Add background services for monitoring and cleanup (skip in test environment to prevent endless loops)
-        if (environment.EnvironmentName != "Test")
-        {
-            // Register media generation metrics
-            services.AddSingleton<MediaGenerationMetrics>();
-
-            // Register media generation orchestrators
-            services.AddScoped<ImageGenerationOrchestrator>();
-            services.AddScoped<VideoGenerationOrchestrator>();
-        }
+        // Messaging handlers need these collaborators in every environment. Registering
+        // them does not start background workers.
+        services.AddSingleton<MediaGenerationMetrics>();
+        services.AddScoped<ImageGenerationOrchestrator>();
+        services.AddScoped<VideoGenerationOrchestrator>();
 
         return services;
     }

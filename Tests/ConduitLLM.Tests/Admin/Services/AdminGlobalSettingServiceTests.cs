@@ -37,7 +37,7 @@ public class AdminGlobalSettingServiceTests
             new() { Id = 1, Key = "setting1", Value = "value1", Description = "desc1" },
             new() { Id = 2, Key = "setting2", Value = "value2", Description = null }
         };
-        _mockGlobalSettingRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>()))
+        _mockGlobalSettingRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(entities);
 
         // Act
@@ -53,7 +53,7 @@ public class AdminGlobalSettingServiceTests
     [Fact]
     public async Task GetAllSettingsAsync_OmitsProtectedWebAdminKey()
     {
-        _mockGlobalSettingRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>()))
+        _mockGlobalSettingRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<GlobalSetting>
             {
                 new() { Id = 1, Key = "Visible", Value = "value" },

@@ -103,8 +103,9 @@ Conduit needs exactly two backing services:
 - **PostgreSQL** (required) — configuration, billing, and the message queue. Async messaging runs
   on **Wolverine over the PostgreSQL transport with an outbox**; there is no separate message
   broker to deploy or operate.
-- **Redis** (required for multi-node, recommended always) — caching, rate limiting, and the
-  SignalR backplane for real-time updates.
+- **Redis** (required for the Gateway, including single-node deployments) — caching, rate
+  limiting, spending coordination, and the SignalR backplane for real-time updates. Admin can run
+  without Redis; Redis-backed provider-error monitoring is then unavailable.
 
 The bundled Docker Compose stack also runs Prometheus, Grafana (pre-provisioned dashboards and
 alert rules), and an nginx edge proxy that serves the WebAdmin and its embedded Grafana UI from a
@@ -183,7 +184,7 @@ secrets, service URLs) and the **runtime Admin UI/API** (providers, keys, model 
 # PostgreSQL (required) — the app fails to start without it
 DATABASE_URL=postgresql://conduit:conduitpass@postgres:5432/conduitdb
 
-# Redis — providing REDIS_URL enables caching automatically
+# Redis (required for the Gateway) — also enables distributed caching automatically
 REDIS_URL=redis://redis:6379
 
 # Backend service-to-service authentication (WebAdmin backend → APIs)

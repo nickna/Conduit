@@ -6,14 +6,8 @@ namespace ConduitLLM.Configuration.Interfaces
     /// <summary>
     /// Service for logging and retrieving API requests made using virtual keys
     /// </summary>
-    public interface IRequestLogService
+    public interface IRequestLogService : IRequestLogRuntimeWriter
     {
-        /// <summary>
-        /// Logs a request made with a virtual key
-        /// </summary>
-        /// <param name="request">Request details to log</param>
-        Task LogRequestAsync(LogRequestDto request);
-
         /// <summary>
         /// Gets virtual key ID from the key hash
         /// </summary>

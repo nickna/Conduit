@@ -18,10 +18,20 @@ public partial class Program
             nativeRuntime
                 ? [
                     "postgresql-wolverine-persistence",
-                    "redis-signalr-backplane",
+                    "redis-signalr-backplane-and-rate-limits",
                     "redis-data-protection",
                     "json-signalr-negotiate-routing",
+                    "authenticated-signalr-json-connections",
+                    "redis-ephemeral-key-cache",
                     "unauthenticated-request-rejection",
+                    "authenticated-model-discovery",
+                    "provider-http",
+                    "sse-streaming",
+                    "provider-error-translation",
+                    "provider-cancellation",
+                    "request-accounting-and-spend-settlement",
+                    "async-task-persistence",
+                    "s3-media-api-workflows",
                     "forwarded-headers",
                     "liveness-metrics-opentelemetry"
                 ]
@@ -43,11 +53,7 @@ public partial class Program
                 ? [
                     "signalr-messagepack",
                     "ef-core-query-data-plane",
-                    "authenticated-http-data-plane",
-                    "authenticated-signalr-connections",
-                    "redis-virtual-key-cache-and-rate-limits",
-                    "provider-routing-and-streaming",
-                    "s3-media-api-workflows",
+                    "redis-virtual-key-authentication-cache",
                     "readiness-and-database-health"
                 ]
                 : []);

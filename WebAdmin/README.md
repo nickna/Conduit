@@ -57,6 +57,13 @@ remain stable.
    http://localhost:3000
    ```
 
+## Dependency maintenance
+
+When changing dependency overrides, follow the [verified lockfile refresh procedure](../docs/operations/npm-lockfile-overrides.md).
+`npm run check:dependency-overrides` checks both the locked coverage parser and the
+actual installed consumer; a successful lockfile-only npm command can retain an
+obsolete nested dependency (#1486).
+
 ## Environment Variables
 
 | Variable | Description | Default |

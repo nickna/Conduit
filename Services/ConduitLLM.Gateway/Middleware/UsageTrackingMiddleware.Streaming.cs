@@ -10,7 +10,7 @@ using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Gateway.UsageTracking;
 using ConduitLLM.Gateway.Utilities;
-using IVirtualKeyService = ConduitLLM.Core.Interfaces.IVirtualKeyService;
+using IVirtualKeyRuntimeService = ConduitLLM.Core.Interfaces.IVirtualKeyRuntimeService;
 
 namespace ConduitLLM.Gateway.Middleware
 {
@@ -20,8 +20,8 @@ namespace ConduitLLM.Gateway.Middleware
             HttpContext context,
             ICostCalculationService costCalculationService,
             IBatchSpendUpdateService batchSpendService,
-            IRequestLogService requestLogService,
-            IVirtualKeyService virtualKeyService,
+            IRequestLogRuntimeWriter requestLogService,
+            IVirtualKeyRuntimeService virtualKeyService,
             IBillingAuditService billingAuditService,
             IToolCostCalculationService toolCostCalculationService)
         {

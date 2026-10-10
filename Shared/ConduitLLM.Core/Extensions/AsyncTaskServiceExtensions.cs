@@ -1,7 +1,7 @@
-using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Messaging;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Persistence.Interfaces;
 
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,14 +16,15 @@ public static class AsyncTaskServiceExtensions
     {
         services.AddScoped<IAsyncTaskService>(serviceProvider =>
         {
-            var repository = serviceProvider.GetRequiredService<IAsyncTaskRepository>();
+            var store = serviceProvider.GetRequiredService<IAsyncTaskRuntimeStore>();
             var cache = serviceProvider.GetRequiredService<IDistributedCache>();
             var eventBus = serviceProvider.GetService<IEventBus>();
             var logger = serviceProvider.GetRequiredService<ILogger<HybridAsyncTaskService>>();
+            var terminalWriter = serviceProvider.GetService<IMediaTaskTerminalWriter>();
 
             return eventBus is null
-                ? new HybridAsyncTaskService(repository, cache, logger)
-                : new HybridAsyncTaskService(repository, cache, eventBus, logger);
+                ? new HybridAsyncTaskService(store, cache, logger, terminalWriter)
+                : new HybridAsyncTaskService(store, cache, eventBus, logger, terminalWriter);
         });
 
         return services;

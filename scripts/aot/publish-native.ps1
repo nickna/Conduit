@@ -62,7 +62,7 @@ foreach ($service in @("Admin", "Gateway")) {
 
     Get-ChildItem -LiteralPath $publishDirectory -File |
         Where-Object { $_.Extension -in @(".dbg", ".pdb") } |
-        Move-Item -Destination $symbolDirectory
+        Move-Item -Destination $symbolDirectory -Force
 
     $executableName = "ConduitLLM.$service"
     if ($Runtime.StartsWith("win-", [StringComparison]::OrdinalIgnoreCase)) {

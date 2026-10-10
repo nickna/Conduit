@@ -5,7 +5,6 @@ namespace ConduitLLM.Tests.Core.Services
     public partial class PerformanceMetricsServiceTests
     {
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void CalculateMetrics_BasicNonStreaming_ReturnsCorrectMetrics()
         {
             // Arrange
@@ -47,7 +46,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void CalculateMetrics_StreamingResponse_CalculatesStreamingMetrics()
         {
             // Arrange
@@ -88,7 +86,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void CalculateMetrics_WithRetryAttempts_RecordsRetries()
         {
             // Arrange
@@ -108,7 +105,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void CalculateMetrics_UnmeasurableSplitMetrics_RemainNull()
         {
             // Arrange
@@ -132,7 +128,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void CalculateMetrics_DifferentProviders_SetsCorrectly()
         {
             // Arrange
@@ -156,7 +151,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Theory]
-        [Trait("Category", "TimingSensitive")]
         [InlineData(1, 10, 10)]
         [InlineData(2, 20, 10)]
         [InlineData(5, 50, 10)]
@@ -181,7 +175,6 @@ namespace ConduitLLM.Tests.Core.Services
         }
 
         [Fact]
-        [Trait("Category", "TimingSensitive")]
         public void CalculateMetrics_VeryLongElapsedTime_HandlesCorrectly()
         {
             // Arrange

@@ -14,6 +14,7 @@ namespace ConduitLLM.Admin.Serialization;
     PropertyNameCaseInsensitive = true,
     UseStringEnumConverter = true)]
 [JsonSerializable(typeof(AdminProblemDetails))]
+[JsonSerializable(typeof(ConduitLLM.Core.Interfaces.WebhookReplayRequest))]
 [JsonSerializable(typeof(PagedResult<MetricKeyCountDto>))]
 [JsonSerializable(typeof(BatchSpendingStatusResponse))]
 [JsonSerializable(typeof(BatchSpendingInformationResponse))]

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text;
 
 using Amazon.S3;
 using Amazon.S3.Model;
@@ -13,51 +12,6 @@ namespace ConduitLLM.Tests.Core.Services
     public partial class S3MediaStorageServiceTests
     {
         #region StoreVideoAsync Tests
-
-        [Fact(Skip = "S3 SDK TransferUtility cannot be easily mocked - requires integration test")]
-        public async Task StoreVideoAsync_WithSmallVideo_ShouldUseRegularUpload()
-        {
-            // Arrange
-            var videoContent = new byte[4 * 1024 * 1024]; // 4MB (under 5MB threshold for PutObject)
-            var content = new MemoryStream(videoContent);
-            var metadata = new VideoMediaMetadata
-            {
-                ContentType = "video/mp4",
-                FileName = "test.mp4",
-                Duration = 30,
-                Resolution = "1920x1080",
-                Width = 1920,
-                Height = 1080,
-                FrameRate = 30.0,
-                Codec = "h264",
-                Bitrate = 5000000,
-                GeneratedByModel = "test-model",
-                GenerationPrompt = "test prompt"
-            };
-
-            var progressCallbacks = new List<long>();
-            var putObjectResponse = new PutObjectResponse
-            {
-                ETag = "test-etag",
-                HttpStatusCode = HttpStatusCode.OK
-            };
-
-            _mockS3Client.Setup(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default))
-                .ReturnsAsync(putObjectResponse);
-
-            // Act
-            var result = await _service.StoreVideoAsync(content, metadata, progressCallbacks.Add);
-
-            // Assert
-            Assert.NotNull(result);
-            Assert.StartsWith("video/", result.StorageKey);
-            Assert.EndsWith(".mp4", result.StorageKey);
-            Assert.Equal(videoContent.Length, result.SizeBytes);
-            Assert.NotEmpty(progressCallbacks);
-
-            // Verify put object was called for video upload
-            _mockS3Client.Verify(x => x.PutObjectAsync(It.IsAny<PutObjectRequest>(), default), Times.Once);
-        }
 
         [Fact]
         public async Task StoreVideoAsync_WithLargeVideo_ShouldUseMultipartUpload()
@@ -219,103 +173,6 @@ namespace ConduitLLM.Tests.Core.Services
         #endregion
 
         #region GetVideoStreamAsync Tests
-
-        [Fact(Skip = "Requires mocking non-virtual AWS SDK properties")]
-        public async Task GetVideoStreamAsync_WithFullRange_ShouldReturnFullStream()
-        {
-            // Arrange
-            var storageKey = "video/2023/01/01/test-hash.mp4";
-            var videoContent = "full video content data";
-            var contentLength = videoContent.Length;
-
-            var metadataResponse = new GetObjectMetadataResponse
-            {
-                ContentLength = contentLength,
-                HttpStatusCode = HttpStatusCode.OK
-            };
-
-            var getObjectResponse = new GetObjectResponse
-            {
-                ResponseStream = new MemoryStream(Encoding.UTF8.GetBytes(videoContent)),
-                HttpStatusCode = HttpStatusCode.OK
-            };
-
-            // Mock the Headers property with a dictionary that has ContentType
-            var mockGetObjectResponse = new Mock<GetObjectResponse>();
-            mockGetObjectResponse.Setup(r => r.ResponseStream).Returns(getObjectResponse.ResponseStream);
-            mockGetObjectResponse.Setup(r => r.Headers.ContentType).Returns("video/mp4");
-
-            _mockS3Client.Setup(x => x.GetObjectMetadataAsync(It.IsAny<GetObjectMetadataRequest>(), default))
-                .ReturnsAsync(metadataResponse);
-
-            _mockS3Client.Setup(x => x.GetObjectAsync(It.IsAny<GetObjectRequest>(), default))
-                .ReturnsAsync(mockGetObjectResponse.Object);
-
-            // Act
-            var rangedStream = await _service.GetVideoStreamAsync(storageKey);
-
-            // Assert
-            Assert.NotNull(rangedStream);
-            Assert.Equal(0, rangedStream.RangeStart);
-            Assert.Equal(contentLength - 1, rangedStream.RangeEnd);
-            Assert.Equal(contentLength, rangedStream.TotalSize);
-            Assert.Equal("video/mp4", rangedStream.ContentType);
-
-            // Verify no byte range was set (full file)
-            _mockS3Client.Verify(x => x.GetObjectAsync(It.Is<GetObjectRequest>(req =>
-                req.BucketName == _options.BucketName &&
-                req.Key == storageKey &&
-                req.ByteRange == null
-            ), default), Times.Once);
-        }
-
-        [Fact(Skip = "Requires mocking non-virtual AWS SDK properties")]
-        public async Task GetVideoStreamAsync_WithRangeRequest_ShouldReturnRangedStream()
-        {
-            // Arrange
-            var storageKey = "video/2023/01/01/test-hash.mp4";
-            var contentLength = 1000;
-            var rangeStart = 100L;
-            var rangeEnd = 200L;
-
-            var metadataResponse = new GetObjectMetadataResponse
-            {
-                ContentLength = contentLength,
-                HttpStatusCode = HttpStatusCode.OK
-            };
-
-            var getObjectResponse = new GetObjectResponse
-            {
-                ResponseStream = new MemoryStream(new byte[rangeEnd - rangeStart + 1]),
-                HttpStatusCode = HttpStatusCode.PartialContent
-            };
-
-            var mockGetObjectResponse = new Mock<GetObjectResponse>();
-            mockGetObjectResponse.Setup(r => r.ResponseStream).Returns(getObjectResponse.ResponseStream);
-            mockGetObjectResponse.Setup(r => r.Headers.ContentType).Returns("video/mp4");
-
-            _mockS3Client.Setup(x => x.GetObjectMetadataAsync(It.IsAny<GetObjectMetadataRequest>(), default))
-                .ReturnsAsync(metadataResponse);
-
-            _mockS3Client.Setup(x => x.GetObjectAsync(It.IsAny<GetObjectRequest>(), default))
-                .ReturnsAsync(mockGetObjectResponse.Object);
-
-            // Act
-            var rangedStream = await _service.GetVideoStreamAsync(storageKey, rangeStart, rangeEnd);
-
-            // Assert
-            Assert.NotNull(rangedStream);
-            Assert.Equal(rangeStart, rangedStream.RangeStart);
-            Assert.Equal(rangeEnd, rangedStream.RangeEnd);
-            Assert.Equal(contentLength, rangedStream.TotalSize);
-
-            // Verify byte range was set
-            _mockS3Client.Verify(x => x.GetObjectAsync(It.Is<GetObjectRequest>(req =>
-                req.BucketName == _options.BucketName &&
-                req.Key == storageKey &&
-                req.ByteRange != null
-            ), default), Times.Once);
-        }
 
         [Fact]
         public async Task GetVideoStreamAsync_WithNonExistentKey_ShouldReturnNull()
