@@ -508,7 +508,7 @@ internal sealed class MediaRequestDelegateHostFactory : WebApplicationFactory<Co
     private static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)
-            if (File.Exists(Path.Combine(directory.FullName, "Conduit.slnx"))) return directory.FullName;
+            if (File.Exists(Path.Join(directory.FullName, "Conduit.slnx"))) return directory.FullName;
         throw new DirectoryNotFoundException("Could not find Conduit.slnx for the real Admin test host.");
     }
 }
