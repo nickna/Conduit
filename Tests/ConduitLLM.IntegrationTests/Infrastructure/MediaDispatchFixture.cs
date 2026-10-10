@@ -111,7 +111,7 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
                 {
                     AddOrchestratorDependencies(services);
                     services.AddScoped<IAsyncTaskService>(sp => new HybridAsyncTaskService(
-                        Repository(), Cache.Object, sp.GetRequiredService<IEventBus>(), NullLogger<HybridAsyncTaskService>.Instance,
+                        new ConduitLLM.Configuration.Repositories.EfAsyncTaskRuntimeStore(Repository()), Cache.Object, sp.GetRequiredService<IEventBus>(), NullLogger<HybridAsyncTaskService>.Instance,
                         sp.GetRequiredService<IMediaTaskTerminalWriter>()));
                     services.AddScoped<ImageGenerationOrchestrator>();
                     services.AddScoped<IEventHandler<ImageGenerationRequested>>(sp => new ObservedImages(sp.GetRequiredService<ImageGenerationOrchestrator>(), this));
@@ -162,7 +162,7 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
             Id = 1, ProviderId = 1, ModelAlias = "test-model", ProviderModelId = "provider-model", IsEnabled = true,
             Provider = new Provider { Id = 1, ProviderName = "Test", ProviderType = ProviderType.OpenAI, IsEnabled = true }
         });
-        var key = new Mock<ConduitLLM.Core.Interfaces.IVirtualKeyService>();
+        var key = new Mock<ConduitLLM.Core.Interfaces.IVirtualKeyRuntimeService>();
         key.Setup(k => k.ValidateVirtualKeyAsync(It.IsAny<string>(), It.IsAny<string>()))
             .Returns(async () =>
             {

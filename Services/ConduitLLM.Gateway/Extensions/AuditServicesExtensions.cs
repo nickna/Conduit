@@ -17,6 +17,8 @@ public static class AuditServicesExtensions
     {
         // Request Log Service - uses batch processing like other audit services
         services.AddSingleton<IRequestLogService, RequestLogService>();
+        services.AddSingleton<IRequestLogRuntimeWriter>(provider =>
+            provider.GetRequiredService<IRequestLogService>());
         services.AddLeaderElectedHostedService<RequestLogService>(
             provider => (RequestLogService)provider.GetRequiredService<IRequestLogService>(),
             "RequestLogService");

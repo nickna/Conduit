@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR;
+using ConduitLLM.Configuration.DTOs.SignalR;
 using ConduitLLM.Core.Constants;
 using ConduitLLM.Gateway.Services;
 
@@ -71,7 +72,11 @@ namespace ConduitLLM.Gateway.Hubs
                 Context.ConnectionId, taskId, virtualKeyId);
 
             // Send initial status update
-            await Clients.Caller.SendAsync("taskSubscribed", new { taskId, message = "Successfully subscribed to task updates" });
+            await Clients.Caller.SendAsync("taskSubscribed", new TaskSubscriptionNotification
+            {
+                TaskId = taskId,
+                Message = "Successfully subscribed to task updates"
+            });
         }
 
         /// <summary>

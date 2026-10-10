@@ -59,7 +59,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 3, Key = "setting3", Value = "value3" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
 
             // Act
             await _service.StartAsync(CancellationToken.None);
@@ -74,7 +74,7 @@ namespace ConduitLLM.Tests.Configuration.Services
         public async Task StartAsync_WithNoSettings_LoadsEmptyCache()
         {
             // Arrange
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<GlobalSetting>());
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<GlobalSetting>());
 
             // Act
             await _service.StartAsync(CancellationToken.None);
@@ -93,7 +93,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "setting1", Value = "value1" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
 
             // Act
             await _service.StartAsync(CancellationToken.None);
@@ -125,7 +125,7 @@ namespace ConduitLLM.Tests.Configuration.Services
         {
             // Arrange
             var exception = new InvalidOperationException("Database unavailable");
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ThrowsAsync(exception);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ThrowsAsync(exception);
 
             // Act
             await _service.StartAsync(CancellationToken.None);
@@ -149,7 +149,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 .Select(i => new GlobalSetting { Id = i, Key = $"setting{i}", Value = $"value{i}" })
                 .ToList();
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
 
             var cts = new CancellationTokenSource();
             cts.Cancel();
@@ -176,7 +176,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "setting1", Value = "value1" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             // Verify cache has data
@@ -221,7 +221,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "Agentic.MaxIterations", Value = "10" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             // Act
@@ -235,7 +235,7 @@ namespace ConduitLLM.Tests.Configuration.Services
         public async Task GetMaxAgenticIterationsAsync_WhenSettingNotFound_ReturnsDefault()
         {
             // Arrange
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<GlobalSetting>());
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<GlobalSetting>());
             await _service.StartAsync(CancellationToken.None);
 
             // Act
@@ -254,7 +254,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "Agentic.MaxIterations", Value = "not_a_number" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             // Act
@@ -287,7 +287,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "Agentic.MaxIterations", Value = value }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             // Act
@@ -310,7 +310,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "Agentic.MinIterations", Value = "3" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             // Act
@@ -324,7 +324,7 @@ namespace ConduitLLM.Tests.Configuration.Services
         public async Task GetMinAgenticIterationsAsync_WhenSettingNotFound_ReturnsDefault()
         {
             // Arrange
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<GlobalSetting>());
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<GlobalSetting>());
             await _service.StartAsync(CancellationToken.None);
 
             // Act
@@ -363,7 +363,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "Agentic.DefaultEnabled", Value = value }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             // Act
@@ -377,7 +377,7 @@ namespace ConduitLLM.Tests.Configuration.Services
         public async Task GetDefaultAgenticModeEnabledAsync_WhenSettingNotFound_ReturnsDefault()
         {
             // Arrange
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<GlobalSetting>());
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<GlobalSetting>());
             await _service.StartAsync(CancellationToken.None);
 
             // Act
@@ -396,7 +396,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "Agentic.DefaultEnabled", Value = "maybe" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             // Act
@@ -427,7 +427,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "test_setting", Value = "old_value" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             var updatedSetting = new GlobalSetting { Id = 1, Key = "test_setting", Value = "new_value" };
@@ -453,7 +453,7 @@ namespace ConduitLLM.Tests.Configuration.Services
         [Fact]
         public async Task InvalidateSettingAsync_WithNewlyCreatedSetting_LoadsItIntoCache()
         {
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<GlobalSetting>());
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<GlobalSetting>());
             await _service.StartAsync(CancellationToken.None);
             _mockRepository
                 .Setup(x => x.GetByKeyAsync("new_setting", It.IsAny<CancellationToken>()))
@@ -476,7 +476,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "test", Value = "value" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             // Act
@@ -497,7 +497,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "failing_setting", Value = "value" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             var exception = new InvalidOperationException("Database error");
@@ -526,7 +526,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "stat_test", Value = "value" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             var statsBefore = await _service.GetCacheStatsAsync();
@@ -557,7 +557,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "setting1", Value = "value1" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(initialSettings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(initialSettings);
             await _service.StartAsync(CancellationToken.None);
 
             var newSettings = new List<GlobalSetting>
@@ -566,7 +566,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 3, Key = "setting3", Value = "value3" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(newSettings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(newSettings);
 
             // Act
             await _service.ReloadAllSettingsAsync();
@@ -584,7 +584,7 @@ namespace ConduitLLM.Tests.Configuration.Services
         public async Task ReloadAllSettingsAsync_WhenRepositoryThrows_RethrowsException()
         {
             // Arrange
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>()))
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("Database error"));
 
             // Act & Assert
@@ -596,7 +596,7 @@ namespace ConduitLLM.Tests.Configuration.Services
         public async Task PublishReloadAsync_WithoutRedis_ReloadsOncePerRequest()
         {
             _mockRepository
-                .SetupSequence(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>()))
+                .SetupSequence(x => x.ListAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync([new GlobalSetting { Id = 1, Key = "old", Value = "1" }])
                 .ReturnsAsync([new GlobalSetting { Id = 2, Key = "new", Value = "2" }]);
             await _service.StartAsync(CancellationToken.None);
@@ -607,7 +607,7 @@ namespace ConduitLLM.Tests.Configuration.Services
             var stats = await _service.GetCacheStatsAsync();
             stats.CachedKeys.Should().ContainSingle("new");
             _mockRepository.Verify(
-                repository => repository.GetAllUnboundedAsync(It.IsAny<CancellationToken>()),
+                repository => repository.ListAsync(It.IsAny<CancellationToken>()),
                 Times.Exactly(2));
         }
 
@@ -625,7 +625,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 2, Key = "test_setting", Value = "value" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             // Generate some cache hits and misses
@@ -654,7 +654,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 1, Key = "Agentic.MaxIterations", Value = "10" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             // Generate 3 hits and 1 miss
@@ -682,7 +682,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 .Select(i => new GlobalSetting { Id = i, Key = $"setting{i}", Value = $"value{i}" })
                 .ToList();
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             _mockRepository.Setup(x => x.GetByKeyAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -711,7 +711,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 new() { Id = 3, Key = "Agentic.DefaultEnabled", Value = "true" }
             };
 
-            _mockRepository.Setup(x => x.GetAllUnboundedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
+            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
             await _service.StartAsync(CancellationToken.None);
 
             // Act - Read settings concurrently

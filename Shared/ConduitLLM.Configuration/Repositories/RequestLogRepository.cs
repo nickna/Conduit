@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using ConduitLLM.Configuration.DTOs;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Utilities;
@@ -245,6 +247,10 @@ namespace ConduitLLM.Configuration.Repositories
         #region Database-Level Aggregation Methods
 
         /// <inheritdoc/>
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         public async Task<List<DateCostAggregation>> GetCostsByDateAsync(
             DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
         {
@@ -269,6 +275,10 @@ namespace ConduitLLM.Configuration.Repositories
         }
 
         /// <inheritdoc/>
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         public async Task<List<ModelAggregation>> GetAggregatedByModelAsync(
             DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
         {
@@ -297,6 +307,10 @@ namespace ConduitLLM.Configuration.Repositories
         }
 
         /// <inheritdoc/>
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         public async Task<List<ModelAggregation>> GetAggregatedByModelForVirtualKeyAsync(
             int virtualKeyId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
         {
@@ -325,6 +339,10 @@ namespace ConduitLLM.Configuration.Repositories
         }
 
         /// <inheritdoc/>
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         public async Task<List<VirtualKeyAggregation>> GetAggregatedByVirtualKeyAsync(
             DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
         {
@@ -351,6 +369,10 @@ namespace ConduitLLM.Configuration.Repositories
         }
 
         /// <inheritdoc/>
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         public async Task<RequestLogSummary> GetSummaryAsync(
             DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
         {
@@ -382,6 +404,10 @@ namespace ConduitLLM.Configuration.Repositories
         }
 
         /// <inheritdoc/>
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         public async Task<RequestLogSummary> GetSummaryForVirtualKeyAsync(
             int virtualKeyId, DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
         {
@@ -413,6 +439,10 @@ namespace ConduitLLM.Configuration.Repositories
         }
 
         /// <inheritdoc/>
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         public async Task<List<DailyStatisticsAggregation>> GetDailyStatisticsAsync(
             DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default)
         {

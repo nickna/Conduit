@@ -18,7 +18,7 @@ namespace ConduitLLM.Gateway.Authentication
     /// </summary>
     public class VirtualKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
-        private readonly IVirtualKeyService _virtualKeyService;
+        private readonly IVirtualKeyRuntimeService _virtualKeyService;
         private readonly IEphemeralKeyService _ephemeralKeyService;
         private readonly IReadOnlyList<string> _keyHeaders;
 
@@ -29,7 +29,7 @@ namespace ConduitLLM.Gateway.Authentication
             IOptionsMonitor<AuthenticationSchemeOptions> options,
             ILoggerFactory logger,
             UrlEncoder encoder,
-            IVirtualKeyService virtualKeyService,
+            IVirtualKeyRuntimeService virtualKeyService,
             IEphemeralKeyService ephemeralKeyService,
             IOptions<GatewaySecurityOptions> securityOptions)
             : base(options, logger, encoder)
@@ -146,6 +146,7 @@ namespace ConduitLLM.Gateway.Authentication
                 // Store virtual key info in HttpContext for usage tracking
                 Context.Items["VirtualKeyId"] = keyEntity.Id;
                 Context.Items["VirtualKey"] = virtualKey;
+                Context.Items["VirtualKeyEntity"] = keyEntity;
                 Context.Items["RequestStartTime"] = DateTime.UtcNow;
 
                 // Store rate-limit config so VirtualKeyRateLimitMiddleware can enforce limits

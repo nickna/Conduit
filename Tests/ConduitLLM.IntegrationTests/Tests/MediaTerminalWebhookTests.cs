@@ -141,7 +141,7 @@ public sealed class MediaTerminalWebhookTests(MediaDispatchFixture fixture)
             var writer = host.Services.GetRequiredService<IMediaTaskTerminalWriter>();
             Assert.False(await writer.CommitAsync(new(id, TaskState.Completed, "stale-worker")));
             Assert.True(await writer.CommitAsync(new(id, TaskState.Completed, Worker, Progress: 100, ResultJson: "{\"data\":[]}")));
-            var tasks = new HybridAsyncTaskService(fixture.Repository(), fixture.Cache.Object,
+            var tasks = new HybridAsyncTaskService(new ConduitLLM.Configuration.Repositories.EfAsyncTaskRuntimeStore(fixture.Repository()), fixture.Cache.Object,
                 host.Services.GetRequiredService<IEventBus>(), NullLogger<HybridAsyncTaskService>.Instance, writer);
             await tasks.UpdateTaskStatusAsync(id, TaskState.Processing, progress: 42);
             await using var db = fixture.Db();

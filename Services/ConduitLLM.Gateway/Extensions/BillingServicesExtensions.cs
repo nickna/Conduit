@@ -21,8 +21,13 @@ public static class BillingServicesExtensions
     /// </summary>
     public static IServiceCollection AddBillingAndPricingServices(this IServiceCollection services)
     {
-        // Model costs tracking service with caching decorator pattern
+        // Native request billing uses the fixed-shape routing persistence contract.
+        // JIT retains the full EF management service and FusionCache composition.
+#if CONDUIT_NATIVE_AOT
+        services.AddScoped<IModelCostService, StoreBackedModelCostService>();
+#else
         services.AddModelCostCache();
+#endif
 
         // Cost calculation service
         services.AddScoped<ICostCalculationService, CostCalculationService>();

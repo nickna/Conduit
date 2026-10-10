@@ -11,6 +11,8 @@
     <Project Path="Shared/ConduitLLM.Media/ConduitLLM.Media.csproj" />
     <Project Path="Shared/ConduitLLM.Messaging.Wolverine/ConduitLLM.Messaging.Wolverine.csproj" />
     <Project Path="Shared/ConduitLLM.OpenApi/ConduitLLM.OpenApi.csproj" />
+    <Project Path="Shared/ConduitLLM.Persistence.Abstractions/ConduitLLM.Persistence.Abstractions.csproj" />
+    <Project Path="Shared/ConduitLLM.Persistence.Npgsql/ConduitLLM.Persistence.Npgsql.csproj" />
     <Project Path="Shared/ConduitLLM.Providers/ConduitLLM.Providers.csproj" />
     <Project Path="Shared/ConduitLLM.Security/ConduitLLM.Security.csproj" />
     <Project Path="Shared/ConduitLLM.SignalR/ConduitLLM.SignalR.csproj" />

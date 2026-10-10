@@ -4,6 +4,8 @@ using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Messaging;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Gateway.EventHandlers;
+using ConduitLLM.Persistence;
+using ConduitLLM.Persistence.Interfaces;
 using ConduitLLM.Tests.Messaging;
 
 using AwesomeAssertions;
@@ -67,6 +69,76 @@ namespace ConduitLLM.Tests.Http.EventHandlers
 
             handlers.Should().ContainSingle()
                 .Which.Should().Be<SpendUpdateProcessor>();
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task HandleAsync_WithRuntimeStore_PreservesDebitAndRedeliveryNotifications(bool applied)
+        {
+            var store = new Mock<IVirtualKeyRuntimeStore>(MockBehavior.Strict);
+            _serviceProviderMock.Setup(sp => sp.GetService(typeof(IVirtualKeyRuntimeStore)))
+                .Returns(store.Object);
+            store.Setup(s => s.GetByIdAsync(123, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new VirtualKeyRuntimeRecord
+                {
+                    Id = 123, KeyName = "Runtime key", KeyHash = "runtime-hash", VirtualKeyGroupId = 1,
+                    Group = new VirtualKeyGroupRuntimeRecord { Id = 1, Balance = 100m }
+                });
+            var request = new SpendUpdateRequested
+            {
+                KeyId = 123, Amount = 105m, RequestId = "runtime-spend", CorrelationId = "runtime-correlation",
+                Timestamp = new DateTime(2026, 10, 7, 8, 45, 0, DateTimeKind.Utc)
+            };
+            store.Setup(s => s.AdjustBalanceAsync(It.Is<VirtualKeyBalanceAdjustment>(a =>
+                    a.GroupId == 1 && a.Amount == -105m && a.IdempotencyKey == "spend:runtime-spend" &&
+                    a.ReferenceType == VirtualKeyBalanceReferenceType.VirtualKey && a.ReferenceId == "123" &&
+                    a.Description == "API usage by virtual key #123" && a.InitiatedBy == "System" &&
+                    a.BillingWindowStartUtc == new DateTime(2026, 10, 7, 8, 0, 0, DateTimeKind.Utc)),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new VirtualKeyBalanceAdjustmentResult(-5m, 105m, applied));
+            var reservations = new Mock<IBatchSpendUpdateService>();
+            var processor = new SpendUpdateProcessor(_serviceScopeFactoryMock.Object, _eventBusMock.Object,
+                CreateLogger<SpendUpdateProcessor>().Object, reservations.Object);
+
+            await processor.HandleAsync(request, new TestEventContext());
+
+            store.VerifyAll();
+            _serviceProviderMock.Verify(sp => sp.GetService(typeof(IVirtualKeyRepository)), Times.Never);
+            _serviceProviderMock.Verify(sp => sp.GetService(typeof(IVirtualKeyGroupRepository)), Times.Never);
+            reservations.Verify(s => s.ReleaseSpendReservationAsync(123, "runtime-spend"), Times.Once);
+            _eventBusMock.Verify(b => b.PublishAsync(It.Is<SpendUpdated>(e =>
+                e.KeyId == 123 && e.KeyHash == "runtime-hash" && e.Amount == 105m &&
+                e.NewTotalSpend == 105m && e.RequestId == "runtime-spend" && e.CorrelationId == "runtime-correlation"),
+                It.IsAny<CancellationToken>()), Times.Once);
+            _eventBusMock.Verify(b => b.PublishAsync(It.Is<SpendThresholdExceeded>(e =>
+                e.VirtualKeyId == 123 && e.VirtualKeyHash == "runtime-hash" && e.AmountOver == 5m),
+                It.IsAny<CancellationToken>()), applied ? Times.Once() : Times.Never());
+        }
+
+        [Fact]
+        public async Task HandleAsync_WhenRuntimeDebitFails_RetainsReservationAndThrowsForDurableRetry()
+        {
+            var store = new Mock<IVirtualKeyRuntimeStore>();
+            _serviceProviderMock.Setup(sp => sp.GetService(typeof(IVirtualKeyRuntimeStore))).Returns(store.Object);
+            store.Setup(s => s.GetByIdAsync(123, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new VirtualKeyRuntimeRecord
+                {
+                    Id = 123, VirtualKeyGroupId = 1,
+                    Group = new VirtualKeyGroupRuntimeRecord { Id = 1, Balance = 100m }
+                });
+            store.Setup(s => s.AdjustBalanceAsync(It.IsAny<VirtualKeyBalanceAdjustment>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("Database unavailable"));
+            var reservations = new Mock<IBatchSpendUpdateService>();
+            var processor = new SpendUpdateProcessor(_serviceScopeFactoryMock.Object, _eventBusMock.Object,
+                CreateLogger<SpendUpdateProcessor>().Object, reservations.Object);
+
+            var act = () => processor.HandleAsync(new SpendUpdateRequested
+                { KeyId = 123, Amount = 5m, RequestId = "retry-spend" }, new TestEventContext());
+
+            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("Database unavailable");
+            reservations.VerifyNoOtherCalls();
+            _eventBusMock.VerifyNoOtherCalls();
         }
 
         [Fact]

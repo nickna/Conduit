@@ -116,9 +116,10 @@ merges to `master`, on a weekly schedule, and on manual dispatch. The workflow:
 5. Retains publish time, executable and runtime size, OpenAPI readiness time, peak
    working set, generated OpenAPI documents, and process logs.
 
-Native smoke results are measurements during the readiness epic. A known runtime
-failure is visible in the report and job summary without discarding successful
-publish artifacts. JIT build/test and Docker validation jobs are unchanged.
+Native smoke failures fail the job. Diagnostics and measurements are retained even
+on failure. The supported Gateway gate includes PostgreSQL, Redis, MinIO, provider
+HTTP/SSE, request accounting, task state, and real JSON SignalR connections. JIT
+build/test and Docker validation remain required independently.
 
 The publish lane writes `linker-diagnostics.json` with each de-duplicated first-party
 `IL2026`, `IL3050`, `IL207x`, or `IL209x` diagnostic and `linker-summary.md` with
@@ -131,11 +132,71 @@ callable against existing publish logs:
   -BaselinePath scripts/aot/linker-warning-baseline.json
 ```
 
-The 2026-08-27 `win-x64` native publish contains **147** unique first-party linker
-diagnostics: 45 `IL2026` warnings from EF query expression generation and 102
-`IL3050` warnings from the generated EF compiled model. The same publish contains no
-first-party JSON metadata or security middleware diagnostics. These 147 warnings are
-an explicit burn-down baseline, not an acceptance waiver. NativeAOT readiness still
-requires a successful `linux-x64` publish with this baseline reduced to zero, followed
-by the full feature-parity and canary gates described in the feature matrix and
-promotion policy.
+EF Core 10's compiled-model generator emits closed enum and array mappings through
+APIs annotated for arbitrary runtime types. The 22 affected generated `Create`
+methods carry exact `IL3050` exceptions with an owner, upstream issue, and removal
+condition. `scripts/aot/normalize-compiled-model.ps1` reapplies and verifies that
+bounded generated-file set after regeneration.
+
+The 2026-08-28 `win-x64` native publish contains **0** first-party linker diagnostics.
+The checked-in linker baseline is therefore empty: any new first-party `IL2026`,
+`IL3050`, `IL207x`, or `IL209x` diagnostic now fails the native publish lane.
+
+This closeout removed the eight supported Gateway metrics diagnostics by introducing
+the fixed-shape `IGatewayMetricsStore`; its EF reference and typed-Npgsql adapters pass
+the same real-PostgreSQL aggregate contract. The remaining 29 emitted diagnostics came
+from 25 EF query methods on the Admin management/reporting path that ADR 0006 explicitly
+excludes from the supported NativeAOT data plane. Those methods now carry individual
+`IL2026` exceptions with the database/runtime owner, `dotnet/efcore#29754`, and a
+removal condition requiring either a fixed-shape native store or trim-safe EF query
+construction. No assembly-, type-, or warning-category suppression is used.
+
+Zero emitted first-party diagnostics is the warning ratchet, not proof that the
+excepted Admin methods can execute natively. Those methods remain unsupported and
+must be replaced or independently proven before the parent epic is complete.
+Production NativeAOT promotion also requires a successful `linux-x64` release
+publish plus the full feature-parity, digest-pinned benchmark, ordered soak, and
+rollback gates described in the feature matrix and promotion policy.
+
+## Integration checkpoint: 2026-10-07
+
+The persistence/protocol stack previously merged only into feature branches is now
+integrated with the current Gateway and Admin code. JIT retains FusionCache and the
+existing distributed-lock registrations. Media acceptance, recovery, and terminal
+writes retain their transactional Wolverine dispatch; stale task snapshots cannot
+overwrite newer claims. Queued spend updates use the selected virtual-key runtime
+store instead of re-entering EF in native builds.
+
+Local verification uses .NET SDK 10.0.401, `win-x64`, PostgreSQL 17, Redis 7.4, and
+pinned MinIO. The Release solution build, empty analyzer/linker ratchets, both native
+OpenAPI smokes, two-host native Wolverine dispatch, native persistence probe,
+nine shared EF/Npgsql contracts, and the
+published Gateway provider/SSE/accounting/storage/JSON-SignalR matrix pass. The core
+suite, billing invariants and fault injection, and 26 durable media/webhook cases
+also pass. Offline OpenAPI and client types match the checked-in contracts across
+two isolated generations; committed Wolverine adapters have no drift. The
+`linux-x64` workflow remains the platform-specific release gate.
+
+The parent epic remains open. Remaining work is:
+
+- **Persistence (#1373):** replace or independently prove the 25 excepted Admin
+  query methods and the remaining management/reporting/retention workload. Refresh
+  the query inventory for features added since its original audit. Gateway function
+  audit/retention and billing reconciliation still execute unextracted EF queries;
+  native host startup logs expose those failures even when the bounded protocol
+  probe passes. They require typed stores and process tests before production use.
+- **Runtime parity (#1374):** prove database readiness, authentication-cache
+  invalidation, tool/function providers, and provider/video/audio flows beyond the
+  documented OpenAI-compatible chat/image matrix. JSON-only SignalR remains an
+  explicit first-image limitation. Full native Admin management coverage remains
+  outstanding. A passing bounded probe is insufficient for these workloads.
+- **Operations (#1375):** collect digest-pinned JIT/native benchmarks, security,
+  SBOM/provenance, dashboard/alert, and automatic/manual rollback evidence. Complete
+  the policy's 168-hour Admin soak before the separate 168-hour Gateway soak. The
+  promotion policy stays blocked until workload and operational evidence exist.
+
+Native CI now checks the shared EF/Npgsql contracts, publishes/runs the native
+persistence probe, and retains Gateway/Wolverine process logs with the native
+reports. Source changes to shared libraries and service code trigger the native
+lane. Compiled-model normalization checks the exact exception code, justification,
+and placement on `Create`, including rejection of an altered exception.

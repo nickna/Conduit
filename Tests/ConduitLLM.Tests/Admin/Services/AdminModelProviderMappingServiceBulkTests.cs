@@ -31,7 +31,7 @@ public class AdminModelProviderMappingServiceBulkTests
         ]);
 
         _providerRepository
-            .Setup(repository => repository.GetAllUnboundedAsync(It.IsAny<CancellationToken>()))
+            .Setup(repository => repository.ListAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => _providers.ToList());
         _providerRepository
             .Setup(repository => repository.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))

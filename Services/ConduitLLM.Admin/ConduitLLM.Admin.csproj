@@ -44,6 +44,7 @@
     <ProjectReference Include="..\..\Shared\ConduitLLM.Security\ConduitLLM.Security.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Media\ConduitLLM.Media.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.OpenApi\ConduitLLM.OpenApi.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Abstractions\ConduitLLM.Persistence.Abstractions.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Messaging.Wolverine\ConduitLLM.Messaging.Wolverine.csproj" />
     <!-- WebAdmin reference removed, now using API client -->
   </ItemGroup>

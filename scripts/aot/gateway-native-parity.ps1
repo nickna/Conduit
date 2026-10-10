@@ -4,18 +4,25 @@
     Runs the Phase 5 Gateway protocol/infrastructure matrix against native processes.
 
 .DESCRIPTION
-    Starts a native Admin and two native Gateway executables against real PostgreSQL
-    and Redis, then runs the native JSON SignalR/HTTP supported-boundary probe.
+    Starts a native Admin and two native Gateway executables against real PostgreSQL,
+    Redis, and S3-compatible storage, then runs the native supported-boundary probe.
 #>
 [CmdletBinding()]
 param(
     [string]$ArtifactDirectory,
     [string]$DatabaseUrl = $env:DATABASE_URL,
     [string]$RedisUrl = $env:REDIS_URL,
+    [string]$S3Endpoint = $env:CONDUIT_S3_ENDPOINT,
+    [string]$S3HealthPath = '/minio/health/live',
+    [string]$S3AccessKeyId = $env:CONDUIT_S3_ACCESS_KEY_ID,
+    [string]$S3SecretAccessKey = $env:CONDUIT_S3_SECRET_ACCESS_KEY,
+    [string]$S3BucketName = $env:CONDUIT_S3_BUCKET_NAME,
+    [string]$S3Region = 'us-east-1',
     [string]$MasterKey = 'native-aot-parity-master-key-32-bytes',
     [int]$GatewayPort = 15100,
     [int]$SecondaryGatewayPort = 15101,
     [int]$AdminPort = 15102,
+    [int]$ProviderPort = 15103,
     [int]$TimeoutSeconds = 240,
     [switch]$NoBuild
 )
@@ -27,11 +34,15 @@ $artifactRoot = [IO.Path]::GetFullPath($ArtifactDirectory)
 $runtimeRoot = Join-Path $artifactRoot 'runtime'
 $migratorProject = Join-Path $repoRoot 'tools/ConduitLLM.Migrator'
 $probeProject = Join-Path $repoRoot 'Tests/ConduitLLM.GatewayNativeAotTests'
-$logRoot = Join-Path ([IO.Path]::GetTempPath()) "gateway-native-parity-$PID"
+$logRoot = Join-Path $artifactRoot "reports/gateway-parity-$PID"
 New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
 
 if (-not $DatabaseUrl) { throw 'DatabaseUrl not set.' }
 if (-not $RedisUrl) { throw 'RedisUrl not set.' }
+if (-not $S3Endpoint) { throw 'S3Endpoint not set.' }
+if (-not $S3AccessKeyId) { throw 'S3AccessKeyId not set.' }
+if (-not $S3SecretAccessKey) { throw 'S3SecretAccessKey not set.' }
+if (-not $S3BucketName) { throw 'S3BucketName not set.' }
 
 function Get-NativeExecutable([string]$service) {
     $name = "ConduitLLM.$service"
@@ -90,9 +101,18 @@ if (-not $NoBuild) {
 
 $env:DATABASE_URL = $DatabaseUrl
 $env:REDIS_URL = $RedisUrl
+$env:CONDUIT_MEDIA_STORAGE_TYPE = 'S3'
+$env:CONDUIT_S3_ENDPOINT = $S3Endpoint
+$env:CONDUIT_S3_ACCESS_KEY_ID = $S3AccessKeyId
+$env:CONDUIT_S3_SECRET_ACCESS_KEY = $S3SecretAccessKey
+$env:CONDUIT_S3_BUCKET_NAME = $S3BucketName
+$env:CONDUIT_S3_REGION = $S3Region
 $env:CONDUIT_MASTER_KEY = $MasterKey
+$env:CONDUIT_NATIVE_PROVIDER_URL = "http://127.0.0.1:$ProviderPort"
 $env:CONDUIT_MIGRATION_MODE = 'Skip'
 $env:ConduitLLM__Messaging__Backend = 'Wolverine'
+$env:BatchSpending__FlushIntervalSeconds = '1'
+$env:SignalR__ConnectionLimits__MaxConnectionsPerVirtualKey = '2'
 $env:ASPNETCORE_ENVIRONMENT = 'Production'
 $env:CONDUIT_ENABLE_HTTPS_REDIRECTION = 'false'
 $env:CONDUIT_TRUSTED_PROXY_ENABLED = 'true'
@@ -106,12 +126,34 @@ if ($IsWindows) {
     $env:Logging__EventLog__LogLevel__Default = 'None'
 }
 
+Wait-ForHttp "$($S3Endpoint.TrimEnd('/'))/$($S3HealthPath.TrimStart('/'))" 'S3-compatible media storage'
+
 Write-Host 'Applying migrations before native process startup...'
 dotnet (Join-Path $migratorProject 'bin/Release/net10.0/ConduitLLM.Migrator.dll')
 if ($LASTEXITCODE -ne 0) { throw 'Standalone migrator failed.' }
 
+Write-Host 'Seeding typed-store authentication and IP-filter fixtures...'
+$probeName = if ($IsWindows) { 'ConduitLLM.GatewayNativeAotTests.exe' } else { 'ConduitLLM.GatewayNativeAotTests' }
+$nativeProbe = Join-Path $runtimeRoot 'probe' $probeName
+if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
+    & $nativeProbe --seed
+} else {
+    dotnet (Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll') --seed
+}
+if ($LASTEXITCODE -ne 0) { throw 'Native Gateway parity fixture seed failed.' }
+
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 try {
+    if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
+        $provider = Start-LoggedProcess 'provider' $nativeProbe @('--mock-provider') (Split-Path $nativeProbe) $null
+    } else {
+        $dotnet = (Get-Command dotnet).Source
+        $probeDll = Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll'
+        $provider = Start-LoggedProcess 'provider' $dotnet @($probeDll, '--mock-provider') $probeProject $null
+    }
+    $processes.Add($provider)
+    Wait-ForHttp "http://127.0.0.1:$ProviderPort/health" 'OpenAI-compatible provider stub'
+
     $adminExecutable = Get-NativeExecutable 'Admin'
     $admin = Start-LoggedProcess 'admin' $adminExecutable @() (Split-Path $adminExecutable) "http://127.0.0.1:$AdminPort"
     $processes.Add($admin)
@@ -129,8 +171,6 @@ try {
     $env:CONDUIT_NATIVE_ADMIN_URL = "http://127.0.0.1:$AdminPort"
     $env:CONDUIT_NATIVE_GATEWAY_URL = "http://127.0.0.1:$GatewayPort"
     $env:CONDUIT_NATIVE_GATEWAY_SECONDARY_URL = "http://127.0.0.1:$SecondaryGatewayPort"
-    $probeName = if ($IsWindows) { 'ConduitLLM.GatewayNativeAotTests.exe' } else { 'ConduitLLM.GatewayNativeAotTests' }
-    $nativeProbe = Join-Path $runtimeRoot 'probe' $probeName
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
         & $nativeProbe
     } else {

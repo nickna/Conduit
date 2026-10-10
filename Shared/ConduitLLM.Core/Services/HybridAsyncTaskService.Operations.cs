@@ -1,10 +1,10 @@
 using System.Text.Json;
 
-using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Serialization;
+using ConduitLLM.Persistence;
 
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
@@ -24,7 +24,7 @@ namespace ConduitLLM.Core.Services
             var virtualKeyId = GetVirtualKeyIdFromMetadata(metadata);
 
             // Create database entity
-            var asyncTask = new AsyncTask
+            var asyncTask = new AsyncTaskRuntimeRecord
             {
                 Id = taskId,
                 Type = taskType,
@@ -40,7 +40,7 @@ namespace ConduitLLM.Core.Services
             };
 
             // Save to database first - this is the critical operation
-            await _repository.CreateAsync(asyncTask, cancellationToken);
+            await _store.CreateAsync(asyncTask, cancellationToken);
             _logger.LogInformation("Created async task {TaskId} in database", taskId);
 
             // Create task status for cache
@@ -99,7 +99,7 @@ namespace ConduitLLM.Core.Services
             var now = DateTime.UtcNow;
 
             // Create database entity
-            var asyncTask = new AsyncTask
+            var asyncTask = new AsyncTaskRuntimeRecord
             {
                 Id = taskId,
                 Type = taskType,
@@ -115,7 +115,7 @@ namespace ConduitLLM.Core.Services
             };
 
             // Save to database first - this is the critical operation
-            await _repository.CreateAsync(asyncTask, cancellationToken);
+            await _store.CreateAsync(asyncTask, cancellationToken);
             _logger.LogInformation("Created async task {TaskId} in database", taskId);
 
             // Create task status for cache
@@ -212,7 +212,7 @@ namespace ConduitLLM.Core.Services
 
             // Fallback to database
             _logger.LogInformation("Cache miss for task {TaskId} with key {CacheKey}, reading from database", taskId, key);
-            var dbTask = await _repository.GetByIdAsync(taskId, cancellationToken);
+            var dbTask = await _store.GetByIdAsync(taskId, cancellationToken);
             if (dbTask == null)
             {
                 _logger.LogWarning("Task {TaskId} not found in database either", taskId);
@@ -261,7 +261,7 @@ namespace ConduitLLM.Core.Services
                 return;
             }
             // Get task from database to ensure it exists
-            var dbTask = await _repository.GetByIdAsync(taskId, cancellationToken);
+            var dbTask = await _store.GetByIdAsync(taskId, cancellationToken);
             if (dbTask == null)
             {
                 throw new InvalidOperationException($"Task {taskId} not found");
@@ -332,7 +332,7 @@ namespace ConduitLLM.Core.Services
             }
 
             // Save to database
-            if (!await _repository.UpdateAsync(dbTask, cancellationToken)) return;
+            if (!await _store.UpdateAsync(dbTask, cancellationToken)) return;
 
             // Update cache
             var taskStatus = ConvertToTaskStatus(dbTask);

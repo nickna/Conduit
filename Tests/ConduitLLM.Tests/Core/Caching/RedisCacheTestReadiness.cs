@@ -9,6 +9,26 @@ internal static class RedisCacheTestReadiness
 {
     internal const string HealthyReadTimeout = "00:00:01";
 
+    // Prepare lazy generation-store connections before installing recovery assertions.
+    internal static async Task<string> WarmAsync(
+        ApplicationCacheGeneration generation,
+        ApplicationCacheDomain domain)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        for (;;)
+        {
+            try
+            {
+                return await generation.GetAsync(domain, deadline.Token);
+            }
+            catch (Exception exception) when (exception is RedisException or TimeoutException
+                or FusionCacheDistributedCacheException or FusionCacheBackplaneException)
+            {
+                await Task.Delay(25, deadline.Token);
+            }
+        }
+    }
+
     // Call only after asserting automatic fencing without an explicit invalidation retry.
     internal static async Task RetryRecoveredInvalidationAsync(Func<CancellationToken, Task> invalidate)
     {

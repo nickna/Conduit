@@ -13,14 +13,18 @@ public sealed class ApplicationCacheGenerationTests
     {
         var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
         Skip.If(string.IsNullOrEmpty(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
-        var options = new ApplicationCacheOptions { Environment = $"generation-{Guid.NewGuid():N}" };
+        var options = new ApplicationCacheOptions
+        {
+            Environment = $"generation-{Guid.NewGuid():N}",
+            DistributedReadTimeout = TimeSpan.Parse(RedisCacheTestReadiness.HealthyReadTimeout)
+        };
         var fusionOptions = options.FusionOptions();
         fusionOptions.EnableSyncEventHandlersExecution = true;
         using var cache = new FusionCache(fusionOptions);
         cache.SetupSerializer(new ApplicationCacheSerializer());
         using var generations = new ApplicationCacheGeneration(cache, options, redis);
         var key = $"generation:{ApplicationCacheOptions.Tag(domain)}";
-        var original = await generations.GetAsync(domain);
+        var original = await RedisCacheTestReadiness.WarmAsync(generations, domain);
         // Keep the old local token fresh while the recovery factory is deliberately held before publication.
         var local = options.Entry(TimeSpan.FromSeconds(5));
         local.SkipDistributedCacheRead = local.SkipDistributedCacheWrite = true;

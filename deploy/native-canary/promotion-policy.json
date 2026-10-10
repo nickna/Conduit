@@ -2,8 +2,10 @@
   "schemaVersion": 1,
   "status": "blocked",
   "blockedBy": [
-    "ADR 0006 keeps production persistence on JIT while EF Core NativeAOT query execution is experimental.",
-    "The parent epic's full native data-plane and supported-feature acceptance criteria are not complete."
+    "ADR 0006 keeps the EF-backed Admin production path on JIT while EF Core NativeAOT query execution is experimental.",
+    "Admin management/reporting EF queries remain unsupported; bounded warning exceptions do not establish native workload parity.",
+    "Gateway function audit/retention, billing reconciliation, readiness, and the full provider workload remain unproven natively.",
+    "Digest-pinned production benchmark, ordered Admin and Gateway soak, and rollback evidence have not been collected."
   ],
   "sequence": ["admin", "gateway"],
   "minimumSoakHours": {

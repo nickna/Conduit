@@ -12,13 +12,13 @@ namespace ConduitLLM.Gateway.EventHandlers
     public class SpendUpdatedHandler : IEventHandler<SpendUpdated>
     {
         private readonly ISpendNotificationService _notificationService;
-        private readonly CoreInterfaces.IVirtualKeyService _virtualKeyService;
+        private readonly CoreInterfaces.IVirtualKeyRuntimeService _virtualKeyService;
         private readonly IVirtualKeyGroupRepository _groupRepository;
         private readonly ILogger<SpendUpdatedHandler> _logger;
 
         public SpendUpdatedHandler(
             ISpendNotificationService notificationService,
-            CoreInterfaces.IVirtualKeyService virtualKeyService,
+            CoreInterfaces.IVirtualKeyRuntimeService virtualKeyService,
             IVirtualKeyGroupRepository groupRepository,
             ILogger<SpendUpdatedHandler> logger)
         {

@@ -52,62 +52,26 @@ namespace ConduitLLM.Core.Services
             Func<string, Task<VirtualKey?>> lookupByHashAsync,
             IBatchSpendUpdateService? batchSpendService)
         {
-            if (string.IsNullOrWhiteSpace(key))
+            Func<VirtualKey, Task<(VirtualKeyGroup? Group, decimal PendingSpend)>>? getBalanceSnapshotAsync = null;
+            if (checkBalance)
             {
-                Logger.LogWarning("Empty key provided for virtual key validation");
-                return VirtualKeyValidationOutcome.Failure(
-                    VirtualKeyValidationFailureCodes.MissingKey,
-                    401,
-                    "Virtual key is required.");
+                getBalanceSnapshotAsync = async virtualKey =>
+                {
+                    var group = await GroupRepository.GetByIdAsync(virtualKey.VirtualKeyGroupId);
+                    var pendingSpend = group != null && batchSpendService != null
+                        ? await batchSpendService.GetPendingSpendAsync(virtualKey.Id)
+                        : 0m;
+                    return (group, pendingSpend);
+                };
             }
 
-            try
-            {
-                var keyHash = VirtualKeyUtilities.HashKey(key);
-                Logger.LogDebug("Validating key ({ValidationMode}): {KeyPrefix}, Hash: {Hash}",
-                    checkBalance ? "balance" : "authentication",
-                    LoggingSanitizer.S(ConduitLLM.Core.Utilities.SpanHelper.MaskSecret(key)),
-                    keyHash);
-
-                var virtualKey = await lookupByHashAsync(keyHash);
-                if (virtualKey == null)
-                {
-                    Logger.LogWarning("No matching virtual key found for hash: {Hash}", keyHash);
-                    return VirtualKeyValidationOutcome.Failure(
-                        VirtualKeyValidationFailureCodes.KeyNotFound,
-                        401,
-                        "Virtual key was not found.");
-                }
-
-                var result = await VirtualKeyValidationHelper.ValidateVirtualKeyAsync(
-                    virtualKey,
-                    requestedModel,
-                    checkBalance,
-                    checkBalance ? GroupRepository : null,
-                    Logger,
-                    checkBalance ? batchSpendService : null);
-
-                if (!result.IsValid)
-                {
-                    Logger.LogWarning("Virtual key {KeyId} validation failed: {Reason}",
-                        virtualKey.Id, result.Reason ?? "unknown");
-                }
-                else
-                {
-                    Logger.LogDebug("Virtual key {KeyId} validated successfully for model: {Model}",
-                        virtualKey.Id, LoggingSanitizer.S(requestedModel ?? "any"));
-                }
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Error validating virtual key");
-                return VirtualKeyValidationOutcome.Failure(
-                    VirtualKeyValidationFailureCodes.ValidationError,
-                    500,
-                    "Virtual key validation failed.");
-            }
+            return await VirtualKeyValidationHelper.ValidateKeyAsync(
+                key,
+                requestedModel,
+                checkBalance,
+                lookupByHashAsync,
+                getBalanceSnapshotAsync,
+                Logger);
         }
 
         #region Virtual Hooks

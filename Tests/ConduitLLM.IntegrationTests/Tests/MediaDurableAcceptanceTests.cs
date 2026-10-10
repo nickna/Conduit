@@ -154,7 +154,7 @@ public sealed class MediaDurableAcceptanceTests(MediaDispatchFixture fixture)
         {
             var id = await host.Services.GetRequiredService<IMediaTaskSubmission>().SubmitAsync(new ImageGenerationRequested
                 { VirtualKeyId = 1, Request = new() { Prompt = "test", Model = "test-model" } }, Metadata());
-            var taskService = new ConduitLLM.Core.Services.HybridAsyncTaskService(fixture.Repository(), fixture.Cache.Object,
+            var taskService = new ConduitLLM.Core.Services.HybridAsyncTaskService(new ConduitLLM.Configuration.Repositories.EfAsyncTaskRuntimeStore(fixture.Repository()), fixture.Cache.Object,
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<ConduitLLM.Core.Services.HybridAsyncTaskService>.Instance);
             var status = await taskService.GetTaskStatusAsync(id);
             Assert.Equal(id, status!.TaskId);

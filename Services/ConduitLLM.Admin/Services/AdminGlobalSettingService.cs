@@ -43,7 +43,7 @@ namespace ConduitLLM.Admin.Services
         {
             _logger.LogDebug("Getting all global settings");
 
-            var settings = await _globalSettingRepository.GetAllUnboundedAsync();
+            var settings = await _globalSettingRepository.ListAsync();
             return settings
                 .Where(setting => !setting.Key.Equals(
                     GlobalSettingDefinitionRegistry.ProtectedWebAdminKey,

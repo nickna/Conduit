@@ -22,6 +22,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
     [EntityFrameworkInternal]
     public partial class ModelCostEntityType
     {
+        [global::System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+            "AOT",
+            "IL3050",
+            Justification = "EF Core 10 generates closed enum/array mapping setup through APIs annotated for arbitrary runtime types. Every concrete type is statically named and rooted by this compiled model. Owner: database/runtime maintainers; upstream: dotnet/efcore#29754; remove when the generator emits warning-free mappings.")]
         public static RuntimeEntityType Create(RuntimeModel model, RuntimeEntityType baseEntityType = null)
         {
             var runtimeEntityType = model.AddEntityType(

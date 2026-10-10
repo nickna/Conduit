@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using ConduitLLM.Configuration.DTOs;
 using ConduitLLM.Admin.Extensions;
 using ConduitLLM.Admin.Auditing;
@@ -58,6 +60,10 @@ namespace ConduitLLM.Admin.Endpoints
         /// Get all media retention policies.
         /// </summary>
         /// <returns>List of all retention policies</returns>
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         public async Task<IResult> GetPolicies()
         {
             var policies = await _context.MediaRetentionPolicies

@@ -13,7 +13,7 @@ namespace ConduitLLM.Gateway.Authentication
     /// </summary>
     public class VirtualKeySignalRAuthenticationHandler : IAuthorizationHandler
     {
-        private readonly IVirtualKeyService _virtualKeyService;
+        private readonly IVirtualKeyRuntimeService _virtualKeyService;
         private readonly ILogger<VirtualKeySignalRAuthenticationHandler> _logger;
         private readonly IReadOnlyList<string> _keyHeaders;
 
@@ -21,7 +21,7 @@ namespace ConduitLLM.Gateway.Authentication
         /// Initializes a new instance of VirtualKeySignalRAuthenticationHandler
         /// </summary>
         public VirtualKeySignalRAuthenticationHandler(
-            IVirtualKeyService virtualKeyService,
+            IVirtualKeyRuntimeService virtualKeyService,
             ILogger<VirtualKeySignalRAuthenticationHandler> logger,
             IOptions<GatewaySecurityOptions> securityOptions)
         {

@@ -65,7 +65,7 @@ public class AdminIpFilterService : EventPublishingServiceBase, IAdminIpFilterSe
 
             // Global IP filtering surface: return only global filters (VirtualKeyId == null). Per-key
             // filters are managed via GetFiltersByVirtualKeyIdAsync.
-            var filters = await _ipFilterRepository.GetAllUnboundedAsync();
+            var filters = await _ipFilterRepository.ListAsync();
             return filters.Where(f => f.VirtualKeyId == null).Select(f => f.ToDto());
         }
         catch (Exception ex)

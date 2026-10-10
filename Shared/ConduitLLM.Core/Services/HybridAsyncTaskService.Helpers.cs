@@ -1,9 +1,9 @@
 using System.Text.Json;
 
-using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Serialization;
+using ConduitLLM.Persistence;
 
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
@@ -53,7 +53,7 @@ namespace ConduitLLM.Core.Services
             await _cache.SetStringAsync(key, json, options, cancellationToken);
         }
 
-        private static AsyncTaskStatus ConvertToTaskStatus(AsyncTask dbTask)
+        private static AsyncTaskStatus ConvertToTaskStatus(AsyncTaskRuntimeRecord dbTask)
         {
             return new AsyncTaskStatus
             {
