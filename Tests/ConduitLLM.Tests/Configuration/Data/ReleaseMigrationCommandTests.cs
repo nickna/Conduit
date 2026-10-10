@@ -69,6 +69,50 @@ public sealed class ReleaseMigrationCommandTests
     }
 
     [SkippableFact]
+    public async Task FailingEfMigration_ReturnsFailureWithoutProvisioningAndCanRetryAfterRepair()
+    {
+        await using var database = await TemporaryDatabase.CreateAsync();
+        using var environment = database.UseAsMigrationTarget();
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+
+        // The initial migration creates this table first. A pre-existing table in
+        // this disposable database forces a real PostgreSQL DDL error, rather
+        // than a connection failure before EF attempts any migration.
+        await using (var conflict = new NpgsqlCommand(
+            """
+            CREATE TABLE "CacheConfigurationAudits" ("Conflict" integer)
+            """, connection))
+        {
+            await conflict.ExecuteNonQueryAsync();
+        }
+
+        Assert.Equal(1, await MigrationRunner.RunAsync());
+        Assert.Equal(0, await GetAppliedMigrationCountAsync(database.ConnectionString));
+        var probe = new SchemaVersionProbe(new TestContextFactory(database.ConnectionString));
+        Assert.False((await probe.GetStatusAsync()).IsCurrent);
+        foreach (var schema in new[] { "wolverine_conduit_gateway", "wolverine_conduit_admin", "wolverine_queues" })
+        {
+            Assert.False(await SchemaExistsAsync(database.ConnectionString, schema));
+        }
+
+        await using (var repair = new NpgsqlCommand(
+            """
+            DROP TABLE "CacheConfigurationAudits"
+            """, connection))
+        {
+            await repair.ExecuteNonQueryAsync();
+        }
+
+        Assert.Equal(0, await MigrationRunner.RunAsync());
+        await AssertSchemaCurrentAsync(database.ConnectionString);
+        foreach (var schema in new[] { "wolverine_conduit_gateway", "wolverine_conduit_admin", "wolverine_queues" })
+        {
+            Assert.True(await SchemaExistsAsync(database.ConnectionString, schema));
+        }
+    }
+
+    [SkippableFact]
     public async Task ConcurrentInvocations_AreSerializedAndSucceed()
     {
         await using var database = await TemporaryDatabase.CreateAsync();

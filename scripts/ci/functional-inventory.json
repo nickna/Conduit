@@ -1,5 +1,6 @@
 {
   "ConduitLLM.Tests.Http.Middleware.BillingAuditIntegrationTests": 8,
   "ConduitLLM.Tests.Integration.RefundServiceIntegrationTests": 7,
-  "ConduitLLM.Tests.Admin.Integration.EphemeralMasterKeyIntegrationTests": 4
+  "ConduitLLM.Tests.Admin.Integration.EphemeralMasterKeyIntegrationTests": 4,
+  "ConduitLLM.Tests.Admin.Endpoints.MediaRequestDelegateHostTests": 11
 }
