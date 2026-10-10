@@ -7,22 +7,49 @@ namespace Internal.Generated.WolverineHandlers
     [global::System.CodeDom.Compiler.GeneratedCode("JasperFx", "1.0.0")]
     public sealed class GeneratedHandlerRegistry : Wolverine.Runtime.Handlers.HandlerRegistry
     {
-
-
         public override System.Type[] HandlerTypes()
         {
             return new System.Type[] { typeof(ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.FunctionConfigurationChanged>), typeof(ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.FunctionDiscoveryCacheInvalidationRequested>), typeof(ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.GatewayHeartbeat>), typeof(ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.GlobalSettingChanged>), typeof(ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.GlobalSettingsReloadRequested>) };
         }
 
-
         public override System.Type[] MessageTypes()
         {
             return System.Array.Empty<System.Type>();
         }
-
     }
 
     // END: GeneratedHandlerRegistry
+
+
+    // START: AotRoots
+    // Native AOT rooting companion (jasperfx#743). Generated code is only ever reached reflectively, so without these roots ILC trims it and TypeLoadMode.Static finds nothing.
+    [global::System.CodeDom.Compiler.GeneratedCode("JasperFx", "1.0.0")]
+    public sealed class AotRoots
+    {
+        [global::System.Runtime.CompilerServices.ModuleInitializer]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Internal.Generated.WolverineHandlers.GeneratedHandlerRegistry))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Internal.Generated.WolverineHandlers.FunctionConfigurationChangedHandler2137694965))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Internal.Generated.WolverineHandlers.FunctionDiscoveryCacheInvalidationRequestedHandler486748459))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Internal.Generated.WolverineHandlers.GatewayHeartbeatHandler989896135))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Internal.Generated.WolverineHandlers.GlobalSettingChangedHandler1604840796))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Internal.Generated.WolverineHandlers.GlobalSettingsReloadRequestedHandler1670587812))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.FunctionConfigurationChanged>))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.FunctionDiscoveryCacheInvalidationRequested>))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.GatewayHeartbeat>))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.GlobalSettingChanged>))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::ConduitLLM.Configuration.Messaging.Wolverine.WolverineHandlerBridge<ConduitLLM.Core.Events.GlobalSettingsReloadRequested>))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::ConduitLLM.Core.Events.FunctionConfigurationChanged))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::ConduitLLM.Core.Events.FunctionDiscoveryCacheInvalidationRequested))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::ConduitLLM.Core.Events.GatewayHeartbeat))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::ConduitLLM.Core.Events.GlobalSettingChanged))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::ConduitLLM.Core.Events.GlobalSettingsReloadRequested))]
+        public static void Pin()
+        {
+            // Intentionally empty. The [DynamicDependency] attributes above are the payload: they root the generated types for Native AOT, and [ModuleInitializer] guarantees this method is itself an ILC root.
+        }
+    }
+
+    // END: AotRoots
 
 
 }

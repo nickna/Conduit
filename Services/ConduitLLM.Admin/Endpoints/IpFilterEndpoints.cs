@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Admin.Extensions;
 using ConduitLLM.Admin.Interfaces;
@@ -40,30 +41,45 @@ public class IpFilterEndpoints : AdminEndpointHandlerBase
             .WithTags("IP Filters");
 
         group.MapGet("/", ([FromServices] IpFilterEndpoints endpoints) => endpoints.GetAllFilters())
-            .WithName("IpFilter_GetAll").Produces<IEnumerable<IpFilterDto>>();
+            .WithName("IpFilter_GetAll")
+            .WithSummary("Gets all IP filters").Produces<IEnumerable<IpFilterDto>>();
         group.MapGet("/enabled", ([FromServices] IpFilterEndpoints endpoints) => endpoints.GetEnabledFilters())
-            .WithName("IpFilter_GetEnabled").Produces<IEnumerable<IpFilterDto>>();
+            .WithName("IpFilter_GetEnabled")
+            .WithSummary("Gets all enabled IP filters").Produces<IEnumerable<IpFilterDto>>();
         group.MapGet("/by-virtual-key/{virtualKeyId}", ([FromServices] IpFilterEndpoints endpoints, int virtualKeyId) => endpoints.GetFiltersByVirtualKey(virtualKeyId))
-            .WithName("IpFilter_GetByVirtualKey").Produces<IEnumerable<IpFilterDto>>();
+            .WithName("IpFilter_GetByVirtualKey")
+            .WithSummary("Gets the IP filters scoped to a specific virtual key")
+            .WithParameterDescription("virtualKeyId", "The virtual key ID").Produces<IEnumerable<IpFilterDto>>();
         group.MapGet("/{id}", ([FromServices] IpFilterEndpoints endpoints, int id) => endpoints.GetFilterById(id))
-            .WithName("IpFilter_GetById").Produces<IpFilterDto>().Produces(StatusCodes.Status404NotFound);
+            .WithName("IpFilter_GetById")
+            .WithSummary("Gets an IP filter by ID")
+            .WithParameterDescription("id", "The ID of the filter to get").Produces<IpFilterDto>().Produces(StatusCodes.Status404NotFound);
         group.MapPost("/", ([FromServices] IpFilterEndpoints endpoints, CreateIpFilterDto filter) => endpoints.CreateFilter(filter))
-            .WithName("IpFilter_Create").Produces<IpFilterDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest)
+            .WithName("IpFilter_Create")
+            .WithSummary("Creates a new IP filter").Produces<IpFilterDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
         group.MapPatch("/{id}", ([FromServices] IpFilterEndpoints endpoints, int id, JsonMergePatch<UpdateIpFilterDto> patch) => endpoints.UpdateFilter(id, patch.Value))
             .AcceptsJsonMergePatch<UpdateIpFilterDto>()
-            .WithName("IpFilter_Update").Produces<IpFilterDto>().Produces(StatusCodes.Status400BadRequest)
+            .WithName("IpFilter_Update")
+            .WithSummary("Updates an existing IP filter")
+            .WithParameterDescription("id", "The ID of the filter to update").Produces<IpFilterDto>().Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden).Produces(StatusCodes.Status404NotFound);
         group.MapDelete("/{id}", ([FromServices] IpFilterEndpoints endpoints, int id) => endpoints.DeleteFilter(id))
-            .WithName("IpFilter_Delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status401Unauthorized)
+            .WithName("IpFilter_Delete")
+            .WithSummary("Deletes an IP filter")
+            .WithParameterDescription("id", "The ID of the filter to delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status403Forbidden).Produces(StatusCodes.Status404NotFound);
         group.MapGet("/settings", ([FromServices] IpFilterEndpoints endpoints) => endpoints.GetSettings())
-            .WithName("IpFilter_GetSettings").Produces<IpFilterSettingsDto>();
+            .WithName("IpFilter_GetSettings")
+            .WithSummary("Gets the current IP filter settings").Produces<IpFilterSettingsDto>();
         group.MapPut("/settings", ([FromServices] IpFilterEndpoints endpoints, IpFilterSettingsDto settings) => endpoints.UpdateSettings(settings))
-            .WithName("IpFilter_UpdateSettings").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status400BadRequest)
+            .WithName("IpFilter_UpdateSettings")
+            .WithSummary("Updates the IP filter settings").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
         group.MapGet("/check/{ipAddress}", ([FromServices] IpFilterEndpoints endpoints, string ipAddress) => endpoints.CheckIpAddress(ipAddress))
-            .WithName("IpFilter_Check").Produces<IpCheckResult>().Produces(StatusCodes.Status400BadRequest).AllowAnonymous();
+            .WithName("IpFilter_Check")
+            .WithSummary("Checks if an IP address is allowed based on current filter rules")
+            .WithParameterDescription("ipAddress", "The IP address to check").Produces<IpCheckResult>().Produces(StatusCodes.Status400BadRequest).AllowAnonymous();
         return app;
     }
 

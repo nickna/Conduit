@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Extensions;
@@ -31,26 +32,36 @@ namespace ConduitLLM.Admin.Endpoints
 
             group.MapGet("/", GetAll)
                 .WithName("ModelAuthors_List")
+                .WithSummary("List model authors")
                 .Produces<IEnumerable<ModelAuthorDto>>(StatusCodes.Status200OK);
             group.MapGet("/{id:int}", GetById).WithName("ModelAuthors_GetById")
+                .WithSummary("Get a model author")
+                .WithParameterDescription("id", "Identifier of the ModelAuthor resource.")
                 .Produces<ModelAuthorDto>(StatusCodes.Status200OK)
                 .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
             group.MapGet("/{id:int}/series", GetSeriesByAuthor)
                 .WithName("ModelAuthors_ListSeries")
+                .WithSummary("List model series published by an author")
+                .WithParameterDescription("id", "Identifier of the ModelAuthor resource.")
                 .Produces<IEnumerable<SimpleModelSeriesDto>>(StatusCodes.Status200OK)
                 .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
             group.MapPost("/", Create)
                 .WithName("ModelAuthors_Create")
+                .WithSummary("Create a model author")
                 .Produces<ModelAuthorDto>(StatusCodes.Status201Created)
                 .Produces(StatusCodes.Status400BadRequest);
             group.MapPatch("/{id:int}", Update)
                 .AcceptsJsonMergePatch<UpdateModelAuthorDto>()
                 .WithName("ModelAuthors_Update")
+                .WithSummary("Update a model author")
+                .WithParameterDescription("id", "Identifier of the ModelAuthor resource.")
                 .Produces<ModelAuthorDto>(StatusCodes.Status200OK)
                 .Produces(StatusCodes.Status400BadRequest)
                 .Produces(StatusCodes.Status404NotFound);
             group.MapDelete("/{id:int}", Delete)
                 .WithName("ModelAuthors_Delete")
+                .WithSummary("Delete a model author")
+                .WithParameterDescription("id", "Identifier of the ModelAuthor resource.")
                 .Produces(StatusCodes.Status204NoContent)
                 .Produces(StatusCodes.Status400BadRequest)
                 .Produces(StatusCodes.Status404NotFound);

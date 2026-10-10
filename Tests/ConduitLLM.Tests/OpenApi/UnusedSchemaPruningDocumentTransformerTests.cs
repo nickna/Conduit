@@ -1,6 +1,6 @@
 using System.Net.Http;
 
-using ConduitLLM.Gateway.OpenApi;
+using ConduitLLM.Core.OpenApi;
 
 using AwesomeAssertions;
 

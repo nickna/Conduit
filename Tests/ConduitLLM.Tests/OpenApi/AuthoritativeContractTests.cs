@@ -78,8 +78,6 @@ public sealed class AuthoritativeContractTests : IDisposable
     }
 
     [Theory]
-    [InlineData("admin", "/v1/admin/virtual-keys/validate", "post")]
-    [InlineData("admin", "/v1/admin/ip-filters/check/{ipAddress}", "get")]
     [InlineData("gateway", "/v1/conduit/media/{storageKey}", "get")]
     [InlineData("gateway", "/v1/conduit/media/{storageKey}", "head")]
     public void AnonymousOperations_PublishAnExplicitEmptySecurityRequirement(
@@ -105,6 +103,55 @@ public sealed class AuthoritativeContractTests : IDisposable
         var requirement = Operation(document, path, method).GetProperty("security")[0];
 
         requirement.TryGetProperty(scheme, out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Admin_AllPublishedOperationsDocumentMiddlewareAuthentication()
+    {
+        foreach (var (_, path, operation) in Operations(_admin))
+            operation.GetProperty("security")[0].TryGetProperty("MasterKey", out _)
+                .Should().BeTrue($"Admin SecurityService requires a master key even on {path}");
+    }
+
+    [Fact]
+    public void Contracts_DocumentEveryOperationAndParameterAndPublishServiceMetadata()
+    {
+        foreach (var document in new[] { _admin, _gateway })
+        {
+            var root = document.RootElement;
+            root.GetProperty("info").GetProperty("license").GetProperty("identifier").GetString().Should().Be("MIT");
+            root.GetProperty("info").GetProperty("contact").GetProperty("url").GetString().Should().StartWith("https://github.com/");
+            root.GetProperty("servers")[0].GetProperty("url").GetString().Should().Be("/");
+            foreach (var tag in root.GetProperty("tags").EnumerateArray())
+                tag.GetProperty("description").GetString().Should().NotBeNullOrWhiteSpace();
+            foreach (var (_, path, operation) in Operations(document))
+            {
+                operation.GetProperty("summary").GetString().Should().NotBeNullOrWhiteSpace(path);
+                if (operation.TryGetProperty("parameters", out var parameters))
+                    foreach (var parameter in parameters.EnumerateArray())
+                        parameter.GetProperty("description").GetString().Should().NotBeNullOrWhiteSpace(path);
+            }
+        }
+    }
+
+    [Fact]
+    public void Admin_MetricsDocumentsThePrometheusMiddlewareResponse()
+    {
+        var content = Operation(_admin, "/metrics", "get").GetProperty("responses").GetProperty("200").GetProperty("content");
+        content.EnumerateObject().Select(item => item.Name).Should().BeEquivalentTo("text/plain", "application/openmetrics-text");
+        foreach (var media in content.EnumerateObject())
+            media.Value.GetProperty("schema").GetProperty("type").GetString().Should().Be("string");
+    }
+
+    [Theory]
+    [InlineData("admin", "/v1/admin/model-costs/import/csv")]
+    [InlineData("admin", "/v1/admin/model-costs/import/json")]
+    [InlineData("gateway", "/v1/conduit/media/upload")]
+    public void UploadsRequireAFile(string contract, string path)
+    {
+        var schema = Operation(contract == "admin" ? _admin : _gateway, path, "post")
+            .GetProperty("requestBody").GetProperty("content").GetProperty("multipart/form-data").GetProperty("schema");
+        schema.GetProperty("required").EnumerateArray().Select(item => item.GetString()).Should().Contain("file");
     }
 
     [Fact]
@@ -213,7 +260,7 @@ public sealed class AuthoritativeContractTests : IDisposable
     }
 
     [Fact]
-    public void Contracts_PublishRequestIdAndCanonicalErrorShapeOnEveryResponse()
+    public void Contracts_PublishRequestIdsAndActualEndpointAndMiddlewareErrorShapes()
     {
         foreach (var (name, document, mediaType, schemaName) in new[]
         {
@@ -233,12 +280,25 @@ public sealed class AuthoritativeContractTests : IDisposable
                         continue;
                     }
 
+                    if (operationName == "HEAD")
+                    {
+                        response.Value.TryGetProperty("content", out _).Should().BeFalse();
+                        continue;
+                    }
+
                     var content = response.Value.GetProperty("content");
-                    content.EnumerateObject().Select(item => item.Name)
-                        .Should().Equal(mediaType);
-                    content.GetProperty(mediaType).GetProperty("schema")
-                        .GetProperty("$ref").GetString()
-                        .Should().Be($"#/components/schemas/{schemaName}");
+                    var schema = content.GetProperty(mediaType).GetProperty("schema");
+                    if (name == "gateway" && status == 403)
+                    {
+                        schema.GetProperty("oneOf").EnumerateArray()
+                            .Select(branch => branch.GetProperty("$ref").GetString())
+                            .Should().BeEquivalentTo("#/components/schemas/OpenAIErrorResponse", "#/components/schemas/SecurityErrorResponse");
+                    }
+                    else
+                        schema.GetProperty("$ref").GetString().Should().Be($"#/components/schemas/{schemaName}");
+                    if (name == "admin" && status is 401 or 403 or 429)
+                        content.GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString()
+                            .Should().Be(status == 429 ? "#/components/schemas/OpenAIErrorResponse" : "#/components/schemas/SecurityErrorResponse");
                 }
             }
         }
@@ -265,7 +325,7 @@ public sealed class AuthoritativeContractTests : IDisposable
                 {
                     content.EnumerateObject().Select(item => item.Name)
                         .Should().NotContain(mediaType =>
-                             mediaType == "text/json" || mediaType == "text/plain" ||
+                             mediaType == "text/json" ||
                              mediaType.StartsWith("application/", StringComparison.Ordinal) &&
                              mediaType.EndsWith("+json", StringComparison.Ordinal) &&
                              mediaType != "application/problem+json" &&

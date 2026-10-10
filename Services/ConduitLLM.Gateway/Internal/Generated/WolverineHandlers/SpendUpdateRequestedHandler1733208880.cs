@@ -18,11 +18,10 @@ namespace Internal.Generated.WolverineHandlers
             _loggerOfWolverineHandlerBridgeOfSpendUpdateRequested = loggerOfWolverineHandlerBridgeOfSpendUpdateRequested;
         }
 
-
-
         public override async System.Threading.Tasks.Task HandleAsync(Wolverine.Runtime.MessageContext context, System.Threading.CancellationToken cancellation)
         {
             await using var serviceScope = _serviceScopeFactory.CreateAsyncScope();
+            Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<Wolverine.Runtime.ScopedMessageContextHolder>(serviceScope.ServiceProvider).Context = context;
             // This service has been marked as requiring service location independent of Wolverine's ability to use constructor injection of everything else
             var eventHandlerOfSpendUpdateRequestedIEnumerable = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<ConduitLLM.Configuration.Messaging.IEventHandler<ConduitLLM.Core.Events.SpendUpdateRequested>>>(serviceScope.ServiceProvider);
             // The actual message body
@@ -34,9 +33,7 @@ namespace Internal.Generated.WolverineHandlers
 
             // The actual message execution
             await wolverineHandlerBridgeOfSpendUpdateRequested.Handle(spendUpdateRequested, context, cancellation).ConfigureAwait(false);
-
         }
-
     }
 
     // END: SpendUpdateRequestedHandler1733208880

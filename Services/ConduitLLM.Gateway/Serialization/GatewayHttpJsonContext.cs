@@ -50,6 +50,7 @@ namespace ConduitLLM.Gateway.Serialization;
 [JsonSerializable(typeof(MediaInfo))]
 [JsonSerializable(typeof(ModelListItemDto))]
 [JsonSerializable(typeof(OpenAIErrorResponse))]
+[JsonSerializable(typeof(ConduitLLM.Security.Serialization.SecurityErrorResponse))]
 [JsonSerializable(typeof(RerankResponse))]
 [JsonSerializable(typeof(RuntimeCapabilitiesResponse))]
 [JsonSerializable(typeof(ResponseObject))]

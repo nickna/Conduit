@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Extensions;
@@ -24,23 +25,33 @@ public static class ModelSeriesEndpoints
             .WithTags("ModelSeries");
 
         group.MapGet("/", GetAll).WithName("ModelSeries_GetAll")
+            .WithSummary("List model series")
             .Produces<IEnumerable<ModelSeriesDto>>(StatusCodes.Status200OK);
         group.MapGet("/{id}", GetById).WithName("ModelSeries_GetById")
+            .WithSummary("Get a model series")
+            .WithParameterDescription("id", "Identifier of the ModelSeries resource.")
             .Produces<ModelSeriesDto>(StatusCodes.Status200OK)
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapGet("/{id}/models", GetModelsInSeries).WithName("ModelSeries_GetModels")
+            .WithSummary("List models in a series")
+            .WithParameterDescription("id", "Identifier of the ModelSeries resource.")
             .Produces<IEnumerable<SeriesSimpleModelDto>>(StatusCodes.Status200OK)
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapPost("/", Create).WithName("ModelSeries_Create")
+            .WithSummary("Create a model series")
             .Produces<ModelSeriesDto>(StatusCodes.Status201Created)
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json");
         group.MapPatch("/{id}", Update).AcceptsJsonMergePatch<UpdateModelSeriesDto>().WithName("ModelSeries_Update")
+            .WithSummary("Update a model series")
+            .WithParameterDescription("id", "Identifier of the ModelSeries resource.")
             .Produces<ModelSeriesDto>(StatusCodes.Status200OK)
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json");
         group.MapDelete("/{id}", Delete).WithName("ModelSeries_Delete")
+            .WithSummary("Delete a model series")
+            .WithParameterDescription("id", "Identifier of the ModelSeries resource.")
             .Produces(StatusCodes.Status204NoContent)
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json");

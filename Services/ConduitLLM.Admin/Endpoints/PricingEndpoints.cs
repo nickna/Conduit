@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using System.Text.Json;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Configuration.Interfaces;
@@ -70,11 +71,18 @@ namespace ConduitLLM.Admin.Endpoints
         public static IEndpointRouteBuilder MapPricingEndpoints(IEndpointRouteBuilder app)
         {
             var group = app.MapGroup("/v1/admin/pricing-tools").RequireAuthorization("MasterKeyPolicy").AddEndpointFilter<OperationLoggingEndpointFilter>().WithTags("Pricing");
-            group.MapGet("/types", ([FromServices] PricingEndpoints e) => e.GetPricingTypes()).WithName("Pricing_GetTypes").Produces<IEnumerable<PricingTypeInfo>>();
-            group.MapGet("/operators", ([FromServices] PricingEndpoints e) => e.GetConditionOperators()).WithName("Pricing_GetOperators").Produces<IEnumerable<OperatorInfo>>();
-            group.MapGet("/template", ([FromServices] PricingEndpoints e, string? pricingType = "per_second") => e.GetPricingTemplate(pricingType)).WithName("Pricing_GetTemplate").Produces<PricingRulesConfig>();
-            group.MapPost("/validate", ([FromServices] PricingEndpoints e, PricingValidationRequest request) => e.ValidatePricingConfiguration(request)).WithName("Pricing_Validate").Produces<PricingValidationResponse>().Produces(StatusCodes.Status400BadRequest);
-            group.MapPost("/simulate", ([FromServices] PricingEndpoints e, PricingSimulationRequest request) => e.SimulatePricing(request)).WithName("Pricing_Simulate").Produces<PricingSimulationResponse>().Produces(StatusCodes.Status400BadRequest);
+            group.MapGet("/types", ([FromServices] PricingEndpoints e) => e.GetPricingTypes()).WithName("Pricing_GetTypes")
+                .WithSummary("Get available pricing types").Produces<IEnumerable<PricingTypeInfo>>();
+            group.MapGet("/operators", ([FromServices] PricingEndpoints e) => e.GetConditionOperators()).WithName("Pricing_GetOperators")
+                .WithSummary("Get available condition operators").Produces<IEnumerable<OperatorInfo>>();
+            group.MapGet("/template", ([FromServices] PricingEndpoints e, string? pricingType = "per_second") => e.GetPricingTemplate(pricingType)).WithName("Pricing_GetTemplate")
+                .WithParameterDescription("pricingType", "Filter audit records by pricing type.")
+                .WithSummary("Get pricing configuration template")
+                .WithParameterDescription("pricingType", "The pricing type to get template for").Produces<PricingRulesConfig>();
+            group.MapPost("/validate", ([FromServices] PricingEndpoints e, PricingValidationRequest request) => e.ValidatePricingConfiguration(request)).WithName("Pricing_Validate")
+                .WithSummary("Validate pricing configuration JSON").Produces<PricingValidationResponse>().Produces(StatusCodes.Status400BadRequest);
+            group.MapPost("/simulate", ([FromServices] PricingEndpoints e, PricingSimulationRequest request) => e.SimulatePricing(request)).WithName("Pricing_Simulate")
+                .WithSummary("Simulate pricing calculation with test parameters").Produces<PricingSimulationResponse>().Produces(StatusCodes.Status400BadRequest);
             group.MapGet("/audit/events", ([FromServices] PricingEndpoints e, DateTime from, DateTime to, int? virtualKeyId = null, string? modelId = null, string? pricingType = null, int page = 1, int pageSize = 50) =>
                 e.QueryPricingAuditEvents(new PricingAuditQueryRequest
                 {
@@ -85,9 +93,22 @@ namespace ConduitLLM.Admin.Endpoints
                     PricingType = pricingType,
                     PageNumber = page,
                     PageSize = pageSize
-                })).WithName("Pricing_QueryAudit").Produces<PagedResult<PricingAuditEventDto>>().Produces(StatusCodes.Status400BadRequest);
-            group.MapGet("/audit/summary", ([FromServices] PricingEndpoints e, DateTime? from = null, DateTime? to = null) => e.GetPricingAuditSummary(from ?? default, to ?? default)).WithName("Pricing_GetAuditSummary").Produces<PricingAuditSummary>().Produces(StatusCodes.Status400BadRequest);
-            group.MapGet("/audit/request/{requestId}", ([FromServices] PricingEndpoints e, string requestId) => e.GetPricingAuditByRequestId(requestId)).WithName("Pricing_GetAuditByRequestId").Produces<IEnumerable<PricingAuditEventDto>>().Produces(StatusCodes.Status404NotFound);
+                })).WithName("Pricing_QueryAudit")
+                    .WithParameterDescription("pricingType", "Filter audit records by pricing type.")
+                    .WithSummary("Query pricing audit events")
+                    .WithParameterDescription("from", "Start of the reporting interval in UTC.")
+                    .WithParameterDescription("to", "End of the reporting interval in UTC.")
+                    .WithParameterDescription("virtualKeyId", "Identifier of the virtual key.")
+                    .WithParameterDescription("modelId", "Identifier of the model.")
+                    .WithParameterDescription("page", "Page number, starting at 1.")
+                    .WithParameterDescription("pageSize", "Number of records per page; values are normalized to the supported pagination range.").Produces<PagedResult<PricingAuditEventDto>>().Produces(StatusCodes.Status400BadRequest);
+            group.MapGet("/audit/summary", ([FromServices] PricingEndpoints e, DateTime? from = null, DateTime? to = null) => e.GetPricingAuditSummary(from ?? default, to ?? default)).WithName("Pricing_GetAuditSummary")
+                .WithSummary("Get pricing audit summary")
+                .WithParameterDescription("from", "Start of the reporting interval in UTC.")
+                .WithParameterDescription("to", "End of the reporting interval in UTC.").Produces<PricingAuditSummary>().Produces(StatusCodes.Status400BadRequest);
+            group.MapGet("/audit/request/{requestId}", ([FromServices] PricingEndpoints e, string requestId) => e.GetPricingAuditByRequestId(requestId)).WithName("Pricing_GetAuditByRequestId")
+                .WithParameterDescription("requestId", "Request identifier used to correlate pricing audit records.")
+                .WithSummary("Get pricing audit events by request ID").Produces<IEnumerable<PricingAuditEventDto>>().Produces(StatusCodes.Status404NotFound);
             return app;
         }
 

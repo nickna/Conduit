@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Admin.Extensions;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Configuration;
@@ -58,6 +59,9 @@ namespace ConduitLLM.Admin.Endpoints
             group.MapGet("/", ([FromServices] ProviderCredentialsEndpoints endpoints, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default) =>
                     endpoints.GetAllProviders(page, pageSize, cancellationToken))
                 .WithName("ProviderCredentials_GetAll")
+                .WithSummary("Gets all provider configurations with pagination")
+                .WithParameterDescription("page", "Page number (1-based, default: 1)")
+                .WithParameterDescription("pageSize", "Number of items per page (default: 50, max: 100)")
                 .Produces<Configuration.DTOs.PagedResult<ProviderDto>>();
             group.MapGet("/settings-schema", () => GetProviderSettingsSchema())
                 .WithName("ProviderCredentials_GetSettingsSchema")
@@ -68,35 +72,64 @@ namespace ConduitLLM.Admin.Endpoints
                 .Produces(StatusCodes.Status403Forbidden)
                 .Produces(StatusCodes.Status429TooManyRequests);
             group.MapGet("/{id:int}", ([FromServices] ProviderCredentialsEndpoints endpoints, int id) => endpoints.GetProviderById(id))
-                .WithName("ProviderCredentials_GetById").Produces<ProviderDto>().Produces(StatusCodes.Status404NotFound);
+                .WithName("ProviderCredentials_GetById")
+                .WithSummary("Gets a provider by ID")
+                .WithParameterDescription("id", "The ID of the provider").Produces<ProviderDto>().Produces(StatusCodes.Status404NotFound);
             group.MapPost("/", ([FromServices] ProviderCredentialsEndpoints endpoints, CreateProviderRequest request) => endpoints.CreateProvider(request))
-                .WithName("ProviderCredentials_Create").Produces<ProviderDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest);
+                .WithName("ProviderCredentials_Create")
+                .WithSummary("Creates a new provider").Produces<ProviderDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest);
             group.MapPatch("/{id:int}", ([FromServices] ProviderCredentialsEndpoints endpoints, int id, JsonMergePatch<UpdateProviderRequest> patch) => endpoints.UpdateProvider(id, patch.Value))
                 .AcceptsJsonMergePatch<UpdateProviderRequest>()
-                .WithName("ProviderCredentials_Update").Produces<ProviderDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
+                .WithName("ProviderCredentials_Update")
+                .WithSummary("Updates a provider")
+                .WithParameterDescription("id", "The ID of the provider to update").Produces<ProviderDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
             group.MapDelete("/{id:int}", ([FromServices] ProviderCredentialsEndpoints endpoints, int id) => endpoints.DeleteProvider(id))
-                .WithName("ProviderCredentials_Delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
+                .WithName("ProviderCredentials_Delete")
+                .WithSummary("Deletes a provider")
+                .WithParameterDescription("id", "The ID of the provider to delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
             group.MapGet("/{providerId:int}/keys", ([FromServices] ProviderCredentialsEndpoints endpoints, int providerId) => endpoints.GetProviderKeyCredentials(providerId))
-                .WithName("ProviderCredentials_GetKeys").Produces<IEnumerable<ProviderKeyCredentialDto>>().Produces(StatusCodes.Status404NotFound);
+                .WithName("ProviderCredentials_GetKeys")
+                .WithSummary("Gets all key credentials for a specific provider")
+                .WithParameterDescription("providerId", "The ID of the provider").Produces<IEnumerable<ProviderKeyCredentialDto>>().Produces(StatusCodes.Status404NotFound);
             group.MapGet("/{providerId:int}/keys/{keyId:int}", ([FromServices] ProviderCredentialsEndpoints endpoints, int providerId, int keyId) => endpoints.GetProviderKeyCredential(providerId, keyId))
-                .WithName("ProviderCredentials_GetKey").Produces<ProviderKeyCredentialDto>().Produces(StatusCodes.Status404NotFound);
+                .WithName("ProviderCredentials_GetKey")
+                .WithSummary("Gets a specific key credential")
+                .WithParameterDescription("providerId", "The ID of the provider")
+                .WithParameterDescription("keyId", "The ID of the key").Produces<ProviderKeyCredentialDto>().Produces(StatusCodes.Status404NotFound);
             group.MapPost("/{providerId:int}/keys", ([FromServices] ProviderCredentialsEndpoints endpoints, int providerId, CreateKeyRequest request) => endpoints.CreateProviderKeyCredential(providerId, request))
-                .WithName("ProviderCredentials_CreateKey").Produces<ProviderKeyCredentialDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status409Conflict);
+                .WithName("ProviderCredentials_CreateKey")
+                .WithSummary("Creates a new key credential for a provider")
+                .WithParameterDescription("providerId", "The ID of the provider").Produces<ProviderKeyCredentialDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status409Conflict);
             group.MapPatch("/{providerId:int}/keys/{keyId:int}", ([FromServices] ProviderCredentialsEndpoints endpoints, int providerId, int keyId, JsonMergePatch<UpdateKeyRequest> patch) => endpoints.UpdateProviderKeyCredential(providerId, keyId, patch.Value))
                 .AcceptsJsonMergePatch<UpdateKeyRequest>()
-                .WithName("ProviderCredentials_UpdateKey").Produces<ProviderKeyCredentialDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
+                .WithName("ProviderCredentials_UpdateKey")
+                .WithSummary("Updates a key credential")
+                .WithParameterDescription("providerId", "The ID of the provider")
+                .WithParameterDescription("keyId", "The ID of the key").Produces<ProviderKeyCredentialDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
             group.MapDelete("/{providerId:int}/keys/{keyId:int}", ([FromServices] ProviderCredentialsEndpoints endpoints, int providerId, int keyId) => endpoints.DeleteProviderKeyCredential(providerId, keyId))
-                .WithName("ProviderCredentials_DeleteKey").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
+                .WithName("ProviderCredentials_DeleteKey")
+                .WithSummary("Deletes a key credential")
+                .WithParameterDescription("providerId", "The ID of the provider")
+                .WithParameterDescription("keyId", "The ID of the key to delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
             group.MapPost("/{providerId:int}/keys/{keyId:int}/set-primary", ([FromServices] ProviderCredentialsEndpoints endpoints, int providerId, int keyId) => endpoints.SetPrimaryKey(providerId, keyId))
-                .WithName("ProviderCredentials_SetPrimaryKey").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
+                .WithName("ProviderCredentials_SetPrimaryKey")
+                .WithSummary("Sets a key as the primary key for a provider")
+                .WithParameterDescription("providerId", "The ID of the provider")
+                .WithParameterDescription("keyId", "The ID of the key to set as primary").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
             group.MapPost("/{id:int}/test", ([FromServices] ProviderCredentialsEndpoints endpoints, int id) => endpoints.TestProviderConnection(id))
-                .WithName("ProviderCredentials_Test").Produces<StandardApiKeyTestResponse>().Produces(StatusCodes.Status404NotFound);
+                .WithName("ProviderCredentials_Test")
+                .WithSummary("Tests the connection to a provider")
+                .WithParameterDescription("id", "The ID of the provider to test").Produces<StandardApiKeyTestResponse>().Produces(StatusCodes.Status404NotFound);
             group.MapPost("/test/{id:int}", ([FromServices] ProviderCredentialsEndpoints endpoints, int id) => endpoints.TestProviderConnection(id))
                 .ExcludeFromDescription();
             group.MapPost("/test", ([FromServices] ProviderCredentialsEndpoints endpoints, TestProviderRequest request) => endpoints.TestProviderConnectionWithCredentials(request))
-                .WithName("ProviderCredentials_TestCredentials").Produces<StandardApiKeyTestResponse>().Produces(StatusCodes.Status400BadRequest);
+                .WithName("ProviderCredentials_TestCredentials")
+                .WithSummary("Tests a provider connection without saving").Produces<StandardApiKeyTestResponse>().Produces(StatusCodes.Status400BadRequest);
             group.MapPost("/{providerId:int}/keys/{keyId:int}/test", ([FromServices] ProviderCredentialsEndpoints endpoints, int providerId, int keyId) => endpoints.TestProviderKeyCredential(providerId, keyId))
-                .WithName("ProviderCredentials_TestKey").Produces<StandardApiKeyTestResponse>().Produces(StatusCodes.Status404NotFound);
+                .WithName("ProviderCredentials_TestKey")
+                .WithSummary("Tests a specific key credential")
+                .WithParameterDescription("providerId", "The ID of the provider")
+                .WithParameterDescription("keyId", "The ID of the key to test").Produces<StandardApiKeyTestResponse>().Produces(StatusCodes.Status404NotFound);
             return app;
         }
 

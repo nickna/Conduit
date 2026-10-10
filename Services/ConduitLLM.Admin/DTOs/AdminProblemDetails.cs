@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ConduitLLM.Admin.DTOs;
 
-/// <summary>RFC 9457 error response used by every Admin API error path.</summary>
+/// <summary>RFC 9457 error response used by Admin endpoint and exception handling.</summary>
 public sealed class AdminProblemDetails : ProblemDetails
 {
     /// <summary>Stable machine-readable error code.</summary>
