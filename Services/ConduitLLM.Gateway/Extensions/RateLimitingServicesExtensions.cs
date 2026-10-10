@@ -20,12 +20,14 @@ public static class RateLimitingServicesExtensions
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<RateLimitOptions>>().Value);
         services.AddSingleton<IRateLimitFailurePolicy, RateLimitFailurePolicy>();
 
-        services.AddSingleton<RequestTokenEstimator>();
-        services.AddSingleton<TokenRateLimitFilter>();
+        // Token counting uses scoped model capabilities and repositories. Keep the
+        // endpoint filter in the request scope with that graph.
+        services.AddScoped<RequestTokenEstimator>();
+        services.AddScoped<TokenRateLimitFilter>();
 
-        // Distributed limits need Redis. Where it is absent the endpoint filter still has to
-        // resolve, so bind an implementation that admits everything rather than letting every
-        // request to a token-limited route fail on a missing dependency.
+        // The normal Gateway runtime requires Redis before calling this extension. Isolated
+        // endpoint tests can compose these primitives without infrastructure; their unlimited
+        // implementations do not make a Redis-free Gateway deployment supported.
         var redisConnectionString = ConduitLLM.Configuration.Utilities.RedisUrlParser.ResolveConnectionString();
         if (string.IsNullOrEmpty(redisConnectionString))
         {

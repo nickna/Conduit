@@ -167,49 +167,8 @@ public static class ServiceCollectionExtensions
             ?? throw new InvalidOperationException("PricingAuditService must implement IHostedService"),
             "PricingAuditService");
 
-        // The rate-limit usage endpoint reads windows the Gateway writes, so it needs the same
-        // store. Registered only when Redis is present; the endpoint reports the ceilings and
-        // flags the usage figures unavailable when it is not.
-        services.AddSingleton<ConduitLLM.Core.Services.IVirtualKeyRateLimitService?>(serviceProvider =>
-        {
-            var redis = serviceProvider.GetService<StackExchange.Redis.IConnectionMultiplexer>();
-            if (redis is null)
-            {
-                return null;
-            }
-
-            return new ConduitLLM.Core.Services.RedisVirtualKeyRateLimitService(
-                redis,
-                serviceProvider.GetRequiredService<ILogger<ConduitLLM.Core.Services.RedisVirtualKeyRateLimitService>>());
-        });
-
-        // Register Redis error store with deferred resolution
-        // IConnectionMultiplexer will be registered by AddRedisDataProtection in Program.cs after this method
-        services.AddSingleton<ConduitLLM.Core.Interfaces.IRedisErrorStore>(serviceProvider =>
-        {
-            var redis = serviceProvider.GetService<StackExchange.Redis.IConnectionMultiplexer>();
-            var logger = serviceProvider.GetRequiredService<ILogger<ConduitLLM.Core.Services.RedisErrorStore>>();
-
-            if (redis == null)
-            {
-                logger.LogError("[ConduitLLM.Admin] Redis connection not available. Redis error store will not function.");
-                throw new InvalidOperationException("Redis error store requires Redis. Ensure REDIS_URL or CONDUIT_REDIS_CONNECTION_STRING is configured.");
-            }
-
-            logger.LogInformation("[ConduitLLM.Admin] Redis error store initialized");
-            return new ConduitLLM.Core.Services.RedisErrorStore(redis, logger);
-        });
-
-        // Register provider error tracking service
-        services.AddSingleton<ConduitLLM.Core.Interfaces.IProviderErrorTrackingService>(serviceProvider =>
-        {
-            var errorStore = serviceProvider.GetRequiredService<ConduitLLM.Core.Interfaces.IRedisErrorStore>();
-            var scopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
-            var logger = serviceProvider.GetRequiredService<ILogger<ConduitLLM.Core.Services.ProviderErrorTrackingService>>();
-
-            logger.LogInformation("[ConduitLLM.Admin] Provider error tracking service initialized with Redis backend");
-            return new ConduitLLM.Core.Services.ProviderErrorTrackingService(errorStore, scopeFactory, logger);
-        });
+        services.AddAdminRedisServices(!string.IsNullOrEmpty(
+            ConduitLLM.Configuration.Utilities.RedisUrlParser.ResolveConnectionString()));
 
         // Configure CORS for the Admin API
         services.AddCors(options =>
@@ -233,6 +192,23 @@ public static class ServiceCollectionExtensions
                 }
             });
         });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers optional Redis-backed Admin features. Without Redis the endpoints expose
+    /// their deliberate unavailable behavior, rather than descriptors that throw or return null.
+    /// </summary>
+    public static IServiceCollection AddAdminRedisServices(this IServiceCollection services, bool redisConfigured)
+    {
+        if (redisConfigured)
+        {
+            services.AddSingleton<ConduitLLM.Core.Services.IVirtualKeyRateLimitService,
+                ConduitLLM.Core.Services.RedisVirtualKeyRateLimitService>();
+            services.AddSingleton<IRedisErrorStore, ConduitLLM.Core.Services.RedisErrorStore>();
+            services.AddSingleton<IProviderErrorTrackingService, ConduitLLM.Core.Services.ProviderErrorTrackingService>();
+        }
 
         return services;
     }

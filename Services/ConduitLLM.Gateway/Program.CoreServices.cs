@@ -18,7 +18,6 @@ public partial class Program
     {
         builder.Services.AddSingleton<ConduitLLM.Core.Services.IEventPublisher,
             ConduitLLM.Core.Services.EventPublisher>();
-        builder.Services.AddGatewayEndpointHandlers();
         // ========== Core Infrastructure ==========
 
         // Add leader election service for distributed background service coordination

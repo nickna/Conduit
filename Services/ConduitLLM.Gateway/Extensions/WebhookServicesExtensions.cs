@@ -23,11 +23,7 @@ public static class WebhookServicesExtensions
     {
         services.AddWebhookHttpServices(configuration);
 
-        // Register Distributed Spend Notification Service (Redis-based for multi-instance consistency) - with leader election
-        services.AddSingleton<ISpendNotificationService, DistributedSpendNotificationService>();
-        services.AddLeaderElectedHostedService<DistributedSpendNotificationService>(
-            sp => (DistributedSpendNotificationService)sp.GetRequiredService<ISpendNotificationService>(),
-            "SpendNotificationService");
+        services.AddSpendNotificationServices();
 
         services.AddScoped<IWebhookRecovery, ConduitLLM.Messaging.Wolverine.WebhookDeliveryStore>();
 
@@ -61,6 +57,23 @@ public static class WebhookServicesExtensions
             sp => (WebhookDeliveryNotificationService)sp.GetRequiredService<IWebhookDeliveryNotificationService>(),
             "WebhookDeliveryNotificationService");
 
+        return services;
+    }
+
+    /// <summary>Registers the singleton spend graph and its leader-elected hosted lifecycle.</summary>
+    public static IServiceCollection AddSpendNotificationServices(this IServiceCollection services)
+    {
+        services.AddSingleton<ISpendDataRepository>(provider => new SpendDataRepository(
+            provider.GetRequiredService<IConnectionMultiplexer>().GetDatabase(),
+            provider.GetRequiredService<ILogger<SpendDataRepository>>()));
+        services.AddSingleton<IBudgetAlertManager, BudgetAlertManager>();
+        services.AddSingleton<ISpendPatternAnalyzer, SpendPatternAnalyzer>();
+        services.AddSingleton<DistributedSpendNotificationService>();
+        services.AddSingleton<ISpendNotificationService>(provider =>
+            provider.GetRequiredService<DistributedSpendNotificationService>());
+        services.AddLeaderElectedHostedService<DistributedSpendNotificationService>(
+            provider => provider.GetRequiredService<DistributedSpendNotificationService>(),
+            "SpendNotificationService");
         return services;
     }
 

@@ -54,14 +54,7 @@ if (Environment.GetEnvironmentVariable("CONDUIT_OPENAPI_GENERATION") == "true")
 }
 
 // Configure all service registrations
-Program.ConfigureCoreServices(builder);
-Program.ConfigureSecurityServices(builder);
-Program.ConfigureCachingServices(builder);
-Program.ConfigureMessagingServices(builder);
-Program.ConfigureSignalRServices(builder);
-Program.ConfigureMediaServices(builder);
-Program.ConfigureMonitoringServices(builder);
-builder.Services.AddConduitRateLimiting(builder.Configuration);
+Program.ConfigureRuntimeServices(builder);
 
 var app = builder.Build();
 

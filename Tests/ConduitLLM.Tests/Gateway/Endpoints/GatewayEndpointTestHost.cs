@@ -6,6 +6,7 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Middleware;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Endpoints;
+using ConduitLLM.Gateway.Extensions;
 using ConduitLLM.Gateway.RateLimiting;
 using ConduitLLM.Persistence.Interfaces;
 using Microsoft.AspNetCore.Authentication;
@@ -14,6 +15,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -91,7 +93,7 @@ internal sealed class GatewayEndpointTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Mirrors the no-Redis branch of <c>AddConduitRateLimiting</c>. The chat, embeddings and
+    /// Uses the production registration for the rate-limit filter. The chat, embeddings and
     /// responses routes carry <see cref="TokenRateLimitFilter"/>; without its dependencies every
     /// request to them fails DI inside the filter chain and answers 500 dependency_resolution_error
     /// before the handler ever runs. <see cref="UnlimitedTokenRateLimitService"/> admits everything,
@@ -99,12 +101,10 @@ internal sealed class GatewayEndpointTestHost : IAsyncDisposable
     /// </summary>
     private static void AddRateLimitingFilterDependencies(IServiceCollection services)
     {
-        services.AddSingleton(new RateLimitOptions());
-        services.AddSingleton<IRateLimitFailurePolicy, RateLimitFailurePolicy>();
-        services.AddSingleton<ITokenRateLimitService, UnlimitedTokenRateLimitService>();
-        services.AddSingleton(Mock.Of<ITokenCounter>());
-        services.AddSingleton<RequestTokenEstimator>();
-        services.AddSingleton<TokenRateLimitFilter>();
+        services.AddConduitRateLimiting(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        services.AddScoped(_ => Mock.Of<ITokenCounter>());
+        services.Replace(ServiceDescriptor.Singleton<ITokenRateLimitService, UnlimitedTokenRateLimitService>());
+        services.Replace(ServiceDescriptor.Singleton<IConcurrencyRateLimitService, UnlimitedConcurrencyRateLimitService>());
     }
 
     public async ValueTask DisposeAsync()
