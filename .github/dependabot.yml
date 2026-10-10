@@ -1,0 +1,97 @@
+# Keep this configuration on master (the default branch); update PRs target dev.
+# GitHub Actions updates remain manual because reviewed SHAs must also be updated
+# in scripts/ci/action-versions.json. See docs/operations/dependency-updates.md.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      efcore:
+        patterns:
+          - Microsoft.EntityFrameworkCore*
+          - Npgsql*
+          - Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore
+      opentelemetry:
+        patterns:
+          - OpenTelemetry*
+      aspnetcore:
+        patterns:
+          - Microsoft.AspNetCore*
+          - Microsoft.Extensions*
+      tokenizers:
+        patterns:
+          - Microsoft.ML.Tokenizers*
+      wolverine:
+        patterns:
+          - WolverineFx*
+      fusioncache:
+        patterns:
+          - ZiggyCreatures.FusionCache*
+      test:
+        patterns:
+          - xunit*
+          - Xunit.*
+          - Moq*
+          - AutoFixture*
+          - AwesomeAssertions
+          - FsCheck*
+          - bunit
+          - Microsoft.NET.Test.Sdk
+          - coverlet*
+          - Testcontainers*
+
+  - package-ecosystem: npm
+    directory: /WebAdmin
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      mantine:
+        patterns:
+          - '@mantine/*'
+      next-react:
+        patterns:
+          - next
+          - '@next/*'
+          - react
+          - react-dom
+          - '@types/react'
+          - '@types/react-dom'
+      signalr:
+        patterns:
+          - '@microsoft/signalr*'
+      development:
+        dependency-type: development
+        patterns:
+          - '*'
+
+  - package-ecosystem: npm
+    directory: /tools/openapi
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    groups:
+      openapi-tooling:
+        patterns:
+          - '*'
+
+  - package-ecosystem: npm
+    directory: /tools/ci
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    groups:
+      ci-tooling:
+        patterns:
+          - '*'
