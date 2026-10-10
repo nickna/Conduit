@@ -962,8 +962,10 @@ export interface components {
       | "failed"
       | "cancelled"
       | "timed_out";
-    /** @description Public file metadata contract. Kept separate from the Core storage model so
-     *     API requiredness and wire names remain stable as the internal model evolves. */
+    /**
+     * @description Public file metadata contract. Kept separate from the Core storage model so
+     *     API requiredness and wire names remain stable as the internal model evolves.
+     */
     FileMetadataResponse: {
       file_name: null | string;
       content_type: string;
@@ -1520,8 +1522,7 @@ export interface components {
     WebSearchUserLocation: {
       type?: string;
       approximate?:
-        | null
-        | components["schemas"]["WebSearchApproximateLocation"];
+        null | components["schemas"]["WebSearchApproximateLocation"];
     };
   };
   responses: never;
@@ -1909,8 +1910,7 @@ export interface operations {
     requestBody?: {
       content: {
         "application/json":
-          | null
-          | components["schemas"]["GenerateEphemeralKeyRequest"];
+          null | components["schemas"]["GenerateEphemeralKeyRequest"];
       };
     };
     responses: {
