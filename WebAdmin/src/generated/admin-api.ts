@@ -3644,8 +3644,10 @@ export interface components {
       apiKey?: string;
       keyName?: string;
       baseUrl?: null | string;
-      /** @description Secret-valued structured settings declared by the provider type (for example an AWS secret
-       *     access key), keyed by setting key. Stored encrypted and never returned by any read. */
+      /**
+       * @description Secret-valued structured settings declared by the provider type (for example an AWS secret
+       *     access key), keyed by setting key. Stored encrypted and never returned by any read.
+       */
       secretSettings?: null | {
         [key: string]: string;
       };
@@ -3772,11 +3774,15 @@ export interface components {
       maxOutputTokens?: null | number;
       /** @description Gets or sets the tokenizer type used by this model. */
       tokenizerType?: components["schemas"]["TokenizerType"];
-      /** @description Gets or sets whether the model should be active upon creation.
-       *     True to create an active model; false for inactive; null for default (true). */
+      /**
+       * @description Gets or sets whether the model should be active upon creation.
+       *     True to create an active model; false for inactive; null for default (true).
+       */
       isActive?: null | boolean;
-      /** @description Gets or sets the model-specific parameter configuration for UI generation.
-       *     JSON string containing parameter definitions, or null to use series defaults. */
+      /**
+       * @description Gets or sets the model-specific parameter configuration for UI generation.
+       *     JSON string containing parameter definitions, or null to use series defaults.
+       */
       modelParameters?: {
         [key: string]: unknown;
       };
@@ -3805,17 +3811,25 @@ export interface components {
        *     The foreign key reference to an existing ModelAuthor.
        */
       authorId?: number;
-      /** @description Gets or sets the name of the model series.
-       *     The series name. */
+      /**
+       * @description Gets or sets the name of the model series.
+       *     The series name.
+       */
       name?: string;
-      /** @description Gets or sets an optional description of the model series.
-       *     The series description, or null if not provided. */
+      /**
+       * @description Gets or sets an optional description of the model series.
+       *     The series description, or null if not provided.
+       */
       description?: null | string;
-      /** @description Gets or sets the tokenizer type for models in this series.
-       *     The tokenizer type enum value. */
+      /**
+       * @description Gets or sets the tokenizer type for models in this series.
+       *     The tokenizer type enum value.
+       */
       tokenizerType?: components["schemas"]["TokenizerType"];
-      /** @description Gets or sets optional UI parameter configuration for the series.
-       *     JSON string with UI parameters, or null for default. */
+      /**
+       * @description Gets or sets optional UI parameter configuration for the series.
+       *     JSON string with UI parameters, or null for default.
+       */
       parameters?: {
         [key: string]: unknown;
       };
@@ -4113,12 +4127,7 @@ export interface components {
     ExecutionMode: "synchronous" | "asynchronous";
     /** @enum {unknown} */
     ExecutionState:
-      | "pending"
-      | "running"
-      | "completed"
-      | "failed"
-      | "cancelled"
-      | "timedOut";
+      "pending" | "running" | "completed" | "failed" | "cancelled" | "timedOut";
     /** @description DTO for fatal error information */
     FatalErrorDto: {
       /** @description Type of error */
@@ -4303,20 +4312,10 @@ export interface components {
     };
     /** @enum {unknown} */
     FunctionPricingModel:
-      | "flatRate"
-      | "perResult"
-      | "perToken"
-      | "tiered"
-      | "timeBased"
-      | "hybrid";
+      "flatRate" | "perResult" | "perToken" | "tiered" | "timeBased" | "hybrid";
     /** @enum {unknown} */
     FunctionProviderType:
-      | "exa"
-      | "perplexity"
-      | "customRAG"
-      | "tavily"
-      | "mcp"
-      | "custom";
+      "exa" | "perplexity" | "customRAG" | "tavily" | "mcp" | "custom";
     /** @enum {unknown} */
     FunctionPurpose: "search" | "answer" | "contentRetrieval" | "rag" | null;
     /** @description Server-owned metadata for a known global setting. */
@@ -4425,8 +4424,10 @@ export interface components {
     };
     /** @description A single incident derived from request log analysis. */
     IncidentDto: {
-      /** @description Identifier for the incident. Derived from the incident's subject and window rather than
-       *     randomly generated, so the same incident keeps the same id across dashboard polls. */
+      /**
+       * @description Identifier for the incident. Derived from the incident's subject and window rather than
+       *     randomly generated, so the same incident keeps the same id across dashboard polls.
+       */
       id?: string;
       /** @description Human-readable incident title. */
       title?: string;
@@ -4446,8 +4447,10 @@ export interface components {
        * @description When the incident ended (UTC), or null if still active.
        */
       endTime?: null | string;
-      /** @description Identifier of the affected service, matching an entry in the service health response
-       *     (e.g. core-api). */
+      /**
+       * @description Identifier of the affected service, matching an entry in the service health response
+       *     (e.g. core-api).
+       */
       affectedService?: string;
       /** @description Model the incident was attributed to, or null when the incident is not model-specific. */
       affectedModel?: null | string;
@@ -4802,8 +4805,10 @@ export interface components {
       /** @description Source that triggered the cleanup. */
       triggeredBy?: string;
     };
-    /** @description Status information for the media cleanup service.
-     *     Provides operational visibility into cleanup runs, budget usage, and configuration. */
+    /**
+     * @description Status information for the media cleanup service.
+     *     Provides operational visibility into cleanup runs, budget usage, and configuration.
+     */
     MediaCleanupStatusDto: {
       /** @description Whether the media cleanup service is currently enabled. */
       isEnabled?: boolean;
@@ -4911,8 +4916,7 @@ export interface components {
        */
       maxRecordsPerRun?: number;
       defaultRetentionPolicy?:
-        | null
-        | components["schemas"]["RetentionPolicySummaryDto"];
+        null | components["schemas"]["RetentionPolicySummaryDto"];
       /**
        * Format: int32
        * @description Total number of active retention policies.
@@ -5156,11 +5160,7 @@ export interface components {
     };
     /** @enum {unknown} */
     ModelCapabilitySource:
-      | "unknown"
-      | "legacyInferred"
-      | "curated"
-      | "providerApi"
-      | "manual";
+      "unknown" | "legacyInferred" | "curated" | "providerApi" | "manual";
     ModelCostBreakdownDto: {
       /** Format: date-time */
       startDate?: string;
@@ -5251,8 +5251,10 @@ export interface components {
        *     The database-generated ID that uniquely identifies this model across the system.
        */
       id?: number;
-      /** @description Gets or sets the canonical name of the model.
-       *     The canonical model name. */
+      /**
+       * @description Gets or sets the canonical name of the model.
+       *     The canonical model name.
+       */
       name?: string;
       /**
        * Format: int32
@@ -5313,8 +5315,10 @@ export interface components {
       maxOutputTokens?: null | number;
       /** @description Gets or sets the tokenizer type used by this model. */
       tokenizerType?: components["schemas"]["TokenizerType"];
-      /** @description Gets or sets whether this model is currently active and available for use.
-       *     True if the model is active and available; otherwise, false. */
+      /**
+       * @description Gets or sets whether this model is currently active and available for use.
+       *     True if the model is active and available; otherwise, false.
+       */
       isActive?: boolean;
       /**
        * Format: date-time
@@ -5329,8 +5333,10 @@ export interface components {
        */
       updatedAt?: string;
       series?: null | components["schemas"]["ModelSeriesDto"];
-      /** @description Gets or sets the model-specific parameter configuration for UI generation.
-       *     JSON string containing parameter definitions, or null to use series defaults. */
+      /**
+       * @description Gets or sets the model-specific parameter configuration for UI generation.
+       *     JSON string containing parameter definitions, or null to use series defaults.
+       */
       modelParameters?: {
         [key: string]: unknown;
       };
@@ -5389,8 +5395,7 @@ export interface components {
       /** @description Provider-specific output modality override; null inherits the model. */
       outputModalities?: null | string[];
       operationalCapabilities?:
-        | null
-        | components["schemas"]["ProviderOperationalCapabilities"];
+        null | components["schemas"]["ProviderOperationalCapabilities"];
       capabilitySource?: null | components["schemas"]["ModelCapabilitySource"];
       /** Format: date-time */
       capabilitiesLastVerifiedAt?: null | string;
@@ -5436,8 +5441,7 @@ export interface components {
       inputModalities?: null | string[];
       outputModalities?: null | string[];
       operationalCapabilities?:
-        | null
-        | components["schemas"]["ProviderOperationalCapabilities"];
+        null | components["schemas"]["ProviderOperationalCapabilities"];
       capabilitySource?: null | components["schemas"]["ModelCapabilitySource"];
       /** Format: date-time */
       capabilitiesLastVerifiedAt?: null | string;
@@ -5485,8 +5489,7 @@ export interface components {
       /** @description Provider-specific output modality override; null inherits the canonical model. */
       outputModalities?: null | string[];
       operationalCapabilities?:
-        | null
-        | components["schemas"]["ProviderOperationalCapabilities"];
+        null | components["schemas"]["ProviderOperationalCapabilities"];
       capabilitySource?: null | components["schemas"]["ModelCapabilitySource"];
       /**
        * Format: date-time
@@ -5540,20 +5543,30 @@ export interface components {
        *     The foreign key reference to the ModelAuthor entity.
        */
       authorId?: number;
-      /** @description Gets or sets the name of the author/organization.
-       *     The author's display name, or null if not loaded. */
+      /**
+       * @description Gets or sets the name of the author/organization.
+       *     The author's display name, or null if not loaded.
+       */
       authorName?: null | string;
-      /** @description Gets or sets the name of this model series.
-       *     The series name. */
+      /**
+       * @description Gets or sets the name of this model series.
+       *     The series name.
+       */
       name?: string;
-      /** @description Gets or sets a description of this model series.
-       *     The series description, or null if not provided. */
+      /**
+       * @description Gets or sets a description of this model series.
+       *     The series description, or null if not provided.
+       */
       description?: null | string;
-      /** @description Gets or sets the tokenizer type used by models in this series.
-       *     The tokenizer type enum value. */
+      /**
+       * @description Gets or sets the tokenizer type used by models in this series.
+       *     The tokenizer type enum value.
+       */
       tokenizerType?: components["schemas"]["TokenizerType"];
-      /** @description Gets or sets the UI parameters configuration for this series.
-       *     JSON string containing UI parameter configuration. */
+      /**
+       * @description Gets or sets the UI parameters configuration for this series.
+       *     JSON string containing UI parameter configuration.
+       */
       parameters?: {
         [key: string]: unknown;
       };
@@ -5614,8 +5627,10 @@ export interface components {
        *     The database-generated ID that uniquely identifies this model across the system.
        */
       id?: number;
-      /** @description Gets or sets the canonical name of the model.
-       *     The canonical model name. */
+      /**
+       * @description Gets or sets the canonical name of the model.
+       *     The canonical model name.
+       */
       name?: string;
       /**
        * Format: int32
@@ -5676,8 +5691,10 @@ export interface components {
       maxOutputTokens?: null | number;
       /** @description Gets or sets the tokenizer type used by this model. */
       tokenizerType?: components["schemas"]["TokenizerType"];
-      /** @description Gets or sets whether this model is currently active and available for use.
-       *     True if the model is active and available; otherwise, false. */
+      /**
+       * @description Gets or sets whether this model is currently active and available for use.
+       *     True if the model is active and available; otherwise, false.
+       */
       isActive?: boolean;
       /**
        * Format: date-time
@@ -5692,8 +5709,10 @@ export interface components {
        */
       updatedAt?: string;
       series?: null | components["schemas"]["ModelSeriesDto"];
-      /** @description Gets or sets the model-specific parameter configuration for UI generation.
-       *     JSON string containing parameter definitions, or null to use series defaults. */
+      /**
+       * @description Gets or sets the model-specific parameter configuration for UI generation.
+       *     JSON string containing parameter definitions, or null to use series defaults.
+       */
       modelParameters?: {
         [key: string]: unknown;
       };
@@ -6071,10 +6090,7 @@ export interface components {
     };
     /** @enum {unknown} */
     PromptCachingStrategy:
-      | "Automatic"
-      | "OpenRouterAutomatic"
-      | "Explicit"
-      | "OpenRouterExplicit";
+      "Automatic" | "OpenRouterAutomatic" | "Explicit" | "OpenRouterExplicit";
     ProviderCatalogImportResult: {
       provider: string;
       /** Format: int32 */
@@ -6241,8 +6257,10 @@ export interface components {
       displayName: string;
       isEnabled: boolean;
     };
-    /** @description A single structured, provider-scoped setting an operator supplies in addition to the API key
-     *     (for example a Cloudflare account ID). */
+    /**
+     * @description A single structured, provider-scoped setting an operator supplies in addition to the API key
+     *     (for example a Cloudflare account ID).
+     */
     ProviderSettingFieldDto: {
       /** @description Stable machine key; also the storage key in the provider's settings map. */
       key?: string;
@@ -6258,12 +6276,16 @@ export interface components {
       required?: boolean;
       /** @description Whether the value is sensitive and should be entered masked. */
       secret?: boolean;
-      /** @description Optional regular-expression source the value must match. The backend remains authoritative;
-       *     clients use this only to fail fast before submitting. */
+      /**
+       * @description Optional regular-expression source the value must match. The backend remains authoritative;
+       *     clients use this only to fail fast before submitting.
+       */
       validationRegex?: null | string;
     };
-    /** @description The configuration and presentation metadata a provider type declares, projected from the
-     *     backend provider registry so administrative UIs do not maintain a second provider catalog. */
+    /**
+     * @description The configuration and presentation metadata a provider type declares, projected from the
+     *     backend provider registry so administrative UIs do not maintain a second provider catalog.
+     */
     ProviderSettingsSchemaDto: {
       /** @description The provider type these settings belong to. */
       providerType?: components["schemas"]["ProviderType"];
@@ -6587,14 +6609,20 @@ export interface components {
        *     The model's database ID.
        */
       id?: number;
-      /** @description Gets or sets the canonical name of the model.
-       *     The model name. */
+      /**
+       * @description Gets or sets the canonical name of the model.
+       *     The model name.
+       */
       name?: string;
-      /** @description Gets or sets the version identifier of the model.
-       *     The version string, or null if not versioned. */
+      /**
+       * @description Gets or sets the version identifier of the model.
+       *     The version string, or null if not versioned.
+       */
       version?: null | string;
-      /** @description Gets or sets whether the model is currently active.
-       *     True if the model is active; otherwise, false. */
+      /**
+       * @description Gets or sets whether the model is currently active.
+       *     True if the model is active; otherwise, false.
+       */
       isActive?: boolean;
     };
     /** @description Response containing current health status for all monitored services. */
@@ -6662,13 +6690,17 @@ export interface components {
       name?: string;
       /** @description Health status of the service (healthy, degraded, or unhealthy). */
       status?: string;
-      /** @description Logical service version, `mixed` when active instances do not match, or null
-       *     for dependencies that do not expose an application version. */
+      /**
+       * @description Logical service version, `mixed` when active instances do not match, or null
+       *     for dependencies that do not expose an application version.
+       */
       version?: null | string;
       /** @description Per-instance status for clustered application services. */
       instances?: components["schemas"]["ServiceInstanceStatusDto"][];
-      /** @description How long the service has been running, or `null` when it is not known
-       *     (e.g. a service reporting via heartbeat that has not been seen yet). */
+      /**
+       * @description How long the service has been running, or `null` when it is not known
+       *     (e.g. a service reporting via heartbeat that has not been seen yet).
+       */
       uptime?: null | string;
       /**
        * Format: date-time
@@ -6913,8 +6945,10 @@ export interface components {
       keyName?: null | string;
       apiKey?: null | string;
       baseUrl?: null | string;
-      /** @description Secret-valued structured settings. Object members merge recursively; null removes the
-       *     entire settings object or an individual member at that member's path. */
+      /**
+       * @description Secret-valued structured settings. Object members merge recursively; null removes the
+       *     entire settings object or an individual member at that member's path.
+       */
       secretSettings?: null | {
         [key: string]: string;
       };
@@ -6949,8 +6983,7 @@ export interface components {
       /** Format: int32 */
       maxFileCount?: null | number;
       quotaExceededBehavior?:
-        | null
-        | components["schemas"]["MediaQuotaExceededBehavior"];
+        null | components["schemas"]["MediaQuotaExceededBehavior"];
       isActive?: null | boolean;
     };
     /** @description Data transfer object for updating an existing model author/organization. */
@@ -6998,8 +7031,10 @@ export interface components {
     };
     /** @description Data transfer object for updating an existing AI model in the system. */
     UpdateModelDto: {
-      /** @description Gets or sets the ID of the model to update.
-       *     The unique identifier of the model to update. */
+      /**
+       * @description Gets or sets the ID of the model to update.
+       *     The unique identifier of the model to update.
+       */
       name?: null | string;
       /**
        * Format: int32
@@ -7017,26 +7052,40 @@ export interface components {
        * @description Updates when the directional capability metadata was verified.
        */
       capabilitiesLastVerifiedAt?: null | string;
-      /** @description Clears directional metadata and marks it unknown. This is distinct from
-       *     supplying empty arrays, which explicitly means no modalities are supported. */
+      /**
+       * @description Clears directional metadata and marks it unknown. This is distinct from
+       *     supplying empty arrays, which explicitly means no modalities are supported.
+       */
       clearDirectionalCapabilities?: null | boolean;
-      /** @description Gets or sets whether the model supports chat/conversation interactions.
-       *     True to enable chat support or false to disable it. */
+      /**
+       * @description Gets or sets whether the model supports chat/conversation interactions.
+       *     True to enable chat support or false to disable it.
+       */
       supportsChat?: null | boolean;
-      /** @description Gets or sets whether the model supports vision/image understanding.
-       *     True to enable vision support or false to disable it. */
+      /**
+       * @description Gets or sets whether the model supports vision/image understanding.
+       *     True to enable vision support or false to disable it.
+       */
       supportsVision?: null | boolean;
-      /** @description Gets or sets whether the model supports function/tool calling.
-       *     True to enable function calling or false to disable it. */
+      /**
+       * @description Gets or sets whether the model supports function/tool calling.
+       *     True to enable function calling or false to disable it.
+       */
       supportsFunctionCalling?: null | boolean;
-      /** @description Gets or sets whether the model supports streaming responses.
-       *     True to enable streaming or false to disable it. */
+      /**
+       * @description Gets or sets whether the model supports streaming responses.
+       *     True to enable streaming or false to disable it.
+       */
       supportsStreaming?: null | boolean;
-      /** @description Gets or sets whether the model supports image generation.
-       *     True to enable image generation or false to disable it. */
+      /**
+       * @description Gets or sets whether the model supports image generation.
+       *     True to enable image generation or false to disable it.
+       */
       supportsImageGeneration?: null | boolean;
-      /** @description Gets or sets whether the model supports video generation.
-       *     True to enable video generation or false to disable it. */
+      /**
+       * @description Gets or sets whether the model supports video generation.
+       *     True to enable video generation or false to disable it.
+       */
       supportsVideoGeneration?: null | boolean;
       /** @description Whether the model supports speech-to-text transcription. */
       supportsSpeechToText?: null | boolean;
@@ -7044,8 +7093,10 @@ export interface components {
       supportsTextToSpeech?: null | boolean;
       /** @description Whether the model supports document reranking. */
       supportsRerank?: null | boolean;
-      /** @description Gets or sets whether the model supports text embeddings generation.
-       *     True to enable embeddings or false to disable it. */
+      /**
+       * @description Gets or sets whether the model supports text embeddings generation.
+       *     True to enable embeddings or false to disable it.
+       */
       supportsEmbeddings?: null | boolean;
       /**
        * Format: int32
@@ -7059,11 +7110,15 @@ export interface components {
        *     The new max output tokens, or null to clear the override.
        */
       maxOutputTokens?: null | number;
-      /** @description Gets or sets the new activation status for the model.
-       *     True to activate or false to deactivate. */
+      /**
+       * @description Gets or sets the new activation status for the model.
+       *     True to activate or false to deactivate.
+       */
       isActive?: null | boolean;
-      /** @description Gets or sets the model-specific parameter configuration for UI generation.
-       *     JSON string containing parameter definitions, or null to use series defaults. */
+      /**
+       * @description Gets or sets the model-specific parameter configuration for UI generation.
+       *     JSON string containing parameter definitions, or null to use series defaults.
+       */
       modelParameters?: {
         [key: string]: unknown;
       };
@@ -7086,15 +7141,21 @@ export interface components {
     };
     /** @description Data transfer object for updating an existing model series. */
     UpdateModelSeriesDto: {
-      /** @description Gets or sets the ID of the series to update.
-       *     The unique identifier of the series to update. */
+      /**
+       * @description Gets or sets the ID of the series to update.
+       *     The unique identifier of the series to update.
+       */
       name?: null | string;
-      /** @description Gets or sets the new description for the series.
-       *     The new description, or null to clear it. */
+      /**
+       * @description Gets or sets the new description for the series.
+       *     The new description, or null to clear it.
+       */
       description?: null | string;
       tokenizerType?: null | components["schemas"]["TokenizerType"];
-      /** @description Gets or sets the new UI parameters configuration.
-       *     The parameter object to merge, or null to clear it. */
+      /**
+       * @description Gets or sets the new UI parameters configuration.
+       *     The parameter object to merge, or null to clear it.
+       */
       parameters?: {
         [key: string]: unknown;
       };
@@ -7223,8 +7284,10 @@ export interface components {
       pricingConfiguration?: {
         [key: string]: unknown;
       };
-      /** @description Optional parameter schema JSON for standalone validation. The model-cost-scoped
-       *     endpoint ignores this value and uses persisted associated-model schemas. */
+      /**
+       * @description Optional parameter schema JSON for standalone validation. The model-cost-scoped
+       *     endpoint ignores this value and uses persisted associated-model schemas.
+       */
       parameterSchema?: {
         [key: string]: unknown;
       };
