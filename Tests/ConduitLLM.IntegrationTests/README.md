@@ -63,7 +63,11 @@ The SignalR component is self-contained with Testcontainers and runs as a requir
 dotnet test ConduitLLM.IntegrationTests.csproj --configuration Release --filter "Component=SignalR"
 ```
 
-Provider and critical-path integration tests remain manual because they require running Conduit services and provider credentials.
+Provider integration tests remain manual because they require running Conduit services and provider credentials.
+
+The legacy `Tests/CriticalPath` harness is retired (#1464). All 30 facts carry an explicit xUnit skip reason and cannot report successful provider or timeout execution. The original setup and conditional assertions are archived as noncompiled `.cs.txt` references in `Tests/CriticalPath/Archive`; the active records have no service or Docker fixtures. Do not remove the skip reasons or use `--filter "CriticalPath=true"` as acceptance evidence.
+
+Required replacement ownership is recorded in [`scripts/ci/critical-path-map.json`](../../scripts/ci/critical-path-map.json): packaged container business smoke, official OpenAI SDK smoke, and focused component suites cover the automated cases. The five deployment/provider-specific scenarios remain manual procedures; they require an isolated deployment, explicit provider spending and request limits where applicable, and assertions that the intended fault actually occurred. The retired facts are not those procedures. See [`docs/operations/ci-validation.md`](../../docs/operations/ci-validation.md).
 
 ### Run All Tests
 ```bash
@@ -179,7 +183,7 @@ DELETE FROM "Providers" WHERE "Name" LIKE 'TEST_%';
 ## Common Issues
 
 ### Build Errors
-- Ensure you're using .NET 9.0 SDK
+- Ensure you're using the .NET SDK required by `global.json`
 - Run `dotnet restore` if package errors occur
 
 ### Configuration Not Found

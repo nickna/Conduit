@@ -28,8 +28,7 @@ namespace ConduitLLM.Configuration.Messaging
         /// <summary>
         /// Publishes a batch of domain events of the same type in one transport operation
         /// where the backend supports it, falling back to
-        /// sequential publishes otherwise. Used by the high-throughput webhook batch path
-        /// (<c>BatchWebhookPublisher</c>).
+        /// sequential publishes otherwise.
         /// </summary>
         /// <typeparam name="TEvent">The event type. Routing is by the closed generic type.</typeparam>
         /// <param name="events">The event instances to publish. Must not be null.</param>

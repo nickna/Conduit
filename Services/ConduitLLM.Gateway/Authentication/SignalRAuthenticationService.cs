@@ -53,12 +53,12 @@ namespace ConduitLLM.Gateway.Authentication
     /// </summary>
     public class SignalRAuthenticationService : ISignalRAuthenticationService
     {
-        private readonly IVirtualKeyService _virtualKeyService;
+        private readonly IVirtualKeyRuntimeService _virtualKeyService;
         private readonly IAsyncTaskService _taskService;
         private readonly ILogger<SignalRAuthenticationService> _logger;
         
         public SignalRAuthenticationService(
-            IVirtualKeyService virtualKeyService,
+            IVirtualKeyRuntimeService virtualKeyService,
             IAsyncTaskService taskService,
             ILogger<SignalRAuthenticationService> logger)
         {

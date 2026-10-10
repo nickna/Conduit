@@ -1,5 +1,5 @@
-using ConduitLLM.Configuration.Models;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Persistence;
 
 using Moq;
 
@@ -8,7 +8,7 @@ namespace ConduitLLM.Tests.Core.Services
     public partial class MediaLifecycleServiceTests
     {
         private MediaLifecycleService CreateStatsService() => new(
-            _mockMediaRepository.Object,
+            _mockMediaStore.Object,
             _mockLogger.Object);
 
         [Fact]
@@ -23,24 +23,24 @@ namespace ConduitLLM.Tests.Core.Services
                 { "OpenAI", 5000 }
             };
 
-            _mockMediaRepository.Setup(x => x.GetAggregateStorageStatsAsync(
+            _mockMediaStore.Setup(x => x.GetAggregateStorageStatsAsync(
                     null,
                     100,
                     It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new MediaStorageAggregateStats
+                .ReturnsAsync(new MediaRuntimeStorageAggregate
                 {
                     TotalFiles = 3,
                     TotalSizeBytes = 8000,
                     ByProvider = providerStats,
                     ByMediaType =
                     [
-                        new MediaTypeStorageAggregate("image", 2, 3000),
-                        new MediaTypeStorageAggregate("video", 1, 5000)
+                        new MediaRuntimeTypeAggregate("image", 2, 3000),
+                        new MediaRuntimeTypeAggregate("video", 1, 5000)
                     ],
                     TopVirtualKeys =
                     [
-                        new VirtualKeyStorageAggregate(2, 5000),
-                        new VirtualKeyStorageAggregate(1, 3000)
+                        new MediaRuntimeVirtualKeyAggregate(2, 5000),
+                        new MediaRuntimeVirtualKeyAggregate(1, 3000)
                     ]
                 });
             // Act
@@ -64,11 +64,11 @@ namespace ConduitLLM.Tests.Core.Services
             // Arrange
             var service = CreateStatsService();
             const int groupId = 1;
-            _mockMediaRepository.Setup(x => x.GetAggregateStorageStatsAsync(
+            _mockMediaStore.Setup(x => x.GetAggregateStorageStatsAsync(
                     groupId,
                     100,
                     It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new MediaStorageAggregateStats
+                .ReturnsAsync(new MediaRuntimeStorageAggregate
                 {
                     TotalFiles = 2,
                     TotalSizeBytes = 3000,
@@ -79,13 +79,13 @@ namespace ConduitLLM.Tests.Core.Services
                     },
                     ByMediaType =
                     [
-                        new MediaTypeStorageAggregate("image", 1, 1000),
-                        new MediaTypeStorageAggregate("video", 1, 2000)
+                        new MediaRuntimeTypeAggregate("image", 1, 1000),
+                        new MediaRuntimeTypeAggregate("video", 1, 2000)
                     ],
                     TopVirtualKeys =
                     [
-                        new VirtualKeyStorageAggregate(3, 2000),
-                        new VirtualKeyStorageAggregate(1, 1000)
+                        new MediaRuntimeVirtualKeyAggregate(3, 2000),
+                        new MediaRuntimeVirtualKeyAggregate(1, 1000)
                     ]
                 });
 
@@ -110,16 +110,16 @@ namespace ConduitLLM.Tests.Core.Services
             const int groupId = 1;
             var service = CreateStatsService();
 
-            _mockMediaRepository.Setup(x => x.GetAggregateStorageStatsAsync(
+            _mockMediaStore.Setup(x => x.GetAggregateStorageStatsAsync(
                     groupId,
                     100,
                     It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new MediaStorageAggregateStats());
+                .ReturnsAsync(new MediaRuntimeStorageAggregate());
 
             var result = await service.GetOverallStorageStatsAsync(groupId);
 
             Assert.Equal(0, result.TotalFiles);
-            _mockMediaRepository.Verify(x => x.GetAggregateStorageStatsAsync(
+            _mockMediaStore.Verify(x => x.GetAggregateStorageStatsAsync(
                 groupId,
                 100,
                 It.IsAny<CancellationToken>()), Times.Once);
@@ -131,11 +131,11 @@ namespace ConduitLLM.Tests.Core.Services
             // Arrange
             var service = CreateStatsService();
             const int groupId = 999;
-            _mockMediaRepository.Setup(x => x.GetAggregateStorageStatsAsync(
+            _mockMediaStore.Setup(x => x.GetAggregateStorageStatsAsync(
                     groupId,
                     100,
                     It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new MediaStorageAggregateStats());
+                .ReturnsAsync(new MediaRuntimeStorageAggregate());
 
             // Act
             var result = await service.GetOverallStorageStatsAsync(groupId);
@@ -156,18 +156,18 @@ namespace ConduitLLM.Tests.Core.Services
             // Arrange
             var service = CreateStatsService();
 
-            _mockMediaRepository.Setup(x => x.GetAggregateStorageStatsAsync(
+            _mockMediaStore.Setup(x => x.GetAggregateStorageStatsAsync(
                     null,
                     100,
                     It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new MediaStorageAggregateStats
+                .ReturnsAsync(new MediaRuntimeStorageAggregate
                 {
                     TotalFiles = 4,
                     TotalSizeBytes = 11000,
                     ByMediaType =
                     [
-                        new MediaTypeStorageAggregate("image", 2, 3000),
-                        new MediaTypeStorageAggregate("video", 2, 8000)
+                        new MediaRuntimeTypeAggregate("image", 2, 3000),
+                        new MediaRuntimeTypeAggregate("video", 2, 8000)
                     ]
                 });
             // Act

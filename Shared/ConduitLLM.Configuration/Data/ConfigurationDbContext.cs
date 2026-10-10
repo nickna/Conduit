@@ -46,6 +46,8 @@ namespace ConduitLLM.Configuration
         public virtual DbSet<VirtualKeyGroupTransaction> VirtualKeyGroupTransactions { get; set; } = null!;
 
         public virtual DbSet<RefundIdempotencyRecord> RefundIdempotencyRecords { get; set; } = null!;
+        public virtual DbSet<WebhookDeliveryRecord> WebhookDeliveries { get; set; } = null!;
+        public virtual DbSet<WebhookReplayAudit> WebhookReplayAudits { get; set; } = null!;
 
         /// <summary>
         /// Database set for request logs

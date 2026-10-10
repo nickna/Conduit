@@ -1,0 +1,17 @@
+{
+  "utc": "2026-10-07T00:28:22.7974147Z",
+  "os": "Microsoft Windows 10.0.29639",
+  "logicalProcessors": 28,
+  "dotnet": "10.0.401",
+  "databaseImage": "postgres:17-alpine",
+  "databaseCpuLimit": 2,
+  "databaseMemoryGiB": 2,
+  "payloadPaddingBytes": 1024,
+  "offeredEvents": 200,
+  "warmupEvents": 20,
+  "observationSeconds": 10,
+  "queueConcurrencyPerHost": 75,
+  "scheduledPollingMilliseconds": 250,
+  "redis": "absent",
+  "hostModel": "one or two Wolverine hosts in one process; shared receiver; same machine"
+}

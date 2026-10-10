@@ -18,7 +18,6 @@ public partial class Program
     {
         builder.Services.AddSingleton<ConduitLLM.Core.Services.IEventPublisher,
             ConduitLLM.Core.Services.EventPublisher>();
-        builder.Services.AddGatewayEndpointHandlers();
         // ========== Core Infrastructure ==========
 
         // Add leader election service for distributed background service coordination
@@ -101,6 +100,9 @@ public partial class Program
         // ========== Audit Services ==========
 
         builder.Services.AddAuditServices();
+#if CONDUIT_NATIVE_AOT
+        builder.Services.UseNativeRuntimePersistence();
+#endif
 
         // ========== Webhook Services ==========
 

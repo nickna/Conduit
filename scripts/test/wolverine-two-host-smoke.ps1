@@ -20,9 +20,8 @@
          webhook-delivery, video-generation-events, spend-update-events,
          image-generation-events).
       5. Representative spend, batch, image, and video messages reach the committed
-         static handler adapters through the real PostgreSQL queues. In the native
-         supported-boundary run, spend stops at the explicitly excluded EF query data
-         plane after the adapter has invoked it.
+         static handler adapters through the real PostgreSQL queues. Both JIT and
+         native spend probes reach the virtual-key lookup and report the missing key.
       6. Neither host logs agent-assignment, service-location, or static-code-loading
          failures (including a fallback handler scan).
 
@@ -93,7 +92,11 @@ $adminProject = Join-Path $repoRoot 'Services' 'ConduitLLM.Admin'
 $gatewayProject = Join-Path $repoRoot 'Services' 'ConduitLLM.Gateway'
 $publisherProject = Join-Path $repoRoot 'tools' 'WolverineSmokePublisher'
 $migratorProject = Join-Path $repoRoot 'tools' 'ConduitLLM.Migrator'
-$logDir = Join-Path ([System.IO.Path]::GetTempPath()) "wolverine-two-host-$PID"
+$logDir = if ($NativeArtifactDirectory) {
+    Join-Path ([IO.Path]::GetFullPath($NativeArtifactDirectory)) "reports/wolverine-two-host-$PID"
+} else {
+    Join-Path ([System.IO.Path]::GetTempPath()) "wolverine-two-host-$PID"
+}
 New-Item -ItemType Directory -Force $logDir | Out-Null
 
 $script:failures = [System.Collections.Generic.List[string]]::new()
@@ -243,11 +246,7 @@ SELECT CASE WHEN count(*) >= 2 THEN 1 ELSE 0 END FROM wolverine_conduit_gateway.
     dotnet (Join-Path $publisherProject 'bin' $Configuration 'net10.0' 'WolverineSmokePublisher.dll') $probeId
     if ($LASTEXITCODE -ne 0) { Write-Error 'Wolverine delivery-probe publisher failed' }
 
-    $spendPattern = if ($NativeArtifactDirectory) {
-        'SpendUpdateRequestedHandler1733208880\.<HandleAsync>'
-    } else {
-        'Spend update request for non-existent virtual key 2147483647'
-    }
+    $spendPattern = 'Spend update request for non-existent virtual key 2147483647'
     $deliveryPatterns = [ordered]@{
         Spend = $spendPattern
         Batch = "Processing batch spend flush request static-codegen-batch-$probeId"
@@ -282,12 +281,7 @@ SELECT CASE WHEN count(*) >= 2 THEN 1 ELSE 0 END FROM wolverine_conduit_gateway.
     }
 
     # (5) Representative messages traverse each generated handler path.
-    $spendAssertion = if ($NativeArtifactDirectory) {
-        'SpendUpdateRequested reached its static handler adapter before the excluded EF query plane'
-    } else {
-        'SpendUpdateRequested delivered through its static handler adapter'
-    }
-    Assert $spendDelivered $spendAssertion
+    Assert $spendDelivered 'SpendUpdateRequested delivered through its static handler adapter and virtual-key lookup'
     Assert $batchDelivered 'BatchSpendFlushRequestedEvent delivered through its static handler adapter'
     Assert $imageDelivered 'ImageGenerationCancelled delivered through its static handler adapter'
     Assert $videoDelivered 'VideoGenerationCancelled delivered through its static handler adapter'

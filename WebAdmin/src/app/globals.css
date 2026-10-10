@@ -2,21 +2,34 @@
 
 * {
   box-sizing: border-box;
-  padding: 0;
   margin: 0;
+  padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--conduit-scrollbar-thumb) var(--conduit-scrollbar-track);
 }
 
 html,
 body {
   max-width: 100vw;
-  overflow-x: hidden;
   height: 100%;
+
+  overflow-x: hidden;
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* These declarations are the source of the design tokens used below. */
+/* stylelint-disable color-no-hex -- Foundation tokens deliberately define palette values. */
+:root {
+  --conduit-scrollbar-track: #f1f1f1;
+  --conduit-scrollbar-thumb: #c1c1c1;
+  --conduit-scrollbar-thumb-hover: #a8a8a8;
+  --conduit-focus-ring: #1976d2;
+  --conduit-shadow-color: 0 0 0;
 }
 
 /* Dark mode color overrides for better aesthetics and readability */
@@ -51,7 +64,20 @@ body {
   --conduit-warning-bg: #451a03;
   --conduit-error: #ef4444;
   --conduit-error-bg: #7f1d1d;
+  --conduit-scrollbar-thumb-dark-hover: #6b7280;
+  --conduit-chat-warning-background: rgb(255 152 0 / 0.05);
+  --conduit-chat-warning-border: rgb(255 152 0 / 0.3);
+  --conduit-chat-info-background: rgb(33 150 243 / 0.05);
+  --conduit-chat-info-border: rgb(33 150 243 / 0.3);
+  --conduit-chat-danger-background: rgb(244 67 54 / 0.05);
+  --conduit-chat-danger-border: rgb(244 67 54 / 0.3);
+  --conduit-chat-neutral-background: rgb(158 158 158 / 0.05);
+  --conduit-chat-neutral-border: rgb(158 158 158 / 0.3);
+  --conduit-thinking-border: rgb(33 150 243 / 0.2);
+  --conduit-thinking-hover-background: rgb(33 150 243 / 0.1);
+  --conduit-thinking-hover-border: rgb(33 150 243 / 0.4);
 }
+/* stylelint-enable color-no-hex */
 
 /* Ensure smooth scrolling */
 html {
@@ -65,23 +91,19 @@ html {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
   border-radius: 4px;
+
+  background: var(--conduit-scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
   border-radius: 4px;
+
+  background: var(--conduit-scrollbar-thumb);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-/* Firefox scrollbar */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #c1c1c1 #f1f1f1;
+  background: var(--conduit-scrollbar-thumb-hover);
 }
 
 /* Dark mode scrollbar */
@@ -94,7 +116,7 @@ html {
 }
 
 [data-mantine-color-scheme="dark"] ::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: var(--conduit-scrollbar-thumb-dark-hover);
 }
 
 [data-mantine-color-scheme="dark"] * {
@@ -107,7 +129,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 a:focus-visible {
-  outline: 2px solid #1976d2;
+  outline: 2px solid var(--conduit-focus-ring);
   outline-offset: 2px;
 }
 
@@ -116,6 +138,7 @@ a:focus-visible {
   0%, 100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }

@@ -18,25 +18,30 @@ namespace ConduitLLM.Admin.Endpoints
     /// </summary>
     public class ProviderErrorsEndpoints
     {
-        private readonly IProviderErrorTrackingService _errorService;
+        private readonly IProviderErrorTrackingService? _errorService;
         private readonly IProviderKeyCredentialRepository _keyRepo;
         private readonly IProviderRepository _providerRepo;
         private readonly IEventPublisher _eventPublisher;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<ProviderErrorsEndpoints> _logger;
 
+        private IProviderErrorTrackingService ErrorService => _errorService ??
+            throw new ConduitLLM.Core.Exceptions.ServiceUnavailableException(
+                "Provider error tracking is unavailable because Redis is not configured.",
+                "ProviderErrorTracking");
+
         /// <summary>
         /// Initializes the Provider Errors endpoint handler.
         /// </summary>
         public ProviderErrorsEndpoints(
-            IProviderErrorTrackingService errorService,
             IProviderKeyCredentialRepository keyRepo,
             IProviderRepository providerRepo,
             IEventPublisher eventPublisher,
             IHttpContextAccessor httpContextAccessor,
-            ILogger<ProviderErrorsEndpoints> logger)
+            ILogger<ProviderErrorsEndpoints> logger,
+            IProviderErrorTrackingService? errorService = null)
         {
-            _errorService = errorService ?? throw new ArgumentNullException(nameof(errorService));
+            _errorService = errorService;
             _keyRepo = keyRepo ?? throw new ArgumentNullException(nameof(keyRepo));
             _providerRepo = providerRepo ?? throw new ArgumentNullException(nameof(providerRepo));
             _eventPublisher = eventPublisher;
@@ -48,24 +53,41 @@ namespace ConduitLLM.Admin.Endpoints
         {
             var group = app.MapGroup("/v1/admin/provider-errors")
                 .RequireAuthorization("MasterKeyPolicy")
+                .AddEndpointFilter(async (context, next) =>
+                {
+                    if (context.HttpContext.RequestServices.GetService<IProviderErrorTrackingService>() is null)
+                    {
+                        return AdminResults.ServiceUnavailable(
+                            "Provider error tracking is unavailable because Redis is not configured.");
+                    }
+
+                    return await next(context);
+                })
                 .AddEndpointFilter<OperationLoggingEndpointFilter>()
                 .WithTags("Provider Errors");
             group.MapGet("/recent", ([FromServices] ProviderErrorsEndpoints e, int? providerId = null, int? keyId = null, int limit = 100) => e.GetRecentErrors(providerId, keyId, limit))
                 .WithName("ProviderErrors_GetRecent")
                 .WithDescription("Returns a bounded tail window of the most recent provider errors; this is intentionally not a paged collection.")
-                .Produces<List<ProviderErrorDto>>();
+                .Produces<List<ProviderErrorDto>>()
+                .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             group.MapGet("/summary", ([FromServices] ProviderErrorsEndpoints e) => e.GetErrorSummary())
-                .WithName("ProviderErrors_GetSummary").Produces<List<ProviderErrorSummaryDto>>();
+                .WithName("ProviderErrors_GetSummary").Produces<List<ProviderErrorSummaryDto>>()
+                .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             group.MapGet("/keys/{keyId}", ([FromServices] ProviderErrorsEndpoints e, int keyId) => e.GetKeyErrors(keyId))
-                .WithName("ProviderErrors_GetKeyErrors").Produces<KeyErrorDetailsDto>().Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
+                .WithName("ProviderErrors_GetKeyErrors").Produces<KeyErrorDetailsDto>().Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")
+                .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             group.MapPost("/keys/{keyId}/clear", ([FromServices] ProviderErrorsEndpoints e, int keyId, ClearErrorsRequest request) => e.ClearKeyErrors(keyId, request))
-                .WithName("ProviderErrors_ClearKeyErrors").Produces<ClearKeyErrorsResponseDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
+                .WithName("ProviderErrors_ClearKeyErrors").Produces<ClearKeyErrorsResponseDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
+                .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             group.MapGet("/stats", ([FromServices] ProviderErrorsEndpoints e, int hours = 24) => e.GetErrorStatistics(hours))
-                .WithName("ProviderErrors_GetStatistics").Produces<ErrorStatisticsDto>();
+                .WithName("ProviderErrors_GetStatistics").Produces<ErrorStatisticsDto>()
+                .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             group.MapGet("/providers/{providerId}/key-errors", ([FromServices] ProviderErrorsEndpoints e, int providerId, int hours = 1) => e.GetErrorCountsByKey(providerId, hours))
-                .WithName("ProviderErrors_GetCountsByKey").Produces<Dictionary<int, int>>();
+                .WithName("ProviderErrors_GetCountsByKey").Produces<Dictionary<int, int>>()
+                .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             group.MapPost("/keys/{keyId}/disable", ([FromServices] ProviderErrorsEndpoints e, int keyId, string reason) => e.DisableKey(keyId, reason))
-                .WithName("ProviderErrors_DisableKey").Accepts<string>("application/json").Produces<DisableKeyResponseDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
+                .WithName("ProviderErrors_DisableKey").Accepts<string>("application/json").Produces<DisableKeyResponseDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
+                .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             return app;
         }
 
@@ -83,7 +105,7 @@ namespace ConduitLLM.Admin.Endpoints
         {
             limit = Math.Clamp(limit, 1, 1000);
 
-            var errors = await _errorService.GetRecentErrorsAsync(providerId, keyId, limit);
+            var errors = await ErrorService.GetRecentErrorsAsync(providerId, keyId, limit);
 
             // Get provider names for display using efficient lookup
             var providerMap = await _providerRepo.GetProviderNameMapAsync();
@@ -110,6 +132,7 @@ namespace ConduitLLM.Admin.Endpoints
         /// <returns>List of provider error summaries</returns>
         public async Task<IResult> GetErrorSummary()
         {
+            var errorService = ErrorService;
             // Use paginated retrieval - get all providers in batches
             var allProviders = new List<ConduitLLM.Configuration.Entities.Provider>();
             var pageNumber = 1;
@@ -127,7 +150,7 @@ namespace ConduitLLM.Admin.Endpoints
             // Fetch all provider summaries in parallel to avoid N+1
             var summaryTasks = allProviders.Select(async provider =>
             {
-                var summary = await _errorService.GetProviderSummaryAsync(provider.Id);
+                var summary = await errorService.GetProviderSummaryAsync(provider.Id);
                 return (provider, summary);
             });
 
@@ -160,7 +183,7 @@ namespace ConduitLLM.Admin.Endpoints
         /// <returns>Detailed error information for the key</returns>
         public async Task<IResult> GetKeyErrors(int keyId)
         {
-            var details = await _errorService.GetKeyErrorDetailsAsync(keyId);
+            var details = await ErrorService.GetKeyErrorDetailsAsync(keyId);
             if (details == null)
             {
                 throw new KeyNotFoundException($"No error data found for key {keyId}");
@@ -216,10 +239,10 @@ namespace ConduitLLM.Admin.Endpoints
             var key = await _keyRepo.GetByIdAsync(keyId);
             int? providerId = key?.ProviderId;
             var keyErrorDetails = key != null
-                ? await _errorService.GetKeyErrorDetailsAsync(keyId)
+                ? await ErrorService.GetKeyErrorDetailsAsync(keyId)
                 : null;
             var providerSummary = providerId.HasValue
-                ? await _errorService.GetProviderSummaryAsync(providerId.Value)
+                ? await ErrorService.GetProviderSummaryAsync(providerId.Value)
                 : null;
             var providerWasAutoDisabled =
                 providerSummary?.ProviderDisabledAt != null &&
@@ -243,7 +266,7 @@ namespace ConduitLLM.Admin.Endpoints
                                  candidate.ProviderAccountGroup == key.ProviderAccountGroup))
                     {
                         var candidateErrors =
-                            await _errorService.GetKeyErrorDetailsAsync(candidate.Id);
+                            await ErrorService.GetKeyErrorDetailsAsync(candidate.Id);
                         if (candidateErrors?.FatalError?.ErrorType ==
                             ProviderErrorType.InsufficientBalance)
                         {
@@ -258,13 +281,13 @@ namespace ConduitLLM.Admin.Endpoints
             {
                 foreach (var recoveryKey in keysToRecover)
                 {
-                    await _errorService.ClearErrorsForKeyAsync(
+                    await ErrorService.ClearErrorsForKeyAsync(
                         recoveryKey.Id, recoveryKey.ProviderId);
                 }
             }
             else
             {
-                await _errorService.ClearErrorsForKeyAsync(keyId, providerId);
+                await ErrorService.ClearErrorsForKeyAsync(keyId, providerId);
             }
 
             // Re-enable the key or its nonzero shared-account group if requested.
@@ -306,7 +329,7 @@ namespace ConduitLLM.Admin.Endpoints
                     await _providerRepo.UpdateAsync(provider);
                 }
 
-                await _errorService.ClearProviderDisabledAsync(providerId.Value);
+                await ErrorService.ClearProviderDisabledAsync(providerId.Value);
             }
 
             return Results.Ok(new ClearKeyErrorsResponseDto
@@ -330,7 +353,7 @@ namespace ConduitLLM.Admin.Endpoints
             hours = Math.Clamp(hours, 1, 168);
 
             var window = TimeSpan.FromHours(hours);
-            var stats = await _errorService.GetErrorStatisticsAsync(window);
+            var stats = await ErrorService.GetErrorStatisticsAsync(window);
 
             // Map provider IDs to names for the statistics
             var providerNameMap = await _providerRepo.GetProviderNameMapAsync();
@@ -366,7 +389,7 @@ namespace ConduitLLM.Admin.Endpoints
             hours = Math.Clamp(hours, 1, 24);
 
             var window = TimeSpan.FromHours(hours);
-            var counts = await _errorService.GetErrorCountsByKeyAsync(providerId, window);
+            var counts = await ErrorService.GetErrorCountsByKeyAsync(providerId, window);
 
             return Results.Ok(counts);
         }
@@ -386,7 +409,7 @@ namespace ConduitLLM.Admin.Endpoints
                 return AdminResults.BadRequest("Reason is required for disabling a key");
             }
 
-            await _errorService.DisableKeyAsync(keyId, $"Manual disable: {reason}");
+            await ErrorService.DisableKeyAsync(keyId, $"Manual disable: {reason}");
 
             LogAdminAudit("Disabled", "ProviderKeyCredential", keyId,
                 $"Reason: {reason}");

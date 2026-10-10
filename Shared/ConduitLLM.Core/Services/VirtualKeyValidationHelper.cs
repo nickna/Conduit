@@ -1,6 +1,5 @@
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Extensions;
-using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Models;
 using Microsoft.Extensions.Logging;
 
@@ -12,22 +11,98 @@ namespace ConduitLLM.Core.Services
     public static class VirtualKeyValidationHelper
     {
         /// <summary>
+        /// Resolves and validates a virtual key without coupling the validation policy
+        /// to a particular persistence backend.
+        /// </summary>
+        /// <param name="key">The plaintext virtual key supplied by the caller.</param>
+        /// <param name="requestedModel">The requested model, if any.</param>
+        /// <param name="checkBalance">Whether to check the resolved group balance.</param>
+        /// <param name="lookupByHashAsync">Fixed-shape lookup supplied by the active backend.</param>
+        /// <param name="getBalanceSnapshotAsync">
+        /// Optional lazy balance resolver. It is invoked only after the key passes the
+        /// enabled and expiration checks.
+        /// </param>
+        /// <param name="logger">Logger for diagnostic output.</param>
+        public static async Task<VirtualKeyValidationOutcome> ValidateKeyAsync(
+            string key,
+            string? requestedModel,
+            bool checkBalance,
+            Func<string, Task<VirtualKey?>> lookupByHashAsync,
+            Func<VirtualKey, Task<(VirtualKeyGroup? Group, decimal PendingSpend)>>? getBalanceSnapshotAsync,
+            ILogger logger)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                logger.LogWarning("Empty key provided for virtual key validation");
+                return VirtualKeyValidationOutcome.Failure(
+                    VirtualKeyValidationFailureCodes.MissingKey,
+                    401,
+                    "Virtual key is required.");
+            }
+
+            try
+            {
+                var keyHash = ConduitLLM.Configuration.Utilities.VirtualKeyUtilities.HashKey(key);
+                logger.LogDebug("Validating key ({ValidationMode}): {KeyPrefix}, Hash: {Hash}",
+                    checkBalance ? "balance" : "authentication",
+                    LoggingSanitizer.S(ConduitLLM.Core.Utilities.SpanHelper.MaskSecret(key)),
+                    keyHash);
+
+                var virtualKey = await lookupByHashAsync(keyHash);
+                if (virtualKey == null)
+                {
+                    logger.LogWarning("No matching virtual key found for hash: {Hash}", keyHash);
+                    return VirtualKeyValidationOutcome.Failure(
+                        VirtualKeyValidationFailureCodes.KeyNotFound,
+                        401,
+                        "Virtual key was not found.");
+                }
+
+                var result = await ValidateVirtualKeyAsync(
+                    virtualKey,
+                    requestedModel,
+                    checkBalance,
+                    getBalanceSnapshotAsync,
+                    logger);
+
+                if (!result.IsValid)
+                {
+                    logger.LogWarning("Virtual key {KeyId} validation failed: {Reason}",
+                        virtualKey.Id, result.Reason ?? "unknown");
+                }
+                else
+                {
+                    logger.LogDebug("Virtual key {KeyId} validated successfully for model: {Model}",
+                        virtualKey.Id, LoggingSanitizer.S(requestedModel ?? "any"));
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error validating virtual key");
+                return VirtualKeyValidationOutcome.Failure(
+                    VirtualKeyValidationFailureCodes.ValidationError,
+                    500,
+                    "Virtual key validation failed.");
+            }
+        }
+
+        /// <summary>
         /// Validates a virtual key with common checks
         /// </summary>
         /// <param name="virtualKey">The virtual key to validate</param>
         /// <param name="requestedModel">The requested model, if any</param>
         /// <param name="checkBalance">Whether to check the group balance</param>
-        /// <param name="groupRepository">Repository for group operations (required if checkBalance is true)</param>
+        /// <param name="getBalanceSnapshotAsync">Lazy provider for the persisted balance and pending spend.</param>
         /// <param name="logger">Logger for diagnostic output</param>
-        /// <param name="batchSpendService">Optional service for pending spend and reservation checks</param>
         /// <returns>Validation result with status and error message if failed</returns>
         public static async Task<VirtualKeyValidationOutcome> ValidateVirtualKeyAsync(
             VirtualKey virtualKey,
             string? requestedModel,
             bool checkBalance,
-            IVirtualKeyGroupRepository? groupRepository,
-            ILogger logger,
-            IBatchSpendUpdateService? batchSpendService = null)
+            Func<VirtualKey, Task<(VirtualKeyGroup? Group, decimal PendingSpend)>>? getBalanceSnapshotAsync,
+            ILogger logger)
         {
             // Check if key is enabled
             if (!virtualKey.IsEnabled)
@@ -54,12 +129,9 @@ namespace ConduitLLM.Core.Services
             }
 
             // Check group balance if requested
-            if (checkBalance && groupRepository != null)
+            if (checkBalance && getBalanceSnapshotAsync != null)
             {
-                var group = await groupRepository.GetByIdAsync(virtualKey.VirtualKeyGroupId);
-                var pendingSpend = group != null && batchSpendService != null
-                    ? await batchSpendService.GetPendingSpendAsync(virtualKey.Id)
-                    : 0m;
+                var (group, pendingSpend) = await getBalanceSnapshotAsync(virtualKey);
                 var availableBalance = group?.Balance - pendingSpend;
                 if (group != null && availableBalance <= 0)
                 {

@@ -1,7 +1,7 @@
-using ConduitLLM.Configuration.Entities;
-using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Gateway.Endpoints;
+using ConduitLLM.Persistence;
+using ConduitLLM.Persistence.Interfaces;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,17 +14,18 @@ namespace ConduitLLM.Tests.Gateway.Endpoints;
 public sealed class MediaEndpointsSoftDeleteTests
 {
     private readonly Mock<IMediaStorageService> _storage = new();
-    private readonly Mock<IMediaRecordRepository> _repository = new();
+    private readonly Mock<IMediaRuntimeStore> _mediaStore = new();
 
     [Fact]
     public async Task GetMediaInfo_TombstonedRecord_ReturnsNotFoundWithoutReadingStorage()
     {
         const string storageKey = "tombstoned-media";
-        _repository.Setup(repository =>
-                repository.GetByStorageKeyIncludingDeletedAsync(
+        _mediaStore.Setup(store =>
+                store.GetByStorageKeyAsync(
                     storageKey,
+                    true,
                     It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new MediaRecord
+            .ReturnsAsync(new MediaRuntimeRecord
             {
                 Id = Guid.NewGuid(),
                 VirtualKeyId = 1,
@@ -49,7 +50,7 @@ public sealed class MediaEndpointsSoftDeleteTests
         };
         return new MediaEndpoints(
             _storage.Object,
-            _repository.Object,
+            _mediaStore.Object,
             accessor,
             NullLogger<MediaEndpoints>.Instance);
     }

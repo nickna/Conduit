@@ -1,8 +1,7 @@
-using Microsoft.EntityFrameworkCore;
 using Prometheus;
-using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Metrics;
+using ConduitLLM.Persistence.Interfaces;
 
 namespace ConduitLLM.Gateway.Services
 {
@@ -145,7 +144,7 @@ namespace ConduitLLM.Gateway.Services
         }
 
         protected override Task CollectOnceAsync(CancellationToken cancellationToken) =>
-            CollectMetricsAsync();
+            CollectMetricsAsync(cancellationToken);
 
         protected override void OnCollectionFailed(Exception exception)
         {
@@ -153,7 +152,7 @@ namespace ConduitLLM.Gateway.Services
             _logger.LogError(exception, "Error collecting business metrics");
         }
 
-        internal async Task CollectMetricsAsync()
+        internal async Task CollectMetricsAsync(CancellationToken cancellationToken = default)
         {
             using var collectionTimer = MetricsCollectionInstrumentation.Measure("business");
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -162,9 +161,9 @@ namespace ConduitLLM.Gateway.Services
 
             var tasks = new[]
             {
-                CollectModelUsageMetrics(scope),
-                CollectCostMetrics(scope),
-                CollectActiveEntityMetrics(scope)
+                CollectModelUsageMetrics(scope, cancellationToken),
+                CollectCostMetrics(scope, cancellationToken),
+                CollectActiveEntityMetrics(scope, cancellationToken)
             };
 
             await Task.WhenAll(tasks);
@@ -173,7 +172,9 @@ namespace ConduitLLM.Gateway.Services
             _logger.LogDebug("Business metrics collection cycle completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
         }
 
-        private async Task CollectModelUsageMetrics(IServiceScope scope)
+        private async Task CollectModelUsageMetrics(
+            IServiceScope scope,
+            CancellationToken cancellationToken)
         {
             // NOTE: Model/provider counters (conduit_model_requests_total, conduit_model_tokens_total)
             // are updated in REAL-TIME via static methods called from UsageTrackingMiddleware.
@@ -184,26 +185,10 @@ namespace ConduitLLM.Gateway.Services
 
             try
             {
-                var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ConduitLLM.Configuration.ConduitDbContext>>();
-                await using var context = await dbContextFactory.CreateDbContextAsync();
-
                 // Get model usage statistics for the last 5 minutes to calculate current rates
                 var fiveMinutesAgo = DateTime.UtcNow.AddMinutes(-5);
-
-                var modelStats = await context.RequestLogs
-                    .AsNoTracking()
-                    .Where(r => r.Timestamp >= fiveMinutesAgo)
-                    .GroupBy(r => new { Model = r.ModelName, Provider = r.ProviderType ?? "unknown" })
-                    .Select(g => new
-                    {
-                        g.Key.Model,
-                        g.Key.Provider,
-                        RequestCount = g.Count(),
-                        TotalPromptTokens = g.Sum(r => r.InputTokens),
-                        TotalCompletionTokens = g.Sum(r => r.OutputTokens),
-                        AvgResponseTime = g.Average(r => r.ResponseTimeMs)
-                    })
-                    .ToListAsync();
+                var store = scope.ServiceProvider.GetRequiredService<IGatewayMetricsStore>();
+                var modelStats = await store.GetModelUsageAsync(fiveMinutesAgo, cancellationToken);
 
                 _logger.LogDebug("Collected model usage metrics: {Count} model/provider combinations in last 5 minutes",
                     modelStats.Count);
@@ -211,10 +196,10 @@ namespace ConduitLLM.Gateway.Services
                 // Observe average response times (histograms are safe to update periodically)
                 foreach (var stat in modelStats)
                 {
-                    if (stat.AvgResponseTime > 0)
+                    if (stat.AverageResponseTimeMs > 0)
                     {
-                        ModelResponseTime.WithLabels(stat.Model ?? "unknown", stat.Provider)
-                            .Observe(stat.AvgResponseTime / 1000.0); // Convert ms to seconds
+                        ModelResponseTime.WithLabels(stat.Model, stat.Provider)
+                            .Observe(stat.AverageResponseTimeMs / 1000.0); // Convert ms to seconds
                     }
                 }
             }
@@ -225,7 +210,9 @@ namespace ConduitLLM.Gateway.Services
             }
         }
 
-        private async Task CollectCostMetrics(IServiceScope scope)
+        private async Task CollectCostMetrics(
+            IServiceScope scope,
+            CancellationToken cancellationToken)
         {
             // NOTE: Cost counters (conduit_cost_total_dollars) are updated in REAL-TIME via
             // static methods called from UsageTrackingMiddleware.
@@ -233,22 +220,10 @@ namespace ConduitLLM.Gateway.Services
 
             try
             {
-                var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ConduitLLM.Configuration.ConduitDbContext>>();
-                await using var context = await dbContextFactory.CreateDbContextAsync();
-
                 // Calculate cost rate per provider using the ProviderType field
                 var fiveMinutesAgo = DateTime.UtcNow.AddMinutes(-5);
-
-                var costByProvider = await context.RequestLogs
-                    .AsNoTracking()
-                    .Where(r => (r.BilledAtUtc ?? r.Timestamp) >= fiveMinutesAgo && r.Cost > 0)
-                    .GroupBy(r => r.ProviderType ?? "unknown")
-                    .Select(g => new
-                    {
-                        Provider = g.Key,
-                        TotalCost = g.Sum(r => r.Cost)
-                    })
-                    .ToListAsync();
+                var store = scope.ServiceProvider.GetRequiredService<IGatewayMetricsStore>();
+                var costByProvider = await store.GetProviderCostsAsync(fiveMinutesAgo, cancellationToken);
 
                 var currentLabels = costByProvider
                     .Select(providerCost => providerCost.Provider)
@@ -275,26 +250,19 @@ namespace ConduitLLM.Gateway.Services
             }
         }
 
-        internal async Task CollectActiveEntityMetrics(IServiceScope scope)
+        internal async Task CollectActiveEntityMetrics(
+            IServiceScope scope,
+            CancellationToken cancellationToken = default)
         {
             try
             {
-                var virtualKeyRepo = scope.ServiceProvider.GetRequiredService<IVirtualKeyRepository>();
-                var dbContextFactory = scope.ServiceProvider.GetRequiredService<
-                    IDbContextFactory<ConduitLLM.Configuration.ConduitDbContext>>();
+                var store = scope.ServiceProvider.GetRequiredService<IGatewayMetricsStore>();
+                var activeEntities = await store.GetActiveEntitiesAsync(
+                    DateTime.UtcNow,
+                    cancellationToken);
+                ActiveVirtualKeys.Set(activeEntities.ActiveVirtualKeyCount);
 
-                // Count active virtual keys using database-level count
-                var activeKeyCount = await virtualKeyRepo.CountActiveAsync();
-                ActiveVirtualKeys.Set(activeKeyCount);
-
-                await using var context = await dbContextFactory.CreateDbContextAsync();
-                // A mapping is active only when both the route and its provider are enabled.
-                var mappingsByProvider = await context.ModelProviderMappings
-                    .AsNoTracking()
-                    .Where(mapping => mapping.IsEnabled && mapping.Provider.IsEnabled)
-                    .GroupBy(mapping => mapping.ProviderId)
-                    .Select(group => new { ProviderId = group.Key, Count = group.Count() })
-                    .ToListAsync();
+                var mappingsByProvider = activeEntities.MappingsByProvider;
 
                 var currentLabels = mappingsByProvider
                     .Select(group => group.ProviderId.ToString())

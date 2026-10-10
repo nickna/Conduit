@@ -29,12 +29,12 @@ public class ProviderErrorsEndpointsTests
         };
 
         _endpoints = new ProviderErrorsEndpoints(
-            _errorService.Object,
             _keyRepository.Object,
             _providerRepository.Object,
             _eventPublisher.Object,
             httpContextAccessor,
-            Mock.Of<ILogger<ProviderErrorsEndpoints>>());
+            Mock.Of<ILogger<ProviderErrorsEndpoints>>(),
+            _errorService.Object);
     }
 
     [Fact]

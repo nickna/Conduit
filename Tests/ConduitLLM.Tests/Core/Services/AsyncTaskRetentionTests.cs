@@ -1,8 +1,7 @@
-using ConduitLLM.Configuration.Entities;
-using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Persistence.Interfaces;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,7 +18,7 @@ public sealed class AsyncTaskRetentionTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddDistributedMemoryCache();
-        services.AddSingleton(Mock.Of<IAsyncTaskRepository>());
+        services.AddSingleton(Mock.Of<IAsyncTaskRuntimeStore>());
         services.AddAsyncTaskServices();
         using var provider = services.BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
@@ -32,32 +31,32 @@ public sealed class AsyncTaskRetentionTests
     [Fact]
     public async Task CleanupOldTasks_DrainsEveryDeleteBatchAndReportsBothCounts()
     {
-        var repository = new Mock<IAsyncTaskRepository>();
-        repository
-            .Setup(repo => repo.ArchiveOldTasksAsync(
+        var store = new Mock<IAsyncTaskRuntimeStore>();
+        store
+            .Setup(candidate => candidate.ArchiveOldTasksAsync(
                 TimeSpan.FromDays(1),
                 TimeSpan.FromDays(7),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(3);
-        repository
-            .SetupSequence(repo => repo.GetTasksForCleanupAsync(
+        store
+            .SetupSequence(candidate => candidate.GetTaskIdsForCleanupAsync(
                 TimeSpan.FromDays(30),
                 2,
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync([Task("one"), Task("two")])
-            .ReturnsAsync([Task("three")])
+            .ReturnsAsync(["one", "two"])
+            .ReturnsAsync(["three"])
             .ReturnsAsync([]);
-        repository
-            .Setup(repo => repo.BulkDeleteAsync(
-                It.IsAny<IEnumerable<string>>(),
+        store
+            .Setup(candidate => candidate.BulkDeleteAsync(
+                It.IsAny<IReadOnlyCollection<string>>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync((IEnumerable<string> ids, CancellationToken _) => ids.Count());
+            .ReturnsAsync((IReadOnlyCollection<string> ids, CancellationToken _) => ids.Count);
 
         var services = new ServiceCollection();
         services.AddDistributedMemoryCache();
         using var provider = services.BuildServiceProvider();
         var service = new HybridAsyncTaskService(
-            repository.Object,
+            store.Object,
             provider.GetRequiredService<Microsoft.Extensions.Caching.Distributed.IDistributedCache>(),
             NullLogger<HybridAsyncTaskService>.Instance);
 
@@ -68,13 +67,12 @@ public sealed class AsyncTaskRetentionTests
             BatchSize: 2));
 
         Assert.Equal(new AsyncTaskCleanupResult(3, 3), result);
-        repository.Verify(
-            repo => repo.GetTasksForCleanupAsync(
+        store.Verify(
+            candidate => candidate.GetTaskIdsForCleanupAsync(
                 TimeSpan.FromDays(30),
                 2,
                 It.IsAny<CancellationToken>()),
             Times.Exactly(3));
     }
 
-    private static AsyncTask Task(string id) => new() { Id = id };
 }

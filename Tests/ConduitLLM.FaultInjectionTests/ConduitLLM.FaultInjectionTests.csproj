@@ -3,6 +3,7 @@
     <PackageReference Include="AwesomeAssertions" />
     <PackageReference Include="Moq" />
     <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="SSH.NET" />
     <PackageReference Include="Testcontainers.Redis" />
   </ItemGroup>
 

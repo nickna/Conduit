@@ -6,13 +6,16 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Middleware;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Endpoints;
+using ConduitLLM.Gateway.Extensions;
 using ConduitLLM.Gateway.RateLimiting;
+using ConduitLLM.Persistence.Interfaces;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -31,7 +34,9 @@ internal sealed class GatewayEndpointTestHost : IAsyncDisposable
         Client = host.GetTestClient();
     }
 
-    public static async Task<GatewayEndpointTestHost> StartAsync(Action<IServiceCollection>? configure = null)
+    public static async Task<GatewayEndpointTestHost> StartAsync(
+        Action<IServiceCollection>? configure = null,
+        bool exposeOpenApi = false)
     {
         var host = await new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -46,7 +51,7 @@ internal sealed class GatewayEndpointTestHost : IAsyncDisposable
                     services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
                     services.AddGatewayEndpointHandlers();
                     services.AddSingleton(Mock.Of<IMediaStorageService>());
-                    services.AddSingleton(Mock.Of<IMediaRecordRepository>());
+                    services.AddSingleton(Mock.Of<IMediaRuntimeStore>());
                     services.AddSingleton(Mock.Of<IEventPublisher>());
                     AddRateLimitingFilterDependencies(services);
                     services.AddAuthentication("VirtualKey")
@@ -74,7 +79,12 @@ internal sealed class GatewayEndpointTestHost : IAsyncDisposable
                     // Mirrors Program.Middleware.cs: the error middleware sits below auth and above
                     // the endpoints, so endpoint exceptions map to OpenAI-shaped error responses.
                     app.UseOpenAIErrorHandling();
-                    app.UseEndpoints(endpoints => endpoints.MapGatewayApiEndpoints());
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapGatewayApiEndpoints();
+                        if (exposeOpenApi)
+                            endpoints.MapOpenApi();
+                    });
                 });
             })
             .StartAsync();
@@ -83,7 +93,7 @@ internal sealed class GatewayEndpointTestHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Mirrors the no-Redis branch of <c>AddConduitRateLimiting</c>. The chat, embeddings and
+    /// Uses the production registration for the rate-limit filter. The chat, embeddings and
     /// responses routes carry <see cref="TokenRateLimitFilter"/>; without its dependencies every
     /// request to them fails DI inside the filter chain and answers 500 dependency_resolution_error
     /// before the handler ever runs. <see cref="UnlimitedTokenRateLimitService"/> admits everything,
@@ -91,12 +101,10 @@ internal sealed class GatewayEndpointTestHost : IAsyncDisposable
     /// </summary>
     private static void AddRateLimitingFilterDependencies(IServiceCollection services)
     {
-        services.AddSingleton(new RateLimitOptions());
-        services.AddSingleton<IRateLimitFailurePolicy, RateLimitFailurePolicy>();
-        services.AddSingleton<ITokenRateLimitService, UnlimitedTokenRateLimitService>();
-        services.AddSingleton(Mock.Of<ITokenCounter>());
-        services.AddSingleton<RequestTokenEstimator>();
-        services.AddSingleton<TokenRateLimitFilter>();
+        services.AddConduitRateLimiting(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        services.AddScoped(_ => Mock.Of<ITokenCounter>());
+        services.Replace(ServiceDescriptor.Singleton<ITokenRateLimitService, UnlimitedTokenRateLimitService>());
+        services.Replace(ServiceDescriptor.Singleton<IConcurrencyRateLimitService, UnlimitedConcurrencyRateLimitService>());
     }
 
     public async ValueTask DisposeAsync()

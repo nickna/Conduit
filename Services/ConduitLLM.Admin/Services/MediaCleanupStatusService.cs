@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 using Microsoft.EntityFrameworkCore;
@@ -81,6 +82,10 @@ namespace ConduitLLM.Admin.Services
         }
 
         /// <inheritdoc />
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         public async Task<MediaCleanupStatusDto> GetStatusAsync(CancellationToken cancellationToken = default)
         {
             using var scope = _scopeFactory.CreateScope();

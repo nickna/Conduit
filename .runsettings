@@ -5,7 +5,7 @@
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
           <Format>cobertura,opencover,json</Format>
-          <ExcludeByFile>**/Migrations/*.cs,**/bin/**/*,**/obj/**/*,**/*Test*.cs,**/*Tests.cs,**/Program.cs,**/Startup.cs</ExcludeByFile>
+          <ExcludeByFile>**/Migrations/*.cs,**/bin/**/*,**/obj/**/*</ExcludeByFile>
           <ExcludeByAttribute>System.Diagnostics.DebuggerNonUserCodeAttribute,System.Diagnostics.DebuggerHiddenAttribute,System.ComponentModel.EditorBrowsableAttribute,System.CodeDom.Compiler.GeneratedCodeAttribute,System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <IncludeDirectory>**/ConduitLLM.*</IncludeDirectory>
           <SingleHit>false</SingleHit>

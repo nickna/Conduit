@@ -1,7 +1,5 @@
 using System.Text.Json.Serialization;
 
-using ConduitLLM.Core.Services;
-
 namespace ConduitLLM.Core.Serialization;
 
 /// <summary>
@@ -10,5 +8,5 @@ namespace ConduitLLM.Core.Serialization;
 [JsonSourceGenerationOptions(
     GenerationMode = JsonSourceGenerationMode.Metadata,
     PropertyNameCaseInsensitive = true)]
-[JsonSerializable(typeof(RedisWebhookCircuitBreaker.CircuitState))]
+[JsonSerializable(typeof(LegacyWebhookCircuitState))]
 internal partial class CoreRedisJsonContext : JsonSerializerContext;

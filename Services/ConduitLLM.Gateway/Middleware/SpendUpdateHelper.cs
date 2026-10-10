@@ -2,7 +2,7 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Configuration.Exceptions;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Gateway.Metrics;
-using IVirtualKeyService = ConduitLLM.Core.Interfaces.IVirtualKeyService;
+using IVirtualKeyRuntimeService = ConduitLLM.Core.Interfaces.IVirtualKeyRuntimeService;
 
 namespace ConduitLLM.Gateway.Middleware
 {
@@ -21,7 +21,7 @@ namespace ConduitLLM.Gateway.Middleware
             int virtualKeyId,
             decimal cost,
             IBatchSpendUpdateService batchSpendService,
-            IVirtualKeyService virtualKeyService,
+            IVirtualKeyRuntimeService virtualKeyService,
             ILogger logger,
             DateTime? billedAtUtc = null)
         {

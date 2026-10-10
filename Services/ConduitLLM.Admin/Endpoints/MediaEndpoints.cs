@@ -1,4 +1,5 @@
 using ConduitLLM.Core.Extensions;
+using System.Diagnostics.CodeAnalysis;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Interfaces;
@@ -513,6 +514,10 @@ public static class MediaEndpoints
             cancellationToken);
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
     internal static async Task<List<MediaRecord>> QueryPruneCandidatesAsync(
         IConfigurationDbContext context,
         int daysToKeep,

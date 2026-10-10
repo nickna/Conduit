@@ -475,7 +475,7 @@ public class AdminModelProviderMappingService : EventPublishingServiceBase, IAdm
         IReadOnlyCollection<BulkModelMappingItemDto> items,
         CancellationToken cancellationToken)
     {
-        var providers = (await _providerRepository.GetAllUnboundedAsync(cancellationToken))
+        var providers = (await _providerRepository.ListAsync(cancellationToken))
             .ToDictionary(provider => provider.Id);
         var existingMappings = await _mappingRepository.GetAllUnboundedAsync(cancellationToken);
         var identifiers = items

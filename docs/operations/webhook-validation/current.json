@@ -1,0 +1,154 @@
+[
+  {
+    "implementation": "current",
+    "instances": 1,
+    "mixed": false,
+    "messages": 200,
+    "healthy": 200,
+    "windowSeconds": 10.0257608,
+    "delivered": 200,
+    "usefulPerSecond": 19.94861078273481,
+    "posts": 200,
+    "amplificationPerOfferedEvent": 1,
+    "firstAttemptMs": {
+      "p50": 261.1184,
+      "p95": 631.0959,
+      "p99": 715.176
+    },
+    "endToEndMs": {
+      "p50": 322.9942,
+      "p95": 649.6267,
+      "p99": 732.9563
+    },
+    "queueDepth": 0,
+    "pending": 0,
+    "oldestPendingSeconds": 0,
+    "healthyFirstAttemptMs": {
+      "p50": 261.1184,
+      "p95": 631.0959,
+      "p99": 715.176
+    },
+    "healthyDrainMilliseconds": 739.9149,
+    "cpuMilliseconds": 4609.375,
+    "allocatedBytes": 36069728,
+    "peakWorkingSetBytes": 178200576,
+    "peakThreadPoolQueue": 21,
+    "peakThreadPoolThreads": 28,
+    "postgresCalls": 6439,
+    "redisCalls": 0
+  },
+  {
+    "implementation": "current",
+    "instances": 1,
+    "mixed": true,
+    "messages": 200,
+    "healthy": 40,
+    "windowSeconds": 10.0202731,
+    "delivered": 40,
+    "usefulPerSecond": 3.991907166681914,
+    "posts": 48,
+    "amplificationPerOfferedEvent": 0.24,
+    "firstAttemptMs": {
+      "p50": 170.5337,
+      "p95": 278.9891,
+      "p99": 297.2418
+    },
+    "endToEndMs": {
+      "p50": 200.9666,
+      "p95": 295.5714,
+      "p99": 313.7617
+    },
+    "queueDepth": 0,
+    "pending": 160,
+    "oldestPendingSeconds": 10.0225161,
+    "healthyFirstAttemptMs": {
+      "p50": 181.8757,
+      "p95": 278.9891,
+      "p99": 297.2418
+    },
+    "healthyDrainMilliseconds": 313.7617,
+    "cpuMilliseconds": 4828.125,
+    "allocatedBytes": 31539280,
+    "peakWorkingSetBytes": 191246336,
+    "peakThreadPoolQueue": 15,
+    "peakThreadPoolThreads": 40,
+    "postgresCalls": 5494,
+    "redisCalls": 0
+  },
+  {
+    "implementation": "current",
+    "instances": 2,
+    "mixed": false,
+    "messages": 200,
+    "healthy": 200,
+    "windowSeconds": 10.0247807,
+    "delivered": 200,
+    "usefulPerSecond": 19.95056111302265,
+    "posts": 200,
+    "amplificationPerOfferedEvent": 1,
+    "firstAttemptMs": {
+      "p50": 105.9592,
+      "p95": 459.7139,
+      "p99": 534.8013
+    },
+    "endToEndMs": {
+      "p50": 125.3443,
+      "p95": 475.6969,
+      "p99": 555.3124
+    },
+    "queueDepth": 0,
+    "pending": 0,
+    "oldestPendingSeconds": 0,
+    "healthyFirstAttemptMs": {
+      "p50": 105.9592,
+      "p95": 459.7139,
+      "p99": 534.8013
+    },
+    "healthyDrainMilliseconds": 560.5966,
+    "cpuMilliseconds": 3687.5,
+    "allocatedBytes": 34463632,
+    "peakWorkingSetBytes": 203268096,
+    "peakThreadPoolQueue": 20,
+    "peakThreadPoolThreads": 43,
+    "postgresCalls": 6394,
+    "redisCalls": 0
+  },
+  {
+    "implementation": "current",
+    "instances": 2,
+    "mixed": true,
+    "messages": 200,
+    "healthy": 40,
+    "windowSeconds": 10.0399446,
+    "delivered": 40,
+    "usefulPerSecond": 3.9840857289192613,
+    "posts": 56,
+    "amplificationPerOfferedEvent": 0.28,
+    "firstAttemptMs": {
+      "p50": 146.237,
+      "p95": 190.7661,
+      "p99": 260.358
+    },
+    "endToEndMs": {
+      "p50": 189.8339,
+      "p95": 218.0123,
+      "p99": 285.4069
+    },
+    "queueDepth": 0,
+    "pending": 160,
+    "oldestPendingSeconds": 10.041573,
+    "healthyFirstAttemptMs": {
+      "p50": 147.4061,
+      "p95": 190.7661,
+      "p99": 260.358
+    },
+    "healthyDrainMilliseconds": 285.4069,
+    "cpuMilliseconds": 2125,
+    "allocatedBytes": 37293584,
+    "peakWorkingSetBytes": 205017088,
+    "peakThreadPoolQueue": 16,
+    "peakThreadPoolThreads": 48,
+    "postgresCalls": 6488,
+    "redisCalls": 0
+  }
+]
