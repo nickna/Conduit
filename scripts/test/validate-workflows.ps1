@@ -10,13 +10,15 @@ try {
         $directory = Join-Path $root 'artifacts/tools/actionlint'
         if ($IsWindows) {
             $asset = "actionlint_${version}_windows_amd64.zip"
-            $checksum = '6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9'
             $Actionlint = Join-Path $directory 'bin/actionlint.exe'
         } elseif ($IsLinux -and [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq 'X64') {
             $asset = "actionlint_${version}_linux_amd64.tar.gz"
-            $checksum = '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
             $Actionlint = Join-Path $directory 'bin/actionlint'
         } else { throw 'Pass -Actionlint with a verified executable on this platform.' }
+        $checksum = $configuration.archives.$asset
+        if ($checksum -isnot [string] -or $checksum -cnotmatch '^[a-f0-9]{64}$') {
+            throw "Missing or invalid reviewed SHA-256 for actionlint archive: $asset"
+        }
         New-Item -ItemType Directory -Force "$directory/bin" | Out-Null
         $archive = Join-Path $directory $asset
         if (!(Test-Path -LiteralPath $archive)) {

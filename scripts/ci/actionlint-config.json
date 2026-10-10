@@ -1,4 +1,8 @@
 {
   "version": "1.7.12",
+  "archives": {
+    "actionlint_1.7.12_windows_amd64.zip": "6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9",
+    "actionlint_1.7.12_linux_amd64.tar.gz": "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+  },
   "queueCompatibilityDiagnostic": "^unexpected key \"queue\" for \"concurrency\" section\\. expected one of \"cancel-in-progress\", \"group\"$"
 }
