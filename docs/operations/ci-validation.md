@@ -126,6 +126,11 @@ one baseline-emitter skip. Other required filtered lanes allow zero skips.
 WebAdmin retains Jest JSON and coverage; fewer than 461 executed cases, any failure,
 or any skipped correctness test fails the gate.
 
+The official OpenAI SDK smoke lane starts the real Gateway with Redis, matching the runtime's
+required infrastructure policy. It creates and disposes an isolated Redis testcontainer by default;
+local runs can set `TEST_REDIS_CONNECTION` to use an existing Redis connection instead. OpenAPI
+metadata export remains infrastructure-free.
+
 `coverage-baseline.json` records component minima measured October 6, 2026 from
 the complete core and Jest suites. .NET uses executable-line coverage; Jest uses
 statement coverage. Minima round measured values down to whole percentage points;

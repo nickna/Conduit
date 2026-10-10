@@ -44,10 +44,13 @@ of the areas, not a copy of that file:
   (plus a structured `error.metadata.provider_error` object) for teams running Conduit as their own
   router. HTTP status codes are identical in both modes. Set it on **both** the Gateway and Admin
   services — the Admin only uses it to report the active mode on WebAdmin's System Information page.
-- **Cache (Redis)** — a Redis connection enables distributed caching and is **required for
-  distributed rate limiting**; the Gateway will not start rate limiting without it. Redis also backs
-  the real-time backplane and ephemeral keys. Redis 7.4 or newer enables per-connection field TTLs
-  for SignalR monitoring; older supported servers continue to use the periodic stale-connection
+- **Redis** — **required for the normal Gateway runtime, including single-node deployments**.
+  Set `REDIS_URL` or `CONDUIT_REDIS_CONNECTION_STRING`; missing configuration fails startup before
+  the runtime service graph is constructed. Redis backs distributed caching, rate limiting,
+  spending coordination, the real-time backplane, and ephemeral keys. Admin can run without Redis,
+  with Redis-backed provider-error monitoring unavailable. Infrastructure-free OpenAPI export and
+  isolated application-cache composition do not require Redis. Redis 7.4 or newer enables
+  per-connection field TTLs for SignalR monitoring; older supported servers use periodic stale-connection
   cleanup. The bundled Compose deployment pins Redis 7.4.2. Set
   `SignalR__ConnectionMonitor__EnableHashFieldExpiration=false` to force the compatibility path.
 - **Messaging** — Conduit's internal events run on **Wolverine over PostgreSQL** (they reuse the

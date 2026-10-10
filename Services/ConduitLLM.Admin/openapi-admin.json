@@ -19000,6 +19000,24 @@
               }
             }
           },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal Server Error",
             "headers": {
@@ -19112,6 +19130,24 @@
               }
             }
           },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal Server Error",
             "headers": {
@@ -19176,6 +19212,24 @@
           },
           "404": {
             "description": "Not Found",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -19282,6 +19336,24 @@
               }
             }
           },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal Server Error",
             "headers": {
@@ -19340,6 +19412,24 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorStatisticsDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
                 }
               }
             }
@@ -19415,6 +19505,24 @@
                     "type": "integer",
                     "format": "int32"
                   }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
                 }
               }
             }
@@ -19501,6 +19609,24 @@
           },
           "400": {
             "description": "Bad Request",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",

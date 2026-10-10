@@ -16,8 +16,8 @@ Both the Gateway and Admin APIs expose the standard trio:
 - **`/health/live`** — process liveness. It answers "is this instance up and serving?" and stays
   healthy as long as the process can respond. Use it for restart decisions.
 - **`/health/ready`** — readiness to take traffic. This is the one a load balancer should gate on:
-  it checks that the database schema is current, the messaging bus is reachable, and (where Redis is
-  configured) that Redis is healthy.
+  it checks that the database schema is current, the messaging bus is reachable, and Redis is
+  healthy. Redis is required for the Gateway; Admin checks it when configured.
 - **`/health`** — an aggregate view for humans and dashboards.
 
 The distinction matters during deploys: an instance can be *live* (don't kill it) while not yet
@@ -60,7 +60,8 @@ transports). The streams fall into two groups by audience:
   and security events — and require admin authentication.
 
 For horizontal scale, SignalR uses a **Redis backplane** so a client connected to any instance
-receives events raised on any other; without Redis configured, streaming works but stays single-node.
+receives events raised on any other. The Gateway requires Redis even in a single-node deployment;
+Admin streams stay local to their instance when Admin runs without Redis.
 The exact set of hubs and their events is declared in the Gateway and Admin service code — treat that
 as the source of truth rather than a list here, which would drift.
 
@@ -78,6 +79,10 @@ You review and clear provider errors from the **Provider Errors** view in WebAdm
 Admin API). Disable and recovery events also create durable admin notifications and best-effort
 live announcements. Thresholds, recovery procedures, Redis state, and reprobe troubleshooting are
 covered in **[Provider key auto-disable operations](./operations/provider-key-auto-disable.md)**.
+
+If Admin runs without Redis, its provider-error routes return **503 Service Unavailable** with a
+problem response explaining that Redis is not configured. Configure Admin with the Gateway's Redis
+store to inspect and manage the Gateway's recorded provider errors.
 
 ## Alerting: billing correctness and security
 

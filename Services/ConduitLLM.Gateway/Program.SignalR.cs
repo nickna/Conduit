@@ -11,39 +11,14 @@ public partial class Program
 {
     public static void ConfigureSignalRServices(WebApplicationBuilder builder)
     {
-        // Get Redis connection string from environment
-        var redisConnectionString = ConduitLLM.Configuration.Utilities.RedisUrlParser.ResolveConnectionString();
+        var redisConnectionString = RequireRedisConfiguration();
 
         // Register VirtualKeyHubFilter for SignalR authentication
         builder.Services.AddScoped<ConduitLLM.Gateway.Authentication.VirtualKeyHubFilter>();
 
-        // Register Redis-based distributed rate limiting services
-        // Check if Redis is available
-        if (!string.IsNullOrEmpty(redisConnectionString))
-        {
-            // Register the Redis-based virtual key rate limit service
-            builder.Services.AddSingleton<ConduitLLM.Core.Services.IVirtualKeyRateLimitService, ConduitLLM.Core.Services.RedisVirtualKeyRateLimitService>();
-            
-            // Register the Redis-based SignalR rate limit service
-            builder.Services.AddSingleton<ConduitLLM.Core.Services.ISignalRRateLimitService, ConduitLLM.Core.Services.RedisSignalRRateLimitService>();
-            
-        }
-        else
-        {
-            // If no Redis, create a warning and provide a fallback
-            builder.Services.AddSingleton<ConduitLLM.Core.Services.ISignalRRateLimitService>(sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<Program>>();
-                logger.LogWarning("No Redis connection configured. SignalR rate limiting will fall back to local memory (security risk in multi-instance deployments)");
-                // For now, throw an exception to enforce Redis requirement for rate limiting
-                throw new InvalidOperationException("Redis is required for secure distributed rate limiting. Please configure REDIS_URL or CONDUIT_REDIS_CONNECTION_STRING.");
-            });
-            
-            builder.Services.AddSingleton<ConduitLLM.Core.Services.IVirtualKeyRateLimitService>(sp =>
-            {
-                throw new InvalidOperationException("Redis is required for secure distributed rate limiting. Please configure REDIS_URL or CONDUIT_REDIS_CONNECTION_STRING.");
-            });
-        }
+        // The runtime validates Redis before constructing its dependency graph.
+        builder.Services.AddSingleton<ConduitLLM.Core.Services.IVirtualKeyRateLimitService, ConduitLLM.Core.Services.RedisVirtualKeyRateLimitService>();
+        builder.Services.AddSingleton<ConduitLLM.Core.Services.ISignalRRateLimitService, ConduitLLM.Core.Services.RedisSignalRRateLimitService>();
 
         // Register SignalR rate limit filter
         builder.Services.AddSingleton<ConduitLLM.Gateway.Authentication.VirtualKeySignalRRateLimitFilter>();

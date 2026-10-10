@@ -10,9 +10,17 @@ stores retain their existing registrations and namespaces.
 
 Both hosts resolve Redis through the existing RedisUrlParser: REDIS_URL, then
 CONDUIT_REDIS_CONNECTION_STRING. Without Redis, FusionCache uses its dedicated L1.
+This cache behavior supports Admin and isolated cache tests; the normal Gateway runtime requires
+Redis for its rate limits and spending services, including in single-node deployments.
 Each warmed Redis cache owns three multiplexers: payload storage, backplane and generation
 metadata. These do not reuse the host multiplexer or replace its IDistributedCache.
 DI disposes the storage, backplane, metadata connection and dedicated L1.
+
+Data Protection reuses Gateway's pooled host multiplexer. Admin registers its host multiplexer
+lazily when Redis is configured. Both hosts configure key persistence through their final DI
+provider; registration creates no Redis connections or temporary service providers. A configured
+Redis key store does not silently fall back to local files when Redis is unavailable. Admin without
+Redis continues to use the default local key store.
 
 ~~~json
 {

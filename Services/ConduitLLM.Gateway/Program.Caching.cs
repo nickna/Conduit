@@ -29,7 +29,6 @@ public partial class Program
             }
         });
 
-        builder.Services.AddRedisDataProtection(redisConnectionString, "Conduit");
         builder.Services.AddConduitDistributedLocks();
 
         // Configure Redis connection multiplexer FIRST (shared across all Redis services)
@@ -61,6 +60,9 @@ public partial class Program
             // Fall back to in-memory distributed cache
             builder.Services.AddDistributedMemoryCache();
         }
+
+        // Data Protection reuses the DI-owned multiplexer registered above.
+        builder.Services.AddRedisDataProtection(redisConnectionString, "Conduit");
 
         // Register Virtual Key service with optional Redis caching
         if (!string.IsNullOrEmpty(redisConnectionString))

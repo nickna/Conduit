@@ -17874,6 +17874,17 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
     };
   };
   ProviderErrors_GetSummary: {
@@ -17924,6 +17935,17 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
     };
   };
   ProviderErrors_GetKeyErrors: {
@@ -17961,6 +17983,17 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -18020,6 +18053,17 @@ export interface operations {
           "application/problem+json": components["schemas"]["AdminProblemDetails"];
         };
       };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
     };
   };
   ProviderErrors_GetStatistics: {
@@ -18046,6 +18090,17 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -18085,6 +18140,17 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
@@ -18137,6 +18203,17 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;

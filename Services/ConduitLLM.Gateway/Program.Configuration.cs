@@ -4,6 +4,19 @@ using Microsoft.Extensions.Options;
 
 public partial class Program
 {
+    /// <summary>Validates the Redis configuration required by the normal Gateway runtime.</summary>
+    public static string RequireRedisConfiguration()
+    {
+        var connectionString = ConduitLLM.Configuration.Utilities.RedisUrlParser.ResolveConnectionString();
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "Redis is required for the Gateway runtime. Configure REDIS_URL or CONDUIT_REDIS_CONNECTION_STRING before starting the Gateway.");
+        }
+
+        return connectionString;
+    }
+
     public static void ConfigureBasicSettings(WebApplicationBuilder builder)
     {
         // Use environment variables ONLY for configuration
