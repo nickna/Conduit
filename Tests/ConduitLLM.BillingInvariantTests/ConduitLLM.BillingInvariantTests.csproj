@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <PackageReference Include="FsCheck.Xunit" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" VersionOverride="10.0.12" />
     <PackageReference Include="Moq" />
   </ItemGroup>
   <ItemGroup>
