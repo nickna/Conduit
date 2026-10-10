@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
@@ -25,12 +26,21 @@ public static class PromptCachingEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("PromptCaching");
         group.MapGet("/config", GetConfig).WithName("PromptCaching_GetConfig")
+            .WithSummary("Get prompt caching configuration")
             .Produces<PromptCachingConfigDto>().Produces<ProblemDetails>(StatusCodes.Status409Conflict);
         group.MapPut("/config", UpdateConfig).WithName("PromptCaching_UpdateConfig")
+            .WithSummary("Update prompt caching configuration")
             .Produces<PromptCachingConfigDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         group.MapGet("/capabilities", GetCapabilities).WithName("PromptCaching_GetCapabilities")
+            .WithSummary("Get provider prompt caching capabilities")
             .Produces<IReadOnlyList<PromptCachingCapability>>();
         group.MapGet("/analytics", GetAnalytics).WithName("PromptCaching_GetAnalytics")
+            .WithParameterDescription("mappingId", "Filter analytics by model-provider mapping identifier.")
+            .WithSummary("Get prompt caching usage analytics")
+            .WithParameterDescription("from", "Start of the reporting interval in UTC.")
+            .WithParameterDescription("to", "End of the reporting interval in UTC.")
+            .WithParameterDescription("alias", "Model alias whose routing policy is being addressed.")
+            .WithParameterDescription("provider", "Filter by provider type.")
             .Produces<PromptCachingAnalyticsDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
         return app;

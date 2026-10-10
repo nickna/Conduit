@@ -11,6 +11,8 @@ public abstract class ApiDocumentTransformer : IOpenApiDocumentTransformer
     private readonly string _securitySchemeName;
     private readonly OpenApiSecurityScheme _securityScheme;
 
+    protected abstract IReadOnlyDictionary<string, string> TagDescriptions { get; }
+
     protected ApiDocumentTransformer(
         string title,
         string description,
@@ -31,6 +33,23 @@ public abstract class ApiDocumentTransformer : IOpenApiDocumentTransformer
         document.Info.Title = _title;
         document.Info.Version = "v1";
         document.Info.Description = _description;
+        document.Info.Contact = new OpenApiContact
+        {
+            Name = "Conduit maintainers",
+            Url = new Uri("https://github.com/nickna/Conduit/issues")
+        };
+        document.Info.License = new OpenApiLicense
+        {
+            Name = "MIT",
+            Identifier = "MIT"
+        };
+        // A relative server keeps the contract usable for self-hosted deployments.
+        document.Servers = [new OpenApiServer { Url = "/", Description = "This Conduit deployment" }];
+        foreach (var tag in (document.Tags ?? new HashSet<OpenApiTag>())
+            .Where(tag => tag.Name is not null && TagDescriptions.ContainsKey(tag.Name)))
+        {
+            tag.Description = TagDescriptions[tag.Name!];
+        }
 
         document.Components ??= new OpenApiComponents();
         document.Components.SecuritySchemes ??=

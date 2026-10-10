@@ -1,5 +1,8 @@
+using System.Text.Json.Nodes;
+
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.OpenApi;
+using ConduitLLM.Security.Serialization;
 
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -45,12 +48,26 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
         CancellationToken cancellationToken)
     {
         Normalize(operation, context.Description.HttpMethod);
+        if (operation.RequestBody?.Content?.TryGetValue("application/json", out var requestMedia) == true)
+        {
+            // Model names are deployment-specific aliases, not upstream model IDs.
+            var example = operation.OperationId switch
+            {
+                "Chat_CreateCompletion" => """{"model":"your-model-alias","messages":[{"role":"user","content":"Hello"}],"stream":false}""",
+                "Responses_Create" => """{"model":"your-model-alias","input":"Hello","stream":false}""",
+                "Embeddings_Create" => """{"model":"your-embedding-alias","input":"Text to embed"}""",
+                "Images_Create" or "Images_CreateImageAsync" => """{"model":"your-image-alias","prompt":"A lighthouse at sunrise","n":1}""",
+                _ => null
+            };
+            if (example is not null)
+                requestMedia.Example = JsonNode.Parse(example);
+        }
 
         if (operation.OperationId == "Media_Upload" &&
             operation.RequestBody?.Content?["multipart/form-data"].Schema is OpenApiSchema multipartSchema)
         {
-            multipartSchema.Required?.Clear();
-            operation.RequestBody.Description = "Optional media type (image/video/audio).";
+            multipartSchema.Required = new HashSet<string>(StringComparer.Ordinal) { "file" };
+            operation.RequestBody.Description = "Required media file and optional media_type (image/video/audio).";
         }
 
         if (operation.OperationId == "Audio_CreateTranscription" &&
@@ -117,6 +134,24 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
         components.Schemas ??= new Dictionary<string, IOpenApiSchema>();
         components.Schemas["OpenAIErrorResponse"] = schema;
         var errorReference = new OpenApiSchemaReference("OpenAIErrorResponse", document);
+        operation.Responses.TryAdd("403", new OpenApiResponse { Description = "Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body." });
+        operation.Responses.TryAdd("429", new OpenApiResponse { Description = "The request exceeded an applicable request, token, or concurrency limit." });
+        operation.Responses.TryAdd("503", new OpenApiResponse { Description = "Required infrastructure is temporarily unavailable." });
+        operation.Responses.TryAdd("500", new OpenApiResponse { Description = "An unexpected error occurred." });
+        if (operation.RequestBody is not null || operation.Parameters?.Count > 0)
+            operation.Responses.TryAdd("400", new OpenApiResponse { Description = "Invalid request parameters or body. Parameter binding may return an empty body." });
+        if (operation.RequestBody is not null)
+            operation.Responses.TryAdd("415", new OpenApiResponse { Description = "The request Content-Type is not supported." });
+
+        // Authentication applies to every protected Gateway route,
+        // including Conduit extensions outside the OpenAI-compatible surface.
+        if (operation.Security?.Any(requirement => requirement.Count > 0) == true)
+        {
+            operation.Responses.TryAdd("401", new OpenApiResponse
+            {
+                Description = "The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body."
+            });
+        }
 
         if (operation.OperationId is not null &&
             OpenAICompatibleOperations.Contains(operation.OperationId))
@@ -145,14 +180,48 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
                     ["application/json"] = new() { Schema = errorReference }
                 };
 
+                if (status == 403)
+                {
+                    // IP security middleware returns a simple string error envelope;
+                    // endpoint failures return the OpenAI object error envelope.
+                    var securitySchema = await context.GetOrCreateSchemaAsync(typeof(SecurityErrorResponse), null, cancellationToken);
+                    components.Schemas["SecurityErrorResponse"] = securitySchema;
+                    response.Content["application/json"].Schema = new OpenApiSchema
+                    {
+                        OneOf = [errorReference, new OpenApiSchemaReference("SecurityErrorResponse", document)]
+                    };
+                }
+
                 if (status is 429 or 503)
                 {
                     response.Headers["Retry-After"] = new OpenApiHeader
                     {
                         Description = "Delay in seconds before retrying the request.",
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.Integer, Minimum = "1" }
+                    };
+                }
+                if (status == 429)
+                {
+                    foreach (var (name, description) in new Dictionary<string, string>
+                    {
+                        ["X-RateLimit-Limit"] = "Maximum requests or tokens in the applicable window.",
+                        ["X-RateLimit-Remaining"] = "Requests or tokens remaining in the applicable window.",
+                        ["X-RateLimit-Reset"] = "UTC Unix timestamp in seconds when the window resets."
+                    })
+                        response.Headers[name] = new OpenApiHeader
+                        {
+                            Description = description,
+                            Schema = new OpenApiSchema { Type = JsonSchemaType.Integer, Format = "int64" }
+                        };
+                    response.Headers["X-RateLimit-Scope"] = new OpenApiHeader
+                    {
+                        Description = "Scope of the exceeded limit (key, group, model, token, concurrency, or IP).",
                         Schema = new OpenApiSchema { Type = JsonSchemaType.String }
                     };
                 }
+                // HTTP HEAD never carries a response body, including failures.
+                if (string.Equals(context.Description.HttpMethod, "HEAD", StringComparison.OrdinalIgnoreCase))
+                    response.Content.Clear();
             }
         }
     }

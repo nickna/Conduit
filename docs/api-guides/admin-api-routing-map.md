@@ -2,8 +2,14 @@
 
 All Admin API resources live below `/v1/admin`, use plural lowercase kebab-case
 resource names, and use lowercase kebab-case literal subpaths. `/metrics` is the
-only exception because Prometheus-compatible scrape infrastructure consumes it
-at the root.
+only exception. The deployment's metrics middleware serves Prometheus/OpenMetrics
+text at this root before endpoint dispatch; the OpenAPI operation describes that
+actual scrape response.
+
+The trailing-slash `/metrics/` route retains the legacy JSON metrics handler.
+
+See [API contracts and documentation](openapi-maintenance.md) for authentication,
+error bodies, examples, and contract maintenance.
 
 | Previous root | Canonical root |
 | --- | --- |

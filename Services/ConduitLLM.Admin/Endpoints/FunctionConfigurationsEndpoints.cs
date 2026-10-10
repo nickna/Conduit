@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using System.Text.Json;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Admin.Auditing;
@@ -49,20 +50,32 @@ public class FunctionConfigurationsEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Function Configurations");
         group.MapGet("/", ([FromServices] FunctionConfigurationsEndpoints e) => e.GetAllConfigurations())
-            .WithName("FunctionConfigurations_GetAll").Produces<List<FunctionConfigurationDto>>();
+            .WithName("FunctionConfigurations_GetAll")
+            .WithSummary("Gets all function configurations.").Produces<List<FunctionConfigurationDto>>();
         group.MapGet("/{id}", ([FromServices] FunctionConfigurationsEndpoints e, int id) => e.GetConfigurationById(id))
-            .WithName("FunctionConfigurations_GetById").Produces<FunctionConfigurationDto>().Produces(StatusCodes.Status404NotFound);
+            .WithName("FunctionConfigurations_GetById")
+            .WithSummary("Gets a function configuration by ID.")
+            .WithParameterDescription("id", "The ID of the function configuration").Produces<FunctionConfigurationDto>().Produces(StatusCodes.Status404NotFound);
         group.MapGet("/provider/{providerType}", ([FromServices] FunctionConfigurationsEndpoints e, string providerType) => e.GetConfigurationsByProvider(providerType))
-            .WithName("FunctionConfigurations_GetByProvider").Produces<List<FunctionConfigurationDto>>();
+            .WithName("FunctionConfigurations_GetByProvider")
+            .WithSummary("Gets function configurations by provider type.")
+            .WithParameterDescription("providerType", "The provider type (e.g., \"Exa\")").Produces<List<FunctionConfigurationDto>>();
         group.MapGet("/purpose/{purpose}", ([FromServices] FunctionConfigurationsEndpoints e, string purpose) => e.GetConfigurationsByPurpose(purpose))
-            .WithName("FunctionConfigurations_GetByPurpose").Produces<List<FunctionConfigurationDto>>();
+            .WithName("FunctionConfigurations_GetByPurpose")
+            .WithSummary("Gets function configurations by purpose.")
+            .WithParameterDescription("purpose", "The purpose (e.g., \"Search\", \"Answer\", \"Enrich\")").Produces<List<FunctionConfigurationDto>>();
         group.MapPost("/", ([FromServices] FunctionConfigurationsEndpoints e, CreateFunctionConfigurationRequest request) => e.CreateConfiguration(request))
-            .WithName("FunctionConfigurations_Create").Produces<FunctionConfigurationDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest);
+            .WithName("FunctionConfigurations_Create")
+            .WithSummary("Creates a new function configuration.").Produces<FunctionConfigurationDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest);
         group.MapPatch("/{id}", ([FromServices] FunctionConfigurationsEndpoints e, int id, JsonMergePatch<UpdateFunctionConfigurationRequest> patch) => e.UpdateConfiguration(id, patch.Value))
             .AcceptsJsonMergePatch<UpdateFunctionConfigurationRequest>()
-            .WithName("FunctionConfigurations_Update").Produces<FunctionConfigurationDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
+            .WithName("FunctionConfigurations_Update")
+            .WithSummary("Updates an existing function configuration.")
+            .WithParameterDescription("id", "The ID of the function configuration to update").Produces<FunctionConfigurationDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
         group.MapDelete("/{id}", ([FromServices] FunctionConfigurationsEndpoints e, int id) => e.DeleteConfiguration(id))
-            .WithName("FunctionConfigurations_Delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
+            .WithName("FunctionConfigurations_Delete")
+            .WithSummary("Deletes a function configuration.")
+            .WithParameterDescription("id", "The ID of the function configuration to delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
         return app;
     }
 

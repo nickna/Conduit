@@ -63,7 +63,7 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
         if (operation.OperationId is "ModelCosts_ImportCsv" or "ModelCosts_ImportJson" &&
             operation.RequestBody?.Content?["multipart/form-data"].Schema is OpenApiSchema importSchema)
         {
-            importSchema.Required?.Clear();
+            importSchema.Required = new HashSet<string>(StringComparer.Ordinal) { "file" };
             operation.RequestBody.Description = operation.OperationId == "ModelCosts_ImportCsv"
                 ? "CSV file containing model costs"
                 : "JSON file containing model costs";
@@ -82,6 +82,17 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
             }
 
             OpenApiMediaTypeNormalizer.RemoveLegacyAliases(response.Content);
+            if (responseEntry.Key == "200" && operation.OperationId == "Metrics_GetAllMetrics")
+            {
+                // The registered Prometheus middleware handles the canonical /metrics
+                // request before the legacy JSON handler is reached.
+                response.Content = new Dictionary<string, OpenApiMediaType>
+                {
+                    ["text/plain"] = new() { Schema = new OpenApiSchema { Type = JsonSchemaType.String } },
+                    ["application/openmetrics-text"] = new() { Schema = new OpenApiSchema { Type = JsonSchemaType.String } }
+                };
+                continue;
+            }
             if (!int.TryParse(responseEntry.Key, out var status) || status is < 200 or >= 300)
             {
                 continue;

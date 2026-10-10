@@ -16,6 +16,7 @@ public static class BundledModelCatalogEndpoints
 
         group.MapPost("/import", Import)
             .WithName("BundledModelCatalog_Import")
+            .WithSummary("Import the bundled model catalog")
             .Produces<BundledModelCatalogImportResult>();
         return app;
     }

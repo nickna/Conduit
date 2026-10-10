@@ -7,10 +7,14 @@ OpenAI API contract. Conduit-specific extensions live below `/v1/conduit/...`.
 
 - `/v1/models`
 - `/v1/chat/completions`
-- `/v1/completions`
+- `/v1/responses` (stateless)
 - `/v1/embeddings`
 - `/v1/audio/...`
 - `/v1/images/generations`
+
+The legacy `/v1/completions` route always returns 501 and is excluded from the
+published contract. See [API contracts and documentation](openapi-maintenance.md)
+for examples and validation instructions.
 
 ## Conduit extension route map
 
@@ -36,12 +40,18 @@ leaking into the reserved namespace.
 
 ## Error contract
 
-Every Gateway error — on `/v1/...` and `/v1/conduit/...` alike — is the OpenAI error
-envelope, and carries the request's `x-request-id` header:
+Gateway endpoint and exception-handler errors use the OpenAI error envelope
+and carry the request's `x-request-id` header:
 
 ```json
 { "error": { "message": "...", "type": "invalid_request_error", "code": "model_not_found", "param": "model" } }
 ```
+
+IP security middleware can instead return `application/json` with a string
+`error` and numeric `code`. Authentication/authorization and parameter binding
+can return an empty body. Check status and Content-Type before parsing a failure.
+HEAD failures never carry bodies. The OpenAPI contract documents these variants
+and the optional rate-limit headers.
 
 Status selection is centralized in `ExceptionToResponseMapper`
 (`Shared/ConduitLLM.Core/Exceptions/`), applied by `OpenAIErrorMiddleware`. Endpoint

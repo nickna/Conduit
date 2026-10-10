@@ -68,6 +68,23 @@ public sealed class PrometheusMetricsEndpointExtensionsTests
         (await response.Content.ReadAsStringAsync()).Should().Contain("conduit_issue_1066_registry_total");
     }
 
+    [Theory]
+    [InlineData("text/plain", "text/plain")]
+    [InlineData("application/openmetrics-text", "application/openmetrics-text")]
+    public async Task MetricsEndpoint_NegotiatesTheDocumentedScrapeFormats(string accept, string contentType)
+    {
+        using var host = await StartHostAsync();
+        using var request = CreateRequest("/metrics", "10.10.0.8");
+        request.Headers.Accept.ParseAdd(accept);
+
+        using var response = await host.GetTestClient().SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Content.Headers.ContentType!.MediaType.Should().Be(contentType);
+        if (contentType == "application/openmetrics-text")
+            (await response.Content.ReadAsStringAsync()).Should().EndWith("# EOF\n");
+    }
+
     [Fact]
     public async Task MetricsEndpoint_DoesNotExposeMetrics_ToAnonymousExternalRequests()
     {

@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using System.Text.Json;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Admin.Extensions;
@@ -42,32 +43,51 @@ public partial class VirtualKeysEndpoints : AdminEndpointHandlerBase
             .WithTags("Virtual Keys");
 
         group.MapPost("/", ([FromServices] VirtualKeysEndpoints endpoints, CreateVirtualKeyRequestDto request) => endpoints.GenerateKey(request))
-            .WithName("VirtualKeys_Generate").Produces<CreateVirtualKeyResponseDto>(StatusCodes.Status201Created)
+            .WithName("VirtualKeys_Generate")
+            .WithSummary("Generates a new virtual API key").Produces<CreateVirtualKeyResponseDto>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden)
             .RequireAuthorization("MasterKeyPolicy");
         group.MapGet("/", ([FromServices] VirtualKeysEndpoints endpoints, int? virtualKeyGroupId = null) => endpoints.ListKeys(virtualKeyGroupId))
-            .WithName("VirtualKeys_GetAll").Produces<List<VirtualKeyDto>>().RequireAuthorization("MasterKeyPolicy");
+            .WithName("VirtualKeys_GetAll")
+            .WithSummary("Retrieves a list of all virtual keys")
+            .WithParameterDescription("virtualKeyGroupId", "Optional filter by virtual key group ID").Produces<List<VirtualKeyDto>>().RequireAuthorization("MasterKeyPolicy");
         group.MapGet("/{id}", ([FromServices] VirtualKeysEndpoints endpoints, int id) => endpoints.GetKeyById(id))
-            .WithName("VirtualKeys_GetById").Produces<VirtualKeyDto>().Produces(StatusCodes.Status404NotFound).RequireAuthorization("MasterKeyPolicy");
+            .WithName("VirtualKeys_GetById")
+            .WithSummary("Retrieves details for a specific virtual key by ID")
+            .WithParameterDescription("id", "The ID of the key to retrieve").Produces<VirtualKeyDto>().Produces(StatusCodes.Status404NotFound).RequireAuthorization("MasterKeyPolicy");
         group.MapPatch("/{id}", ([FromServices] VirtualKeysEndpoints endpoints, int id, JsonMergePatch<UpdateVirtualKeyRequestDto> patch) => endpoints.UpdateKey(id, patch.Value))
             .AcceptsJsonMergePatch<UpdateVirtualKeyRequestDto>()
-            .WithName("VirtualKeys_Update").Produces<VirtualKeyDto>().Produces(StatusCodes.Status400BadRequest)
+            .WithName("VirtualKeys_Update")
+            .WithSummary("Updates an existing virtual key")
+            .WithParameterDescription("id", "The ID of the key to update").Produces<VirtualKeyDto>().Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden).Produces(StatusCodes.Status404NotFound)
             .RequireAuthorization("MasterKeyPolicy");
         group.MapDelete("/{id}", ([FromServices] VirtualKeysEndpoints endpoints, int id, CancellationToken cancellationToken) => endpoints.DeleteKey(id, cancellationToken))
-            .WithName("VirtualKeys_Delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status401Unauthorized)
+            .WithName("VirtualKeys_Delete")
+            .WithSummary("Deletes a virtual key by ID")
+            .WithParameterDescription("id", "The ID of the key to delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status403Forbidden).Produces(StatusCodes.Status404NotFound).RequireAuthorization("MasterKeyPolicy");
         group.MapPost("/validate", ([FromServices] VirtualKeysEndpoints endpoints, ValidateVirtualKeyRequest request) => endpoints.ValidateKey(request))
-            .WithName("VirtualKeys_Validate").Produces<VirtualKeyValidationResult>().Produces(StatusCodes.Status400BadRequest).AllowAnonymous();
+            .WithName("VirtualKeys_Validate")
+            .WithSummary("Validates a virtual key").Produces<VirtualKeyValidationResult>().Produces(StatusCodes.Status400BadRequest).AllowAnonymous();
         group.MapGet("/{id}/validation-info", ([FromServices] VirtualKeysEndpoints endpoints, int id) => endpoints.GetValidationInfo(id))
-            .WithName("VirtualKeys_GetValidationInfo").Produces<VirtualKeyValidationInfoDto>().Produces(StatusCodes.Status404NotFound).RequireAuthorization("MasterKeyPolicy");
+            .WithName("VirtualKeys_GetValidationInfo")
+            .WithSummary("Gets detailed information about a virtual key for validation purposes")
+            .WithParameterDescription("id", "The ID of the virtual key").Produces<VirtualKeyValidationInfoDto>().Produces(StatusCodes.Status404NotFound).RequireAuthorization("MasterKeyPolicy");
         group.MapPost("/maintenance", ([FromServices] VirtualKeysEndpoints endpoints) => endpoints.PerformMaintenance())
-            .WithName("VirtualKeys_Maintenance").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status401Unauthorized)
+            .WithName("VirtualKeys_Maintenance")
+            .WithSummary("Performs maintenance tasks on all virtual keys")
+            .WithDescription("This endpoint performs the following maintenance tasks: - Disables keys that have passed their expiration date Budget resets are no longer performed in the bank account model. This is typically called by a background service.").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status403Forbidden).RequireAuthorization("MasterKeyPolicy");
         group.MapGet("/{id}/discovery-preview", ([FromServices] VirtualKeysEndpoints endpoints, int id, string? capability = null) => endpoints.PreviewDiscovery(id, capability))
-            .WithName("VirtualKeys_PreviewDiscovery").Produces<DiscoveryModelsResponse>().Produces(StatusCodes.Status404NotFound).RequireAuthorization("MasterKeyPolicy");
+            .WithName("VirtualKeys_PreviewDiscovery")
+            .WithSummary("Previews the discovery results for a virtual key")
+            .WithParameterDescription("id", "The ID of the virtual key")
+            .WithParameterDescription("capability", "Optional capability filter (e.g. \"chat\", \"vision\", \"audio_transcription\")").Produces<DiscoveryModelsResponse>().Produces(StatusCodes.Status404NotFound).RequireAuthorization("MasterKeyPolicy");
         group.MapGet("/{id}/group", ([FromServices] VirtualKeysEndpoints endpoints, int id) => endpoints.GetKeyGroup(id))
-            .WithName("VirtualKeys_GetGroup").Produces<VirtualKeyGroupDto>().Produces(StatusCodes.Status404NotFound).RequireAuthorization("MasterKeyPolicy");
+            .WithName("VirtualKeys_GetGroup")
+            .WithSummary("Get the virtual key group for a specific key")
+            .WithParameterDescription("id", "The ID of the virtual key").Produces<VirtualKeyGroupDto>().Produces(StatusCodes.Status404NotFound).RequireAuthorization("MasterKeyPolicy");
         group.MapGet("/{id}/rate-limit-usage", (
                 [FromServices] VirtualKeysEndpoints endpoints,
                 int id,
@@ -76,13 +96,18 @@ public partial class VirtualKeysEndpoints : AdminEndpointHandlerBase
                 [FromServices] ConduitLLM.Core.Services.IVirtualKeyRateLimitService? rateLimitService = null) =>
                 endpoints.GetRateLimitUsage(id, keyRepository, groupRepository, rateLimitService))
             .WithName("VirtualKeys_GetRateLimitUsage")
+            .WithDescription("The limits themselves live in the database, but what has been spent against them lives only in the shared window store — so \"is this key near its limit right now?\" is a question nothing else can answer. Reads only; it never admits or rejects anything.")
+            .WithParameterDescription("id", "Identifier of the Virtual Keys resource.")
             .WithSummary("Get a virtual key's current rate limit usage")
             .Produces<VirtualKeyRateLimitUsageDto>()
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status429TooManyRequests)
             .RequireAuthorization("MasterKeyPolicy");
         group.MapGet("/usage/by-key/{key}", ([FromServices] VirtualKeysEndpoints endpoints, string key) => endpoints.GetUsageByKey(key))
-            .WithName("VirtualKeys_GetUsageByKey").Produces<VirtualKeyUsageDto>().Produces(StatusCodes.Status400BadRequest)
+            .WithName("VirtualKeys_GetUsageByKey")
+            .WithSummary("Get usage information for a virtual key by its key value")
+            .WithDescription("This endpoint allows administrators to check the usage and balance of a virtual key using the actual key value instead of the database ID. This is useful for support scenarios where users provide their key value.")
+            .WithParameterDescription("key", "The virtual key value (with prefix)").Produces<VirtualKeyUsageDto>().Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden)
             .RequireAuthorization("MasterKeyPolicy");
         return app;
