@@ -229,33 +229,6 @@ namespace ConduitLLM.Providers.Configuration
                 }
             },
 
-            [ProviderType.Ultravox] = new ProviderConfiguration
-            {
-                DisplayName = "Ultravox",
-                HelpText = "Create or manage an API key in the Ultravox platform.",
-                DefaultBaseUrl = DefaultUrl(ProviderType.Ultravox),
-                AuthenticationStrategy = BearerTokenStrategy.Instance,
-                ErrorMessages = new ProviderErrorMessages
-                {
-                    InvalidApiKey = "Invalid API key for Ultravox. Please verify your API key is correct.",
-                    RateLimitExceeded = "Ultravox API rate limit exceeded. Please try again later."
-                }
-            },
-
-            [ProviderType.ElevenLabs] = new ProviderConfiguration
-            {
-                DisplayName = "ElevenLabs",
-                HelpUrl = "https://elevenlabs.io/api",
-                HelpText = "Create or manage an API key in your ElevenLabs account.",
-                DefaultBaseUrl = DefaultUrl(ProviderType.ElevenLabs),
-                AuthenticationStrategy = BearerTokenStrategy.Instance,
-                ErrorMessages = new ProviderErrorMessages
-                {
-                    InvalidApiKey = "Invalid API key for ElevenLabs. Please verify your API key is correct.",
-                    RateLimitExceeded = "ElevenLabs API rate limit exceeded. Please try again later."
-                }
-            },
-
             [ProviderType.OpenRouter] = new ProviderConfiguration
             {
                 DisplayName = "OpenRouter",

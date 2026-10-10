@@ -335,8 +335,10 @@ namespace ConduitLLM.Admin.Endpoints
                 provider.Settings = settings;
             }
 
-            // Validate that required structured settings still resolve after the update.
-            if (!TryValidateProviderSettings(provider, out var settingsError))
+            // Keep legacy records for retired/reserved types manageable (for example disabling
+            // them), even though those types no longer have adapter configuration to validate.
+            if (ProviderTypeCatalog.IsConfigurable(provider.ProviderType)
+                && !TryValidateProviderSettings(provider, out var settingsError))
             {
                 return BadRequest(settingsError);
             }
