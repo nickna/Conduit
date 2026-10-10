@@ -52,6 +52,13 @@ public class ProviderSettingsSchemaEndpointTests
     }
 
     [Fact]
+    public void Schema_Should_Exclude_ProviderTypes_Without_Adapters()
+    {
+        GetSchema().Select(entry => entry.ProviderType).Should()
+            .NotContain(new[] { ProviderType.Unknown, ProviderType.Ultravox, ProviderType.ElevenLabs });
+    }
+
+    [Fact]
     public void Schema_Should_Publish_Required_Endpoint_Metadata_For_OpenAiCompatible()
     {
         var openAiCompatible = GetSchema()
