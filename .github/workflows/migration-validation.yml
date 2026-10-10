@@ -74,7 +74,7 @@ jobs:
           project: Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
           suite: migrations
           filter: Component=ReleaseMigration
-          minimum: '7'
+          minimum: '8'
 
       - name: Exercise native PostgreSQL persistence probe
         shell: pwsh

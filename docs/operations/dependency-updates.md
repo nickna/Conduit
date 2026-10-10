@@ -1,8 +1,9 @@
 # Dependency update automation
 
 `.github/dependabot.yml` schedules grouped weekly version updates on Mondays,
-with every update PR targeting `dev`. NuGet scans the repository root and updates
-the central versions in `Directory.Packages.props`. Related EF Core/Npgsql,
+with every update PR targeting `master`, the active development branch. NuGet
+scans the repository root and updates the central versions in
+`Directory.Packages.props`. Related EF Core/Npgsql,
 OpenTelemetry, ASP.NET Core/Extensions, tokenizer, Wolverine, FusionCache and test
 packages travel together. The EF health-check integration belongs to the EF group;
 Dependabot uses the first matching group. Other NuGet packages get individual PRs,
@@ -17,28 +18,27 @@ No updates are automatically merged or exempted from required validation.
 
 ## Activation and first-batch triage
 
-GitHub reads the configuration from the repository's **default branch (`master`)**,
-even though version updates target `dev`. Merge the configuration PR to master to
-activate it. See [GitHub's configuration rules](https://docs.github.com/en/code-security/concepts/supply-chain-security/about-the-dependabot-yml-file)
+GitHub reads the configuration from the repository's **default branch (`master`)**.
+Version-update PRs also target `master`; `dev` is retired and needs no synchronization.
+Merge configuration changes to master to activate them. See
+[GitHub's configuration rules](https://docs.github.com/en/code-security/concepts/supply-chain-security/about-the-dependabot-yml-file)
 and [target-branch behavior](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference#target-branch).
 This configuration does not enable the separate repository setting for Dependabot
 security updates; existing required NuGet/npm audits remain in force.
 
-Before the first run, synchronize the reviewed master changes into dev through a
-PR. At the October 10, 2026 audit, dev was 100 commits behind master and lacked
-`tools/ci/package.json` and the current required security/validation policy. A bot
-PR must not update that older graph or bypass the checks added on master. All three
-npm manifests and lockfiles must exist on dev before expecting all three npm jobs
-to succeed. GitHub only scans manifests on the configured target branch.
+All configured manifests and lockfiles are present on master. After merging the
+branch correction, confirm new update jobs and PRs target master. Any initial bot
+PRs against retired dev should be superseded by master-targeted updates, rather
+than merged into or used to revive dev.
 
-After merge and branch synchronization:
+After merge:
 
 1. Open **Insights → Dependency graph → Dependabot** and check each update job's
    logs. Use **Check for updates** to request the initial batch, or wait for Monday.
    Missing manifests, registry failures or configuration errors require correction;
    an empty PR list alone does not prove success.
 2. List the initial PRs with
-   `gh pr list --base dev --author 'app/dependabot' --json number,title,url,statusCheckRollup`.
+   `gh pr list --base master --author 'app/dependabot' --json number,title,url,statusCheckRollup`.
    Confirm grouped NuGet updates edit central versions and npm PRs include the
    matching lockfile. Record the actual PR URLs and job results on issue #1063.
 3. Review upstream release notes, package compatibility and security/compatibility
