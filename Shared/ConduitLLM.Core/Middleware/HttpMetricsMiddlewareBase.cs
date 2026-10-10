@@ -104,7 +104,8 @@ namespace ConduitLLM.Core.Middleware
             {
                 var errorType = ex.GetType().Name;
                 RecordError(method, path, context.Response.StatusCode, errorType);
-                Logger.LogError(ex, "Unhandled exception in request pipeline");
+                // The outer exception middleware owns logging and chooses the severity
+                // after mapping the response. Metrics must not log the exception again.
                 OnException(context);
                 throw;
             }
