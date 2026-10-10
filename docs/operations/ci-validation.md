@@ -70,7 +70,7 @@ use their Node 24 releases, and CodeQL uses v4. Resolve updates from upstream ta
 commits, inspect action runtime metadata, update the inventory and workflow pins
 together, then run the pin regression test and actionlint. Actions updates retain
 this manual review procedure; [dependency automation](dependency-updates.md)
-groups weekly NuGet/npm updates to dev. Archived workflows are inactive.
+groups weekly NuGet/npm updates to master. Archived workflows are inactive.
 
 All 23 formerly excluded `TimingSensitive` methods now run in ordinary CI. Ten
 calculate supplied durations; eleven test streaming metrics with FakeTimeProvider;
@@ -237,7 +237,7 @@ Verify both the lockfile graph and the actual loader's parser after applying ove
 
 The [scoped override procedure](npm-lockfile-overrides.md) includes a two-dependency upstream reproduction and targeted refresh commands. The same bug reproduces with npm 12.2.0, so an npm upgrade alone is insufficient. `WebAdmin/scripts/check-dependency-overrides.mjs` rejects stale consumer-specific parser resolution and leftover sprintf-js lock entries before dependency audits; WebAdmin correctness additionally checks the actual installed parser after `npm ci`. Regression fixtures cover hoisted and nested resolution, missing graph entries and a stale installed graph despite a clean lockfile.
 
-Compatible npm updates remove the initial critical findings and patch contract-tool advisories. The obsolete redundant rational-order CSS configuration and its legacy Stylelint tree are removed; existing explicit property ordering remains. A targeted compatible brace-expansion override resolves an outdated exact transitive pin. Test-only SSH.NET is pinned to 2026.0.0 to fix both published SCP advisories. [Dependabot configuration and first-batch triage](dependency-updates.md) belong to #1063; activation requires the configuration on master and current manifests/validation on dev.
+Compatible npm updates remove the initial critical findings and patch contract-tool advisories. The obsolete redundant rational-order CSS configuration and its legacy Stylelint tree are removed; existing explicit property ordering remains. A targeted compatible brace-expansion override resolves an outdated exact transitive pin. Test-only SSH.NET is pinned to 2026.0.0 to fix both published SCP advisories. [Dependabot configuration and first-batch triage](dependency-updates.md) belong to #1063; the configuration and update target both use master, the active development branch.
 
 The negative policy proof scanned an actual Node 18.0.0 Debian fixture by immutable digest: 17 critical findings were rejected. The exact patched production WebAdmin image scan passed the critical gate with no exceptions. All 461 Jest tests, type checks, deterministic contract generation and the packaged business/authenticated Chromium flows pass after updates. The parser regressions also prove introduced vulnerable dependencies, malformed/unavailable scans, narrow exceptions and expiry fail as specified.
 
