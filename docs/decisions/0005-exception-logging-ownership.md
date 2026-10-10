@@ -54,6 +54,10 @@ the exception raised by the lower layer. Adding a `Warning` or `Debug` entry
 immediately before an unchanged rethrow is not an acceptable substitute because
 it still produces duplicate telemetry.
 
+Recording metrics does not make a catch an outcome boundary. HTTP metrics
+middleware may record an escaping exception and run cleanup, but leaves its
+logging and severity selection to the outer exception middleware.
+
 ## Enforcement
 
 `scripts/test/verify-exception-logging.ps1` parses tracked C# source and rejects
