@@ -18,11 +18,10 @@ namespace Internal.Generated.WolverineHandlers
             _loggerOfWolverineHandlerBridgeOfModelUpdated = loggerOfWolverineHandlerBridgeOfModelUpdated;
         }
 
-
-
         public override async System.Threading.Tasks.Task HandleAsync(Wolverine.Runtime.MessageContext context, System.Threading.CancellationToken cancellation)
         {
             await using var serviceScope = _serviceScopeFactory.CreateAsyncScope();
+            Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<Wolverine.Runtime.ScopedMessageContextHolder>(serviceScope.ServiceProvider).Context = context;
             // This service has been marked as requiring service location independent of Wolverine's ability to use constructor injection of everything else
             var eventHandlerOfModelUpdatedIEnumerable = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<System.Collections.Generic.IEnumerable<ConduitLLM.Configuration.Messaging.IEventHandler<ConduitLLM.Core.Events.ModelUpdated>>>(serviceScope.ServiceProvider);
             // The actual message body
@@ -34,9 +33,7 @@ namespace Internal.Generated.WolverineHandlers
 
             // The actual message execution
             await wolverineHandlerBridgeOfModelUpdated.Handle(modelUpdated, context, cancellation).ConfigureAwait(false);
-
         }
-
     }
 
     // END: ModelUpdatedHandler646168095
