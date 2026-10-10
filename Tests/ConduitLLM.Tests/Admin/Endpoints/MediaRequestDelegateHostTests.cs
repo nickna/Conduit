@@ -272,7 +272,7 @@ public sealed class MediaRequestDelegateHostTests : IDisposable
         await document.SerializeAsJsonAsync(stream, OpenApiSpecVersion.OpenApi3_1, default);
         stream.Position = 0;
         var actual = await JsonNode.ParseAsync(stream);
-        var expected = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(
+        var expected = JsonNode.Parse(await File.ReadAllTextAsync(Path.Join(
             MediaRequestDelegateHostFactory.RepositoryRoot, "Services", "ConduitLLM.Admin", "openapi-admin.json")));
         var expectedPaths = expected["paths"].AsObject().Where(entry =>
             entry.Key.StartsWith("/v1/admin/media-assets", StringComparison.Ordinal) ||
