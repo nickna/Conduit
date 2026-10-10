@@ -152,6 +152,36 @@ try {
     $result = Invoke-Gate 'admin' $openPolicy $adminBenchmark $adminEvidence
     Assert-Decision $result 'promote' 'Complete Admin evidence'
 
+    $matchingWorkloadBenchmark = Copy-Value $adminBenchmark
+    foreach ($variant in 'jit', 'native') {
+        $matchingWorkloadBenchmark.$variant.requests = 2000
+        $matchingWorkloadBenchmark.$variant.concurrency = 40
+    }
+    $result = Invoke-Gate 'admin' $openPolicy $matchingWorkloadBenchmark $adminEvidence
+    Assert-Decision $result 'promote' 'Comparable alternate benchmark workload'
+
+    $mismatchedRequestsBenchmark = Copy-Value $adminBenchmark
+    $mismatchedRequestsBenchmark.native.requests = 1
+    $result = Invoke-Gate 'admin' $openPolicy $mismatchedRequestsBenchmark $adminEvidence
+    Assert-Decision $result 'hold' 'Different benchmark request counts'
+    Assert-Failure $result 'values for requests do not match' 'Different benchmark request counts'
+
+    $mismatchedConcurrencyBenchmark = Copy-Value $adminBenchmark
+    $mismatchedConcurrencyBenchmark.native.concurrency = 1
+    $result = Invoke-Gate 'admin' $openPolicy $mismatchedConcurrencyBenchmark $adminEvidence
+    Assert-Decision $result 'hold' 'Different benchmark concurrency'
+    Assert-Failure $result 'values for concurrency do not match' 'Different benchmark concurrency'
+
+    foreach ($workloadProperty in 'requests', 'concurrency') {
+        $fractionalWorkloadBenchmark = Copy-Value $adminBenchmark
+        foreach ($variant in 'jit', 'native') {
+            $fractionalWorkloadBenchmark.$variant.$workloadProperty = 1.5
+        }
+        $result = Invoke-Gate 'admin' $openPolicy $fractionalWorkloadBenchmark $adminEvidence
+        Assert-Decision $result 'hold' "Fractional benchmark $workloadProperty"
+        Assert-Failure $result 'must be a whole number' "Fractional benchmark $workloadProperty"
+    }
+
     $result = Invoke-Gate 'admin' $blockedPolicy $adminBenchmark $adminEvidence
     Assert-Decision $result 'hold' 'Repository policy blocker'
     Assert-Failure $result '^promotion blocked:' 'Repository policy blocker'
