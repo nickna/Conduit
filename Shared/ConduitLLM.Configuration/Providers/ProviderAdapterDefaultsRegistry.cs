@@ -21,8 +21,6 @@ public static class ProviderAdapterDefaultsRegistry
             [ProviderType.Fireworks] = new("https://api.fireworks.ai/inference/v1"),
             [ProviderType.OpenAICompatible] = new("https://api.openai.com/v1", RequiresBaseUrlOverride: true),
             [ProviderType.MiniMax] = new("https://api.minimax.io"),
-            [ProviderType.Ultravox] = new("https://api.ultravox.ai/v1"),
-            [ProviderType.ElevenLabs] = new("https://api.elevenlabs.io/v1"),
             [ProviderType.Cerebras] = new("https://api.cerebras.ai/v1"),
             [ProviderType.SambaNova] = new("https://api.sambanova.ai/v1"),
             [ProviderType.DeepInfra] = new("https://api.deepinfra.com/v1/openai"),

@@ -15,6 +15,28 @@ namespace ConduitLLM.Tests.Providers;
 public class ProviderDefaultsRegistryTests
 {
     [Fact]
+    public void ClientCreators_Should_Cover_Exactly_The_Configurable_ProviderTypes()
+    {
+        ClientCreatorRegistry.GetSupportedProviderTypes()
+            .OrderBy(x => x)
+            .Should()
+            .Equal(ProviderTypeCatalog.ConfigurableTypes.OrderBy(x => x));
+    }
+
+    [Theory]
+    [InlineData(ProviderType.Ultravox)]
+    [InlineData(ProviderType.ElevenLabs)]
+    [InlineData((ProviderType)999)]
+    public void Unimplemented_Types_Should_Not_Be_Configurable_Or_Registered(ProviderType providerType)
+    {
+        ProviderTypeCatalog.IsConfigurable(providerType).Should().BeFalse();
+        ProviderTypeCatalog.ConfigurableTypes.Should().NotContain(providerType);
+        ClientCreatorRegistry.IsSupported(providerType).Should().BeFalse();
+        ProviderAdapterDefaultsRegistry.TryGet(providerType, out _).Should().BeFalse();
+        ProviderConfigurationRegistry.TryGetConfiguration(providerType, out _).Should().BeFalse();
+    }
+
+    [Fact]
     public void AdapterDefaults_Should_Cover_Every_Configurable_ProviderType()
     {
         ProviderAdapterDefaultsRegistry.GetRegisteredProviderTypes()
