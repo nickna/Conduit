@@ -97,16 +97,23 @@ public sealed class SpendNotificationCompositionTests
         repository.Verify(value => value.UnregisterInstanceAsync(service.InstanceId), Times.Once);
     }
 
-    [Fact]
-    public async Task RedisOutage_AfterComposition_StillDeliversSpendNotification()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RedisOutage_AfterComposition_StillDeliversSpendNotification(bool timeout)
     {
         var services = Services();
+        Exception failure = timeout
+            ? new RedisTimeoutException("offline", CommandStatus.WaitingToBeSent)
+            : new RedisConnectionException(ConnectionFailureType.UnableToConnect, "offline");
         var database = new Mock<IDatabase>();
         database.Setup(value => value.HashGetAllAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
-            .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "offline"));
+            .ThrowsAsync(failure);
         database.Setup(value => value.HashSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(),
                 It.IsAny<RedisValue>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
-            .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "offline"));
+            .ThrowsAsync(failure);
+        database.Setup(value => value.KeyDeleteAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ThrowsAsync(failure);
         var redis = new Mock<IConnectionMultiplexer>();
         redis.Setup(value => value.GetDatabase(It.IsAny<int>(), It.IsAny<object>())).Returns(database.Object);
         services.RemoveAll<IConnectionMultiplexer>();
@@ -127,5 +134,39 @@ public sealed class SpendNotificationCompositionTests
 
         client.Verify(value => value.SendCoreAsync("SpendUpdate", It.IsAny<object[]>(),
             It.IsAny<CancellationToken>()), Times.Once);
+        database.Verify(value => value.KeyDeleteAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HostedService_UnexpectedLifecycleFailure_Propagates(bool shutdown)
+    {
+        var services = Services();
+        var failure = new ArgumentException("unexpected repository failure");
+        var repository = new Mock<ISpendDataRepository>();
+        if (shutdown)
+        {
+            repository.Setup(value => value.UnregisterInstanceAsync(It.IsAny<string>())).ThrowsAsync(failure);
+        }
+        else
+        {
+            repository.Setup(value => value.RegisterInstanceAsync(It.IsAny<string>(),
+                It.IsAny<ConduitLLM.Gateway.Serialization.SpendNotificationInstanceData>())).ThrowsAsync(failure);
+        }
+        services.RemoveAll<ISpendDataRepository>();
+        services.AddSingleton(repository.Object);
+        using var provider = Build(services);
+        var service = provider.GetRequiredService<DistributedSpendNotificationService>();
+
+        if (shutdown)
+        {
+            await service.StartAsync(CancellationToken.None);
+        }
+        var actual = await Assert.ThrowsAsync<ArgumentException>(() => shutdown
+            ? service.StopAsync(CancellationToken.None)
+            : service.StartAsync(CancellationToken.None));
+
+        Assert.Same(failure, actual);
     }
 }

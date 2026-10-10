@@ -3,6 +3,7 @@ using ConduitLLM.Configuration.DTOs.SignalR;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Gateway.Hubs;
 using ConduitLLM.Gateway.Serialization;
+using StackExchange.Redis;
 
 namespace ConduitLLM.Gateway.Services.SpendNotification
 {
@@ -60,7 +61,18 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             _patternAnalysisTimer?.Change(Timeout.Infinite, 0);
             _patternAnalysisTimer?.Dispose();
 
-            await _repository.UnregisterInstanceAsync(InstanceId);
+            try
+            {
+                await _repository.UnregisterInstanceAsync(InstanceId);
+            }
+            catch (RedisException ex)
+            {
+                _logger.LogWarning(ex, "Failed to unregister spend notification instance; shutdown will continue");
+            }
+            catch (TimeoutException ex)
+            {
+                _logger.LogWarning(ex, "Timed out unregistering spend notification instance; shutdown will continue");
+            }
         }
 
         public async Task NotifySpendUpdateAsync(
@@ -196,6 +208,10 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             catch (TimeoutException ex)
             {
                 _logger.LogWarning(ex, "Timed out registering spend notification instance; notification processing will continue");
+            }
+            catch (RedisException ex)
+            {
+                _logger.LogWarning(ex, "Failed to register spend notification instance; notification processing will continue");
             }
             catch (InvalidOperationException ex)
             {
