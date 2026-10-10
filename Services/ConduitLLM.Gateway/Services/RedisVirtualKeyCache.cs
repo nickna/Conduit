@@ -58,7 +58,7 @@ namespace ConduitLLM.Gateway.Services
                 // Try Redis first - this is ~50x faster than database
                 var virtualKey = await TryGetCacheEntryAsync(
                     cacheKey,
-                    GatewayRedisJsonContext.Default.VirtualKey);
+                    GatewayRedisJsonContext.CachedVirtualKey);
 
                 if (virtualKey != null)
                 {
@@ -114,7 +114,7 @@ namespace ConduitLLM.Gateway.Services
                 await SetCacheEntryAsync(
                     cacheKey,
                     virtualKey,
-                    GatewayRedisJsonContext.Default.VirtualKey,
+                    GatewayRedisJsonContext.CachedVirtualKey,
                     expiry);
 
                 Logger.LogDebug("Cached Virtual Key: {KeyHash}, expires in {ExpiryMinutes} minutes",

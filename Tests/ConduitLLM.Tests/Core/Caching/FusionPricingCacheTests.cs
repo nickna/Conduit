@@ -15,6 +15,7 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace ConduitLLM.Tests.Core.Caching;
 
+[Collection(ApplicationCacheContractCollection.Name)]
 public sealed class FusionPricingCacheTests
 {
     internal sealed class Clock : TimeProvider
@@ -23,10 +24,12 @@ public sealed class FusionPricingCacheTests
         public override DateTimeOffset GetUtcNow() => Now;
     }
     private static ServiceProvider Host(IModelCostService inner, Clock? clock = null, string? redis = null,
-        string? environment = null, bool enabled = true)
+        string? environment = null, bool enabled = true, TimeSpan? healthyReadTimeout = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         { ["ApplicationCache:Environment"] = environment ?? $"test-{Guid.NewGuid():N}",
+            ["ApplicationCache:DistributedReadTimeout"] = healthyReadTimeout?.ToString()
+                ?? (redis is null ? "00:00:00.250" : RedisCacheTestReadiness.HealthyReadTimeout),
             ["ApplicationCache:Domains:Costs:Enabled"] = enabled.ToString(),
             ["ApplicationCache:Domains:PricingRules:Enabled"] = enabled.ToString() }).Build();
         var services = new ServiceCollection().AddLogging();
@@ -189,7 +192,8 @@ public sealed class FusionPricingCacheTests
         Skip.If(string.IsNullOrEmpty(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         await using var proxy = new RedisNetworkProxy(redis!);
         var cost = Cost(); var inner = Inner(cost);
-        using var host = Host(inner.Object, redis: proxy.ConnectionString); using var scope = host.CreateScope();
+        using var host = Host(inner.Object, redis: proxy.ConnectionString, healthyReadTimeout: TimeSpan.FromMilliseconds(250)); using var scope = host.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(host, ApplicationCacheDomain.Costs, ApplicationCacheDomain.PricingRules);
         var cache = scope.ServiceProvider.GetRequiredService<IModelCostService>();
         var rules = host.GetRequiredService<ICachedPricingRulesService>();
         var generation = host.GetRequiredService<ApplicationCacheGeneration>();
@@ -208,8 +212,13 @@ public sealed class FusionPricingCacheTests
             catch (Exception ex) when (ex is RedisException or TimeoutException) { await Task.Delay(10); }
         }
         Assert.NotNull(current); Assert.NotEqual(original, current);
+        await RedisCacheTestReadiness.WarmAsync(host, ApplicationCacheDomain.Costs, ApplicationCacheDomain.PricingRules);
         Assert.Equal(0.75m, (await cache.GetCostByIdAsync(42))!.InputCostPerMillionTokens);
-        await cache.ClearCacheAsync(); await rules.InvalidateAllAsync();
+        // Prove fencing above before explicitly retrying invalidation. The separate Redis
+        // connections can reconnect at different times; successful post-outage writes are eventual.
+        await RedisCacheTestReadiness.RetryRecoveredInvalidationAsync(async token =>
+        { await cache.ClearCacheAsync(token); await rules.InvalidateAllAsync(token); });
+        Assert.Equal(0.75m, (await cache.GetCostByIdAsync(42))!.InputCostPerMillionTokens);
     }
 
     [SkippableFact]
@@ -218,11 +227,15 @@ public sealed class FusionPricingCacheTests
         var redis = Environment.GetEnvironmentVariable("CONDUIT_CACHE_TEST_REDIS");
         Skip.If(string.IsNullOrEmpty(redis), "Set CONDUIT_CACHE_TEST_REDIS for Redis contracts.");
         var environment = $"test-{Guid.NewGuid():N}"; var cost = Cost(); var inner = Inner(cost);
-        using var writer = Host(inner.Object, redis: redis, environment: environment); using var writerScope = writer.CreateScope();
+        // This contract proves healthy L2 values and TTLs, not the default 250 ms outage budget.
+        // Use the supported one-second read budget so instrumented scheduling is not an assertion.
+        using var writer = Host(inner.Object, redis: redis, environment: environment, healthyReadTimeout: TimeSpan.FromSeconds(1)); using var writerScope = writer.CreateScope();
+        using var reader = Host(inner.Object, redis: redis, environment: environment, healthyReadTimeout: TimeSpan.FromSeconds(1)); using var readerScope = reader.CreateScope();
+        await RedisCacheTestReadiness.WarmAsync(writer, ApplicationCacheDomain.Costs, ApplicationCacheDomain.PricingRules);
+        await RedisCacheTestReadiness.WarmAsync(reader, ApplicationCacheDomain.Costs, ApplicationCacheDomain.PricingRules);
         var first = writerScope.ServiceProvider.GetRequiredService<IModelCostService>();
         await first.GetCostByIdAsync(42); await first.ListModelCostsAsync();
         await writer.GetRequiredService<ICachedPricingRulesService>().GetConfigAsync(42, Rules);
-        using var reader = Host(inner.Object, redis: redis, environment: environment); using var readerScope = reader.CreateScope();
         var second = readerScope.ServiceProvider.GetRequiredService<IModelCostService>();
         Assert.Equal("model", (await second.GetCostByIdAsync(42))!.ModelProviderTypeAssociations!.Single().Model!.Name);
         Assert.Single(await second.ListModelCostsAsync());

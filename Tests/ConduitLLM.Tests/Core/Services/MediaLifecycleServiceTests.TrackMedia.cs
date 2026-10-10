@@ -1,6 +1,6 @@
 using ConduitLLM.Configuration;
-using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Persistence;
 
 using Moq;
 
@@ -32,7 +32,7 @@ namespace ConduitLLM.Tests.Core.Services
 
             var expectedId = Guid.NewGuid();
 
-            _mockMediaRepository.Setup(x => x.CreateAsync(It.IsAny<MediaRecord>(), It.IsAny<CancellationToken>()))
+            _mockMediaStore.Setup(x => x.CreateAsync(It.IsAny<MediaRuntimeRecord>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(expectedId);
 
             // Act
@@ -54,7 +54,7 @@ namespace ConduitLLM.Tests.Core.Services
             Assert.Equal(metadata.ExpiresAt, result.ExpiresAt);
             Assert.Equal(0, result.AccessCount);
 
-            _mockMediaRepository.Verify(x => x.CreateAsync(It.Is<MediaRecord>(r =>
+            _mockMediaStore.Verify(x => x.CreateAsync(It.Is<MediaRuntimeRecord>(r =>
                 r.StorageKey == storageKey &&
                 r.VirtualKeyId == virtualKeyId &&
                 r.MediaType == mediaType &&
@@ -81,7 +81,7 @@ namespace ConduitLLM.Tests.Core.Services
 
             var expectedId = Guid.NewGuid();
 
-            _mockMediaRepository.Setup(x => x.CreateAsync(It.IsAny<MediaRecord>(), It.IsAny<CancellationToken>()))
+            _mockMediaStore.Setup(x => x.CreateAsync(It.IsAny<MediaRuntimeRecord>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(expectedId);
 
             // Act

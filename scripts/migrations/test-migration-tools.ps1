@@ -66,7 +66,7 @@ function Test-WrapperNoDatabaseUrl {
         $env:DATABASE_URL = $null
 
         # Run wrapper and expect it to fail gracefully
-        $output = & "$scriptDir/ef-wrapper.ps1" migrations list --no-build 2>&1 | Out-String
+        $output = & "$scriptDir/ef-wrapper.ps1" -Command @('migrations', 'list', '--no-build', '--no-connect') *>&1 | Out-String
 
         if ($output -match 'DATABASE_URL environment variable is not set') {
             Write-TestResult 'PASS' "Wrapper correctly detected missing DATABASE_URL"
@@ -94,7 +94,7 @@ function Test-WrapperInvalidDatabaseUrl {
         $env:DATABASE_URL = 'invalid-connection-string'
 
         # Run wrapper and check for warning
-        $output = & "$scriptDir/ef-wrapper.ps1" migrations list --no-build 2>&1 | Out-String
+        $output = & "$scriptDir/ef-wrapper.ps1" -Command @('migrations', 'list', '--no-build', '--no-connect') *>&1 | Out-String
 
         if ($output -match 'DATABASE_URL format may be invalid') {
             Write-TestResult 'PASS' "Wrapper warned about invalid DATABASE_URL format"
@@ -117,7 +117,7 @@ function Test-WrapperWrongDirectory {
 
     try {
         # Run wrapper from wrong directory
-        $output = & "$scriptDir/ef-wrapper.ps1" migrations list --no-build 2>&1 | Out-String
+        $output = & "$scriptDir/ef-wrapper.ps1" -Command @('migrations', 'list', '--no-build', '--no-connect') *>&1 | Out-String
 
         if ($output -match 'Not in ConduitLLM.Configuration directory') {
             Write-TestResult 'PASS' "Wrapper detected wrong directory"
@@ -138,24 +138,14 @@ function Test-ValidateMigrationsBasic {
 
     try {
         # Run validation script and capture output
-        $output = & "$scriptDir/validate-migrations.ps1" 2>&1 | Out-String
+        $output = & "$scriptDir/validate-migrations.ps1" *>&1 | Out-String
         $exitCode = $LASTEXITCODE
 
-        # Check if it ran (even if it found issues)
-        if ($output -match 'EF Core Migration Validation') {
-            if ($exitCode -eq 0) {
-                Write-TestResult 'PASS' "Validation script completed successfully"
-            } else {
-                # Script ran but found issues - this is still correct behavior
-                if ($output -match 'ERROR:') {
-                    Write-TestResult 'PASS' "Validation script correctly detected migration issues"
-                    Write-Host "  Note: Found migration issues (expected behavior)"
-                } else {
-                    Write-TestResult 'FAIL' "Validation script failed unexpectedly"
-                }
-            }
+        if ($exitCode -eq 0 -and $output -match 'Migration validation completed successfully!') {
+            Write-TestResult 'PASS' "Validation script completed successfully"
         } else {
-            Write-TestResult 'FAIL' "Validation script did not run properly"
+            Write-TestResult 'FAIL' "Validation script failed; prepare EF tooling and inspect the diagnostics"
+            Write-Host $output
         }
     } finally {
         Pop-Location
@@ -227,7 +217,7 @@ function Test-WrapperErrorMessages {
 
     try {
         # Use a read-only EF command. This test suite must never create a migration.
-        $output = & "$scriptDir/ef-wrapper.ps1" migrations list --no-build 2>&1 | Out-String
+        $output = & "$scriptDir/ef-wrapper.ps1" -Command @('migrations', 'list', '--no-build', '--no-connect') *>&1 | Out-String
 
         # Check if wrapper provides helpful context
         if ($output -match 'Validating environment' -and $output -match 'EF Core Command Wrapper') {

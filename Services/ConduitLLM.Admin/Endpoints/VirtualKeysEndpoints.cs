@@ -73,7 +73,7 @@ public partial class VirtualKeysEndpoints : AdminEndpointHandlerBase
                 int id,
                 [FromServices] ConduitLLM.Configuration.Interfaces.IVirtualKeyRepository keyRepository,
                 [FromServices] ConduitLLM.Configuration.Interfaces.IVirtualKeyGroupRepository groupRepository,
-                [FromServices] ConduitLLM.Core.Services.IVirtualKeyRateLimitService? rateLimitService) =>
+                [FromServices] ConduitLLM.Core.Services.IVirtualKeyRateLimitService? rateLimitService = null) =>
                 endpoints.GetRateLimitUsage(id, keyRepository, groupRepository, rateLimitService))
             .WithName("VirtualKeys_GetRateLimitUsage")
             .WithSummary("Get a virtual key's current rate limit usage")

@@ -1,9 +1,12 @@
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Data;
+using ConduitLLM.Configuration.ModelCatalogs;
 using ConduitLLM.Migrator;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Npgsql;
 
@@ -16,6 +19,7 @@ namespace ConduitLLM.Tests.Configuration.Data;
 /// server. CI supplies DATABASE_URL; local runs skip when it is absent.
 /// </summary>
 [Collection("MigrationEnvironment")]
+[Trait("Component", "ReleaseMigration")]
 public sealed class ReleaseMigrationCommandTests
 {
     [SkippableFact]
@@ -65,6 +69,50 @@ public sealed class ReleaseMigrationCommandTests
     }
 
     [SkippableFact]
+    public async Task FailingEfMigration_ReturnsFailureWithoutProvisioningAndCanRetryAfterRepair()
+    {
+        await using var database = await TemporaryDatabase.CreateAsync();
+        using var environment = database.UseAsMigrationTarget();
+        await using var connection = new NpgsqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+
+        // The initial migration creates this table first. A pre-existing table in
+        // this disposable database forces a real PostgreSQL DDL error, rather
+        // than a connection failure before EF attempts any migration.
+        await using (var conflict = new NpgsqlCommand(
+            """
+            CREATE TABLE "CacheConfigurationAudits" ("Conflict" integer)
+            """, connection))
+        {
+            await conflict.ExecuteNonQueryAsync();
+        }
+
+        Assert.Equal(1, await MigrationRunner.RunAsync());
+        Assert.Equal(0, await GetAppliedMigrationCountAsync(database.ConnectionString));
+        var probe = new SchemaVersionProbe(new TestContextFactory(database.ConnectionString));
+        Assert.False((await probe.GetStatusAsync()).IsCurrent);
+        foreach (var schema in new[] { "wolverine_conduit_gateway", "wolverine_conduit_admin", "wolverine_queues" })
+        {
+            Assert.False(await SchemaExistsAsync(database.ConnectionString, schema));
+        }
+
+        await using (var repair = new NpgsqlCommand(
+            """
+            DROP TABLE "CacheConfigurationAudits"
+            """, connection))
+        {
+            await repair.ExecuteNonQueryAsync();
+        }
+
+        Assert.Equal(0, await MigrationRunner.RunAsync());
+        await AssertSchemaCurrentAsync(database.ConnectionString);
+        foreach (var schema in new[] { "wolverine_conduit_gateway", "wolverine_conduit_admin", "wolverine_queues" })
+        {
+            Assert.True(await SchemaExistsAsync(database.ConnectionString, schema));
+        }
+    }
+
+    [SkippableFact]
     public async Task ConcurrentInvocations_AreSerializedAndSucceed()
     {
         await using var database = await TemporaryDatabase.CreateAsync();
@@ -90,6 +138,76 @@ public sealed class ReleaseMigrationCommandTests
         var exitCode = await MigrationRunner.RunAsync();
 
         Assert.Equal(1, exitCode);
+    }
+
+    [SkippableFact]
+    public async Task BundledCatalog_ProductionRetryStrategy_ImportsAndRepeatsIdempotently()
+    {
+        await using var database = await TemporaryDatabase.CreateAsync();
+        await using var context = CreateContext(database.ConnectionString);
+        await context.Database.MigrateAsync();
+        var importer = new BundledModelCatalogImporter(
+            new RetryingCatalogContextFactory(database.ConnectionString),
+            new BundledModelCatalog(), NullLogger<BundledModelCatalogImporter>.Instance);
+
+        var imported = await importer.ImportAsync(onlyWhenIdentifierCatalogIsEmpty: true);
+        Assert.NotNull(imported);
+        Assert.True(imported.Created.Identifiers > 0);
+        Assert.Null(await importer.ImportAsync(onlyWhenIdentifierCatalogIsEmpty: true));
+        var repeated = await importer.ImportAsync(onlyWhenIdentifierCatalogIsEmpty: false);
+        Assert.NotNull(repeated);
+        Assert.Equal(0, repeated.Created.Identifiers);
+        Assert.Equal(imported.Created.Identifiers, repeated.SkippedExistingIdentifiers);
+        Assert.Equal(imported.Created.Identifiers, await context.ModelProviderTypeAssociations.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task BundledCatalog_FailureAfterSave_RetriesWholeTransactionWithFreshContext()
+    {
+        await using var database = await TemporaryDatabase.CreateAsync();
+        await using var context = CreateContext(database.ConnectionString);
+        await context.Database.MigrateAsync();
+        var failure = new FailFirstCatalogSave();
+        var factory = new RetryingCatalogContextFactory(database.ConnectionString, failure);
+        var importer = new BundledModelCatalogImporter(factory,
+            new BundledModelCatalog(), NullLogger<BundledModelCatalogImporter>.Instance);
+
+        var imported = await importer.ImportAsync(onlyWhenIdentifierCatalogIsEmpty: true);
+
+        Assert.NotNull(imported);
+        Assert.Equal(2, failure.Saves);
+        Assert.Equal(3, factory.ContextsCreated); // Strategy plus one context per attempt.
+        Assert.Equal(imported.Created.Identifiers, await context.ModelProviderTypeAssociations.CountAsync());
+        Assert.Equal(imported.Created.Models, await context.Models.CountAsync());
+    }
+
+    private sealed class RetryingCatalogContextFactory(string connectionString, SaveChangesInterceptor? interceptor = null)
+        : IDbContextFactory<ConduitDbContext>
+    {
+        public int ContextsCreated { get; private set; }
+
+        public ConduitDbContext CreateDbContext()
+        {
+            ContextsCreated++;
+            var options = new DbContextOptionsBuilder<ConduitDbContext>()
+                .UseNpgsql(connectionString, postgres => postgres.EnableRetryOnFailure(
+                    maxRetryCount: 2, maxRetryDelay: TimeSpan.Zero, errorCodesToAdd: null));
+            if (interceptor is not null) options.AddInterceptors(interceptor);
+            return new ConduitDbContext(options.Options);
+        }
+    }
+
+    private sealed class FailFirstCatalogSave : SaveChangesInterceptor
+    {
+        public int Saves { get; private set; }
+
+        public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData,
+            int result, CancellationToken cancellationToken = default)
+        {
+            if (++Saves == 1)
+                throw new PostgresException("Injected serialization failure after save", "ERROR", "ERROR", "40001");
+            return ValueTask.FromResult(result);
+        }
     }
 
     private static ConduitDbContext CreateContext(string connectionString)
@@ -153,6 +271,12 @@ public sealed class ReleaseMigrationCommandTests
         public static async Task<TemporaryDatabase> CreateAsync()
         {
             var configured = Environment.GetEnvironmentVariable("DATABASE_URL");
+            if (string.IsNullOrWhiteSpace(configured) &&
+                (Environment.GetEnvironmentVariable("CI") == "true" ||
+                 Environment.GetEnvironmentVariable("CONDUIT_CI_REQUIRED_INFRASTRUCTURE") == "true"))
+            {
+                throw new InvalidOperationException("Required CI migration database DATABASE_URL is missing.");
+            }
             Skip.If(
                 string.IsNullOrWhiteSpace(configured),
                 "DATABASE_URL is required for release migration integration tests.");
@@ -171,14 +295,9 @@ public sealed class ReleaseMigrationCommandTests
             };
 
             await using var connection = new NpgsqlConnection(adminBuilder.ConnectionString);
-            try
-            {
-                await connection.OpenAsync();
-            }
-            catch (Exception ex)
-            {
-                Skip.If(true, $"DATABASE_URL is not reachable: {ex.Message}");
-            }
+            // A configured database is a promise, including in local runs. Never
+            // turn an infrastructure outage into a successful skipped CI gate.
+            await connection.OpenAsync();
 
             await using var command = new NpgsqlCommand(
                 $"CREATE DATABASE \"{databaseName}\"",

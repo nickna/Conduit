@@ -7,7 +7,7 @@ namespace ConduitLLM.Tests.Core.Services
         #region Constructor Tests
 
         [Fact]
-        public void Constructor_WithNullMediaRepository_ShouldThrowArgumentNullException()
+        public void Constructor_WithNullMediaStore_ShouldThrowArgumentNullException()
         {
             // Act & Assert
             Assert.Throws<ArgumentNullException>(() => new MediaLifecycleService(
@@ -20,7 +20,7 @@ namespace ConduitLLM.Tests.Core.Services
         {
             // Act & Assert
             Assert.Throws<ArgumentNullException>(() => new MediaLifecycleService(
-                _mockMediaRepository.Object,
+                _mockMediaStore.Object,
                 null));
         }
 

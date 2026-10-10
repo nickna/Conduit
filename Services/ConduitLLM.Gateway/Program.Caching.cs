@@ -29,7 +29,6 @@ public partial class Program
             }
         });
 
-        builder.Services.AddRedisDataProtection(redisConnectionString, "Conduit");
         builder.Services.AddConduitDistributedLocks();
 
         // Configure Redis connection multiplexer FIRST (shared across all Redis services)
@@ -62,6 +61,9 @@ public partial class Program
             builder.Services.AddDistributedMemoryCache();
         }
 
+        // Data Protection reuses the DI-owned multiplexer registered above.
+        builder.Services.AddRedisDataProtection(redisConnectionString, "Conduit");
+
         // Register Virtual Key service with optional Redis caching
         if (!string.IsNullOrEmpty(redisConnectionString))
         {
@@ -77,8 +79,10 @@ public partial class Program
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IModelCostCache, RedisModelCostCache>();
             builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IProviderToolCache, RedisProviderToolCache>();
 
-            // Register CachedApiVirtualKeyService with event publishing dependency
-            builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyService>(serviceProvider =>
+            // Register one scoped implementation behind separate request-time and
+            // management contracts. Native builds can replace only the runtime
+            // contract without rooting management CRUD in the data plane.
+            builder.Services.AddScoped<CachedApiVirtualKeyService>(serviceProvider =>
             {
                 var virtualKeyRepository = serviceProvider.GetRequiredService<IVirtualKeyRepository>();
                 var spendHistoryRepository = serviceProvider.GetRequiredService<IVirtualKeySpendHistoryRepository>();
@@ -89,51 +93,33 @@ public partial class Program
 
                 return new CachedApiVirtualKeyService(virtualKeyRepository, spendHistoryRepository, groupRepository, cache, eventBus, logger);
             });
+            builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyService>(serviceProvider =>
+                serviceProvider.GetRequiredService<CachedApiVirtualKeyService>());
         }
         else
         {
             // Fall back to direct database Virtual Key service
-            builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyService>(sp =>
+            builder.Services.AddScoped<DirectApiVirtualKeyService>(sp =>
             {
                 var virtualKeyRepository = sp.GetRequiredService<IVirtualKeyRepository>();
                 var groupRepository = sp.GetRequiredService<IVirtualKeyGroupRepository>();
                 var spendHistoryRepository = sp.GetRequiredService<IVirtualKeySpendHistoryRepository>();
                 var eventBus = sp.GetService<ConduitLLM.Configuration.Messaging.IEventBus>(); // Optional
                 var logger = sp.GetRequiredService<ILogger<ConduitLLM.Gateway.Services.DirectApiVirtualKeyService>>();
-                return new ConduitLLM.Gateway.Services.DirectApiVirtualKeyService(
+                return new DirectApiVirtualKeyService(
                     virtualKeyRepository, groupRepository, spendHistoryRepository, eventBus, logger);
             });
+            builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyService>(sp =>
+                sp.GetRequiredService<DirectApiVirtualKeyService>());
         }
 
-        // Register Webhook Delivery Tracker for deduplication and statistics
-        if (!string.IsNullOrEmpty(redisConnectionString))
-        {
-            // Register the Redis tracker as the inner implementation
-            builder.Services.AddSingleton<ConduitLLM.Core.Services.RedisWebhookDeliveryTracker>();
-
-            // Add memory caching
-            builder.Services.AddMemoryCache();
-
-            // Register the cached wrapper as the main interface
-            builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IWebhookDeliveryTracker>(sp =>
-            {
-                var redisTracker = sp.GetRequiredService<ConduitLLM.Core.Services.RedisWebhookDeliveryTracker>();
-                var memoryCache = sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
-                var logger = sp.GetRequiredService<ILogger<ConduitLLM.Core.Services.CachedWebhookDeliveryTracker>>();
-
-                return new ConduitLLM.Core.Services.CachedWebhookDeliveryTracker(redisTracker, memoryCache, logger);
-            });
-        }
-        else
-        {
-            // If no Redis, log warning and use a no-op implementation
-            builder.Services.AddSingleton<ConduitLLM.Core.Interfaces.IWebhookDeliveryTracker>(sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<Program>>();
-                logger.LogWarning("No Redis connection configured. Webhook delivery tracking and deduplication will not be available.");
-                var noOpLogger = sp.GetRequiredService<ILogger<ConduitLLM.Gateway.Services.NoOpWebhookDeliveryTracker>>();
-                return new ConduitLLM.Gateway.Services.NoOpWebhookDeliveryTracker(noOpLogger);
-            });
-        }
+#if CONDUIT_NATIVE_AOT
+        // Native requests use fixed-shape persistence; management keeps its EF contract.
+        builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyRuntimeService,
+            StoreBackedVirtualKeyRuntimeService>();
+#else
+        builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IVirtualKeyRuntimeService>(sp =>
+            sp.GetRequiredService<ConduitLLM.Core.Interfaces.IVirtualKeyService>());
+#endif
     }
 }

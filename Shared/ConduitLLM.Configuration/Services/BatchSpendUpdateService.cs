@@ -10,6 +10,8 @@ using ConduitLLM.Configuration.Options;
 using ConduitLLM.Configuration.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
+using ConduitLLM.Persistence;
+using ConduitLLM.Persistence.Interfaces;
 
 namespace ConduitLLM.Configuration.Services
 {
@@ -24,6 +26,7 @@ namespace ConduitLLM.Configuration.Services
         private readonly RedisConnectionFactory _redisConnectionFactory;
         private readonly IBillingAlertingService _alertingService;
         private readonly IRedisCircuitBreaker? _circuitBreaker;
+        private readonly IVirtualKeyRuntimeStore? _runtimeStore;
         private readonly BatchSpendingOptions _options;
         private readonly Timer _flushTimer;
         private readonly TimeSpan _flushInterval;
@@ -68,7 +71,8 @@ namespace ConduitLLM.Configuration.Services
             IOptions<BatchSpendingOptions> options,
             ILogger<BatchSpendUpdateService> logger,
             IBillingAlertingService alertingService,
-            IRedisCircuitBreaker? circuitBreaker = null)
+            IRedisCircuitBreaker? circuitBreaker = null,
+            IVirtualKeyRuntimeStore? runtimeStore = null)
         {
             _serviceScopeFactory = serviceScopeFactory;
             _redisConnectionFactory = redisConnectionFactory;
@@ -76,6 +80,7 @@ namespace ConduitLLM.Configuration.Services
             _logger = logger;
             _alertingService = alertingService;
             _circuitBreaker = circuitBreaker;
+            _runtimeStore = runtimeStore;
 
             // Validate and apply configuration
             var validationResult = _options.Validate();
@@ -120,16 +125,8 @@ namespace ConduitLLM.Configuration.Services
                     CircuitState.Open);
             }
 
-            // Need to get the group ID for this key
-            using var scope = _serviceScopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<IConfigurationDbContext>();
-
-            var virtualKey = await context.VirtualKeys
-                .Where(vk => vk.Id == virtualKeyId)
-                .Select(vk => new { vk.VirtualKeyGroupId })
-                .FirstOrDefaultAsync();
-
-            if (virtualKey == null)
+            var groupId = await GetGroupIdAsync(virtualKeyId);
+            if (!groupId.HasValue)
             {
                 throw new BillingSystemException(
                     $"Virtual Key {virtualKeyId} was not found while queueing spend",
@@ -142,16 +139,16 @@ namespace ConduitLLM.Configuration.Services
             {
                 await _circuitBreaker.ExecuteAsync(async () =>
                 {
-                    await PerformRedisUpdate(virtualKeyId, virtualKey.VirtualKeyGroupId, cost, GetBillingWindow(billedAtUtc));
+                    await PerformRedisUpdate(virtualKeyId, groupId.Value, cost, GetBillingWindow(billedAtUtc));
                 });
             }
             else
             {
-                await PerformRedisUpdate(virtualKeyId, virtualKey.VirtualKeyGroupId, cost, GetBillingWindow(billedAtUtc));
+                await PerformRedisUpdate(virtualKeyId, groupId.Value, cost, GetBillingWindow(billedAtUtc));
             }
 
             _logger.LogDebug("Queued spend update to Redis for Virtual Key {VirtualKeyId} (Group {GroupId}): {Cost:C}",
-                virtualKeyId, virtualKey.VirtualKeyGroupId, cost);
+                virtualKeyId, groupId.Value, cost);
         }
 
         /// <inheritdoc />
@@ -245,32 +242,24 @@ namespace ConduitLLM.Configuration.Services
                 throw new ArgumentException("A reservation ID is required", nameof(reservationId));
             }
 
-            using var scope = _serviceScopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<IConfigurationDbContext>();
-            var keyAndBalance = await context.VirtualKeys
-                .Where(vk => vk.Id == virtualKeyId)
-                .Select(vk => new
-                {
-                    GroupId = vk.VirtualKeyGroupId,
-                    Balance = vk.VirtualKeyGroup!.Balance
-                })
-                .FirstOrDefaultAsync();
+            var keyAndBalance = await GetKeyAndBalanceAsync(virtualKeyId);
 
             if (keyAndBalance == null)
             {
                 return false;
             }
+            var account = keyAndBalance.Value;
 
             var redis = await _redisConnectionFactory.GetConnectionAsync();
             var db = redis.GetDatabase();
-            var reservationsKey = $"{_reservationPrefix}{keyAndBalance.GroupId}";
-            var reservationExpiryKey = $"{_reservationExpiryPrefix}{keyAndBalance.GroupId}";
-            var reservedTotalKey = $"{_reservedSpendPrefix}{keyAndBalance.GroupId}";
-            var pendingKey = $"{_redisKeyPrefix}{keyAndBalance.GroupId}";
-            var pendingUnitsKey = $"{_redisUnitsKeyPrefix}{keyAndBalance.GroupId}";
-            var windowedPendingTotalUnitsKey = $"{_windowedPendingTotalUnitsPrefix}{keyAndBalance.GroupId}";
-            var startedReservationsKey = $"{_startedReservationPrefix}{keyAndBalance.GroupId}";
-            var settledReservationsKey = $"{_settledReservationPrefix}{keyAndBalance.GroupId}";
+            var reservationsKey = $"{_reservationPrefix}{account.GroupId}";
+            var reservationExpiryKey = $"{_reservationExpiryPrefix}{account.GroupId}";
+            var reservedTotalKey = $"{_reservedSpendPrefix}{account.GroupId}";
+            var pendingKey = $"{_redisKeyPrefix}{account.GroupId}";
+            var pendingUnitsKey = $"{_redisUnitsKeyPrefix}{account.GroupId}";
+            var windowedPendingTotalUnitsKey = $"{_windowedPendingTotalUnitsPrefix}{account.GroupId}";
+            var startedReservationsKey = $"{_startedReservationPrefix}{account.GroupId}";
+            var settledReservationsKey = $"{_settledReservationPrefix}{account.GroupId}";
 
             const string script = """
                 local expired = redis.call('ZRANGEBYSCORE', KEYS[4], '-inf', ARGV[4])
@@ -325,7 +314,7 @@ namespace ConduitLLM.Configuration.Services
                 },
                 new RedisValue[]
                 {
-                    keyAndBalance.Balance.ToString(CultureInfo.InvariantCulture),
+                    account.Balance.ToString(CultureInfo.InvariantCulture),
                     amount.ToString(CultureInfo.InvariantCulture),
                     reservationId,
                     now,
@@ -514,12 +503,46 @@ namespace ConduitLLM.Configuration.Services
 
         private async Task<int?> GetGroupIdAsync(int virtualKeyId)
         {
+            if (_runtimeStore is not null)
+            {
+                return (await _runtimeStore.GetByIdAsync(virtualKeyId))?.VirtualKeyGroupId;
+            }
+
+#if CONDUIT_NATIVE_AOT
+            throw new InvalidOperationException(
+                "NativeAOT batch spending requires IVirtualKeyRuntimeStore.");
+#else
             using var scope = _serviceScopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<IConfigurationDbContext>();
             return await context.VirtualKeys
                 .Where(vk => vk.Id == virtualKeyId)
                 .Select(vk => (int?)vk.VirtualKeyGroupId)
                 .FirstOrDefaultAsync();
+#endif
+        }
+
+        private async Task<(int GroupId, decimal Balance)?> GetKeyAndBalanceAsync(int virtualKeyId)
+        {
+            if (_runtimeStore is not null)
+            {
+                var key = await _runtimeStore.GetByIdAsync(virtualKeyId);
+                return key is null ? null : (key.VirtualKeyGroupId, key.Group.Balance);
+            }
+
+#if CONDUIT_NATIVE_AOT
+            throw new InvalidOperationException(
+                "NativeAOT batch spending requires IVirtualKeyRuntimeStore.");
+#else
+            using var scope = _serviceScopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<IConfigurationDbContext>();
+            var keyAndBalance = await context.VirtualKeys
+                .Where(key => key.Id == virtualKeyId)
+                .Select(key => new { key.VirtualKeyGroupId, key.VirtualKeyGroup!.Balance })
+                .FirstOrDefaultAsync();
+            return keyAndBalance is null
+                ? null
+                : (keyAndBalance.VirtualKeyGroupId, keyAndBalance.Balance);
+#endif
         }
 
         private static decimal ParseRedisDecimal(RedisValue value)
@@ -570,10 +593,6 @@ namespace ConduitLLM.Configuration.Services
 
             _logger.LogDebug("Flushing {PendingCount} durable spend claims from Redis", claims.Count);
 
-            using var scope = _serviceScopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<IConfigurationDbContext>();
-            var groupRepository = scope.ServiceProvider.GetRequiredService<IVirtualKeyGroupRepository>();
-
             // Process each group
             var updatedKeyHashes = new List<string>();
             var flushStopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -589,14 +608,7 @@ namespace ConduitLLM.Configuration.Services
                 // the debit. If the process dies after the DB commit but before deleting
                 // the Redis claim, recovery observes Applied=false and only acknowledges
                 // the already-recorded claim.
-                var result = claim.BillingWindowStartUtc.HasValue
-                    ? await groupRepository.AdjustBalanceIdempotentAsync(
-                        claim.GroupId, -claim.TotalCost, $"batch-spend:{claim.ClaimId}",
-                        description, "System", ReferenceType.System, claim.ClaimId,
-                        claim.BillingWindowStartUtc.Value)
-                    : await groupRepository.AdjustBalanceIdempotentAsync(
-                        claim.GroupId, -claim.TotalCost, $"batch-spend:{claim.ClaimId}",
-                        description, "System", ReferenceType.System, claim.ClaimId);
+                var result = await ApplyClaimAsync(claim, description);
 
                 // Acknowledge only after the database commit (or idempotent duplicate
                 // confirmation). Until this delete succeeds, the claim remains durable
@@ -613,14 +625,7 @@ namespace ConduitLLM.Configuration.Services
                 // because AdjustBalanceIdempotentAsync already creates one with the correct balance.
                 // The individual key usage tracking is already handled in the description.
 
-                // Get keys in this group for cache invalidation
-                var groupKeys = await context.VirtualKeys
-                    .AsNoTracking()
-                    .Where(vk => vk.VirtualKeyGroupId == claim.GroupId)
-                    .Select(vk => new { vk.Id, vk.KeyHash })
-                    .ToListAsync();
-
-                updatedKeyHashes.AddRange(groupKeys.Select(k => k.KeyHash));
+                updatedKeyHashes.AddRange(await GetKeyHashesByGroupIdAsync(claim.GroupId));
             }
 
             flushStopwatch.Stop();
@@ -634,22 +639,10 @@ namespace ConduitLLM.Configuration.Services
             {
                 try
                 {
-                    var fallbackKey = await context.VirtualKeys
-                        .Where(vk => vk.Id == fallbackItem.VirtualKeyId)
-                        .Select(vk => new { vk.VirtualKeyGroupId, vk.KeyHash })
-                        .FirstOrDefaultAsync();
-
-                    if (fallbackKey != null)
+                    var fallbackKeyHash = await ApplyFallbackAsync(fallbackItem);
+                    if (fallbackKeyHash is not null)
                     {
-                        await groupRepository.AdjustBalanceAsync(
-                            fallbackKey.VirtualKeyGroupId,
-                            -fallbackItem.Cost,
-                            $"API usage by virtual key #{fallbackItem.VirtualKeyId} (recovered from fallback queue)",
-                            "System",
-                            ReferenceType.System,
-                            fallbackItem.VirtualKeyId.ToString(CultureInfo.InvariantCulture),
-                            fallbackItem.BillingWindowStartUtc);
-                        updatedKeyHashes.Add(fallbackKey.KeyHash);
+                        updatedKeyHashes.Add(fallbackKeyHash);
                         fallbackCount++;
                     }
                     else
@@ -690,6 +683,117 @@ namespace ConduitLLM.Configuration.Services
             }
 
             return processedCount;
+        }
+
+        private async Task<VirtualKeyBalanceAdjustmentResult> ApplyClaimAsync(
+            SpendClaim claim,
+            string description)
+        {
+            var idempotencyKey = $"batch-spend:{claim.ClaimId}";
+            if (_runtimeStore is not null)
+            {
+                return await _runtimeStore.AdjustBalanceAsync(new VirtualKeyBalanceAdjustment(
+                    claim.GroupId,
+                    -claim.TotalCost,
+                    description,
+                    "System",
+                    VirtualKeyBalanceReferenceType.System,
+                    claim.ClaimId,
+                    idempotencyKey,
+                    claim.BillingWindowStartUtc));
+            }
+
+#if CONDUIT_NATIVE_AOT
+            throw new InvalidOperationException(
+                "NativeAOT batch spending requires IVirtualKeyRuntimeStore.");
+#else
+            using var scope = _serviceScopeFactory.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IVirtualKeyGroupRepository>();
+            var result = claim.BillingWindowStartUtc.HasValue
+                ? await repository.AdjustBalanceIdempotentAsync(
+                    claim.GroupId, -claim.TotalCost, idempotencyKey,
+                    description, "System", ReferenceType.System, claim.ClaimId,
+                    claim.BillingWindowStartUtc.Value)
+                : await repository.AdjustBalanceIdempotentAsync(
+                    claim.GroupId, -claim.TotalCost, idempotencyKey,
+                    description, "System", ReferenceType.System, claim.ClaimId);
+            return new VirtualKeyBalanceAdjustmentResult(
+                result.NewBalance,
+                result.LifetimeSpent,
+                result.Applied);
+#endif
+        }
+
+        private async Task<IReadOnlyList<string>> GetKeyHashesByGroupIdAsync(int groupId)
+        {
+            if (_runtimeStore is not null)
+            {
+                return await _runtimeStore.GetKeyHashesByGroupIdAsync(groupId);
+            }
+
+#if CONDUIT_NATIVE_AOT
+            throw new InvalidOperationException(
+                "NativeAOT batch spending requires IVirtualKeyRuntimeStore.");
+#else
+            using var scope = _serviceScopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<IConfigurationDbContext>();
+            return await context.VirtualKeys
+                .AsNoTracking()
+                .Where(key => key.VirtualKeyGroupId == groupId)
+                .OrderBy(key => key.Id)
+                .Select(key => key.KeyHash)
+                .ToListAsync();
+#endif
+        }
+
+        private async Task<string?> ApplyFallbackAsync(
+            (int VirtualKeyId, decimal Cost, DateTime BillingWindowStartUtc) fallback)
+        {
+            if (_runtimeStore is not null)
+            {
+                var key = await _runtimeStore.GetByIdAsync(fallback.VirtualKeyId);
+                if (key is null)
+                {
+                    return null;
+                }
+
+                await _runtimeStore.AdjustBalanceAsync(new VirtualKeyBalanceAdjustment(
+                    key.VirtualKeyGroupId,
+                    -fallback.Cost,
+                    $"API usage by virtual key #{fallback.VirtualKeyId} (recovered from fallback queue)",
+                    "System",
+                    VirtualKeyBalanceReferenceType.System,
+                    fallback.VirtualKeyId.ToString(CultureInfo.InvariantCulture),
+                    BillingWindowStartUtc: fallback.BillingWindowStartUtc));
+                return key.KeyHash;
+            }
+
+#if CONDUIT_NATIVE_AOT
+            throw new InvalidOperationException(
+                "NativeAOT batch spending requires IVirtualKeyRuntimeStore.");
+#else
+            using var scope = _serviceScopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<IConfigurationDbContext>();
+            var repository = scope.ServiceProvider.GetRequiredService<IVirtualKeyGroupRepository>();
+            var keyRecord = await context.VirtualKeys
+                .Where(key => key.Id == fallback.VirtualKeyId)
+                .Select(key => new { key.VirtualKeyGroupId, key.KeyHash })
+                .FirstOrDefaultAsync();
+            if (keyRecord is null)
+            {
+                return null;
+            }
+
+            await repository.AdjustBalanceAsync(
+                keyRecord.VirtualKeyGroupId,
+                -fallback.Cost,
+                $"API usage by virtual key #{fallback.VirtualKeyId} (recovered from fallback queue)",
+                "System",
+                ReferenceType.System,
+                fallback.VirtualKeyId.ToString(CultureInfo.InvariantCulture),
+                fallback.BillingWindowStartUtc);
+            return keyRecord.KeyHash;
+#endif
         }
 
         private async Task<List<SpendClaim>> ClaimPendingSpendAsync(IServer server, IDatabase db)

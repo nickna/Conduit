@@ -438,9 +438,22 @@ namespace ConduitLLM.Tests.Services.Orchestrators
                 EventBusMock.Verify(x => x.PublishAsync(
                     It.Is<WebhookDeliveryRequested>(w => 
                         w.TaskId == GetRequestId(request) &&
-                        w.WebhookUrl == webhookUrl),
+                        w.WebhookUrl == webhookUrl &&
+                        w.Headers != null && w.Headers["Authorization"] == "Bearer callback-test"),
                     It.IsAny<CancellationToken>()), Times.Once);
             }
+        }
+
+        [Fact]
+        public async Task HandleAsync_TerminalCommitError_DoesNotManufactureFailedOutcome()
+        {
+            var request = CreateTestEventRequest();
+            SetupSuccessfulGeneration(CreateTestResponse());
+            EventBusMock.Setup(bus => bus.PublishAsync(It.IsAny<WebhookDeliveryRequested>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new IOException("Commit outcome may be unknown"));
+            await Assert.ThrowsAsync<IOException>(() => Orchestrator.HandleAsync(request, CreateEventContext()));
+            TaskServiceMock.Verify(service => service.UpdateTaskStatusAsync(GetRequestId(request), TaskState.Failed,
+                It.IsAny<int?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Fact]

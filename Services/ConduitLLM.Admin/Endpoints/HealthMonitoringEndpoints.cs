@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Interfaces;
@@ -272,6 +273,10 @@ namespace ConduitLLM.Admin.Endpoints
         /// <c>date_trunc</c> over a <c>timestamptz</c> column and resolve in the server's
         /// <c>timezone</c> setting instead of UTC.
         /// </summary>
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         internal static IQueryable<ErrorSpikeRow> QueryErrorSpikes(
             IQueryable<RequestLog> requestLogs,
             DateTime windowStart) =>
@@ -357,6 +362,10 @@ namespace ConduitLLM.Admin.Endpoints
         /// are an epoch offset from <paramref name="startTime"/> for the same timezone-safety reason
         /// as <see cref="QueryErrorSpikes"/>. Intervals with no traffic produce no row.
         /// </summary>
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         internal static IQueryable<HealthIntervalRow> QueryHealthIntervals(
             IQueryable<RequestLog> requestLogs,
             DateTime startTime,

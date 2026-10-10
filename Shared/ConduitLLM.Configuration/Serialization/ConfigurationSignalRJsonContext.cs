@@ -11,6 +11,9 @@ namespace ConduitLLM.Configuration.Serialization;
     GenerationMode = JsonSourceGenerationMode.Metadata,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(TaskSubscriptionNotification))]
+[JsonSerializable(typeof(HubErrorNotification))]
 [JsonSerializable(typeof(WebhookDeliveryAttempt))]
 [JsonSerializable(typeof(WebhookDeliverySuccess))]
 [JsonSerializable(typeof(WebhookDeliveryFailure))]

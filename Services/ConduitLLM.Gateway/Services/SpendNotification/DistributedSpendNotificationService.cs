@@ -1,11 +1,9 @@
-using ConduitLLM.Core.Extensions;
 using Microsoft.AspNetCore.SignalR;
-using StackExchange.Redis;
 using ConduitLLM.Configuration.DTOs.SignalR;
-using ConduitLLM.Configuration.Services;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Gateway.Hubs;
 using ConduitLLM.Gateway.Serialization;
+using StackExchange.Redis;
 
 namespace ConduitLLM.Gateway.Services.SpendNotification
 {
@@ -15,13 +13,11 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
     public class DistributedSpendNotificationService : ISpendNotificationService, IHostedService, IDisposable
     {
         private readonly IHubContext<SpendNotificationHub> _hubContext;
-        private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly ILogger<DistributedSpendNotificationService> _logger;
-        private readonly RedisConnectionFactory _redisConnectionFactory;
 
-        private ISpendDataRepository? _repository;
-        private IBudgetAlertManager? _budgetAlertManager;
-        private ISpendPatternAnalyzer? _patternAnalyzer;
+        private readonly ISpendDataRepository _repository;
+        private readonly IBudgetAlertManager _budgetAlertManager;
+        private readonly ISpendPatternAnalyzer _patternAnalyzer;
 
         private Timer? _patternAnalysisTimer;
         private readonly TimeSpan _analysisInterval = TimeSpan.FromMinutes(5);
@@ -30,21 +26,23 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
 
         public DistributedSpendNotificationService(
             IHubContext<SpendNotificationHub> hubContext,
-            IServiceScopeFactory serviceScopeFactory,
             ILogger<DistributedSpendNotificationService> logger,
-            RedisConnectionFactory redisConnectionFactory)
+            ISpendDataRepository repository,
+            IBudgetAlertManager budgetAlertManager,
+            ISpendPatternAnalyzer patternAnalyzer)
         {
             _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
-            _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _redisConnectionFactory = redisConnectionFactory ?? throw new ArgumentNullException(nameof(redisConnectionFactory));
+            _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+            _budgetAlertManager = budgetAlertManager ?? throw new ArgumentNullException(nameof(budgetAlertManager));
+            _patternAnalyzer = patternAnalyzer ?? throw new ArgumentNullException(nameof(patternAnalyzer));
 
             InstanceId = GenerateInstanceId();
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            await InitializeServicesAsync();
+            await RegisterInstanceAsync();
 
             _patternAnalysisTimer = new Timer(
                 async _ => await AnalyzeSpendingPatternsAsync(),
@@ -63,9 +61,17 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             _patternAnalysisTimer?.Change(Timeout.Infinite, 0);
             _patternAnalysisTimer?.Dispose();
 
-            if (_repository != null)
+            try
             {
                 await _repository.UnregisterInstanceAsync(InstanceId);
+            }
+            catch (RedisException ex)
+            {
+                _logger.LogWarning(ex, "Failed to unregister spend notification instance; shutdown will continue");
+            }
+            catch (TimeoutException ex)
+            {
+                _logger.LogWarning(ex, "Timed out unregistering spend notification instance; shutdown will continue");
             }
         }
 
@@ -79,14 +85,10 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
         {
             try
             {
-                // Record spend if repository is available
-                if (_repository != null)
-                {
-                    await _repository.RecordSpendingPatternAsync(virtualKeyId, amount, totalSpend);
-                }
+                await _repository.RecordSpendingPatternAsync(virtualKeyId, amount, totalSpend);
 
                 // Check budget thresholds if applicable
-                if (budget.HasValue && budget.Value > 0 && _budgetAlertManager != null)
+                if (budget.HasValue && budget.Value > 0)
                 {
                     var budgetPercentage = (totalSpend / budget.Value) * 100;
                     await _budgetAlertManager.CheckBudgetThresholdsAsync(
@@ -98,10 +100,7 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                     virtualKeyId, amount, totalSpend, budget, model, provider);
 
                 // Check for unusual spending patterns
-                if (_patternAnalyzer != null)
-                {
-                    await _patternAnalyzer.CheckUnusualSpendingAsync(virtualKeyId);
-                }
+                await _patternAnalyzer.CheckUnusualSpendingAsync(virtualKeyId);
             }
             catch (Exception ex)
             {
@@ -143,65 +142,14 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
         public void RecordSpend(int virtualKeyId, decimal amount)
         {
             // Fire and forget to avoid blocking
-            if (_repository != null)
-            {
-                _ = _repository.RecordSpendingPatternAsync(virtualKeyId, amount, amount);
-            }
+            _ = _repository.RecordSpendingPatternAsync(virtualKeyId, amount, amount);
         }
 
         /// <summary>
         /// Public method to check for unusual spending patterns
         /// </summary>
-        public async Task CheckUnusualSpendingAsync(int virtualKeyId)
-        {
-            if (_patternAnalyzer != null)
-            {
-                await _patternAnalyzer.CheckUnusualSpendingAsync(virtualKeyId);
-            }
-        }
-
-        private async Task InitializeServicesAsync()
-        {
-            try
-            {
-                var connection = await _redisConnectionFactory.GetConnectionAsync();
-                var database = connection.GetDatabase();
-
-                // Create repositories and services
-                using var scope = _serviceScopeFactory.CreateScope();
-                var serviceProvider = scope.ServiceProvider;
-
-                // Initialize repository
-                _repository = new SpendDataRepository(
-                    database,
-                    serviceProvider.GetRequiredService<ILogger<SpendDataRepository>>());
-
-                // Initialize budget alert manager
-                var lockService = serviceProvider.GetRequiredService<IDistributedLockProvider>();
-                _budgetAlertManager = new BudgetAlertManager(
-                    _hubContext,
-                    _repository,
-                    lockService,
-                    serviceProvider.GetRequiredService<ILogger<BudgetAlertManager>>(),
-                    serviceProvider.GetService<IHostApplicationLifetime>());
-
-                // Initialize pattern analyzer
-                _patternAnalyzer = new SpendPatternAnalyzer(
-                    _hubContext,
-                    _repository,
-                    serviceProvider.GetRequiredService<ILogger<SpendPatternAnalyzer>>());
-
-                // Register instance
-                await RegisterInstanceAsync();
-
-                _logger.LogInformation("Distributed spend notification services initialized with Redis backend");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to initialize Redis-based services, running in degraded mode");
-                // Service will continue without Redis features
-            }
-        }
+        public Task CheckUnusualSpendingAsync(int virtualKeyId) =>
+            _patternAnalyzer.CheckUnusualSpendingAsync(virtualKeyId);
 
         private async Task SendSpendUpdateNotificationAsync(
             int virtualKeyId, decimal amount, decimal totalSpend, decimal? budget, string? model, string? provider)
@@ -228,22 +176,19 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
 
         private async Task AnalyzeSpendingPatternsAsync()
         {
-            if (_patternAnalyzer != null)
+            try
             {
-                try
-                {
-                    await _patternAnalyzer.AnalyzeAllPatternsAsync();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error in periodic pattern analysis");
-                }
+                await _patternAnalyzer.AnalyzeAllPatternsAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in periodic pattern analysis");
             }
         }
 
         private async Task RegisterInstanceAsync()
         {
-            if (_repository != null)
+            try
             {
                 var now = DateTime.UtcNow;
                 var instanceData = new SpendNotificationInstanceData(
@@ -255,6 +200,22 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
 
                 await _repository.RegisterInstanceAsync(InstanceId, instanceData);
                 _logger.LogInformation("Registered spend notification instance: {InstanceId}", InstanceId);
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancellation is expected during shutdown/startup race conditions.
+            }
+            catch (TimeoutException ex)
+            {
+                _logger.LogWarning(ex, "Timed out registering spend notification instance; notification processing will continue");
+            }
+            catch (RedisException ex)
+            {
+                _logger.LogWarning(ex, "Failed to register spend notification instance; notification processing will continue");
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Failed to register spend notification instance due to invalid operation; notification processing will continue");
             }
         }
 

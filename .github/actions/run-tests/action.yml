@@ -1,0 +1,54 @@
+name: Required test evidence
+description: Run a required suite, fail empty/skip discovery, and retain results even on failure.
+inputs:
+  project:
+    description: Test project
+    required: true
+  suite:
+    description: Unique artifact and suite identifier
+    required: true
+  filter:
+    description: VSTest trait selector
+    default: ''
+  configuration:
+    description: Build configuration
+    default: Release
+  no-build:
+    description: Reuse a matching existing build
+    default: 'false'
+  coverage:
+    description: Collect configured coverage
+    default: 'false'
+  minimum:
+    description: Minimum executed test count
+    default: '1'
+  maximum-skips:
+    description: Explicit intentional skip budget
+    default: '0'
+runs:
+  using: composite
+  steps:
+    - name: Execute and verify suite
+      shell: pwsh
+      run: >-
+        ./scripts/ci/run-tests.ps1 -Project $env:TEST_PROJECT -Suite $env:TEST_SUITE
+        -Filter $env:TEST_FILTER -Configuration $env:TEST_CONFIGURATION
+        -NoBuild:([bool]::Parse($env:TEST_NO_BUILD)) -Coverage:([bool]::Parse($env:TEST_COVERAGE))
+        -Minimum ([int]$env:TEST_MINIMUM) -MaximumSkips ([int]$env:TEST_MAXIMUM_SKIPS)
+      env:
+        TEST_PROJECT: ${{ inputs.project }}
+        TEST_SUITE: ${{ inputs.suite }}
+        TEST_FILTER: ${{ inputs.filter }}
+        TEST_CONFIGURATION: ${{ inputs.configuration }}
+        TEST_NO_BUILD: ${{ inputs.no-build }}
+        TEST_COVERAGE: ${{ inputs.coverage }}
+        TEST_MINIMUM: ${{ inputs.minimum }}
+        TEST_MAXIMUM_SKIPS: ${{ inputs.maximum-skips }}
+    - name: Retain suite diagnostics
+      if: ${{ always() }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: tests-${{ inputs.suite }}
+        path: artifacts/tests/${{ inputs.suite }}
+        retention-days: 30
+        if-no-files-found: error

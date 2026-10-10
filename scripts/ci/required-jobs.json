@@ -1,0 +1,18 @@
+[
+  "source-ignore-guard",
+  "media-dispatch-integration",
+  "billing-fault-injection",
+  "billing-invariants",
+  "signalr-integration",
+  "aot-analyzers",
+  "validate",
+  "wolverine-two-host",
+  "docker",
+  "migrations",
+  "distributed-lock",
+  "codeql",
+  "s3-storage",
+  "contracts",
+  "webadmin",
+  "dependencies"
+]

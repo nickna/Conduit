@@ -1,6 +1,7 @@
 using ConduitLLM.Configuration.Entities;
-using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Persistence;
+using ConduitLLM.Persistence.Interfaces;
 
 using Microsoft.Extensions.Logging;
 
@@ -11,7 +12,7 @@ namespace ConduitLLM.Core.Services
     /// </summary>
     public class MediaLifecycleService : IMediaLifecycleService
     {
-        private readonly IMediaRecordRepository _mediaRepository;
+        private readonly IMediaRuntimeStore _mediaStore;
         private readonly IMediaQuotaService? _mediaQuotaService;
         private readonly ILogger<MediaLifecycleService> _logger;
         private const int VirtualKeyStatsLimit = 100;
@@ -19,15 +20,15 @@ namespace ConduitLLM.Core.Services
         /// <summary>
         /// Initializes a new instance of the MediaLifecycleService class.
         /// </summary>
-        /// <param name="mediaRepository">The media record repository.</param>
+        /// <param name="mediaStore">The media runtime store.</param>
         /// <param name="logger">The logger instance.</param>
         /// <param name="mediaQuotaService">Optional group quota reporting service.</param>
         public MediaLifecycleService(
-            IMediaRecordRepository mediaRepository,
+            IMediaRuntimeStore mediaStore,
             ILogger<MediaLifecycleService> logger,
             IMediaQuotaService? mediaQuotaService = null)
         {
-            _mediaRepository = mediaRepository ?? throw new ArgumentNullException(nameof(mediaRepository));
+            _mediaStore = mediaStore ?? throw new ArgumentNullException(nameof(mediaStore));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _mediaQuotaService = mediaQuotaService;
         }
@@ -48,7 +49,7 @@ namespace ConduitLLM.Core.Services
             if (string.IsNullOrWhiteSpace(mediaType))
                 throw new ArgumentException("Media type cannot be empty", nameof(mediaType));
 
-            var mediaRecord = new MediaRecord
+            var mediaRecord = new MediaRuntimeRecord
             {
                 Id = Guid.NewGuid(),
                 StorageKey = storageKey,
@@ -67,13 +68,13 @@ namespace ConduitLLM.Core.Services
                 AccessCount = 0
             };
 
-            await _mediaRepository.CreateAsync(mediaRecord);
+            await _mediaStore.CreateAsync(mediaRecord);
 
             _logger.LogInformation(
                 "Tracked media {StorageKey} of type {MediaType} for virtual key {VirtualKeyId}",
                 storageKey, mediaType, virtualKeyId);
 
-            return mediaRecord;
+            return ToEntity(mediaRecord);
         }
 
         /// <inheritdoc/>
@@ -84,11 +85,11 @@ namespace ConduitLLM.Core.Services
 
             try
             {
-                var mediaRecord = await _mediaRepository.GetByStorageKeyAsync(storageKey);
+                var mediaRecord = await _mediaStore.GetByStorageKeyAsync(storageKey);
                 if (mediaRecord == null)
                     return false;
 
-                return await _mediaRepository.UpdateAccessStatsAsync(mediaRecord.Id);
+                return await _mediaStore.UpdateAccessStatsAsync(mediaRecord.Id);
             }
             catch (Exception ex)
             {
@@ -100,7 +101,7 @@ namespace ConduitLLM.Core.Services
         /// <inheritdoc/>
         public async Task<MediaStorageStats> GetStorageStatsByVirtualKeyAsync(int virtualKeyId)
         {
-            var mediaRecords = await _mediaRepository.GetByVirtualKeyIdAsync(virtualKeyId);
+            var mediaRecords = await _mediaStore.GetByVirtualKeyIdAsync(virtualKeyId);
 
             var stats = new MediaStorageStats
             {
@@ -126,7 +127,7 @@ namespace ConduitLLM.Core.Services
         /// <inheritdoc/>
         public async Task<OverallMediaStorageStats> GetOverallStorageStatsAsync(int? virtualKeyGroupId = null)
         {
-            var aggregate = await _mediaRepository.GetAggregateStorageStatsAsync(
+            var aggregate = await _mediaStore.GetAggregateStorageStatsAsync(
                 virtualKeyGroupId,
                 VirtualKeyStatsLimit);
             return new OverallMediaStorageStats
@@ -154,8 +155,31 @@ namespace ConduitLLM.Core.Services
         /// <inheritdoc/>
         public async Task<List<MediaRecord>> GetMediaByVirtualKeyAsync(int virtualKeyId)
         {
-            return await _mediaRepository.GetByVirtualKeyIdAsync(virtualKeyId);
+            return (await _mediaStore.GetByVirtualKeyIdAsync(virtualKeyId))
+                .Select(ToEntity)
+                .ToList();
         }
+
+        private static MediaRecord ToEntity(MediaRuntimeRecord media) => new()
+        {
+            Id = media.Id,
+            StorageKey = media.StorageKey,
+            VirtualKeyId = media.VirtualKeyId,
+            MediaType = media.MediaType,
+            ContentType = media.ContentType,
+            SizeBytes = media.SizeBytes,
+            ContentHash = media.ContentHash,
+            Provider = media.Provider,
+            Model = media.Model,
+            Prompt = media.Prompt,
+            StorageUrl = media.StorageUrl,
+            PublicUrl = media.PublicUrl,
+            ExpiresAt = media.ExpiresAt,
+            CreatedAt = media.CreatedAt,
+            LastAccessedAt = media.LastAccessedAt,
+            AccessCount = media.AccessCount,
+            DeletedAt = media.DeletedAt
+        };
     }
 
 }
