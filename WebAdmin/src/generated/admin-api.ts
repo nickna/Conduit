@@ -3721,11 +3721,8 @@ export interface components {
     };
     /** @description Data transfer object for creating a new AI model in the system. */
     CreateModelDto: {
-      /**
-       * @description Gets or sets the canonical name of the model to create.
-       *     The canonical model name.
-       * @example gpt-4-turbo
-       */
+      /** @description Gets or sets the canonical name of the model to create.
+       *     The canonical model name. */
       name?: string;
       /**
        * Format: int32
@@ -5608,11 +5605,8 @@ export interface components {
     };
     /** @description Extended model DTO that includes the provider-specific identifier for the model. */
     ModelWithProviderIdDto: {
-      /**
-       * @description Gets or sets the provider-specific identifier for this model.
-       *     The provider-specific model identifier.
-       * @example gpt-4-0613
-       */
+      /** @description Gets or sets the provider-specific identifier for this model.
+       *     The provider-specific model identifier. */
       providerModelId?: string;
       /**
        * Format: int32
