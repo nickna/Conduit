@@ -2,6 +2,7 @@ using ConduitLLM.Core.Models;
 using ConduitLLM.Core.OpenApi;
 
 using Microsoft.AspNetCore.OpenApi;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.OpenApi;
 
 namespace ConduitLLM.Gateway.OpenApi;
@@ -55,7 +56,33 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
         if (operation.OperationId == "Audio_CreateTranscription" &&
             operation.RequestBody?.Content?["multipart/form-data"].Schema is OpenApiSchema transcriptionSchema)
         {
-            transcriptionSchema.Properties ??= new Dictionary<string, IOpenApiSchema>();
+            // ASP.NET can emit unnamed primitive allOf branches for repeated string form
+            // parameters. Describe each named form value from endpoint metadata instead,
+            // retaining generated constraints for fields that already have object branches.
+            var properties = new Dictionary<string, IOpenApiSchema>();
+            foreach (var branch in transcriptionSchema.AllOf ?? [])
+            {
+                foreach (var property in branch.Properties ?? new Dictionary<string, IOpenApiSchema>())
+                    properties[property.Key] = property.Value;
+            }
+            foreach (var property in transcriptionSchema.Properties ?? new Dictionary<string, IOpenApiSchema>())
+                properties[property.Key] = property.Value;
+
+            var required = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var parameter in context.Description.ParameterDescriptions.Where(parameter =>
+                parameter.Source == BindingSource.Form || parameter.Source == BindingSource.FormFile))
+            {
+                if (!properties.ContainsKey(parameter.Name))
+                    properties[parameter.Name] = await context.GetOrCreateSchemaAsync(
+                        parameter.Type, parameter, cancellationToken);
+                if (parameter.IsRequired)
+                    required.Add(parameter.Name);
+            }
+
+            transcriptionSchema.Type = JsonSchemaType.Object;
+            transcriptionSchema.AllOf = null;
+            transcriptionSchema.Properties = properties;
+            transcriptionSchema.Required = required;
             foreach (var propertyName in new[]
             {
                 "include",

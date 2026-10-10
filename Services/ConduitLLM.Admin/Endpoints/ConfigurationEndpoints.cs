@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 using ConduitLLM.Admin.DTOs;
@@ -45,6 +46,10 @@ public static class ConfigurationEndpoints
         return app;
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
     private static async Task<IResult> GetRoutingConfig(
         [FromServices] IDbContextFactory<ConduitDbContext> dbContextFactory,
         [FromServices] IConfiguration configuration,
@@ -218,6 +223,10 @@ public static class ConfigurationEndpoints
         IsEnabled = policy.IsEnabled
     };
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
     private static async Task<List<LoadBalancerEndpointDto>> GetProviderEndpoints(
         ConduitDbContext dbContext,
         CancellationToken cancellationToken)
@@ -243,6 +252,10 @@ public static class ConfigurationEndpoints
         }).ToList();
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
     private static async Task<RoutingStatisticsDto> GetRoutingStatistics(
         ConduitDbContext dbContext,
         CancellationToken cancellationToken)

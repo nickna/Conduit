@@ -1,5 +1,7 @@
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
+using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Configuration.Repositories;
 using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
@@ -24,7 +26,7 @@ public sealed class MediaQuotaServiceTests : IDisposable
     {
         _context = _database.CreateContext();
         _service = new MediaQuotaService(
-            _context,
+            new EfMediaRuntimeStore(Mock.Of<IMediaRecordRepository>(), _context),
             NullLogger<MediaQuotaService>.Instance);
     }
 

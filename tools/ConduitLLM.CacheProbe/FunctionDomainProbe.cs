@@ -64,11 +64,7 @@ internal static class FunctionDomainProbe
         public Task<int> CreateAsync(GlobalSetting entity, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> UpdateAsync(GlobalSetting entity, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<(List<GlobalSetting> Items, int TotalCount)> GetPaginatedAsync(int page, int pageSize, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<int> CountAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<List<GlobalSetting>> GetAllUnboundedAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<List<GlobalSetting>> GetAllAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<GlobalSetting>> ListAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> UpsertAsync(string key, string value, string? description = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> DeleteByKeyAsync(string key, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }

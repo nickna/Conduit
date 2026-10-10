@@ -214,7 +214,7 @@ public sealed class ChatEndpointErrorStatusTests
             services.AddSingleton(Mock.Of<IEventBus>());
             services.AddSingleton(Mock.Of<IGlobalSettingsCacheService>());
             services.AddSingleton(Mock.Of<IUsageEstimationService>());
-            services.AddSingleton(virtualKeyService.Object);
+            services.AddSingleton<IVirtualKeyRuntimeService>(virtualKeyService.Object);
             services.AddScoped<Conduit>();
         });
     }

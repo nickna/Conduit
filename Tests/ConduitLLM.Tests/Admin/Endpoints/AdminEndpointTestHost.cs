@@ -29,9 +29,15 @@ internal sealed class AdminEndpointTestHost : IDisposable
     public static AdminEndpointTestHost Create(
         Action<IServiceCollection> configureServices,
         Action<IEndpointRouteBuilder> mapEndpoints,
-        IDisposable? ownedResource = null)
+        IDisposable? ownedResource = null,
+        bool validateServiceProvider = false)
     {
         var host = new HostBuilder()
+            .UseDefaultServiceProvider(options =>
+            {
+                options.ValidateOnBuild = validateServiceProvider;
+                options.ValidateScopes = validateServiceProvider;
+            })
             .ConfigureWebHost(webHost =>
             {
                 webHost.UseTestServer();

@@ -1,0 +1,54 @@
+{
+  "actions/checkout": {
+    "version": "v7.0.1",
+    "revision": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+  },
+  "actions/setup-dotnet": {
+    "version": "v6.0.0",
+    "revision": "a98b56852c35b8e3190ac28c8c2271da59106c68"
+  },
+  "actions/setup-node": {
+    "version": "v7.0.0",
+    "revision": "820762786026740c76f36085b0efc47a31fe5020"
+  },
+  "actions/setup-python": {
+    "version": "v7.0.0",
+    "revision": "5fda3b95a4ea91299a34e894583c3862153e4b97"
+  },
+  "actions/upload-artifact": {
+    "version": "v7.0.1",
+    "revision": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+  },
+  "actions/download-artifact": {
+    "version": "v8.0.1",
+    "revision": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+  },
+  "actions/cache": {
+    "version": "v6.1.0",
+    "revision": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+  },
+  "github/codeql-action": {
+    "version": "v4",
+    "revision": "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
+  },
+  "docker/build-push-action": {
+    "version": "v7.4.0",
+    "revision": "c3c9e263c25d99ce0380d002d59b67737d91b0dc"
+  },
+  "docker/setup-buildx-action": {
+    "version": "v4.4.1",
+    "revision": "f87e5991a6d7451dcb8d9637bfbc97413f497069"
+  },
+  "docker/login-action": {
+    "version": "v4.6.0",
+    "revision": "dbcb813823bdd20940b903addbd779551569679f"
+  },
+  "aquasecurity/trivy-action": {
+    "version": "v0.36.0",
+    "revision": "ed142fd0673e97e23eac54620cfb913e5ce36c25"
+  },
+  "softprops/action-gh-release": {
+    "version": "v3.0.3",
+    "revision": "efb35369e0ad2afab669f228072c1b0d510eae64"
+  }
+}

@@ -18,12 +18,13 @@
     ./scripts/migrations/ef-wrapper.ps1 migrations add MigrationName
 
 .EXAMPLE
-    ./scripts/migrations/ef-wrapper.ps1 migrations script -o output.sql
+    ./scripts/migrations/ef-wrapper.ps1 -Command @('migrations', 'script', '-o', 'output.sql')
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Position = 0, ValueFromRemainingArguments)]
+    [ValidateNotNullOrEmpty()]
     [string[]]$Command
 )
 
@@ -118,28 +119,30 @@ function Test-DatabaseConnection {
 
     # Extract connection details from DATABASE_URL
     if ($databaseUrl -match '^(postgresql|postgres)://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)$') {
-        $host = $Matches[4]
+        $databaseHost = $Matches[4]
         $port = [int]$Matches[5]
 
         # Test if PostgreSQL is reachable
         try {
             $tcpClient = New-Object System.Net.Sockets.TcpClient
-            $connectResult = $tcpClient.BeginConnect($host, $port, $null, $null)
+            $connectResult = $tcpClient.BeginConnect($databaseHost, $port, $null, $null)
             $success = $connectResult.AsyncWaitHandle.WaitOne(5000, $false)
-            $tcpClient.Close()
+            if ($success) { $tcpClient.EndConnect($connectResult) }
 
             if ($success) {
-                Write-EfStatus 'success' "PostgreSQL server is reachable at ${host}:${port}"
+                Write-EfStatus 'success' "PostgreSQL server is reachable at ${databaseHost}:${port}"
                 return $true
             } else {
-                Write-EfStatus 'error' "Cannot connect to PostgreSQL at ${host}:${port}"
+                Write-EfStatus 'error' "Cannot connect to PostgreSQL at ${databaseHost}:${port}"
                 Write-Host "  Ensure PostgreSQL is running and accessible"
                 return $false
             }
         } catch {
-            Write-EfStatus 'error' "Cannot connect to PostgreSQL at ${host}:${port}"
+            Write-EfStatus 'error' "Cannot connect to PostgreSQL at ${databaseHost}:${port}"
             Write-Host "  Error: $_"
             return $false
+        } finally {
+            if ($tcpClient) { $tcpClient.Dispose() }
         }
     }
 
@@ -155,17 +158,25 @@ function Invoke-EfCommand {
     $commandString = $CommandArgs -join ' '
     Write-EfStatus 'info' "Running: dotnet ef $commandString"
 
-    $tempOutput = [System.IO.Path]::GetTempFileName()
-
+    # Start-Process joins ArgumentList into a command line, which loses boundaries
+    # for paths with spaces. ProcessStartInfo.ArgumentList passes each EF argument.
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = 'dotnet'
+    $startInfo.WorkingDirectory = (Get-Location).Path
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in (@('ef') + $CommandArgs)) { $startInfo.ArgumentList.Add($argument) }
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
     try {
-        # Run the command and capture output
-        $process = Start-Process -FilePath 'dotnet' -ArgumentList (@('ef') + $CommandArgs) `
-            -NoNewWindow -Wait -PassThru `
-            -RedirectStandardOutput $tempOutput `
-            -RedirectStandardError "$tempOutput.err"
-
-        $output = Get-Content $tempOutput -Raw -ErrorAction SilentlyContinue
-        $errorOutput = Get-Content "$tempOutput.err" -Raw -ErrorAction SilentlyContinue
+        [void]$process.Start()
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        $stderr = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $output = $stdout.GetAwaiter().GetResult()
+        $errorOutput = $stderr.GetAwaiter().GetResult()
 
         if ($output) { Write-Host $output }
         if ($errorOutput) { Write-Host $errorOutput -ForegroundColor Red }
@@ -193,10 +204,12 @@ function Invoke-EfCommand {
 
         return $process.ExitCode
     } finally {
-        Remove-Item $tempOutput -Force -ErrorAction SilentlyContinue
-        Remove-Item "$tempOutput.err" -Force -ErrorAction SilentlyContinue
+        $process.Dispose()
     }
 }
+
+# Dot-sourcing exposes helpers for the offline regression suite without running EF.
+if ($MyInvocation.InvocationName -eq '.') { return }
 
 # Main execution
 Write-Host "==============================================" -ForegroundColor Cyan

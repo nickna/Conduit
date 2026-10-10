@@ -16,7 +16,15 @@ The Repository pattern is being implemented gradually in the Conduit codebase. T
 ## Current Implementation Status
 
 - ✅ `IVirtualKeyRepository` and `VirtualKeyRepository` - Complete
-- ⏳ `IGlobalSettingRepository` and `GlobalSettingRepository` - In progress
+- ✅ `IGlobalSettingRepository` - extracted to the EF-free persistence abstractions
+- ✅ `GlobalSettingRepository` - explicit-operation EF reference implementation
+- ✅ `NpgsqlGlobalSettingRepository` - typed-Npgsql parity implementation
+- ✅ `IIpFilterRepository` - extracted explicit contract for global/per-key access policy
+- ✅ `IpFilterRepository` - explicit-operation EF reference implementation
+- ✅ `NpgsqlIpFilterRepository` - typed-Npgsql parity implementation
+- ✅ `IProviderRepository` / `IProviderKeyCredentialRepository` - extracted provider consistency contracts
+- ✅ EF provider repositories - explicit-operation production/reference implementations
+- ✅ typed-Npgsql provider repositories - JSONB, graph, cascade, and primary-rotation parity
 - ❌ Other repositories - Planned
 
 ## Usage Example

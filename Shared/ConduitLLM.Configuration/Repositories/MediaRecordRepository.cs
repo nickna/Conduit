@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Models;
@@ -250,6 +252,10 @@ public class MediaRecordRepository : RepositoryBase<MediaRecord, Guid>, IMediaRe
     }
 
     /// <inheritdoc/>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
     public async Task<Dictionary<string, long>> GetStorageStatsByProviderAsync(CancellationToken cancellationToken = default)
     {
         return await ExecuteAsync(async context =>
@@ -262,6 +268,10 @@ public class MediaRecordRepository : RepositoryBase<MediaRecord, Guid>, IMediaRe
     }
 
     /// <inheritdoc/>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
     public async Task<Dictionary<string, long>> GetStorageStatsByMediaTypeAsync(CancellationToken cancellationToken = default)
     {
         return await ExecuteAsync(async context =>
@@ -274,6 +284,10 @@ public class MediaRecordRepository : RepositoryBase<MediaRecord, Guid>, IMediaRe
     }
 
     /// <inheritdoc/>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
     public async Task<MediaStorageAggregateStats> GetAggregateStorageStatsAsync(
         int? virtualKeyGroupId = null,
         int virtualKeyLimit = 100,

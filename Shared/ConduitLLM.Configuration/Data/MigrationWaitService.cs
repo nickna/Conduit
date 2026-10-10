@@ -13,7 +13,7 @@ namespace ConduitLLM.Configuration.Data
     /// </summary>
     public static class ConduitSchemaVersion
     {
-        public const string Current = "20260805172716_AddAsyncTaskRetryDispatchId";
+        public const string Current = "20261006232832_AddWebhookReplayAudit";
     }
 
     public sealed record SchemaVersionStatus(string? AppliedVersion, string ExpectedVersion)

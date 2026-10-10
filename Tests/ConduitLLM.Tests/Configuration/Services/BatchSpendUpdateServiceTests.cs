@@ -6,6 +6,8 @@ using ConduitLLM.Configuration.Options;
 using ConduitLLM.Configuration.Services;
 using ConduitLLM.Tests.Helpers;
 using ConduitLLM.Tests.TestInfrastructure;
+using ConduitLLM.Persistence;
+using ConduitLLM.Persistence.Interfaces;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -327,6 +329,48 @@ namespace ConduitLLM.Tests.Configuration.Services
         }
 
         [Fact]
+        public async Task QueueSpendUpdateAsync_WithRuntimeStore_DoesNotResolveEfServices()
+        {
+            const int virtualKeyId = 41;
+            const int groupId = 13;
+            const decimal cost = 0.5m;
+            var billedAt = new DateTime(2026, 8, 27, 22, 0, 0, DateTimeKind.Utc);
+            var runtimeStore = new Mock<IVirtualKeyRuntimeStore>(MockBehavior.Strict);
+            runtimeStore.Setup(store => store.GetByIdAsync(
+                    virtualKeyId,
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new VirtualKeyRuntimeRecord
+                {
+                    Id = virtualKeyId,
+                    KeyHash = "native-hash-41",
+                    VirtualKeyGroupId = groupId,
+                    Group = new VirtualKeyGroupRuntimeRecord
+                    {
+                        Id = groupId,
+                        Balance = 100m
+                    }
+                });
+            _mockRedisDb.Setup(database => database.ScriptEvaluateAsync(
+                    It.IsAny<string>(),
+                    It.Is<RedisKey[]>(keys => keys.All(key => key.ToString().Contains($"group:{groupId}"))),
+                    It.IsAny<RedisValue[]>(),
+                    It.IsAny<CommandFlags>()))
+                .ReturnsAsync(RedisResult.Create((RedisValue)1));
+            using var service = new BatchSpendUpdateService(
+                _mockScopeFactory.Object,
+                _testRedisFactory,
+                Microsoft.Extensions.Options.Options.Create(new BatchSpendingOptions()),
+                _mockLogger.Object,
+                _mockAlertingService.Object,
+                runtimeStore: runtimeStore.Object);
+
+            await service.QueueSpendUpdateAsync(virtualKeyId, cost, billedAt);
+
+            runtimeStore.VerifyAll();
+            _mockScopeFactory.Verify(factory => factory.CreateScope(), Times.Never);
+        }
+
+        [Fact]
         public async Task FlushPendingUpdates_WithWindowedClaim_ShouldPersistWindowAndAcknowledgeAtomically()
         {
             // Arrange
@@ -641,6 +685,46 @@ namespace ConduitLLM.Tests.Configuration.Services
             _mockRedisDb.Verify(x => x.KeyDeleteAsync(
                 It.Is<RedisKey[]>(keys => keys.Length == 1 && keys[0] == processingKey),
                 It.IsAny<CommandFlags>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task FlushPendingUpdates_WithRuntimeStore_DoesNotResolveEfServices()
+        {
+            const int groupId = 13;
+            const int virtualKeyId = 41;
+            const decimal usageCost = 2.75m;
+            SetupPendingSpendClaim(groupId, usageCost, new Dictionary<int, decimal>
+            {
+                [virtualKeyId] = usageCost
+            });
+            var runtimeStore = new Mock<IVirtualKeyRuntimeStore>(MockBehavior.Strict);
+            runtimeStore.Setup(store => store.AdjustBalanceAsync(
+                    It.Is<VirtualKeyBalanceAdjustment>(adjustment =>
+                        adjustment.GroupId == groupId &&
+                        adjustment.Amount == -usageCost &&
+                        adjustment.IdempotencyKey!.StartsWith("batch-spend:")),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new VirtualKeyBalanceAdjustmentResult(97.25m, usageCost, true));
+            runtimeStore.Setup(store => store.GetKeyHashesByGroupIdAsync(
+                    groupId,
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(["native-hash-41"]);
+            using var service = new BatchSpendUpdateService(
+                _mockScopeFactory.Object,
+                _testRedisFactory,
+                Microsoft.Extensions.Options.Options.Create(new BatchSpendingOptions()),
+                _mockLogger.Object,
+                _mockAlertingService.Object,
+                runtimeStore: runtimeStore.Object);
+
+            var updatedHashes = Array.Empty<string>();
+            service.SpendUpdatesCompleted += hashes => updatedHashes = hashes;
+            var result = await service.FlushPendingUpdatesAsync();
+
+            Assert.Equal(1, result);
+            Assert.Equal(["native-hash-41"], updatedHashes);
+            runtimeStore.VerifyAll();
+            _mockScopeFactory.Verify(factory => factory.CreateScope(), Times.Never);
         }
 
         private void SetupPendingSpendClaim(

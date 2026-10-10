@@ -1,7 +1,4 @@
 using System.Net;
-using System.Security.Claims;
-using System.Text.Encodings.Web;
-using ConduitLLM.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -14,6 +11,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ConduitLLM.Admin.Security;
 using ConduitLLM.Admin.Services;
+using ConduitLLM.Admin.Middleware;
+using ConduitLLM.Security.Options;
+using Microsoft.Extensions.Configuration;
 
 namespace ConduitLLM.Tests.Admin.Integration
 {
@@ -36,11 +36,22 @@ namespace ConduitLLM.Tests.Admin.Integration
 
                         // Add required services
                         services.AddDistributedMemoryCache(); // Use in-memory cache for testing
+                        services.AddMemoryCache();
+                        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+                        services.Configure<AdminSecurityOptions>(options =>
+                        {
+                            options.ApiAuth.ApiKeyHeader = "X-Custom-Key";
+                            options.ApiAuth.AlternativeHeaders = ["X-API-Key", "X-Master-Key"];
+                            options.FailedAuth.Enabled = false;
+                            options.RateLimiting.Enabled = false;
+                            options.IpFiltering.Enabled = false;
+                        });
+                        services.AddSingleton<ConduitLLM.Security.Interfaces.ISecurityService, SecurityService>();
                         services.AddSingleton<IEphemeralMasterKeyService, EphemeralMasterKeyService>();
                         
                         // Add authentication
                         services.AddAuthentication("MasterKey")
-                            .AddScheme<AuthenticationSchemeOptions, TestMasterKeyAuthenticationHandler>("MasterKey", null);
+                            .AddScheme<MasterKeyAuthenticationSchemeOptions, MasterKeyAuthenticationHandler>("MasterKey", null);
 
                         // Add authorization
                         services.AddAuthorization(options =>
@@ -56,6 +67,8 @@ namespace ConduitLLM.Tests.Admin.Integration
                     webHost.Configure(app =>
                     {
                         app.UseRouting();
+                        app.UseAdminSecurity();
+                        app.UseMiddleware<EphemeralMasterKeyCleanupMiddleware>();
                         app.UseAuthentication();
                         app.UseAuthorization();
                         app.UseEndpoints(endpoints =>
@@ -71,8 +84,12 @@ namespace ConduitLLM.Tests.Admin.Integration
             _serviceProvider = _server.Services;
         }
 
-        [Fact]
-        public async Task EphemeralMasterKey_FullFlow_WorksCorrectly()
+        [Theory]
+        [InlineData("X-Custom-Key", "")]
+        [InlineData("X-API-Key", "")]
+        [InlineData("X-Master-Key", "")]
+        [InlineData("Authorization", "Bearer ")]
+        public async Task EphemeralMasterKey_FullFlow_WorksCorrectly(string header, string prefix)
         {
             // Step 1: Generate ephemeral master key
             var ephemeralKeyService = _serviceProvider.GetRequiredService<IEphemeralMasterKeyService>();
@@ -83,34 +100,40 @@ namespace ConduitLLM.Tests.Admin.Integration
 
             // Step 2: Use ephemeral key to access protected endpoint
             var request = new HttpRequestMessage(HttpMethod.Get, "/api/test");
-            request.Headers.Add("X-Master-Key", keyResponse.EphemeralMasterKey);
+            request.Headers.Add(header, prefix + keyResponse.EphemeralMasterKey);
 
             var response = await _client.SendAsync(request);
 
             // Step 3: Verify response
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.False(await ephemeralKeyService.KeyExistsAsync(keyResponse.EphemeralMasterKey));
 
             // Step 4: Verify key is consumed (second use should fail)
             var secondRequest = new HttpRequestMessage(HttpMethod.Get, "/api/test");
-            secondRequest.Headers.Add("X-Master-Key", keyResponse.EphemeralMasterKey);
+            secondRequest.Headers.Add(header, prefix + keyResponse.EphemeralMasterKey);
 
             var secondResponse = await _client.SendAsync(secondRequest);
             Assert.Equal(HttpStatusCode.Unauthorized, secondResponse.StatusCode);
         }
 
-        [Fact]
-        public async Task RegularMasterKey_CanBeReused()
+        [Theory]
+        [InlineData("X-Custom-Key", "")]
+        [InlineData("X-API-Key", "")]
+        [InlineData("X-Master-Key", "")]
+        [InlineData("Authorization", "Bearer ")]
+        [InlineData("Authorization", "bEaReR   ")]
+        public async Task RegularMasterKey_CanBeReused(string header, string prefix)
         {
             // First request with master key
             var request1 = new HttpRequestMessage(HttpMethod.Get, "/api/test");
-            request1.Headers.Add("X-Master-Key", "test-master-key");
+            request1.Headers.Add(header, prefix + "test-master-key");
 
             var response1 = await _client.SendAsync(request1);
             Assert.Equal(HttpStatusCode.OK, response1.StatusCode);
 
             // Second request with same master key
             var request2 = new HttpRequestMessage(HttpMethod.Get, "/api/test");
-            request2.Headers.Add("X-Master-Key", "test-master-key");
+            request2.Headers.Add(header, prefix + "test-master-key");
 
             var response2 = await _client.SendAsync(request2);
             Assert.Equal(HttpStatusCode.OK, response2.StatusCode);
@@ -138,6 +161,34 @@ namespace ConduitLLM.Tests.Admin.Integration
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
 
+        [Theory]
+        [InlineData("Bearer wrong-key")]
+        [InlineData("Bearer emk_unknown")]
+        [InlineData("Bearer")]
+        [InlineData("Bearer ")]
+        [InlineData("Basic test-master-key")]
+        public async Task InvalidAuthorization_ReturnsUnauthorized(string authorization)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/api/test");
+            request.Headers.TryAddWithoutValidation("Authorization", authorization);
+
+            using var response = await _client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task InvalidPrimaryHeader_DoesNotFallBackToBearer()
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/api/test");
+            request.Headers.Add("X-Custom-Key", "wrong-key");
+            request.Headers.Add("Authorization", "Bearer test-master-key");
+
+            using var response = await _client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
         public void Dispose()
         {
             Environment.SetEnvironmentVariable("CONDUIT_API_TO_API_BACKEND_AUTH_KEY", null);
@@ -159,80 +210,4 @@ namespace ConduitLLM.Tests.Admin.Integration
         }
     }
 
-    // Simplified test authentication handler
-    public class TestMasterKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
-    {
-        private readonly IEphemeralMasterKeyService _ephemeralMasterKeyService;
-
-        public TestMasterKeyAuthenticationHandler(
-            IOptionsMonitor<AuthenticationSchemeOptions> options,
-            ILoggerFactory logger,
-            UrlEncoder encoder,
-            IEphemeralMasterKeyService ephemeralMasterKeyService)
-            : base(options, logger, encoder)
-        {
-            _ephemeralMasterKeyService = ephemeralMasterKeyService;
-        }
-
-        protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
-        {
-            string providedKey = null;
-
-            if (Context.Request.Headers.TryGetValue("X-Master-Key", out var masterKeyValues))
-            {
-                providedKey = masterKeyValues.FirstOrDefault();
-            }
-            else if (Context.Request.Headers.TryGetValue("X-API-Key", out var apiKeyValues))
-            {
-                providedKey = apiKeyValues.FirstOrDefault();
-            }
-
-            if (string.IsNullOrEmpty(providedKey))
-            {
-                return AuthenticateResult.Fail("Missing master key");
-            }
-
-            // Check if it's an ephemeral master key
-            if (providedKey.StartsWith("emk_", StringComparison.Ordinal))
-            {
-                var isValid = await _ephemeralMasterKeyService.ValidateAndConsumeKeyAsync(providedKey);
-                
-                if (!isValid)
-                {
-                    return AuthenticateResult.Fail("Invalid or expired ephemeral master key");
-                }
-
-                var claims = new[]
-                {
-                    new Claim(ClaimTypes.Name, "AdminUser"),
-                    new Claim("MasterKey", "true")
-                };
-
-                var identity = new ClaimsIdentity(claims, Scheme.Name);
-                var principal = new ClaimsPrincipal(identity);
-                var ticket = new AuthenticationTicket(principal, Scheme.Name);
-
-                return AuthenticateResult.Success(ticket);
-            }
-
-            // Check regular master key
-            var masterKey = Environment.GetEnvironmentVariable("CONDUIT_API_TO_API_BACKEND_AUTH_KEY");
-            if (ConstantTimeComparer.Equals(providedKey, masterKey))
-            {
-                var claims = new[]
-                {
-                    new Claim(ClaimTypes.Name, "AdminUser"),
-                    new Claim("MasterKey", "true")
-                };
-
-                var identity = new ClaimsIdentity(claims, Scheme.Name);
-                var principal = new ClaimsPrincipal(identity);
-                var ticket = new AuthenticationTicket(principal, Scheme.Name);
-
-                return AuthenticateResult.Success(ticket);
-            }
-
-            return AuthenticateResult.Fail("Invalid master key");
-        }
-    }
 }

@@ -40,29 +40,41 @@ public sealed class BundledModelCatalogImporter : IBundledModelCatalogImporter
         bool onlyWhenIdentifierCatalogIsEmpty,
         CancellationToken cancellationToken = default)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
-        if (onlyWhenIdentifierCatalogIsEmpty &&
-            await context.ModelProviderTypeAssociations.AnyAsync(cancellationToken))
+        await using var strategyContext = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        var strategy = strategyContext.Database.CreateExecutionStrategy();
+        var result = await strategy.ExecuteAsync(async strategyToken =>
+        {
+            // A retry must start with a fresh change tracker as well as a fresh
+            // transaction; a failed save can leave generated keys on tracked rows.
+            await using var context = await _contextFactory.CreateDbContextAsync(strategyToken);
+            if (onlyWhenIdentifierCatalogIsEmpty &&
+                await context.ModelProviderTypeAssociations.AnyAsync(strategyToken))
+            {
+                return null;
+            }
+
+            await using var transaction = await context.Database.BeginTransactionAsync(strategyToken);
+            await context.Database.ExecuteSqlRawAsync(
+                $"SELECT pg_advisory_xact_lock({CATALOG_IMPORT_LOCK_ID})", strategyToken);
+
+            // Re-check after taking the lock; another host may have seeded while this host waited.
+            if (onlyWhenIdentifierCatalogIsEmpty &&
+                await context.ModelProviderTypeAssociations.AnyAsync(strategyToken))
+            {
+                await transaction.RollbackAsync(strategyToken);
+                return null;
+            }
+
+            var imported = await MergeAsync(context, strategyToken);
+            await context.SaveChangesAsync(strategyToken);
+            await transaction.CommitAsync(strategyToken);
+            return imported;
+        }, cancellationToken);
+        if (result is null)
         {
             _logger.LogDebug("Bundled model catalog startup seed skipped because model identifiers already exist");
             return null;
         }
-
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-        await context.Database.ExecuteSqlRawAsync(
-            $"SELECT pg_advisory_xact_lock({CATALOG_IMPORT_LOCK_ID})", cancellationToken);
-
-        // Re-check after taking the lock; another host may have seeded while this host waited.
-        if (onlyWhenIdentifierCatalogIsEmpty &&
-            await context.ModelProviderTypeAssociations.AnyAsync(cancellationToken))
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            return null;
-        }
-
-        var result = await MergeAsync(context, cancellationToken);
-        await context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
 
         foreach (var conflict in result.Conflicts)
         {

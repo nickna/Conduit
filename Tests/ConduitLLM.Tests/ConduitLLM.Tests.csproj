@@ -21,6 +21,7 @@
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Moq" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Moq.Contrib.HttpClient" />
     <!-- Test-only hosts exercise dynamic Wolverine configurations independently
          of the production services' committed static adapters. -->
@@ -41,6 +42,7 @@
     <ProjectReference Include="..\..\Shared\ConduitLLM.Configuration\ConduitLLM.Configuration.csproj" />
     <ProjectReference Include="..\..\Services\ConduitLLM.Gateway\ConduitLLM.Gateway.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Functions\ConduitLLM.Functions.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Npgsql\ConduitLLM.Persistence.Npgsql.csproj" />
     <ProjectReference Include="..\..\tools\ConduitLLM.Migrator\ConduitLLM.Migrator.csproj" />
   </ItemGroup>
 

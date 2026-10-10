@@ -95,7 +95,9 @@ function Invoke-Probe([string] $url, [int] $requestCount, [int] $workerCount, [s
 
 function Measure-Variant([string] $runtime, [string] $image, [int] $hostPort) {
     $name = "conduit-$Service-$runtime-benchmark-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-    $healthUrl = "http://localhost:$hostPort/health/ready"
+    # The port is explicitly bound to IPv4 below. Using localhost can resolve to ::1
+    # first on Windows and make a healthy container appear to time out.
+    $healthUrl = "http://127.0.0.1:$hostPort/health/ready"
     $started = [System.Diagnostics.Stopwatch]::StartNew()
     try {
         docker run --detach --name $name --add-host host.docker.internal:host-gateway `

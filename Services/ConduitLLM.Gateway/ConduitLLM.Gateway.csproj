@@ -32,6 +32,8 @@
     <ProjectReference Include="..\..\Shared\ConduitLLM.SignalR\ConduitLLM.SignalR.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Tokenization\ConduitLLM.Tokenization.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Messaging.Wolverine\ConduitLLM.Messaging.Wolverine.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Npgsql\ConduitLLM.Persistence.Npgsql.csproj"
+                      Condition="'$(ConduitAotAudit)' == 'true' or '$(PublishAot)' == 'true'" />
   </ItemGroup>
 
   <!-- Roslyn is a generation-time tool only. Normal restores and production

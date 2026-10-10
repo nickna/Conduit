@@ -38,11 +38,13 @@ import { useChatStreamingLogic } from './ChatStreamingLogic';
 import { DynamicParameters } from '@/components/parameters/DynamicParameters';
 import { useParameterState } from '@/components/parameters/hooks/useParameterState';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAdminClient } from '@/lib/client/adminClient';
 import type { FunctionConfigurationDto } from '@/lib/admin-api';
 import { useChatLayout } from '../hooks/useChatLayout';
 
 export function ChatInterface() {
+  const router = useRouter();
   const { data: discoveryData, isLoading: modelsLoading } = useDiscoveryModels(ModelCapability.Chat); // Filter for chat-capable models only
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -193,7 +195,7 @@ export function ChatInterface() {
           actions={[
             {
               label: 'Configure Providers',
-              onClick: () => window.location.href = '/llm-providers',
+              onClick: () => router.push('/llm-providers'),
               color: 'blue',
               variant: 'light',
             }

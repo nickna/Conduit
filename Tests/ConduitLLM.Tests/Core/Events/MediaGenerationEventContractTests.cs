@@ -9,6 +9,21 @@ namespace ConduitLLM.Tests.Core.Events;
 public class MediaGenerationEventContractTests
 {
     [Fact]
+    public void VideoEvent_SourceGeneratedTransport_RoundTripsDirectAndLegacyRequests()
+    {
+        var transport = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = CoreMessagingJsonContext.Default };
+        var original = new VideoGenerationRequested { RequestId = "generated-video", VirtualKeyId = "12", IsAsync = true,
+            Request = new() { Model = "video-model", Prompt = "video", Duration = 7, WebhookHeaders = new() { ["Authorization"] = "Bearer test" } } };
+        var serialized = JsonSerializer.Serialize(original, transport);
+        var result = JsonSerializer.Deserialize<VideoGenerationRequested>(serialized, transport)!;
+        Assert.Equal(7, result.ResolveRequest().Duration);
+        Assert.Equal("Bearer test", result.ResolveRequest().WebhookHeaders!["Authorization"]);
+        var legacy = JsonSerializer.Deserialize<VideoGenerationRequested>("""{"requestId":"old","virtualKeyId":"12","model":"old-model","prompt":"old prompt","parameters":{"duration":8}}""", transport)!;
+        Assert.Equal("old-model", legacy.ResolveRequest().Model);
+        Assert.Equal(8, legacy.ResolveRequest().Duration);
+    }
+
+    [Fact]
     public void ImageEvent_DirectRequest_RoundTripsEveryRequestField()
     {
         var eventRequest = new ImageGenerationRequested

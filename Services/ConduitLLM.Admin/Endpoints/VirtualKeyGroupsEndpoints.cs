@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -221,6 +223,10 @@ namespace ConduitLLM.Admin.Endpoints
         /// until each key's cache entry expired — operators would see an edit that appears to
         /// do nothing.
         /// </remarks>
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         private async Task InvalidateGroupKeyCachesAsync(int groupId)
         {
             if (_eventBus is null)
@@ -299,6 +305,10 @@ namespace ConduitLLM.Admin.Endpoints
         /// <summary>
         /// Get transaction history for a virtual key group
         /// </summary>
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         public async Task<IResult> GetTransactionHistory(
             int id,
             [FromQuery] int page = 1,

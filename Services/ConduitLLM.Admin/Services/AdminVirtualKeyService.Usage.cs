@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using ConduitLLM.Admin.Extensions;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Configuration.Constants;
@@ -17,6 +19,10 @@ namespace ConduitLLM.Admin.Services
     public partial class AdminVirtualKeyService
     {
         /// <inheritdoc />
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026",
+            Justification = "Admin EF queries are outside the supported NativeAOT data-plane contract (ADR 0006). Owner: database/runtime. Upstream: dotnet/efcore#29754. Remove when this query uses a fixed-shape native store or EF expression construction is trim-safe.")]
         public async Task PerformMaintenanceAsync()
         {
             _logger.LogInformation("Starting virtual key maintenance tasks");
