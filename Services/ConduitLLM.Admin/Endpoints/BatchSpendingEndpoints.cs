@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Configuration.Events;
 using ConduitLLM.Configuration.Messaging;
@@ -17,10 +18,18 @@ public static class BatchSpendingEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("BatchSpending");
         group.MapPost("/flush", Flush).WithName("BatchSpending_Flush")
+            .WithParameterDescription("priority", "Flush priority; Normal is the default and High requests urgent processing.")
+            .WithParameterDescription("timeoutSeconds", "Optional flush timeout in seconds, from 1 to 300.")
+            .WithParameterDescription("includeStatistics", "Include processing statistics in the flush request.")
+            .WithSummary("Request a flush of pending spending updates")
+            .WithDescription("Publishes a flush request to the event bus. Acceptance does not mean all pending spending updates have completed.")
+            .WithParameterDescription("reason", "Optional reason recorded for the requested operation.")
             .Produces<BatchSpendingFlushResponse>(StatusCodes.Status202Accepted)
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
-        group.MapGet("/status", GetStatus).WithName("BatchSpending_GetStatus").Produces<BatchSpendingStatusResponse>();
-        group.MapGet("/info", GetInformation).WithName("BatchSpending_GetInformation").Produces<BatchSpendingInformationResponse>();
+        group.MapGet("/status", GetStatus).WithName("BatchSpending_GetStatus")
+            .WithSummary("Get batch spending system status").Produces<BatchSpendingStatusResponse>();
+        group.MapGet("/info", GetInformation).WithName("BatchSpending_GetInformation")
+            .WithSummary("Get batch spending administration information").Produces<BatchSpendingInformationResponse>();
         return app;
     }
 

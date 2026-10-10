@@ -71,6 +71,7 @@ public partial class Program
             options.AddSchemaTransformer<ConduitLLM.Admin.OpenApi.IpFilterResponseSchemaTransformer>();
             options.AddSchemaTransformer<ConduitLLM.Admin.OpenApi.StructuredJsonSchemaTransformer>();
             options.AddSchemaTransformer<ConduitLLM.Admin.OpenApi.FunctionExecutionSchemaTransformer>();
+            options.AddDocumentTransformer<ConduitLLM.Core.OpenApi.UnusedSchemaPruningDocumentTransformer>();
             options.AddDocumentTransformer<ConduitLLM.Core.OpenApi.OperationIdValidationDocumentTransformer>();
             options.AddDocumentTransformer<ConduitLLM.Core.OpenApi.DocumentationLineEndingDocumentTransformer>();
         });

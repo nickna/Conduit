@@ -19,17 +19,22 @@ public static class SystemInfoEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("SystemInfo");
         group.MapGet("/info", GetInfo).WithName("SystemInfo_GetInfo")
+            .WithSummary("Get deployment and system information")
             .Produces<SystemInfoDto>(StatusCodes.Status200OK);
         group.MapGet("/health", GetHealth).WithName("SystemInfo_GetHealth")
+            .WithSummary("Get system health information")
             .Produces<HealthStatusDto>(StatusCodes.Status200OK);
         group.MapPost("/cache/invalidate-discovery", InvalidateDiscovery)
-            .WithName("SystemInfo_InvalidateDiscoveryCache").Produces<CacheInvalidationPublishedResponse>(StatusCodes.Status200OK);
+            .WithName("SystemInfo_InvalidateDiscoveryCache")
+            .WithSummary("Invalidate the model discovery cache").Produces<CacheInvalidationPublishedResponse>(StatusCodes.Status200OK);
         group.MapGet("/cache/function-discovery/stats", GetFunctionDiscoveryStats)
             .WithName("SystemInfo_GetFunctionDiscoveryCacheStats")
+            .WithSummary("Get function discovery cache statistics")
             .Produces<CacheStats>(StatusCodes.Status200OK)
             .Produces<CacheServiceUnavailableResponse>(StatusCodes.Status404NotFound);
         group.MapPost("/cache/invalidate-function-discovery", InvalidateFunctionDiscovery)
             .WithName("SystemInfo_InvalidateFunctionDiscoveryCache")
+            .WithSummary("Invalidate the function discovery cache")
             .Produces<CacheInvalidationPublishedResponse>(StatusCodes.Status200OK);
         return app;
     }

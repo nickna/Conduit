@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Configuration.Interfaces;
 
 using ConduitLLM.Admin.Extensions;
@@ -47,17 +48,33 @@ public class ModelProviderMappingEndpoints
     public static IEndpointRouteBuilder MapModelProviderMappingEndpoints(IEndpointRouteBuilder app)
     {
         var g = app.MapGroup("/v1/admin/model-provider-mappings").RequireAuthorization("MasterKeyPolicy").AddEndpointFilter<OperationLoggingEndpointFilter>().WithTags("Model Provider Mappings");
-        g.MapGet("/", ([FromServices] ModelProviderMappingEndpoints e) => e.GetAllMappings()).WithName("ModelProviderMapping_GetAll").Produces<IEnumerable<ModelProviderMappingDto>>();
-        g.MapGet("/{id}", ([FromServices] ModelProviderMappingEndpoints e, int id) => e.GetMappingById(id)).WithName("ModelProviderMapping_GetById").Produces<ModelProviderMappingDto>().Produces(StatusCodes.Status404NotFound);
-        g.MapPost("/", ([FromServices] ModelProviderMappingEndpoints e, CreateModelProviderMappingDto dto) => e.CreateMapping(dto)).WithName("ModelProviderMapping_Create").Produces<ModelProviderMappingDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status409Conflict);
-        g.MapPatch("/{id}", ([FromServices] ModelProviderMappingEndpoints e, int id, JsonMergePatch<UpdateModelProviderMappingDto> patch) => e.UpdateMapping(id, patch.Value)).AcceptsJsonMergePatch<UpdateModelProviderMappingDto>().WithName("ModelProviderMapping_Update").Produces<ModelProviderMappingDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status409Conflict);
-        g.MapDelete("/{id}", ([FromServices] ModelProviderMappingEndpoints e, int id) => e.DeleteMapping(id)).WithName("ModelProviderMapping_Delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
-        g.MapGet("/providers", ([FromServices] ModelProviderMappingEndpoints e) => e.GetProviders()).WithName("ModelProviderMapping_GetProviders").Produces<IEnumerable<ProviderDto>>();
-        g.MapPost("/bulk/preview", ([FromServices] ModelProviderMappingEndpoints e, BulkModelMappingPreviewRequest d) => e.PreviewBulkMappings(d)).WithName("ModelProviderMapping_PreviewBulk").Produces<BulkModelMappingPreviewResponse>().Produces(StatusCodes.Status400BadRequest);
-        g.MapPost("/bulk", ([FromServices] ModelProviderMappingEndpoints e, BulkModelMappingCreateRequest d) => e.CreateBulkMappings(d)).WithName("ModelProviderMapping_CreateBulk").Produces<BulkModelMappingCreateResponse>().Produces(StatusCodes.Status400BadRequest);
-        g.MapPost("/bulk/delete", ([FromServices] ModelProviderMappingEndpoints e, List<int> ids) => e.DeleteBulkMappings(ids)).WithName("ModelProviderMapping_DeleteBulk").Produces<BulkDeleteResult>().Produces(StatusCodes.Status400BadRequest);
-        g.MapPost("/bulk/enable", ([FromServices] ModelProviderMappingEndpoints e, List<int> ids) => e.EnableBulkMappings(ids)).WithName("ModelProviderMapping_EnableBulk").Produces<BulkUpdateResult>().Produces(StatusCodes.Status400BadRequest);
-        g.MapPost("/bulk/disable", ([FromServices] ModelProviderMappingEndpoints e, List<int> ids) => e.DisableBulkMappings(ids)).WithName("ModelProviderMapping_DisableBulk").Produces<BulkUpdateResult>().Produces(StatusCodes.Status400BadRequest);
+        g.MapGet("/", ([FromServices] ModelProviderMappingEndpoints e) => e.GetAllMappings()).WithName("ModelProviderMapping_GetAll")
+            .WithSummary("Gets all model provider mappings").Produces<IEnumerable<ModelProviderMappingDto>>();
+        g.MapGet("/{id}", ([FromServices] ModelProviderMappingEndpoints e, int id) => e.GetMappingById(id)).WithName("ModelProviderMapping_GetById")
+            .WithSummary("Gets a specific model provider mapping by ID")
+            .WithParameterDescription("id", "The ID of the mapping to retrieve").Produces<ModelProviderMappingDto>().Produces(StatusCodes.Status404NotFound);
+        g.MapPost("/", ([FromServices] ModelProviderMappingEndpoints e, CreateModelProviderMappingDto dto) => e.CreateMapping(dto)).WithName("ModelProviderMapping_Create")
+            .WithSummary("Creates a new model provider mapping").Produces<ModelProviderMappingDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status409Conflict);
+        g.MapPatch("/{id}", ([FromServices] ModelProviderMappingEndpoints e, int id, JsonMergePatch<UpdateModelProviderMappingDto> patch) => e.UpdateMapping(id, patch.Value)).AcceptsJsonMergePatch<UpdateModelProviderMappingDto>().WithName("ModelProviderMapping_Update")
+            .WithSummary("Updates an existing model provider mapping")
+            .WithParameterDescription("id", "The ID of the mapping to update").Produces<ModelProviderMappingDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status409Conflict);
+        g.MapDelete("/{id}", ([FromServices] ModelProviderMappingEndpoints e, int id) => e.DeleteMapping(id)).WithName("ModelProviderMapping_Delete")
+            .WithSummary("Deletes a model provider mapping")
+            .WithParameterDescription("id", "The ID of the mapping to delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
+        g.MapGet("/providers", ([FromServices] ModelProviderMappingEndpoints e) => e.GetProviders()).WithName("ModelProviderMapping_GetProviders")
+            .WithSummary("Gets all available providers").Produces<IEnumerable<ProviderDto>>();
+        g.MapPost("/bulk/preview", ([FromServices] ModelProviderMappingEndpoints e, BulkModelMappingPreviewRequest d) => e.PreviewBulkMappings(d)).WithName("ModelProviderMapping_PreviewBulk")
+            .WithSummary("Resolves model associations and conflicts before bulk creation.").Produces<BulkModelMappingPreviewResponse>().Produces(StatusCodes.Status400BadRequest);
+        g.MapPost("/bulk", ([FromServices] ModelProviderMappingEndpoints e, BulkModelMappingCreateRequest d) => e.CreateBulkMappings(d)).WithName("ModelProviderMapping_CreateBulk")
+            .WithSummary("Resolve and create multiple model provider mappings")
+            .WithDescription("Uses partial-success semantics. Equivalent existing mappings satisfy retries without creating duplicates.")
+            .Produces<BulkModelMappingCreateResponse>().Produces(StatusCodes.Status400BadRequest);
+        g.MapPost("/bulk/delete", ([FromServices] ModelProviderMappingEndpoints e, List<int> ids) => e.DeleteBulkMappings(ids)).WithName("ModelProviderMapping_DeleteBulk")
+            .WithSummary("Deletes multiple model provider mappings in a single operation").Produces<BulkDeleteResult>().Produces(StatusCodes.Status400BadRequest);
+        g.MapPost("/bulk/enable", ([FromServices] ModelProviderMappingEndpoints e, List<int> ids) => e.EnableBulkMappings(ids)).WithName("ModelProviderMapping_EnableBulk")
+            .WithSummary("Enables multiple model provider mappings in a single operation").Produces<BulkUpdateResult>().Produces(StatusCodes.Status400BadRequest);
+        g.MapPost("/bulk/disable", ([FromServices] ModelProviderMappingEndpoints e, List<int> ids) => e.DisableBulkMappings(ids)).WithName("ModelProviderMapping_DisableBulk")
+            .WithSummary("Disables multiple model provider mappings in a single operation").Produces<BulkUpdateResult>().Produces(StatusCodes.Status400BadRequest);
         return app;
     }
 

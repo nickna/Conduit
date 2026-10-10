@@ -11,6 +11,7 @@ using ConduitLLM.Admin.Services;
 
 namespace ConduitLLM.Tests.Admin.Services
 {
+    [Collection("AdminMasterKeyEnvironment")]
     public class SecurityServiceTests
     {
         private readonly Mock<IConfiguration> _configurationMock;

@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Configuration.DTOs;
@@ -18,8 +19,15 @@ public static class TasksEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Tasks");
         group.MapPost("/cleanup", Cleanup).WithName("Tasks_Cleanup")
+            .WithSummary("Archive and delete old asynchronous tasks")
+            .WithDescription("Archives completed tasks older than the requested threshold and deletes records according to task retention policy. The response retains the legacy cleaned_up and older_than_hours field names.")
+            .WithParameterDescription("olderThanHours", "Task age threshold in hours; zero selects the 24-hour default and negative values are clamped to 1.")
             .Produces<TaskCleanupResponseDto>(StatusCodes.Status200OK);
         group.MapGet("/", List).WithName("Tasks_List")
+            .WithDescription("Lists tasks in the indeterminate state for operator review. Other state filters are rejected.")
+            .WithParameterDescription("state", "Execution or task state to filter by.")
+            .WithParameterDescription("page", "Page number, starting at 1.")
+            .WithParameterDescription("pageSize", "Number of records per page; values are normalized to the supported pagination range.")
             .WithSummary("List indeterminate async media tasks")
             .Produces<PagedResult<IndeterminateTaskDto>>(StatusCodes.Status200OK)
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
@@ -27,6 +35,9 @@ public static class TasksEndpoints
             .Produces<AdminProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status429TooManyRequests, "application/problem+json");
         group.MapPost("/{taskId}/resolve", Resolve).WithName("Tasks_ResolveIndeterminate")
+            .WithSummary("Resolve an indeterminate asynchronous task")
+            .WithDescription("Records an operator decision for an indeterminate task. Returns 202 when resolution is accepted or 204 when no further work is required.")
+            .WithParameterDescription("taskId", "Identifier returned when the asynchronous task was accepted.")
             .Produces<TaskResolutionAcceptedDto>(StatusCodes.Status202Accepted)
             .Produces(StatusCodes.Status204NoContent)
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")

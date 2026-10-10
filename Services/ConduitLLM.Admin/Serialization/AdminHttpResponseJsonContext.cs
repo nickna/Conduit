@@ -179,6 +179,8 @@ namespace ConduitLLM.Admin.Serialization;
 [JsonSerializable(typeof(StandardApiKeyTestResponse))]
 [JsonSerializable(typeof(SystemInfoDto))]
 [JsonSerializable(typeof(TaskCleanupResponseDto))]
+[JsonSerializable(typeof(ConduitLLM.Security.Serialization.SecurityErrorResponse))]
+[JsonSerializable(typeof(ConduitLLM.Core.Models.OpenAIErrorResponse))]
 [JsonSerializable(typeof(TaskResolutionAcceptedDto))]
 [JsonSerializable(typeof(UsageStatisticsDto))]
 [JsonSerializable(typeof(VirtualKeyCostBreakdownDto))]

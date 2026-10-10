@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
@@ -19,11 +20,15 @@ public static class ModelsEndpoints
 
         group.MapGet("/models", ListModels)
             .WithName("Models_ListModels")
+            .WithSummary("List enabled model aliases")
+            .WithDescription("Lists configured aliases of enabled model-provider mappings.")
             .Produces<ModelListResponse>(StatusCodes.Status200OK)
             .Produces<OpenAIErrorResponse>(StatusCodes.Status500InternalServerError);
 
         group.MapGet("/models/{model}", RetrieveModel)
             .WithName("Models_RetrieveModel")
+            .WithDescription("Returns a model alias when its mapping is enabled, or 404 when the mapping is absent or disabled.")
+            .WithParameterDescription("model", "Model alias exposed by Conduit.")
             .WithSummary("Retrieve a model")
             .Produces<ModelListItemDto>(StatusCodes.Status200OK)
             .Produces<OpenAIErrorResponse>(StatusCodes.Status404NotFound)
@@ -34,6 +39,8 @@ public static class ModelsEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Models")
             .WithName("Models_GetModelMetadata")
+            .WithSummary("Get metadata for an available model")
+            .WithParameterDescription("modelId", "Identifier of the model.")
             .Produces<ModelMetadataResponse>(StatusCodes.Status200OK)
             .Produces<OpenAIErrorResponse>(StatusCodes.Status404NotFound)
             .Produces<OpenAIErrorResponse>(StatusCodes.Status500InternalServerError);

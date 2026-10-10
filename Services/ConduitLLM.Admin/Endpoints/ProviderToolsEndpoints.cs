@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ConduitLLM.Admin.DTOs;
@@ -42,15 +43,29 @@ namespace ConduitLLM.Admin.Endpoints
             var group = app.MapGroup("/v1/admin/provider-tools")
                 .AddEndpointFilter<OperationLoggingEndpointFilter>()
                 .WithTags("Provider Tools");
-            group.MapGet("/", ([FromServices] ProviderToolsEndpoints e, ProviderType? provider = null, bool? isActive = null) => e.GetProviderTools(provider, isActive)).WithName("ProviderTools_GetAll").Produces<IEnumerable<ProviderToolDto>>();
-            group.MapGet("/{id}", ([FromServices] ProviderToolsEndpoints e, int id) => e.GetProviderTool(id)).WithName("ProviderTools_GetById").Produces<ProviderToolDto>().Produces(StatusCodes.Status404NotFound);
-            group.MapPost("/", ([FromServices] ProviderToolsEndpoints e, CreateProviderToolDto dto) => e.CreateProviderTool(dto)).WithName("ProviderTools_Create").Produces<ProviderToolDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest);
-            group.MapPatch("/{id}", ([FromServices] ProviderToolsEndpoints e, int id, JsonMergePatch<UpdateProviderToolDto> patch) => e.UpdateProviderTool(id, patch.Value)).AcceptsJsonMergePatch<UpdateProviderToolDto>().WithName("ProviderTools_Update").Produces<ProviderToolDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
-            group.MapDelete("/{id}", ([FromServices] ProviderToolsEndpoints e, int id) => e.DeleteProviderTool(id)).WithName("ProviderTools_Delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
-            group.MapGet("/providers", ([FromServices] ProviderToolsEndpoints e) => e.GetToolProviders()).WithName("ProviderTools_GetProviders").Produces<IEnumerable<ToolProviderDto>>();
-            group.MapGet("/billing-units", ([FromServices] ProviderToolsEndpoints e) => e.GetBillingUnits()).WithName("ProviderTools_GetBillingUnits").Produces<IEnumerable<string>>();
-            group.MapPost("/import", ([FromServices] ProviderToolsEndpoints e, List<CreateProviderToolDto> tools) => e.ImportProviderTools(tools)).WithName("ProviderTools_Import").Produces<ProviderToolImportResultDto>();
-            group.MapGet("/export", ([FromServices] ProviderToolsEndpoints e) => e.ExportProviderTools()).WithName("ProviderTools_Export").Produces<IEnumerable<ProviderToolDto>>();
+            group.MapGet("/", ([FromServices] ProviderToolsEndpoints e, ProviderType? provider = null, bool? isActive = null) => e.GetProviderTools(provider, isActive)).WithName("ProviderTools_GetAll")
+                .WithSummary("Gets all provider tools.")
+                .WithParameterDescription("provider", "Optional provider type filter")
+                .WithParameterDescription("isActive", "Optional active status filter").Produces<IEnumerable<ProviderToolDto>>();
+            group.MapGet("/{id}", ([FromServices] ProviderToolsEndpoints e, int id) => e.GetProviderTool(id)).WithName("ProviderTools_GetById")
+                .WithSummary("Gets a specific provider tool by ID.")
+                .WithParameterDescription("id", "Tool ID").Produces<ProviderToolDto>().Produces(StatusCodes.Status404NotFound);
+            group.MapPost("/", ([FromServices] ProviderToolsEndpoints e, CreateProviderToolDto dto) => e.CreateProviderTool(dto)).WithName("ProviderTools_Create")
+                .WithSummary("Creates a new provider tool.").Produces<ProviderToolDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest);
+            group.MapPatch("/{id}", ([FromServices] ProviderToolsEndpoints e, int id, JsonMergePatch<UpdateProviderToolDto> patch) => e.UpdateProviderTool(id, patch.Value)).AcceptsJsonMergePatch<UpdateProviderToolDto>().WithName("ProviderTools_Update")
+                .WithSummary("Updates an existing provider tool.")
+                .WithParameterDescription("id", "Tool ID").Produces<ProviderToolDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
+            group.MapDelete("/{id}", ([FromServices] ProviderToolsEndpoints e, int id) => e.DeleteProviderTool(id)).WithName("ProviderTools_Delete")
+                .WithSummary("Deletes a provider tool.")
+                .WithParameterDescription("id", "Tool ID").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
+            group.MapGet("/providers", ([FromServices] ProviderToolsEndpoints e) => e.GetToolProviders()).WithName("ProviderTools_GetProviders")
+                .WithSummary("Gets available provider types that support tools.").Produces<IEnumerable<ToolProviderDto>>();
+            group.MapGet("/billing-units", ([FromServices] ProviderToolsEndpoints e) => e.GetBillingUnits()).WithName("ProviderTools_GetBillingUnits")
+                .WithSummary("Gets available billing units.").Produces<IEnumerable<string>>();
+            group.MapPost("/import", ([FromServices] ProviderToolsEndpoints e, List<CreateProviderToolDto> tools) => e.ImportProviderTools(tools)).WithName("ProviderTools_Import")
+                .WithSummary("Bulk import provider tools from a JSON array.").Produces<ProviderToolImportResultDto>();
+            group.MapGet("/export", ([FromServices] ProviderToolsEndpoints e) => e.ExportProviderTools()).WithName("ProviderTools_Export")
+                .WithSummary("Exports all provider tools as JSON.").Produces<IEnumerable<ProviderToolDto>>();
             return app;
         }
 

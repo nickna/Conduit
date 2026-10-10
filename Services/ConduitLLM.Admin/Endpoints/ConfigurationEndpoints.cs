@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
@@ -25,20 +26,30 @@ public static class ConfigurationEndpoints
 
         group.MapGet("/routing", GetRoutingConfig)
             .WithName("Configuration_GetRouting")
+            .WithSummary("Get routing configuration and statistics")
+            .WithDescription("Returns provider mappings, load-balancer information, routing statistics, and per-alias policies.")
             .Produces<RoutingConfigurationDto>();
         group.MapGet("/routing/defaults", GetRoutingDefaults)
             .WithName("Configuration_GetRoutingDefaults")
+            .WithSummary("Get default routing policy")
             .Produces<RoutingDefaultsDto>();
         group.MapPut("/routing/defaults", PutRoutingDefaults)
             .WithName("Configuration_UpdateRoutingDefaults")
+            .WithSummary("Replace default routing policy")
+            .WithDescription("Replaces the default provider-selection weights and routing strategy. Per-alias policies can override these defaults.")
             .Produces<RoutingDefaultsDto>()
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         group.MapGet("/routing/aliases/{alias}", GetAliasRouting)
             .WithName("Configuration_GetAliasRouting")
+            .WithSummary("Get routing policy for a model alias")
+            .WithParameterDescription("alias", "Model alias whose routing policy is being addressed.")
             .Produces<RoutePolicyDto>()
             .Produces(StatusCodes.Status404NotFound);
         group.MapPut("/routing/aliases/{alias}", PutAliasRouting)
             .WithName("Configuration_UpdateAliasRouting")
+            .WithSummary("Replace routing policy for a model alias")
+            .WithDescription("Replaces provider-selection policy for the specified model alias. Returns 404 when the alias does not exist.")
+            .WithParameterDescription("alias", "Model alias whose routing policy is being addressed.")
             .Produces<RoutePolicyDto>()
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
             .Produces(StatusCodes.Status404NotFound);

@@ -9,6 +9,8 @@ public abstract class AuthorizedOperationSecurityTransformer : IOpenApiOperation
 {
     private readonly string _securitySchemeName;
 
+    protected virtual bool MiddlewareRequiresAuthentication => false;
+
     protected AuthorizedOperationSecurityTransformer(string securitySchemeName)
     {
         _securitySchemeName = securitySchemeName;
@@ -22,7 +24,8 @@ public abstract class AuthorizedOperationSecurityTransformer : IOpenApiOperation
         var metadata = context.Description.ActionDescriptor.EndpointMetadata;
         operation.Security = new List<OpenApiSecurityRequirement>();
 
-        if (metadata.OfType<IAllowAnonymous>().Any() || !metadata.OfType<IAuthorizeData>().Any())
+        if (!MiddlewareRequiresAuthentication &&
+            (metadata.OfType<IAllowAnonymous>().Any() || !metadata.OfType<IAuthorizeData>().Any()))
         {
             return Task.CompletedTask;
         }

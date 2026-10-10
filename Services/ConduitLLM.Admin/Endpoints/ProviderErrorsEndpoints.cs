@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Configuration.Messaging;
@@ -67,26 +68,43 @@ namespace ConduitLLM.Admin.Endpoints
                 .WithTags("Provider Errors");
             group.MapGet("/recent", ([FromServices] ProviderErrorsEndpoints e, int? providerId = null, int? keyId = null, int limit = 100) => e.GetRecentErrors(providerId, keyId, limit))
                 .WithName("ProviderErrors_GetRecent")
+                .WithSummary("Get recent errors across all providers")
+                .WithParameterDescription("providerId", "Optional provider ID filter")
+                .WithParameterDescription("keyId", "Optional key ID filter")
+                .WithParameterDescription("limit", "Maximum number of errors to return (default: 100)")
                 .WithDescription("Returns a bounded tail window of the most recent provider errors; this is intentionally not a paged collection.")
                 .Produces<List<ProviderErrorDto>>()
                 .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             group.MapGet("/summary", ([FromServices] ProviderErrorsEndpoints e) => e.GetErrorSummary())
-                .WithName("ProviderErrors_GetSummary").Produces<List<ProviderErrorSummaryDto>>()
+                .WithName("ProviderErrors_GetSummary")
+                .WithSummary("Get error summary for all providers").Produces<List<ProviderErrorSummaryDto>>()
                 .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             group.MapGet("/keys/{keyId}", ([FromServices] ProviderErrorsEndpoints e, int keyId) => e.GetKeyErrors(keyId))
-                .WithName("ProviderErrors_GetKeyErrors").Produces<KeyErrorDetailsDto>().Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")
+                .WithName("ProviderErrors_GetKeyErrors")
+                .WithSummary("Get detailed error information for a specific key")
+                .WithParameterDescription("keyId", "ID of the key").Produces<KeyErrorDetailsDto>().Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")
                 .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             group.MapPost("/keys/{keyId}/clear", ([FromServices] ProviderErrorsEndpoints e, int keyId, ClearErrorsRequest request) => e.ClearKeyErrors(keyId, request))
-                .WithName("ProviderErrors_ClearKeyErrors").Produces<ClearKeyErrorsResponseDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
+                .WithName("ProviderErrors_ClearKeyErrors")
+                .WithSummary("Clear errors and optionally re-enable a key")
+                .WithParameterDescription("keyId", "ID of the key").Produces<ClearKeyErrorsResponseDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
                 .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             group.MapGet("/stats", ([FromServices] ProviderErrorsEndpoints e, int hours = 24) => e.GetErrorStatistics(hours))
-                .WithName("ProviderErrors_GetStatistics").Produces<ErrorStatisticsDto>()
+                .WithName("ProviderErrors_GetStatistics")
+                .WithSummary("Get error statistics for dashboard")
+                .WithParameterDescription("hours", "Time window in hours (default: 24)").Produces<ErrorStatisticsDto>()
                 .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             group.MapGet("/providers/{providerId}/key-errors", ([FromServices] ProviderErrorsEndpoints e, int providerId, int hours = 1) => e.GetErrorCountsByKey(providerId, hours))
-                .WithName("ProviderErrors_GetCountsByKey").Produces<Dictionary<int, int>>()
+                .WithName("ProviderErrors_GetCountsByKey")
+                .WithSummary("Get error counts by key for a specific provider")
+                .WithParameterDescription("providerId", "Provider ID")
+                .WithParameterDescription("hours", "Time window in hours (default: 1)").Produces<Dictionary<int, int>>()
                 .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             group.MapPost("/keys/{keyId}/disable", ([FromServices] ProviderErrorsEndpoints e, int keyId, string reason) => e.DisableKey(keyId, reason))
-                .WithName("ProviderErrors_DisableKey").Accepts<string>("application/json").Produces<DisableKeyResponseDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
+                .WithName("ProviderErrors_DisableKey")
+                .WithSummary("Manually disable a key due to errors")
+                .WithParameterDescription("keyId", "ID of the key to disable")
+                .WithParameterDescription("reason", "Reason for disabling").Accepts<string>("application/json").Produces<DisableKeyResponseDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
                 .Produces<AdminProblemDetails>(StatusCodes.Status503ServiceUnavailable, "application/problem+json");
             return app;
         }

@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Extensions;
@@ -21,18 +22,30 @@ public static class FunctionExecutionsEndpoints
             .WithTags("FunctionExecutions");
 
         group.MapGet("/{id:guid}", GetById).WithName("FunctionExecutions_GetById")
+            .WithSummary("Get a function execution")
+            .WithParameterDescription("id", "Identifier of the FunctionExecutions resource.")
             .Produces<AdminFunctionExecutionDto>().Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapGet("/virtual-keys/{virtualKeyId:int}", GetByVirtualKey)
-            .WithName("FunctionExecutions_GetByVirtualKey").Produces<List<AdminFunctionExecutionDto>>();
+            .WithName("FunctionExecutions_GetByVirtualKey")
+            .WithSummary("List function executions for a virtual key")
+            .WithParameterDescription("virtualKeyId", "Identifier of the virtual key.").Produces<List<AdminFunctionExecutionDto>>();
         group.MapGet("/configuration/{functionConfigurationId:int}", GetByConfiguration)
-            .WithName("FunctionExecutions_GetByConfiguration").Produces<List<AdminFunctionExecutionDto>>();
+            .WithName("FunctionExecutions_GetByConfiguration")
+            .WithSummary("List function executions for a configuration")
+            .WithParameterDescription("functionConfigurationId", "Identifier of the function configuration.").Produces<List<AdminFunctionExecutionDto>>();
         group.MapGet("/state/{state}", GetByState).WithName("FunctionExecutions_GetByState")
+            .WithSummary("List function executions in a given state")
+            .WithParameterDescription("state", "Execution or task state to filter by.")
             .Produces<List<AdminFunctionExecutionDto>>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         group.MapGet("/expired-leases", GetExpiredLeases).WithName("FunctionExecutions_GetExpiredLeases")
+            .WithSummary("List function executions with expired leases")
             .Produces<List<AdminFunctionExecutionDto>>();
         group.MapGet("/ready-for-retry", GetReadyForRetry).WithName("FunctionExecutions_GetReadyForRetry")
+            .WithSummary("List function executions ready for retry")
             .Produces<List<AdminFunctionExecutionDto>>();
         group.MapDelete("/cleanup", Cleanup).WithName("FunctionExecutions_Cleanup")
+            .WithSummary("Delete old function execution records")
+            .WithParameterDescription("olderThanDays", "Minimum record age in days for cleanup.")
             .Produces<FunctionExecutionCleanupResultDto>().Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         return app;
     }

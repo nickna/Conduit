@@ -122,7 +122,7 @@ public partial class Program
             options.AddOperationTransformer<ConduitLLM.Gateway.OpenApi.VirtualKeySecurityOperationTransformer>();
             options.AddOperationTransformer<ConduitLLM.Gateway.OpenApi.ResponseContractOperationTransformer>();
             options.AddSchemaTransformer<ConduitLLM.Gateway.OpenApi.StructuredJsonSchemaTransformer>();
-            options.AddDocumentTransformer<ConduitLLM.Gateway.OpenApi.UnusedSchemaPruningDocumentTransformer>();
+            options.AddDocumentTransformer<ConduitLLM.Core.OpenApi.UnusedSchemaPruningDocumentTransformer>();
             options.AddDocumentTransformer<ConduitLLM.Core.OpenApi.OperationIdValidationDocumentTransformer>();
             options.AddDocumentTransformer<ConduitLLM.Core.OpenApi.DocumentationLineEndingDocumentTransformer>();
         });

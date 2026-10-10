@@ -35,20 +35,27 @@ function schemaType(schema) {
   return Array.isArray(schema.type) ? schema.type.find((type) => type !== 'null') : schema.type;
 }
 
-function containsBinarySchema(schema, seen = new Set()) {
+function containsBinarySchema(schema, document, seen = new Set()) {
   if (!schema || typeof schema !== 'object' || seen.has(schema)) return false;
   seen.add(schema);
-  if (schemaType(schema) === 'string' && schema.format === 'binary') return true;
-  if (schema.items && containsBinarySchema(schema.items, seen)) return true;
-  for (const child of [...(schema.allOf ?? []), ...(schema.oneOf ?? []), ...(schema.anyOf ?? [])]) {
-    if (containsBinarySchema(child, seen)) return true;
+  if (schema.$ref?.startsWith('#/')) {
+    const target = schema.$ref.slice(2).split('/').reduce((value, segment) =>
+      value?.[segment.replaceAll('~1', '/').replaceAll('~0', '~')], document);
+    return containsBinarySchema(target, document, seen);
   }
-  return Object.values(schema.properties ?? {}).some((property) => containsBinarySchema(property, seen));
+  if (schemaType(schema) === 'string' && schema.format === 'binary') return true;
+  if (schema.items && containsBinarySchema(schema.items, document, seen)) return true;
+  for (const child of [...(schema.allOf ?? []), ...(schema.oneOf ?? []), ...(schema.anyOf ?? [])]) {
+    if (containsBinarySchema(child, document, seen)) return true;
+  }
+  return Object.values(schema.properties ?? {}).some((property) => containsBinarySchema(property, document, seen));
 }
 
-function isAllowedMediaType(contentType, schema) {
+function isAllowedMediaType(contentType, schema, document, operation) {
   if (allowedMediaTypes.has(contentType)) return true;
-  return containsBinarySchema(schema);
+  if (operation?.operationId === 'Metrics_GetAllMetrics' && schemaType(schema) === 'string' &&
+      ['text/plain', 'application/openmetrics-text'].includes(contentType)) return true;
+  return containsBinarySchema(schema, document);
 }
 
 function isGenericSuccessSchema(schema) {
@@ -188,7 +195,7 @@ function validateDocument(file, document) {
 
       for (const [contentType, media] of Object.entries(operation.requestBody?.content ?? {})) {
         const target = `${location} request ${contentType}`;
-        if (!isAllowedMediaType(contentType, media.schema)) {
+        if (!isAllowedMediaType(contentType, media.schema, document, operation)) {
           violate('unsupported-media-type', target, 'request uses a non-canonical media type');
         }
         visitSchemaProperties(media.schema, `#/paths/${route}/${method}/requestBody/content/${contentType}/schema`,
@@ -206,7 +213,7 @@ function validateDocument(file, document) {
           continue;
         }
         for (const [contentType, media] of Object.entries(content)) {
-          if (!isAllowedMediaType(contentType, media.schema)) {
+          if (!isAllowedMediaType(contentType, media.schema, document, operation)) {
             violate('unsupported-media-type', `${responseLocation} ${contentType}`,
               'response uses a non-canonical media type');
           }
@@ -428,6 +435,18 @@ function selfTest() {
     properties: { data: { type: 'array', items: { type: 'string' } } },
   };
   assert.equal(validateDocument('openapi-admin.json', structuredClone(base)).violations.length, 0);
+
+  const upload = structuredClone(base);
+  upload.components.schemas.File = { type: 'string', format: 'binary' };
+  upload.paths['/v1/admin/widgets'].get.requestBody = {
+    content: { 'multipart/form-data': { schema: { type: 'object',
+      properties: { file: { $ref: '#/components/schemas/File' } } } } },
+  };
+  assert.equal(validateDocument('openapi-admin.json', upload).violations.length, 0,
+    'multipart uploads may reference a reusable binary schema');
+  upload.components.schemas.File = { $ref: '#/components/schemas/File' };
+  assert(validateDocument('openapi-admin.json', upload).violations.some(v => v.rule === 'unsupported-media-type'),
+    'cyclic or nonbinary references must not bypass media validation');
 
   const broken = structuredClone(base);
   broken.paths['/v1/admin/widget'] = broken.paths['/v1/admin/widgets'];

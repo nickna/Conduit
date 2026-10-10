@@ -1,3 +1,4 @@
+using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Admin.Auditing;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Interfaces;
@@ -16,25 +17,37 @@ public static class NotificationsEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Notifications");
         group.MapGet("/", GetAll).WithName("Notifications_GetAll")
+            .WithSummary("List administrative notifications")
             .Produces<IEnumerable<NotificationDto>>(StatusCodes.Status200OK);
         group.MapGet("/unread", GetUnread).WithName("Notifications_GetUnread")
+            .WithSummary("List unread administrative notifications")
             .Produces<IEnumerable<NotificationDto>>(StatusCodes.Status200OK);
         group.MapGet("/{id}", GetById).WithName("Notifications_GetById")
+            .WithSummary("Get an administrative notification")
+            .WithParameterDescription("id", "Identifier of the Notifications resource.")
             .Produces<NotificationDto>(StatusCodes.Status200OK)
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapPost("/", Create).WithName("Notifications_Create")
+            .WithSummary("Create an administrative notification")
             .Produces<NotificationDto>(StatusCodes.Status201Created)
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json");
         group.MapPatch("/{id}", Update).AcceptsJsonMergePatch<UpdateNotificationDto>().WithName("Notifications_Update")
+            .WithSummary("Update an administrative notification")
+            .WithParameterDescription("id", "Identifier of the Notifications resource.")
             .Produces<NotificationDto>()
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapPost("/{id}/read", MarkAsRead).WithName("Notifications_MarkAsRead")
+            .WithSummary("Mark an administrative notification as read")
+            .WithParameterDescription("id", "Identifier of the Notifications resource.")
             .Produces(StatusCodes.Status204NoContent)
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         group.MapPost("/mark-all-read", MarkAllAsRead).WithName("Notifications_MarkAllAsRead")
+            .WithSummary("Mark all administrative notifications as read")
             .Produces<int>(StatusCodes.Status200OK);
         group.MapDelete("/{id}", Delete).WithName("Notifications_Delete")
+            .WithSummary("Delete an administrative notification")
+            .WithParameterDescription("id", "Identifier of the Notifications resource.")
             .Produces(StatusCodes.Status204NoContent)
             .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
         return app;
