@@ -18,8 +18,8 @@ collected. A synthetic benchmark alone cannot clear these blockers.
 The release workflow therefore publishes only immutable candidate tags:
 
 ```text
-ghcr.io/nickna/conduit-admin-native:<version>-candidate
-ghcr.io/nickna/conduit-http-native:<version>-candidate
+ghcr.io/nickna/conduit-admin-native:<version>-candidate-<run_id>-<run_attempt>
+ghcr.io/nickna/conduit-http-native:<version>-candidate-<run_id>-<run_attempt>
 ```
 
 It never gives these images a version, `latest`, or `beta` deployment tag. Existing
@@ -81,6 +81,15 @@ Docker, kernel, PostgreSQL, and Redis versions with the canary evidence. Do not
 compare runs from unlike hosts. `-NativeBaselinePath` is required for a promotion
 decision even though the measurement script permits a benchmark-only run without it.
 
+The current script sends load only to `/health/ready` and starts containers with
+`CONDUIT_MIGRATION_MODE=Skip`. Its throughput and latency describe that endpoint,
+not authenticated Admin operations, provider requests, durable workers, or normal
+schema-wait startup. Add representative workload drivers and record their identical
+inputs, backing services, host environment, request counts, and concurrency before
+using measurements to justify a production decision. The evaluator requires equal
+positive integer request counts and concurrency for JIT and native reports; that
+comparability check alone does not establish representative workload coverage.
+
 No production comparison is accepted yet. The existing ~102–103 MiB native
 executable baseline did not exercise the production database workload, so it cannot
 justify promotion. Promotion is deferred because of that missing workload parity and
@@ -118,7 +127,8 @@ size, readiness, memory, throughput, and latency measurement; a matching linux-x
 native publish baseline; matching JIT and backing-service evidence; dashboard and
 alert links; critical-vulnerability review; and verified SBOM/provenance attestations.
 It independently recalculates every comparison percentage and rejects inconsistent or
-incomplete reports. Claimed soak hours cannot exceed the recorded timestamps.
+incomplete reports, including mismatched request counts or concurrency. Claimed soak
+hours cannot exceed the recorded timestamps.
 
 ## Canary procedure
 

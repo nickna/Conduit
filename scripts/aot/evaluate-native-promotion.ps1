@@ -53,6 +53,14 @@ function Get-RequiredPositiveNumber($Object, [string] $PropertyName, [string] $D
     return $value
 }
 
+function Get-RequiredPositiveInteger($Object, [string] $PropertyName, [string] $Description) {
+    $value = Get-RequiredPositiveNumber $Object $PropertyName $Description
+    if ($null -ne $value -and $value -ne [Math]::Floor($value)) {
+        $failures.Add("$Description must be a whole number")
+    }
+    return $value
+}
+
 function Get-RequiredNonNegativeNumber($Object, [string] $PropertyName, [string] $Description) {
     $value = Get-RequiredNumber $Object $PropertyName $Description
     if ($null -ne $value -and $value -lt 0) {
@@ -208,12 +216,14 @@ foreach ($variantName in 'jit', 'native') {
         continue
     }
     if ($variant.runtime -ne $expectedRuntime) { $failures.Add("$variantName benchmark runtime is invalid") }
-    $requests = Get-RequiredPositiveNumber $variant 'requests' "$variantName benchmark request count"
-    $concurrency = Get-RequiredPositiveNumber $variant 'concurrency' "$variantName benchmark concurrency"
+    $requests = Get-RequiredPositiveInteger $variant 'requests' "$variantName benchmark request count"
+    $concurrency = Get-RequiredPositiveInteger $variant 'concurrency' "$variantName benchmark concurrency"
     $benchmarkFailures = Get-RequiredNonNegativeNumber $variant 'failures' "$variantName benchmark failure count"
     if ($null -ne $benchmarkFailures -and $benchmarkFailures -ne 0) { $failures.Add("$variantName benchmark contains failed requests") }
 
     $variantMetrics[$variantName] = [pscustomobject]@{
+        requests = $requests
+        concurrency = $concurrency
         imageBytes = Get-RequiredPositiveNumber $variant 'imageBytes' "$variantName image size"
         pullBytes = Get-RequiredPositiveNumber $variant 'pullBytes' "$variantName compressed pull size"
         coldReadinessMilliseconds = Get-RequiredPositiveNumber $variant 'coldReadinessMilliseconds' "$variantName cold-readiness duration"
@@ -235,6 +245,14 @@ foreach ($variantName in 'jit', 'native') {
         if ($Matches[1] -ne $recordedDigest) {
             $failures.Add("$variantName benchmark image digest does not match canary evidence")
         }
+    }
+}
+
+foreach ($workloadProperty in 'requests', 'concurrency') {
+    $jitWorkload = $variantMetrics.jit.$workloadProperty
+    $nativeWorkload = $variantMetrics.native.$workloadProperty
+    if ($null -ne $jitWorkload -and $null -ne $nativeWorkload -and $jitWorkload -ne $nativeWorkload) {
+        $failures.Add("JIT and native benchmark values for $workloadProperty do not match")
     }
 }
 
