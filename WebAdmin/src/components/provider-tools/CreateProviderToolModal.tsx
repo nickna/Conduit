@@ -89,7 +89,7 @@ export function CreateProviderToolModal({ isOpen, onClose, onSuccess }: CreatePr
           label: p.name,
         }))}
         {...form.getInputProps('provider')}
-        onChange={(value) => form.setFieldValue(
+        onChange={(value: string | null) => form.setFieldValue(
           'provider',
           value ? normalizeProviderType(value) ?? ProviderType.Unknown : ProviderType.Unknown
         )}

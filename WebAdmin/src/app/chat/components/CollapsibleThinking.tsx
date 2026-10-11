@@ -42,7 +42,7 @@ export function CollapsibleThinking({ content, icon, title }: CollapsibleThinkin
           {isOpen ? 'Click to collapse' : 'Click to expand'}
         </Text>
       </Group>
-      <Collapse in={isOpen}>
+      <Collapse expanded={isOpen}>
         <div style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
         </div>

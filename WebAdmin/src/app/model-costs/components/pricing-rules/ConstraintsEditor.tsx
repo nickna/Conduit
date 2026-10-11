@@ -92,7 +92,7 @@ export function ConstraintsEditor({
         </Group>
       </Group>
 
-      <Collapse in={hasConstraints}>
+      <Collapse expanded={hasConstraints}>
         <Card withBorder p="md" bg="gray.0">
           <Stack gap="md">
             {/* Duration Constraints - shown for per_second pricing */}

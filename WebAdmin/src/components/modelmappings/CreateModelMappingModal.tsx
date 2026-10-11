@@ -147,7 +147,7 @@ export function CreateModelMappingModal({
                 searchable
                 required
                 {...form.getInputProps('modelId')}
-                onChange={(value) => {
+                onChange={(value: string | null) => {
                   form.setFieldValue('modelId', value ? parseInt(value, 10) : null);
                   // Auto-fill model alias if empty
                   if (!form.values.modelAlias && value) {

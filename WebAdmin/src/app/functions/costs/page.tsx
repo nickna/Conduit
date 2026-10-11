@@ -435,7 +435,7 @@ export default function FunctionCostsPage() {
         title={editingCost ? 'Edit Cost Configuration' : 'Create Cost Configuration'}
         size="xl"
       >
-        <Grid gutter="md">
+        <Grid gap="md">
           <Grid.Col span={6}>
             <Stack gap="md">
               <TextInput

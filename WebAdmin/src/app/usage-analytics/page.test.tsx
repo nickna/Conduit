@@ -21,7 +21,7 @@ describe('UsageAnalyticsPage', () => {
   it('switches the embedded and full Grafana links together', () => {
     render(<MantineProvider><UsageAnalyticsPage /></MantineProvider>);
 
-    fireEvent.click(screen.getByRole('textbox', { name: 'Dashboard' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Dashboard' }));
     fireEvent.click(screen.getByRole('option', { name: 'Infrastructure' }));
 
     const expected = '/grafana/d/conduit-infrastructure/infrastructure?kiosk&refresh=30s&theme=dark';
