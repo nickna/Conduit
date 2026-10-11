@@ -308,11 +308,15 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
                 await context.SaveChangesAsync();
 
                 _logger.LogDebug("Final flush of {Count} {EntityName} audit events to database", events.Count, EntityName);
+                AuditEventsFlushed.WithLabels(EntityName, "success").Inc(events.Count);
+                AuditQueueDepth.WithLabels(EntityName).Set(_eventQueue.Count);
             }
         }
         catch (Exception ex)
         {
             RequeueEvents(events);
+            // Preserve shutdown's failure contract: requeue and rethrow without counting
+            // a normal background-flush failure. Only successful drains update metrics.
             _logger.LogError(ex, "Failed to flush remaining {EntityName} audit events to database", EntityName);
             throw;
         }
