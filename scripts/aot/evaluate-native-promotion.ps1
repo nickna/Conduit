@@ -14,6 +14,10 @@ param(
 
     [string] $AdminCanaryEvidencePath,
 
+    [string] $AdminBenchmarkPath,
+
+    [string] $QualificationEvidencePath,
+
     [string] $NativePackagingDirectory,
 
     [switch] $ReportOnly
@@ -23,17 +27,84 @@ $Service = $Service.ToLowerInvariant()
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'native-benchmark-image-evidence.ps1')
 . (Join-Path $PSScriptRoot 'native-benchmark-attempt-evidence.ps1')
-$policy = Get-Content -LiteralPath $PolicyPath -Raw | ConvertFrom-Json
-$evidence = Get-Content -LiteralPath $CanaryEvidencePath -Raw | ConvertFrom-Json
+. (Join-Path $PSScriptRoot 'native-benchmark-qualification-evidence.ps1')
 $failures = [System.Collections.Generic.List[string]]::new()
+$policyDocument = $null
+$canaryDocument = $null
+$adminCanaryDocument = $null
+$qualificationEvidence = $null
+$adminQualificationEvidence = $null
+$adminBenchmarkAttemptEvidence = $null
 $benchmarkDocument = $null
 $benchmarkAttemptEvidence = $null
+
+function ConvertTo-NativePromotionObject($Value) {
+    return (Get-NativeEvidenceObject $Value) | ConvertTo-Json -Depth 64 -Compress | ConvertFrom-Json -DateKind String
+}
+function Read-NativePromotionSelectedAttempt([string] $OutputPath, [string] $ExpectedService, $Qualification) {
+    if ($null -ne $Qualification -and $Qualification['approval']['selection'] -ceq 'historical') {
+        if ($policy.historicalEvidencePolicy -isnot [string] -or $policy.historicalEvidencePolicy -cne 'approved-archive') {
+            throw 'Historical benchmark selection is not permitted by the policy.'
+        }
+        return ,(Read-NativeBenchmarkAttemptArchiveEvidence -OutputPath $OutputPath -Service $ExpectedService -AttemptId $Qualification['approval']['attemptId'])
+    }
+    return ,(Read-NativeBenchmarkAttemptEvidence -OutputPath $OutputPath -Service $ExpectedService)
+}
+function Assert-NativePromotionAttemptUnchanged($Before, $After) {
+    foreach ($field in 'latestSha256', 'attemptSha256', 'reportSha256', 'reportPath') {
+        if ($After[$field] -cne $Before[$field]) { throw 'Benchmark attempt evidence changed during evaluation.' }
+    }
+    foreach ($field in 'attemptId', 'service') {
+        if ($After['attempt'][$field] -cne $Before['attempt'][$field]) { throw 'Benchmark attempt identity changed during evaluation.' }
+    }
+    if ($Before.Contains('latestAttemptSha256') -and $After['latestAttemptSha256'] -cne $Before['latestAttemptSha256']) {
+        throw 'Acknowledged failed benchmark attempt changed during evaluation.'
+    }
+}
+
+try {
+    $policyDocument = Read-NativeBenchmarkAttemptDocument -Path $PolicyPath
+    $policy = ConvertTo-NativePromotionObject $policyDocument['value']
+}
+catch {
+    $policy = [pscustomobject]@{}
+    $failures.Add('promotion policy document is malformed or exceeds its bounded JSON contract')
+}
+try {
+    $canaryDocument = Read-NativeBenchmarkAttemptDocument -Path $CanaryEvidencePath
+    $evidence = ConvertTo-NativePromotionObject $canaryDocument['value']
+}
+catch {
+    $evidence = [pscustomobject]@{}
+    $failures.Add('canary evidence document is malformed or exceeds its bounded JSON contract')
+}
+if ([string]::IsNullOrWhiteSpace($QualificationEvidencePath)) {
+    $failures.Add('accepted benchmark qualification evidence is required')
+}
+else {
+    try { $qualificationEvidence = Read-NativeBenchmarkQualificationEvidence -Path $QualificationEvidencePath -Service $Service }
+    catch { $failures.Add('accepted benchmark qualification evidence could not be verified') }
+}
+
+$historicalSelection = $null -ne $qualificationEvidence -and $qualificationEvidence['approval']['selection'] -ceq 'historical'
+$selectedBenchmarkPath = $BenchmarkPath
+if ($historicalSelection) {
+    try {
+        $benchmarkAttemptEvidence = Read-NativePromotionSelectedAttempt $BenchmarkPath $Service $qualificationEvidence
+        $selectedBenchmarkPath = $benchmarkAttemptEvidence['reportPath']
+    }
+    catch {
+        $selectedBenchmarkPath = $null
+        $failures.Add('benchmark approved historical collection attempt could not be verified against the original archive')
+    }
+}
 try {
     # Preserve integer and finite fractional metrics, while rejecting duplicate
     # JSON keys before PowerShell object conversion can discard them.
-    $benchmarkDocument = Read-NativeImageOciEvidenceDocument -Path $BenchmarkPath
+    if ($null -eq $selectedBenchmarkPath) { throw 'No approved historical benchmark was selected.' }
+    $benchmarkDocument = Read-NativeImageOciEvidenceDocument -Path $selectedBenchmarkPath
     $benchmarkValue = Get-NativeEvidenceObject $benchmarkDocument['value']
-    $benchmark = $benchmarkValue | ConvertTo-Json -Depth 64 -Compress | ConvertFrom-Json -DateKind String
+    $benchmark = ConvertTo-NativePromotionObject $benchmarkValue
 }
 catch {
     $benchmark = [pscustomobject]@{}
@@ -41,14 +112,17 @@ catch {
 }
 if ($null -ne $benchmarkDocument) {
     try {
-        $benchmarkAttemptEvidence = Read-NativeBenchmarkAttemptEvidence -OutputPath $BenchmarkPath -Service $Service
+        if (-not $historicalSelection) {
+            $benchmarkAttemptEvidence = Read-NativePromotionSelectedAttempt $BenchmarkPath $Service $qualificationEvidence
+        }
         if ($benchmarkAttemptEvidence['reportSha256'] -cne $benchmarkDocument['sha256']) {
             throw 'Benchmark original report changed before its attempt was read.'
         }
     }
     catch {
         $benchmarkAttemptEvidence = $null
-        $failures.Add('benchmark latest successful collection attempt could not be verified against the original report')
+        if ($historicalSelection) { $failures.Add('benchmark approved historical collection attempt could not be verified against the original archive') }
+        else { $failures.Add('benchmark latest successful collection attempt could not be verified against the original report') }
     }
 }
 
@@ -207,6 +281,9 @@ elseif (@($policy.blockedBy).Count -ne 0) {
 }
 $policySchema = Get-RequiredPositiveInteger $policy 'schemaVersion' 'promotion policy schema version'
 if ($policySchema -ne 1) { $failures.Add('promotion policy schema version is not supported') }
+if ($policy.historicalEvidencePolicy -isnot [string] -or $policy.historicalEvidencePolicy -cnotin @('latest-only', 'approved-archive')) {
+    $failures.Add('promotion historical evidence policy must be latest-only or approved-archive')
+}
 if (@($policy.sequence).Count -ne 2 -or $policy.sequence[0] -ne 'admin' -or $policy.sequence[1] -ne 'gateway') {
     $failures.Add('promotion policy sequence must be Admin followed by Gateway')
 }
@@ -245,13 +322,55 @@ if ($benchmarkSchema -eq 4) {
 }
 
 $canaryTimes = Test-CanaryEvidence $evidence $Service 'canary evidence'
+if ($null -ne $qualificationEvidence -and $null -ne $benchmarkAttemptEvidence -and $null -ne $canaryDocument) {
+    try {
+        Assert-NativeBenchmarkQualificationTimeline -QualificationEvidence $qualificationEvidence -AttemptEvidence $benchmarkAttemptEvidence `
+            -CanaryDocument $canaryDocument -HistoricalEvidencePolicy $policy.historicalEvidencePolicy -Now ([DateTimeOffset]::UtcNow)
+    }
+    catch { $failures.Add('benchmark collection attempt does not match the accepted qualification window or selection') }
+}
 if ($Service -eq 'gateway') {
     if ([string]::IsNullOrWhiteSpace($AdminCanaryEvidencePath)) { $failures.Add('Gateway promotion requires accepted Admin canary evidence') }
     else {
-        $adminEvidence = Get-Content -LiteralPath $AdminCanaryEvidencePath -Raw | ConvertFrom-Json
+        try {
+            $adminCanaryDocument = Read-NativeBenchmarkAttemptDocument -Path $AdminCanaryEvidencePath
+            $adminEvidence = ConvertTo-NativePromotionObject $adminCanaryDocument['value']
+        }
+        catch {
+            $adminEvidence = [pscustomobject]@{}
+            $failures.Add('Admin canary evidence document is malformed or exceeds its bounded JSON contract')
+        }
         $adminTimes = Test-CanaryEvidence $adminEvidence 'admin' 'Admin canary evidence'
         if ($adminTimes.completedAt -ne [DateTimeOffset]::MinValue -and $canaryTimes.startedAt -ne [DateTimeOffset]::MinValue -and
             $adminTimes.completedAt -gt $canaryTimes.startedAt) { $failures.Add('Gateway canary started before the Admin canary completed') }
+    }
+    if ($null -ne $qualificationEvidence) {
+        try {
+            $adminQualificationEvidence = Read-NativeBenchmarkQualificationEvidence -Path $QualificationEvidencePath -Service 'admin'
+            if ($adminQualificationEvidence['sha256'] -cne $qualificationEvidence['sha256']) { throw 'Qualification changed before Admin approval was read.' }
+            $adminAcceptedAt = Get-NativeBenchmarkAttemptUtc $adminQualificationEvidence['approval']['acceptedAt']
+            if ($canaryTimes.startedAt -ne [DateTimeOffset]::MinValue -and $adminAcceptedAt -gt $canaryTimes.startedAt) {
+                $failures.Add('Gateway canary started before the Admin qualification was accepted')
+            }
+        }
+        catch {
+            $adminQualificationEvidence = $null
+            $failures.Add('Gateway promotion requires an accepted Admin qualification')
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($AdminBenchmarkPath)) {
+        $failures.Add('Gateway promotion requires accepted Admin benchmark collection evidence')
+    }
+    elseif ($null -ne $adminQualificationEvidence) {
+        try { $adminBenchmarkAttemptEvidence = Read-NativePromotionSelectedAttempt $AdminBenchmarkPath 'admin' $adminQualificationEvidence }
+        catch { $failures.Add('Admin benchmark collection attempt could not be verified against its accepted qualification') }
+    }
+    if ($null -ne $adminQualificationEvidence -and $null -ne $adminBenchmarkAttemptEvidence -and $null -ne $adminCanaryDocument) {
+        try {
+            Assert-NativeBenchmarkQualificationTimeline -QualificationEvidence $adminQualificationEvidence -AttemptEvidence $adminBenchmarkAttemptEvidence `
+                -CanaryDocument $adminCanaryDocument -HistoricalEvidencePolicy $policy.historicalEvidencePolicy -Now ([DateTimeOffset]::UtcNow)
+        }
+        catch { $failures.Add('Admin benchmark collection attempt does not match the accepted qualification window or selection') }
     }
 }
 
@@ -503,19 +622,52 @@ if ($benchmarkSchema -eq 4 -and $null -ne $nativeImageEvidence) {
 }
 if ($null -ne $benchmarkAttemptEvidence) {
     try {
-        $finalBenchmarkAttemptEvidence = Read-NativeBenchmarkAttemptEvidence -OutputPath $BenchmarkPath -Service $Service
-        foreach ($field in 'latestSha256', 'attemptSha256', 'reportSha256', 'reportPath') {
-            if ($finalBenchmarkAttemptEvidence[$field] -cne $benchmarkAttemptEvidence[$field]) {
-                throw 'Benchmark attempt evidence changed during evaluation.'
-            }
+        $finalBenchmarkAttemptEvidence = Read-NativePromotionSelectedAttempt $BenchmarkPath $Service $qualificationEvidence
+        Assert-NativePromotionAttemptUnchanged $benchmarkAttemptEvidence $finalBenchmarkAttemptEvidence
+    }
+    catch {
+        if ($historicalSelection) { $failures.Add('benchmark approved historical collection attempt changed or could not be reverified after evaluation') }
+        else { $failures.Add('benchmark latest successful collection attempt changed or could not be reverified after evaluation') }
+    }
+}
+if ($null -ne $adminBenchmarkAttemptEvidence) {
+    try {
+        $finalAdminBenchmarkAttemptEvidence = Read-NativePromotionSelectedAttempt $AdminBenchmarkPath 'admin' $adminQualificationEvidence
+        Assert-NativePromotionAttemptUnchanged $adminBenchmarkAttemptEvidence $finalAdminBenchmarkAttemptEvidence
+    }
+    catch { $failures.Add('Admin benchmark collection attempt changed or could not be reverified after evaluation') }
+}
+foreach ($entry in @(
+    @{ original = $policyDocument; path = $PolicyPath; description = 'promotion policy' },
+    @{ original = $canaryDocument; path = $CanaryEvidencePath; description = 'canary evidence' },
+    @{ original = $adminCanaryDocument; path = $AdminCanaryEvidencePath; description = 'Admin canary evidence' }
+)) {
+    if ($null -eq $entry.original) { continue }
+    try {
+        $finalDocument = Read-NativeBenchmarkAttemptDocument -Path $entry.path
+        if ($finalDocument['sha256'] -cne $entry.original['sha256']) { throw 'Original promotion evidence bytes changed.' }
+    }
+    catch { $failures.Add($entry.description + ' changed or could not be reverified after evaluation') }
+}
+if ($null -ne $qualificationEvidence) {
+    try {
+        $finalQualificationEvidence = Read-NativeBenchmarkQualificationEvidence -Path $QualificationEvidencePath -Service $Service
+        if ($finalQualificationEvidence['sha256'] -cne $qualificationEvidence['sha256']) { throw 'Accepted qualification bytes changed.' }
+    }
+    catch { $failures.Add('accepted benchmark qualification evidence changed or could not be reverified after evaluation') }
+    # Check expiry last, including time spent replaying original OCI/report bytes.
+    try {
+        $finalNow = [DateTimeOffset]::UtcNow
+        if ($null -ne $benchmarkAttemptEvidence -and $null -ne $canaryDocument) {
+            Assert-NativeBenchmarkQualificationTimeline -QualificationEvidence $qualificationEvidence -AttemptEvidence $benchmarkAttemptEvidence `
+                -CanaryDocument $canaryDocument -HistoricalEvidencePolicy $policy.historicalEvidencePolicy -Now $finalNow
         }
-        foreach ($field in 'attemptId', 'service') {
-            if ($finalBenchmarkAttemptEvidence['attempt'][$field] -cne $benchmarkAttemptEvidence['attempt'][$field]) {
-                throw 'Benchmark attempt identity changed during evaluation.'
-            }
+        if ($null -ne $adminQualificationEvidence -and $null -ne $adminBenchmarkAttemptEvidence -and $null -ne $adminCanaryDocument) {
+            Assert-NativeBenchmarkQualificationTimeline -QualificationEvidence $adminQualificationEvidence -AttemptEvidence $adminBenchmarkAttemptEvidence `
+                -CanaryDocument $adminCanaryDocument -HistoricalEvidencePolicy $policy.historicalEvidencePolicy -Now $finalNow
         }
     }
-    catch { $failures.Add('benchmark latest successful collection attempt changed or could not be reverified after evaluation') }
+    catch { $failures.Add('accepted benchmark qualification window or selection changed or expired during evaluation') }
 }
 
 $decision = if ($failures.Count -eq 0) { 'promote' } else { 'hold' }

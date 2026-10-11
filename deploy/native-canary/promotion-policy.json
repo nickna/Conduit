@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "status": "blocked",
+  "historicalEvidencePolicy": "latest-only",
   "blockedBy": [
     "ADR 0006 keeps the EF-backed Admin production path on JIT while EF Core NativeAOT query execution is experimental.",
     "Admin management/reporting EF queries remain unsupported; bounded warning exceptions do not establish native workload parity.",

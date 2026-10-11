@@ -175,11 +175,11 @@ the attempt records success. A failed rerun preserves the previous report while
 the new failed or running attempt disqualifies it as the latest result. Reports
 created before attempt tracking are retained by their original hash for inspection.
 Retain the entire attempt directory with the public report. The evaluator requires
-schema 4, exact original report/archive hashes and matching successful latest
-attempt identity and timestamps. It rechecks the attempt after image and metric
-evaluation; an active writer or changed attempt holds promotion. The accepted
-qualification window and explicit historical-evidence policy remain tracked in
-[#1583](https://github.com/nickna/Conduit/issues/1583).
+schema 4, exact original report/archive hashes and matching successful attempt
+identity and timestamps. Its default selection requires the latest successful
+attempt. It rechecks the attempt after image and metric evaluation; an active
+writer or changed attempt holds promotion. Archived selection requires the
+explicit approval described below; legacy hash-named inspection copies cannot qualify.
 
 The evaluator independently recomputes the medians and comparisons, validates
 complete zero-failure workloads and identical load parameters and fingerprints
@@ -198,21 +198,25 @@ The machine-readable policy is
 `deploy/native-canary/promotion-policy.json`. It is deliberately `blocked`; changing
 it to `open` is a reviewed production decision, not a release-script side effect.
 When the blockers are resolved, populate a copy of `evidence.template.json` from the
-deployment and monitoring systems, then evaluate it with the benchmark:
+deployment and monitoring systems and record the accepted qualification timeline,
+then evaluate it with the benchmark:
 
 ```powershell
 ./scripts/aot/evaluate-native-promotion.ps1 `
   -Service admin `
   -BenchmarkPath artifacts/native-benchmark/admin.json `
   -NativePackagingDirectory artifacts/native-image/admin/packaging-<owner> `
-  -CanaryEvidencePath artifacts/native-canary/admin-evidence.json
+  -CanaryEvidencePath artifacts/native-canary/admin-evidence.json `
+  -QualificationEvidencePath artifacts/native-canary/qualification.json
 
 ./scripts/aot/evaluate-native-promotion.ps1 `
   -Service gateway `
   -BenchmarkPath artifacts/native-benchmark/gateway.json `
   -NativePackagingDirectory artifacts/native-image/gateway/packaging-<owner> `
   -CanaryEvidencePath artifacts/native-canary/gateway-evidence.json `
-  -AdminCanaryEvidencePath artifacts/native-canary/admin-evidence.json
+  -AdminCanaryEvidencePath artifacts/native-canary/admin-evidence.json `
+  -AdminBenchmarkPath artifacts/native-benchmark/admin.json `
+  -QualificationEvidencePath artifacts/native-canary/qualification.json
 ```
 
 The gate requires at least a 10% image reduction, 20% cold-readiness reduction, 15%
@@ -230,6 +234,64 @@ and comparison percentages and rejects incomplete reports or changed request cou
 concurrency, warm-ups, deadlines and input fingerprints. Throughput and p99 thresholds
 apply to each workload separately. Claimed soak hours cannot exceed recorded timestamps.
 
+## Accepted qualification window and archived evidence
+
+Start from `deploy/native-canary/qualification.template.json`. The pending template
+always holds promotion. An accepted schema-1 record contains its kind
+`conduit-native-benchmark-qualification`, a nonzero lowercase GUID in N format as
+`qualificationId`, `status: "accepted"`, UTC `windowStartedAt` and `windowEndsAt`,
+and exactly `admin` and `gateway` entries in `services`. The Gateway entry can
+remain null while only Admin evidence has been accepted. Each accepted service
+entry contains exactly these fields:
+
+```json
+{
+  "selection": "latest",
+  "attemptId": "<successful attempt GUID in N format>",
+  "reportSha256": "<original benchmark file SHA-256>",
+  "canaryEvidenceSha256": "<original canary evidence file SHA-256>",
+  "latestAttemptId": "<acknowledged latest attempt GUID in N format>",
+  "latestAttemptSha256": "<original acknowledged attempt.json SHA-256>",
+  "acceptedAt": "<UTC time when this service's evidence was accepted>",
+  "acceptedBy": "<reviewer identity>"
+}
+```
+
+Use lowercase hashes of the original file bytes, rather than reformatted JSON.
+For latest selection, the successful and acknowledged latest attempt IDs must be
+identical. Record acceptance after both the selected collection and canary have
+completed. All timestamps must use UTC with `Z` or `+00:00`.
+
+Choose the evidence window explicitly during review. It must cover the selected
+collection, canary and acceptance times, and evaluation must occur inside it.
+Gateway requires both services' evidence in that same window, with Admin's
+acceptance recorded before the Gateway canary starts. The actual ordered
+168-hour soaks, and any gap between them, determine the required coverage; the
+gate does not invent a fixed age limit. A later Admin collection attempt also
+invalidates the prior Admin acknowledgment used for Gateway qualification.
+Extend or replace a window only through a new review of the retained evidence.
+
+The committed `historicalEvidencePolicy` is `latest-only`. A reviewed policy may
+explicitly select `approved-archive` while preserving every other promotion gate.
+For a historical service entry, set `selection` to `historical`, identify the
+successful archived attempt in `attemptId` and `reportSha256`, and acknowledge the
+current failed attempt in `latestAttemptId` and `latestAttemptSha256`. The failed
+attempt must follow the selected success, lie inside the accepted window and
+complete before acceptance. The evaluator reads the selected GUID's immutable
+`benchmark.json` directly. `BenchmarkPath` remains the public output path locating
+its `.attempts` directory, even if a failed publication left that public file
+malformed or obstructed. Supplying an archive path or a legacy inspection copy
+does not establish approval.
+
+A running attempt, active writer, subsequent attempt or changed acknowledgment
+always holds promotion, including under the archive policy. The evaluator uses
+bounded strict JSON, checks the original report, canary and qualification hashes,
+then replays those records and the policy after OCI validation. It checks window
+expiry again before returning its decision. The acceptance record documents a
+reviewer's decision; it does not authenticate that identity or change the blocked
+production policy. No production qualification, soak or rollback is claimed by
+the repository's synthetic contract tests.
+
 ## Canary procedure
 
 1. Record the JIT release digest and database schema version. Run the migrator before
@@ -244,8 +306,9 @@ apply to each workload separately. Claimed soak hours cannot exceed recorded tim
    100% only after the required healthy windows at each step. Start Gateway only
    after Admin's full soak is accepted.
 5. Store benchmark JSON, candidate/JIT digests, dashboard and alert links, feature
-   results, alert history, and rollback evidence together. Evaluate the policy; a
-   nonzero result is a hold.
+   results, alert history, rollback evidence, complete attempt directories and
+   the accepted qualification record together. Evaluate the policy; a nonzero
+   result is a hold.
 
 ## Dashboard and alerts
 
