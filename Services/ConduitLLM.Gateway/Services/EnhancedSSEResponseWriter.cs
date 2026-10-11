@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using ConduitLLM.Core.Models;
 using ConduitLLM.Gateway.Serialization;
 
 namespace ConduitLLM.Gateway.Services
@@ -17,6 +18,7 @@ namespace ConduitLLM.Gateway.Services
     {
         private readonly HttpResponse _response;
         private readonly JsonSerializerOptions _jsonOptions;
+        public bool EnhancedEventsEnabled { get; }
         private bool _headersWritten;
         private int _doneWritten;
         private long _eventsWritten;
@@ -31,10 +33,11 @@ namespace ConduitLLM.Gateway.Services
 
         public DateTimeOffset? FirstClientFlushAt => _firstClientFlushAt;
 
-        public EnhancedSSEResponseWriter(HttpResponse response, JsonSerializerOptions jsonOptions)
+        public EnhancedSSEResponseWriter(HttpResponse response, JsonSerializerOptions jsonOptions, bool enhancedEvents = true)
         {
             _response = response ?? throw new ArgumentNullException(nameof(response));
             _jsonOptions = jsonOptions ?? throw new ArgumentNullException(nameof(jsonOptions));
+            EnhancedEventsEnabled = enhancedEvents;
         }
 
         /// <summary>
@@ -93,6 +96,11 @@ namespace ConduitLLM.Gateway.Services
         /// </summary>
         public async Task WriteErrorEventAsync(string error, CancellationToken cancellationToken = default)
         {
+            if (!EnhancedEventsEnabled)
+            {
+                await WriteOpenAIErrorEventAsync(error, null, cancellationToken);
+                return;
+            }
             await WriteEventAsync("error", new SseErrorEvent(error), cancellationToken);
         }
 
@@ -107,6 +115,11 @@ namespace ConduitLLM.Gateway.Services
             ConduitLLM.Core.Interfaces.ProviderErrorDetail? providerError,
             CancellationToken cancellationToken = default)
         {
+            if (!EnhancedEventsEnabled)
+            {
+                await WriteOpenAIErrorEventAsync(error, providerError, cancellationToken);
+                return;
+            }
             if (providerError is null)
             {
                 await WriteErrorEventAsync(error, cancellationToken);
@@ -117,6 +130,29 @@ namespace ConduitLLM.Gateway.Services
                 "error",
                 new SseErrorEvent(error, providerError),
                 cancellationToken);
+        }
+
+        private Task WriteOpenAIErrorEventAsync(
+            string message,
+            ConduitLLM.Core.Interfaces.ProviderErrorDetail? providerError,
+            CancellationToken cancellationToken)
+        {
+            var error = new OpenAIError
+            {
+                Message = message,
+                Type = "server_error",
+                Code = "provider_response_error"
+            };
+            if (providerError is not null)
+            {
+                error.Metadata = JsonSerializer.SerializeToElement(
+                    new Dictionary<string, ConduitLLM.Core.Interfaces.ProviderErrorDetail>
+                    {
+                        ["provider_error"] = providerError
+                    },
+                    GatewayJsonTypeInfo.Require<Dictionary<string, ConduitLLM.Core.Interfaces.ProviderErrorDetail>>(_jsonOptions));
+            }
+            return WriteContentEventAsync(new OpenAIErrorResponse { Error = error }, cancellationToken);
         }
 
         /// <summary>
@@ -152,6 +188,10 @@ namespace ConduitLLM.Gateway.Services
         public async Task WriteEventAsync<T>(string eventType, T data, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (!EnhancedEventsEnabled)
+            {
+                return;
+            }
             
             await EnsureHeadersWrittenAsync(cancellationToken);
             
@@ -230,9 +270,10 @@ namespace ConduitLLM.Gateway.Services
         /// </summary>
         public static EnhancedSSEResponseWriter CreateEnhancedSSEWriter(
             this HttpResponse response, 
-            JsonSerializerOptions jsonOptions)
+            JsonSerializerOptions jsonOptions,
+            bool enhancedEvents = true)
         {
-            return new EnhancedSSEResponseWriter(response, jsonOptions);
+            return new EnhancedSSEResponseWriter(response, jsonOptions, enhancedEvents);
         }
     }
 }

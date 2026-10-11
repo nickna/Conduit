@@ -106,6 +106,8 @@ namespace ConduitLLM.Gateway.Middleware
             // Common API endpoints
             if (pathValue.StartsWith("/v1/chat/completions", StringComparison.OrdinalIgnoreCase))
                 return "/v1/chat/completions";
+            if (pathValue.StartsWith("/v1/conduit/chat/completions", StringComparison.OrdinalIgnoreCase))
+                return "/v1/conduit/chat/completions";
             if (pathValue.StartsWith("/v1/embeddings", StringComparison.OrdinalIgnoreCase))
                 return "/v1/embeddings";
             if (pathValue.StartsWith("/v1/models", StringComparison.OrdinalIgnoreCase))

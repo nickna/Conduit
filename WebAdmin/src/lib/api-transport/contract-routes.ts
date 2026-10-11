@@ -15,7 +15,7 @@ export const ADMIN_CONTRACT_ROUTES = {
 
 export const GATEWAY_CONTRACT_ROUTES = {
   ephemeralKey: '/v1/conduit/auth/ephemeral-key',
-  chatCompletions: '/v1/chat/completions',
+  chatCompletions: '/v1/conduit/chat/completions',
   discoveryModels: '/v1/conduit/discovery/models',
   functionParameters: '/v1/conduit/discovery/functions/{functionConfigurationId}/parameters',
   executeFunction: '/v1/conduit/functions/execute',

@@ -283,10 +283,26 @@ public static class GatewayApiEndpoints
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Chat").WithName("Chat_CreateCompletion")
             .WithSummary("Creates a chat completion.")
-            .WithDescription("Returns a chat completion as application/json. Set stream=true to receive text/event-stream chunks. Models and capabilities depend on the virtual key and configured provider.")
+            .WithDescription("Returns a chat completion as application/json. Set stream=true to receive OpenAI text/event-stream chunks and a [DONE] sentinel. Set stream_options.include_usage=true for a final usage chunk when the provider reports usage. Conduit progress and metrics events are available at /v1/conduit/chat/completions. Models and capabilities depend on the virtual key and configured provider.")
             .Produces<ChatCompletionResponse>(200, "application/json")
             .Produces<OpenAIErrorResponse>(400)
             .Produces<OpenAIErrorResponse>(404)
+            .Produces<OpenAIErrorResponse>(500)
+            .Produces<OpenAIErrorResponse>(402);
+
+        app.MapPost("/v1/conduit/chat/completions", ([FromServices] ChatEndpoints endpoints, ChatCompletionRequest request, CancellationToken cancellationToken) => endpoints.CreateChatCompletion(request, cancellationToken))
+            .RequireAuthorization("VirtualKeyAuthentication")
+            .AddEndpointFilter<RequireBalanceEndpointFilter>()
+            .AddEndpointFilter<TokenRateLimitFilter>()
+            .AddEndpointFilter<OperationLoggingEndpointFilter>()
+            .WithTags("Chat").WithName("Chat_CreateEnhancedCompletion")
+            .WithSummary("Creates a chat completion with Conduit streaming events.")
+            .WithDescription("Uses the same chat execution and accounting as /v1/chat/completions. Set stream=true for chat chunks plus named Conduit metrics, reasoning, and tool progress events, followed by [DONE].")
+            .Produces<ChatCompletionResponse>(200, "application/json")
+            .Produces<OpenAIErrorResponse>(400)
+            .Produces<OpenAIErrorResponse>(404)
+            .Produces<OpenAIErrorResponse>(408)
+            .Produces<OpenAIErrorResponse>(413)
             .Produces<OpenAIErrorResponse>(500)
             .Produces<OpenAIErrorResponse>(402);
 

@@ -147,7 +147,7 @@ public class StreamingWithReasoningTest : ProviderIntegrationTestBase
 
         var events = new List<StreamEvent>();
 
-        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions")
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "/v1/conduit/chat/completions")
         {
             Content = new StringContent(
                 JsonSerializer.Serialize(requestBody),

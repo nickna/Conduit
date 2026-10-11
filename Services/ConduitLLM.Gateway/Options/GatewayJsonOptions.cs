@@ -20,6 +20,9 @@ public static class GatewayJsonOptions
 
         options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
         options.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+        // ASP.NET's Web defaults accept quoted numbers and expose number|string
+        // schemas. OpenAI-compatible requests and responses use JSON numbers.
+        options.NumberHandling = JsonNumberHandling.Strict;
         AddStringEnumConverter<ConduitLLM.Functions.Enums.ExecutionState>(options);
         AddStringEnumConverter<ConduitLLM.Core.Models.MediaType>(options);
         AddStringEnumConverter<ConduitLLM.Core.Interfaces.TaskState>(options);

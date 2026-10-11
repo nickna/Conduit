@@ -53,7 +53,7 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
             // Model names are deployment-specific aliases, not upstream model IDs.
             var example = operation.OperationId switch
             {
-                "Chat_CreateCompletion" => """{"model":"your-model-alias","messages":[{"role":"user","content":"Hello"}],"stream":false}""",
+                "Chat_CreateCompletion" or "Chat_CreateEnhancedCompletion" => """{"model":"your-model-alias","messages":[{"role":"user","content":"Hello"}],"stream":false}""",
                 "Responses_Create" => """{"model":"your-model-alias","input":"Hello","stream":false}""",
                 "Embeddings_Create" => """{"model":"your-embedding-alias","input":"Text to embed"}""",
                 "Images_Create" or "Images_CreateImageAsync" => """{"model":"your-image-alias","prompt":"A lighthouse at sunrise","n":1}""",
@@ -266,7 +266,7 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
             }
 
             if (responseEntry.Key == "200" &&
-                operation.OperationId is "Chat_CreateCompletion" or "Responses_Create")
+                operation.OperationId is "Chat_CreateCompletion" or "Chat_CreateEnhancedCompletion" or "Responses_Create")
             {
                 response.Content!["text/event-stream"] = new OpenApiMediaType
                 {

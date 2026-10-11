@@ -398,10 +398,11 @@ public sealed class ResponsesEndpoints : GatewayEndpointHandlerBase
             {
                 chunkCount++;
                 firstChunkAt ??= DateTimeOffset.UtcNow;
-                if (chunk.Choices.Count > 1 ||
-                    chunk.Choices.Any(choice => choice.Index != 0 || choice.FinishReason == FinishReason.ToolCalls))
+                var choices = chunk.Choices ?? [];
+                if (choices.Count > 1 ||
+                    choices.Any(choice => choice.Index != 0 || choice.FinishReason == FinishReason.ToolCalls))
                     throw new InvalidOperationException("Provider returned unsupported multiple-choice or tool output.");
-                if (chunk.Choices.SelectMany(choice => choice.Delta?.ToolCalls ?? []).Any())
+                if (choices.SelectMany(choice => choice.Delta?.ToolCalls ?? []).Any())
                     throw new InvalidOperationException("Provider returned an unsupported tool call.");
 
                 if (chunk.Usage is not null)
@@ -409,11 +410,11 @@ public sealed class ResponsesEndpoints : GatewayEndpointHandlerBase
                     providerUsage = chunk.Usage;
                     providerModel = chunk.Model ?? chatRequest.Model;
                 }
-                finishReason = chunk.Choices
+                finishReason = choices
                     .Select(choice => choice.FinishReason)
                     .LastOrDefault(reason => reason is not null) ?? finishReason;
 
-                foreach (var delta in chunk.Choices.Select(choice => choice.Delta?.Content)
+                foreach (var delta in choices.Select(choice => choice.Delta?.Content)
                              .Where(content => !string.IsNullOrEmpty(content)))
                 {
                     if (output.Length + delta!.Length > maximumOutputCharacters)

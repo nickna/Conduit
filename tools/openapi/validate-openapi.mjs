@@ -13,6 +13,35 @@ const defaultFiles = [
 ];
 const defaultAllowlist = path.join(scriptsDir, 'openapi-ratchet-allowlist.json');
 const defaultOpenAiBaseline = path.join(scriptsDir, 'openai-conformance-baseline.json');
+const openAiRoutes = [
+  ['GET', '/v1/models', '/models'],
+  ['GET', '/v1/models/{model}', '/models/{model}'],
+  ['POST', '/v1/embeddings', '/embeddings'],
+  ['POST', '/v1/chat/completions', '/chat/completions'],
+  ['POST', '/v1/responses', '/responses'],
+  ['POST', '/v1/audio/transcriptions', '/audio/transcriptions'],
+  ['POST', '/v1/audio/speech', '/audio/speech'],
+  ['POST', '/v1/images/generations', '/images/generations'],
+];
+// Bounded schema checks complement the existing top-level field comparison. They do
+// not claim full schema equivalence: enums, constraints, nullability, and unlisted
+// nested schemas are not compared. JSON types exclude null on both sides.
+const openAiSchemaChecks = {
+  'GET /v1/models': { response: ['', '/properties/data', '/properties/data/items',
+    ...['id', 'object', 'created', 'owned_by'].map((name) => `/properties/data/items/properties/${name}`)] },
+  'GET /v1/models/{model}': { response: ['',
+    ...['id', 'object', 'created', 'owned_by'].map((name) => `/properties/${name}`)] },
+  'POST /v1/chat/completions': { request: [
+    'temperature', 'top_p', 'max_tokens', 'max_completion_tokens', 'n', 'seed',
+    'frequency_penalty', 'presence_penalty', 'reasoning_effort', 'parallel_tool_calls',
+    'modalities', 'audio', 'prediction', 'logprobs', 'top_logprobs', 'service_tier',
+  ].map((name) => `/properties/${name}`), response: ['/properties/created'] },
+  'POST /v1/embeddings': { request: ['/properties/dimensions'] },
+  'POST /v1/images/generations': { request: [
+    'n', 'output_compression', 'partial_images',
+  ].map((name) => `/properties/${name}`), response: ['/properties/created'] },
+  'POST /v1/audio/speech': { request: ['/properties/speed'] },
+};
 const methods = new Set(['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']);
 const ratchetRules = [
   'generic-success-schema',
@@ -267,7 +296,42 @@ function resolveSchema(schema, document, seen = new Set()) {
   if (!schema.$ref.startsWith('#/')) return schema;
   if (seen.has(schema.$ref)) return {};
   seen.add(schema.$ref);
-  return schema.$ref.slice(2).split('/').reduce((value, segment) => value?.[segment], document);
+  const target = schema.$ref.slice(2).split('/').reduce((value, segment) =>
+    value?.[segment.replaceAll('~1', '/').replaceAll('~0', '~')], document);
+  return resolveSchema(target, document, seen);
+}
+
+function schemaTypes(schema, document, seen = new Set()) {
+  schema = resolveSchema(schema, document, seen);
+  if (!schema || typeof schema !== 'object') return [];
+  const types = new Set((Array.isArray(schema.type) ? schema.type : [schema.type])
+    .filter((type) => type && type !== 'null'));
+  if (schema.properties) types.add('object');
+  for (const child of [...(schema.allOf ?? []), ...(schema.oneOf ?? []), ...(schema.anyOf ?? [])]) {
+    schemaTypes(child, document, new Set(seen)).forEach((type) => types.add(type));
+  }
+  return [...types].sort();
+}
+
+function schemaAtPointer(schema, pointer, document) {
+  const segments = pointer.split('/').slice(1)
+    .map((segment) => segment.replaceAll('~1', '/').replaceAll('~0', '~'));
+  function visit(current, remaining, seen = new Set()) {
+    current = resolveSchema(current, document, seen);
+    if (!remaining.length) return current;
+    if (!current || typeof current !== 'object') return undefined;
+    const [first, ...rest] = remaining;
+    if (current[first] !== undefined) {
+      const result = visit(current[first], rest, new Set(seen));
+      if (result !== undefined) return result;
+    }
+    for (const child of current.allOf ?? []) {
+      const result = visit(child, remaining, new Set(seen));
+      if (result !== undefined) return result;
+    }
+    return undefined;
+  }
+  return visit(schema, segments);
 }
 
 function schemaFields(schema, document, seen = new Set()) {
@@ -283,16 +347,36 @@ function schemaFields(schema, document, seen = new Set()) {
   return { properties: [...properties].sort(), required: [...required].sort() };
 }
 
-function operationShape(operation, document) {
+function operationSchemas(operation) {
   const requestMedia = operation.requestBody?.content?.['application/json'] ??
     operation.requestBody?.content?.['multipart/form-data'];
   const success = Object.entries(operation.responses ?? {})
     .find(([status]) => /^2\d\d$/.test(status))?.[1];
   const responseMedia = success?.content?.['application/json'];
   return {
-    request: requestMedia ? schemaFields(requestMedia.schema, document) : null,
-    response: responseMedia ? schemaFields(responseMedia.schema, document) : null,
+    request: requestMedia?.schema ?? null,
+    response: responseMedia?.schema ?? null,
   };
+}
+
+function operationShape(operation, document, operationKey) {
+  const schemas = operationSchemas(operation);
+  return Object.fromEntries(['request', 'response'].map((side) => {
+    if (!schemas[side]) return [side, null];
+    const shape = schemaFields(schemas[side], document);
+    const pointers = openAiSchemaChecks[operationKey]?.[side];
+    if (pointers) {
+      shape.schemas = Object.fromEntries(pointers.map((pointer) => {
+        const schema = schemaAtPointer(schemas[side], pointer, document);
+        const types = schemaTypes(schema, document);
+        if (!types.length) throw new Error(`${operationKey} ${side} ${pointer || '/'}: pinned schema has no type`);
+        const modelFields = operationKey.startsWith('GET /v1/models') &&
+          ['', '/properties/data/items'].includes(pointer);
+        return [pointer, { types, ...(modelFields ? schemaFields(schema, document) : {}) }];
+      }));
+    }
+    return [side, shape];
+  }));
 }
 
 function compareOpenAiConformance(gatewayDocument, baseline) {
@@ -306,18 +390,29 @@ function compareOpenAiConformance(gatewayDocument, baseline) {
       warnings.push(`${operationKey}: shared OpenAI operation is missing`);
       continue;
     }
-    const actual = operationShape(operation, gatewayDocument);
+    const schemas = operationSchemas(operation);
     for (const side of ['request', 'response']) {
       if (!expected[side]) continue;
-      for (const fieldKind of ['properties', 'required']) {
-        const expectedFields = expected[side][fieldKind] ?? [];
-        const actualFields = actual[side]?.[fieldKind] ?? [];
-        const missing = expectedFields.filter((name) => !actualFields.includes(name));
-        const extra = actualFields.filter((name) => !expectedFields.includes(name));
-        if (missing.length || extra.length) {
-          warnings.push(`${operationKey} ${side} ${fieldKind}: ` +
-            `missing [${missing.join(', ')}], extra [${extra.join(', ')}]`);
+      const compareFields = (expectedShape, actualShape, location) => {
+        for (const fieldKind of ['properties', 'required', 'types']) {
+          if (!expectedShape[fieldKind]) continue;
+          const expectedFields = expectedShape[fieldKind];
+          const actualFields = actualShape[fieldKind] ?? [];
+          const missing = expectedFields.filter((name) => !actualFields.includes(name));
+          const extra = actualFields.filter((name) => !expectedFields.includes(name));
+          if (missing.length || extra.length) {
+            warnings.push(`${location} ${fieldKind}: ` +
+              `missing [${missing.join(', ')}], extra [${extra.join(', ')}]`);
+          }
         }
+      };
+      compareFields(expected[side], schemaFields(schemas[side], gatewayDocument), `${operationKey} ${side}`);
+      for (const [pointer, expectedSchema] of Object.entries(expected[side].schemas ?? {})) {
+        const schema = schemaAtPointer(schemas[side], pointer, gatewayDocument);
+        compareFields(expectedSchema, {
+          types: schemaTypes(schema, gatewayDocument),
+          ...schemaFields(schema, gatewayDocument),
+        }, `${operationKey} ${side} schema ${pointer || '/'}`);
       }
     }
   }
@@ -326,20 +421,15 @@ function compareOpenAiConformance(gatewayDocument, baseline) {
 
 function buildOpenAiBaseline(officialDocument, commit) {
   const operations = {};
-  const gatewayRoutes = [
-    ['GET', '/v1/models', '/models'],
-    ['POST', '/v1/embeddings', '/embeddings'],
-    ['POST', '/v1/chat/completions', '/chat/completions'],
-    ['POST', '/v1/responses', '/responses'],
-    ['POST', '/v1/audio/transcriptions', '/audio/transcriptions'],
-    ['POST', '/v1/audio/speech', '/audio/speech'],
-    ['POST', '/v1/images/generations', '/images/generations'],
-  ];
-  for (const [method, gatewayRoute, officialRoute] of gatewayRoutes) {
+  for (const [method, gatewayRoute, officialRoute] of openAiRoutes) {
     const operation = officialDocument.paths?.[officialRoute]?.[method.toLowerCase()];
-    if (operation) operations[`${method} ${gatewayRoute}`] = operationShape(operation, officialDocument);
+    const key = `${method} ${gatewayRoute}`;
+    if (!operation) throw new Error(`${key}: operation is missing from the pinned OpenAI document`);
+    operations[key] = operationShape(operation, officialDocument, key);
   }
   return {
+    version: 2,
+    description: 'Enforces top-level fields on compatible operations, nested model objects, and selected field types. Does not compare enums, constraints, nullability, or unlisted nested schemas.',
     source: {
       repository: 'https://github.com/openai/openai-openapi',
       commit,
@@ -350,8 +440,136 @@ function buildOpenAiBaseline(officialDocument, commit) {
   };
 }
 
+function validateOpenAiBaseline(baseline) {
+  const invalid = (message) => { throw new Error(`Invalid OpenAI conformance baseline: ${message}`); };
+  if (baseline?.version !== 2) invalid('version must be 2');
+  if (baseline.enforcement !== 'enforced') invalid('enforcement must be enforced');
+  if (baseline.source?.repository !== 'https://github.com/openai/openai-openapi' ||
+      !/^[a-f0-9]{40}$/.test(baseline.source?.commit ?? '') ||
+      baseline.source?.document !== 'openapi.json') invalid('pinned OpenAI source is missing or invalid');
+  const validList = (values) => Array.isArray(values) && values.every((value) => typeof value === 'string') &&
+    new Set(values).size === values.length;
+  for (const [method, route] of openAiRoutes) {
+    const key = `${method} ${route}`;
+    const operation = baseline.operations?.[key];
+    if (!operation || typeof operation !== 'object') invalid(`${key} is missing`);
+    for (const side of ['request', 'response']) {
+      const shape = operation[side];
+      const bodylessSide = (side === 'request' && method === 'GET') ||
+        (side === 'response' && key === 'POST /v1/audio/speech');
+      if (bodylessSide) {
+        if (shape !== null) invalid(`${key} ${side} must be null`);
+        continue;
+      }
+      if (!shape || !validList(shape.properties) || !validList(shape.required) ||
+          shape.required.some((field) => !shape.properties.includes(field))) invalid(`${key} ${side} fields are invalid`);
+      for (const pointer of openAiSchemaChecks[key]?.[side] ?? []) {
+        const schema = shape.schemas?.[pointer];
+        const modelFields = key.startsWith('GET /v1/models') && ['', '/properties/data/items'].includes(pointer);
+        if (!schema ||
+            (modelFields && (!validList(schema.properties) || !validList(schema.required))) ||
+            !validList(schema.properties ?? []) || !validList(schema.required ?? []) ||
+            (schema.required ?? []).some((field) => !schema.properties?.includes(field)) ||
+            !validList(schema.types) || !schema.types.length ||
+            schema.types.some((type) => !['object', 'array', 'string', 'number', 'integer', 'boolean'].includes(type))) {
+          invalid(`${key} ${side} schema ${pointer || '/'} is missing or invalid`);
+        }
+      }
+    }
+  }
+  return baseline;
+}
+
+function readOpenAiBaseline(file) {
+  if (!fs.existsSync(file)) throw new Error(`OpenAI conformance baseline is missing: ${file}`);
+  return validateOpenAiBaseline(readJson(file));
+}
+
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+function conformanceSelfTest() {
+  const model = {
+    type: 'object',
+    properties: {
+      id: { type: 'string' }, object: { type: 'string' },
+      created: { type: 'integer' }, owned_by: { type: 'string' },
+    },
+    required: ['id', 'object', 'created', 'owned_by'],
+  };
+  const response = (schema) => ({ responses: {
+    200: { content: { 'application/json': { schema } } },
+  } });
+  const fixture = {
+    components: { schemas: {
+      Model: model,
+      ModelAlias: { $ref: '#/components/schemas/Model' },
+      ModelList: {
+        type: 'object', properties: {
+          object: { type: 'string' }, data: { type: 'array', items: { $ref: '#/components/schemas/ModelAlias' } },
+        }, required: ['object', 'data'],
+      },
+    } },
+    paths: {
+      '/v1/models': { get: response({ $ref: '#/components/schemas/ModelList' }) },
+      '/v1/models/{model}': { get: response({ $ref: '#/components/schemas/ModelAlias' }) },
+      '/v1/chat/completions': { post: { requestBody: { content: { 'application/json': { schema: {
+        type: 'object', properties: { max_completion_tokens: { type: ['integer', 'null'] } },
+      } } } } } },
+    },
+  };
+  const baseline = { operations: {
+    'GET /v1/models': operationShape(fixture.paths['/v1/models'].get, fixture, 'GET /v1/models'),
+    'GET /v1/models/{model}': operationShape(fixture.paths['/v1/models/{model}'].get, fixture, 'GET /v1/models/{model}'),
+    'POST /v1/chat/completions': {
+      request: { properties: ['max_completion_tokens'], required: [], schemas: {
+        '/properties/max_completion_tokens': { types: ['integer'], properties: [], required: [] },
+      } }, response: null,
+    },
+  } };
+  assert.deepEqual(compareOpenAiConformance(fixture, baseline), []);
+  const expectDifference = (mutate, pattern) => {
+    const changed = structuredClone(fixture);
+    mutate(changed);
+    assert.ok(compareOpenAiConformance(changed, baseline).some((difference) => pattern.test(difference)));
+  };
+  expectDifference((changed) => { delete changed.paths['/v1/models/{model}']; }, /models\/\{model\}.*missing/);
+  expectDifference((changed) => { delete changed.components.schemas.Model.properties.owned_by; }, /items properties.*owned_by/);
+  expectDifference((changed) => { changed.components.schemas.Model.required.pop(); }, /items required.*owned_by/);
+  expectDifference((changed) => { changed.components.schemas.Model.properties.created.type = 'string'; }, /created types.*integer.*string/);
+  expectDifference((changed) => { changed.components.schemas.ModelList.properties.data.type = 'object'; }, /data types.*array.*object/);
+  expectDifference((changed) => {
+    changed.paths['/v1/chat/completions'].post.requestBody.content['application/json'].schema
+      .properties.max_completion_tokens.type = ['integer', 'string', 'null'];
+  }, /max_completion_tokens types.*extra \[string\]/);
+  // allOf properties and escaped local references must resolve without weakening checks.
+  assert.deepEqual(schemaTypes({ $ref: '#/components/schemas/a~1b' }, {
+    components: { schemas: { 'a/b': { type: 'integer' } } },
+  }), ['integer']);
+  assert.deepEqual(schemaTypes(schemaAtPointer({ allOf: [
+    { type: 'object', properties: { value: { type: 'integer' } } },
+  ] }, '/properties/value', {}), {}), ['integer']);
+  assert.deepEqual(schemaTypes(schemaAtPointer({
+    type: 'object', properties: { sibling: { type: 'string' } },
+    allOf: [{ type: 'object', properties: { inherited: { type: 'integer' } } }],
+  }, '/properties/inherited', {}), {}), ['integer']);
+
+  const committedBaseline = readOpenAiBaseline(defaultOpenAiBaseline);
+  for (const mutate of [
+    (changed) => { changed.enforcement = 'warn-only'; },
+    (changed) => { changed.source.commit = ''; },
+    (changed) => { delete changed.operations['GET /v1/models/{model}']; },
+    (changed) => { changed.operations['POST /v1/embeddings'].response = null; },
+    (changed) => { delete changed.operations['GET /v1/models'].response.schemas['/properties/data/items']; },
+    (changed) => { changed.operations['GET /v1/models/{model}'].response.schemas[''].types = []; },
+  ]) {
+    const changed = structuredClone(committedBaseline);
+    mutate(changed);
+    assert.throws(() => validateOpenAiBaseline(changed), /Invalid OpenAI conformance baseline/);
+  }
+  assert.throws(() => readOpenAiBaseline(path.join(os.tmpdir(), `missing-openai-baseline-${process.pid}.json`)),
+    /OpenAI conformance baseline is missing/);
 }
 
 function applyRatchet(violations, allowlist, activeContracts = null) {
@@ -476,7 +694,8 @@ function selfTest() {
   generatedAllowlist.rules['operation-summary'].push('admin|GET /v1/admin/stale');
   assert.equal(applyRatchet(result.violations, generatedAllowlist).stale.length, 1);
 
-  console.log('OpenAPI ratchet self-test passed.');
+  conformanceSelfTest();
+  console.log('OpenAPI ratchet and conformance self-tests passed.');
 }
 
 function parseArgs(argv) {
@@ -503,14 +722,15 @@ function parseArgs(argv) {
 }
 
 const options = parseArgs(process.argv.slice(2));
-if (options.selfTest) selfTest();
 
 if (options.writeOpenAiBaseline) {
   if (!options.openAiCommit) throw new Error('--openai-commit is required with --write-openai-baseline');
   const official = readJson(options.writeOpenAiBaseline);
-  fs.writeFileSync(options.baseline, `${JSON.stringify(buildOpenAiBaseline(official, options.openAiCommit), null, 2)}${os.EOL}`);
+  const baseline = validateOpenAiBaseline(buildOpenAiBaseline(official, options.openAiCommit));
+  fs.writeFileSync(options.baseline, `${JSON.stringify(baseline, null, 2)}${os.EOL}`);
   console.log(`Wrote pinned OpenAI conformance baseline to ${path.relative(repoRoot, options.baseline)}.`);
 }
+if (options.selfTest) selfTest();
 
 if (!options.selfTest || options.files.length > 0 || options.writeAllowlist) {
   const files = options.files.length > 0 ? options.files : defaultFiles;
@@ -522,7 +742,9 @@ if (!options.selfTest || options.files.length > 0 || options.writeAllowlist) {
   }
 
   const allowlist = readJson(options.allowlist);
-  const baseline = fs.existsSync(options.baseline) ? readJson(options.baseline) : null;
+  const baseline = files.some((file) => contractName(file) === 'gateway')
+    ? readOpenAiBaseline(options.baseline)
+    : null;
   const result = validateFiles(files, allowlist, baseline);
   const allowlistCount = Object.values(allowlist.rules ?? {}).reduce((total, entries) => total + entries.length, 0);
   console.log(`OpenAPI ratchet allowlist: ${allowlistCount} known violation(s).`);
