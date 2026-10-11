@@ -79,12 +79,12 @@ and the linker ratchet succeed. The contract suite exercises file mutations,
 ownership and failure paths independently of native compilation. Actual Linux
 publishing must also verify the resolved toolchain capture.
 
-Dockerfiles currently run separate publishes and add a native health probe. The
-same source revision does not prove that those image payloads match these loose
-publish directories. Until image extraction and digest association are verified,
-the manifests support inspection of these exact directories only. Existing
-historical schema-1 baselines have no manifest identity. Production promotion
-remains blocked by the [canary policy](native-aot-canary.md).
+The native Dockerfiles use the assembled image producer described below. These
+separate image builds do not establish that their payloads match the loose publish
+directories above, even when their declared source revisions agree. Associating
+embedded image evidence with a digest-pinned image remains subsequent work under
+#1582. Existing historical schema-1 baselines have no manifest identity. Production
+promotion remains blocked by the [canary policy](native-aot-canary.md).
 
 ## Assembled image payloads
 
@@ -121,6 +121,14 @@ Actual Git metadata, when available, must agree with the assembly commit propert
 A snapshot without Git metadata retains an unavailable source identity. A supplied
 commit argument alone does not establish a clean checkout or promotion evidence.
 
-This producer currently prepares loose payloads. The native Dockerfiles still use
-their existing independent publishes. Packaging these exact payloads and associating
-their manifests with a digest-pinned image remain subsequent work under #1582.
+Both native Dockerfiles invoke this producer and package its exact `payload`
+directory as `/app`. They copy the three `evidence` documents to `/conduit-evidence`,
+outside the runtime file manifest. The separate scratch `symbols` stage preserves
+the application and health-probe symbol directories, including nested paths. Build
+tools, compiler captures and publish logs stay in the builder stage.
+
+The filtered local Docker context excludes `.git`, so these builds record source
+status `unavailable` with null revision and dirty state. The declared commit argument
+and OCI revision label remain metadata, without establishing actual Git provenance.
+Embedded evidence from this snapshot supports historical payload inspection;
+digest association and promotion qualification remain subsequent work under #1582.
