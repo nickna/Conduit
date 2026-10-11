@@ -69,10 +69,10 @@ namespace ConduitLLM.Configuration.EntityConfigurations
 
             // Configure decimal precision
             builder.Property(e => e.CalculatedCost)
-                .HasColumnType("decimal(10, 6)");
+                .HasColumnType("decimal(12, 8)");
 
             builder.Property(e => e.ToolUsageCost)
-                .HasColumnType("decimal(10, 6)");
+                .HasColumnType("decimal(12, 8)");
 
             // Foreign key relationship
             builder.HasOne(e => e.VirtualKey)

@@ -84,7 +84,7 @@ public sealed class GatewayMetricsPersistenceParityTests
                 "ModelName" varchar(100) NOT NULL,
                 "ProviderType" varchar(50) NULL,
                 "ResponseTimeMs" double precision NOT NULL,
-                "Cost" numeric(10,6) NOT NULL,
+                "Cost" numeric(12,8) NOT NULL,
                 "BilledAtUtc" timestamp with time zone NULL,
                 "Timestamp" timestamp with time zone NOT NULL
             );
@@ -113,7 +113,7 @@ public sealed class GatewayMetricsPersistenceParityTests
             CREATE TABLE "{schema}"."VirtualKeySpendHistory" (
                 "Id" integer PRIMARY KEY,
                 "VirtualKeyId" integer NOT NULL,
-                "Amount" numeric(10,6) NOT NULL,
+                "Amount" numeric(12,8) NOT NULL,
                 "Timestamp" timestamp with time zone NOT NULL
             );
 

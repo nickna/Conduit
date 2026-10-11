@@ -75,7 +75,7 @@ public class PricingAuditEvent : IAuditEvent
     /// <summary>
     /// Final calculated cost (Rate * Quantity).
     /// </summary>
-    [Column(TypeName = "decimal(10, 6)")]
+    [Column(TypeName = "decimal(12, 8)")]
     public decimal CalculatedCost { get; set; }
 
     /// <summary>

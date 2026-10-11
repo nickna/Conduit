@@ -69,7 +69,10 @@ namespace ConduitLLM.Gateway.Middleware
                     };
                     var functionMetadata = accountingSnapshot?.FunctionExecutions.Count > 0
                         ? FunctionExecutionSerializer.SerializeFunctionExecutionResults(
-                            accountingSnapshot.FunctionExecutions.ToList())
+                            accountingSnapshot.FunctionExecutions,
+                            accountingSnapshot.BillingRequestId,
+                            context.TraceIdentifier,
+                            new FunctionExecutionCostBreakdown(null, functionCost, null, functionCost))
                         : null;
                     await LogRequestAsync(
                         context,
@@ -173,8 +176,6 @@ namespace ConduitLLM.Gateway.Middleware
             if (endpointType == "chat" && functionResults.Count > 0)
             {
                 // Use richer function execution data (includes status, cost, execution ID)
-                chatToolCallsJson = FunctionExecutionSerializer.SerializeFunctionExecutionResults(functionResults);
-
                 // Get total function cost from HttpContext
                 functionExecutionCost = accountingSnapshot?.FunctionExecutionCost ?? 0m;
 
@@ -211,6 +212,15 @@ namespace ConduitLLM.Gateway.Middleware
                 context, model, usage, costCalculationService, billingAuditService);
             var baseCost = pricingResult.Cost;
             var cost = baseCost + (toolCost ?? 0m) + functionExecutionCost;
+            if (endpointType == "chat" && functionResults.Count > 0)
+            {
+                chatToolCallsJson = FunctionExecutionSerializer.SerializeFunctionExecutionResults(
+                    functionResults,
+                    accountingSnapshot!.BillingRequestId,
+                    context.TraceIdentifier,
+                    new FunctionExecutionCostBreakdown(baseCost, functionExecutionCost, toolCost ?? 0m, cost),
+                    toolUsageData);
+            }
 
             // Update metrics
             UsageMetrics.UsageTrackingRequests.WithLabels(endpointType + "_stream", "success").Inc();

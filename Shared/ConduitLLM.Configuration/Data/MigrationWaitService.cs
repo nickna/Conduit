@@ -13,7 +13,7 @@ namespace ConduitLLM.Configuration.Data
     /// </summary>
     public static class ConduitSchemaVersion
     {
-        public const string Current = "20261006232832_AddWebhookReplayAudit";
+        public const string Current = "20261011192146_PreserveEightDecimalFinancialAmounts";
     }
 
     public sealed record SchemaVersionStatus(string? AppliedVersion, string ExpectedVersion)

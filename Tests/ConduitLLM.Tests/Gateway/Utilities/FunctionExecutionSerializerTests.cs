@@ -394,6 +394,48 @@ namespace ConduitLLM.Tests.Http.Utilities
             Assert.Equal(0, deserialized.FailedCount);
         }
 
+        [Fact]
+        public void SerializeAndDeserialize_WithBillingComponents_PreservesCorrelationAndIteration()
+        {
+            var results = new List<ToolExecutionEvent>
+            {
+                new()
+                {
+                    Iteration = 3,
+                    ToolCallId = "failed-call",
+                    Status = "failed",
+                    Cost = 0.02m,
+                    FunctionExecutionId = Guid.NewGuid()
+                }
+            };
+            var breakdown = new FunctionExecutionCostBreakdown(0.10m, 0.02m, 0m, 0.12m);
+
+            var json = FunctionExecutionSerializer.SerializeFunctionExecutionResults(
+                results, "billing-parent", "http-parent", breakdown);
+            var restored = FunctionExecutionSerializer.DeserializeFunctionExecutionMetadata(json)!;
+
+            Assert.Equal("billing-parent", restored.BillingRequestId);
+            Assert.Equal("http-parent", restored.RequestId);
+            Assert.Equal(breakdown, restored.CostBreakdown);
+            Assert.Equal(0.02m, restored.TotalCost);
+            Assert.Equal(3, Assert.Single(restored.FunctionCalls!).Iteration);
+            Assert.Equal(results[0].FunctionExecutionId, restored.FunctionCalls[0].FunctionExecutionId);
+        }
+
+        [Fact]
+        public void SerializeFunctionExecutionResults_WithoutBillingComponents_PreservesLegacyShape()
+        {
+            var json = FunctionExecutionSerializer.SerializeFunctionExecutionResults(
+                [new ToolExecutionEvent { Status = "completed", Cost = 0.01m }]);
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+
+            Assert.False(document.RootElement.TryGetProperty("billingRequestId", out _));
+            Assert.False(document.RootElement.TryGetProperty("requestId", out _));
+            Assert.False(document.RootElement.TryGetProperty("costBreakdown", out _));
+            Assert.False(document.RootElement.TryGetProperty("providerToolUsage", out _));
+            Assert.False(document.RootElement.GetProperty("functionCalls")[0].TryGetProperty("iteration", out _));
+        }
+
         #endregion
     }
 }

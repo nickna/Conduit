@@ -87,6 +87,13 @@ X-Virtual-Key: condt_xxxx (legacy)
 - Removes server identification headers
 - Custom headers support
 
+`CONDUIT_CORE_SECURITY_HEADERS_ENABLED` defaults to `true`. Setting it to `false`
+disables all header additions and removals by this middleware, including custom
+headers and the `X-Content-Type` / `X-API-Version` headers. Existing headers and
+headers supplied by other middleware, endpoints, or the hosting server are preserved.
+The aggregate switch takes precedence over individual switches. When it is `true`,
+individual switches control their respective headers; HSTS is emitted only for HTTPS.
+
 ## Configuration
 
 ### Environment Variables
@@ -113,6 +120,13 @@ CONDUIT_CORE_TRACK_FAILED_AUTH_ACROSS_KEYS=true
 CONDUIT_CORE_ENFORCE_VKEY_RATE_LIMITS=true
 CONDUIT_CORE_ENFORCE_VKEY_BUDGETS=true
 CONDUIT_CORE_ENFORCE_VKEY_MODELS=true
+
+# Security Headers
+CONDUIT_CORE_SECURITY_HEADERS_ENABLED=true
+CONDUIT_CORE_SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS_ENABLED=true
+CONDUIT_CORE_SECURITY_HEADERS_X_XSS_PROTECTION_ENABLED=false
+CONDUIT_CORE_SECURITY_HEADERS_HSTS_ENABLED=true
+CONDUIT_CORE_SECURITY_HEADERS_HSTS_MAX_AGE=31536000
 
 # Distributed Tracking (shared with Admin/WebAdmin)
 CONDUIT_SECURITY_USE_DISTRIBUTED_TRACKING=true
@@ -189,7 +203,7 @@ When an IP is banned by any service (Core, Admin, WebAdmin), all services respec
 
 ## Request Flow
 
-1. **Security Headers** - Added to all responses
+1. **Security Headers** - Added to responses when enabled
 2. **Virtual Key Authentication** - Extract and validate key
 3. **Security Checks** - IP bans, rate limits, IP filters
 4. **Rate Limiter** - Apply Virtual Key specific limits
