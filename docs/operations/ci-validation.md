@@ -1,11 +1,69 @@
 # CI and release validation
 
-`CI required` is the sole required merge context for master and dev. CI invokes
-migration, PostgreSQL 16/17 lock, and CodeQL validation as reusable workflows, so
-their results belong to the same run and exact revision. It runs on every PR and
-branch push, including documentation changes; no path-filtered required context
-can remain pending. Failed, cancelled, missing, and skipped required jobs fail
-the aggregate. Its job inventory is `scripts/ci/required-jobs.json`.
+`CI required` is the sole required merge context for master and dev. It runs on
+every PR and master/dev push, including documentation changes; no path-filtered
+required context can remain pending. PRs select complete jobs from their cumulative
+changed paths. Master/dev pushes and manual CI runs select the full inventory.
+Selected migration, PostgreSQL 16/17 lock, and CodeQL validation run as reusable
+workflows whose results belong to the same run and exact revision. Selected jobs
+must succeed, including the `select` job itself. Only jobs explicitly excluded
+by the validated plan may return skipped or success; failures, cancellations, and
+missing results always fail the aggregate. Its job inventory is
+`scripts/ci/required-jobs.json`.
+
+The first phase uses three plans:
+
+| PR changes | Selected validation |
+| --- | --- |
+| Only allowlisted non-executable Markdown under `docs/` and named root documentation (`AGENTS.md`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE.md`, or `LICENSE`) | Selection, source/workflow guard, and the complete dependency security job |
+| Only `WebAdmin/**` and allowlisted documentation, with no `WebAdmin/src/generated/**` changes | Those guards, complete WebAdmin correctness and coverage, all three production image builds and packaged business/browser flows, and JavaScript CodeQL |
+| Backend, shared libraries, build/dependency/tooling/CI inputs, generated WebAdmin files, or any other path | Every validation job, including both CodeQL languages |
+
+`scripts/ci/change-impact.mjs` compares the merge base with the PR head across the
+entire PR, rather than only its latest commit. Renames include both old and new
+paths, and deletions remain inputs. An empty or uncertain diff, including missing
+history, selects the full inventory. Oversized plans also select full validation
+and emit a compact job output, keeping Actions output and runner environment
+limits from preventing the required aggregate from starting.
+`artifacts/ci-selection/plan.json` still records the complete changed-path inventory,
+selected/excluded jobs, CodeQL languages, and reasons; the
+`ci-selection` artifact retains the plan so a reviewer can explain every exclusion.
+The aggregate validates that plan against the actual results; a skipped selected
+job cannot be treated as a successful test run. The source/workflow guard and
+dependency audits always run independently of conditional jobs.
+The gate consumes the direct output of `select` in the same run and binds reduced
+plans to the current PR base/head SHAs and event. Plans supplied by users, earlier
+runs, or downloaded artifacts are not inputs to this gate.
+
+This boundary keeps coverage and execution evidence intact. Selected correctness
+jobs still execute their complete suites and enforce the existing discovery,
+skip, ownership, and coverage minima. There is no related-test filter or merging
+of partial coverage from another revision. WebAdmin has its own package lock and
+build inputs, so ordinary frontend changes can omit backend unit/infrastructure
+lanes. Its production Next build and shipped dependency guard live in the Docker
+job, and the browser uses real Admin/Gateway services and single-use Admin
+credentials, so frontend PRs retain that complete packaged lane. Generated client
+types cross the API boundary and therefore select the full plan.
+
+Backend service/component selection is deferred. Admin and Gateway share projects,
+DTOs, persistence, messaging, authentication and generated code; linked source such
+as `Shared/ConduitLLM.Core/OpenApi/*.cs` is also compiled by the OpenAPI project.
+Project-reference edges alone do not describe all of these dependencies. Unknown
+paths select everything until their ownership has executable regression coverage.
+Dependency audits remain on every PR because advisory and exception-expiry state
+can change without a package-file edit.
+
+Rollout should inspect retained plans for documentation-only, frontend-only,
+mixed, renamed/deleted, generated-type, and build-policy PRs, then confirm their
+actual job results and the required aggregate. Classifier and aggregate regression
+fixtures guard these boundaries. Record observed wall time and summed runner
+minutes with `scripts/ci/ci-timings.mjs`, reporting selected job inventories alongside
+the measurements. Compare repeated runs for representative changes while keeping
+source, runner class, and cache conditions comparable. The existing
+`--compare` scheduling experiment requires identical job inventories and is not
+a measure of savings from excluded jobs. New savings remain unmeasured until
+GitHub runs provide evidence; mainline/manual full runs retain the integration
+backstop and exact-SHA release qualification.
 
 `scripts/ci/configure-protection.ps1 -Apply` installs the reviewed policy in
 `scripts/ci/branch-protection.json` on both branches. The policy requires an
@@ -39,8 +97,11 @@ then both native Docker SDK pins to that version or a newer patch/feature band o
 the same major/minor. Keep stable `latestFeature` roll-forward. Setup-dotnet selects
 the latest stable 10.0 SDK; global.json enforces the minimum on runners and in images.
 Native linking and both image builds run on master pushes, weekly/manual runs, and
-PRs changing native Dockerfiles, SDK/build policy, native scripts, or that workflow.
-Analyzer checks remain required for every PR. Native images remain canaries.
+PRs changing backend/shared code, native Dockerfiles, SDK/build policy, native
+scripts, or that workflow. The native path inventory also covers HealthProbe,
+integration test/build inputs, linked descriptors, embedded provider catalogs,
+Docker context policy, promotion policy, and the shared test/evidence harness. Analyzer checks remain
+required whenever the full CI plan is selected. Native images remain canaries.
 
 The main test project owns self-contained tests irrespective of class names. Its
 ordinary selector excludes only explicitly owned `ReleaseMigration` traits. Release migrations belong to the mandatory migration
@@ -49,8 +110,8 @@ in the main lane; `functional-inventory.json` and `verify-functional-results.ps1
 fail when any promised suite disappears from executed results. These tests use
 SQLite/TestServer and need neither provider credentials nor developer services.
 
-Migration verification runs for every CI revision, including tooling/dependency-only
-and documentation changes. Required mode never substitutes filesystem enumeration
+Migration verification runs for full CI plans, including backend, shared,
+tooling/dependency changes, master/dev pushes, and manual runs. Required mode never substitutes filesystem enumeration
 for EF's migration inventory (#1455). EF inventory and pending-model subprocesses
 have 30-second limits with process-tree termination; nonzero exits, missing tools,
 empty inventory, and timeouts fail. Pending-model output and migration TRX are
@@ -240,7 +301,7 @@ Measured GitHub execution after the scheduling change (run 37562579173): all 18 
 
 Dependency and candidate security (#1443)
 
-Every master/dev PR and push runs explicit NuGet (including transitive) and all three locked npm audits as a required job. High/critical dependency findings block; lower severities remain reported. Release scans use Trivy 0.75.0 against the exact three JIT/WebAdmin candidate digests and both independent native digests. Critical image findings block, including unfixed ones; high/lower findings remain visible. Source CodeQL is independently required for both target branches. Reports and normalized findings survive policy failure.
+Every master/dev PR and push runs explicit NuGet (including transitive) and all three locked npm audits as a required job. High/critical dependency findings block; lower severities remain reported. Release scans use Trivy 0.75.0 against the exact three JIT/WebAdmin candidate digests and both independent native digests. Critical image findings block, including unfixed ones; high/lower findings remain visible. Source CodeQL follows the PR plan: JavaScript for frontend-only changes, both languages for full plans, and no source scan for allowlisted documentation-only changes. Both languages still run on master/dev pushes and weekly/manual scans. Reports and normalized findings survive policy failure.
 
 There is one repository-owner-approved temporary exception: WebAdmin/braces/3.0.3/GHSA-vfj7-8cjw-p6xm, owned by @nickna, expiring 2026-11-06 and recorded in #1467. `security-exceptions.json` accepts only exact scope/package/version/advisory identities with an owner, reason, unexpired date and linked approval record. An expired or malformed exception fails closed. An exception suppresses only its exact identity and remains counted in output. Owners must approve exceptions before they are added; no wildcard, package-wide or silent unfixed suppression is used. This exception also requires `developmentOnly: true`: each affected lockfile node must explicitly carry `dev: true`, so moving the same identity into production or losing its classification blocks the dependency gate.
 

@@ -12,6 +12,24 @@ test('real workflows and cancellable validation jobs satisfy the policy without 
 });
 for (const [name, mutate] of [
   ['missing required job', w => w['ci.yml'].jobs.required.needs.pop()],
+  ['missing selector', w => delete w['ci.yml'].jobs.select],
+  ['unprotected CI job', w => { w['ci.yml'].jobs.unprotected = { 'runs-on': 'ubuntu-latest', 'timeout-minutes': 5, steps: [{ run: 'echo unprotected' }] }; }],
+  ['conditional selector', w => w['ci.yml'].jobs.select.if = '${{ success() }}'],
+  ['conditional policy guard', w => w['ci.yml'].jobs.dependencies.if = '${{ needs.select.outputs.plan }}'],
+  ['policy guard blocked by selector', w => w['ci.yml'].jobs['source-ignore-guard'].needs = ['select']],
+  ['shallow selector checkout', w => w['ci.yml'].jobs.select.steps[0].with['fetch-depth'] = 1],
+  ['missing selector output', w => delete w['ci.yml'].jobs.select.outputs.plan],
+  ['missing selector classification', w => w['ci.yml'].jobs.select.steps.find(s => s.id === 'plan').run = 'echo ignored'],
+  ['missing selection evidence', w => w['ci.yml'].jobs.select.steps.find(s => s.uses?.startsWith('actions/upload-artifact@')).with.path = 'artifacts/other'],
+  ['aggregate without plan', w => delete w['ci.yml'].jobs.required.steps.find(s => s.env?.CI_PLAN).env.CI_PLAN],
+  ['aggregate with wrong results', w => w['ci.yml'].jobs.required.steps.find(s => s.env?.CI_NEEDS).env.CI_NEEDS = '${{ toJSON(jobs) }}'],
+  ['CodeQL without planned languages', w => delete w['ci.yml'].jobs.codeql.with.languages],
+  ['selective standalone CodeQL default', w => w['codeql-analysis.yml'].on.workflow_call.inputs.languages.default = '["javascript"]'],
+  ['CodeQL matrix readds unselected language', w => w['codeql-analysis.yml'].jobs.analyze.strategy.matrix.include = [{ language: 'csharp' }]],
+  ['static CodeQL language matrix', w => w['codeql-analysis.yml'].jobs.analyze.strategy.matrix.language = ['csharp', 'javascript']],
+  ['manual selective CodeQL option', w => w['codeql-analysis.yml'].on.workflow_dispatch.inputs.languages = { type: 'string', default: '["javascript"]' }],
+  ['missing scheduled full CodeQL scan', w => delete w['codeql-analysis.yml'].on.schedule],
+  ['uninstrumented C# CodeQL mode', w => w['codeql-analysis.yml'].jobs.analyze.steps.find(s => s.uses?.startsWith('github/codeql-action/init@')).with['build-mode'] = 'none'],
   ['docs-only path filtering', w => w['ci.yml'].on.pull_request['paths-ignore'] = ['docs/**']],
   ['skipped aggregate', w => w['ci.yml'].jobs.required.if = '${{ success() }}'],
   ['default packaged checkout credentials', w => delete w['ci.yml'].jobs.docker.steps[0].with],
@@ -33,6 +51,23 @@ for (const [name, mutate] of [
   ['missing scan', w => w['release.yml'].jobs.candidates.steps.splice(w['release.yml'].jobs.candidates.steps.findIndex(s => s.uses?.startsWith('aquasecurity')), 1)],
   ['reusable cancellation collision', w => w['migration-validation.yml'].concurrency.group = '${{ github.workflow }}-${{ github.ref }}']]) {
   test(`rejects ${name}`, () => { const w = workflows(); mutate(w); assert.throws(() => validateWorkflows(w, inventory)); });
+}
+for (const id of inventory.filter(id => !['select', 'source-ignore-guard', 'dependencies'].includes(id))) {
+  test(`rejects an ungated ${id} validation job`, () => {
+    const w = workflows();
+    delete w['ci.yml'].jobs[id].if;
+    assert.throws(() => validateWorkflows(w, inventory), /own selector decision/);
+  });
+  test(`rejects ${id} using another job's selection`, () => {
+    const w = workflows();
+    w['ci.yml'].jobs[id].if = "${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['select'] }}";
+    assert.throws(() => validateWorkflows(w, inventory), /own selector decision/);
+  });
+  test(`rejects ${id} without its selector dependency`, () => {
+    const w = workflows();
+    delete w['ci.yml'].jobs[id].needs;
+    assert.throws(() => validateWorkflows(w, inventory), /own selector decision/);
+  });
 }
 test('malformed YAML and duplicate keys fail parsing', () => {
   assert.throws(() => parseWorkflow('jobs: [unterminated'));

@@ -31,6 +31,29 @@ export function validateWorkflows(workflows, required) {
       `CI must validate all ${event} changes on master/dev`);
   }
   const gate = ci.jobs.required;
+  const alwaysJobs = ['select', 'source-ignore-guard', 'dependencies'];
+  require(alwaysJobs.every(id => required.includes(id)) && new Set(required).size === required.length,
+    'Required inventory must include the selector and unconditional policy guards exactly once');
+  require(JSON.stringify(Object.keys(ci.jobs).sort()) === JSON.stringify([...required, 'required'].sort()),
+    'Every CI job must belong to the protected validation inventory');
+  for (const id of alwaysJobs) {
+    require(ci.jobs[id]?.if === undefined && array(ci.jobs[id]?.needs).length === 0,
+      `${id}: selection and policy guards must run independently on every change`);
+  }
+  const selector = ci.jobs.select;
+  const selectorCheckout = array(selector.steps).filter(step => step.uses?.startsWith('actions/checkout@'));
+  require(selectorCheckout.length === 1 && selectorCheckout[0].with?.['fetch-depth'] === 0 &&
+    selector.outputs?.plan === '${{ steps.plan.outputs.plan }}' &&
+    array(selector.steps).some(step => step.id === 'plan' && step.run === 'node scripts/ci/change-impact.mjs'),
+    'Selector must classify complete Git history and publish its validated plan');
+  require(array(selector.steps).some(step => step.uses?.startsWith('actions/upload-artifact@') &&
+    step.if === 'always()' && step.with?.path === 'artifacts/ci-selection/plan.json' && step.with?.['if-no-files-found'] === 'error'),
+    'Selector must retain its complete plan and selection reasons');
+  for (const id of required.filter(id => !alwaysJobs.includes(id))) {
+    require(JSON.stringify(array(ci.jobs[id]?.needs)) === JSON.stringify(['select']) &&
+      ci.jobs[id]?.if === `\${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['${id}'] }}`,
+      `${id}: validation must use its own selector decision after successful classification`);
+  }
   const timingInput = ci.on.workflow_dispatch?.inputs?.measure_previous_scheduling;
   require(timingInput?.type === 'boolean' && timingInput.default === false &&
     ci.jobs['distributed-lock'].with?.repeat_policy_tests === "${{ github.event_name == 'workflow_dispatch' && inputs.measure_previous_scheduling }}",
@@ -38,6 +61,21 @@ export function validateWorkflows(workflows, required) {
   require(gate.name === 'CI required' && gate.if === '${{ always() }}', 'Aggregate must always report with its protected name');
   require(JSON.stringify([...array(gate.needs)].sort()) === JSON.stringify([...required].sort()) && required.every(id => ci.jobs[id]),
     'Aggregate dependency graph differs from required inventory');
+  require(array(gate.steps).some(step => step.run === 'node scripts/ci/required-check.mjs' &&
+    step.env?.CI_NEEDS === '${{ toJSON(needs) }}' && step.env?.CI_PLAN === '${{ needs.select.outputs.plan }}'),
+    'Aggregate must verify every result against the successful selector plan');
+  const codeql = workflows['codeql-analysis.yml'];
+  require(ci.jobs.codeql.with?.languages === '${{ toJSON(fromJSON(needs.select.outputs.plan).codeqlLanguages) }}' &&
+    codeql.on.workflow_call?.inputs?.languages?.type === 'string' &&
+    codeql.on.workflow_call.inputs.languages.default === '["csharp","javascript"]',
+    'CodeQL must receive the complete planned language inventory with a full standalone default');
+  require(codeql.on.schedule?.length > 0 && codeql.on.workflow_dispatch?.inputs?.languages === undefined &&
+    codeql.jobs.analyze.strategy?.matrix?.language === '\${{ fromJSON(inputs.languages || \'["csharp","javascript"]\') }}' &&
+    Object.keys(codeql.jobs.analyze.strategy.matrix).length === 1,
+    'CodeQL language matrix must select exactly the plan and keep scheduled/manual scans full');
+  require(array(codeql.jobs.analyze.steps).some(step => step.uses?.startsWith('github/codeql-action/init@') &&
+    step.with?.['build-mode'] === "${{ matrix.language == 'csharp' && 'manual' || 'none' }}"),
+    'CodeQL C# analysis must retain its instrumented manual build');
   const release = workflows['release.yml'];
   const production = release.jobs.production, candidates = release.jobs.candidates;
   require(production?.concurrency?.group === 'conduit-production-release' && production.concurrency['cancel-in-progress'] === false && production.concurrency.queue === 'max',
