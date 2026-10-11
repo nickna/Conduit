@@ -266,6 +266,8 @@ public sealed class AotDependencyBoundaryTests
         services.AddScoped<IMediaRuntimeStore>(_ => null!);
         services.AddScoped<IRequestLogRuntimeStore>(_ => null!);
         services.AddScoped<IRequestLogRuntimeWriter>(_ => null!);
+        services.AddScoped<IFunctionExecutionRuntimeWriter>(_ => null!);
+        services.AddScoped<IFunctionExecutionRuntimeReader>(_ => null!);
         services.AddScoped<IModelProviderMappingRuntimeStore>(_ => null!);
         services.AddScoped<IModelProviderMappingRepository>(_ => null!);
 
@@ -288,6 +290,8 @@ public sealed class AotDependencyBoundaryTests
         AssertNativeSingleton<IModelProviderMappingRepository, StoreBackedModelProviderMappingRepository>(services);
         AssertNativeSingleton<IFunctionDiscoveryRuntimeStore, NpgsqlFunctionDiscoveryRuntimeStore>(services);
         AssertNativeSingleton<IFunctionExecutionConfigurationStore, NpgsqlFunctionExecutionConfigurationStore>(services);
+        AssertNativeSingleton<IFunctionExecutionRuntimeWriter, NpgsqlFunctionExecutionRuntimeWriter>(services);
+        AssertNativeSingleton<IFunctionExecutionRuntimeReader, NpgsqlFunctionExecutionRuntimeReader>(services);
         AssertNativeSingleton<IFunctionPricingRuntimeStore, NpgsqlFunctionPricingRuntimeStore>(services);
         var functionCost = Assert.Single(services,
             candidate => candidate.ServiceType == typeof(IFunctionCostService));
@@ -297,6 +301,11 @@ public sealed class AotDependencyBoundaryTests
             candidate => candidate.ServiceType == typeof(IFunctionClientFactory));
         Assert.Equal(ServiceLifetime.Scoped, functionClient.Lifetime);
         Assert.NotNull(functionClient.ImplementationFactory);
+        var functionExecution = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(IFunctionExecutionService));
+        Assert.Equal(ServiceLifetime.Scoped, functionExecution.Lifetime);
+        Assert.NotNull(functionExecution.ImplementationFactory);
+        Assert.Null(functionExecution.ImplementationType);
         var functionDiscovery = Assert.Single(services,
             candidate => candidate.ServiceType == typeof(ConduitLLM.Core.Interfaces.IFunctionDiscoveryService));
         Assert.Equal(ServiceLifetime.Scoped, functionDiscovery.Lifetime);

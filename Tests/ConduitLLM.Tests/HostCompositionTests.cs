@@ -79,6 +79,7 @@ public sealed class HostCompositionTests
         ResolveRuntimeServices(builder.Services, app.Services);
         AssertFunctionClientComposition(builder.Services, app.Services, false);
         AssertFunctionDiscoveryComposition(builder.Services, app.Services, false);
+        AssertFunctionExecutionComposition(builder.Services, app.Services, false);
         AssertFunctionsEndpointComposition(builder.Services, app.Services, false);
         await AssertFunctionCostCompositionAsync(builder.Services, app.Services, false);
         Assert.Null(app.Services.GetService<IRedisErrorStore>());
@@ -105,6 +106,7 @@ public sealed class HostCompositionTests
         ResolveRuntimeServices(builder.Services, app.Services);
         AssertFunctionClientComposition(builder.Services, app.Services, gateway);
         AssertFunctionDiscoveryComposition(builder.Services, app.Services, gateway);
+        AssertFunctionExecutionComposition(builder.Services, app.Services, gateway);
         AssertFunctionsEndpointComposition(builder.Services, app.Services, gateway);
         await AssertFunctionCostCompositionAsync(builder.Services, app.Services, gateway);
         Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(StackExchange.Redis.IConnectionMultiplexer));
@@ -252,6 +254,71 @@ public sealed class HostCompositionTests
         Assert.Same(first.ServiceProvider.GetRequiredService<IFunctionConfigurationRepository>(), repositoryField.GetValue(service));
         Assert.Same(second.ServiceProvider.GetRequiredService<IFunctionConfigurationRepository>(), repositoryField.GetValue(other));
 #endif
+    }
+
+    private static void AssertFunctionExecutionComposition(IServiceCollection descriptors, IServiceProvider provider, bool gateway)
+    {
+        var descriptor = Assert.Single(descriptors, value => value.ServiceType == typeof(IFunctionExecutionService));
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var service = Assert.IsType<FunctionExecutionService>(first.ServiceProvider.GetRequiredService<IFunctionExecutionService>());
+        var other = Assert.IsType<FunctionExecutionService>(second.ServiceProvider.GetRequiredService<IFunctionExecutionService>());
+        Assert.Same(service, first.ServiceProvider.GetRequiredService<IFunctionExecutionService>());
+        Assert.NotSame(service, other);
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        object? Field(FunctionExecutionService target, string name) =>
+            typeof(FunctionExecutionService).GetField(name, flags)!.GetValue(target);
+        Assert.Same(first.ServiceProvider.GetRequiredService<IFunctionCostCalculationService>(), Field(service, "_costCalculationService"));
+        Assert.Same(first.ServiceProvider.GetRequiredService<IFunctionClientFactory>(), Field(service, "_clientFactory"));
+        Assert.Same(first.ServiceProvider.GetRequiredService<ConduitLLM.Functions.Security.IFunctionCredentialProtector>(),
+            Field(service, "_credentialProtector"));
+#if CONDUIT_NATIVE_AOT
+        if (gateway)
+        {
+            Assert.NotNull(descriptor.ImplementationFactory);
+            Assert.Null(descriptor.ImplementationType);
+            foreach (var (contract, implementation, field) in new[]
+                     {
+                         (typeof(IFunctionExecutionConfigurationStore), typeof(NpgsqlFunctionExecutionConfigurationStore), "_runtimeConfigurationStore"),
+                         (typeof(IFunctionExecutionRuntimeWriter), typeof(NpgsqlFunctionExecutionRuntimeWriter), "_runtimeWriter"),
+                         (typeof(IFunctionExecutionRuntimeReader), typeof(NpgsqlFunctionExecutionRuntimeReader), "_runtimeReader")
+                     })
+            {
+                var port = Assert.Single(descriptors, value => value.ServiceType == contract);
+                Assert.Equal(ServiceLifetime.Singleton, port.Lifetime);
+                Assert.Equal(implementation, port.ImplementationType);
+                var resolved = first.ServiceProvider.GetRequiredService(contract);
+                Assert.IsType(implementation, resolved);
+                Assert.Same(resolved, second.ServiceProvider.GetRequiredService(contract));
+                Assert.Same(resolved, Field(service, field));
+                Assert.Same(resolved, Field(other, field));
+            }
+            foreach (var field in new[] { "_functionConfigurationRepository", "_credentialRepository", "_executionRepository" })
+            {
+                Assert.Null(Field(service, field));
+                Assert.Null(Field(other, field));
+            }
+            return;
+        }
+#endif
+        Assert.Equal(typeof(FunctionExecutionService), descriptor.ImplementationType);
+        Assert.Null(descriptor.ImplementationFactory);
+        foreach (var field in new[] { "_runtimeConfigurationStore", "_runtimeWriter", "_runtimeReader" })
+        {
+            Assert.Null(Field(service, field));
+            Assert.Null(Field(other, field));
+        }
+        foreach (var (contract, field) in new[]
+                 {
+                     (typeof(IFunctionConfigurationRepository), "_functionConfigurationRepository"),
+                     (typeof(IFunctionCredentialRepository), "_credentialRepository"),
+                     (typeof(IFunctionExecutionRepository), "_executionRepository")
+                 })
+        {
+            Assert.Same(first.ServiceProvider.GetRequiredService(contract), Field(service, field));
+            Assert.Same(second.ServiceProvider.GetRequiredService(contract), Field(other, field));
+        }
     }
 
     private static async Task AssertFunctionCostCompositionAsync(IServiceCollection descriptors, IServiceProvider provider, bool gateway)

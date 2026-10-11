@@ -217,8 +217,8 @@ Real PostgreSQL tests compare the actual repository with both adapters, includin
 three-way concurrent writes, invalid JSON/FK/duplicate failures, occupied pools and
 observed SQL lock cancellation. The native persistence probe independently reads all
 24 fields and checks scalar writes, CAS, failure atomicity and single-slot recovery.
-Runtime selection waits for published-native proof. Lease/retry/retention operations,
-audit writes and function-execution service wiring remain separate boundaries. The
+Published Linux run 38126684370 proves this writer before Gateway selection.
+Lease/retry/retention operations and audit writes remain separate boundaries. The
 inherited stale-snapshot retry behavior is tracked in
 [#1569](https://github.com/nickna/Conduit/issues/1569).
 
@@ -231,18 +231,23 @@ collection points back to that exact row; audits and cost mappings remain unload
 The real-PostgreSQL suite compares the actual legacy repository and both adapters,
 including 105-row lists, detached mutations, graph identity, cancelled pool/observed
 SQL waits, and successful reuse. Included graphs retain the scalar writer's rejection
-before caller mutation. The standalone native probe exercises this reader before
+before caller mutation. Published Linux run 38128502143 proves this reader before
 runtime selection; no broader lease, audit, worker or Admin support is implied.
 
 `FunctionExecutionService.CreateWithRuntimePersistence` prepares the inline service
 to consume the configuration/credential store, scalar writer and included-snapshot
-reader together. Its original public repository constructor and host registrations
-remain unchanged. The new path preserves provider invocation, credential selection,
+reader together. Native Gateway now selects the named scoped factory and singleton
+Npgsql writer/reader after their published persistence proofs. Its original public
+repository constructor and JIT/Admin registrations remain unchanged. The path
+preserves provider invocation, credential selection,
 generated request/cost JSON, optional MCP pricing/tool arguments, cancellation and
 post-provider billable failure behavior. Paired tests exercise both constructions;
-read and list results retain the existing public return types. This service path
-remains unwired until the reader's published-native proof, followed by separate
-endpoint/tool-discovery selection and native HTTP workflow coverage.
+read and list results retain the existing public return types. Complete host
+composition verifies exact port/calculator/client identities and empty legacy
+repository fields on native, while JIT/Admin retain their scoped repositories.
+Native HTTP provider execution, status/list ownership and accounting remain
+separate process-level work; the capability endpoint continues to exclude those
+workloads until that proof passes.
 The inherited ignored concurrency-update result remains tracked separately in
 [#1572](https://github.com/nickna/Conduit/issues/1572).
 

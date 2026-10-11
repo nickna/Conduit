@@ -42,7 +42,19 @@ public static class FunctionServicesExtensions
 #else
         services.AddScoped<IFunctionClientFactory, FunctionClientFactory>();
 #endif
+#if CONDUIT_NATIVE_AOT
+        services.AddScoped<IFunctionExecutionService>(provider =>
+            FunctionExecutionService.CreateWithRuntimePersistence(
+                provider.GetRequiredService<IFunctionExecutionConfigurationStore>(),
+                provider.GetRequiredService<IFunctionExecutionRuntimeWriter>(),
+                provider.GetRequiredService<IFunctionExecutionRuntimeReader>(),
+                provider.GetRequiredService<IFunctionCostCalculationService>(),
+                provider.GetRequiredService<IFunctionClientFactory>(),
+                provider.GetRequiredService<IFunctionCredentialProtector>(),
+                provider.GetRequiredService<ILogger<FunctionExecutionService>>()));
+#else
         services.AddScoped<IFunctionExecutionService, FunctionExecutionService>();
+#endif
         services.AddScoped<FunctionParameterValidationService>();
 
         // Register Agentic Function Calling services

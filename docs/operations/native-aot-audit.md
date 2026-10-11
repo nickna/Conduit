@@ -334,10 +334,13 @@ included configuration/inverse graph and 105-row list, plus native HTTP executio
 preflight on both Gateways for authentication, missing/disabled configurations and
 missing required parameters. Both image jobs were still running at this checkpoint.
 Reader and writer persistence proof and early-return HTTP preflight do not establish
-Gateway provider execution, execution status/list selection or their HTTP behavior.
+Gateway provider execution or execution status/list HTTP behavior.
 
-Native Gateway selects the catalog, scalar configuration/credential and pricing
-stores. Core's `FunctionDiscoveryService` now selects scalar reads through an
+Native Gateway selects the catalog, scalar configuration/credential, pricing and
+execution writer/reader stores. Its scoped execution service consumes the named
+typed factory after the writer/reader persistence proofs; JIT/Admin retain their
+repository construction. Host composition verifies exact native port identities
+and empty legacy repository fields. Core's `FunctionDiscoveryService` selects scalar reads through an
 explicit factory while retaining the sole public repository constructor for JIT.
 Commit `f6fd3100` passes 99 JIT and 100 native-profile managed cases without skips,
 including paired Core discovery behavior and exact host composition. Its Gateway

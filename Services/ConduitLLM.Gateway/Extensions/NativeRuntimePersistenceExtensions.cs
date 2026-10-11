@@ -29,6 +29,8 @@ public static class NativeRuntimePersistenceExtensions
         services.Replace(ServiceDescriptor.Singleton<IGatewayMetricsStore, NpgsqlGatewayMetricsStore>());
         services.Replace(ServiceDescriptor.Singleton<IFunctionDiscoveryRuntimeStore, NpgsqlFunctionDiscoveryRuntimeStore>());
         services.Replace(ServiceDescriptor.Singleton<IFunctionExecutionConfigurationStore, NpgsqlFunctionExecutionConfigurationStore>());
+        services.Replace(ServiceDescriptor.Singleton<IFunctionExecutionRuntimeWriter, NpgsqlFunctionExecutionRuntimeWriter>());
+        services.Replace(ServiceDescriptor.Singleton<IFunctionExecutionRuntimeReader, NpgsqlFunctionExecutionRuntimeReader>());
         services.Replace(ServiceDescriptor.Singleton<IFunctionPricingRuntimeStore, NpgsqlFunctionPricingRuntimeStore>());
         services.Replace(ServiceDescriptor.Singleton<IAsyncTaskRuntimeStore, NpgsqlAsyncTaskRuntimeStore>());
         services.Replace(ServiceDescriptor.Singleton<IMediaRuntimeStore, NpgsqlMediaRuntimeStore>());
