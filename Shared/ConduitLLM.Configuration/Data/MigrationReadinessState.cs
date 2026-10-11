@@ -1,10 +1,9 @@
 namespace ConduitLLM.Configuration.Data
 {
     /// <summary>
-    /// Process-wide flag: does the database schema contain every migration this binary
-    /// knows about? Initially current only in explicit Skip mode and otherwise flipped
-    /// by <see cref="MigrationWaitService"/>. Gates /health/ready via
-    /// <see cref="HealthChecks.PendingMigrationsReadinessCheck"/>.
+    /// Records whether the initial schema wait has completed. Starts current only in
+    /// explicit Skip mode and is otherwise flipped by <see cref="MigrationWaitService"/>.
+    /// Live readiness independently probes the schema on every request.
     /// </summary>
     public sealed class MigrationReadinessState
     {

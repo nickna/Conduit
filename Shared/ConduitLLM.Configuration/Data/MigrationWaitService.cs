@@ -8,8 +8,9 @@ namespace ConduitLLM.Configuration.Data
     /// <summary>
     /// In Wait mode, polls until the database schema version matches this binary
     /// (the standalone migrator applies it), then flips
-    /// <see cref="MigrationReadinessState"/> so /health/ready starts passing. No-op in
-    /// Skip mode. An unreachable database is not fatal: readiness simply stays
+    /// <see cref="MigrationReadinessState"/> to record initial wait completion.
+    /// Live readiness continues probing independently. No-op in Skip mode.
+    /// An unreachable database is not fatal: readiness simply stays
     /// down with an actionable diagnostic, which is the correct signal for orchestrators.
     /// </summary>
     public sealed class MigrationWaitService : BackgroundService
@@ -63,7 +64,7 @@ namespace ConduitLLM.Configuration.Data
                     if (status.IsCurrent)
                     {
                         _state.IsSchemaCurrent = true;
-                        _logger.LogInformation("Database schema is current. Service is ready.");
+                        _logger.LogInformation("Database schema is current. Initial schema wait completed.");
                         return;
                     }
 

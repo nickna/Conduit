@@ -5,28 +5,50 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 namespace ConduitLLM.Configuration.HealthChecks
 {
     /// <summary>
-    /// Fails readiness until <see cref="MigrationReadinessState"/> reports the schema
-    /// current. Must be registered with the "ready" tag — /health/ready filters on it.
-    /// In Skip mode the state starts current; otherwise it holds readiness at 503 until
-    /// the external migrator has applied all migrations this binary knows about.
+    /// Checks the live schema version on every Wait-mode readiness request, including
+    /// after startup has completed. Must be registered with the "ready" tag.
+    /// Explicit Skip mode bypasses the probe.
     /// </summary>
     public class PendingMigrationsReadinessCheck : IHealthCheck
     {
-        private readonly MigrationReadinessState _state;
+        private readonly ISchemaVersionProbe _probe;
+        private readonly MigrationStartupOptions _options;
 
-        public PendingMigrationsReadinessCheck(MigrationReadinessState state)
+        public PendingMigrationsReadinessCheck(
+            ISchemaVersionProbe probe, MigrationStartupOptions options)
         {
-            _state = state ?? throw new ArgumentNullException(nameof(state));
+            _probe = probe ?? throw new ArgumentNullException(nameof(probe));
+            _options = options ?? throw new ArgumentNullException(nameof(options));
         }
 
-        public Task<HealthCheckResult> CheckHealthAsync(
+        public async Task<HealthCheckResult> CheckHealthAsync(
             HealthCheckContext context,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(_state.IsSchemaCurrent
-                ? HealthCheckResult.Healthy("Database schema is current")
-                : HealthCheckResult.Unhealthy(
-                    "Database schema is not current. Run the ConduitLLM.Migrator deployment job to migrate before rollout."));
+            if (_options.Mode == MigrationMode.Skip)
+            {
+                return HealthCheckResult.Healthy("Database schema checks are disabled in Skip mode");
+            }
+
+            try
+            {
+                var status = await _probe.GetStatusAsync(cancellationToken);
+                return status.IsCurrent
+                    ? HealthCheckResult.Healthy("Database schema is current")
+                    : HealthCheckResult.Unhealthy(
+                        $"Database schema is at {status.AppliedVersion ?? "<uninitialized>"}; " +
+                        $"this release requires {status.ExpectedVersion}. " +
+                        "Run the ConduitLLM.Migrator deployment job to migrate before rollout.");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                return HealthCheckResult.Unhealthy(
+                    "Could not check the database schema version", exception);
+            }
         }
     }
 }

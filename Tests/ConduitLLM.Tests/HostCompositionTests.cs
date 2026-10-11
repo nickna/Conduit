@@ -4,8 +4,10 @@ using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Gateway.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace ConduitLLM.Tests;
 
@@ -35,6 +37,23 @@ public sealed class HostCompositionTests
     [Theory]
     [InlineData("Development")]
     [InlineData("Production")]
+    public void GatewayRedisConnectivityCheck_IsPartOfReadiness(string environment)
+    {
+        using var variables = new CompositionEnvironment("127.0.0.1:6379,abortConnect=false");
+        var builder = CreateBuilder(true, environment);
+        global::Program.ConfigureMonitoringServices(builder);
+        using var services = builder.Services.BuildServiceProvider();
+
+        var registrations = services.GetRequiredService<IOptions<HealthCheckServiceOptions>>()
+            .Value.Registrations;
+        var redis = Assert.Single(registrations, registration => registration.Name == "redis");
+
+        Assert.Contains("ready", redis.Tags);
+    }
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Production")]
     public async Task AdminWithoutRedis_ValidatesAndResolvesCompleteRuntimeGraph(string environment)
     {
         using var variables = new CompositionEnvironment(null);
@@ -45,6 +64,9 @@ public sealed class HostCompositionTests
         Assert.Null(app.Services.GetService<IRedisErrorStore>());
         Assert.Null(app.Services.GetService<IProviderErrorTrackingService>());
         Assert.Null(app.Services.GetService<ConduitLLM.Core.Services.IVirtualKeyRateLimitService>());
+        Assert.DoesNotContain(
+            app.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations,
+            registration => registration.Name == "redis");
     }
 
     [SkippableTheory]

@@ -8,8 +8,8 @@ namespace ConduitLLM.Configuration.Data
     public enum MigrationMode
     {
         /// <summary>
-        /// Never migrate. Poll until the schema contains every migration this binary
-        /// knows about, gating /health/ready in the meantime. This is the default;
+        /// Never migrate. Poll until the schema version exactly matches this binary,
+        /// gating /health/ready in the meantime and rechecking afterward. This is the default;
         /// a release hook or one-shot job must run "migrate" separately.
         /// </summary>
         Wait,

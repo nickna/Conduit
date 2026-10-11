@@ -57,7 +57,7 @@ public partial class Program
                 healthChecksBuilder.AddTypeActivatedCheck<ConduitLLM.Configuration.HealthChecks.RedisHealthCheck>(
                     "redis",
                     failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
-                    tags: new[] { "cache", "redis", "billing" },
+                    tags: new[] { "cache", "redis", "billing", "ready" },
                     args: new object[] { redisConnStr });
                 
                 // Add circuit breaker health check
