@@ -18,9 +18,19 @@ if (string.IsNullOrWhiteSpace(configured))
 }
 
 var connectionString = NormalizeConnectionString(configured);
-var schema = $"conduit_aot_probe_{Guid.NewGuid():N}";
+if (args.Length > 0 && args[0] == "--cleanup-fixture")
+{
+    if (args.Length > 2 || (args.Length == 2 && args[1] != "--fail-work"))
+        throw new ArgumentException("Cleanup fixture accepts only --fail-work.");
+    return await PersistenceProbeCleanupFixture.RunAsync(connectionString, args.Length == 2);
+}
+var schema = $"{PersistenceProbeLifecycle.SchemaPrefix}{Guid.NewGuid():N}";
+return await PersistenceProbeLifecycle.RunAsync(schema, RunProbeAsync,
+    () => PersistenceProbeLifecycle.CleanupOwnedSchemaAsync(connectionString, schema),
+    () => Console.WriteLine("Native persistence probe passed: schema readiness, pool warming/cancellation/reuse, reads, writes, rollback, concurrency, retry, PostgreSQL mappings, and the global-settings, IP-filter, provider/credential, model-routing, virtual-key, media, async-task, function-discovery, function-execution configuration, function-pricing, and request-log runtime stores; owned schema removed."),
+    Console.Error);
 
-try
+async Task RunProbeAsync()
 {
     await using var connection = new NpgsqlConnection(connectionString);
     await OpenWithRetryAsync(connection);
@@ -459,21 +469,6 @@ try
             new NpgsqlRequestLogRuntimeStore(dataSource));
     }
 
-    Console.WriteLine("Native persistence probe passed: schema readiness, pool warming/cancellation/reuse, reads, writes, rollback, concurrency, retry, PostgreSQL mappings, and the global-settings, IP-filter, provider/credential, model-routing, virtual-key, media, async-task, function-discovery, function-execution configuration, function-pricing, and request-log runtime stores.");
-    return 0;
-}
-finally
-{
-    try
-    {
-        await using var cleanup = new NpgsqlConnection(connectionString);
-        await cleanup.OpenAsync();
-        await ExecuteAsync(cleanup, $"DROP SCHEMA IF EXISTS \"{schema}\" CASCADE");
-    }
-    catch (Exception exception)
-    {
-        Console.Error.WriteLine($"Cleanup failed: {exception.Message}");
-    }
 }
 
 static async Task ExerciseConnectionPoolWarmupAsync(NpgsqlDataSource dataSource)

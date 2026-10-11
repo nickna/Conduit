@@ -112,11 +112,12 @@ jobs:
         with:
           project: Tests/ConduitLLM.IntegrationTests
           suite: native-persistence-parity
-          filter: FullyQualifiedName~PersistenceParityTests|FullyQualifiedName~GlobalSettingRepositoryParityTests|FullyQualifiedName~IpFilterRepositoryParityTests|FullyQualifiedName~ProviderPersistenceParityTests|FullyQualifiedName~SchemaVersionProbeTests|FullyQualifiedName~NpgsqlConnectionPoolWarmupTests
-          minimum: '30'
+          filter: FullyQualifiedName~PersistenceParityTests|FullyQualifiedName~NativePersistenceCleanupParityTests|FullyQualifiedName~GlobalSettingRepositoryParityTests|FullyQualifiedName~IpFilterRepositoryParityTests|FullyQualifiedName~ProviderPersistenceParityTests|FullyQualifiedName~SchemaVersionProbeTests|FullyQualifiedName~NpgsqlConnectionPoolWarmupTests
+          minimum: '36'
         env:
           CONDUIT_LOCK_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
           CONDUIT_LOCK_TEST_REDIS: 127.0.0.1:6379
+          CONDUIT_PERSISTENCE_PROBE_PATH: ${{ github.workspace }}/artifacts/native-aot/persistence/ConduitLLM.PersistenceAotTests
 
       - name: Build release-owned migration and message probes
         run: |
