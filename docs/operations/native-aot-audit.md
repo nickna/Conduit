@@ -293,3 +293,25 @@ persistence probe, and retains Gateway/Wolverine process logs with the native
 reports. Source changes to shared libraries and service code trigger the native
 lane. Compiled-model normalization checks the exact exception code, justification,
 and placement on `Create`, including rejection of an altered exception.
+
+## Integration checkpoint: 2026-10-11
+
+[Linux NativeAOT run 38121134709](https://github.com/nickna/Conduit/actions/runs/38121134709)
+passed its publish/process job with **0** first-party linker diagnostics. It proves
+Wait-mode startup against two owned databases: an empty schema and the real prior
+release migration. Native Admin and two Gateways stay live with readiness503 across
+two observations, then become ready on the original processes after the standalone
+migrator provisions the application and Wolverine schemas. The same run passes the
+future-history mismatch and PostgreSQL/Redis outage/recovery gates, exact seeded
+metric aggregates and the existing authenticated protocol workload.
+
+The runtime capability contract now includes `readiness-and-database-health` rather
+than excluding it. This is a schema/dependency health claim, not completion of the
+background-worker or Admin-management workload. The retained logs still expose
+unextracted EF work; the parent epic and production promotion remain incomplete.
+
+Function entities and persistence interfaces now compile in the neutral persistence
+leaf with binary forwarding from Functions, so Configuration no longer references
+the function provider implementation assembly. Function discovery and execution
+configuration/credential read ports have EF/Npgsql parity suites and standalone
+persistence probes; their native service selection remains a separate checkpoint.

@@ -20,6 +20,7 @@ The running Gateway exposes the same information at `GET /health/runtime-capabil
 | Async-task persistence | Task status, cancellation, claims, provider phases, recovery, retry preparation, and retention use a fixed-shape runtime store. | A seeded task is read on one native Gateway, cancelled on the second, observed through the shared cache on the first, and verified durable in PostgreSQL. EF and typed Npgsql also pass the same real-PostgreSQL lifecycle contract. |
 | S3 media workflows | Provider image generation, media quota lookup, S3-compatible upload/read, durable media ownership, and authenticated downloads use the native runtime stores. | A separate provider returns a base64 PNG; the primary Gateway stores it in S3-compatible storage and PostgreSQL, while the secondary Gateway proves typed ownership and returns identical bytes through authenticated metadata/download endpoints. Linux CI uses S3Mock; local proof uses MinIO. EF and typed Npgsql pass the same media/quota contract. |
 | Operations | Liveness, Prometheus exposition, and middleware/telemetry startup are exercised. Gateway metrics select fixed-shape aggregates through EF on JIT and typed Npgsql on native. | The native gate requires a $0.40/min cost rate, 0.20s mean latency, and one active mapping from an elected business-metrics host, plus two pending notification tasks from each Gateway. EF/Npgsql aggregates also pass the same real-PostgreSQL contract. |
+| Schema and dependency readiness | Wait-mode hosts stay live while withholding readiness until the release schema and Wolverine storage are available. Readiness reflects live PostgreSQL connectivity and Gateway Redis connectivity. | Empty/prior databases recover on the same native Admin and two Gateway processes after the standalone migrator; future schema history and PostgreSQL/Redis outages return the required 503 statuses and recover without restarts. [Linux process gate 38121134709](https://github.com/nickna/Conduit/actions/runs/38121134709) passed all these cases. |
 
 SignalR MessagePack is deliberately excluded from NativeAOT publishes and the AOT
 audit profile. Its registration code and protocol package reference are conditional,
@@ -37,7 +38,6 @@ The following features are excluded from the first native image and appear in `e
 - `signalr-messagepack`
 - `ef-core-query-data-plane`
 - `redis-virtual-key-authentication-cache`
-- `readiness-and-database-health`
 
 The native gate uses `CONDUIT_MIGRATION_MODE=Wait` after the standalone migrator
 and requires `/health/ready` to return 200 from Admin and both Gateways. In its
@@ -48,11 +48,14 @@ TCP proxies then interrupt the hosts' Redis and PostgreSQL connections. Redis lo
 must produce Gateway readiness 503 while Admin remains ready; PostgreSQL loss must
 produce readiness 503 from all three hosts. Every liveness response must remain
 200, and all three readiness responses must recover to 200 without host restarts.
-Startup against missing or stale schemas still needs published-process proof
-before the full readiness exclusion can be removed. The
+The same gate also starts the three published native processes against empty and
+prior-release databases, requires two live200/ready503 observations, runs the
+standalone migrator and requires ready200 without restarting them. This proves the
+schema/dependency health contract; it does not establish support for unextracted
+background workers or full Admin management workloads. The
 authenticated model-discovery proof covers `/v1/models`, model retrieval, and
-model metadata. It does not cover the newer `/v1/discovery/models` or
-`/v1/discovery/functions` query paths. Likewise, connecting a video hub or cancelling
+model metadata. It does not cover the newer `/v1/conduit/discovery/models` or
+`/v1/conduit/discovery/functions` query paths. Likewise, connecting a video hub or cancelling
 a seeded task does not prove provider video/audio generation or durable worker
 recovery. See the [current query inventory](persistence-aot-query-inventory.md) and
 [epic assessment](native-aot-audit.md#epic-1368-assessment-2026-10-09) for those gaps.

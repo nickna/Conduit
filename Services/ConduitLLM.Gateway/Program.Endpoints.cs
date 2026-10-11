@@ -33,6 +33,7 @@ public partial class Program
                     "async-task-persistence",
                     "s3-media-api-workflows",
                     "forwarded-headers",
+                    "readiness-and-database-health",
                     "liveness-metrics-opentelemetry"
                 ]
                 : [
@@ -53,8 +54,7 @@ public partial class Program
                 ? [
                     "signalr-messagepack",
                     "ef-core-query-data-plane",
-                    "redis-virtual-key-authentication-cache",
-                    "readiness-and-database-health"
+                    "redis-virtual-key-authentication-cache"
                 ]
                 : []);
 

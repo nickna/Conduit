@@ -329,6 +329,7 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
                      "s3-media-api-workflows",
                      "authenticated-signalr-json-connections",
                      "redis-signalr-backplane-and-rate-limits",
+                     "readiness-and-database-health",
                      "redis-ephemeral-key-cache"
                  })
         {
@@ -349,6 +350,8 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             "process-tested provider routing and streaming are no longer excluded");
         True(!exclusions.Contains("s3-media-api-workflows"),
             "process-tested S3 media workflows are no longer excluded");
+        True(!exclusions.Contains("readiness-and-database-health"),
+            "process-tested schema/dependency readiness is no longer excluded");
 
         await ExpectAsync(await _admin.GetAsync("health/live"), HttpStatusCode.OK, "Admin liveness");
         await ExpectAsync(await _gateway.GetAsync("health/live"), HttpStatusCode.OK, "Gateway liveness");

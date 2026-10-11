@@ -7,8 +7,10 @@ Admin and Gateway NativeAOT images are release candidates, not production defaul
 plane on JIT while EF Core NativeAOT query execution is experimental. The Gateway's
 declared native feature matrix now process-tests authentication, provider HTTP/SSE,
 request accounting, async tasks, S3 media, PostgreSQL/Wolverine, Redis, and JSON
-SignalR paths. It continues to exclude MessagePack, broad EF query execution, the
-Redis virtual-key authentication cache, and full readiness/database-health parity.
+SignalR paths. Published native tests also prove Wait-mode schema startup and live
+PostgreSQL/Redis readiness failure and recovery. It continues to exclude MessagePack,
+broad EF query execution and the Redis virtual-key authentication cache. Healthy
+schema/dependency readiness does not establish full Admin or background-worker parity.
 
 The first-party linker ratchet is now empty. Promotion nevertheless remains blocked
 because the EF-backed Admin path is not approved for production NativeAOT and no

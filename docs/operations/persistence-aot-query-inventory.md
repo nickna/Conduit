@@ -1,6 +1,6 @@
 # NativeAOT persistence query inventory
 
-Revalidated: 2026-10-09 against `master` commit `e71f8d61` (merged #1489).
+Revalidated: 2026-10-11 after commit `afead83e` on the #1368 implementation branch.
 Owner: database/runtime maintainers. Related: #1368, #1373, #1374,
 [ADR 0006](../decisions/0006-native-aot-persistence.md), and
 [ADR 0009](../decisions/0009-staged-native-persistence-refactor.md).
@@ -54,10 +54,10 @@ At the audited commit:
 |---|---:|---:|
 | ConduitLLM.Admin | 26 | 352 |
 | ConduitLLM.Gateway | 4 | 47 |
-| ConduitLLM.Configuration | 36 | 912 |
-| ConduitLLM.Core | 2 | 11 |
+| ConduitLLM.Configuration | 38 | 929 |
+| ConduitLLM.Core | 1 | 9 |
 | ConduitLLM.Providers | 1 | 12 |
-| Total | 69 | 1,334 |
+| Total | 70 | 1,349 |
 
 This is a review aid, not a count of unsupported SQL queries. It includes in-memory
 LINQ in EF-importing files, EF reference adapters retained for JIT, and the
@@ -131,20 +131,23 @@ and rejects broad or changed exceptions. Generated compiled-model code has a
 separate bounded set of 22 `IL3050` exceptions. Both sets are warning-management
 evidence, not runtime support evidence.
 
-## Readiness and runtime gaps to close next
+## Readiness checkpoint and remaining runtime gaps
 
-The native process script sets `CONDUIT_MIGRATION_MODE=Skip` and tests liveness;
-it does not prove `/health/ready` or the schema-readiness transition. The shared
-`SchemaVersionProbe` creates an EF context to obtain a raw database connection.
-Add native `Wait` tests for missing, stale, and current schema plus database
-failure/recovery before removing `readiness-and-database-health` from exclusions.
-Its single `SELECT CASE` references `__EFMigrationsHistory` in a subquery while
-guarding with `to_regclass`; add a real-PostgreSQL missing-table regression test,
-because relation lookup occurs before evaluating that guard.
+The native process gate now uses `CONDUIT_MIGRATION_MODE=Wait`. The typed Npgsql
+schema-version probe reads the migration history directly, treating PostgreSQL's
+missing-table code as an uninitialized schema; real-PostgreSQL tests cover that
+case. Release-lock and mandatory Wolverine-storage preflights defer bus startup
+until the standalone migrator has completed its work.
+
+[Linux run 38121134709](https://github.com/nickna/Conduit/actions/runs/38121134709)
+passed published-process tests for empty/prior/current/future schema states,
+PostgreSQL/Redis outages and same-process readiness recovery with liveness200.
+The runtime capability contract therefore includes `readiness-and-database-health`.
+This does not prove the remaining EF-backed background-worker or Admin workload.
 
 The current Gateway capability endpoint explicitly excludes
 `signalr-messagepack`, `ef-core-query-data-plane`,
-`redis-virtual-key-authentication-cache`, and `readiness-and-database-health`.
+and `redis-virtual-key-authentication-cache`.
 All eight JSON hubs, Redis admission/method limits/backplane, and ephemeral keys
 are covered by the native process probe; virtual-key authentication-cache
 invalidation, full Admin management, provider families beyond the mock-compatible
