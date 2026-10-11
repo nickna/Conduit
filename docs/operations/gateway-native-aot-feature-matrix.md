@@ -21,12 +21,14 @@ The running Gateway exposes the same information at `GET /health/runtime-capabil
 | S3 media workflows | Provider image generation, media quota lookup, S3-compatible upload/read, durable media ownership, and authenticated downloads use the native runtime stores. | A separate provider returns a base64 PNG; the primary Gateway stores it in S3-compatible storage and PostgreSQL, while the secondary Gateway proves typed ownership and returns identical bytes through authenticated metadata/download endpoints. Linux CI uses S3Mock; local proof uses MinIO. EF and typed Npgsql pass the same media/quota contract. |
 | Operations | Liveness, Prometheus exposition, and middleware/telemetry startup are exercised. Gateway metrics select fixed-shape aggregates through EF on JIT and typed Npgsql on native. | Native liveness and `/metrics` return 200; the probe checks a `# HELP` body. EF/Npgsql metric aggregates pass the same JIT real-PostgreSQL contract. Seeded aggregate values are not yet asserted from a published native process. |
 
-SignalR MessagePack is deliberately not registered by a NativeAOT publish; its
-registration code is excluded at compile time. `ConduitLLM.SignalR.csproj` still
-has an unconditional MessagePack protocol package reference. Disabling the protocol
-does not prove that its package was omitted from the restore graph or that every
-related dependency disappeared from the linked image. A normal JIT build enables
-MessagePack by default and still honors `SIGNALR_MESSAGEPACK_ENABLED=false`.
+SignalR MessagePack is deliberately excluded from NativeAOT publishes and the AOT
+audit profile. Its registration code and protocol package reference are conditional,
+and a build guard rejects the optional MessagePack client protocol package in the
+resolved native SignalR graph. The Redis backplane still requires the MessagePack
+library for its internal transport; client protocol exclusion does not remove that
+dependency. Test projects own their JIT MessagePack compatibility dependencies explicitly. A
+normal JIT build enables MessagePack by default and still honors
+`SIGNALR_MESSAGEPACK_ENABLED=false`.
 
 ## Explicit exclusions
 
@@ -124,7 +126,7 @@ The separate `scripts/test/wolverine-two-host-smoke.ps1 -NativeArtifactDirectory
 |---|---:|---|---|---|
 | EF Core | 10.0.10 | [NativeAOT epic #29754](https://github.com/dotnet/efcore/issues/29754), [precompiled queries #25009](https://github.com/dotnet/efcore/issues/25009) | Dynamic repository query composition is rejected by the experimental precompiler. Query-backed features are excluded and observable. | The EF precompiler accepts Conduit's query shapes, or the repository layer is converted to precompilable/static queries; then enable and process-test the data plane before removing exclusions. |
 | Wolverine / JasperFx | Wolverine 6.14.0, JasperFx 2.13.x | [Wolverine #2769](https://github.com/JasperFx/wolverine/issues/2769), [#2757](https://github.com/JasperFx/wolverine/issues/2757) | Wolverine still closes router/serializer generics and locates its generated handler registry and adapters reflectively. Conduit supplies narrow runtime directives and explicit application assembly selection. | Remove each directive only after the pinned dependency no longer uses runtime generic construction/exported-type discovery and the two-host native gate remains green. |
-| MessagePack-CSharp | 2.5.302; SignalR protocol 10.0.10 | [NativeAOT support #1503](https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/1503), [generator issue #2283](https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/2283) | Native protocol registration is excluded, but the SignalR project still restores its package; JSON remains supported. | Conditionally remove the unused native package and verify the resulting graph. Supporting MessagePack later requires generated hub payload resolvers and native protocol tests. |
+| MessagePack-CSharp | 2.5.302; SignalR protocol 10.0.12 | [NativeAOT support #1503](https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/1503), [generator issue #2283](https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/2283) | The native client protocol registration and package reference are excluded, with a resolved graph build guard. The Redis backplane retains its internal MessagePack dependency. JIT retains contractless client payload compatibility. | Supporting the MessagePack client protocol in native hosts later requires generated hub payload resolvers and native protocol tests. |
 | AWS SDK for .NET S3 | 4.0.24.2 | [trim-safe runtime dependency work #4354](https://github.com/aws/aws-sdk-net/issues/4354), [AOT tracking #2486](https://github.com/aws/aws-sdk-net/issues/2486) | Authenticated upload/read/download is process-tested against S3Mock in Linux CI and MinIO locally. Publish logs retain third-party linker diagnostics outside the first-party ratchet; CI does not cover every S3-compatible vendor. | Remove warnings only after the pinned SDK supplies the required trim annotations; add provider-specific gates before claiming behavior beyond the S3-compatible contract. |
 
 The first-party linker ratchet is empty. This includes bounded exceptions on 22

@@ -20,6 +20,8 @@
     <PackageReference Include="System.Security.Cryptography.Xml" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- JIT protocol tests own this dependency; native service graphs exclude it. -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" PrivateAssets="all" />
     <PackageReference Include="Moq" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Moq.Contrib.HttpClient" />

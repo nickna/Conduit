@@ -89,7 +89,8 @@ namespace ConduitLLM.Core.Extensions
 
             // The JIT service retains its existing MessagePack wire contract. The first
             // NativeAOT variant is compile-time JSON-only so the reflection-oriented
-            // contractless resolver and its package are absent from the native graph.
+            // contractless client protocol and its package are absent from the native
+            // graph. The Redis backplane retains its internal MessagePack transport.
 #if !CONDUIT_NATIVE_AOT
             if (ConduitSignalRProtocolPolicy.IsMessagePackEnabled)
             {

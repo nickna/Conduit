@@ -291,6 +291,24 @@ public sealed class AotDependencyBoundaryTests
 #endif
 
     [Fact]
+    public void SignalRProtocolReferencesMatchTheRuntimeVariant()
+    {
+        var references = typeof(SignalRConfigurationExtensions).Assembly
+            .GetReferencedAssemblies()
+            .Select(reference => reference.Name)
+            .ToArray();
+        if (ConduitSignalRProtocolPolicy.IsNativeAot)
+        {
+            Assert.DoesNotContain(references, name => name?.Contains("MessagePack", StringComparison.Ordinal) == true);
+        }
+        else
+        {
+            Assert.Contains("Microsoft.AspNetCore.SignalR.Protocols.MessagePack", references);
+            Assert.Contains("MessagePack", references);
+        }
+    }
+
+    [Fact]
     public void AdminDoesNotDirectlyOwnGatewayOnlyAdapters()
     {
         AssertDoesNotReference(
