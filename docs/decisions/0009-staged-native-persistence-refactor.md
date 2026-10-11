@@ -247,8 +247,9 @@ composition verifies exact port/calculator/client identities and empty legacy
 repository fields on native, while JIT/Admin retain their scoped repositories.
 Published Linux run 38133326127 proves the bounded inline Exa path on two native
 Gateways: successful and failed execution, opposite-host status retrieval,
-ownership denial and settled accounting. Execution-list HTTP, MCP, successful
-agentic conversations and function audit/retention remain separate workload proofs.
+ownership denial and settled accounting. Configured non-streaming Exa agentic chat
+is qualified below. Execution-list HTTP, MCP and function audit/retention remain
+separate workload proofs.
 The inherited ignored concurrency-update result remains tracked separately in
 [#1572](https://github.com/nickna/Conduit/issues/1572).
 
@@ -259,8 +260,8 @@ registration remain unchanged. Missing/disabled configuration, authentication,
 parameter validation, execution forwarding, direct-cost evidence and response/error
 contracts retain their existing behavior. Paired handler tests use production JSON
 metadata, and the native two-host probe exercises requests rejected before provider
-invocation. This preflight selection does not establish native execution, status
-reads, agentic tool discovery or chat workflow support.
+invocation. The preflight cases alone do not establish native execution or chat
+workflow support; the complete selected Exa workload below supplies that proof.
 Inherited validation of JSON-bound primitive parameters is preserved and tracked in
 [#1573](https://github.com/nickna/Conduit/issues/1573).
 
@@ -273,8 +274,8 @@ validation, generated schemas and MCP expansion. Routing maps retain their origi
 ID input and existing validation/error behavior. Paired tests cover both service
 constructions, while complete host composition verifies the exact scoped service
 and shared store identity. This removes Core discovery's configuration-query
-boundary. ChatEndpoints' separate preflight is selected below; published agentic
-workflows remain separate work.
+boundary. ChatEndpoints' separate preflight is selected below, and the published
+configured Exa workflow proves these Core tool and routing-map reads.
 
 `ChatEndpoints.CreateWithRuntimePersistence` prepares the separate chat preflight
 over that same scalar configuration store. The sole public 14-parameter repository
@@ -294,13 +295,15 @@ Paired HTTP tests preserve explicit-null global defaults and the inherited omitt
 flag initializers; the latter bypass the documented global defaults and are tracked
 in [#1576](https://github.com/nickna/Conduit/issues/1576).
 
-The next process proof carries a non-streaming OpenAI-compatible chat through one
+The published process proof carries a non-streaming OpenAI-compatible chat through one
 configured Exa call and a final LLM reply on both aliases and both Gateway hosts.
 It uses the selected configuration, discovery, credential, pricing and execution
 stores without provider-hosted tool usage. Four chats verify generated schemas,
 matching tool results, complete persisted executions, opposite-host ownership,
 aggregate token usage and settled combined charges. Managed native-profile HTTP
-verification passes; the same probe is mandatory in the published Linux gate.
+verification passes; the
+[published Linux process job at d13e7deb](https://github.com/nickna/Conduit/actions/runs/38137532017/job/114465334583)
+also passed this mandatory probe with zero first-party linker diagnostics.
 Cost-summary, iteration and chat-log attribution quirks remain unchanged and are
 tracked in #1577, #1578 and #1579. Provider-hosted tool pricing, MCP, agentic SSE,
 parallel/dependent calls and audit/retention require separate workload proofs.
@@ -334,10 +337,13 @@ Each slice must provide:
 
 The extracted global-settings, IP-filter, provider/credential, virtual-key runtime,
 model-routing, request-accounting, async-task, media, and Gateway-metrics slices are
-selected only by a native Gateway build. Model routing is selected behind a read-only
+selected by a native Gateway build. Native Admin also selects the typed global-setting
+repository; its HTTP proof awaits published Linux verification. Model routing is
+selected behind a read-only
 compatibility adapter, while request-log writes use a narrow runtime writer and
-authenticated hubs share the virtual-key runtime snapshot. JIT Gateway and Admin
-registrations retain their existing EF-backed services.
+authenticated hubs share the virtual-key runtime snapshot. JIT Gateway and JIT
+Admin registrations retain their existing EF-backed services, as do the remaining
+unextracted Admin management registrations.
 Rollback is therefore the JIT artifact, whose request-time and management contracts
 continue to resolve to the legacy services.
 

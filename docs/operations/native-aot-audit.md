@@ -346,8 +346,8 @@ Commit `f6fd3100` passes 99 JIT and 100 native-profile managed cases without ski
 including paired Core discovery behavior and exact host composition. Its Gateway
 analyzer build emits zero first-party IL diagnostics; its 14 known warnings comprise
 12 cached NuGet vulnerability-metadata warnings and two nullable compiler warnings.
-Published Core LLM tool discovery and broader agentic workflows remain unproved;
-the selected chat preflight and bounded inline execution proofs follow below.
+The selected Core LLM tool discovery and chat preflight now have published Exa
+workflow proof below. Broader agentic workflows remain outside that bounded proof.
 
 Chat's separate function-configuration preflight now selects a scalar-store
 factory. It retains the sole public 14-parameter constructor and the original ID
@@ -359,8 +359,8 @@ warnings. The subsequent native composition and HTTP gate exercises missing IDs,
 disabled rows and invalid iteration limits on both chat routes and both Gateways.
 It checks unchanged provider counters and owned SQL accounting, and preserves the
 middleware correlation ID before the handler creates a billing identity. These
-guarded requests do not advertise successful agentic execution support; published
-verification of this selection remains required.
+guarded requests alone do not establish successful agentic execution. The complete
+published Exa workload below also passes this selected preflight.
 
 [Linux run 38133326127](https://github.com/nickna/Conduit/actions/runs/38133326127)
 at `5396be8a` passed its complete native publish/process job with zero first-party
@@ -370,7 +370,8 @@ provider rejections with a production-protected scoped credential. It independen
 checks all 24 execution fields, opposite-host retrieval and ownership denial,
 configured prices, success-only logs and settled ledger/group balances. Its bounded
 process and owned Redis/SQL cleanup gate passes too. This proves that selected inline
-Exa path; MCP, successful agentic chat and the excluded workers remain separate work.
+Exa path. Successful configured Exa agentic chat is qualified below; MCP and the
+excluded workers remain separate work.
 Both native image jobs also passed their packaged-entrypoint checks. The inherited
 financial precision and External-mode provider diagnostics are tracked in
 [#1574](https://github.com/nickna/Conduit/issues/1574) and
@@ -386,7 +387,13 @@ stable final group spend `0.75060006` alongside log/ledger sums `0.750600`.
 OpenAI's wildcard capability makes prompt caching eligible; no policy is applied
 without caching intent. The real two-host managed native-profile HTTP probe and
 fully enabled Gateway/probe analyzer builds pass with zero IL diagnostics. The
-published Linux gate must pass this new phase before native qualification. Response
+published Linux process job in
+[run 38137532017](https://github.com/nickna/Conduit/actions/runs/38137532017/job/114465334583)
+at `d13e7deb` passed this phase, configuration preflight, inline execution and owned
+cleanup with zero first-party linker diagnostics. Its strict parity report records
+137 discovered, executed and passed cases with zero failures/skips, including 27
+production MCP-client transport cases. Those managed MCP cases do not establish
+the Gateway's published MCP execution path. Response
 cost summaries, summary iteration and omitted chat-log function metadata are
 preserved and tracked in [#1577](https://github.com/nickna/Conduit/issues/1577),
 [#1578](https://github.com/nickna/Conduit/issues/1578) and
@@ -400,10 +407,13 @@ its owned hosts, retaining both IP and per-key limiting. A local managed native
 profile rerun passed 101 authenticated validation rejections in under a second,
 then the complete inline/agentic proof and repeated owned cleanup. The options
 divergence is tracked in [#1580](https://github.com/nickna/Conduit/issues/1580);
-published verification of the corrected complete gate remains required.
+the corrected complete published process gate passed in the run linked above.
 
-The native capability endpoint explicitly names `inline-function-execution`,
-`agentic-tool-and-function-workflows`, `function-audit-and-retention`, and
+The native capability endpoint now includes `inline-exa-search` and
+`nonstreaming-configured-exa-agentic-chat`. It explicitly names
+`inline-functions-beyond-exa-search`,
+`agentic-workflows-beyond-nonstreaming-configured-exa-chat`,
+`function-execution-list-http`, `function-audit-and-retention`, and
 `billing-reconciliation` alongside the existing EF, authentication-cache and
 MessagePack exclusions. These declarations identify unsupported workloads; their
 registrations still exist in the candidate. Full Admin management, unextracted

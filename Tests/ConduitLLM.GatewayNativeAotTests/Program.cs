@@ -446,6 +446,8 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         foreach (var feature in new[]
                  {
                      "function-metadata-discovery",
+                     "inline-exa-search",
+                     "nonstreaming-configured-exa-agentic-chat",
                      "provider-http",
                      "sse-streaming",
                      "provider-error-translation",
@@ -470,8 +472,9 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             "Redis virtual-key authentication cache exclusion is observable");
         foreach (var feature in new[]
                  {
-                     "inline-function-execution",
-                     "agentic-tool-and-function-workflows",
+                     "inline-functions-beyond-exa-search",
+                     "agentic-workflows-beyond-nonstreaming-configured-exa-chat",
+                     "function-execution-list-http",
                      "function-audit-and-retention",
                      "billing-reconciliation"
                  })
@@ -489,6 +492,14 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             "process-tested S3 media workflows are no longer excluded");
         True(!exclusions.Contains("readiness-and-database-health"),
             "process-tested schema/dependency readiness is no longer excluded");
+        foreach (var feature in new[] { "inline-exa-search", "nonstreaming-configured-exa-agentic-chat" })
+        {
+            True(!exclusions.Contains(feature), $"{feature} is supported after published process proof");
+        }
+        True(!exclusions.Contains("inline-function-execution"),
+            "inline functions are no longer excluded as one undifferentiated boundary");
+        True(!exclusions.Contains("agentic-tool-and-function-workflows"),
+            "agentic functions are no longer excluded as one undifferentiated boundary");
 
         await ExpectAsync(await _admin.GetAsync("health/live"), HttpStatusCode.OK, "Admin liveness");
         await ExpectAsync(await _gateway.GetAsync("health/live"), HttpStatusCode.OK, "Gateway liveness");

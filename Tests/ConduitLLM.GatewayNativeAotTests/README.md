@@ -83,8 +83,8 @@ all four executions through the opposite host, and compares the HTTP contracts
 against an independent 24-column SQL oracle. A separate key/group isolates the
 proof's pricing, two successful request logs, balance, and settled ledger totals.
 Ownership denial, missing executions, unauthenticated reads, and unbilled failures
-are checked too. The published two-host process gate must pass before this work
-can establish native function execution support.
+are checked too. The published two-host process gate passed this bounded inline Exa
+path in Linux run 38133326127 and again in the complete process job linked below.
 
 The final phase runs one automatic Exa search followed by a final LLM reply on
 both chat aliases and both Gateways. Each request carries its own GUID-marked
@@ -101,7 +101,11 @@ chat-log function metadata are tracked in
 [#1578](https://github.com/nickna/Conduit/issues/1578) and
 [#1579](https://github.com/nickna/Conduit/issues/1579). This bounded non-streaming Exa workflow does not
 establish MCP, provider-hosted tools, agentic SSE, parallel/dependent calls or
-function audit/retention support. Published Linux verification remains required.
+function audit/retention support. The
+[published Linux process job at d13e7deb](https://github.com/nickna/Conduit/actions/runs/38137532017/job/114465334583)
+passed the configuration preflight, inline Exa and four complete Exa agentic loops,
+including owned cleanup. It qualifies `inline-exa-search` and
+`nonstreaming-configured-exa-agentic-chat`; broader function workflows stay excluded.
 
 A separate inline MCP phase binds its TCP upstream inside the probe process on
 port zero, then creates a distinct GUID-owned configuration using the protected

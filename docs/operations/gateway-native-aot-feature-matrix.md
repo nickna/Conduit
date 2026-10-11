@@ -9,13 +9,15 @@ The running Gateway exposes the same information at `GET /health/runtime-capabil
 | Area | NativeAOT contract | Process-gate evidence |
 |---|---|---|
 | Host topology | One native Admin and two native Gateway processes start together. | Each process is launched and its liveness/capability endpoint returns 200. |
-| PostgreSQL / Wolverine | Wolverine 6.14 PostgreSQL persistence and transport initialize in every host. Static application assembly selection and bounded generic metadata avoid runtime-codegen startup failures. | Real PostgreSQL migration, two-host startup, queue assignment, representative static handler-adapter dispatch, and settled request spend. |
+| PostgreSQL / Wolverine | Wolverine 6.48.3 PostgreSQL persistence and transport initialize in every host. Static application assembly selection and bounded generic metadata avoid runtime-codegen startup failures. | Real PostgreSQL migration, two-host startup, queue assignment, representative static handler-adapter dispatch, and settled request spend. |
 | Redis / SignalR | Redis supplies the SignalR backplane, distributed connection and method limits, webhook subscription state, ephemeral keys, and the data-protection key ring. | The probe observes both live connections, rejects a third at the shared ceiling, checks RPM/RPD keys and zero-count teardown, exercises Redis-backed webhook and ephemeral-key operations, and observes `Conduit-DataProtection-Keys`. |
 | SignalR protocol surface | JSON is the only protocol. All eight Gateway hub routes accept real native clients; the public video hub authenticates each subscription with an ephemeral key. | The probe connects and invokes every hub, receives typed virtual-key status, and carries a notification between two native Gateway hosts through the Redis backplane. |
 | Authentication boundary | Requests without a virtual key are rejected before the EF-backed data plane. | `GET /v1/models` returns 401 without credentials. |
 | Typed request persistence | Virtual-key lookup plus global and per-key IP policy use typed Npgsql repositories in the native Gateway. | With default-deny IP filtering enabled, a seeded virtual key negotiates all eight hub routes on both native Gateway processes. |
 | Authenticated model discovery | Model list, retrieval, and effective capability metadata use the fixed-query typed Npgsql model-routing graph. | A seeded alias is listed and retrieved on both native Gateways, and its canonical/provider capability graph is returned by the metadata endpoint. |
 | Authenticated function metadata discovery | `GET /v1/conduit/discovery/functions` and `GET /v1/conduit/discovery/functions/{id}/parameters` use the typed configuration catalog store. The runtime advertises `function-metadata-discovery`. | [Linux process gate 38124571584](https://github.com/nickna/Conduit/actions/runs/38124571584) checks both native Gateways: authentication, enabled configurations, named/numeric filters, structured schemas/examples, unknown enum strings, private-field omission, repeated JSON shape, and missing/disabled parameter resources. These reads do not execute functions. |
+| Inline Exa search | The runtime advertises `inline-exa-search` for configured search execution and owned execution-by-ID reads. | [Published Linux process job 114465334583](https://github.com/nickna/Conduit/actions/runs/38137532017/job/114465334583) checks both Gateways, successful searches and provider rejections, all 24 persisted execution fields, opposite-host ownership, configured pricing and settled success-only charges. |
+| Configured Exa agentic chat | The runtime advertises `nonstreaming-configured-exa-agentic-chat` for one configured Exa search followed by a final OpenAI-compatible LLM reply. | The same published process job checks both chat aliases on both Gateways, generated schemas, matching rich tool results, aggregate usage, execution-by-ID ownership, all 28 chat-log fields and combined LLM/function settlement. |
 | Provider chat transport | OpenAI-compatible non-stream HTTP, SSE streaming, customer-safe provider error translation, and downstream cancellation propagation are supported. | A separate native provider process validates the credential, returns JSON/SSE responses, emits a private 400 diagnostic that must be sanitized, and observes the upstream connection close after the probe disconnects. |
 | Request accounting | Provider usage is priced through the fixed-shape model-cost lookup, persisted by the typed request-log writer, and settled by the typed virtual-key store. | Four successful chat requests (one non-streamed and three SSE variants) persist exact token/cost rows totaling $0.0003; the batch worker updates balance and lifetime spend and creates the matching debit ledger entry in real PostgreSQL. |
 | Async-task persistence | Task status, cancellation, claims, provider phases, recovery, retry preparation, and retention use a fixed-shape runtime store. | A seeded task is read on one native Gateway, cancelled on the second, observed through the shared cache on the first, and verified durable in PostgreSQL. EF and typed Npgsql also pass the same real-PostgreSQL lifecycle contract. |
@@ -39,16 +41,17 @@ The following features are outside the native support contract and appear in `ex
 - `signalr-messagepack`
 - `ef-core-query-data-plane`
 - `redis-virtual-key-authentication-cache`
-- `inline-function-execution`
-- `agentic-tool-and-function-workflows`
+- `inline-functions-beyond-exa-search`
+- `agentic-workflows-beyond-nonstreaming-configured-exa-chat`
+- `function-execution-list-http`
 - `function-audit-and-retention`
 - `billing-reconciliation`
 
 The function and worker labels identify unsupported workloads whose registrations
 still exist in the candidate while extraction continues. The MessagePack client
 protocol is omitted at build time. These labels preserve the existing JIT support
-contract; advertising function metadata or settled request spend does not establish
-native function execution or reconciliation.
+contract. The selected Exa workloads above have published proof; metadata and
+ordinary request spend alone do not establish other function paths or reconciliation.
 
 The native gate uses `CONDUIT_MIGRATION_MODE=Wait` after the standalone migrator
 and requires `/health/ready` to return 200 from Admin and both Gateways. In its
@@ -68,20 +71,22 @@ discovery covers `/v1/models`, model retrieval, and model metadata. The separate
 `/v1/conduit/discovery/models` projection and its cache warmer remain unproved.
 Authenticated function catalog and parameter metadata are supported through the
 two routes listed above. Core's LLM tool/route discovery now has paired managed
-tests and explicit native composition through scalar configuration reads; its
-published LLM workflow and ChatEndpoints' separate configuration preflight remain
-distinct work. [Linux process gate 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143)
+tests and explicit native composition through scalar configuration reads. Its
+selected Exa workflow and ChatEndpoints' configuration preflight pass the published
+process job linked above. [Linux process gate 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143)
 also passes the execution endpoint's authentication, missing/disabled configuration
 and missing-required-parameter preflight on both Gateways. Those cases return before
-provider execution. Inline execution, execution status/list reads, agentic tool/function
-workflows, function audit/retention, and billing reconciliation remain outside the
-native support contract. Connecting a video hub or cancelling a seeded task also
+provider execution. Execution-list HTTP, MCP, other inline providers, provider-hosted
+tool pricing, agentic SSE, parallel/dependent calls, function audit/retention, and
+billing reconciliation remain outside the native support contract. The supported
+Exa execution-by-ID reads include opposite-host ownership and missing/authentication
+errors. Connecting a video hub or cancelling a seeded task also
 does not prove provider video/audio generation or durable worker recovery. See the
 [current query inventory](persistence-aot-query-inventory.md) and
 [integration checkpoint](native-aot-audit.md#integration-checkpoint-2026-10-11) for
 the current evidence and limits.
 
-EF Core 10 can generate the compiled `ConduitDbContext` model, but its NativeAOT query precompiler rejects Conduit's repository abstractions as dynamic LINQ. Extracted request-time operations now bypass those queries for global settings, IP filters, provider/credential reads, virtual keys, model discovery/routing metadata, function metadata and scalar configuration/credential/pricing reads, model-cost reads, request-log writes, virtual-key spend settlement, async tasks, media ownership/quota reads and writes, and the bounded aggregates used by Gateway operational metrics. Broad Admin request-log reporting and retention remain unextracted. OpenAI-compatible provider chat HTTP/SSE, translated errors, cancellation, request accounting, function metadata discovery, async-task persistence, S3-compatible image workflows, authenticated JSON SignalR, Redis backplane/rate limiting, and public ephemeral-key subscriptions are process-tested and supported. All excluded features remain available in the JIT image.
+EF Core 10 can generate the compiled `ConduitDbContext` model, but its NativeAOT query precompiler rejects Conduit's repository abstractions as dynamic LINQ. Extracted request-time operations now bypass those queries for global settings, IP filters, provider/credential reads, virtual keys, model discovery/routing metadata, function metadata and scalar configuration/credential/pricing reads, model-cost reads, request-log writes, virtual-key spend settlement, async tasks, media ownership/quota reads and writes, and the bounded aggregates used by Gateway operational metrics. Broad Admin request-log reporting and retention remain unextracted. OpenAI-compatible provider chat HTTP/SSE, translated errors, cancellation, request accounting, function metadata discovery, inline Exa search, configured non-streaming Exa agentic chat, async-task persistence, S3-compatible image workflows, authenticated JSON SignalR, Redis backplane/rate limiting, and public ephemeral-key subscriptions are process-tested and supported. All excluded features remain available in the JIT image.
 
 Gateway request-time consumers now depend on `IVirtualKeyRuntimeService`, while
 Admin-style key management remains behind the broader `IVirtualKeyService`. Both
@@ -153,6 +158,17 @@ CI runs `scripts/aot/gateway-native-parity.ps1` after native publishing. It requ
 
 The separate `scripts/test/wolverine-two-host-smoke.ps1 -NativeArtifactDirectory <artifact>` gate exercises cross-host Wolverine delivery with native Admin/Gateway processes.
 
+The function phases then reject invalid configuration requests before dispatch,
+execute successful and rejected inline Exa searches on both hosts, and carry four
+non-streaming chats through generated tool schemas, one configured search and a
+final LLM reply. Independent SQL checks complete execution/log mappings,
+opposite-host ownership and stable combined settlement at each column's precision.
+Inherited cost summaries, iteration and log attribution are tracked in
+[#1577](https://github.com/nickna/Conduit/issues/1577),
+[#1578](https://github.com/nickna/Conduit/issues/1578) and
+[#1579](https://github.com/nickna/Conduit/issues/1579).
+The added stateless MCP and Admin settings phases await their own published pass.
+
 Before normal fixture seeding, the parity script creates two marked disposable
 databases: one empty, one with the real penultimate EF migration. It starts native
 Admin and two Gateways using PostgreSQL Wolverine with provisioning disabled,
@@ -188,10 +204,10 @@ are tracked in [#1561](https://github.com/nickna/Conduit/issues/1561).
 
 | Dependency | Version | Upstream reference | Remaining risk | Removal condition |
 |---|---:|---|---|---|
-| EF Core | 10.0.10 | [NativeAOT epic #29754](https://github.com/dotnet/efcore/issues/29754), [precompiled queries #25009](https://github.com/dotnet/efcore/issues/25009) | Dynamic repository query composition is rejected by the experimental precompiler. Query-backed features are excluded and observable. | The EF precompiler accepts Conduit's query shapes, or the repository layer is converted to precompilable/static queries; then enable and process-test the data plane before removing exclusions. |
-| Wolverine / JasperFx | Wolverine 6.14.0, JasperFx 2.13.x | [Wolverine #2769](https://github.com/JasperFx/wolverine/issues/2769), [#2757](https://github.com/JasperFx/wolverine/issues/2757) | Wolverine still closes router/serializer generics and locates its generated handler registry and adapters reflectively. Conduit supplies narrow runtime directives and explicit application assembly selection. | Remove each directive only after the pinned dependency no longer uses runtime generic construction/exported-type discovery and the two-host native gate remains green. |
-| MessagePack-CSharp | 2.5.302; SignalR protocol 10.0.12 | [NativeAOT support #1503](https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/1503), [generator issue #2283](https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/2283) | The native client protocol registration and package reference are excluded, with a resolved graph build guard. The Redis backplane retains its internal MessagePack dependency. JIT retains contractless client payload compatibility. | Supporting the MessagePack client protocol in native hosts later requires generated hub payload resolvers and native protocol tests. |
-| AWS SDK for .NET S3 | 4.0.24.2 | [trim-safe runtime dependency work #4354](https://github.com/aws/aws-sdk-net/issues/4354), [AOT tracking #2486](https://github.com/aws/aws-sdk-net/issues/2486) | Authenticated upload/read/download is process-tested against S3Mock in Linux CI and MinIO locally. Publish logs retain third-party linker diagnostics outside the first-party ratchet; CI does not cover every S3-compatible vendor. | Remove warnings only after the pinned SDK supplies the required trim annotations; add provider-specific gates before claiming behavior beyond the S3-compatible contract. |
+| EF Core | 10.0.12 | [NativeAOT epic #29754](https://github.com/dotnet/efcore/issues/29754), [precompiled queries #25009](https://github.com/dotnet/efcore/issues/25009) | Dynamic repository query composition is rejected by the experimental precompiler. Query-backed features are excluded and observable. | The EF precompiler accepts Conduit's query shapes, or the repository layer is converted to precompilable/static queries; then enable and process-test the data plane before removing exclusions. |
+| Wolverine / JasperFx | Wolverine 6.48.3, JasperFx 2.81.0 | [Wolverine #2769](https://github.com/JasperFx/wolverine/issues/2769), [#2757](https://github.com/JasperFx/wolverine/issues/2757) | Wolverine still closes router/serializer generics and locates its generated handler registry and adapters reflectively. Conduit supplies narrow runtime directives and explicit application assembly selection. | Remove each directive only after the pinned dependency no longer uses runtime generic construction/exported-type discovery and the two-host native gate remains green. |
+| MessagePack-CSharp | 3.1.11; SignalR protocol 10.0.12 | [NativeAOT support #1503](https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/1503), [generator issue #2283](https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/2283) | The native client protocol registration and package reference are excluded, with a resolved graph build guard. The Redis backplane retains its internal MessagePack dependency. JIT retains contractless client payload compatibility. | Supporting the MessagePack client protocol in native hosts later requires generated hub payload resolvers and native protocol tests. |
+| AWS SDK for .NET S3 | 4.0.104.2 | [trim-safe runtime dependency work #4354](https://github.com/aws/aws-sdk-net/issues/4354), [AOT tracking #2486](https://github.com/aws/aws-sdk-net/issues/2486) | Authenticated upload/read/download is process-tested against S3Mock in Linux CI and MinIO locally. Publish logs retain third-party linker diagnostics outside the first-party ratchet; CI does not cover every S3-compatible vendor. | Remove warnings only after the pinned SDK supplies the required trim annotations; add provider-specific gates before claiming behavior beyond the S3-compatible contract. |
 
 The first-party linker ratchet is empty. This includes bounded exceptions on 22
 generated compiled-model methods and 25 unsupported Admin EF query methods; zero

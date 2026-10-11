@@ -26,6 +26,8 @@ public partial class Program
                     "unauthenticated-request-rejection",
                     "authenticated-model-discovery",
                     "function-metadata-discovery",
+                    "inline-exa-search",
+                    "nonstreaming-configured-exa-agentic-chat",
                     "provider-http",
                     "sse-streaming",
                     "provider-error-translation",
@@ -56,8 +58,9 @@ public partial class Program
                     "signalr-messagepack",
                     "ef-core-query-data-plane",
                     "redis-virtual-key-authentication-cache",
-                    "inline-function-execution",
-                    "agentic-tool-and-function-workflows",
+                    "inline-functions-beyond-exa-search",
+                    "agentic-workflows-beyond-nonstreaming-configured-exa-chat",
+                    "function-execution-list-http",
                     "function-audit-and-retention",
                     "billing-reconciliation"
                 ]
