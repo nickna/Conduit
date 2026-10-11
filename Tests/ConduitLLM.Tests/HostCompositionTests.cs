@@ -1,13 +1,22 @@
+using ConduitLLM.Configuration;
+using ConduitLLM.Configuration.Interceptors;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Gateway.Interfaces;
 using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Gateway.RateLimiting;
+using ConduitLLM.Persistence.Interfaces;
+using ConduitLLM.Persistence.Npgsql;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.Internal;
 
 namespace ConduitLLM.Tests;
 
@@ -126,6 +135,7 @@ public sealed class HostCompositionTests
 
     private static void ResolveRuntimeServices(IServiceCollection descriptors, IServiceProvider provider)
     {
+        AssertDatabaseComposition(descriptors, provider);
         // Factory bodies are opaque to ValidateOnBuild. Resolve hosted services and
         // application factories explicitly, without starting background workers.
         var hostedServices = provider.GetServices<IHostedService>().ToArray();
@@ -150,6 +160,32 @@ public sealed class HostCompositionTests
             var services = descriptor.Lifetime == ServiceLifetime.Singleton ? provider : scope.ServiceProvider;
             Assert.NotNull(services.GetRequiredService(descriptor.ServiceType));
         }
+    }
+
+    private static void AssertDatabaseComposition(IServiceCollection descriptors, IServiceProvider provider)
+    {
+        var registration = Assert.Single(descriptors,
+            descriptor => descriptor.ServiceType == typeof(IConnectionPoolWarmup));
+        Assert.Equal(ServiceLifetime.Singleton, registration.Lifetime);
+        Assert.Equal(typeof(NpgsqlConnectionPoolWarmup), registration.ImplementationType);
+        var warmup = Assert.IsType<NpgsqlConnectionPoolWarmup>(provider.GetRequiredService<IConnectionPoolWarmup>());
+        using var scope = provider.CreateScope();
+        Assert.Same(warmup, scope.ServiceProvider.GetRequiredService<IConnectionPoolWarmup>());
+
+        Assert.Equal(ServiceLifetime.Singleton, Assert.Single(descriptors,
+            descriptor => descriptor.ServiceType == typeof(NpgsqlDataSource)).Lifetime);
+        var dataSource = provider.GetRequiredService<NpgsqlDataSource>();
+        var options = provider.GetRequiredService<DbContextOptions<ConduitDbContext>>();
+#pragma warning disable EF1001 // Test-only inspection proves the pinned provider uses the exact host-owned pool.
+        Assert.Same(dataSource, options.FindExtension<NpgsqlOptionsExtension>()!.DataSource);
+#pragma warning restore EF1001
+        Assert.Contains(provider.GetRequiredService<QueryMonitoringInterceptor>(),
+            options.FindExtension<CoreOptionsExtension>()!.Interceptors!);
+
+        using var context = provider.GetRequiredService<IDbContextFactory<ConduitDbContext>>().CreateDbContext();
+        var retry = Assert.IsType<NpgsqlRetryingExecutionStrategy>(context.Database.CreateExecutionStrategy());
+        Assert.Equal(5, retry.MaxRetryCount);
+        Assert.Equal(TimeSpan.FromSeconds(10), retry.MaxRetryDelay);
     }
 
     private static void AssertRequestScopedRateLimiting(IServiceCollection descriptors, IServiceProvider provider)

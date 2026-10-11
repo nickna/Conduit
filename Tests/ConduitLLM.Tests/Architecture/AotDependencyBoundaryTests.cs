@@ -23,6 +23,7 @@ using ConduitLLM.Persistence.Npgsql;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 using AdminConfigurationEndpoints = ConduitLLM.Admin.Endpoints.ConfigurationEndpoints;
 
@@ -187,15 +188,15 @@ public sealed class AotDependencyBoundaryTests
             "Wolverine");
     }
 
-#if !CONDUIT_NATIVE_AOT
     [Fact]
-    public void JitGatewayDoesNotRootTypedNpgsqlRuntimeAdapter()
+    public void ConnectionPoolWarmupDependsOnlyOnTheHostDataSource()
     {
-        AssertDoesNotReference(
-            Assembly.Load("ConduitLLM.Gateway"),
-            "ConduitLLM.Persistence.Npgsql");
+        var parameters = typeof(NpgsqlConnectionPoolWarmup).GetConstructors()
+            .Single().GetParameters().Select(parameter => parameter.ParameterType).ToArray();
+        Assert.Equal([typeof(NpgsqlDataSource)], parameters);
     }
 
+#if !CONDUIT_NATIVE_AOT
     [Fact]
     public void JitRepositoryGraphRegistersTheEfVirtualKeyRuntimeStore()
     {

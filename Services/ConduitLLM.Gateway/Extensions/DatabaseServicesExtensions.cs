@@ -1,6 +1,8 @@
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Interceptors;
 using ConduitLLM.Core.Data;
+using ConduitLLM.Persistence.Interfaces;
+using ConduitLLM.Persistence.Npgsql;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -27,14 +29,15 @@ public static class DatabaseServicesExtensions
             throw new InvalidOperationException($"Only PostgreSQL is supported. Invalid provider: {dbProvider}");
         }
 
-        // Schema readiness and native fixed-shape repositories share a host-owned pool.
+        // EF, schema readiness, fixed-shape repositories, and warmup share the host pool.
         services.AddSingleton(_ => NpgsqlDataSource.Create(dbConnectionString));
+        services.AddSingleton<IConnectionPoolWarmup, NpgsqlConnectionPoolWarmup>();
 
         // Register DbContext Factory with query monitoring interceptor
         services.AddDbContextFactory<ConduitDbContext>((sp, options) =>
         {
             var interceptor = sp.GetRequiredService<QueryMonitoringInterceptor>();
-            options.UseNpgsql(dbConnectionString, npgsql =>
+            options.UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>(), npgsql =>
                        // Transient-failure resilience. Explicit BeginTransaction calls are
                        // incompatible with a retrying strategy — use
                        // ExecuteInTransactionAsync (ExecutionStrategyExtensions) instead.

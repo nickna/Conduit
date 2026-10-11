@@ -3,12 +3,11 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using ConduitLLM.Configuration;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Options;
 using ConduitLLM.Core.Serialization;
-using Microsoft.EntityFrameworkCore;
+using ConduitLLM.Persistence.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -347,22 +346,14 @@ namespace ConduitLLM.Core.Services
                 var tasks = Enumerable.Range(0, _connectionsToWarm).Select(async i =>
                 {
                     using var scope = _serviceProvider.CreateScope();
-                    var dbContextFactory = scope.ServiceProvider
-                        .GetService<IDbContextFactory<ConduitDbContext>>();
+                    var warmup = scope.ServiceProvider.GetRequiredService<IConnectionPoolWarmup>();
+                    await warmup.WarmConnectionAsync(cancellationToken);
 
-                    if (dbContextFactory != null)
+                    if (_options.VerboseLogging)
                     {
-                        using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-
-                        // Execute a simple query to ensure the connection is fully established
-                        await dbContext.Database.ExecuteSqlRawAsync("SELECT 1", cancellationToken);
-
-                        if (_options.VerboseLogging)
-                        {
-                            _logger.LogDebug(
-                                "Warmed connection {ConnectionNumber}/{TotalConnections} for {ServiceType}",
-                                i + 1, _connectionsToWarm, _serviceType);
-                        }
+                        _logger.LogDebug(
+                            "Warmed connection {ConnectionNumber}/{TotalConnections} for {ServiceType}",
+                            i + 1, _connectionsToWarm, _serviceType);
                     }
                 });
 
