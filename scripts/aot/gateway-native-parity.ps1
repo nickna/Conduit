@@ -96,6 +96,55 @@ function Set-GateEnvironment([string]$name, $value) {
     [Environment]::SetEnvironmentVariable($name, $environmentValue)
 }
 
+function Invoke-FunctionCredentialFixture([string]$fixtureDll, [string]$redisConnectionString, [string]$plaintext) {
+    $startInfo = [Diagnostics.ProcessStartInfo]::new((Get-Command dotnet).Source)
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.ArgumentList.Add($fixtureDll)
+    $startInfo.ArgumentList.Add('protect-function-key')
+    $startInfo.Environment['CONDUIT_NATIVE_FUNCTION_PLAINTEXT_KEY'] = $plaintext
+    $startInfo.Environment['CONDUIT_NATIVE_FUNCTION_REDIS_CONNECTION_STRING'] = $redisConnectionString
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) { throw 'Function credential fixture could not start.' }
+        # Both streams stay private; never include their contents in gate diagnostics.
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        $stderr = $process.StandardError.ReadToEndAsync()
+        $streams = [Threading.Tasks.Task[]]@($stdout, $stderr)
+        if (-not $process.WaitForExit(30000)) {
+            $cleanup = [Diagnostics.Stopwatch]::StartNew()
+            try { $process.Kill($true) } catch {
+                if (-not $process.HasExited) { throw 'Function credential fixture termination failed.' }
+            }
+            $remaining = [Math]::Max(0, 5000 - [int]$cleanup.ElapsedMilliseconds)
+            if (-not $process.WaitForExit($remaining)) { throw 'Function credential fixture could not be reaped.' }
+            $remaining = [Math]::Max(0, 5000 - [int]$cleanup.ElapsedMilliseconds)
+            if (-not [Threading.Tasks.Task]::WaitAll($streams, $remaining)) {
+                throw 'Function credential fixture output did not close.'
+            }
+            throw 'Function credential fixture timed out.'
+        }
+        if (-not [Threading.Tasks.Task]::WaitAll($streams, 5000)) {
+            throw 'Function credential fixture output did not close.'
+        }
+        if ($process.ExitCode -ne 0) { throw 'Function credential fixture failed.' }
+        $output = $stdout.GetAwaiter().GetResult()
+        if ($output.Length -gt 2002 -or $output -cnotmatch '\Aenc:v1:[A-Za-z0-9_-]+(?:\r?\n)?\z') {
+            throw 'Function credential fixture returned invalid ciphertext.'
+        }
+        $ciphertext = $output.TrimEnd("`r", "`n")
+        if ($ciphertext.Length -gt 2000 -or $ciphertext -ceq $plaintext) {
+            throw 'Function credential fixture did not protect its input.'
+        }
+        return $ciphertext
+    } finally {
+        $process.Dispose()
+    }
+}
+
 function Wait-ForHttp([string]$url, [string]$name) {
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     while ([DateTime]::UtcNow -lt $deadline) {
@@ -185,6 +234,9 @@ try {
     Write-Host 'Applying migrations before native process startup...'
     dotnet (Join-Path $migratorProject 'bin/Release/net10.0/ConduitLLM.Migrator.dll')
     if ($LASTEXITCODE -ne 0) { throw 'Standalone migrator failed.' }
+
+    $protectedFunctionKey = Invoke-FunctionCredentialFixture $startupFixtureDll $routes.directRedis 'native-aot-function-key-32-bytes'
+    Set-GateEnvironment 'CONDUIT_NATIVE_FUNCTION_PROTECTED_KEY' $protectedFunctionKey
 
     Write-Host 'Seeding typed-store authentication and IP-filter fixtures...'
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {

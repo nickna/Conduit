@@ -4,5 +4,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Shared\ConduitLLM.Configuration\ConduitLLM.Configuration.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Functions\ConduitLLM.Functions.csproj" />
   </ItemGroup>
 </Project>
