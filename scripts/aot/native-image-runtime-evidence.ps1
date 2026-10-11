@@ -10,6 +10,34 @@ function Read-NativeImageRuntimeClaim([string] $Path, [string] $Owner) {
     }
 }
 
+function Assert-NativeImageRuntimeManifest($Record, $Container) {
+    $association = $Record['ociAssociation']
+    if ($association['associationStatus'] -cne 'verified') { return }
+    if ($association['descriptorChainVerified'] -isnot [bool] -or -not $association['descriptorChainVerified']) {
+        throw 'Native image runtime OCI association is invalid.'
+    }
+    $expected = Get-NativeOciDescriptor $association['selectedManifestDescriptor']
+    $actual = Get-NativeOciDescriptor $Container['ImageManifestDescriptor']
+    if (-not (Test-NativeOciDescriptorCore $expected $actual)) {
+        throw 'Native image runtime manifest differs from its packaged OCI identity.'
+    }
+    if ($actual.Contains('platform') -and ($actual['platform']['os'] -cne 'linux' -or
+            $actual['platform']['architecture'] -cne 'amd64')) {
+        throw 'Native image runtime manifest is not Linux/amd64.'
+    }
+    if ($expected.Contains('platform')) {
+        if (-not $actual.Contains('platform')) {
+            throw 'Native image runtime manifest omits its packaged platform.'
+        }
+        foreach ($field in $expected['platform'].Keys) {
+            if (-not $actual['platform'].ContainsKey($field) -or
+                -not (Test-NativeImageOciEvidenceValueEqual -Left $expected['platform'][$field] -Right $actual['platform'][$field])) {
+                throw 'Native image runtime manifest platform differs from its packaged OCI identity.'
+            }
+        }
+    }
+}
+
 function Get-NativeImageRuntimePackaging {
     param([string] $Directory)
     $root = Get-NativeEvidenceFullPath $Directory
@@ -20,12 +48,15 @@ function Get-NativeImageRuntimePackaging {
     $path = [IO.Path]::Combine($root, 'packaging-evidence.json')
     $before = Get-NativeEvidenceFileHash (Get-Item -LiteralPath $path)
     $report = Read-NativeImageEvidenceDocument $path
-    Assert-NativeEvidenceKeys $report @('schemaVersion', 'kind', 'service', 'requestedImage', 'localImageId',
+    Assert-NativeEvidenceInteger $report['schemaVersion'] -Positive
+    $reportKeys = @('schemaVersion', 'kind', 'service', 'requestedImage', 'localImageId',
         'containerId', 'owner', 'buildId', 'rid', 'commitMetadata', 'source', 'manifestHashes',
         'runtimeFilesSha256', 'metrics', 'ociLabels', 'archiveBytes', 'archiveEntries', 'archivedFilePermissions',
-        'extractionId', 'verifiedAtUtc', 'cleanupConfirmed', 'payloadVerified', 'registryDigestQualification') -Exact
-    Assert-NativeEvidenceInteger $report['schemaVersion'] -Positive
-    if ($report['schemaVersion'] -ne 1 -or $report['kind'] -isnot [string] -or
+        'extractionId', 'verifiedAtUtc', 'cleanupConfirmed', 'payloadVerified', 'registryDigestQualification')
+    if ($report['schemaVersion'] -eq 2) { $reportKeys += 'ociAssociation' }
+    elseif ($report['schemaVersion'] -ne 1) { throw 'Completed native image packaging schema is invalid.' }
+    Assert-NativeEvidenceKeys $report $reportKeys -Exact
+    if ($report['kind'] -isnot [string] -or
         $report['kind'] -cne 'conduit-native-image-packaging' -or $report['service'] -isnot [string] -or
         $report['service'] -cnotin @('admin', 'gateway') -or $report['rid'] -isnot [string] -or
         $report['rid'] -cne 'linux-x64' -or $report['localImageId'] -isnot [string] -or
@@ -135,10 +166,23 @@ function Get-NativeImageRuntimePackaging {
             throw 'Completed native image file permissions are invalid.'
         }
     }
+    # Schema 1 remains valid local smoke evidence, with no invented OCI chain.
+    $ociAssociation = [ordered]@{
+        associationStatus = 'hold'; descriptorChainVerified = $false
+        selectedManifestDescriptor = $null; holdReasons = @('missing-oci-association')
+        registryDigestQualification = $false
+    }
+    if ($report['schemaVersion'] -eq 2) {
+        $ociAssociation = Read-NativeImageOciEvidenceAssociation -Directory $root -Reference $report['ociAssociation'] `
+            -RequestedImage $report['requestedImage'] -LocalImageId $report['localImageId'] -ContainerId $report['containerId']
+    }
     if ((Get-NativeEvidenceFileHash (Get-Item -LiteralPath $path))['sha256'] -cne $before['sha256']) {
         throw 'Completed native image packaging report changed during verification.'
     }
-    return [ordered]@{ directory = $root; path = $path; sha256 = $before['sha256']; report = $report }
+    return [ordered]@{
+        directory = $root; path = $path; sha256 = $before['sha256']; report = $report
+        ociAssociation = $ociAssociation
+    }
 }
 
 function Get-NativeImageRuntimeContainer {
@@ -149,6 +193,7 @@ function Get-NativeImageRuntimeContainer {
         [double] $ReapTimeoutSeconds = 5,
         [switch] $AllowMissing,
         [switch] $AllowRunning,
+        [switch] $ValidateManifest,
         [string] $ExpectedId
     )
     $identity = if ($null -ne $Record['containerId']) { $Record['containerId'] } else { $Record['name'] }
@@ -198,6 +243,7 @@ function Get-NativeImageRuntimeContainer {
         if ($values.Count -ne 1 -or $values[0] -cne $expected) { throw 'Native image runtime environment is invalid.' }
     }
     $Record['containerId'] = $container['Id']
+    if ($ValidateManifest) { Assert-NativeImageRuntimeManifest $Record $container }
     return $container
 }
 
@@ -313,7 +359,7 @@ function Get-NativeImageRuntimeEvidence {
     $command = Resolve-NativeImageVerificationCommand $DockerCommandPath
     $record = [ordered]@{
         owner = [Guid]::NewGuid().ToString('N'); service = $package['service']; name = $null
-        containerId = $null; packaging = $package
+        containerId = $null; packaging = $package; ociAssociation = $packaging['ociAssociation']
     }
     $record['name'] = 'conduit-native-image-entrypoint-' + $record['service'] + '-' + $record['owner']
     $claim = $null
@@ -346,7 +392,7 @@ function Get-NativeImageRuntimeEvidence {
         if ($created['exitCode'] -ne 0 -or $created['stdout'].Trim() -cnotmatch '\A[0-9a-f]{64}\z') {
             throw 'Native image runtime container creation failed.'
         }
-        $container = Get-NativeImageRuntimeContainer -Record $record -Command $command -TimeoutSeconds $DockerCommandTimeoutSeconds -ExpectedId ($created['stdout'].Trim())
+        $container = Get-NativeImageRuntimeContainer -Record $record -Command $command -ValidateManifest -TimeoutSeconds $DockerCommandTimeoutSeconds -ExpectedId ($created['stdout'].Trim())
         $user = $container['Config']['User']
         $stage = 'runtime-start'
         $started = Invoke-NativeImageVerificationDocker -Command $command -Arguments @('container', 'start', $record['containerId']) -TimeoutSeconds $DockerCommandTimeoutSeconds
@@ -358,7 +404,7 @@ function Get-NativeImageRuntimeEvidence {
         try {
             while ($true) {
                 $budget = Get-NativeImageRuntimeBudget $execution $ExecutionTimeoutSeconds $DockerCommandTimeoutSeconds
-                $container = Get-NativeImageRuntimeContainer -Record $record -Command $command -AllowRunning -TimeoutSeconds $budget['work'] -ReapTimeoutSeconds $budget['reap']
+                $container = Get-NativeImageRuntimeContainer -Record $record -Command $command -AllowRunning -ValidateManifest -TimeoutSeconds $budget['work'] -ReapTimeoutSeconds $budget['reap']
                 if (-not $container['State']['Running']) { break }
                 if ($execution.Elapsed.TotalSeconds -ge $ExecutionTimeoutSeconds) { throw 'Native image runtime execution timed out.' }
                 Start-Sleep -Milliseconds 100
@@ -367,7 +413,7 @@ function Get-NativeImageRuntimeEvidence {
             $waited = Invoke-NativeImageVerificationDocker -Command $command -Arguments @('container', 'wait', $record['containerId']) -TimeoutSeconds $budget['work'] -ReapTimeoutSeconds $budget['reap']
             if ($waited['exitCode'] -ne 0 -or $waited['stdout'].Trim() -cne '0') { throw 'Native image runtime wait did not report success.' }
             $budget = Get-NativeImageRuntimeBudget $execution $ExecutionTimeoutSeconds $DockerCommandTimeoutSeconds
-            $container = Get-NativeImageRuntimeContainer -Record $record -Command $command -TimeoutSeconds $budget['work'] -ReapTimeoutSeconds $budget['reap']
+            $container = Get-NativeImageRuntimeContainer -Record $record -Command $command -ValidateManifest -TimeoutSeconds $budget['work'] -ReapTimeoutSeconds $budget['reap']
             Assert-NativeEvidenceInteger $container['State']['ExitCode']
             if ($container['State']['ExitCode'] -ne 0 -or $container['State']['Status'] -isnot [string] -or
                 $container['State']['Status'] -cne 'exited' -or $execution.Elapsed.TotalSeconds -gt $ExecutionTimeoutSeconds) {

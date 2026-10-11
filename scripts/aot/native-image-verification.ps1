@@ -1,6 +1,33 @@
 # Verify a locally inspected Linux native image without starting its container.
 # Loading this file defines helpers only; it does not invoke Docker or write files.
-. (Join-Path $PSScriptRoot 'native-image-runtime-archive.ps1')
+. (Join-Path $PSScriptRoot 'native-image-oci-evidence.ps1')
+
+function Get-NativeImageVerificationDescriptor($Value) {
+    if ($null -eq $Value) { return $null }
+    return ,(Get-NativeOciDescriptor $Value)
+}
+
+function Assert-NativeImageVerificationSelectedDescriptor($Container, $ExpectedDescriptor) {
+    $descriptor = Get-NativeImageVerificationDescriptor $Container['ImageManifestDescriptor']
+    if (-not (Test-NativeImageOciEvidenceValueEqual $descriptor $ExpectedDescriptor)) {
+        throw 'Native image selected manifest descriptor changed during packaging verification.'
+    }
+}
+
+function Write-NativeImageVerificationOciDocument([string] $Path, $Value) {
+    Assert-NativeEvidencePathAncestry $Path
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-Json -InputObject $Value -Depth 64))
+    if ($bytes.Length -eq 0 -or $bytes.Length -gt 4194304) {
+        throw 'Native image OCI evidence document exceeds its bound.'
+    }
+    $output = [IO.FileStream]::new($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try { $output.Write($bytes); $output.Flush($true) }
+    finally { $output.Dispose() }
+    return ,[ordered]@{
+        path = [IO.Path]::GetFileName($Path)
+        sha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+    }
+}
 
 function Read-NativeImageVerificationJson([string] $Text) {
     $document = $null
@@ -266,6 +293,8 @@ function Get-NativeImagePackagingEvidence {
     $failure = $null
     $cleanupFailure = $null
     $report = $null
+    $ociReport = $null
+    $ociObservations = $null
     $stage = 'artifact-claim'
     try {
         [IO.Directory]::CreateDirectory($root) | Out-Null
@@ -328,11 +357,12 @@ function Get-NativeImagePackagingEvidence {
         # The local ID may be an OCI index digest in Docker's containerd store.
         # It pins this local export; it is not asserted to be a config digest.
         $record['localImageId'] = $identity['Id']
+        $imageDescriptor = Get-NativeImageVerificationDescriptor $identity['Descriptor']
 
         $stage = 'container-creation'
         $createAttempted = $true
         $created = Invoke-NativeImageVerificationDocker -Command $command -Arguments @(
-            'container', 'create', '--name', $record['name'], '--network', 'none',
+            'container', 'create', '--platform', 'linux/amd64', '--name', $record['name'], '--network', 'none',
             '--label', ('conduit.proof.owner=' + $record['owner']),
             '--label', ('conduit.proof.service=' + $Service), '--label', 'conduit.epic=1368',
             '--label', 'conduit.fixture=native-image-verification', $record['localImageId']
@@ -342,9 +372,40 @@ function Get-NativeImagePackagingEvidence {
         }
         # Store the ID only after inspecting the exact owned name. Failed or
         # malformed create responses remain recoverable by that name in finally.
-        $null = Get-NativeImageVerificationContainer -Record $record -Command $command -TimeoutSeconds $DockerCommandTimeoutSeconds -ExpectedId ($created['stdout'].Trim())
+        $initialContainer = Get-NativeImageVerificationContainer -Record $record -Command $command -TimeoutSeconds $DockerCommandTimeoutSeconds -ExpectedId ($created['stdout'].Trim())
+        $selectedDescriptor = Get-NativeImageVerificationDescriptor $initialContainer['ImageManifestDescriptor']
+        $ociObservations = [ordered]@{
+            schemaVersion = 1
+            kind = 'conduit-native-image-observations'
+            requestedImage = $Image
+            image = [ordered]@{ id = $record['localImageId']; descriptor = $imageDescriptor }
+            container = [ordered]@{
+                id = $record['containerId']; image = $record['localImageId']; imageManifestDescriptor = $selectedDescriptor
+            }
+        }
+
+        $stage = 'image-save'
+        $ociArchivePath = [IO.Path]::Combine($root, 'image-save.tar')
+        Assert-NativeEvidencePathAncestry $ociArchivePath
+        if ([IO.File]::Exists($ociArchivePath) -or [IO.Directory]::Exists($ociArchivePath)) {
+            throw 'Native image OCI save destination already exists.'
+        }
+        # Keep the original local root index, rather than asking Docker to
+        # substitute a single-platform manifest as the save root.
+        $saved = Invoke-NativeImageVerificationDocker -Command $command -Arguments @(
+            'image', 'save', '--output', $ociArchivePath, $record['localImageId']
+        ) -TimeoutSeconds $DockerCommandTimeoutSeconds
+        if ($saved['exitCode'] -ne 0) { throw 'Native image original OCI archive save failed.' }
+        $stage = 'oci-association'
+        $associationArguments = @{
+            ArchivePath = $ociArchivePath; RequestedImage = $Image
+            ImageObservation = $ociObservations['image']; ContainerObservation = $ociObservations['container']
+        }
+        $ociReport = Get-NativeImageOciArchiveAssociation @associationArguments
 
         $stage = 'container-export'
+        $beforeExport = Get-NativeImageVerificationContainer -Record $record -Command $command -TimeoutSeconds $DockerCommandTimeoutSeconds
+        Assert-NativeImageVerificationSelectedDescriptor $beforeExport $selectedDescriptor
         $archivePath = [IO.Path]::Combine($root, 'rootfs.tar')
         Assert-NativeEvidencePathAncestry $archivePath
         if ([IO.File]::Exists($archivePath) -or [IO.Directory]::Exists($archivePath)) {
@@ -354,7 +415,8 @@ function Get-NativeImagePackagingEvidence {
             'container', 'export', '--output', $archivePath, $record['containerId']
         ) -TimeoutSeconds $DockerCommandTimeoutSeconds
         if ($exported['exitCode'] -ne 0) { throw 'Native image owned container export failed.' }
-        $null = Get-NativeImageVerificationContainer -Record $record -Command $command -TimeoutSeconds $DockerCommandTimeoutSeconds
+        $afterExport = Get-NativeImageVerificationContainer -Record $record -Command $command -TimeoutSeconds $DockerCommandTimeoutSeconds
+        Assert-NativeImageVerificationSelectedDescriptor $afterExport $selectedDescriptor
 
         $stage = 'runtime-archive'
         $archiveInfo = Expand-NativeImageRuntimeArchive -ArchivePath $archivePath -OutputDirectory ([IO.Path]::Combine($root, 'extracted')) -Service $Service
@@ -376,7 +438,7 @@ function Get-NativeImagePackagingEvidence {
             $manifestHashes[$manifestName] = (Get-NativeEvidenceFileHash $manifestFile)['sha256']
         }
         $report = [ordered]@{
-            schemaVersion = 1
+            schemaVersion = 2
             kind = 'conduit-native-image-packaging'
             service = $Service
             requestedImage = $Image
@@ -406,7 +468,11 @@ function Get-NativeImagePackagingEvidence {
             cleanupConfirmed = $false
             payloadVerified = $true
             registryDigestQualification = $false
+            ociAssociation = $null
         }
+        $stage = 'final-container-observation'
+        $finalContainer = Get-NativeImageVerificationContainer -Record $record -Command $command -TimeoutSeconds $DockerCommandTimeoutSeconds
+        Assert-NativeImageVerificationSelectedDescriptor $finalContainer $selectedDescriptor
     }
     catch {
         $failure = [ordered]@{
@@ -437,6 +503,22 @@ function Get-NativeImagePackagingEvidence {
                 '; line=' + $failure['line'] + '.')
         }
         if ($null -eq $report) { throw 'Native image packaging did not produce validated evidence.' }
+        if ($null -eq $ociReport -or $null -eq $ociObservations) {
+            throw 'Native image packaging did not produce retained OCI association evidence.'
+        }
+        $reportReference = Write-NativeImageVerificationOciDocument ([IO.Path]::Combine($root, 'oci-association.json')) $ociReport
+        $observationsReference = Write-NativeImageVerificationOciDocument ([IO.Path]::Combine($root, 'image-observations.json')) $ociObservations
+        $ociReference = [ordered]@{
+            report = $reportReference
+            observations = $observationsReference
+            archive = [ordered]@{ path = 'image-save.tar'; sha256 = $ociReport['archiveSha256']; bytes = $ociReport['archiveBytes'] }
+        }
+        $retainedArguments = @{
+            Directory = $root; Reference = $ociReference; RequestedImage = $Image
+            LocalImageId = $record['localImageId']; ContainerId = $record['containerId']
+        }
+        $null = Read-NativeImageOciEvidenceAssociation @retainedArguments
+        $report['ociAssociation'] = $ociReference
         $report['cleanupConfirmed'] = $true
         $report['verifiedAtUtc'] = [DateTime]::UtcNow.ToString('O')
         $reportPath = [IO.Path]::Combine($root, 'packaging-evidence.json')

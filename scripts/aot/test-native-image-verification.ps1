@@ -10,7 +10,6 @@ $environmentNames = @('CONDUIT_IMAGE_VERIFICATION_TEST_ROOT', 'CONDUIT_IMAGE_VER
 $oldEnvironment = @{}
 foreach ($name in $environmentNames) { $oldEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
 $cases = 0; $sequence = 0; $failure = $null; $cleanupFailure = $false
-$localImageId = 'sha256:' + ('a' * 64)
 $otherImageId = 'sha256:' + ('b' * 64)
 $containerId = 'c' * 64
 $privateDiagnostic = 'private-image-verification-' + [Guid]::NewGuid().ToString('N')
@@ -98,6 +97,66 @@ function Write-VerificationArchive([string] $Root, [string] $Payload, [string] $
     return $archive
 }
 
+function Write-VerificationOciArchive([string] $Root, $Image, [string] $RootfsArchive, [string] $Scenario) {
+    $blobs = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
+    function ConvertTo-FixtureOciBytes($Value) { return ,[Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-Json -InputObject $Value -Depth 32 -Compress)) }
+    function Add-FixtureOciBlob([string] $MediaType, [byte[]] $Bytes) {
+        $digest = 'sha256:' + [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($Bytes)).ToLowerInvariant()
+        $blobs[$digest] = $Bytes
+        return [ordered]@{ mediaType = $MediaType; digest = $digest; size = [long]$Bytes.Length }
+    }
+    $layerBytes = [IO.File]::ReadAllBytes($RootfsArchive)
+    $layer = Add-FixtureOciBlob 'application/vnd.oci.image.layer.v1.tar' $layerBytes
+    $configDocument = [ordered]@{ os = 'linux'; architecture = 'amd64'; config = $Image.Config; rootfs = @{ type = 'layers'; diff_ids = @($layer.digest) } }
+    $configBytes = ConvertTo-FixtureOciBytes $configDocument
+    $config = Add-FixtureOciBlob 'application/vnd.oci.image.config.v1+json' $configBytes
+    $manifest = Add-FixtureOciBlob 'application/vnd.oci.image.manifest.v1+json' (ConvertTo-FixtureOciBytes @{
+        schemaVersion = 2; mediaType = 'application/vnd.oci.image.manifest.v1+json'; config = $config; layers = @($layer)
+    })
+    $manifest['platform'] = @{ os = 'linux'; architecture = 'amd64' }
+    $rootDescriptor = Add-FixtureOciBlob 'application/vnd.oci.image.index.v1+json' (ConvertTo-FixtureOciBytes @{
+        schemaVersion = 2; mediaType = 'application/vnd.oci.image.index.v1+json'; manifests = @($manifest)
+    })
+    $wrapperBytes = ConvertTo-FixtureOciBytes @{
+        schemaVersion = 2; mediaType = 'application/vnd.oci.image.index.v1+json'; manifests = @($rootDescriptor)
+    }
+    $Image.Id = $rootDescriptor.digest
+    $Image['Descriptor'] = $rootDescriptor
+    $entries = [Collections.Generic.List[object]]::new()
+    $entries.Add(@{ path = 'oci-layout'; bytes = ConvertTo-FixtureOciBytes @{ imageLayoutVersion = '1.0.0' } })
+    $entries.Add(@{ path = 'index.json'; bytes = $wrapperBytes })
+    foreach ($digest in @($blobs.Keys | Sort-Object)) {
+        $bytes = [byte[]]$blobs[$digest]
+        if ($Scenario -ceq 'oci-blob-corrupt' -and $digest -ceq $layer.digest) { $bytes = [byte[]]$bytes.Clone(); $bytes[0] = $bytes[0] -bxor 1 }
+        $entries.Add(@{ path = 'blobs/sha256/' + $digest.Substring(7); bytes = $bytes })
+    }
+    if ($Scenario -ceq 'oci-hold-classic') {
+        $Image.Id = $config.digest; $Image.Descriptor = $null
+        $entries.Clear()
+        $entries.Add(@{ path = 'manifest.json'; bytes = ConvertTo-FixtureOciBytes @(@{ Config = $config.digest.Substring(7) + '.json'; RepoTags = @('historical-fixture:local'); Layers = @('layer.tar') }) })
+        $entries.Add(@{ path = $config.digest.Substring(7) + '.json'; bytes = $configBytes })
+        $entries.Add(@{ path = 'layer.tar'; bytes = $layerBytes })
+    }
+    if ($Scenario -ceq 'oci-hold-no-descriptors') { $Image.Descriptor = $null }
+    $archive = Join-Path $Root 'fixture-save.tar'
+    $file = [IO.FileStream]::new($archive, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    $writer = [Formats.Tar.TarWriter]::new($file, [Formats.Tar.TarEntryFormat]::Pax, $true)
+    try {
+        foreach ($item in $entries) {
+            $entry = [Formats.Tar.PaxTarEntry]::new([Formats.Tar.TarEntryType]::RegularFile, $item.path)
+            $entry.Uid = 0; $entry.Gid = 0; $entry.Mode = [IO.UnixFileMode]420
+            $body = [IO.MemoryStream]::new([byte[]]$item.bytes, $false)
+            try { $entry.DataStream = $body; $writer.WriteEntry($entry) }
+            finally { $body.Dispose() }
+        }
+    }
+    finally { $writer.Dispose(); $file.Dispose() }
+    $selectedObservation = if ($Scenario -cin @('oci-hold-classic', 'oci-hold-no-descriptors')) { $null } else { $manifest }
+    Write-VerificationJson (Join-Path $Root 'selected-descriptor.json') $selectedObservation
+    return [ordered]@{ archive = $archive; localImageId = $Image.Id; rootDescriptor = $rootDescriptor; selectedDescriptor = $manifest; configDigest = $config.digest; layer = $layer
+        wrapperSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($wrapperBytes)).ToLowerInvariant() }
+}
+
 function New-VerificationFixture([string] $Service, [string] $Scenario) {
     $script:sequence++
     $root = Join-Path $temporaryRoot ('case-' + $script:sequence.ToString('D3') + ' café 雪')
@@ -138,18 +197,19 @@ function New-VerificationFixture([string] $Service, [string] $Scenario) {
         'org.opencontainers.image.created' = $metadata.buildTimestamp; 'org.opencontainers.image.source' = 'https://github.com/nickna/Conduit'
         'io.conduit.runtime' = 'native-aot'; 'io.conduit.promotion' = 'canary-only' }
     if ($Scenario -ceq 'oci-mismatch') { $labels['org.opencontainers.image.version'] = 'unrelated-version' }
-    $image = [ordered]@{ Id = $localImageId; Os = 'linux'; Architecture = 'amd64'; Config = @{
+    $image = [ordered]@{ Id = $null; Os = 'linux'; Architecture = 'amd64'; Config = @{
         User = '1654'; Entrypoint = @('/app/' + $main); Cmd = $null; Volumes = $null; Labels = $labels
         Env = @('DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false', 'ASPNETCORE_HTTP_PORTS=8080')
         Healthcheck = @{ Test = @('CMD', '/app/conduit-health-probe', 'http://localhost:8080/health/live') }
     } }
-    Write-VerificationJson (Join-Path $root 'image.json') $image
     if ($Scenario -ceq 'manifest-mismatch') { [IO.File]::AppendAllText((Join-Path $evidence 'application.json'), ' ') }
     if ($Scenario -ceq 'payload-mismatch') { [IO.File]::AppendAllText((Join-Path $payload $main), 'changed') }
     $archive = Write-VerificationArchive $root $payload $evidence
+    $oci = Write-VerificationOciArchive $root $image $archive $Scenario
+    Write-VerificationJson (Join-Path $root 'image.json') $image
     return [ordered]@{ root = $root; artifact = Join-Path $root 'artifact'; archive = $archive; service = $Service; scenario = $Scenario
         buildId = $buildId; requestedImage = 'owned-image-verification-fixture:' + $Service; hashes = $expectedHashes
-        metadata = $metadata; metrics = $metrics; runtimeFilesSha256 = $identity.filesSha256; main = $main }
+        metadata = $metadata; metrics = $metrics; runtimeFilesSha256 = $identity.filesSha256; main = $main; oci = $oci; localImageId = $oci.localImageId }
 }
 
 function Invoke-VerificationCase([string] $Service, [string] $Scenario, [bool] $Success) {
@@ -190,12 +250,12 @@ function Invoke-VerificationCase([string] $Service, [string] $Scenario, [bool] $
     if ($Success) {
         Assert-VerificationContract ($null -eq $caught -and $results.Count -eq 1 -and $results[0] -is [Collections.Specialized.OrderedDictionary]) ('Valid packaging verification failed: ' + $Scenario)
         $report = $results[0]; $persisted = Read-VerificationJson $reportPath
-        $expectedKeys = @('schemaVersion', 'kind', 'service', 'requestedImage', 'localImageId', 'containerId', 'owner', 'buildId', 'rid', 'commitMetadata', 'source', 'manifestHashes', 'runtimeFilesSha256', 'metrics', 'ociLabels', 'archiveBytes', 'archiveEntries', 'archivedFilePermissions', 'extractionId', 'verifiedAtUtc', 'cleanupConfirmed', 'payloadVerified', 'registryDigestQualification')
+        $expectedKeys = @('schemaVersion', 'kind', 'service', 'requestedImage', 'localImageId', 'containerId', 'owner', 'buildId', 'rid', 'commitMetadata', 'source', 'manifestHashes', 'runtimeFilesSha256', 'metrics', 'ociLabels', 'archiveBytes', 'archiveEntries', 'archivedFilePermissions', 'extractionId', 'verifiedAtUtc', 'cleanupConfirmed', 'payloadVerified', 'registryDigestQualification', 'ociAssociation')
         Assert-VerificationContract ($report.Count -eq $expectedKeys.Count -and
             ((@($report.Keys | Sort-Object) -join '|') -ceq (@($expectedKeys | Sort-Object) -join '|'))) 'Packaging report properties differ.'
-        Assert-VerificationContract ($report.schemaVersion -is [int] -and $report.schemaVersion -eq 1 -and $report.kind -ceq 'conduit-native-image-packaging' -and
+        Assert-VerificationContract ($report.schemaVersion -is [int] -and $report.schemaVersion -eq 2 -and $report.kind -ceq 'conduit-native-image-packaging' -and
             $report.service -ceq $Service -and $report.requestedImage -ceq $fixture.requestedImage -and
-            $report.localImageId -ceq $localImageId -and $report.containerId -ceq $containerId -and
+            $report.localImageId -ceq $fixture.localImageId -and $report.containerId -ceq $containerId -and
             $report.owner -cmatch '^[0-9a-f]{32}$' -and $report.buildId -ceq $fixture.buildId -and $report.rid -ceq 'linux-x64') 'Packaging report image/build ownership differs.'
         Assert-VerificationContract ($report.source.status -ceq 'unavailable' -and $null -eq $report.source.revision -and
             $null -eq $report.source.dirty -and $report.commitMetadata.commitSha -ceq 'dev' -and
@@ -207,6 +267,30 @@ function Invoke-VerificationCase([string] $Service, [string] $Scenario, [bool] $
         Assert-VerificationContract ($report.manifestHashes.Count -eq 3 -and
             ((@($report.manifestHashes.Values | Sort-Object) -join '|') -ceq (@($fixture.hashes.Values | Sort-Object) -join '|'))) 'Packaging evidence hashes do not identify all three exact documents.'
         foreach ($name in $fixture.metrics.Keys) { Assert-VerificationContract ($report.metrics[$name] -eq $fixture.metrics[$name]) 'Packaging publish metrics differ.' }
+        $reference = $report.ociAssociation
+        Assert-VerificationContract ($reference.Count -eq 3 -and $reference.report.Count -eq 2 -and $reference.observations.Count -eq 2 -and $reference.archive.Count -eq 3 -and
+            $reference.report.path -ceq 'oci-association.json' -and $reference.observations.path -ceq 'image-observations.json' -and $reference.archive.path -ceq 'image-save.tar') 'Packaging OCI sidecar references differ.'
+        foreach ($part in @($reference.report, $reference.observations, $reference.archive)) {
+            Assert-VerificationContract ($part.sha256 -ceq (Get-VerificationHash (Join-Path $fixture.artifact $part.path))) 'Packaging OCI reference is not bound to original retained bytes.'
+        }
+        Assert-VerificationContract ($reference.archive.bytes -eq ([IO.FileInfo]::new($fixture.oci.archive)).Length -and
+            $reference.archive.sha256 -ceq (Get-VerificationHash $fixture.oci.archive)) 'Packaging did not retain the exact original OCI-save archive.'
+        $association = Read-VerificationJson (Join-Path $fixture.artifact $reference.report.path)
+        $observations = Read-VerificationJson (Join-Path $fixture.artifact $reference.observations.path)
+        Assert-VerificationContract ($association.Count -eq 19 -and -not $association.registryDigestQualification -and $association.observedLocalImageId -ceq $fixture.localImageId -and
+            $association.archiveSha256 -ceq $reference.archive.sha256 -and $observations.Count -eq 5 -and $observations.schemaVersion -eq 1 -and
+            $observations.kind -ceq 'conduit-native-image-observations' -and $observations.requestedImage -ceq $fixture.requestedImage -and
+            $observations.image.id -ceq $fixture.localImageId -and $observations.container.image -ceq $fixture.localImageId -and $observations.container.id -ceq $containerId) 'Packaging OCI association changed its image/container observation or invented qualification.'
+        if ($Scenario -cin @('oci-hold-no-descriptors', 'oci-hold-classic')) {
+            $requiredReason = if ($Scenario -ceq 'oci-hold-classic') { 'classic-save-layout' } else { 'missing-image-descriptor' }
+            Assert-VerificationContract ($association.associationStatus -ceq 'hold' -and -not $association.descriptorChainVerified -and
+                $requiredReason -cin $association.holdReasons -and $association.selectedLayers.Count -eq 0 -and $null -eq $association.selectedManifestDescriptor) 'Local-only packaging HOLD invented a selected manifest chain.'
+        } else {
+            Assert-VerificationContract ($association.associationStatus -ceq 'verified' -and $association.descriptorChainVerified -and $association.holdReasons.Count -eq 0 -and
+                $association.rootDescriptor.digest -ceq $fixture.oci.rootDescriptor.digest -and $association.selectedManifestDescriptor.digest -ceq $fixture.oci.selectedDescriptor.digest -and
+                $association.configDigest -ceq $fixture.oci.configDigest -and $association.layoutIndexSha256 -ceq $fixture.oci.wrapperSha256 -and
+                $association.selectedLayers.Count -eq 1 -and $association.selectedLayers[0].digest -ceq $fixture.oci.layer.digest -and $association.selectedLayers[0].size -eq $fixture.oci.layer.size) 'Packaging OCI graph mixed original root, selected manifest, config, wrapper or layer identities.'
+        }
         $mainPermissions = $report.archivedFilePermissions['app/' + $fixture.main]
         $healthPermissions = $report.archivedFilePermissions['app/conduit-health-probe']
         Assert-VerificationContract ($mainPermissions.uid -eq 1654 -and $mainPermissions.gid -eq 1654 -and $mainPermissions.mode -eq 493 -and
@@ -221,8 +305,10 @@ function Invoke-VerificationCase([string] $Service, [string] $Scenario, [bool] $
         Assert-VerificationContract ($persisted.localImageId -ceq $report.localImageId -and $persisted.owner -ceq $report.owner -and
             $persisted.cleanupConfirmed -is [bool] -and $persisted.cleanupConfirmed -and -not $persisted.registryDigestQualification) 'Persisted packaging evidence differs from the returned report.'
         $imageInspects = @($records | Where-Object { $_.arguments[0] -ceq 'image' -and $_.arguments[1] -ceq 'inspect' })
+        $imageSaves = @($records | Where-Object { $_.arguments[0] -ceq 'image' -and $_.arguments[1] -ceq 'save' })
         Assert-VerificationContract ($imageInspects.Count -eq 1 -and $imageInspects[0].arguments[-1] -ceq $fixture.requestedImage -and
-            $created.Count -eq 1 -and $created[0].arguments[-1] -ceq $localImageId -and $removed.Count -eq 1 -and
+            $imageSaves.Count -eq 1 -and $imageSaves[0].arguments.Count -eq 5 -and ($imageSaves[0].arguments[0..2] -join '|') -ceq 'image|save|--output' -and $imageSaves[0].arguments[-1] -ceq $fixture.localImageId -and
+            $created.Count -eq 1 -and $created[0].arguments[-1] -ceq $fixture.localImageId -and $created[0].arguments[[Array]::IndexOf([object[]]$created[0].arguments, '--platform') + 1] -ceq 'linux/amd64' -and $removed.Count -eq 1 -and
             ($removed[0].arguments -join '|') -ceq ('container|rm|' + $containerId)) 'Verification used a mutable reference or unverified/forced deletion.'
         Assert-VerificationContract (-not [IO.File]::Exists((Join-Path $fixture.root 'active.json')) -and
             @($records | Where-Object reportPresent).Count -eq 0 -and
@@ -250,7 +336,10 @@ function Invoke-VerificationCase([string] $Service, [string] $Scenario, [bool] $
         if ($Scenario -ceq 'combined-failure') {
             Assert-VerificationContract ($caught.Exception.Message.StartsWith('Native image packaging and owned cleanup failed;', [StringComparison]::Ordinal)) 'Combined primary and cleanup failure was lost.'
         }
-        if ($Scenario -cin @('image-timeout', 'image-overflow', 'create-timeout', 'export-timeout')) {
+        if ($Scenario -ceq 'oci-save-late-mutation') {
+            Assert-VerificationContract (([IO.FileInfo]::new((Join-Path $fixture.artifact 'image-save.tar'))).Length -eq ([IO.FileInfo]::new($fixture.oci.archive)).Length + 1) 'Late OCI mutation fixture did not alter its retained archive.'
+        }
+        if ($Scenario -cin @('image-timeout', 'image-overflow', 'create-timeout', 'export-timeout', 'oci-save-timeout')) {
             Assert-VerificationContract ([IO.File]::Exists((Join-Path $fixture.root 'paused-process.json')) -and $watch.Elapsed.TotalSeconds -lt 30) 'Bounded command fixture did not reach its latched failure or deadline.'
             Assert-VerificationPausedProcessReaped $fixture.root
         }
@@ -270,10 +359,11 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $root = $env:CONDUIT_IMAGE_VERIFICATION_TEST_ROOT; $scenario = $env:CONDUIT_IMAGE_VERIFICATION_TEST_SCENARIO
 $privateDiagnostic = $env:CONDUIT_IMAGE_VERIFICATION_TEST_DIAGNOSTIC
-$imageId = 'sha256:' + ('a' * 64); $otherImageId = 'sha256:' + ('b' * 64); $id = 'c' * 64
+$otherImageId = 'sha256:' + ('b' * 64); $id = 'c' * 64
 $activePath = Join-Path $root 'active.json'; $removedPath = Join-Path $root 'removed.json'
 function Read-Json([string] $Path) { return [IO.File]::ReadAllText($Path) | ConvertFrom-Json -AsHashtable -DateKind String }
 function Write-Json([string] $Path, $Value) { [IO.File]::WriteAllText($Path, (ConvertTo-Json -InputObject $Value -Depth 32), [Text.UTF8Encoding]::new($false)) }
+$imageId = (Read-Json (Join-Path $root 'image.json')).Id
 function Pause-Command {
     $process = [Diagnostics.Process]::GetCurrentProcess()
     try {
@@ -307,22 +397,30 @@ if ($DockerArguments[0] -ceq 'image' -and $DockerArguments[1] -ceq 'inspect') {
     if ($scenario -ceq 'tag-flip' -and $ordinal -gt 1) { $image.Id = $otherImageId }
     [Console]::Out.WriteLine((ConvertTo-Json -InputObject $image -Depth 32 -Compress)); exit 0
 }
+if ($DockerArguments[0] -ceq 'image' -and $DockerArguments[1] -ceq 'save') {
+    if ($DockerArguments.Count -ne 5 -or $DockerArguments[2] -cne '--output' -or $DockerArguments[-1] -cne $imageId) { throw 'OCI save did not use the exact immutable local ID without platform filtering.' }
+    if ($scenario -ceq 'oci-save-nonzero') { [Console]::Error.WriteLine($privateDiagnostic); exit 17 }
+    if ($scenario -ceq 'oci-save-timeout') { Pause-Command; Start-Sleep -Seconds 60; exit 0 }
+    [IO.File]::Copy((Join-Path $root 'fixture-save.tar'), $DockerArguments[3], $false); exit 0
+}
 if ($DockerArguments[0] -cne 'container') { throw 'Invalid fixture Docker command.' }
 switch ($DockerArguments[1]) {
     'create' {
         $nameIndex = [Array]::IndexOf($DockerArguments, '--name'); $networkIndex = [Array]::IndexOf($DockerArguments, '--network')
-        if ($nameIndex -lt 0 -or $networkIndex -lt 0 -or $DockerArguments[$networkIndex + 1] -cne 'none' -or $DockerArguments[-1] -cne $imageId) { throw 'Invalid fixture container create arguments.' }
+        $platformIndex = [Array]::IndexOf($DockerArguments, '--platform')
+        if ($nameIndex -lt 0 -or $networkIndex -lt 0 -or $platformIndex -lt 0 -or $DockerArguments[$platformIndex + 1] -cne 'linux/amd64' -or $DockerArguments[$networkIndex + 1] -cne 'none' -or $DockerArguments[-1] -cne $imageId) { throw 'Invalid fixture container create arguments.' }
         $name = $DockerArguments[$nameIndex + 1]; $labels = @{}
         for ($index = 0; $index -lt $DockerArguments.Length; $index++) {
             if ($DockerArguments[$index] -ceq '--label') { $parts = $DockerArguments[$index + 1].Split('=', 2); $labels[$parts[0]] = $parts[1] }
         }
-        $container = @{ Id = $id; Name = '/' + $name; Image = $imageId; Config = @{ Labels = $labels }
+        $container = @{ Id = $id; Name = '/' + $name; Image = $imageId; ImageManifestDescriptor = Read-Json (Join-Path $root 'selected-descriptor.json'); Config = @{ Labels = $labels }
             HostConfig = @{ NetworkMode = 'none'; PortBindings = $null }; State = @{ Running = $false; Status = 'created' } }
         switch ($scenario) {
             'wrong-owner' { $container.Config.Labels['conduit.proof.owner'] = 'd' * 32 }
             'wrong-name' { $container.Name = '/foreign-container' }
             'wrong-image' { $container.Image = $otherImageId }
             'running' { $container.State.Running = $true; $container.State.Status = 'running' }
+            'oci-selected-mismatch' { $container.ImageManifestDescriptor.digest = 'sha256:' + ('d' * 64) }
         }
         Write-Json $activePath @{ lookupName = $name; container = $container }
         if ($scenario -ceq 'create-nonzero') { [Console]::Error.WriteLine($privateDiagnostic); exit 17 }
@@ -352,13 +450,19 @@ switch ($DockerArguments[1]) {
         if ($DockerArguments.Count -ne 3 -or $DockerArguments[-1] -cne $id) { throw 'Invalid or forced fixture removal arguments.' }
         if ($scenario -cin @('rm-failure', 'combined-failure')) { [Console]::Error.WriteLine($privateDiagnostic); exit 17 }
         [IO.File]::Copy($activePath, $removedPath, $false); [IO.File]::Delete($activePath)
+        if ($scenario -ceq 'oci-save-late-mutation') {
+            $append = [IO.File]::Open((Join-Path $root 'artifact/image-save.tar'), [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            try { $append.WriteByte(1) }
+            finally { $append.Dispose() }
+        }
         [Console]::Out.WriteLine($(if ($scenario -ceq 'rm-output') { 'wrong-removed-id' } else { $id })); exit 0
     }
     default { throw 'Unexpected fixture Docker operation.' }
 }
 '@ | Set-Content -LiteralPath $script:fakeDocker -Encoding utf8NoBOM
 
-    foreach ($positive in @(@{ Service = 'admin'; Scenario = 'success' }, @{ Service = 'gateway'; Scenario = 'success' }, @{ Service = 'admin'; Scenario = 'tag-flip' })) {
+    foreach ($positive in @(@{ Service = 'admin'; Scenario = 'success' }, @{ Service = 'gateway'; Scenario = 'success' }, @{ Service = 'admin'; Scenario = 'tag-flip' },
+        @{ Service = 'admin'; Scenario = 'oci-hold-no-descriptors' }, @{ Service = 'admin'; Scenario = 'oci-hold-classic' })) {
         Invoke-VerificationCase $positive.Service $positive.Scenario $true
     }
     foreach ($scenario in @('image-nonzero', 'image-malformed', 'image-timeout', 'image-overflow',
@@ -367,7 +471,8 @@ switch ($DockerArguments[1]) {
         'wrong-owner', 'wrong-name', 'wrong-image', 'running', 'rm-failure', 'rm-output',
         'absence-failure', 'missing-diagnostic', 'combined-failure',
         'fresh-visible', 'fresh-hidden', 'fresh-held-claim', 'invalid-image', 'invalid-service',
-        'invalid-docker-timeout', 'invalid-cleanup-timeout', 'invalid-docker-path')) {
+        'invalid-docker-timeout', 'invalid-cleanup-timeout', 'invalid-docker-path',
+        'oci-save-nonzero', 'oci-save-timeout', 'oci-blob-corrupt', 'oci-selected-mismatch', 'oci-save-late-mutation')) {
         Invoke-VerificationCase 'admin' $scenario $false
     }
 }

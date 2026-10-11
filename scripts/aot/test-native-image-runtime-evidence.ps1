@@ -10,7 +10,7 @@ $temporaryRoot = Join-Path $temporaryParent ('conduit-image-runtime-contract-' +
 $environmentNames = @('CONDUIT_IMAGE_RUNTIME_TEST_ROOT', 'CONDUIT_IMAGE_RUNTIME_TEST_SCENARIO', 'CONDUIT_IMAGE_RUNTIME_TEST_PHASE', 'CONDUIT_IMAGE_RUNTIME_TEST_DIAGNOSTIC')
 $oldEnvironment = @{}
 foreach ($name in $environmentNames) { $oldEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
-$localImageId = 'sha256:' + ('a' * 64); $otherImageId = 'sha256:' + ('b' * 64); $containerId = 'c' * 64
+$otherImageId = 'sha256:' + ('b' * 64); $containerId = 'c' * 64
 $privateDiagnostic = 'private-runtime-fixture-' + [Guid]::NewGuid().ToString('N')
 $cases = 0; $sequence = 0; $failure = $null; $cleanupFailure = $false
 $goldens = @{}
@@ -93,11 +93,43 @@ function Invoke-RuntimeCase([string] $Service, [string] $Scenario, [bool] $Succe
     [IO.Directory]::CreateDirectory($root) | Out-Null
     [IO.Directory]::CreateDirectory((Join-Path $root 'commands')) | Out-Null
     $package = Join-Path $root 'packaging'; $artifact = Join-Path $root 'runtime'
-    Copy-RuntimeFixtureDirectory $goldens[$Service].artifact $package
-    [IO.File]::Copy((Join-Path $goldens[$Service].root 'image.json'), (Join-Path $root 'image.json'), $false)
+    $goldenKey = if ($Scenario -cin @('oci-hold-no-descriptors', 'oci-hold-classic')) { $Service + '-' + $Scenario } else { $Service }
+    Copy-RuntimeFixtureDirectory $goldens[$goldenKey].artifact $package
+    [IO.File]::Copy((Join-Path $goldens[$goldenKey].root 'image.json'), (Join-Path $root 'image.json'), $false)
+    [IO.File]::Copy((Join-Path $goldens[$goldenKey].root 'selected-descriptor.json'), (Join-Path $root 'selected-descriptor.json'), $false)
+    $localImageId = (Read-VerificationJson (Join-Path $root 'image.json')).Id
     $packageReportPath = Join-Path $package 'packaging-evidence.json'
     $originalPackage = Read-VerificationJson $packageReportPath
     switch ($Scenario) {
+        'historical-schema1' {
+            $changed = Read-VerificationJson $packageReportPath; $changed.schemaVersion = 1; $changed.Remove('ociAssociation') | Out-Null
+            Write-VerificationJson $packageReportPath $changed
+            foreach ($name in @('oci-association.json', 'image-observations.json', 'image-save.tar')) { [IO.File]::Delete((Join-Path $package $name)) }
+        }
+        'oci-report-tamper' {
+            $path = Join-Path $package 'oci-association.json'; $changed = Read-VerificationJson $path
+            $changed.descriptorChainVerified = $false; Write-VerificationJson $path $changed
+            $changedPackage = Read-VerificationJson $packageReportPath; $changedPackage.ociAssociation.report.sha256 = Get-VerificationHash $path
+            Write-VerificationJson $packageReportPath $changedPackage
+        }
+        'oci-observations-tamper' {
+            $path = Join-Path $package 'image-observations.json'; $changed = Read-VerificationJson $path
+            $changed.container.imageManifestDescriptor.digest = 'sha256:' + ('d' * 64); Write-VerificationJson $path $changed
+            $changedPackage = Read-VerificationJson $packageReportPath; $changedPackage.ociAssociation.observations.sha256 = Get-VerificationHash $path
+            Write-VerificationJson $packageReportPath $changedPackage
+        }
+        'oci-archive-tamper' {
+            $path = Join-Path $package 'image-save.tar'; $stream = [IO.File]::Open($path, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            $tail = [byte[]]::new(512); [Array]::Fill[byte]($tail, [byte]1)
+            try { $stream.Write($tail, 0, $tail.Length) } finally { $stream.Dispose() }
+            $changedPackage = Read-VerificationJson $packageReportPath; $changedPackage.ociAssociation.archive.sha256 = Get-VerificationHash $path
+            $changedPackage.ociAssociation.archive.bytes = ([IO.FileInfo]::new($path)).Length
+            Write-VerificationJson $packageReportPath $changedPackage
+        }
+        'oci-reference-path' {
+            $changed = Read-VerificationJson $packageReportPath; $changed.ociAssociation.report.path = '../outside'
+            Write-VerificationJson $packageReportPath $changed
+        }
         'package-report-tamper' { $changed = Read-VerificationJson $packageReportPath; $changed.cleanupConfirmed = $false; Write-VerificationJson $packageReportPath $changed }
         'manifest-tamper' { [IO.File]::AppendAllText((Join-Path $package 'extracted/conduit-evidence/application.json'), ' ') }
         'payload-tamper' {
@@ -108,15 +140,20 @@ function Invoke-RuntimeCase([string] $Service, [string] $Scenario, [bool] $Succe
     }
     $sourceFingerprint = Get-RuntimeFixtureFingerprint $package
     $expectedSourceFingerprint = $sourceFingerprint
-    if ($Scenario -cin @('runtime-manifest-tamper', 'runtime-payload-tamper')) {
-        $relative = if ($Scenario -ceq 'runtime-manifest-tamper') {
-            Join-Path 'extracted/conduit-evidence' 'application.json'
-        } else {
-            Join-Path 'extracted/app' $(if ($Service -ceq 'admin') { 'ConduitLLM.Admin' } else { 'ConduitLLM.Gateway' })
+    if ($Scenario -cin @('runtime-manifest-tamper', 'runtime-payload-tamper', 'runtime-oci-report-tamper', 'runtime-oci-archive-tamper')) {
+        $relative = switch ($Scenario) {
+            'runtime-manifest-tamper' { Join-Path 'extracted/conduit-evidence' 'application.json' }
+            'runtime-payload-tamper' { Join-Path 'extracted/app' $(if ($Service -ceq 'admin') { 'ConduitLLM.Admin' } else { 'ConduitLLM.Gateway' }) }
+            'runtime-oci-report-tamper' { 'oci-association.json' }
+            'runtime-oci-archive-tamper' { 'image-save.tar' }
         }
         $changedPath = Join-Path $package $relative
         $expectedBytes = [IO.File]::ReadAllBytes($changedPath)
-        if ($Scenario -ceq 'runtime-manifest-tamper') { $expectedBytes = [byte[]]($expectedBytes + [byte]32) }
+        if ($Scenario -cin @('runtime-manifest-tamper', 'runtime-oci-report-tamper')) { $expectedBytes = [byte[]]($expectedBytes + [byte]32) }
+        elseif ($Scenario -ceq 'runtime-oci-archive-tamper') {
+            $tail = [byte[]]::new(512); [Array]::Fill[byte]($tail, [byte]1)
+            $expectedBytes = [byte[]]($expectedBytes + $tail)
+        }
         else { $expectedBytes[0] = $expectedBytes[0] -bxor 1 }
         $expectedHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($expectedBytes)).ToLowerInvariant()
         $entry = [IO.Path]::GetRelativePath($package, $changedPath) + ':'
@@ -187,7 +224,8 @@ function Invoke-RuntimeCase([string] $Service, [string] $Scenario, [bool] $Succe
     }
     else {
         Assert-RuntimeContract ($null -ne $caught -and -not [IO.File]::Exists($reportPath)) ('Invalid runtime was accepted or wrote success evidence: ' + $Scenario)
-        if ($Scenario -cin @('package-report-tamper', 'manifest-tamper', 'payload-tamper', 'nested-artifact') -or
+        if ($Scenario -cin @('package-report-tamper', 'manifest-tamper', 'payload-tamper', 'nested-artifact',
+            'oci-report-tamper', 'oci-observations-tamper', 'oci-archive-tamper', 'oci-reference-path') -or
             $Scenario.StartsWith('fresh-', [StringComparison]::Ordinal) -or $Scenario.StartsWith('invalid-', [StringComparison]::Ordinal)) {
             Assert-RuntimeContract ($records.Count -eq 0) 'Invalid source/output/deadline reached Docker.'
             if ($null -ne $sentinel) { Assert-RuntimeContract ([IO.File]::ReadAllText($sentinel) -ceq 'existing runtime owner' -and [IO.Directory]::GetFileSystemEntries($artifact).Length -eq 1) 'Runtime freshness rejection changed existing state.' }
@@ -242,7 +280,7 @@ try {
     $tokens = $null; $parseErrors = $null
     $ast = [Management.Automation.Language.Parser]::ParseFile($fixtureSource, [ref]$tokens, [ref]$parseErrors)
     Assert-RuntimeContract ($parseErrors.Count -eq 0) 'Committed packaging fixture source did not parse.'
-    foreach ($name in @('Assert-VerificationContract', 'Write-VerificationJson', 'Read-VerificationJson', 'Get-VerificationHash', 'Write-VerificationArchive', 'New-VerificationFixture')) {
+    foreach ($name in @('Assert-VerificationContract', 'Write-VerificationJson', 'Read-VerificationJson', 'Get-VerificationHash', 'Write-VerificationArchive', 'Write-VerificationOciArchive', 'New-VerificationFixture')) {
         $definitions = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name }, $true))
         Assert-RuntimeContract ($definitions.Count -eq 1) 'Committed packaging fixture definition was ambiguous.'
         . ([ScriptBlock]::Create($definitions[0].Extent.Text))
@@ -254,10 +292,11 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $root = $env:CONDUIT_IMAGE_RUNTIME_TEST_ROOT; $scenario = $env:CONDUIT_IMAGE_RUNTIME_TEST_SCENARIO; $phase = $env:CONDUIT_IMAGE_RUNTIME_TEST_PHASE
 $diagnostic = $env:CONDUIT_IMAGE_RUNTIME_TEST_DIAGNOSTIC
-$imageId = 'sha256:' + ('a' * 64); $otherImageId = 'sha256:' + ('b' * 64); $id = 'c' * 64
+$otherImageId = 'sha256:' + ('b' * 64); $id = 'c' * 64
 $active = Join-Path $root 'active.json'; $removed = Join-Path $root 'removed.json'
 function Read-Json([string] $Path) { return [IO.File]::ReadAllText($Path) | ConvertFrom-Json -AsHashtable -DateKind String }
 function Write-Json([string] $Path, $Value) { [IO.File]::WriteAllText($Path, (ConvertTo-Json -InputObject $Value -Depth 32), [Text.UTF8Encoding]::new($false)) }
+$imageId = (Read-Json (Join-Path $root 'image.json')).Id
 function Pause-Command {
     $process = [Diagnostics.Process]::GetCurrentProcess()
     try {
@@ -274,20 +313,24 @@ if ($DockerArguments[0] -ceq 'image' -and $DockerArguments[1] -ceq 'inspect' -an
     if ($DockerArguments.Count -ne 5 -or ($DockerArguments[2..3] -join '|') -cne '--format|{{json .}}') { throw 'Invalid packaging image inspect.' }
     [Console]::Out.WriteLine((ConvertTo-Json -InputObject (Read-Json (Join-Path $root 'image.json')) -Depth 32 -Compress)); exit 0
 }
+if ($DockerArguments[0] -ceq 'image' -and $DockerArguments[1] -ceq 'save' -and $phase -ceq 'packaging') {
+    if ($DockerArguments.Count -ne 5 -or $DockerArguments[2] -cne '--output' -or $DockerArguments[-1] -cne $imageId) { throw 'Golden OCI save did not pin the immutable ID without platform filtering.' }
+    [IO.File]::Copy((Join-Path $root 'fixture-save.tar'), $DockerArguments[3], $false); exit 0
+}
 if ($DockerArguments[0] -cne 'container') { throw 'Unexpected runtime fixture command.' }
 switch ($DockerArguments[1]) {
     'create' {
         $nameIndex = [Array]::IndexOf($DockerArguments, '--name'); $networkIndex = [Array]::IndexOf($DockerArguments, '--network')
-        if ($nameIndex -lt 0 -or $networkIndex -lt 0 -or $DockerArguments[$networkIndex + 1] -cne 'none' -or $DockerArguments[-1] -cne $imageId) { throw 'Runtime create did not pin private immutable identity.' }
+        $platform = [Array]::IndexOf($DockerArguments, '--platform')
+        if ($nameIndex -lt 0 -or $networkIndex -lt 0 -or $platform -lt 0 -or $DockerArguments[$platform + 1] -cne 'linux/amd64' -or
+            $DockerArguments[$networkIndex + 1] -cne 'none' -or $DockerArguments[-1] -cne $imageId) { throw 'Runtime create did not pin private immutable identity and platform.' }
         $name = $DockerArguments[$nameIndex + 1]; $labels = @{}; $environment = @()
         for ($index = 0; $index -lt $DockerArguments.Length; $index++) {
             if ($DockerArguments[$index] -ceq '--label') { $parts = $DockerArguments[$index + 1].Split('=', 2); $labels[$parts[0]] = $parts[1] }
             if ($DockerArguments[$index] -ceq '--env') { $environment += $DockerArguments[$index + 1] }
         }
         if ($phase -ceq 'runtime') {
-            $platform = [Array]::IndexOf($DockerArguments, '--platform')
-            if ($platform -lt 0 -or $DockerArguments[$platform + 1] -cne 'linux/amd64' -or
-                (@($environment | Sort-Object) -join '|') -cne 'CONDUIT_OPENAPI_GENERATION=true|CONDUIT_OPENAPI_OUTPUT=/tmp/packaged-openapi.json' -or
+            if ((@($environment | Sort-Object) -join '|') -cne 'CONDUIT_OPENAPI_GENERATION=true|CONDUIT_OPENAPI_OUTPUT=/tmp/packaged-openapi.json' -or
                 $labels['conduit.fixture'] -cne 'native-image-entrypoint' -or $name -cnotmatch '\Aconduit-native-image-entrypoint-(admin|gateway)-[0-9a-f]{32}\z') { throw 'Invalid runtime platform, flags or fixture identity.' }
         }
         else { if ($labels['conduit.fixture'] -cne 'native-image-verification') { throw 'Invalid packaging fixture identity.' } }
@@ -295,6 +338,7 @@ switch ($DockerArguments[1]) {
         foreach ($label in $labels.Keys) { $configuration.Labels[$label] = $labels[$label] }
         $configuration.Env = @($configuration.Env) + @($environment)
         $state = @{ lookupName = $name; started = $false; waited = $false; container = @{ Id = $id; Name = '/' + $name; Image = $imageId
+            ImageManifestDescriptor = Read-Json (Join-Path $root 'selected-descriptor.json')
             Config = $configuration; HostConfig = @{ NetworkMode = 'none'; PortBindings = $null }
             State = @{ Running = $false; Status = 'created'; ExitCode = 0 } } }
         switch ($scenario) {
@@ -302,6 +346,7 @@ switch ($DockerArguments[1]) {
             'wrong-name' { $state.container.Name = '/foreign-runtime' }
             'wrong-image' { $state.container.Image = $otherImageId }
             'foreign-running' { $state.container.Config.Labels['conduit.proof.owner'] = 'd' * 32; $state.container.State.Running = $true; $state.container.State.Status = 'running' }
+            'runtime-wrong-manifest' { $state.container.ImageManifestDescriptor.digest = 'sha256:' + ('d' * 64) }
         }
         Write-Json $active $state
         if ($scenario -ceq 'create-nonzero') { [Console]::Error.WriteLine($diagnostic); exit 17 }
@@ -352,6 +397,12 @@ switch ($DockerArguments[1]) {
             $path = Join-Path $root ('packaging/extracted/app/' + $main)
             $bytes = [IO.File]::ReadAllBytes($path); $bytes[0] = $bytes[0] -bxor 1; [IO.File]::WriteAllBytes($path, $bytes)
         }
+        if ($scenario -ceq 'runtime-oci-report-tamper') { [IO.File]::AppendAllText((Join-Path $root 'packaging/oci-association.json'), ' ') }
+        if ($scenario -ceq 'runtime-oci-archive-tamper') {
+            $path = Join-Path $root 'packaging/image-save.tar'; $stream = [IO.File]::Open($path, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            $tail = [byte[]]::new(512); [Array]::Fill[byte]($tail, [byte]1)
+            try { $stream.Write($tail, 0, $tail.Length) } finally { $stream.Dispose() }
+        }
         $text = '{"openapi":"3.0.1","info":{"title":"Owned native runtime","version":"8.1.0"},"paths":{"/health/live":{"get":{"responses":{"200":{"description":"ok"}}}},"/proof":{"get":{"responses":{"200":{"description":"café 雪 🔎"}}}}},"components":{"schemas":{"Price":{"type":"number","minimum":0.125,"maximum":1.5,"description":"café 雪 🔎","example":{"nested":[0.25,{"amount":2.75}]}}}}}'
         if ($scenario -ceq 'openapi-nonjson') { $text = '{' }
         if ($scenario -ceq 'openapi-duplicate') { $text = $text.Replace('"minimum":0.125', '"minimum":0.125,"minimum":0.5') }
@@ -380,22 +431,28 @@ switch ($DockerArguments[1]) {
 }
 '@ | Set-Content -LiteralPath $script:fakeDocker -Encoding utf8NoBOM
 
-    foreach ($service in @('admin', 'gateway')) {
-        $fixture = New-VerificationFixture $service 'success'
-        Set-RuntimeFixtureEnvironment $fixture.root 'success' 'packaging'
-        $packaged = @(Get-NativeImagePackagingEvidence -Image $fixture.requestedImage -Service $service -ArtifactDirectory $fixture.artifact -DockerCommandPath $script:fakeDocker -DockerCommandTimeoutSeconds 5 -CleanupTimeoutSeconds 15)
+    foreach ($golden in @(@{ service = 'admin'; scenario = 'success' }, @{ service = 'gateway'; scenario = 'success' },
+        @{ service = 'admin'; scenario = 'oci-hold-no-descriptors' }, @{ service = 'admin'; scenario = 'oci-hold-classic' })) {
+        $fixture = New-VerificationFixture $golden.service $golden.scenario
+        Set-RuntimeFixtureEnvironment $fixture.root $golden.scenario 'packaging'
+        $packaged = @(Get-NativeImagePackagingEvidence -Image $fixture.requestedImage -Service $golden.service -ArtifactDirectory $fixture.artifact -DockerCommandPath $script:fakeDocker -DockerCommandTimeoutSeconds 5 -CleanupTimeoutSeconds 15)
         Assert-RuntimeContract ($packaged.Count -eq 1 -and $packaged[0].cleanupConfirmed -and -not [IO.File]::Exists((Join-Path $fixture.root 'active.json'))) 'Standalone completed packaging fixture failed.'
-        $goldens[$service] = $fixture
+        $key = if ($golden.scenario -ceq 'success') { $golden.service } else { $golden.service + '-' + $golden.scenario }
+        $goldens[$key] = $fixture
     }
     Invoke-RuntimeCase 'admin' 'success' $true
     Invoke-RuntimeCase 'gateway' 'success' $true
+    Invoke-RuntimeCase 'admin' 'historical-schema1' $true
+    Invoke-RuntimeCase 'admin' 'oci-hold-no-descriptors' $true
+    Invoke-RuntimeCase 'admin' 'oci-hold-classic' $true
     foreach ($scenario in @('package-report-tamper', 'manifest-tamper', 'payload-tamper', 'runtime-manifest-tamper', 'runtime-payload-tamper',
         'create-nonzero', 'create-malformed', 'create-timeout', 'start-nonzero', 'wait-nonzero',
         'exit-mismatch', 'running-after-wait', 'wait-timeout', 'cp-nonzero', 'cp-timeout', 'cp-directory',
         'openapi-nonjson', 'openapi-duplicate', 'logs-overflow', 'wrong-owner', 'wrong-name', 'wrong-image',
         'foreign-running', 'stop-failure', 'stop-still-running', 'rm-failure', 'absence-failure',
         'fresh-visible', 'fresh-hidden', 'fresh-claim', 'invalid-execution-timeout', 'invalid-cleanup-timeout',
-        'invalid-docker-timeout', 'nested-artifact')) {
+        'invalid-docker-timeout', 'nested-artifact', 'oci-report-tamper', 'oci-observations-tamper', 'oci-archive-tamper',
+        'oci-reference-path', 'runtime-wrong-manifest', 'runtime-oci-report-tamper', 'runtime-oci-archive-tamper')) {
         Invoke-RuntimeCase 'admin' $scenario $false
     }
 }

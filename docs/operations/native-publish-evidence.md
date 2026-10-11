@@ -131,7 +131,8 @@ The filtered local Docker context excludes `.git`, so these builds record source
 status `unavailable` with null revision and dirty state. The declared commit argument
 and OCI revision label remain metadata, without establishing actual Git provenance.
 Embedded evidence from this snapshot supports historical payload inspection;
-digest association and promotion qualification remain subsequent work under #1582.
+registry digest qualification and benchmark association remain subsequent work
+under #1582.
 
 ## Runtime archive inspection
 
@@ -205,3 +206,25 @@ descriptors, or missing required content produce an explicit hold result. A
 verified archive chain retains `registryDigestQualification=false`; source,
 completed-package association, and benchmark qualification remain separate
 requirements. Existing unavailable source provenance remains unavailable.
+
+## Completed package association
+
+New packaging reports use schema 2 and seal three retained files through the
+`ociAssociation` field: `image-observations.json`, `oci-association.json`, and
+`image-save.tar`. Each reference records its relative path and SHA-256; the
+archive reference also records its byte count. The packaging container is
+created for `linux/amd64`, and its observed manifest identifies the same
+container that supplies the exported payload and embedded publish manifests.
+
+Completed-package readers verify those references and recompute the original
+OCI descriptor chain before runtime execution and again after cleanup. For a
+verified chain, the runtime container must select the packaged manifest too.
+The runtime report's packaging report hash binds the complete association.
+
+Schema-1 packages remain readable for historical inspection and local smoke
+checks. Schema-2 packages from a classic image store or an engine without the
+required descriptor observations retain an explicit association hold. Local
+smoke checks can still run in that state; they do not qualify an image digest.
+Both versions keep `registryDigestQualification=false`. Baseline consumers must
+also establish source, build, payload, and candidate digest identity before
+promotion qualification, as tracked in #1582.
