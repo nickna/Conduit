@@ -27,7 +27,7 @@ if (args.Length > 0 && args[0] == "--cleanup-fixture")
 var schema = $"{PersistenceProbeLifecycle.SchemaPrefix}{Guid.NewGuid():N}";
 return await PersistenceProbeLifecycle.RunAsync(schema, RunProbeAsync,
     () => PersistenceProbeLifecycle.CleanupOwnedSchemaAsync(connectionString, schema),
-    () => Console.WriteLine("Native persistence probe passed: schema readiness, pool warming/cancellation/reuse, reads, writes, rollback, concurrency, retry, PostgreSQL mappings, and the global-settings, IP-filter, provider/credential, model-routing, virtual-key, media, async-task, function-discovery, function-execution configuration, function-pricing, and request-log runtime stores; owned schema removed."),
+    () => Console.WriteLine("Native persistence probe passed: schema readiness, pool warming/cancellation/reuse, reads, writes, rollback, concurrency, retry, PostgreSQL mappings, and the global-settings, IP-filter, provider/credential, model-routing, virtual-key, media, async-task, function-discovery, function-execution configuration/writes, function-pricing, and request-log runtime stores; owned schema removed."),
     Console.Error);
 
 async Task RunProbeAsync()
@@ -452,6 +452,7 @@ async Task RunProbeAsync()
             await FunctionDiscoveryPersistenceProbe.RunAsync(schemaDataSource);
             await FunctionExecutionConfigurationPersistenceProbe.RunAsync(schemaDataSource);
             await FunctionPricingPersistenceProbe.RunAsync(schemaDataSource);
+            await FunctionExecutionPersistenceProbe.RunAsync(schemaDataSource);
         }
         await ExerciseGlobalSettingRepositoryAsync(new NpgsqlGlobalSettingRepository(dataSource));
         await ExerciseIpFilterRepositoryAsync(new NpgsqlIpFilterRepository(dataSource));

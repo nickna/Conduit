@@ -182,6 +182,20 @@ detached reads, and cancellation of both pool and observed SQL lock waits. The n
 persistence probe exercises the same bounded read before runtime selection. Caching,
 Admin management/invalidation and execution writes remain with their existing services.
 
+`IFunctionExecutionRuntimeWriter` adds scalar execution inserts and full snapshot
+updates guarded by ID and the caller's original version. It preserves all 24 fields,
+empty-ID generation, unchecked integer version increments and caller mutations before
+database attempts, including cancellation and concurrency misses. Navigation graphs
+are explicitly outside this new port; the full legacy repository remains unchanged.
+Real PostgreSQL tests compare the actual repository with both adapters, including
+three-way concurrent writes, invalid JSON/FK/duplicate failures, occupied pools and
+observed SQL lock cancellation. The native persistence probe independently reads all
+24 fields and checks scalar writes, CAS, failure atomicity and single-slot recovery.
+Runtime selection waits for published-native proof. Lease/retry/retention operations,
+audit writes and function-execution service wiring remain separate boundaries. The
+inherited stale-snapshot retry behavior is tracked in
+[#1569](https://github.com/nickna/Conduit/issues/1569).
+
 ## Options considered
 
 1. **Wait for production-supported EF NativeAOT.** Rejected as the only plan: it
