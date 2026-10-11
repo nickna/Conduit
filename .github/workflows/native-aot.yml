@@ -296,6 +296,16 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Enable containerd image inspection evidence
+        uses: docker/setup-docker-action@2bf61fb9464cc67f0cbdeabed6aa0380accd1c70 # v5.5.0
+        with:
+          daemon-config: |
+            {
+              "features": {
+                "containerd-snapshotter": true
+              }
+            }
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -319,6 +329,38 @@ jobs:
       - name: Verify minimal native runtime image
         shell: pwsh
         run: ./scripts/aot/verify-native-image.ps1 -Image conduit-${{ matrix.service }}-native:ci -Service ${{ matrix.service }}
+
+      - name: Require sealed payload and local OCI descriptor association
+        shell: pwsh
+        env:
+          CONDUIT_NATIVE_CI_SERVICE: ${{ matrix.service }}
+          CONDUIT_NATIVE_CI_IMAGE: conduit-${{ matrix.service }}-native:ci
+        run: |
+          $ErrorActionPreference = 'Stop'
+          . ./scripts/aot/native-image-runtime-evidence.ps1
+          $service = switch -CaseSensitive ($env:CONDUIT_NATIVE_CI_SERVICE) {
+            'admin' { 'admin' }
+            'http' { 'gateway' }
+            default { throw 'Unexpected native image CI service.' }
+          }
+          $root = Join-Path 'artifacts/native-containers' $service
+          $reports = @(Get-ChildItem -LiteralPath $root -File -Recurse -Filter 'packaging-evidence.json')
+          if ($reports.Count -ne 1) { throw 'CI requires exactly one completed native image package.' }
+          $package = Get-NativeImageRuntimePackaging -Directory $reports[0].DirectoryName
+          $report = $package.report
+          $association = $package.ociAssociation
+          if ($report.schemaVersion -ne 2 -or $report.service -cne $service -or $report.rid -cne 'linux-x64' -or
+              $report.requestedImage -cne $env:CONDUIT_NATIVE_CI_IMAGE -or $report.source.status -cne 'git' -or
+              $report.source.dirty -isnot [bool] -or $report.source.dirty -or $report.source.revision -cne $env:GITHUB_SHA) {
+            throw 'CI native image package differs from the requested service, image or clean source revision.'
+          }
+          if ($association.associationStatus -cne 'verified' -or $association.descriptorChainVerified -isnot [bool] -or
+              -not $association.descriptorChainVerified -or @($association.holdReasons).Count -ne 0 -or
+              $null -eq $association.selectedManifestDescriptor -or $association.registryDigestQualification -isnot [bool] -or
+              $association.registryDigestQualification) {
+            throw 'CI native image OCI descriptor association is not verified.'
+          }
+          Write-Host "PASS: CI $service exact-source payload and local OCI descriptor chain verified; registry digest qualification remains false."
 
       - name: Retain packaged native entrypoint evidence
         if: always()
