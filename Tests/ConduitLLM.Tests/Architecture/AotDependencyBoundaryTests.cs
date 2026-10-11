@@ -297,6 +297,11 @@ public sealed class AotDependencyBoundaryTests
             candidate => candidate.ServiceType == typeof(IFunctionClientFactory));
         Assert.Equal(ServiceLifetime.Scoped, functionClient.Lifetime);
         Assert.NotNull(functionClient.ImplementationFactory);
+        var functionDiscovery = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(ConduitLLM.Core.Interfaces.IFunctionDiscoveryService));
+        Assert.Equal(ServiceLifetime.Scoped, functionDiscovery.Lifetime);
+        Assert.NotNull(functionDiscovery.ImplementationFactory);
+        Assert.Null(functionDiscovery.ImplementationType);
         var functionsEndpoint = Assert.Single(services,
             candidate => candidate.ServiceType == typeof(FunctionsEndpoints));
         Assert.Equal(ServiceLifetime.Scoped, functionsEndpoint.Lifetime);

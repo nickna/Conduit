@@ -78,6 +78,7 @@ public sealed class HostCompositionTests
 
         ResolveRuntimeServices(builder.Services, app.Services);
         AssertFunctionClientComposition(builder.Services, app.Services, false);
+        AssertFunctionDiscoveryComposition(builder.Services, app.Services, false);
         AssertFunctionsEndpointComposition(builder.Services, app.Services, false);
         await AssertFunctionCostCompositionAsync(builder.Services, app.Services, false);
         Assert.Null(app.Services.GetService<IRedisErrorStore>());
@@ -103,6 +104,7 @@ public sealed class HostCompositionTests
 
         ResolveRuntimeServices(builder.Services, app.Services);
         AssertFunctionClientComposition(builder.Services, app.Services, gateway);
+        AssertFunctionDiscoveryComposition(builder.Services, app.Services, gateway);
         AssertFunctionsEndpointComposition(builder.Services, app.Services, gateway);
         await AssertFunctionCostCompositionAsync(builder.Services, app.Services, gateway);
         Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(StackExchange.Redis.IConnectionMultiplexer));
@@ -200,6 +202,56 @@ public sealed class HostCompositionTests
         }
 #endif
         Assert.Equal(typeof(FunctionClientFactory), descriptor.ImplementationType);
+    }
+
+    private static void AssertFunctionDiscoveryComposition(IServiceCollection descriptors, IServiceProvider provider, bool gateway)
+    {
+        if (!gateway)
+        {
+            Assert.DoesNotContain(descriptors, value => value.ServiceType == typeof(IFunctionDiscoveryService));
+            return;
+        }
+
+        var descriptor = Assert.Single(descriptors, value => value.ServiceType == typeof(IFunctionDiscoveryService));
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var service = Assert.IsType<ConduitLLM.Core.Services.FunctionDiscoveryService>(
+            first.ServiceProvider.GetRequiredService<IFunctionDiscoveryService>());
+        var other = Assert.IsType<ConduitLLM.Core.Services.FunctionDiscoveryService>(
+            second.ServiceProvider.GetRequiredService<IFunctionDiscoveryService>());
+        Assert.Same(service, first.ServiceProvider.GetRequiredService<IFunctionDiscoveryService>());
+        Assert.NotSame(service, other);
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var serviceType = typeof(ConduitLLM.Core.Services.FunctionDiscoveryService);
+        var storeField = serviceType.GetField("_runtimeConfigurationStore", flags);
+        var repositoryField = serviceType.GetField("_functionConfigRepository", flags);
+        Assert.NotNull(storeField);
+        Assert.NotNull(repositoryField);
+        Assert.Same(first.ServiceProvider.GetRequiredService<IFunctionClientFactory>(),
+            serviceType.GetField("_clientFactory", flags)!.GetValue(service));
+        Assert.Same(first.ServiceProvider.GetService<IFunctionDiscoveryCacheService>(),
+            serviceType.GetField("_cacheService", flags)!.GetValue(service));
+#if CONDUIT_NATIVE_AOT
+        Assert.NotNull(descriptor.ImplementationFactory);
+        Assert.Null(descriptor.ImplementationType);
+        var store = Assert.Single(descriptors, value => value.ServiceType == typeof(IFunctionExecutionConfigurationStore));
+        Assert.Equal(ServiceLifetime.Singleton, store.Lifetime);
+        Assert.Equal(typeof(NpgsqlFunctionExecutionConfigurationStore), store.ImplementationType);
+        var resolvedStore = first.ServiceProvider.GetRequiredService<IFunctionExecutionConfigurationStore>();
+        Assert.Same(resolvedStore, second.ServiceProvider.GetRequiredService<IFunctionExecutionConfigurationStore>());
+        Assert.Same(resolvedStore, storeField.GetValue(service));
+        Assert.Same(resolvedStore, storeField.GetValue(other));
+        Assert.Null(repositoryField.GetValue(service));
+        Assert.Null(repositoryField.GetValue(other));
+#else
+        Assert.Equal(serviceType, descriptor.ImplementationType);
+        Assert.Null(descriptor.ImplementationFactory);
+        Assert.Null(storeField.GetValue(service));
+        Assert.Null(storeField.GetValue(other));
+        Assert.Same(first.ServiceProvider.GetRequiredService<IFunctionConfigurationRepository>(), repositoryField.GetValue(service));
+        Assert.Same(second.ServiceProvider.GetRequiredService<IFunctionConfigurationRepository>(), repositoryField.GetValue(other));
+#endif
     }
 
     private static async Task AssertFunctionCostCompositionAsync(IServiceCollection descriptors, IServiceProvider provider, bool gateway)

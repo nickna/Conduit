@@ -258,6 +258,18 @@ reads, agentic tool discovery or chat workflow support.
 Inherited validation of JSON-bound primitive parameters is preserved and tracked in
 [#1573](https://github.com/nickna/Conduit/issues/1573).
 
+`FunctionDiscoveryService.CreateWithRuntimePersistence` reuses the proven scalar
+configuration store for Core's tool and routing-map reads. Native Gateway selects
+the named factory explicitly; the sole public repository constructor and JIT
+registration remain unchanged. Tools retain sorted distinct IDs, optional caching,
+the cache loader's cancellation token, minimum configured TTL, missing/disabled
+validation, generated schemas and MCP expansion. Routing maps retain their original
+ID input and existing validation/error behavior. Paired tests cover both service
+constructions, while complete host composition verifies the exact scoped service
+and shared store identity. This removes Core discovery's configuration-query
+boundary; ChatEndpoints' separate preflight read and published agentic workflows
+remain separate work.
+
 ## Options considered
 
 1. **Wait for production-supported EF NativeAOT.** Rejected as the only plan: it

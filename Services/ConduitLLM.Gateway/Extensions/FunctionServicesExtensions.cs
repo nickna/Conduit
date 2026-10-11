@@ -46,7 +46,16 @@ public static class FunctionServicesExtensions
         services.AddScoped<FunctionParameterValidationService>();
 
         // Register Agentic Function Calling services
+#if CONDUIT_NATIVE_AOT
+        services.AddScoped<IFunctionDiscoveryService>(provider =>
+            FunctionDiscoveryService.CreateWithRuntimePersistence(
+                provider.GetRequiredService<IFunctionExecutionConfigurationStore>(),
+                provider.GetRequiredService<IFunctionClientFactory>(),
+                provider.GetService<IFunctionDiscoveryCacheService>(),
+                provider.GetRequiredService<ILogger<FunctionDiscoveryService>>()));
+#else
         services.AddScoped<IFunctionDiscoveryService, FunctionDiscoveryService>();
+#endif
         services.AddScoped<IAgenticOrchestrationService, AgenticOrchestrationService>();
 
         return services;
