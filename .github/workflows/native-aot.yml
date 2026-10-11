@@ -105,6 +105,10 @@ jobs:
         shell: pwsh
         run: ./scripts/aot/test-native-image-publish.ps1
 
+      - name: Verify native runtime archive contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-image-runtime-archive.ps1
+
       - name: Verify Gateway fixture process ownership
         shell: pwsh
         run: ./scripts/aot/test-gateway-fixture-process.ps1

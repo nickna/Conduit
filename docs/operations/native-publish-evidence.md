@@ -132,3 +132,20 @@ status `unavailable` with null revision and dirty state. The declared commit arg
 and OCI revision label remain metadata, without establishing actual Git provenance.
 Embedded evidence from this snapshot supports historical payload inspection;
 digest association and promotion qualification remain subsequent work under #1582.
+
+## Runtime archive inspection
+
+`native-image-runtime-archive.ps1` provides `Expand-NativeImageRuntimeArchive` for
+inspecting a Linux container's exported tar archive on Windows or Linux. Pass an
+archive path, a fresh empty output directory and the `admin` or `gateway` service.
+It extracts only `/app` and `/conduit-evidence`, retaining a separate extraction
+claim. Failed extractions retain their partial files for inspection and cannot be
+reused as fresh output directories.
+
+The reader rejects unsafe or duplicate paths, links and special files in the
+selected payload, build tooling and symbols, incorrect runtime file ownership,
+and missing executable permissions. Base-image links outside the selected roots
+are never materialized. Archive size, selected file sizes, entry counts and read
+time are bounded. The returned payload and evidence paths can be passed to
+`Assert-NativeImagePublishEvidenceMatchesPayload`; extraction alone does not
+establish source provenance or an image digest association.
