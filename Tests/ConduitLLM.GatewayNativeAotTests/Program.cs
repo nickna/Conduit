@@ -20,6 +20,12 @@ if (args is ["--seed"])
     return;
 }
 
+if (args is ["--dependency-proxies"])
+{
+    await NativeDependencyProxyHost.RunAsync();
+    return;
+}
+
 if (args is ["--mock-provider"])
 {
     await NativeProviderStub.RunAsync(ProbeSettings.ProviderUriFromEnvironment());
