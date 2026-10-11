@@ -222,6 +222,18 @@ audit writes and function-execution service wiring remain separate boundaries. T
 inherited stale-snapshot retry behavior is tracked in
 [#1569](https://github.com/nickna/Conduit/issues/1569).
 
+`IFunctionExecutionRuntimeReader` follows with exact-ID and virtual-key execution
+reads. It includes all 24 execution scalars and the 15 configuration scalars through
+the required configuration relationship. Lists retain their unbounded size,
+`RequestedAt` descending order with unspecified ties, and disabled configurations.
+Each no-tracking row owns a separate configuration instance whose `Executions`
+collection points back to that exact row; audits and cost mappings remain unloaded.
+The real-PostgreSQL suite compares the actual legacy repository and both adapters,
+including 105-row lists, detached mutations, graph identity, cancelled pool/observed
+SQL waits, and successful reuse. Included graphs retain the scalar writer's rejection
+before caller mutation. The standalone native probe exercises this reader before
+runtime selection; no broader lease, audit, worker or Admin support is implied.
+
 ## Options considered
 
 1. **Wait for production-supported EF NativeAOT.** Rejected as the only plan: it

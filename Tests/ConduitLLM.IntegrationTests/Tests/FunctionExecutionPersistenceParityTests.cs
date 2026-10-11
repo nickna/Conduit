@@ -20,7 +20,7 @@ using Xunit;
 namespace ConduitLLM.IntegrationTests.Tests;
 
 [Collection("Postgres advisory locks")]
-public sealed class FunctionExecutionPersistenceParityTests(PostgresLockTestContainerFixture fixture)
+public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLockTestContainerFixture fixture)
 {
     private static readonly DateTime Instant = new(2026, 10, 11, 9, 0, 0, DateTimeKind.Utc);
 
@@ -258,11 +258,20 @@ public sealed class FunctionExecutionPersistenceParityTests(PostgresLockTestCont
             {
                 await connection.OpenAsync(deadline.Token);
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"""
-                    CREATE SCHEMA "{schema}";
-                    SET search_path TO "{schema}";
-                    CREATE TABLE "FunctionConfigurations" ("Id" integer PRIMARY KEY);
-                    INSERT INTO "FunctionConfigurations" VALUES (1), (2);
+                command.CommandText = $$"""
+                    CREATE SCHEMA "{{schema}}";
+                    SET search_path TO "{{schema}}";
+                    CREATE TABLE "FunctionConfigurations" (
+                        "Id" integer PRIMARY KEY, "ProviderType" integer NOT NULL, "ConfigurationName" text NOT NULL,
+                        "Purpose" integer NOT NULL, "DefaultExecutionMode" integer NOT NULL, "BaseUrl" text NULL,
+                        "IsEnabled" boolean NOT NULL, "TimeoutSeconds" integer NULL, "CacheTtlMinutes" integer NULL,
+                        "MaxRetries" integer NULL, "ProviderSettings" jsonb NULL, "ParameterSchema" jsonb NULL,
+                        "Description" text NULL, "CreatedAt" timestamptz NOT NULL, "UpdatedAt" timestamptz NOT NULL);
+                    INSERT INTO "FunctionConfigurations" VALUES
+                        (1, 197, 'O''Hare 雪', -9, 123, 'https://example.test', true, -1, 0, 5,
+                         '{"unknown":[null,true,1]}', '[]', '', '2026-10-11T09:00:00Z', '2026-10-11T09:00:01Z'),
+                        (2, 0, 'disabled', 0, 0, NULL, false, NULL, NULL, NULL,
+                         'null', NULL, NULL, '2026-10-11T09:00:00Z', '2026-10-11T09:00:01Z');
                     CREATE TABLE "FunctionExecutions" (
                         "Id" uuid PRIMARY KEY, "FunctionConfigurationId" integer NOT NULL REFERENCES "FunctionConfigurations" ("Id") ON DELETE CASCADE,
                         "VirtualKeyId" integer NOT NULL, "ExecutionMode" integer NOT NULL, "State" integer NOT NULL,

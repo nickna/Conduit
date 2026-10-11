@@ -13,23 +13,23 @@ internal static class FunctionConfigurationRowReader
         "ProviderSettings", "ParameterSchema", "Description", "CreatedAt", "UpdatedAt"
         """;
 
-    internal static FunctionConfiguration Read(NpgsqlDataReader reader) => new()
+    internal static FunctionConfiguration Read(NpgsqlDataReader reader, int offset = 0) => new()
     {
-        Id = reader.GetInt32(0),
-        ProviderType = (FunctionProviderType)reader.GetInt32(1),
-        ConfigurationName = reader.GetString(2),
-        Purpose = (FunctionPurpose)reader.GetInt32(3),
-        DefaultExecutionMode = (ExecutionMode)reader.GetInt32(4),
-        BaseUrl = NullableString(reader, 5),
-        IsEnabled = reader.GetBoolean(6),
-        TimeoutSeconds = NullableInt(reader, 7),
-        CacheTtlMinutes = NullableInt(reader, 8),
-        MaxRetries = NullableInt(reader, 9),
-        ProviderSettings = NullableString(reader, 10),
-        ParameterSchema = NullableString(reader, 11),
-        Description = NullableString(reader, 12),
-        CreatedAt = reader.GetDateTime(13),
-        UpdatedAt = reader.GetDateTime(14)
+        Id = reader.GetInt32(offset),
+        ProviderType = (FunctionProviderType)reader.GetInt32(offset + 1),
+        ConfigurationName = reader.GetString(offset + 2),
+        Purpose = (FunctionPurpose)reader.GetInt32(offset + 3),
+        DefaultExecutionMode = (ExecutionMode)reader.GetInt32(offset + 4),
+        BaseUrl = NullableString(reader, offset + 5),
+        IsEnabled = reader.GetBoolean(offset + 6),
+        TimeoutSeconds = NullableInt(reader, offset + 7),
+        CacheTtlMinutes = NullableInt(reader, offset + 8),
+        MaxRetries = NullableInt(reader, offset + 9),
+        ProviderSettings = NullableString(reader, offset + 10),
+        ParameterSchema = NullableString(reader, offset + 11),
+        Description = NullableString(reader, offset + 12),
+        CreatedAt = reader.GetDateTime(offset + 13),
+        UpdatedAt = reader.GetDateTime(offset + 14)
     };
 
     internal static string? NullableString(NpgsqlDataReader reader, int ordinal) =>

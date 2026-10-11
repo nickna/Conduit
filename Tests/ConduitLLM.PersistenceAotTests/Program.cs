@@ -453,6 +453,7 @@ async Task RunProbeAsync()
             await FunctionExecutionConfigurationPersistenceProbe.RunAsync(schemaDataSource);
             await FunctionPricingPersistenceProbe.RunAsync(schemaDataSource);
             await FunctionExecutionPersistenceProbe.RunAsync(schemaDataSource);
+            await FunctionExecutionReaderPersistenceProbe.RunAsync(schemaDataSource);
         }
         await ExerciseGlobalSettingRepositoryAsync(new NpgsqlGlobalSettingRepository(dataSource));
         await ExerciseIpFilterRepositoryAsync(new NpgsqlIpFilterRepository(dataSource));
