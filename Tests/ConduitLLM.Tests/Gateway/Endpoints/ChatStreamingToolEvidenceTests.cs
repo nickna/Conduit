@@ -105,7 +105,7 @@ public class ChatStreamingToolEvidenceTests
             It.IsAny<ChatCompletionRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()));
         foreach (var call in providerCalls)
         {
-            sequence.Returns(Stream(call));
+            sequence.Returns(StreamAsync(call));
         }
         var factory = new Mock<ILLMClientFactory>();
         factory.Setup(service => service.GetClientAsync("test-model", It.IsAny<CancellationToken>()))
@@ -179,7 +179,7 @@ public class ChatStreamingToolEvidenceTests
         Usage = new Usage { PromptTokens = 10, CompletionTokens = 5, TotalTokens = 15 }
     };
 
-    private static async IAsyncEnumerable<ChatCompletionChunk> Stream(
+    private static async IAsyncEnumerable<ChatCompletionChunk> StreamAsync(
         ChatCompletionChunk[] chunks,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
