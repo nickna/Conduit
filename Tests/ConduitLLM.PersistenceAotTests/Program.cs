@@ -437,7 +437,7 @@ try
                              MinPoolSize = 0
                          }.ConnectionString))
         {
-            await ExerciseSchemaVersionProbeAsync(schemaDataSource);
+            await ExerciseSchemaVersionProbeAsync(schemaDataSource, storeConnectionString);
             await ExerciseConnectionPoolWarmupAsync(schemaDataSource);
         }
         await ExerciseGlobalSettingRepositoryAsync(new NpgsqlGlobalSettingRepository(dataSource));
@@ -499,14 +499,17 @@ static async Task ExerciseConnectionPoolWarmupAsync(NpgsqlDataSource dataSource)
         "warmup leaves the host data source usable after cancellation");
 }
 
-static async Task ExerciseSchemaVersionProbeAsync(NpgsqlDataSource dataSource)
+static async Task ExerciseSchemaVersionProbeAsync(NpgsqlDataSource dataSource, string directConnectionString)
 {
     var probe = new SchemaVersionProbe(dataSource);
+    var startup = new ReleaseMigrationStartupProbe(dataSource);
     Ensure((await probe.GetStatusAsync()).AppliedVersion is null, "missing migration history must be unapplied");
+    Ensure(!await startup.IsReadyAsync(), "missing history must not pass the release startup barrier");
     await ExecuteHistoryAsync("""
         CREATE TABLE "__EFMigrationsHistory" ("MigrationId" varchar(150) PRIMARY KEY, "ProductVersion" varchar(32) NOT NULL)
         """);
     Ensure((await probe.GetStatusAsync()).AppliedVersion is null, "empty migration history must be unapplied");
+    Ensure(!await startup.IsReadyAsync(), "empty history must not pass the release startup barrier");
     foreach (var version in new[] { "20200101000000_Old", ConduitSchemaVersion.Current, "20210101000000_Older", "99999999999999_Future" })
     {
         await InsertHistoryAsync(version);
@@ -514,6 +517,7 @@ static async Task ExerciseSchemaVersionProbeAsync(NpgsqlDataSource dataSource)
         Ensure(status.ExpectedVersion == ConduitSchemaVersion.Current, "schema probe expected release version");
         Ensure(status.IsCurrent == (version is not "20200101000000_Old" and not "99999999999999_Future"),
             "schema probe must accept only the exact latest release version");
+        Ensure(await startup.IsReadyAsync() == status.IsCurrent, "release startup barrier requires the exact current schema");
         if (version is "20200101000000_Old" or "99999999999999_Future")
         {
             Ensure(status.AppliedVersion == version, "schema probe must report the latest applied migration");
@@ -526,6 +530,14 @@ static async Task ExerciseSchemaVersionProbeAsync(NpgsqlDataSource dataSource)
         """);
     await InsertHistoryAsync(ConduitSchemaVersion.Current);
     Ensure((await probe.GetStatusAsync()).IsCurrent, "schema probe must recover using the same pool");
+    Ensure(await startup.IsReadyAsync(), "idle release startup barrier must recover using a single-slot pool");
+    await using var releaseJob = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(directConnectionString)
+        { Pooling = false }.ConnectionString);
+    await releaseJob.OpenAsync();
+    await ExecuteAsync(releaseJob, $"SELECT pg_advisory_lock({ReleaseMigrationLock.Id})");
+    try { Ensure(!await startup.IsReadyAsync(), "active release job must hold startup down after app history is current"); }
+    finally { await ExecuteAsync(releaseJob, $"SELECT pg_advisory_unlock({ReleaseMigrationLock.Id})"); }
+    Ensure(await startup.IsReadyAsync(), "completed release job must release the startup barrier");
 
     async Task ExecuteHistoryAsync(string sql)
     {

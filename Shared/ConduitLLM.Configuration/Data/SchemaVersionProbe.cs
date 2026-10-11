@@ -29,6 +29,11 @@ public sealed class SchemaVersionProbe(NpgsqlDataSource dataSource) : ISchemaVer
     public async Task<SchemaVersionStatus> GetStatusAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        return await ReadStatusAsync(connection, cancellationToken);
+    }
+
+    internal static async Task<SchemaVersionStatus> ReadStatusAsync(NpgsqlConnection connection, CancellationToken cancellationToken)
+    {
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT "MigrationId"
