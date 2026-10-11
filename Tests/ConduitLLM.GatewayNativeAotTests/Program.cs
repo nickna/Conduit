@@ -315,15 +315,15 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             $"SSE completion sentinel is last ({mode})");
 
         var chunks = new List<JsonElement>();
-        foreach (var line in body.Split('\n').Where(line => line.StartsWith("data: {", StringComparison.Ordinal)))
+        foreach (var payload in body.Split('\n')
+            .Where(line => line.StartsWith("data: {", StringComparison.Ordinal))
+            .Select(line => JsonDocument.Parse(line[6..]).RootElement.Clone()))
         {
-            using var document = JsonDocument.Parse(line[6..]);
-            var payload = document.RootElement;
             var isChunk = payload.TryGetProperty("object", out var discriminator) &&
                 discriminator.GetString() == "chat.completion.chunk";
             if (!enhancedStream)
                 True(isChunk, $"standard SSE payload is an OpenAI chat chunk ({mode})");
-            if (isChunk) chunks.Add(payload.Clone());
+            if (isChunk) chunks.Add(payload);
         }
 
         var usageChunks = chunks.Where(chunk =>
