@@ -476,7 +476,10 @@ namespace ConduitLLM.Core
 
                         yield return chunk;
                     }
-                    break;
+                    // The fallback is the final provider response. End the iterator so
+                    // pending calls from the preceding stream cannot trigger another
+                    // forced-final call when discovery fails at the iteration limit.
+                    yield break;
                 }
 
                 // If agentic mode is disabled, stop here

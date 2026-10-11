@@ -173,6 +173,50 @@ public class ConduitAgenticUsageTests
     }
 
     [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task StreamChatCompletionAsync_NoFunctionRoutes_CompletesFallbackOnceWithCumulativeUsage(
+        int maximumIterations)
+    {
+        var client = new Mock<ILLMClient>(MockBehavior.Strict);
+        client.SetupSequence(x => x.StreamChatCompletionAsync(
+                It.IsAny<ChatCompletionRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns(Stream(CreateChunk(
+                FinishReason.ToolCalls,
+                new Usage { PromptTokens = 100, CompletionTokens = 10, TotalTokens = 110,
+                    ProviderReportedCostUsd = 0.01m },
+                includeToolCall: true)))
+            .Returns(Stream(
+                CreateChunk(null, new Usage { PromptTokens = 140, CompletionTokens = 15, TotalTokens = 155 }),
+                CreateChunk(FinishReason.Stop, new Usage
+                {
+                    PromptTokens = 150, CompletionTokens = 20, TotalTokens = 170,
+                    ProviderReportedCostUsd = 0.02m
+                })));
+        var request = CreateRequest();
+        request.MaxAgenticIterations = maximumIterations;
+        var chunks = new List<ChatCompletionChunk>();
+
+        await foreach (var chunk in CreateConduit(client.Object, noFunctionRoutes: true)
+            .StreamChatCompletionAsync(request, virtualKeyId: 42))
+        {
+            chunks.Add(chunk);
+        }
+
+        client.Verify(x => x.StreamChatCompletionAsync(
+            It.IsAny<ChatCompletionRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        Assert.Equal(3, chunks.Count);
+        Assert.Equal(new[] { 1, 2, 2 }, chunks.Select(chunk => chunk.ProviderCallUsage!.Iteration));
+        Assert.Equal(280, chunks[^1].Usage?.TotalTokens);
+        Assert.Equal(250, chunks[^1].Usage?.PromptTokens);
+        Assert.Equal(30, chunks[^1].Usage?.CompletionTokens);
+        Assert.Equal(0.03m, chunks[^1].Usage?.ProviderReportedCostUsd);
+        Assert.Equal(FinishReason.Stop, Assert.Single(chunks[^1].Choices!).FinishReason);
+        Assert.DoesNotContain(request.Messages, message =>
+            message.Content is string text && text.Contains("Maximum iteration limit"));
+    }
+
+    [Theory]
     [InlineData(false, 1)]
     [InlineData(false, 3)]
     [InlineData(true, 1)]
@@ -254,7 +298,8 @@ public class ConduitAgenticUsageTests
         }
     }
 
-    private static Conduit CreateConduit(ILLMClient client, IAgenticOrchestrationService? realOrchestration = null)
+    private static Conduit CreateConduit(
+        ILLMClient client, IAgenticOrchestrationService? realOrchestration = null, bool noFunctionRoutes = false)
     {
         var clientFactory = new Mock<ILLMClientFactory>();
         clientFactory.Setup(x => x.GetClientAsync("test-model", It.IsAny<CancellationToken>()))
@@ -266,7 +311,9 @@ public class ConduitAgenticUsageTests
             .ReturnsAsync(new List<Tool>());
         functionDiscovery.Setup(x => x.GetFunctionNameToIdMappingAsync(
                 It.IsAny<List<int>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<string, FunctionRoute> { ["lookup"] = new FunctionRoute(1) });
+            .ReturnsAsync(noFunctionRoutes
+                ? new Dictionary<string, FunctionRoute>()
+                : new Dictionary<string, FunctionRoute> { ["lookup"] = new FunctionRoute(1) });
 
         var orchestration = new Mock<IAgenticOrchestrationService>();
         orchestration.Setup(x => x.ExecuteToolCallsAsync(
