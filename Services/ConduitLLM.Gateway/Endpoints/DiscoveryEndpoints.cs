@@ -210,7 +210,7 @@ namespace ConduitLLM.Gateway.Endpoints
         /// <summary>
         /// Gets all available function configurations for authenticated virtual keys.
         /// </summary>
-        /// <param name="purpose">Optional purpose filter (e.g., "Search", "Answer", "RAG_Search")</param>
+        /// <param name="purpose">Optional purpose filter (e.g., "Search", "Answer", "RAG")</param>
         /// <param name="providerType">Optional provider type filter (e.g., "Exa", "Perplexity")</param>
         /// <returns>List of available function configurations</returns>
         public async Task<IResult> GetFunctions(

@@ -1,6 +1,6 @@
 # ConduitLLM.Functions
 
-A comprehensive function execution framework for Conduit that enables integration with third-party API services (search engines, RAG systems, data providers) with built-in billing, distributed execution, and cost tracking.
+Function provider configuration, inline execution, usage calculation and execution records for Conduit. The current clients support Exa, Tavily and MCP.
 
 ## Table of Contents
 
@@ -12,17 +12,19 @@ A comprehensive function execution framework for Conduit that enables integratio
 - [Pricing Models](#pricing-models)
 - [Distributed Execution](#distributed-execution)
 - [Integration Points](#integration-points)
+- [Usage Examples](#usage-examples)
 
 ## Purpose
 
-The Functions module provides a unified framework for:
+The Functions module provides:
 
-1. **Function Provider Management**: Configure and manage multiple instances of function providers (Exa.ai, Perplexity, Tavily, custom RAG systems)
-2. **Execution Tracking**: Complete lifecycle tracking from request to completion/failure
-3. **Cost Management**: Flexible pricing models with reserve-then-commit billing
-4. **Distributed Async Execution**: Leasing mechanism for scalable worker-based processing
-5. **Audit Trail**: Comprehensive audit logging for compliance and billing verification
-6. **Balance Enforcement**: Integration with Conduit's billing system to block/permit execution based on account balance
+1. Multiple named configurations of a function provider.
+2. Provider-global and configuration-scoped credentials.
+3. Usage-based cost estimation and calculation.
+4. Durable execution records and repository lifecycle operations.
+5. Audit entities and vocabulary for function executions and agentic tool calls.
+
+Gateway authentication and accounting middleware enforce access and settle recorded costs. Creating an execution entity alone does not invoke a provider or charge a virtual key.
 
 ## Architecture Overview
 
@@ -38,461 +40,150 @@ function persistence.
 
 ### Core Components
 
+```text
+Gateway FunctionsEndpoints
+    → FunctionExecutionService
+        → configuration and credential repositories
+        → FunctionClientFactory → Exa / Tavily / MCP
+        → usage and cost calculation
+        → FunctionExecutionRepository
+    → request accounting middleware
+
+Admin function configuration changes
+    → Wolverine FunctionConfigurationChanged
+    → discovery cache invalidation handlers
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Conduit APIs                             │
-│                    (Gateway API / Admin API)                        │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-                         ├──► REST Endpoints (enumerate/execute)
-                         │
-┌────────────────────────┴────────────────────────────────────────┐
-│                    Functions Framework                           │
-├─────────────────────────────────────────────────────────────────┤
-│  Configuration Layer:                                            │
-│  • FunctionConfiguration (provider instances)                    │
-│  • FunctionCredential (API keys with load balancing)            │
-│  • FunctionCost (flexible pricing models)                        │
-│  • FunctionCostMapping (config-to-cost links)                   │
-├─────────────────────────────────────────────────────────────────┤
-│  Execution Layer:                                                │
-│  • FunctionExecution (lifecycle tracking)                        │
-│  • ExecutionState machine (Pending→Running→Completed/Failed)    │
-│  • Leasing mechanism for distributed workers                     │
-│  • Optimistic concurrency control                                │
-├─────────────────────────────────────────────────────────────────┤
-│  Audit Layer:                                                    │
-│  • FunctionExecutionAudit (complete event trail)                │
-│  • 11 event types for billing verification                       │
-└─────────────────────────────────────────────────────────────────┘
-                         │
-                         ├──► MassTransit (async execution)
-                         ├──► PostgreSQL (persistence)
-                         └──► Billing System (reserve/commit)
-```
+
+`FunctionExecutionService.ExecuteAsync` validates the configuration, estimates cost, writes a `Running` record, awaits the provider call, calculates usage and actual cost, and writes the final result. Provider results and incurred cost are retained in the returned execution when subsequent bookkeeping fails; a failed database write cannot guarantee a durable final state.
 
 ### Multi-Instance Pattern
 
-Following Conduit's Provider architecture, Functions support **multiple configurations of the same provider type**:
-
-- **Provider ID**: Canonical identifier for configuration instances
-- **ProviderType**: Categorizes by API type (Exa, Perplexity, etc.)
-- **ConfigurationName**: User-facing display name (e.g., "Production Exa", "Dev Exa")
-
-Example:
-```csharp
-// Multiple Exa configurations
-FunctionConfiguration prodExa = new()
-{
-    ProviderType = FunctionProviderType.Exa,
-    ConfigurationName = "Production Exa",
-    BaseUrl = "https://api.exa.ai",
-    // ... credentials, costs
-};
-
-FunctionConfiguration devExa = new()
-{
-    ProviderType = FunctionProviderType.Exa,
-    ConfigurationName = "Development Exa",
-    BaseUrl = "https://api.exa.ai",
-    // ... different credentials/costs
-};
-```
+Configurations have an integer `Id`, a `ProviderType`, a display `ConfigurationName` and a `Purpose`. Several configurations can use the same provider with different settings, schemas or credentials. Exa, Tavily and MCP have concrete clients in `ConduitLLM.Functions.Providers`; other enum entries do not imply an implemented client.
 
 ## Database Design
 
-### Entity Relationship Diagram
+| Entity | Role |
+| --- | --- |
+| `FunctionConfiguration` | Provider instance, parameter schema and execution settings. |
+| `FunctionCredential` | Provider-global credential, or a credential scoped by nullable `FunctionConfigurationId`. |
+| `FunctionCost` | Pricing definition, active dates and selection priority. |
+| `FunctionCostMapping` | Active configuration-to-cost association. |
+| `FunctionExecution` | Request, provider result, calculated cost and lifecycle state. |
+| `FunctionExecutionAudit` | Execution audit record vocabulary. |
+| `FunctionCallAudit` | Agentic tool-call audit record. |
 
-```
-┌─────────────────────────┐
-│ FunctionConfiguration   │
-│─────────────────────────│
-│ PK: Id                  │
-│     ProviderType (enum) │◄────┐
-│     ConfigurationName   │     │
-│     Purpose (enum)      │     │
-│     DefaultExecutionMode│     │
-│     BaseUrl             │     │
-│     IsEnabled           │     │
-│     ProviderSettings    │     │ 1:N
-└─────────────────────────┘     │
-         │                       │
-         │ 1:N                   │
-         ▼                       │
-┌─────────────────────────┐     │
-│ FunctionCredential      │     │
-│─────────────────────────│     │
-│ PK: Id                  │     │
-│ FK: FunctionConfigId    │─────┘
-│     ApiKey (encrypted)  │
-│     CredentialGroup     │
-│     IsPrimary           │
-│     IsEnabled           │
-└─────────────────────────┘
+### FunctionConfiguration
 
+- `ProviderType`: Provider API type, such as Exa, Tavily or MCP.
+- `Purpose`: `Search`, `Answer`, `ContentRetrieval` or `RAG`.
+- `DefaultExecutionMode`: Stored execution-mode value; see [Execution Models](#execution-models).
+- `ProviderSettings`, `ParameterSchema`: JSONB settings and input schema.
+- `BaseUrl`, `TimeoutSeconds`, `CacheTtlMinutes`, `MaxRetries`: Configuration fields consumed according to the provider implementation.
 
-┌─────────────────────────┐
-│ FunctionCost            │
-│─────────────────────────│
-│ PK: Id                  │
-│     CostName            │◄────┐
-│     PricingModel (enum) │     │
-│     CostPerExecution    │     │
-│     CostPerResult       │     │
-│     CostPerToken        │     │ N:M via
-│     TieredPricing       │     │ CostMapping
-│     EffectiveDate       │     │
-│     ExpiryDate          │     │
-│     Priority            │     │
-└─────────────────────────┘     │
-                                │
-┌─────────────────────────┐     │
-│ FunctionCostMapping     │     │
-│─────────────────────────│     │
-│ PK: Id                  │     │
-│ FK: FunctionConfigId    │─────┤
-│ FK: FunctionCostId      │─────┘
-│     IsActive            │
-└─────────────────────────┘
+Function discovery returns enabled configurations. Purpose and provider filters parse enum names without case sensitivity; unparseable filter text is currently ignored. Use a defined purpose such as `RAG` when filtering.
 
+### FunctionCredential
 
-┌─────────────────────────┐
-│ FunctionExecution       │
-│─────────────────────────│
-│ PK: Id (Guid)           │
-│ FK: FunctionConfigId    │
-│ FK: VirtualKeyId        │
-│     ExecutionMode       │
-│     State (enum)        │◄────┐
-│     RequestedAt         │     │
-│     StartedAt           │     │
-│     CompletedAt         │     │
-│     Duration            │     │ 1:N
-│     RequestJson         │     │
-│     ResponseJson        │     │
-│     EstimatedCost       │     │
-│     ActualCost          │     │
-│     LeasedBy            │     │
-│     LeaseExpiryTime     │     │
-│     Version             │     │
-│     WebhookUrl          │     │
-└─────────────────────────┘     │
-                                │
-┌─────────────────────────┐     │
-│ FunctionExecutionAudit  │     │
-│─────────────────────────│     │
-│ PK: Id (Guid)           │     │
-│ FK: FunctionExecutionId │─────┘
-│     Timestamp           │
-│     EventType (enum)    │
-│     EventDetails (json) │
-│     Cost                │
-│     FailureReason       │
-└─────────────────────────┘
-```
+Credentials have `ProviderType`, optional `FunctionConfigurationId`, `ApiKey`, `BaseUrl`, `Organization`, `FunctionAccountGroup`, `IsPrimary`, `IsEnabled` and `KeyName`.
 
-### Table Descriptions
+Selection prefers an enabled credential for the current configuration, then an enabled provider-global credential. Within each scope, a primary credential takes precedence. Credentials scoped to a different configuration are not selected.
 
-#### FunctionConfiguration
-Defines a function provider instance with its settings and capabilities.
+The Admin credential endpoints protect configuration-scoped secrets through `IFunctionCredentialProtector`. The execution service reveals the selected secret in memory. Direct repository writes do not encrypt automatically; legacy provider-global plaintext credentials remain readable.
 
-**Key Fields:**
-- `ProviderType`: Enum defining the provider API type (Exa, Perplexity, Tavily, etc.)
-- `Purpose`: Function category (Search, Answer, RAG_Search, RAG_Save, etc.)
-- `DefaultExecutionMode`: Synchronous or Asynchronous execution
-- `ProviderSettings`: JSONB column for provider-specific configuration
-- `TimeoutSeconds`, `MaxRetries`: Execution policies
+### FunctionCost and FunctionCostMapping
 
-#### FunctionCredential
-API credentials for function providers with load balancing support.
+Costs carry a pricing model, rates, JSONB pricing configuration, effective/expiry dates and priority. Configurations can map to several costs. `FunctionCostService.GetCostForConfigurationAsync` considers active mappings and eligible costs before selecting by priority and effective date.
 
-**Key Fields:**
-- `ApiKey`: Encrypted API key
-- `CredentialGroup`: Grouping for load balancing (0-255)
-- `IsPrimary`: Primary credential flag (one per configuration)
-- `IsEnabled`: Active/inactive flag for credential rotation
+### FunctionExecution
 
-**Load Balancing:**
-- Multiple credentials can be grouped using `CredentialGroup`
-- One credential per configuration must be marked `IsPrimary`
-- Failed credentials can be disabled without deletion
+The entity supports `Pending`, `Running`, `Completed`, `Failed`, `Cancelled` and `TimedOut` states. The inline service starts its normal record in `Running` and records the provider outcome.
 
-#### FunctionCost
-Flexible cost definitions supporting multiple pricing models.
+`EstimatedCost` is a calculated estimate. `ActualCost` records incurred cost; these fields do not themselves reserve or refund a balance. `CostCalculationDetails` stores the usage/cost breakdown. Lease, retry, progress and webhook fields exist in the entity, but their presence does not imply that the inline service schedules workers, retries or webhooks.
 
-**Supported Pricing Models:**
-1. **FlatRate**: Fixed cost per execution
-2. **PerResult**: Cost based on number of results returned
-3. **PerToken**: Token-based pricing (like LLM costs)
-4. **Tiered**: Volume-based pricing tiers (JSONB configuration)
-5. **TimeBased**: Cost per minute/hour
-6. **Hybrid**: Combination of multiple models (JSONB configuration)
+The repository uses `Version` for optimistic concurrency. `UpdateAsync` increments the version internally and returns false on a conflict; callers should not increment it separately.
 
-**Key Fields:**
-- `PricingModel`: Enum defining the pricing strategy
-- `EffectiveDate`, `ExpiryDate`: Temporal validity
-- `Priority`: For selecting among multiple active costs
-- `TieredPricing`, `PricingConfiguration`: JSONB for complex pricing
+### Audit Entities
 
-#### FunctionCostMapping
-Links configurations to cost definitions (many-to-many).
+`FunctionAuditEventType` defines `ExecutionRequested`, `ExecutionStarted`, `ExecutionProgress`, `ExecutionCompleted`, `ExecutionFailed`, `CostCalculated`, `SpendUpdated`, `SpendUpdateFailed`, `RetryScheduled`, `ExecutionCancelled` and `ExecutionTimedOut`. These are schema vocabulary, not a guarantee that every execution emits a corresponding `FunctionExecutionAudit` row.
 
-**Purpose:**
-- One configuration can have multiple cost mappings (e.g., one active, others historical)
-- Enables cost changes without modifying configurations
-- Supports A/B testing of pricing models
-
-#### FunctionExecution
-Tracks the complete lifecycle of a function execution.
-
-**State Machine:**
-```
-Pending → Running → Completed
-                 ↘ Failed
-                 ↘ Cancelled
-                 ↘ TimedOut
-```
-
-**Key Fields for Distributed Execution:**
-- `LeasedBy`: Worker instance ID that claimed this execution
-- `LeaseExpiryTime`: When the lease expires (enables recovery)
-- `Version`: Optimistic concurrency control
-
-**Cost Fields:**
-- `EstimatedCost`: Reserved upfront from virtual key balance
-- `ActualCost`: Final cost after execution (refund difference)
-- `CostCalculationDetails`: JSONB breakdown of cost calculation
-
-**Retry Logic:**
-- `RetryCount`: Number of retry attempts
-- `NextRetryAt`: Scheduled retry time with exponential backoff
-
-**Progress Tracking:**
-- `ProgressPercentage`: 0-100 for long-running executions
-- `StatusMessage`: Human-readable status updates
-
-#### FunctionExecutionAudit
-Complete audit trail for compliance and billing verification.
-
-**Event Types (11 total):**
-1. `ExecutionRequested`
-2. `BalanceReserved`
-3. `ExecutionStarted`
-4. `ProgressUpdated`
-5. `ExecutionCompleted`
-6. `ExecutionFailed`
-7. `ExecutionCancelled`
-8. `BalanceCommitted`
-9. `BalanceRefunded`
-10. `RetryScheduled`
-11. `WebhookDelivered`
-
-**Key Fields:**
-- `EventDetails`: JSONB for event-specific data
-- `Cost`: Cost associated with this event (for reserve/commit/refund)
-- `IsEstimated`: Whether cost is estimated or actual
+Agentic tool-call auditing has its own `FunctionCallAuditEventType` and `IFunctionCallAuditService`.
 
 ## Key Features
 
-### 1. Reserve-Then-Commit Billing
+### Cost Calculation and Gateway Accounting
+
+The execution service calculates an estimate before the provider call and actual cost from its usage result. The Gateway endpoint records direct-cost evidence in the request accounting context; middleware settles that evidence through the shared billing flow. A provider call can incur cost even when later bookkeeping fails. Direct calls to the execution service return calculated costs but do not run Gateway middleware.
+
+### Structured Provider Schemas
+
+Configurations can carry parameter schemas for discovery and validation. MCP configurations discover provider-native tools, while fixed-schema providers map a configuration to its implicit function.
+
+### Multiple Configurations
 
 ```csharp
-// Execution lifecycle
-1. User requests function execution
-2. System calculates EstimatedCost
-3. Reserve EstimatedCost from VirtualKey balance
-4. Execute function
-5. Calculate ActualCost based on response
-6. Commit ActualCost to billing
-7. Refund (EstimatedCost - ActualCost) if any
-```
-
-**Customer-Friendly:** Only charge for successful executions (HTTP 200).
-
-### 2. Distributed Async Execution
-
-**Leasing Mechanism:**
-```csharp
-// Worker process
-var execution = await repository.LeaseNextPendingAsync(
-    workerId: "worker-instance-123",
-    leaseDuration: TimeSpan.FromMinutes(5)
-);
-
-// Atomic lease acquisition prevents duplicate processing
-// If worker crashes, lease expiry allows recovery
-```
-
-**Optimistic Concurrency:**
-```csharp
-execution.State = ExecutionState.Completed;
-execution.Version++; // Incremented on every update
-
-var success = await repository.UpdateAsync(execution);
-// Returns false if another worker modified it first
-```
-
-### 3. Flexible Cost Configuration
-
-**Example: Tiered Pricing**
-```json
-{
-  "tiers": [
-    {"upTo": 100, "costPerResult": 0.01},
-    {"upTo": 1000, "costPerResult": 0.008},
-    {"upTo": null, "costPerResult": 0.005}
-  ]
-}
-```
-
-**Example: Hybrid Pricing**
-```json
-{
-  "base": 0.10,
-  "perToken": 0.0001,
-  "perResult": 0.005
-}
-```
-
-### 4. Multi-Instance Provider Support
-
-```csharp
-// Different Exa configurations for different use cases
-var searchConfig = await repository.GetByConfigurationNameAsync("Production Exa Search");
-var answerConfig = await repository.GetByConfigurationNameAsync("Production Exa Answer");
-
-// Both use ProviderType.Exa but different purposes
-searchConfig.Purpose == FunctionPurpose.Search
-answerConfig.Purpose == FunctionPurpose.Answer
+var searchConfig = await repository.GetByNameAsync("Production Exa Search");
+var answerConfig = await repository.GetByNameAsync("Production Exa Answer");
 ```
 
 ## Execution Models
 
-### Synchronous Execution
-- Immediate response to API caller
-- Timeout enforced (default: configuration setting)
-- Best for: Quick searches, simple lookups
+`ExecuteAsync` currently awaits the provider inline for both stored execution-mode values. `DefaultExecutionMode` is copied into the execution record; setting it to `Asynchronous` does not enqueue a command or return an immediate acknowledgement.
 
-### Asynchronous Execution
-- Immediate acknowledgment with execution ID
-- Processing via MassTransit workers
-- Webhook notification on completion
-- Best for: Long-running tasks, batch operations
+There is no registered function execution worker or function completion webhook dispatcher. Wolverine currently handles function configuration/discovery cache events, described below.
 
 ## Pricing Models
 
-### 1. FlatRate
-Fixed cost per execution regardless of results.
-```csharp
-Cost = CostPerExecution
-```
+| Model | Calculation |
+| --- | --- |
+| `FlatRate` | Fixed execution cost. |
+| `PerResult` | Result count multiplied by the configured rate. |
+| `PerToken` | Token usage multiplied by the configured rate. |
+| `Tiered` | Usage evaluated against configured pricing tiers. |
+| `TimeBased` | Duration evaluated against the configured time rate. |
+| `Hybrid` | Configured combination of supported cost components. |
 
-### 2. PerResult
-Cost based on number of results returned.
-```csharp
-Cost = ResultCount × CostPerResult
-```
-
-### 3. PerToken
-Token-based pricing (similar to LLM costs).
-```csharp
-Cost = TokenCount × CostPerToken
-```
-
-### 4. Tiered
-Volume-based pricing with configurable tiers.
-```csharp
-Cost = CalculateFromTiers(ResultCount, TieredPricing)
-```
-
-### 5. TimeBased
-Cost based on execution duration.
-```csharp
-Cost = DurationMinutes × CostPerMinute
-```
-
-### 6. Hybrid
-Combination of multiple pricing components.
-```csharp
-Cost = BaseCost + (Tokens × CostPerToken) + (Results × CostPerResult)
-```
+Refer to `FunctionCostCalculationService` and its model-specific partial files for the accepted pricing JSON and usage fields.
 
 ## Distributed Execution
 
-### Worker Pattern
+`IFunctionExecutionRepository` exposes `LeaseNextPendingAsync`, `GetExpiredLeasesAsync` and `GetReadyForRetryAsync`. These are persistence primitives for a caller-owned workflow. The normal Gateway function request does not use them, and no function worker loop is registered.
 
-```csharp
-public class FunctionExecutionWorker : BackgroundService
-{
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            // Lease next pending execution
-            var execution = await _repository.LeaseNextPendingAsync(
-                workerId: _workerId,
-                leaseDuration: TimeSpan.FromMinutes(5),
-                cancellationToken: stoppingToken
-            );
-
-            if (execution != null)
-            {
-                await ProcessExecutionAsync(execution, stoppingToken);
-            }
-            else
-            {
-                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
-            }
-        }
-    }
-}
-```
-
-### Lease Recovery
-
-```csharp
-// Find executions with expired leases
-var expiredLeases = await _repository.GetExpiredLeasesAsync();
-
-foreach (var execution in expiredLeases)
-{
-    // Clear lease to allow re-acquisition
-    execution.LeasedBy = null;
-    execution.LeaseExpiryTime = null;
-    await _repository.UpdateAsync(execution);
-}
-```
+A caller implementing a worker must handle lease recovery, concurrency conflicts and provider-call duplication explicitly. The current lease operation claims a pending record by setting its lease fields and incrementing its version; it leaves the state unchanged. Clearing lease fields alone does not turn a running record back into a pending job.
 
 ## Integration Points
 
-### 1. REST APIs
-- **Gateway API**: `/api/functions/execute` - Execute functions
-- **Gateway API**: `/api/functions/available` - List available functions
-- **Gateway API**: `/api/functions/status/{id}` - Check execution status
-- **Admin API**: `/api/admin/functions` - Manage configurations
-- **Admin API**: `/api/admin/functions/{id}/credentials` - Manage credentials
+### REST APIs
 
-### 2. MassTransit
-- **ExecuteFunctionCommand**: Async execution requests
-- **FunctionExecutionCompletedEvent**: Completion notifications
-- **FunctionExecutionFailedEvent**: Failure notifications
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/v1/conduit/functions/execute` | Execute a configured function inline. |
+| GET | `/v1/conduit/functions/executions/{executionId}` | Read an execution owned by the authenticated virtual key. |
+| GET | `/v1/conduit/discovery/functions` | Discover enabled configurations with optional `purpose` and `providerType` filters. |
+| GET | `/v1/conduit/discovery/functions/{functionConfigurationId}/parameters` | Read a configuration's structured parameter schema. |
+| GET / POST / PATCH / DELETE | `/v1/admin/function-configurations` and `/{id}` | Manage configurations; see endpoint-specific methods in OpenAPI. |
+| GET / POST / PATCH / DELETE | `/v1/admin/function-credentials` and `/{id}` | Manage credentials. |
+| GET | `/v1/admin/function-credentials/configuration/{functionConfigurationId}` | List credentials for the configuration's provider type. |
+| GET | `/v1/admin/function-executions/{id}` | Inspect an execution record. |
+| GET | `/v1/admin/function-executions/virtual-keys/{virtualKeyId}` | Inspect a virtual key's execution records. |
 
-### 3. Billing System
-- **IVirtualKeyRepository**: Balance checks and reservations
-- **IBillingService**: Cost commits and refunds
-- **BillingAuditEvent**: Audit trail integration
+Use each host's OpenAPI document for request contracts and the complete management route set.
 
-### 4. Provider Implementations
-- Concrete implementations in `ConduitLLM.Providers` project
-- Factory pattern for provider client instantiation
-- Follow established `ILLMClient` patterns
+### Wolverine
+
+`FunctionConfigurationChanged` invalidates cached function discovery after configuration changes. `FunctionDiscoveryCacheInvalidationRequested` requests explicit discovery cache invalidation. Both hosts have generated Wolverine handlers for these shared contracts. Production messaging uses Wolverine with PostgreSQL durability; these events do not execute functions.
+
+### Provider Implementations
+
+`FunctionClientFactory` creates Exa, Tavily and MCP clients from `ConduitLLM.Functions.Providers` through `IFunctionClient`. Provider HTTP and JSON handling lives with those clients.
 
 ## Usage Examples
 
-### Creating a Function Configuration
+These examples assume repositories and services resolved from the normal JIT host. They do not establish NativeAOT support for function execution.
+
+### Creating a Configuration
 
 ```csharp
-var config = new FunctionConfiguration
+var configId = await configRepository.CreateAsync(new FunctionConfiguration
 {
     ProviderType = FunctionProviderType.Exa,
     ConfigurationName = "Production Exa Search",
@@ -501,50 +192,41 @@ var config = new FunctionConfiguration
     BaseUrl = "https://api.exa.ai",
     IsEnabled = true,
     TimeoutSeconds = 30,
-    MaxRetries = 3,
-    ProviderSettings = JsonSerializer.Serialize(new
-    {
-        type = "neural",
-        numResults = 10
-    })
-};
-
-var configId = await _configRepository.CreateAsync(config);
+    ProviderSettings = """{"type":"neural","numResults":10}"""
+});
 ```
 
-### Adding Credentials
+### Adding a Configuration-Scoped Credential
 
 ```csharp
-var credential = new FunctionCredential
+await credentialRepository.CreateAsync(new FunctionCredential
 {
+    ProviderType = FunctionProviderType.Exa,
     FunctionConfigurationId = configId,
-    ApiKey = "exa_api_key_here", // Will be encrypted
-    CredentialGroup = 0,
+    ApiKey = credentialProtector.Protect(apiKey),
+    FunctionAccountGroup = 0,
     IsPrimary = true,
     IsEnabled = true,
-    CredentialName = "Primary Production Key"
-};
-
-await _credentialRepository.CreateAsync(credential);
+    KeyName = "Primary Production Key"
+});
 ```
 
-### Defining Costs
+The Admin API performs scoped-secret protection for API callers. Repository callers must perform it explicitly as above.
+
+### Defining a Cost
 
 ```csharp
-var cost = new FunctionCost
+var costId = await costRepository.CreateAsync(new FunctionCost
 {
+    ProviderType = FunctionProviderType.Exa,
     CostName = "Exa Search - Standard Pricing",
     PricingModel = FunctionPricingModel.PerResult,
     CostPerResult = 0.01m,
     IsActive = true,
     EffectiveDate = DateTime.UtcNow,
     Priority = 1
-};
-
-var costId = await _costRepository.CreateAsync(cost);
-
-// Map cost to configuration
-await _costMappingRepository.CreateAsync(new FunctionCostMapping
+});
+await costMappingRepository.CreateAsync(new FunctionCostMapping
 {
     FunctionConfigurationId = configId,
     FunctionCostId = costId,
@@ -555,28 +237,21 @@ await _costMappingRepository.CreateAsync(new FunctionCostMapping
 ### Executing a Function
 
 ```csharp
-var execution = new FunctionExecution
-{
-    FunctionConfigurationId = configId,
-    VirtualKeyId = virtualKeyId,
-    ExecutionMode = ExecutionMode.Synchronous,
-    State = ExecutionState.Pending,
-    RequestJson = JsonSerializer.Serialize(new
+var execution = await executionService.ExecuteAsync(
+    configId,
+    virtualKeyId,
+    new Dictionary<string, object>
     {
-        query = "latest AI research papers",
-        numResults = 5
-    }),
-    EstimatedCost = 0.05m // 5 results × $0.01
-};
-
-var executionId = await _executionRepository.CreateAsync(execution);
-
-// Process execution (sync or async via MassTransit)
+        ["query"] = "latest AI research papers",
+        ["numResults"] = 5
+    },
+    cancellationToken: cancellationToken);
 ```
+
+Use the Gateway execution route when the request must go through its authentication, parameter validation and accounting middleware.
 
 ## See Also
 
-- [Provider Architecture](../../../docs/architecture/provider-system/provider-architecture.md)
-- [Model & Cost Mapping](../../../docs/architecture/provider-system/model-and-cost-mapping.md)
-- [Repository & Data Access Patterns](../../../docs/architecture/patterns/repository-and-data-access.md)
-- [Async Media Generation](../../../docs/architecture/media-generation/async-media-generation.md) - Similar distributed execution patterns
+- [Function Resources API](../../docs/api-guides/function-resources.md)
+- [Durable Media Dispatch](../../docs/operations/durable-media-dispatch.md)
+- [Indeterminate Media Tasks](../../docs/operations/indeterminate-media-tasks.md)

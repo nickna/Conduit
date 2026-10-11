@@ -63,7 +63,7 @@ public class FunctionConfigurationsEndpoints
         group.MapGet("/purpose/{purpose}", ([FromServices] FunctionConfigurationsEndpoints e, string purpose) => e.GetConfigurationsByPurpose(purpose))
             .WithName("FunctionConfigurations_GetByPurpose")
             .WithSummary("Gets function configurations by purpose.")
-            .WithParameterDescription("purpose", "The purpose (e.g., \"Search\", \"Answer\", \"Enrich\")").Produces<List<FunctionConfigurationDto>>();
+            .WithParameterDescription("purpose", "The purpose (e.g., \"Search\", \"Answer\", \"ContentRetrieval\", \"RAG\")").Produces<List<FunctionConfigurationDto>>();
         group.MapPost("/", ([FromServices] FunctionConfigurationsEndpoints e, CreateFunctionConfigurationRequest request) => e.CreateConfiguration(request))
             .WithName("FunctionConfigurations_Create")
             .WithSummary("Creates a new function configuration.").Produces<FunctionConfigurationDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest);
@@ -123,7 +123,7 @@ public class FunctionConfigurationsEndpoints
     /// <summary>
     /// Gets function configurations by purpose.
     /// </summary>
-    /// <param name="purpose">The purpose (e.g., "Search", "Answer", "Enrich")</param>
+    /// <param name="purpose">The purpose (e.g., "Search", "Answer", "ContentRetrieval", "RAG")</param>
     /// <returns>List of function configurations for the specified purpose</returns>
     public async Task<IResult> GetConfigurationsByPurpose(string purpose)
     {

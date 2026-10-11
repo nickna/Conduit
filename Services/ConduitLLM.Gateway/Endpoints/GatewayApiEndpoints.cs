@@ -78,7 +78,7 @@ public static class GatewayApiEndpoints
         discovery.MapGet("/functions", ([FromServices] DiscoveryEndpoints endpoints, string? purpose, string? providerType) => endpoints.GetFunctions(purpose, providerType))
             .WithName("Discovery_GetFunctions")
             .WithSummary("Gets all available function configurations for authenticated virtual keys.")
-            .WithParameterDescription("purpose", "Optional purpose filter (e.g., \"Search\", \"Answer\", \"RAG_Search\")")
+            .WithParameterDescription("purpose", "Optional purpose filter (e.g., \"Search\", \"Answer\", \"RAG\")")
             .WithParameterDescription("providerType", "Optional provider type filter (e.g., \"Exa\", \"Perplexity\")").Produces<FunctionDiscoveryResponse>();
         discovery.MapGet("/functions/{functionConfigurationId}/parameters", ([FromServices] DiscoveryEndpoints endpoints, int functionConfigurationId) => endpoints.GetFunctionParameters(functionConfigurationId))
             .WithName("Discovery_GetFunctionParameters")
