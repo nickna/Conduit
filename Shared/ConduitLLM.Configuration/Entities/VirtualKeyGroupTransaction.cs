@@ -40,6 +40,24 @@ namespace ConduitLLM.Configuration.Entities
         public decimal Amount { get; set; }
 
         /// <summary>
+        /// Exact unsigned adjustment amount, written atomically for new idempotent
+        /// operations. Historical rounded rows remain null until verified recovery.
+        /// </summary>
+        [Column(TypeName = "decimal(20, 8)")]
+        public decimal? OriginalAmount { get; set; }
+
+        /// <summary>Operator who verified a historical original amount.</summary>
+        [StringLength(100)]
+        public string? OriginalAmountVerifiedBy { get; set; }
+
+        /// <summary>Independent evidence reference for historical replay approval.</summary>
+        [StringLength(500)]
+        public string? OriginalAmountEvidence { get; set; }
+
+        /// <summary>Time the historical original amount was approved.</summary>
+        public DateTime? OriginalAmountVerifiedAtUtc { get; set; }
+
+        /// <summary>
         /// Balance after this transaction
         /// </summary>
         [Column(TypeName = "decimal(20, 8)")]

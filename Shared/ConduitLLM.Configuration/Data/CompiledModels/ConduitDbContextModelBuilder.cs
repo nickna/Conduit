@@ -17,7 +17,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
     public partial class ConduitDbContextModel
     {
         private ConduitDbContextModel()
-            : base(skipDetectChanges: false, modelId: new Guid("c4b7c297-4aaa-4f04-8e2a-b32e591e4fb7"), entityTypeCount: 38)
+            : base(skipDetectChanges: false, modelId: new Guid("0b80bdf0-a1d8-4ab5-9b1e-882e3fbc0c7c"), entityTypeCount: 38)
         {
         }
 
@@ -5243,6 +5243,26 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase.Columns.Add("InitiatedByUserId", initiatedByUserIdColumnBase);
             var isDeletedColumnBase = new ColumnBase<ColumnMappingBase>("IsDeleted", "boolean", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase);
             conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase.Columns.Add("IsDeleted", isDeletedColumnBase);
+            var originalAmountColumnBase = new ColumnBase<ColumnMappingBase>("OriginalAmount", "numeric(20,8)", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase)
+            {
+                IsNullable = true
+            };
+            conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase.Columns.Add("OriginalAmount", originalAmountColumnBase);
+            var originalAmountEvidenceColumnBase = new ColumnBase<ColumnMappingBase>("OriginalAmountEvidence", "character varying(500)", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase)
+            {
+                IsNullable = true
+            };
+            conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase.Columns.Add("OriginalAmountEvidence", originalAmountEvidenceColumnBase);
+            var originalAmountVerifiedAtUtcColumnBase = new ColumnBase<ColumnMappingBase>("OriginalAmountVerifiedAtUtc", "timestamp with time zone", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase)
+            {
+                IsNullable = true
+            };
+            conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase.Columns.Add("OriginalAmountVerifiedAtUtc", originalAmountVerifiedAtUtcColumnBase);
+            var originalAmountVerifiedByColumnBase = new ColumnBase<ColumnMappingBase>("OriginalAmountVerifiedBy", "character varying(100)", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase)
+            {
+                IsNullable = true
+            };
+            conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase.Columns.Add("OriginalAmountVerifiedBy", originalAmountVerifiedByColumnBase);
             var referenceIdColumnBase = new ColumnBase<ColumnMappingBase>("ReferenceId", "character varying(100)", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase)
             {
                 IsNullable = true
@@ -5269,6 +5289,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)initiatedByColumnBase, virtualKeyGroupTransaction.FindProperty("InitiatedBy")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)initiatedByUserIdColumnBase, virtualKeyGroupTransaction.FindProperty("InitiatedByUserId")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isDeletedColumnBase, virtualKeyGroupTransaction.FindProperty("IsDeleted")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)originalAmountColumnBase, virtualKeyGroupTransaction.FindProperty("OriginalAmount")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)originalAmountEvidenceColumnBase, virtualKeyGroupTransaction.FindProperty("OriginalAmountEvidence")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)originalAmountVerifiedAtUtcColumnBase, virtualKeyGroupTransaction.FindProperty("OriginalAmountVerifiedAtUtc")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)originalAmountVerifiedByColumnBase, virtualKeyGroupTransaction.FindProperty("OriginalAmountVerifiedBy")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)referenceIdColumnBase, virtualKeyGroupTransaction.FindProperty("ReferenceId")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)referenceTypeColumnBase, virtualKeyGroupTransaction.FindProperty("ReferenceType")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)transactionTypeColumnBase, virtualKeyGroupTransaction.FindProperty("TransactionType")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
@@ -5326,6 +5350,30 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var isDeletedColumn = new Column("IsDeleted", "boolean", virtualKeyGroupTransactionsTable);
             virtualKeyGroupTransactionsTable.Columns.Add("IsDeleted", isDeletedColumn);
             isDeletedColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<bool>(isDeletedColumn);
+            var originalAmountColumn = new Column("OriginalAmount", "numeric(20,8)", virtualKeyGroupTransactionsTable)
+            {
+                IsNullable = true
+            };
+            virtualKeyGroupTransactionsTable.Columns.Add("OriginalAmount", originalAmountColumn);
+            originalAmountColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<decimal>(originalAmountColumn);
+            var originalAmountEvidenceColumn = new Column("OriginalAmountEvidence", "character varying(500)", virtualKeyGroupTransactionsTable)
+            {
+                IsNullable = true
+            };
+            virtualKeyGroupTransactionsTable.Columns.Add("OriginalAmountEvidence", originalAmountEvidenceColumn);
+            originalAmountEvidenceColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(originalAmountEvidenceColumn);
+            var originalAmountVerifiedAtUtcColumn = new Column("OriginalAmountVerifiedAtUtc", "timestamp with time zone", virtualKeyGroupTransactionsTable)
+            {
+                IsNullable = true
+            };
+            virtualKeyGroupTransactionsTable.Columns.Add("OriginalAmountVerifiedAtUtc", originalAmountVerifiedAtUtcColumn);
+            originalAmountVerifiedAtUtcColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(originalAmountVerifiedAtUtcColumn);
+            var originalAmountVerifiedByColumn = new Column("OriginalAmountVerifiedBy", "character varying(100)", virtualKeyGroupTransactionsTable)
+            {
+                IsNullable = true
+            };
+            virtualKeyGroupTransactionsTable.Columns.Add("OriginalAmountVerifiedBy", originalAmountVerifiedByColumn);
+            originalAmountVerifiedByColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(originalAmountVerifiedByColumn);
             var referenceIdColumn = new Column("ReferenceId", "character varying(100)", virtualKeyGroupTransactionsTable)
             {
                 IsNullable = true
@@ -5356,6 +5404,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(initiatedByColumn, virtualKeyGroupTransaction.FindProperty("InitiatedBy")!, virtualKeyGroupTransactionsTableMapping);
             RelationalModel.CreateColumnMapping(initiatedByUserIdColumn, virtualKeyGroupTransaction.FindProperty("InitiatedByUserId")!, virtualKeyGroupTransactionsTableMapping);
             RelationalModel.CreateColumnMapping(isDeletedColumn, virtualKeyGroupTransaction.FindProperty("IsDeleted")!, virtualKeyGroupTransactionsTableMapping);
+            RelationalModel.CreateColumnMapping(originalAmountColumn, virtualKeyGroupTransaction.FindProperty("OriginalAmount")!, virtualKeyGroupTransactionsTableMapping);
+            RelationalModel.CreateColumnMapping(originalAmountEvidenceColumn, virtualKeyGroupTransaction.FindProperty("OriginalAmountEvidence")!, virtualKeyGroupTransactionsTableMapping);
+            RelationalModel.CreateColumnMapping(originalAmountVerifiedAtUtcColumn, virtualKeyGroupTransaction.FindProperty("OriginalAmountVerifiedAtUtc")!, virtualKeyGroupTransactionsTableMapping);
+            RelationalModel.CreateColumnMapping(originalAmountVerifiedByColumn, virtualKeyGroupTransaction.FindProperty("OriginalAmountVerifiedBy")!, virtualKeyGroupTransactionsTableMapping);
             RelationalModel.CreateColumnMapping(referenceIdColumn, virtualKeyGroupTransaction.FindProperty("ReferenceId")!, virtualKeyGroupTransactionsTableMapping);
             RelationalModel.CreateColumnMapping(referenceTypeColumn, virtualKeyGroupTransaction.FindProperty("ReferenceType")!, virtualKeyGroupTransactionsTableMapping);
             RelationalModel.CreateColumnMapping(transactionTypeColumn, virtualKeyGroupTransaction.FindProperty("TransactionType")!, virtualKeyGroupTransactionsTableMapping);

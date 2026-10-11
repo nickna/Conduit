@@ -264,12 +264,12 @@ public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
                 "VirtualKeyGroupId", "TransactionType", "Amount", "BalanceAfter",
                 "ReferenceType", "ReferenceId", "Description", "InitiatedBy",
                 "InitiatedByUserId", "IdempotencyKey", "BillingWindowStartUtc",
-                "CreatedAt", "IsDeleted", "DeletedAt")
+                "CreatedAt", "IsDeleted", "DeletedAt", "OriginalAmount")
             VALUES (
                 @groupId, @transactionType, @absoluteAmount, @balanceAfter,
                 @referenceType, @referenceId, @description, @initiatedBy,
                 NULL, @idempotencyKey, @billingWindowStartUtc,
-                @createdAt, false, NULL)
+                @createdAt, false, NULL, @originalAmount)
             """;
         command.Parameters.AddWithValue("groupId", NpgsqlDbType.Integer, adjustment.GroupId);
         command.Parameters.AddWithValue(
@@ -281,6 +281,10 @@ public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
             NpgsqlDbType.Numeric,
             Math.Abs(adjustment.Amount));
         command.Parameters.AddWithValue("balanceAfter", NpgsqlDbType.Numeric, balanceAfter);
+        command.Parameters.Add(new NpgsqlParameter("originalAmount", NpgsqlDbType.Numeric)
+        {
+            Value = adjustment.IdempotencyKey is null ? DBNull.Value : Math.Abs(adjustment.Amount)
+        });
         command.Parameters.AddWithValue(
             "referenceType",
             NpgsqlDbType.Integer,
@@ -335,7 +339,7 @@ public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
         command.Transaction = transaction;
         command.CommandText = """
             SELECT "VirtualKeyGroupId", "TransactionType", "Amount", "ReferenceType",
-                   "ReferenceId", "BillingWindowStartUtc"
+                   "ReferenceId", "BillingWindowStartUtc", "OriginalAmount"
             FROM "VirtualKeyGroupTransactions"
             WHERE "IdempotencyKey" = @idempotencyKey
             """;
@@ -348,7 +352,8 @@ public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
                 reader.GetDecimal(2),
                 reader.GetInt32(3),
                 reader.IsDBNull(4) ? null : reader.GetString(4),
-                reader.IsDBNull(5) ? null : reader.GetDateTime(5))
+                reader.IsDBNull(5) ? null : reader.GetDateTime(5),
+                reader.IsDBNull(6) ? null : reader.GetDecimal(6))
             : null;
     }
 
@@ -405,6 +410,7 @@ public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
         {
             throw new ArgumentOutOfRangeException(nameof(adjustment), "Group ID must be positive.");
         }
+        VirtualKeyBalanceReplayEvidence.ValidateAmount(adjustment.Amount, adjustment.IdempotencyKey);
         if (adjustment.IdempotencyKey is not null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(adjustment.IdempotencyKey);
@@ -418,7 +424,7 @@ public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
         var expectedType = adjustment.Amount > 0 ? 1 : 2;
         if (existing.GroupId != adjustment.GroupId ||
             existing.TransactionType != expectedType ||
-            existing.Amount != Math.Abs(adjustment.Amount) ||
+            !VirtualKeyBalanceReplayEvidence.AmountMatches(existing.Amount, existing.OriginalAmount, adjustment.Amount) ||
             existing.ReferenceType != (int)adjustment.ReferenceType ||
             existing.ReferenceId != adjustment.ReferenceId ||
             existing.BillingWindowStartUtc != adjustment.BillingWindowStartUtc)
@@ -477,5 +483,6 @@ public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
         decimal Amount,
         int ReferenceType,
         string? ReferenceId,
-        DateTime? BillingWindowStartUtc);
+        DateTime? BillingWindowStartUtc,
+        decimal? OriginalAmount);
 }
