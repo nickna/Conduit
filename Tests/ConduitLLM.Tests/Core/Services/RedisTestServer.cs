@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using StackExchange.Redis;
 
 using Xunit;
@@ -26,6 +28,8 @@ public static class RedisTestServer
     // 127.0.0.1 rather than "localhost": on Windows that name resolves to ::1 first, and a
     // server listening only on IPv4 is then reported as unreachable.
     private const string DefaultConnection = "127.0.0.1:6379,allowAdmin=true";
+    private static readonly TimeSpan CleanupBudget = TimeSpan.FromSeconds(30);
+    private const int CleanupBatchSize = 128;
 
     private static readonly Lazy<ConnectionMultiplexer?> Connection = new(Connect, isThreadSafe: true);
 
@@ -69,29 +73,104 @@ public static class RedisTestServer
     /// </summary>
     public static string NewKeyPrefix(string name) => $"test:{name}:{Guid.NewGuid():N}:";
 
-    /// <summary>Deletes every key created under a prefix, including the :sum companions.</summary>
-    public static async Task CleanupAsync(string keyPrefix)
+    /// <summary>
+    /// Best-effort cleanup of one test's unique prefix, including namespace-wrapped keys and
+    /// :sum companions. Cleanup diagnostics never replace the test's assertion failure.
+    /// </summary>
+    public static async Task CleanupAsync(string keyPrefix, Action<string>? writeDiagnostic = null)
     {
+        ValidateCleanupPrefix(keyPrefix);
         if (!IsAvailable)
         {
+            // Require() and RedisRequirementTests still enforce mandatory real Redis coverage.
+            if (IsRequired)
+            {
+                (writeDiagnostic ?? Console.Error.WriteLine)(
+                    $"Redis test cleanup skipped for prefix '{keyPrefix}': mandatory Redis is unavailable.");
+            }
             return;
         }
 
-        var multiplexer = Connection.Value!;
-        foreach (var endpoint in multiplexer.GetEndPoints())
-        {
-            var server = multiplexer.GetServer(endpoint);
-            if (!server.IsConnected || server.IsReplica)
-            {
-                continue;
-            }
+        await CleanupAsync(Connection.Value!, keyPrefix,
+            writeDiagnostic ?? Console.Error.WriteLine, CleanupBudget);
+    }
 
-            foreach (var key in server.Keys(pattern: $"{keyPrefix}*"))
+    internal static async Task CleanupAsync(IConnectionMultiplexer multiplexer, string keyPrefix,
+        Action<string> writeDiagnostic, TimeSpan budget)
+    {
+        ValidateCleanupPrefix(keyPrefix);
+        using var cancellation = new CancellationTokenSource(budget);
+        var elapsed = Stopwatch.StartNew();
+        long deleted = 0;
+        var stage = "finding primary endpoints";
+        var database = multiplexer.GetDatabase();
+
+        try
+        {
+            // Product key builders put namespaces before the test prefix (rate:vk:test:...,
+            // signalr:vk:test:...). Escape Redis glob metacharacters and verify literal
+            // ownership again before deletion so parallel tests cannot lose their keys.
+            var pattern = $"*{EscapeGlob(keyPrefix)}*";
+            foreach (var endpoint in multiplexer.GetEndPoints())
             {
-                await multiplexer.GetDatabase().KeyDeleteAsync(key);
+                var server = multiplexer.GetServer(endpoint);
+                if (!server.IsConnected || server.IsReplica)
+                {
+                    continue;
+                }
+
+                var batch = new List<RedisKey>(CleanupBatchSize);
+                stage = $"scanning {endpoint}";
+                await using var keys = server.KeysAsync(database: database.Database,
+                    pattern: pattern, pageSize: CleanupBatchSize).GetAsyncEnumerator(cancellation.Token);
+                while (await keys.MoveNextAsync().AsTask().WaitAsync(cancellation.Token))
+                {
+                    cancellation.Token.ThrowIfCancellationRequested();
+                    if (!keys.Current.ToString().Contains(keyPrefix, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    batch.Add(keys.Current);
+                    if (batch.Count == CleanupBatchSize)
+                    {
+                        stage = $"deleting a batch on {endpoint}";
+                        deleted += await database.KeyDeleteAsync(batch.ToArray()).WaitAsync(cancellation.Token);
+                        batch.Clear();
+                        stage = $"scanning {endpoint}";
+                    }
+                }
+
+                if (batch.Count > 0)
+                {
+                    stage = $"deleting the final batch on {endpoint}";
+                    deleted += await database.KeyDeleteAsync(batch.ToArray()).WaitAsync(cancellation.Token);
+                }
             }
         }
+        catch (Exception exception)
+        {
+            var reason = cancellation.IsCancellationRequested
+                ? $"the {budget.TotalSeconds:0.###}s cleanup budget was exhausted"
+                : exception.GetType().Name;
+            writeDiagnostic($"Redis test cleanup incomplete for prefix '{keyPrefix}' while {stage}; " +
+                $"deleted {deleted} keys in {elapsed.Elapsed.TotalSeconds:0.###}s: {reason}. " +
+                "This is a teardown diagnostic; product assertions and mandatory Redis checks remain authoritative.");
+        }
     }
+
+    private static void ValidateCleanupPrefix(string keyPrefix)
+    {
+        var parts = keyPrefix?.Split(':');
+        if (parts is not { Length: >= 4 } || parts[0] != "test" || parts[^1] != string.Empty ||
+            !Guid.TryParseExact(parts[^2], "N", out _))
+        {
+            throw new ArgumentException("Cleanup requires a unique prefix from NewKeyPrefix.", nameof(keyPrefix));
+        }
+    }
+
+    private static string EscapeGlob(string value) => value.Replace("\\", "\\\\")
+        .Replace("*", "\\*").Replace("?", "\\?").Replace("[", "\\[").Replace("]", "\\]");
 
     private static ConnectionMultiplexer? Connect()
     {
@@ -100,6 +179,9 @@ public static class RedisTestServer
             var options = ConfigurationOptions.Parse(ConfiguredConnection ?? DefaultConnection);
             options.ConnectTimeout = 2000;
             options.SyncTimeout = 2000;
+            // Async SCAN and batched deletes need more room under CI load than sync setup.
+            // The overall cleanup budget still bounds the entire teardown operation.
+            options.AsyncTimeout = 10000;
             options.AbortOnConnectFail = false;
             options.AllowAdmin = true;
 
