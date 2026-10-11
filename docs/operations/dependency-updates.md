@@ -16,6 +16,16 @@ and permits at most two open PRs. Retired SDK packages are not monitored. Major
 updates are offered for review as well; grouping does not establish compatibility.
 No updates are automatically merged or exempted from required validation.
 
+WebAdmin currently defers ESLint 10 (`eslint` and `@eslint/js`) because
+`eslint-plugin-react` 7.37.5 supports ESLint only through major 9. TypeScript 7
+is deferred because `ts-jest` 29.4.14 requires TypeScript `<7` and
+`typescript-eslint` 8.71.1 requires `<6.1.0`. Node API types stay on major 22
+to match the runtime used by CI and the WebAdmin Dockerfile. The WebAdmin
+Dependabot ignores encode these compatibility limits; revisit them when the
+plugins support the new majors or the Node runtime is upgraded. Other compatible
+development updates continue normally. Do not bypass peer checks to install
+these deferred upgrades.
+
 ## Activation and first-batch triage
 
 GitHub reads the configuration from the repository's **default branch (`master`)**.

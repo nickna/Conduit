@@ -52,6 +52,18 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    ignore:
+      # React's lint plugin currently supports ESLint through major 9.
+      - dependency-name: eslint
+        versions: ['>=10']
+      - dependency-name: '@eslint/js'
+        versions: ['>=10']
+      # ts-jest and typescript-eslint do not yet support TypeScript 7.
+      - dependency-name: typescript
+        versions: ['>=7']
+      # Keep the Node API types aligned with the Node 22 runtime in CI/Docker.
+      - dependency-name: '@types/node'
+        versions: ['>=23']
     groups:
       mantine:
         patterns:
