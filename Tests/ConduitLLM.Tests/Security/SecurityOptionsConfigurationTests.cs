@@ -187,7 +187,7 @@ public sealed class SecurityOptionsConfigurationTests
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory != null)
         {
-            var path = Path.Combine(directory.FullName, ".env.example");
+            var path = Path.Join(directory.FullName, ".env.example");
             if (File.Exists(path))
             {
                 return path;
