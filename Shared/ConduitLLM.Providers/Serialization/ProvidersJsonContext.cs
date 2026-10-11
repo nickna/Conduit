@@ -52,6 +52,7 @@ namespace ConduitLLM.Providers.Serialization;
 [JsonSerializable(typeof(List<ReplicateLlamaChatMessage>))]
 [JsonSerializable(typeof(ReplicatePredictionResponse))]
 [JsonSerializable(typeof(Dictionary<string, object>))]
+[JsonSerializable(typeof(Dictionary<string, float>))]
 [JsonSerializable(typeof(List<object>))]
 [JsonSerializable(typeof(object[]))]
 [JsonSerializable(typeof(object))]
