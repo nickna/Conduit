@@ -51,6 +51,7 @@
   <ItemGroup>
     <Compile Include="..\ConduitLLM.GatewayNativeAotTests\NativeMetricSamples.cs" Link="Gateway\NativeMetricSamples.cs" />
     <Compile Include="..\ConduitLLM.GatewayNativeAotTests\SwitchableTcpProxy.cs" Link="Gateway\SwitchableTcpProxy.cs" />
+    <Compile Include="..\ConduitLLM.GatewayNativeAotTests\NativeDependencyRoutes.cs" Link="Gateway\NativeDependencyRoutes.cs" />
     <None Update="xunit.runner.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

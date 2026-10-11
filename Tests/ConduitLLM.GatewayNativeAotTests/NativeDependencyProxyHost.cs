@@ -12,23 +12,15 @@ internal static class NativeDependencyProxyHost
     public static async Task RunAsync()
     {
         var database = new NpgsqlConnectionStringBuilder(ProbeSettings.DatabaseConnectionStringFromEnvironment());
-        if (database.Host is not { Length: > 0 } host || host.Contains(','))
-            throw new InvalidOperationException("The native proxy fixture requires one PostgreSQL host.");
+        NativeDependencyRoutes.ValidateDatabaseTarget(database);
         var redis = ConfigurationOptions.Parse(ProbeSettings.RedisConnectionStringFromEnvironment());
-        if (redis.EndPoints.Count != 1)
-            throw new InvalidOperationException("The native proxy fixture requires one Redis endpoint.");
-        var (redisHost, redisPort) = redis.EndPoints[0] switch
-        {
-            DnsEndPoint endpoint => (endpoint.Host, endpoint.Port),
-            IPEndPoint endpoint => (endpoint.Address.ToString(), endpoint.Port),
-            _ => throw new InvalidOperationException("Unsupported Redis proxy endpoint.")
-        };
+        var (redisHost, redisPort) = NativeDependencyRoutes.RedisTarget(redis);
         var token = Required("CONDUIT_NATIVE_PROXY_TOKEN");
         var controlUri = new Uri(Required("CONDUIT_NATIVE_PROXY_CONTROL_URL"));
         if (controlUri.Host != "127.0.0.1" || controlUri.Scheme != "http")
             throw new InvalidOperationException("The native proxy control listener must use loopback HTTP.");
 
-        await using var postgresProxy = new SwitchableTcpProxy(host, database.Port,
+        await using var postgresProxy = new SwitchableTcpProxy(database.Host!, database.Port,
             int.Parse(Required("CONDUIT_NATIVE_PROXY_POSTGRES_PORT"), CultureInfo.InvariantCulture));
         await using var redisProxy = new SwitchableTcpProxy(redisHost, redisPort,
             int.Parse(Required("CONDUIT_NATIVE_PROXY_REDIS_PORT"), CultureInfo.InvariantCulture));

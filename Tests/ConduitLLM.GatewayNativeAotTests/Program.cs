@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Npgsql;
 using NpgsqlTypes;
@@ -17,6 +18,25 @@ if (args is ["--seed"])
         ProbeSettings.DatabaseConnectionStringFromEnvironment(),
         ProbeSettings.ProviderUriFromEnvironment(),
         ProbeSettings.RedisConnectionStringFromEnvironment());
+    return;
+}
+
+if (args is ["--proxy-routes"])
+{
+    var database = Environment.GetEnvironmentVariable("DATABASE_URL")
+        ?? throw new InvalidOperationException("DATABASE_URL is required.");
+    var redis = NativeDependencyRoutes.ParseRedis(Environment.GetEnvironmentVariable("REDIS_URL"),
+        Environment.GetEnvironmentVariable("CONDUIT_REDIS_CONNECTION_STRING"));
+    var routes = new JsonObject
+    {
+        ["database"] = NativeDependencyRoutes.RedirectDatabaseUrl(database,
+            int.Parse(Environment.GetEnvironmentVariable("CONDUIT_NATIVE_PROXY_POSTGRES_PORT")
+                ?? throw new InvalidOperationException("CONDUIT_NATIVE_PROXY_POSTGRES_PORT is required."))),
+        ["redis"] = NativeDependencyRoutes.RedirectRedis(redis,
+            int.Parse(Environment.GetEnvironmentVariable("CONDUIT_NATIVE_PROXY_REDIS_PORT")
+                ?? throw new InvalidOperationException("CONDUIT_NATIVE_PROXY_REDIS_PORT is required.")))
+    };
+    Console.WriteLine(routes.ToJsonString());
     return;
 }
 
@@ -56,27 +76,12 @@ internal sealed record ProbeSettings(
         RequiredUri("CONDUIT_NATIVE_PROVIDER_URL");
 
     public static string RedisConnectionStringFromEnvironment() =>
-        Required("REDIS_URL").Replace("redis://", string.Empty, StringComparison.OrdinalIgnoreCase);
+        NativeDependencyRoutes.ParseRedis(Environment.GetEnvironmentVariable("REDIS_URL"),
+            Environment.GetEnvironmentVariable("CONDUIT_REDIS_CONNECTION_STRING")).ToString(includePassword: true);
 
     public static string DatabaseConnectionStringFromEnvironment()
     {
-        var value = Required("DATABASE_URL");
-        if (!value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase) &&
-            !value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase))
-        {
-            return value;
-        }
-
-        var uri = new Uri(value);
-        var userInfo = uri.UserInfo.Split(':', 2);
-        return new NpgsqlConnectionStringBuilder
-        {
-            Host = uri.Host,
-            Port = uri.Port > 0 ? uri.Port : 5432,
-            Database = uri.AbsolutePath.TrimStart('/'),
-            Username = Uri.UnescapeDataString(userInfo[0]),
-            Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty
-        }.ConnectionString;
+        return NativeDependencyRoutes.ParseDatabase(Required("DATABASE_URL")).ConnectionString;
     }
 
     private static Uri RequiredUri(string name) =>
