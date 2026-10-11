@@ -114,7 +114,7 @@ export function ChatInput({
   return (
     <Stack gap="xs">
       {supportsFunctions && (
-        <Collapse in={functionsEnabled}>
+        <Collapse expanded={functionsEnabled}>
           <Paper p="xs" withBorder radius="sm">
             <Group justify="space-between" mb="xs">
               <Text size="sm" fw={600}>Functions</Text>

@@ -28,6 +28,7 @@ const conduitGray: MantineColorsTuple = [
 
 export const theme = createTheme({
   primaryColor: 'conduit-blue',
+  defaultRadius: 'sm',
   colors: {
     // Palette names form the CSS custom-property names consumed by chat styles.
     'conduit-blue': conduitBlue,
@@ -61,6 +62,12 @@ export const theme = createTheme({
     xl: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
   },
   components: {
+    Collapse: {
+      defaultProps: {
+        // Preserve mounted form fields and effects while a section is hidden.
+        keepMountedMode: 'display-none',
+      },
+    },
     Button: {
       defaultProps: {
         size: 'sm',

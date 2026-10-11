@@ -205,7 +205,7 @@ export function SystemConfigChecklist() {
           </Group>
         </Group>
 
-        <Collapse in={expanded}>
+        <Collapse expanded={expanded}>
           <Stack gap="sm">
             {checks.map((check) => (
               <CheckItem 

@@ -120,7 +120,7 @@ export function RuleRow({
           </Group>
         </Group>
 
-        <Collapse in={expanded}>
+        <Collapse expanded={expanded}>
           <Stack gap="sm">
             {/* Rule Configuration */}
             <Group grow align="flex-start">

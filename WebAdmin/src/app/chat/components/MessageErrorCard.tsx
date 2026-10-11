@@ -83,7 +83,7 @@ export function MessageErrorCard({ message, isExpanded, onToggleDetails, onRetry
               </ActionIcon>
               <Text size="xs" c="dimmed">Technical Details</Text>
             </Group>
-            <Collapse in={isExpanded}>
+            <Collapse expanded={isExpanded}>
               <Paper p="sm" radius="sm" withBorder className="error-details-box">
                 <Stack gap="xs">
                   {error.statusCode && (
