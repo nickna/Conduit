@@ -317,7 +317,11 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         var chunks = new List<JsonElement>();
         foreach (var payload in body.Split('\n')
             .Where(line => line.StartsWith("data: {", StringComparison.Ordinal))
-            .Select(line => JsonDocument.Parse(line[6..]).RootElement.Clone()))
+            .Select(line =>
+            {
+                using var document = JsonDocument.Parse(line[6..]);
+                return document.RootElement.Clone();
+            }))
         {
             var isChunk = payload.TryGetProperty("object", out var discriminator) &&
                 discriminator.GetString() == "chat.completion.chunk";
