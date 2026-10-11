@@ -189,12 +189,12 @@ public static class FunctionCredentialsEndpoints
         var client = await clientFactory.GetClientAsync(credential.ProviderType, configuration.Id);
         var apiKey = testRequest.ApiKeyOverride ?? protector.Reveal(credential.ApiKey);
         var result = await client.VerifyAuthenticationAsync(apiKey);
-        return Results.Ok(new
+        return Results.Ok(new FunctionCredentialTestResultDto
         {
-            success = result.IsSuccess,
-            message = result.Message,
-            details = result.Details,
-            durationMs = result.ResponseTimeMs
+            Success = result.IsSuccess,
+            Message = result.Message,
+            Details = result.Details,
+            DurationMs = result.ResponseTimeMs
         });
     }
 
