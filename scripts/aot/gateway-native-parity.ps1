@@ -218,6 +218,7 @@ if (-not (Test-Path -LiteralPath $startupFixtureDll -PathType Leaf)) { throw "Sc
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $functionSeedAttempted = $false
 $mcpSeedAttempted = $false
+$adminSettingsAttempted = $false
 $parityFailure = $null
 try {
     Set-GateEnvironment 'DATABASE_URL' $DatabaseUrl
@@ -286,6 +287,8 @@ try {
     Set-GateEnvironment 'CONDUIT_NATIVE_FUNCTION_PROTECTED_KEY' $protectedFunctionKey
     Set-GateEnvironment 'CONDUIT_NATIVE_FUNCTION_FIXTURE_OWNER' ([Guid]::NewGuid().ToString('N'))
     Set-GateEnvironment 'CONDUIT_NATIVE_MCP_FIXTURE_OWNER' ([Guid]::NewGuid().ToString('N'))
+    Set-GateEnvironment 'CONDUIT_NATIVE_ADMIN_SETTINGS_OWNER' ([Guid]::NewGuid().ToString('N'))
+    Set-GateEnvironment 'CONDUIT_API_TO_API_BACKEND_AUTH_KEY' $MasterKey
 
     Write-Host 'Seeding typed-store authentication and IP-filter fixtures...'
     # Set this before the call: a seed that committed but lost its acknowledgement
@@ -351,6 +354,7 @@ try {
     # The in-process MCP server binds port zero and its fixture is created by the
     # probe. Track the attempt before invocation even if its acknowledgement is lost.
     $mcpSeedAttempted = $true
+    $adminSettingsAttempted = $true
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
         & $nativeProbe
     } else {
@@ -376,6 +380,7 @@ finally {
         Stop-OwnedParityProcesses $processes
         $fixtureCleanupFailures = [Collections.Generic.List[Exception]]::new()
         foreach ($cleanup in @(
+            [pscustomobject]@{ Attempted = $adminSettingsAttempted; Argument = '--cleanup-admin-global-settings'; Label = 'Owned Admin global-setting fixture cleanup' },
             [pscustomobject]@{ Attempted = $mcpSeedAttempted; Argument = '--cleanup-mcp-function-fixture'; Label = 'Owned MCP function fixture cleanup' },
             [pscustomobject]@{ Attempted = $functionSeedAttempted; Argument = '--cleanup-function-fixture'; Label = 'Owned function fixture cleanup' }
         )) {

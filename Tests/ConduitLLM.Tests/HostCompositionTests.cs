@@ -1,8 +1,11 @@
 using System.Text.Json;
 
+using ConduitLLM.Admin.Interfaces;
+using ConduitLLM.Admin.Services;
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Interceptors;
 using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Configuration.Repositories;
 using ConduitLLM.Core;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services;
@@ -86,6 +89,7 @@ public sealed class HostCompositionTests
         await using var app = builder.Build();
 
         ResolveRuntimeServices(builder.Services, app.Services);
+        AssertAdminGlobalSettingComposition(builder.Services, app.Services);
         AssertFunctionClientComposition(builder.Services, app.Services, false);
         AssertFunctionDiscoveryComposition(builder.Services, app.Services, false);
         AssertFunctionExecutionComposition(builder.Services, app.Services, false);
@@ -120,6 +124,7 @@ public sealed class HostCompositionTests
         AssertFunctionsEndpointComposition(builder.Services, app.Services, gateway);
         AssertChatEndpointComposition(builder.Services, app.Services, gateway);
         await AssertFunctionCostCompositionAsync(builder.Services, app.Services, gateway);
+        if (!gateway) AssertAdminGlobalSettingComposition(builder.Services, app.Services);
         Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(StackExchange.Redis.IConnectionMultiplexer));
         if (gateway)
         {
@@ -495,6 +500,50 @@ public sealed class HostCompositionTests
             Assert.NotNull(field);
             return field.GetValue(endpoint);
         }
+    }
+
+    private static void AssertAdminGlobalSettingComposition(IServiceCollection descriptors, IServiceProvider provider)
+    {
+        var repositoryDescriptor = Assert.Single(descriptors,
+            descriptor => descriptor.ServiceType == typeof(IGlobalSettingRepository));
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var firstRepository = first.ServiceProvider.GetRequiredService<IGlobalSettingRepository>();
+        var secondRepository = second.ServiceProvider.GetRequiredService<IGlobalSettingRepository>();
+        Assert.Same(firstRepository, first.ServiceProvider.GetRequiredService<IGlobalSettingRepository>());
+        Assert.Same(secondRepository, second.ServiceProvider.GetRequiredService<IGlobalSettingRepository>());
+#if CONDUIT_NATIVE_AOT
+        Assert.Equal(ServiceLifetime.Singleton, repositoryDescriptor.Lifetime);
+        Assert.Equal(typeof(NpgsqlGlobalSettingRepository), repositoryDescriptor.ImplementationType);
+        var repository = Assert.IsType<NpgsqlGlobalSettingRepository>(firstRepository);
+        Assert.Same(repository, secondRepository);
+        var dataSourceField = typeof(NpgsqlGlobalSettingRepository).GetField("_dataSource",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(dataSourceField);
+        Assert.Same(provider.GetRequiredService<NpgsqlDataSource>(), dataSourceField.GetValue(repository));
+#else
+        Assert.Equal(ServiceLifetime.Scoped, repositoryDescriptor.Lifetime);
+        Assert.Equal(typeof(GlobalSettingRepository), repositoryDescriptor.ImplementationType);
+        Assert.IsType<GlobalSettingRepository>(firstRepository);
+        Assert.IsType<GlobalSettingRepository>(secondRepository);
+        Assert.NotSame(firstRepository, secondRepository);
+#endif
+        var serviceDescriptor = Assert.Single(descriptors,
+            descriptor => descriptor.ServiceType == typeof(IAdminGlobalSettingService));
+        Assert.Equal(ServiceLifetime.Scoped, serviceDescriptor.Lifetime);
+        Assert.Equal(typeof(AdminGlobalSettingService), serviceDescriptor.ImplementationType);
+        var firstService = Assert.IsType<AdminGlobalSettingService>(
+            first.ServiceProvider.GetRequiredService<IAdminGlobalSettingService>());
+        var secondService = Assert.IsType<AdminGlobalSettingService>(
+            second.ServiceProvider.GetRequiredService<IAdminGlobalSettingService>());
+        Assert.Same(firstService, first.ServiceProvider.GetRequiredService<IAdminGlobalSettingService>());
+        Assert.Same(secondService, second.ServiceProvider.GetRequiredService<IAdminGlobalSettingService>());
+        Assert.NotSame(firstService, secondService);
+        var repositoryField = typeof(AdminGlobalSettingService).GetField("_globalSettingRepository",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(repositoryField);
+        Assert.Same(firstRepository, repositoryField.GetValue(firstService));
+        Assert.Same(secondRepository, repositoryField.GetValue(secondService));
     }
 
     private static void AssertDatabaseComposition(IServiceCollection descriptors, IServiceProvider provider)

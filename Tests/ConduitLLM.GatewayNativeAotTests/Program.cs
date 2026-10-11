@@ -61,6 +61,39 @@ if (args is ["--cleanup-function-fixture"] or ["--cleanup-mcp-function-fixture"]
     return;
 }
 
+if (args is ["--cleanup-admin-global-settings"])
+{
+    try
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        await NativeAdminGlobalSettingProbe.CleanupAsync(source, ProbeSettings.AdminSettingsOwnerFromEnvironment(), deadline.Token);
+        Console.WriteLine("Owned Admin global-setting fixture cleanup: PASS");
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Owned Admin global-setting fixture cleanup failed.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
+if (args is ["--admin-global-settings"])
+{
+    try
+    {
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        await NativeAdminGlobalSettingProbe.RunAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_ADMIN_URL"), source,
+            ProbeSettings.AdminSettingsOwnerFromEnvironment(), ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine("Admin global-settings HTTP proof failed: " + exception.Message);
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
 if (args is ["--proxy-routes"])
 {
     var database = Environment.GetEnvironmentVariable("DATABASE_URL")
@@ -147,6 +180,10 @@ internal sealed record ProbeSettings(
 
     public static Guid McpFixtureOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_MCP_FIXTURE_OWNER");
 
+    public static Guid AdminSettingsOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_ADMIN_SETTINGS_OWNER");
+
+    public static string AdminMasterKeyFromEnvironment() => Required("CONDUIT_API_TO_API_BACKEND_AUTH_KEY");
+
     public static string ProtectedFunctionKeyFromEnvironment() => Required("CONDUIT_NATIVE_FUNCTION_PROTECTED_KEY");
 
     private static Guid FixtureOwner(string name) =>
@@ -212,6 +249,8 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         await AssertSignalRAndRedisAsync();
         await using (var source = NpgsqlDataSource.Create(settings.DatabaseConnectionString))
         {
+            await NativeAdminGlobalSettingProbe.RunAsync(settings.Admin, source,
+                ProbeSettings.AdminSettingsOwnerFromEnvironment(), ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
             await NativeFunctionExecutionProbe.RunAsync(settings.Gateway, settings.SecondaryGateway,
                 settings.Provider, source, ProbeSettings.FunctionFixtureOwnerFromEnvironment(),
                 NativeParityFixture.VirtualKey, CancellationToken.None);

@@ -2,6 +2,11 @@ using ConduitLLM.Configuration.Data;
 using ConduitLLM.Configuration.Extensions;
 using ConduitLLM.Configuration.ModelCatalogs;
 using ConduitLLM.Core.Extensions;
+#if CONDUIT_NATIVE_AOT
+using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Persistence.Npgsql;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+#endif
 
 namespace ConduitLLM.Admin.Extensions
 {
@@ -20,6 +25,12 @@ namespace ConduitLLM.Admin.Extensions
         {
             // Add repositories
             services.AddRepositories();
+#if CONDUIT_NATIVE_AOT
+            // Use the parity-tested fixed-query store for the selected native
+            // settings endpoints and the shared settings cache.
+            services.RemoveAll<IGlobalSettingRepository>();
+            services.AddSingleton<IGlobalSettingRepository, NpgsqlGlobalSettingRepository>();
+#endif
 
             // Add caching services
             services.AddCachingServices(configuration);

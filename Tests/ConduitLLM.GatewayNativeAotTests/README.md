@@ -118,6 +118,19 @@ Linux gate publishes this in-process upstream as part of the native probe; a
 passing published run is required to qualify this positive stateless MCP path.
 MCP agentic workflows, legacy sessions, SSE and failure billing remain separate.
 
+The native Admin selects the typed Npgsql global-setting repository; JIT retains
+the scoped EF repository. `NativeAdminGlobalSettingProbe` checks the authenticated
+HTTP surface using `X-Master-Key` and its Bearer fallback against an independent
+six-column SQL oracle. Two GUID-owned keys cover create/read/update/delete,
+duplicate and missing resources, Unicode values, description preservation and
+clearing, empty merge patches, pagination, and protected/typed validation without
+mutating existing settings. Cache invalidation and reload checks establish their
+HTTP acknowledgements only. Unrelated rows must retain their complete fingerprint.
+The probe uses bounded cleanup, and the parent repeats
+`--cleanup-admin-global-settings` after stopping all producers so late writes
+cannot escape fixture cleanup. Published Linux execution is required before this
+Admin path qualifies for native promotion.
+
 The probe preserves the current provider-error diagnostics in failed POST/GET
 responses; parity does not establish that these diagnostics are suitable for
 External error mode. The six-versus-eight decimal reporting discrepancy is tracked
