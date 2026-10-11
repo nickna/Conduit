@@ -18,6 +18,18 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\ConduitLLM.Persistence.Abstractions\ConduitLLM.Persistence.Abstractions.csproj" />
+    <Compile Remove="Entities\**\*.cs;Enums\*.cs;
+                     Interfaces\IAuditEvent.cs;
+                     Interfaces\IFunctionCallAuditService.cs;
+                     Interfaces\IFunctionConfigurationRepository.cs;
+                     Interfaces\IFunctionCredentialRepository.cs;
+                     Interfaces\IFunctionCostRepository.cs;
+                     Interfaces\IFunctionCostMappingRepository.cs;
+                     Interfaces\IFunctionExecutionRepository.cs" />
+  </ItemGroup>
+
   <!-- Guard the resolved transitive graph: unused package references do not show
        up in emitted assembly-reference tests, but still contaminate restores. -->
   <Target Name="VerifyFunctionDependencyBoundary" AfterTargets="ResolvePackageAssets">

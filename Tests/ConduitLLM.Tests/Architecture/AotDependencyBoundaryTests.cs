@@ -533,6 +533,7 @@ public sealed class AotDependencyBoundaryTests
             "ConduitLLM.Core",
             "ConduitLLM.Functions",
             "ConduitLLM.Gateway",
+            "ConduitLLM.Persistence.Abstractions",
             "ConduitLLM.Providers",
             "ConduitLLM.Security"
         };

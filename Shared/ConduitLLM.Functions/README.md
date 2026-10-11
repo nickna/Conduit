@@ -26,6 +26,16 @@ The Functions module provides a unified framework for:
 
 ## Architecture Overview
 
+The function entities, enums, identity/audit interfaces and five repository
+interfaces compile into `ConduitLLM.Persistence.Abstractions` from linked sources.
+Their namespaces and signatures stay the same, and Functions forwards all 24
+public types so existing compiled consumers and old assembly-qualified names
+continue to resolve. Configuration depends on this neutral leaf rather than the
+function provider implementations. Clients, services, security, DTOs and JSON
+contexts remain in Functions, which Core references explicitly. This ownership
+boundary does not change the EF repository implementations or prove native
+function persistence.
+
 ### Core Components
 
 ```
