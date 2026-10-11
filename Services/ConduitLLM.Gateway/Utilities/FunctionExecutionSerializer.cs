@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 using ConduitLLM.Core.Models;
 using ConduitLLM.Gateway.Serialization;
+using ConduitLLM.Gateway.Middleware;
 
 namespace ConduitLLM.Gateway.Utilities;
 
@@ -19,8 +20,17 @@ public static class FunctionExecutionSerializer
     /// including execution status, cost, and links to FunctionExecution records.
     /// </summary>
     /// <param name="results">The list of function execution results to serialize.</param>
+    /// <param name="billingRequestId">Parent request identifier used for reservation settlement.</param>
+    /// <param name="requestId">Parent HTTP trace identifier used in billing audit events.</param>
+    /// <param name="costBreakdown">Costs calculated by parent request accounting.</param>
+    /// <param name="providerToolUsage">Provider-hosted tools billed alongside configured functions.</param>
     /// <returns>JSON string representation of the function execution results.</returns>
-    public static string SerializeFunctionExecutionResults(IReadOnlyList<ToolExecutionEvent> results)
+    public static string SerializeFunctionExecutionResults(
+        IReadOnlyList<ToolExecutionEvent> results,
+        string? billingRequestId = null,
+        string? requestId = null,
+        FunctionExecutionCostBreakdown? costBreakdown = null,
+        ToolUsageData? providerToolUsage = null)
     {
         ArgumentNullException.ThrowIfNull(results);
 
@@ -28,10 +38,14 @@ public static class FunctionExecutionSerializer
             new FunctionExecutionResultsMetadata(
                 "chat_with_functions",
                 results.Count,
-                results.Sum(r => r.Cost ?? 0m),
+                costBreakdown?.FunctionCost ?? results.Sum(r => r.Cost ?? 0m),
                 results.Count(r => r.Status == "completed"),
                 results.Count(r => r.Status == "failed"),
-                results.ToList()),
+                results.ToList(),
+                billingRequestId,
+                requestId,
+                costBreakdown,
+                providerToolUsage),
             GatewayJsonTypeInfo.Require<FunctionExecutionResultsMetadata>(DefaultOptions));
     }
 
@@ -63,6 +77,7 @@ public static class FunctionExecutionSerializer
         var options = new JsonSerializerOptions
         {
             TypeInfoResolver = GatewayInternalJsonContext.Default,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
             WriteIndented = false
         };
         options.Converters.Add(new ToolExecutionEventMetadataConverter());
@@ -110,7 +125,34 @@ public class FunctionExecutionMetadata
     /// </summary>
     [System.Text.Json.Serialization.JsonPropertyName("functionCalls")]
     public List<ToolExecutionEvent>? FunctionCalls { get; set; }
+
+    [JsonPropertyName("billingRequestId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? BillingRequestId { get; set; }
+
+    [JsonPropertyName("requestId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RequestId { get; set; }
+
+    [JsonPropertyName("costBreakdown")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public FunctionExecutionCostBreakdown? CostBreakdown { get; set; }
+
+    [JsonPropertyName("providerToolUsage")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ToolUsageData? ProviderToolUsage { get; set; }
 }
+
+/// <summary>
+/// Cost components calculated by request accounting. LLM and provider tool costs are null
+/// when usage is unavailable; TotalCost is the amount recorded on the parent request log.
+/// The legacy metadata totalCost field continues to represent function cost alone.
+/// </summary>
+public sealed record FunctionExecutionCostBreakdown(
+    [property: JsonPropertyName("llmCost")] decimal? LlmCost,
+    [property: JsonPropertyName("functionCost")] decimal FunctionCost,
+    [property: JsonPropertyName("providerToolCost")] decimal? ProviderToolCost,
+    [property: JsonPropertyName("totalCost")] decimal TotalCost);
 
 /// <summary>
 /// Reads legacy camelCase request-log entries and writes the canonical snake_case
@@ -144,6 +186,9 @@ internal sealed class ToolExecutionEventMetadataConverter : JsonConverter<ToolEx
 
             switch (propertyName)
             {
+                case "iteration":
+                    result.Iteration = reader.TokenType == JsonTokenType.Null ? null : reader.GetInt32();
+                    break;
                 case "tool_call_id":
                 case "toolCallId":
                     result.ToolCallId = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
@@ -181,6 +226,10 @@ internal sealed class ToolExecutionEventMetadataConverter : JsonConverter<ToolEx
         JsonSerializerOptions options)
     {
         writer.WriteStartObject();
+        if (value.Iteration.HasValue)
+        {
+            writer.WriteNumber("iteration", value.Iteration.Value);
+        }
         if (value.ToolCallId is not null)
         {
             writer.WriteString("tool_call_id", value.ToolCallId);

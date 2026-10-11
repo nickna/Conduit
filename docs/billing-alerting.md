@@ -62,5 +62,30 @@ vision-heavy traffic raises this tier's share. That is expected behaviour, not a
 5. For production revenue-loss events, reconcile affected request logs and ledger entries before
    closing the incident.
 
+## Financial precision and historical reconciliation
+
+The `PreserveEightDecimalFinancialAmounts` migration retains eight fractional digits in request
+costs, spend history, billing and pricing audit costs, ledger amounts, and ledger balances. It widens
+`numeric(10,6)` to `numeric(12,8)` and `numeric(18,6)` to `numeric(20,8)`, preserving the existing four
+and twelve integral digits. Group balances and function execution costs already retain eight digits.
+
+The migration preserves historical stored values. PostgreSQL already rounded earlier reporting
+rows to six digits; widening a column cannot recover the discarded digits. Reconciliation across
+the upgrade must retain that rounding as historical uncertainty and record the migration cutover
+time with the release evidence. Delayed writes and pending spend can mix old six-digit request
+rows with new eight-digit ledger rows in the same billing window; treat those transition windows
+as historical too. Compare fully settled windows written under the expanded schema at eight digits.
+For earlier rows, corroborate discrepancies with execution amounts or provider evidence before making a correction;
+the rounded log or ledger value alone does not establish the original charge. Do not rewrite
+historical rows or debit customers merely to make aggregate totals match. Any verified adjustment
+should use a separate, audited ledger entry. Existing reconciliation thresholds remain unchanged.
+
+Replaying an old idempotent debit can also conflict when its ledger amount was rounded before the
+upgrade. Retain the pending claim and its original idempotency key until the committed debit is
+verified against independent evidence. Giving the same claim a new key can debit the customer twice.
+
+An application rollback can keep these wider columns. Reverting this migration's schema rounds
+new eight-decimal rows to six digits again; preserve the wider schema when rolling back code.
+
 `conduit_billing_revenue_loss_dollars_total` currently counts revenue-loss events; despite its legacy
 name, its value is not a dollar estimate.

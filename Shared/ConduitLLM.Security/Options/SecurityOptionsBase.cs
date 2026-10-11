@@ -125,6 +125,12 @@ namespace ConduitLLM.Security.Options
     public class SecurityHeadersOptions
     {
         /// <summary>
+        /// Whether the security headers middleware may add or remove response headers.
+        /// When disabled, individual header settings are ignored.
+        /// </summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>
         /// X-Content-Type-Options header
         /// </summary>
         public bool XContentTypeOptions { get; set; } = true;

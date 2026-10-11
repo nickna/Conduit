@@ -86,6 +86,7 @@ namespace ConduitLLM.Gateway.Endpoints
             var functionExecutionResults = agenticMetrics.FunctionCalls
                 .Select(fc => new ToolExecutionEvent
                 {
+                    Iteration = fc.Iteration,
                     ToolCallId = fc.ToolCallId,
                     FunctionName = fc.FunctionName,
                     Status = fc.Success ? "completed" : "failed",
@@ -332,7 +333,8 @@ namespace ConduitLLM.Gateway.Endpoints
 
                 foreach (var toolCallChunk in toolCallDeltas)
                 {
-                    if (!state.AccumulatedToolCalls.TryGetValue(toolCallChunk.Index, out var existing))
+                    var key = (chunk.ProviderIteration ?? 0, choice.Index, toolCallChunk.Index);
+                    if (!state.AccumulatedToolCalls.TryGetValue(key, out var existing))
                     {
                         if (state.AccumulatedToolCalls.Count >= state.MaximumToolCalls)
                         {
@@ -341,7 +343,7 @@ namespace ConduitLLM.Gateway.Endpoints
                         }
 
                         existing = new StreamingToolCallAccumulator();
-                        state.AccumulatedToolCalls[toolCallChunk.Index] = existing;
+                        state.AccumulatedToolCalls[key] = existing;
                     }
 
                     existing.AppendId(state.RetainToolFragment(toolCallChunk.Id));
@@ -669,7 +671,7 @@ namespace ConduitLLM.Gateway.Endpoints
             public ChatCompletionChunk? LastChunk { get; set; }
             public string? StreamingModel { get; set; }
             public BoundedStringAccumulator ContentAccumulator { get; }
-            public Dictionary<int, StreamingToolCallAccumulator> AccumulatedToolCalls { get; } = new();
+            public Dictionary<(int Iteration, int Choice, int Tool), StreamingToolCallAccumulator> AccumulatedToolCalls { get; } = new();
             public List<ToolExecutionEvent> FunctionExecutionResults { get; } = new();
             public decimal TotalFunctionCost { get; set; }
             public Dictionary<int, Usage> ProviderCalls { get; } = new();

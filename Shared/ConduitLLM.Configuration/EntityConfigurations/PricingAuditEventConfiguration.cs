@@ -84,7 +84,7 @@ public class PricingAuditEventConfiguration : IEntityTypeConfiguration<PricingAu
             .IsRequired();
 
         builder.Property(e => e.CalculatedCost)
-            .HasColumnType("decimal(10, 6)")
+            .HasColumnType("decimal(12, 8)")
             .IsRequired();
 
         // Foreign key relationship
