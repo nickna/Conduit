@@ -140,10 +140,14 @@ namespace ConduitLLM.Tests.Http.Middleware
             ctx.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
         }
 
-        [Fact]
-        public async Task Returns_429_with_Retry_After_when_service_rejects()
+        [Theory]
+        [InlineData("/v1/chat/completions")]
+        [InlineData("/v1/models")]
+        [InlineData("/v1/models/")]
+        [InlineData("/v1/models/example")]
+        public async Task Returns_429_with_Retry_After_when_service_rejects(string path)
         {
-            var ctx = NewContext();
+            var ctx = NewContext(path);
             ctx.Items["VirtualKey.KeyHash"] = "hash-abc";
             ctx.Items["VirtualKey.RateLimitRpm"] = 10;
             ctx.Items["VirtualKey.RateLimitRpd"] = null;

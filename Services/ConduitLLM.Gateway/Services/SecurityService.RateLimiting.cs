@@ -30,8 +30,11 @@ namespace ConduitLLM.Gateway.Services
 
         private bool IsDiscoveryPath(string path)
         {
+            var requestPath = new PathString(path);
+
             return _options.RateLimiting.Discovery.DiscoveryPaths
-                .Any(discoveryPath => path.Contains(discoveryPath, StringComparison.OrdinalIgnoreCase));
+                .Any(discoveryPath => requestPath.StartsWithSegments(
+                    discoveryPath.TrimEnd('/'), StringComparison.OrdinalIgnoreCase));
         }
 
         /// <remarks>
