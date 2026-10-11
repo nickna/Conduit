@@ -278,19 +278,20 @@ public sealed class LegacyLedgerReplayPersistenceParityTests(PostgresLockTestCon
         await using var schema = await CreateSchemaAsync(seedLegacy: true);
         var originalBalance = await ReadBalanceAsync(schema);
         var originalLedger = await ReadLedgerAsync(schema);
-        var results = await Task.WhenAll(new[] { "operator-one", "operator-two" }
-            .Select(async actor =>
+        async Task<(string Actor, PostgresException? Error)> ApproveForActorAsync(string actor)
+        {
+            try
             {
-                try
-                {
-                    await ApproveAsync(schema, "verified_by", actor);
-                    return (Actor: actor, Error: (Exception?)null);
-                }
-                catch (PostgresException error)
-                {
-                    return (Actor: actor, Error: (Exception?)error);
-                }
-            }));
+                await ApproveAsync(schema, "verified_by", actor);
+                return (actor, null);
+            }
+            catch (PostgresException error)
+            {
+                return (actor, error);
+            }
+        }
+        var results = await Task.WhenAll(new[] { "operator-one", "operator-two" }
+            .Select(ApproveForActorAsync));
 
         var winner = Assert.Single(results, result => result.Error is null);
         Assert.Single(results, result => result.Error is PostgresException);

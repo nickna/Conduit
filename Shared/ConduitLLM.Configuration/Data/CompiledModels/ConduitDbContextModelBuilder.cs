@@ -17,7 +17,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
     public partial class ConduitDbContextModel
     {
         private ConduitDbContextModel()
-            : base(skipDetectChanges: false, modelId: new Guid("09fce26f-234b-446f-a8fb-9b5028513283"), entityTypeCount: 38)
+            : base(skipDetectChanges: false, modelId: new Guid("0b80bdf0-a1d8-4ab5-9b1e-882e3fbc0c7c"), entityTypeCount: 38)
         {
         }
 
@@ -787,7 +787,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var defaultTableMappings1 = new List<TableMappingBase<ColumnMappingBase>>();
             billingAuditEvent.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings1);
             var conduitLLMConfigurationEntitiesBillingAuditEventTableBase = new TableBase("ConduitLLM.Configuration.Entities.BillingAuditEvent", null, relationalModel);
-            var calculatedCostColumnBase = new ColumnBase<ColumnMappingBase>("CalculatedCost", "numeric(10,6)", conduitLLMConfigurationEntitiesBillingAuditEventTableBase)
+            var calculatedCostColumnBase = new ColumnBase<ColumnMappingBase>("CalculatedCost", "numeric(12,8)", conduitLLMConfigurationEntitiesBillingAuditEventTableBase)
             {
                 IsNullable = true
             };
@@ -835,7 +835,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             conduitLLMConfigurationEntitiesBillingAuditEventTableBase.Columns.Add("RequestPath", requestPathColumnBase);
             var timestampColumnBase = new ColumnBase<ColumnMappingBase>("Timestamp", "timestamp with time zone", conduitLLMConfigurationEntitiesBillingAuditEventTableBase);
             conduitLLMConfigurationEntitiesBillingAuditEventTableBase.Columns.Add("Timestamp", timestampColumnBase);
-            var toolUsageCostColumnBase = new ColumnBase<ColumnMappingBase>("ToolUsageCost", "numeric(10,6)", conduitLLMConfigurationEntitiesBillingAuditEventTableBase)
+            var toolUsageCostColumnBase = new ColumnBase<ColumnMappingBase>("ToolUsageCost", "numeric(12,8)", conduitLLMConfigurationEntitiesBillingAuditEventTableBase)
             {
                 IsNullable = true
             };
@@ -888,7 +888,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var idColumn0 = new Column("Id", "uuid", billingAuditEventsTable);
             billingAuditEventsTable.Columns.Add("Id", idColumn0);
             idColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<Guid>(idColumn0);
-            var calculatedCostColumn = new Column("CalculatedCost", "numeric(10,6)", billingAuditEventsTable)
+            var calculatedCostColumn = new Column("CalculatedCost", "numeric(12,8)", billingAuditEventsTable)
             {
                 IsNullable = true
             };
@@ -945,7 +945,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var timestampColumn = new Column("Timestamp", "timestamp with time zone", billingAuditEventsTable);
             billingAuditEventsTable.Columns.Add("Timestamp", timestampColumn);
             timestampColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(timestampColumn);
-            var toolUsageCostColumn = new Column("ToolUsageCost", "numeric(10,6)", billingAuditEventsTable)
+            var toolUsageCostColumn = new Column("ToolUsageCost", "numeric(12,8)", billingAuditEventsTable)
             {
                 IsNullable = true
             };
@@ -3444,7 +3444,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var conduitLLMConfigurationEntitiesPricingAuditEventTableBase = new TableBase("ConduitLLM.Configuration.Entities.PricingAuditEvent", null, relationalModel);
             var appliedRateColumnBase = new ColumnBase<ColumnMappingBase>("AppliedRate", "numeric(10,8)", conduitLLMConfigurationEntitiesPricingAuditEventTableBase);
             conduitLLMConfigurationEntitiesPricingAuditEventTableBase.Columns.Add("AppliedRate", appliedRateColumnBase);
-            var calculatedCostColumnBase0 = new ColumnBase<ColumnMappingBase>("CalculatedCost", "numeric(10,6)", conduitLLMConfigurationEntitiesPricingAuditEventTableBase);
+            var calculatedCostColumnBase0 = new ColumnBase<ColumnMappingBase>("CalculatedCost", "numeric(12,8)", conduitLLMConfigurationEntitiesPricingAuditEventTableBase);
             conduitLLMConfigurationEntitiesPricingAuditEventTableBase.Columns.Add("CalculatedCost", calculatedCostColumnBase0);
             var idColumnBase15 = new ColumnBase<ColumnMappingBase>("Id", "bigint", conduitLLMConfigurationEntitiesPricingAuditEventTableBase);
             conduitLLMConfigurationEntitiesPricingAuditEventTableBase.Columns.Add("Id", idColumnBase15);
@@ -3502,7 +3502,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var appliedRateColumn = new Column("AppliedRate", "numeric(10,8)", pricingAuditEventsTable);
             pricingAuditEventsTable.Columns.Add("AppliedRate", appliedRateColumn);
             appliedRateColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<decimal>(appliedRateColumn);
-            var calculatedCostColumn0 = new Column("CalculatedCost", "numeric(10,6)", pricingAuditEventsTable);
+            var calculatedCostColumn0 = new Column("CalculatedCost", "numeric(12,8)", pricingAuditEventsTable);
             pricingAuditEventsTable.Columns.Add("CalculatedCost", calculatedCostColumn0);
             calculatedCostColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<decimal>(calculatedCostColumn0);
             var inputParametersColumn = new Column("InputParameters", "jsonb", pricingAuditEventsTable);
@@ -4456,7 +4456,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 IsNullable = true
             };
             conduitLLMConfigurationEntitiesRequestLogTableBase.Columns.Add("ClientIp", clientIpColumnBase);
-            var costColumnBase = new ColumnBase<ColumnMappingBase>("Cost", "numeric(10,6)", conduitLLMConfigurationEntitiesRequestLogTableBase);
+            var costColumnBase = new ColumnBase<ColumnMappingBase>("Cost", "numeric(12,8)", conduitLLMConfigurationEntitiesRequestLogTableBase);
             conduitLLMConfigurationEntitiesRequestLogTableBase.Columns.Add("Cost", costColumnBase);
             var idColumnBase22 = new ColumnBase<ColumnMappingBase>("Id", "integer", conduitLLMConfigurationEntitiesRequestLogTableBase);
             conduitLLMConfigurationEntitiesRequestLogTableBase.Columns.Add("Id", idColumnBase22);
@@ -4610,7 +4610,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             };
             requestLogsTable.Columns.Add("ClientIp", clientIpColumn);
             clientIpColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(clientIpColumn);
-            var costColumn = new Column("Cost", "numeric(10,6)", requestLogsTable);
+            var costColumn = new Column("Cost", "numeric(12,8)", requestLogsTable);
             requestLogsTable.Columns.Add("Cost", costColumn);
             costColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<decimal>(costColumn);
             var inputTokensColumn = new Column("InputTokens", "integer", requestLogsTable);
@@ -5206,9 +5206,9 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var defaultTableMappings26 = new List<TableMappingBase<ColumnMappingBase>>();
             virtualKeyGroupTransaction.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings26);
             var conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase = new TableBase("ConduitLLM.Configuration.Entities.VirtualKeyGroupTransaction", null, relationalModel);
-            var amountColumnBase = new ColumnBase<ColumnMappingBase>("Amount", "numeric(18,6)", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase);
+            var amountColumnBase = new ColumnBase<ColumnMappingBase>("Amount", "numeric(20,8)", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase);
             conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase.Columns.Add("Amount", amountColumnBase);
-            var balanceAfterColumnBase = new ColumnBase<ColumnMappingBase>("BalanceAfter", "numeric(18,6)", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase);
+            var balanceAfterColumnBase = new ColumnBase<ColumnMappingBase>("BalanceAfter", "numeric(20,8)", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase);
             conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase.Columns.Add("BalanceAfter", balanceAfterColumnBase);
             var billingWindowStartUtcColumnBase = new ColumnBase<ColumnMappingBase>("BillingWindowStartUtc", "timestamp with time zone", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase)
             {
@@ -5305,10 +5305,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             virtualKeyGroupTransactionsTable.Columns.Add("Id", idColumn25);
             idColumn25.Accessors = ColumnAccessorsFactory.CreateGeneric<long>(idColumn25);
             idColumn25.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-            var amountColumn = new Column("Amount", "numeric(18,6)", virtualKeyGroupTransactionsTable);
+            var amountColumn = new Column("Amount", "numeric(20,8)", virtualKeyGroupTransactionsTable);
             virtualKeyGroupTransactionsTable.Columns.Add("Amount", amountColumn);
             amountColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<decimal>(amountColumn);
-            var balanceAfterColumn = new Column("BalanceAfter", "numeric(18,6)", virtualKeyGroupTransactionsTable);
+            var balanceAfterColumn = new Column("BalanceAfter", "numeric(20,8)", virtualKeyGroupTransactionsTable);
             virtualKeyGroupTransactionsTable.Columns.Add("BalanceAfter", balanceAfterColumn);
             balanceAfterColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<decimal>(balanceAfterColumn);
             var billingWindowStartUtcColumn = new Column("BillingWindowStartUtc", "timestamp with time zone", virtualKeyGroupTransactionsTable)
@@ -5499,7 +5499,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var defaultTableMappings27 = new List<TableMappingBase<ColumnMappingBase>>();
             virtualKeySpendHistory.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings27);
             var conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase = new TableBase("ConduitLLM.Configuration.Entities.VirtualKeySpendHistory", null, relationalModel);
-            var amountColumnBase0 = new ColumnBase<ColumnMappingBase>("Amount", "numeric(10,6)", conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase);
+            var amountColumnBase0 = new ColumnBase<ColumnMappingBase>("Amount", "numeric(12,8)", conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase);
             conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase.Columns.Add("Amount", amountColumnBase0);
             var dateColumnBase = new ColumnBase<ColumnMappingBase>("Date", "timestamp with time zone", conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase);
             conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase.Columns.Add("Date", dateColumnBase);
@@ -5526,7 +5526,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             virtualKeySpendHistoryTable.Columns.Add("Id", idColumn26);
             idColumn26.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(idColumn26);
             idColumn26.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-            var amountColumn0 = new Column("Amount", "numeric(10,6)", virtualKeySpendHistoryTable);
+            var amountColumn0 = new Column("Amount", "numeric(12,8)", virtualKeySpendHistoryTable);
             virtualKeySpendHistoryTable.Columns.Add("Amount", amountColumn0);
             amountColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<decimal>(amountColumn0);
             var dateColumn = new Column("Date", "timestamp with time zone", virtualKeySpendHistoryTable);

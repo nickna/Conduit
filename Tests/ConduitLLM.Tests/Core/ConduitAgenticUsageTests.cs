@@ -3,6 +3,12 @@ using System.Runtime.CompilerServices;
 using ConduitLLM.Core;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Services;
+using ConduitLLM.Core.Serialization;
+using ConduitLLM.Functions.Entities;
+using ConduitLLM.Functions.Enums;
+using ConduitLLM.Functions.Interfaces;
+using System.Text.Json;
 
 using Microsoft.Extensions.Logging;
 
@@ -166,7 +172,89 @@ public class ConduitAgenticUsageTests
             It.IsAny<ChatCompletionRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
-    private static Conduit CreateConduit(ILLMClient client)
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(false, 3)]
+    [InlineData(true, 1)]
+    [InlineData(true, 3)]
+    public async Task AgenticFlow_MultipleIterationsAndForcedFinal_PreservesFunctionIterations(
+        bool streaming, int maximumIterations)
+    {
+        var client = new Mock<ILLMClient>();
+        client.SetupSequence(x => x.CreateChatCompletionAsync(
+                It.IsAny<ChatCompletionRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateResponse(FinishReason.ToolCalls, new Usage { TotalTokens = 10 }, true))
+            .ReturnsAsync(CreateResponse(
+                maximumIterations == 1 ? FinishReason.Stop : FinishReason.ToolCalls,
+                new Usage { TotalTokens = 20 }, maximumIterations > 1))
+            .ReturnsAsync(CreateResponse(FinishReason.Stop, new Usage { TotalTokens = 30 }));
+        client.SetupSequence(x => x.StreamChatCompletionAsync(
+                It.IsAny<ChatCompletionRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns(Stream(CreateChunk(FinishReason.ToolCalls, new Usage { TotalTokens = 10 }, true)))
+            .Returns(Stream(CreateChunk(
+                maximumIterations == 1 ? FinishReason.Stop : FinishReason.ToolCalls,
+                new Usage { TotalTokens = 20 }, maximumIterations > 1)))
+            .Returns(Stream(CreateChunk(FinishReason.Stop, new Usage { TotalTokens = 30 })));
+        var executionService = new Mock<IFunctionExecutionService>();
+        var executionCount = 0;
+        executionService.Setup(x => x.ExecuteAsync(
+                1, 42, It.IsAny<Dictionary<string, object>>(), It.IsAny<string>(),
+                It.IsAny<Dictionary<string, object>>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new FunctionExecution
+            {
+                FunctionConfigurationId = 1,
+                State = ++executionCount == 1 ? ExecutionState.Completed : ExecutionState.Failed,
+                ActualCost = 0.01m,
+                ResponseJson = "{}",
+                ErrorMessage = "provider failure"
+            });
+        var orchestration = new AgenticOrchestrationService(
+            executionService.Object, Mock.Of<ILogger<AgenticOrchestrationService>>());
+        var conduit = CreateConduit(client.Object, orchestration);
+        var request = CreateRequest();
+        request.MaxAgenticIterations = maximumIterations;
+        var expectedIterations = maximumIterations == 1 ? new[] { 1 } : new[] { 1, 2 };
+
+        if (streaming)
+        {
+            var events = new List<ToolExecutionEvent>();
+            ChatCompletionChunk? lastChunk = null;
+            await foreach (var chunk in conduit.StreamChatCompletionAsync(
+                request, virtualKeyId: 42, onToolExecutingEvent: (executionEvent, _) =>
+                {
+                    events.Add(executionEvent);
+                    return Task.CompletedTask;
+                }))
+            {
+                lastChunk = chunk;
+            }
+
+            Assert.NotNull(lastChunk);
+            var nonNullLastChunk = lastChunk!;
+            Assert.Equal(FinishReason.Stop, Assert.Single(nonNullLastChunk.Choices!).FinishReason);
+            Assert.Equal(maximumIterations == 1 ? 30 : 60, nonNullLastChunk.Usage?.TotalTokens);
+            Assert.Equal(maximumIterations == 1 ? 2 : 3, nonNullLastChunk.ProviderCallUsage?.Iteration);
+            Assert.Equal(expectedIterations, events.Where(item => item.Status != "started")
+                .Select(item => item.Iteration!.Value));
+            Assert.Equal(expectedIterations, events.Where(item => item.Status == "started")
+                .Select(item => item.Iteration!.Value));
+            Assert.Equal("completed", events[1].Status);
+            if (maximumIterations > 1)
+                Assert.Equal("failed", events[3].Status);
+        }
+        else
+        {
+            var response = await conduit.CreateChatCompletionAsync(request, virtualKeyId: 42);
+            Assert.Equal(expectedIterations, response.AgenticMetrics!.FunctionCalls.Select(item => item.Iteration));
+            Assert.Equal(expectedIterations.Length * 0.01m, response.AgenticMetrics.TotalFunctionCost);
+            // Verify the public response contract uses generated metadata and preserves the values.
+            using var json = JsonDocument.Parse(JsonSerializer.Serialize(response, CoreHttpJsonContext.Default.ChatCompletionResponse));
+            Assert.Equal(expectedIterations, json.RootElement.GetProperty("agentic_metrics")
+                .GetProperty("function_calls").EnumerateArray().Select(item => item.GetProperty("iteration").GetInt32()));
+        }
+    }
+
+    private static Conduit CreateConduit(ILLMClient client, IAgenticOrchestrationService? realOrchestration = null)
     {
         var clientFactory = new Mock<ILLMClientFactory>();
         clientFactory.Setup(x => x.GetClientAsync("test-model", It.IsAny<CancellationToken>()))
@@ -202,7 +290,7 @@ public class ConduitAgenticUsageTests
             clientFactory.Object,
             Mock.Of<ILogger<Conduit>>(),
             functionDiscoveryService: functionDiscovery.Object,
-            agenticOrchestrationService: orchestration.Object);
+            agenticOrchestrationService: realOrchestration ?? orchestration.Object);
     }
 
     private static ChatCompletionRequest CreateRequest() => new()
