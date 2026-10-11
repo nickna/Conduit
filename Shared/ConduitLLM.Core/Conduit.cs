@@ -374,6 +374,7 @@ namespace ConduitLLM.Core
                 // Stream the LLM response
                 await foreach (var chunk in client.StreamChatCompletionAsync(request, apiKey, cancellationToken))
                 {
+                    chunk.ProviderIteration = iteration;
                     if (chunk.Usage != null)
                     {
                         // Providers may repeat usage in multiple chunks. Keep the latest usage for
@@ -467,6 +468,7 @@ namespace ConduitLLM.Core
                     Usage? finalCallUsage = null;
                     await foreach (var chunk in client.StreamChatCompletionAsync(request, apiKey, cancellationToken))
                     {
+                        chunk.ProviderIteration = iteration + 1;
                         if (chunk.Usage != null)
                         {
                             finalCallUsage = chunk.Usage;
@@ -497,6 +499,7 @@ namespace ConduitLLM.Core
                         {
                             await onToolExecutingEvent(new ToolExecutionEvent
                             {
+                                Iteration = iteration,
                                 ToolCallId = toolCall.Id,
                                 FunctionName = toolCall.Function.Name,
                                 Status = "started"
@@ -529,6 +532,7 @@ namespace ConduitLLM.Core
                         {
                             await onToolExecutingEvent(new ToolExecutionEvent
                             {
+                                Iteration = summary.Iteration,
                                 ToolCallId = summary.ToolCallId,
                                 FunctionName = summary.FunctionName,
                                 Status = summary.Success ? "completed" : "failed",
@@ -602,6 +606,7 @@ namespace ConduitLLM.Core
 
                 await foreach (var chunk in client.StreamChatCompletionAsync(request, apiKey, cancellationToken))
                 {
+                    chunk.ProviderIteration = iteration + 1;
                     if (chunk.Usage != null)
                     {
                         var finalUsage = chunk.Usage;

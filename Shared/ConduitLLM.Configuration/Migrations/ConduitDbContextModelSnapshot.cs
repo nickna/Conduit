@@ -17,7 +17,7 @@ namespace ConduitLLM.Configuration.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -222,7 +222,7 @@ namespace ConduitLLM.Configuration.Migrations
                         .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<decimal?>("CalculatedCost")
-                        .HasColumnType("decimal(10, 6)");
+                        .HasColumnType("decimal(12, 8)");
 
                     b.Property<int>("EventType")
                         .HasColumnType("integer");
@@ -262,7 +262,7 @@ namespace ConduitLLM.Configuration.Migrations
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<decimal?>("ToolUsageCost")
-                        .HasColumnType("decimal(10, 6)");
+                        .HasColumnType("decimal(12, 8)");
 
                     b.Property<string>("ToolUsageJson")
                         .HasColumnType("jsonb");
@@ -1158,7 +1158,7 @@ namespace ConduitLLM.Configuration.Migrations
                         .HasColumnType("decimal(10, 8)");
 
                     b.Property<decimal>("CalculatedCost")
-                        .HasColumnType("decimal(10, 6)");
+                        .HasColumnType("decimal(12, 8)");
 
                     b.Property<string>("InputParameters")
                         .IsRequired()
@@ -1573,7 +1573,7 @@ namespace ConduitLLM.Configuration.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.Property<decimal>("Cost")
-                        .HasColumnType("decimal(10, 6)");
+                        .HasColumnType("decimal(12, 8)");
 
                     b.Property<int>("InputTokens")
                         .HasColumnType("integer");
@@ -1803,10 +1803,10 @@ namespace ConduitLLM.Configuration.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
                     b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18, 6)");
+                        .HasColumnType("decimal(20, 8)");
 
                     b.Property<decimal>("BalanceAfter")
-                        .HasColumnType("decimal(18, 6)");
+                        .HasColumnType("decimal(20, 8)");
 
                     b.Property<DateTime?>("BillingWindowStartUtc")
                         .HasColumnType("timestamp with time zone");
@@ -1882,7 +1882,7 @@ namespace ConduitLLM.Configuration.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(10, 6)");
+                        .HasColumnType("decimal(12, 8)");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("timestamp with time zone");
