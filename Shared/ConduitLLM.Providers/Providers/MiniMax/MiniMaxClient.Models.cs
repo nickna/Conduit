@@ -372,6 +372,7 @@ namespace ConduitLLM.Providers.MiniMax
             GenerationMode = System.Text.Json.Serialization.JsonSourceGenerationMode.Metadata)]
         [System.Text.Json.Serialization.JsonSerializable(typeof(MiniMaxStreamChunk))]
         [System.Text.Json.Serialization.JsonSerializable(typeof(MiniMaxChatCompletionRequest))]
+        [System.Text.Json.Serialization.JsonSerializable(typeof(MiniMaxChatCompletionResponse))]
         [System.Text.Json.Serialization.JsonSerializable(typeof(MiniMaxVideoStatusResponse))]
         [System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, object?>))]
         [System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, string?>))]
