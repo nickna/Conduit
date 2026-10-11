@@ -48,8 +48,9 @@ below. This imports the verified result without invoking generation again.
 
 Verify the provider operation, original provider/model, owning virtual key, and
 each output against the incident record. For Replicate image/video, MiniMax video,
-and OpenRouter video, Conduit captures the operation ID before polling. The listing
-includes the original provider/model and recovery status. Other providers and
+and OpenRouter video, Conduit captures the operation ID before polling. Credential
+failover cannot submit another job after acceptance of an asynchronous operation.
+The listing includes the original provider/model and recovery status. Other providers and
 historical tasks may lack captured IDs: manually confirm the exact original
 operation and ownership with the provider; a timestamp match alone is insufficient.
 Conduit imports verified output references rather than submitting another provider

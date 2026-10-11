@@ -5,14 +5,24 @@ namespace ConduitLLM.Core.Utilities;
 /// <summary>Per-invocation callback that flows through client decorators without shared mutable callbacks.</summary>
 public sealed class MediaProviderOperationScope : IDisposable
 {
-    private static readonly AsyncLocal<Func<MediaProviderOperation, CancellationToken, Task>?> Current = new();
-    private readonly Func<MediaProviderOperation, CancellationToken, Task>? _previous;
+    private static readonly AsyncLocal<MediaProviderOperationScope?> Current = new();
+    private readonly MediaProviderOperationScope? _previous;
+    private readonly Func<MediaProviderOperation, CancellationToken, Task> _callback;
+    private bool _accepted;
     public MediaProviderOperationScope(Func<MediaProviderOperation, CancellationToken, Task> callback)
     {
         _previous = Current.Value;
-        Current.Value = callback;
+        _callback = callback;
+        Current.Value = this;
     }
-    public static Task RecordAsync(MediaProviderOperation provider, CancellationToken cancellationToken) =>
-        Current.Value?.Invoke(provider, cancellationToken) ?? Task.CompletedTask;
+    public static bool HasAcceptedOperation => Current.Value?._accepted == true;
+    public static Task RecordAsync(MediaProviderOperation provider, CancellationToken cancellationToken)
+    {
+        var scope = Current.Value;
+        if (scope == null) return Task.CompletedTask;
+        // Acceptance must stop credential failover even if persistence itself fails.
+        scope._accepted = true;
+        return scope._callback(provider, cancellationToken);
+    }
     public void Dispose() => Current.Value = _previous;
 }

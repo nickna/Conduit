@@ -2,11 +2,13 @@ using System.Net;
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Utilities;
 using ConduitLLM.Providers.MiniMax;
 using ConduitLLM.Providers.OpenRouter;
 using ConduitLLM.Providers.Replicate;
+using ConduitLLM.Providers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -14,6 +16,37 @@ namespace ConduitLLM.Tests.Core.Services;
 
 public sealed class MediaProviderAcceptanceTests
 {
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public async Task CredentialFailoverIsAllowedOnlyBeforeMediaAcceptance(bool video, bool accepted)
+    {
+        var primary = new Mock<ILLMClient>(); var fallback = new Mock<ILLMClient>();
+        var failure = new LLMCommunicationException("Polling credential expired", HttpStatusCode.Unauthorized, null);
+        async Task RejectAsync()
+        {
+            if (accepted) await MediaProviderOperationScope.RecordAsync(new(1, 7, "model", "provider", "original-operation"), CancellationToken.None);
+            throw failure;
+        }
+        primary.Setup(x => x.CreateImageAsync(It.IsAny<ImageGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(async () => { await RejectAsync(); return new ImageGenerationResponse { Created = 1, Data = [] }; });
+        primary.As<IVideoGenerationClient>().Setup(x => x.CreateVideoAsync(It.IsAny<VideoGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(async () => { await RejectAsync(); return new VideoGenerationResponse(); });
+        fallback.Setup(x => x.CreateImageAsync(It.IsAny<ImageGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ImageGenerationResponse { Created = 1, Data = [] });
+        var fallbackVideo = fallback.As<IVideoGenerationClient>();
+        fallbackVideo.Setup(x => x.CreateVideoAsync(It.IsAny<VideoGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new VideoGenerationResponse());
+        var client = new ProviderKeyFailoverLLMClient([new(7, 0, () => primary.Object), new(8, 0, () => fallback.Object)]);
+        using var scope = new MediaProviderOperationScope((_, _) => Task.CompletedTask);
+        Func<Task> invoke = () => video ? client.CreateVideoAsync(new() { Model = "model", Prompt = "original" }) :
+            client.CreateImageAsync(new() { Model = "model", Prompt = "original" });
+        if (accepted) Assert.Same(failure, await Assert.ThrowsAsync<LLMCommunicationException>(invoke));
+        else await invoke();
+        if (video) fallbackVideo.Verify(x => x.CreateVideoAsync(It.IsAny<VideoGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), accepted ? Times.Never() : Times.Once());
+        else fallback.Verify(x => x.CreateImageAsync(It.IsAny<ImageGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), accepted ? Times.Never() : Times.Once());
+    }
+
     [Theory]
     [InlineData("replicate", false)] [InlineData("replicate", true)]
     [InlineData("minimax", true)] [InlineData("openrouter", true)]

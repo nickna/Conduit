@@ -138,7 +138,7 @@ internal sealed class ProviderKeyFailoverLLMClient :
         CancellationToken cancellationToken = default)
         => ExecuteAsync(
             client => client.CreateImageAsync(request, apiKey, cancellationToken),
-            allowFailover: string.IsNullOrWhiteSpace(apiKey));
+            allowFailover: string.IsNullOrWhiteSpace(apiKey), stopAfterMediaAcceptance: true);
 
     public Task<VideoGenerationResponse> CreateVideoAsync(
         VideoGenerationRequest request,
@@ -146,7 +146,7 @@ internal sealed class ProviderKeyFailoverLLMClient :
         CancellationToken cancellationToken = default)
         => ExecuteAsync(
             client => InvokeVideoAsync(client, request, apiKey, cancellationToken),
-            allowFailover: string.IsNullOrWhiteSpace(apiKey));
+            allowFailover: string.IsNullOrWhiteSpace(apiKey), stopAfterMediaAcceptance: true);
 
     public Task<AuthenticationResult> VerifyAuthenticationAsync(
         string? apiKey = null,
@@ -168,7 +168,8 @@ internal sealed class ProviderKeyFailoverLLMClient :
 
     private async Task<T> ExecuteAsync<T>(
         Func<ILLMClient, Task<T>> operation,
-        bool allowFailover)
+        bool allowFailover,
+        bool stopAfterMediaAcceptance = false)
     {
         ExceptionDispatchInfo? originalError = null;
         var excludedGroups = new HashSet<int>();
@@ -190,7 +191,8 @@ internal sealed class ProviderKeyFailoverLLMClient :
             catch (Exception exception)
             {
                 var fatalKind = ClassifyFatalError(exception);
-                if (!allowFailover || fatalKind == FatalErrorKind.None)
+                if (!allowFailover || fatalKind == FatalErrorKind.None ||
+                    stopAfterMediaAcceptance && MediaProviderOperationScope.HasAcceptedOperation)
                 {
                     throw;
                 }

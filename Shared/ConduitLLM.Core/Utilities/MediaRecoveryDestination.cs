@@ -17,15 +17,25 @@ public static class MediaRecoveryDestination
         if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
         var b = address.GetAddressBytes();
         if (address.AddressFamily == AddressFamily.InterNetworkV6)
-            return (b[0] & 0xe0) == 0x20 &&
-                !(b[0] == 0x20 && b[1] == 1 && (b[2] == 0 && b[3] == 0 || b[2] == 0x0d && b[3] == 0xb8)) &&
-                !(b[0] == 0x20 && b[1] == 2); // Exclude Teredo and 6to4 transition destinations.
-        return b[0] is not (0 or 10 or 127) && b[0] < 224 &&
-            !(b[0] == 100 && b[1] is >= 64 and <= 127) &&
-            !(b[0] == 169 && b[1] == 254) && !(b[0] == 172 && b[1] is >= 16 and <= 31) &&
-            !(b[0] == 192 && (b[1] == 168 || b[1] == 0 || b[1] == 2)) &&
-            !(b[0] == 198 && b[1] is 18 or 19 || b[0] == 198 && b[1] == 51 && b[2] == 100) &&
-            !(b[0] == 203 && b[1] == 0 && b[2] == 113);
+        {
+            if ((b[0] & 0xe0) != 0x20) return false;
+            // Documentation and IPv4 transition destinations are not recovery endpoints.
+            if (b is [0x20, 1, 0, 0, ..] or [0x20, 1, 0x0d, 0xb8, ..] or [0x20, 2, ..]) return false;
+            return true;
+        }
+        return b switch
+        {
+            [0 or 10 or 127, ..] => false,
+            [>= 224, ..] => false,
+            [100, >= 64 and <= 127, ..] => false,
+            [169, 254, ..] => false,
+            [172, >= 16 and <= 31, ..] => false,
+            [192, 0 or 2 or 168, ..] => false,
+            [198, 18 or 19, ..] => false,
+            [198, 51, 100, ..] => false,
+            [203, 0, 113, ..] => false,
+            _ => true
+        };
     }
 
     public static async ValueTask<Stream> ConnectAsync(SocketsHttpConnectionContext context, CancellationToken token)

@@ -29,7 +29,8 @@ public sealed class MediaTaskReconciliationStore(IWolverineRuntime runtime, IDis
             throw new InvalidOperationException("Media reconciliation requires durable PostgreSQL messaging.");
         await using var connection = await database.DataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-        outbox.EnlistInOutbox(new DatabaseEnvelopeTransaction(database, transaction));
+        using var envelopeTransaction = new DatabaseEnvelopeTransaction(database, transaction);
+        outbox.EnlistInOutbox(envelopeTransaction);
         var row = await ReadAsync(connection, transaction, taskId, cancellationToken);
         if (row == null) return MediaReconciliationAcceptance.Missing;
         var metadata = row.Metadata;
@@ -44,9 +45,11 @@ public sealed class MediaTaskReconciliationStore(IWolverineRuntime runtime, IDis
         catch (Exception ex) when (ex is JsonException or InvalidOperationException) { return MediaReconciliationAcceptance.Invalid; }
         var model = command.Image?.Request.Model ?? command.Video!.ResolveRequest().Model;
         var count = command.Image?.Request.N ?? 1;
-        if (model != decision.Model || count != decision.ResultUrls.Count ||
-            row.OperationId != null && row.OperationId != decision.ProviderOperationId ||
-            metadata.MediaProvider is { } provider && (provider.ProviderId != decision.ProviderId || provider.ProviderModelId != decision.ProviderModelId))
+        var matchesRequest = model == decision.Model && count == decision.ResultUrls.Count;
+        var matchesOperation = row.OperationId == null || row.OperationId == decision.ProviderOperationId;
+        var matchesProvider = metadata.MediaProvider is not { } provider ||
+            provider.ProviderId == decision.ProviderId && provider.ProviderModelId == decision.ProviderModelId;
+        if (!matchesRequest || !matchesOperation || !matchesProvider)
             return MediaReconciliationAcceptance.Invalid;
         if (metadata.Reconciliation is { } history)
         {
