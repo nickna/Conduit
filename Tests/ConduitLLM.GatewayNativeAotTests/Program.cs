@@ -13,6 +13,22 @@ using NpgsqlTypes;
 
 using StackExchange.Redis;
 
+if (args.Length > 0 && args[0] == "--benchmark-workload")
+{
+    try
+    {
+        if (args.Length != 2) { throw new InvalidOperationException(); }
+        Environment.ExitCode = await NativeBenchmarkWorkloadProbe.RunAsync(
+            args[1], Console.OpenStandardOutput());
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Benchmark workload failed.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
 if (args is ["--seed"])
 {
     await NativeParityFixture.SeedAsync(

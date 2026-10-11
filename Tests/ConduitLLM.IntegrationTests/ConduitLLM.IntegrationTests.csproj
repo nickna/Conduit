@@ -52,6 +52,7 @@
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeProviderStub.cs" Link="Infrastructure/NativeProviderStub.cs" />
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeMcpProviderStub.cs" Link="Infrastructure/NativeMcpProviderStub.cs" />
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeProviderHttpRequestReader.cs" Link="Infrastructure/NativeProviderHttpRequestReader.cs" />
+    <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeBenchmarkWorkloadProbe.cs" Link="Infrastructure/NativeBenchmarkWorkloadProbe.cs" />
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeProbeJsonContext.cs" Link="Infrastructure/NativeProbeJsonContext.cs" />
   </ItemGroup>
 

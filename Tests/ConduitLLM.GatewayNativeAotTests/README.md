@@ -135,6 +135,33 @@ The probe uses bounded cleanup, and the parent repeats
 cannot escape fixture cleanup. Published Linux execution is required before this
 Admin path qualifies for native promotion.
 
+`--benchmark-workload <configuration.json>` runs one closed authenticated workload
+against an existing fixture: `admin-setting-read`, `gateway-chat-nonstream`, or
+`gateway-chat-sse`. The strict configuration contains `workload`, `baseUrl`,
+`requests`, `concurrency`, `warmupRequests` and `timeoutSeconds`. Admin also requires
+`settingKey` and `expectedValue`; chat requires `model`, `prompt`, `expectedContent`,
+`expectedPromptTokens` and `expectedCompletionTokens`. The credential comes only
+from `CONDUIT_NATIVE_BENCHMARK_API_KEY` and is omitted from configurations, reports
+and failure diagnostics. Duplicate, unknown or missing fields are rejected before
+HTTP. The driver creates no database or setting fixtures.
+
+Each response must match its complete contract. Admin checks the setting's six
+fields, key/value and coherent UTC timestamps; chat checks assistant content,
+completion and token usage. SSE must deliver consistent chunks, complete content,
+stop/usage events and `[DONE]` before EOF. Latency includes response completion and
+validation. Failed warm-ups and caller cancellation produce no report; measured
+failures produce a failure count and a nonzero exit. Responses are capped at 1 MiB,
+configuration at 64 KiB, and the whole operation at 15 minutes.
+
+The schema-2 report contains one workload with requested, executed and completed
+counts, failures, warm-up/concurrency/deadline settings, complete-response latency
+percentiles and throughput. A SHA-256 input fingerprint covers the closed workload
+and expected content without exposing those values or the credential. Endpoint
+origins and load settings are separate from that fingerprint so comparable JIT and
+native processes can use different local ports. The published process gate runs
+small correctness samples for all three workloads after its accounting assertions;
+these samples do not establish operational benefit or replace canary measurements.
+
 The probe preserves the current provider-error diagnostics in failed POST/GET
 responses; parity does not establish that these diagnostics are suitable for
 External error mode. The six-versus-eight decimal reporting discrepancy is tracked

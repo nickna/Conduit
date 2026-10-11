@@ -361,6 +361,56 @@ try {
         dotnet (Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll')
     }
     if ($LASTEXITCODE -ne 0) { throw "Gateway native parity probe exited with $LASTEXITCODE." }
+
+    # Run the same bounded, authenticated workload driver used by the benchmark
+    # collector. These small correctness samples are not promotion measurements.
+    foreach ($workload in @('admin-setting-read', 'gateway-chat-nonstream', 'gateway-chat-sse')) {
+        $configuration = [ordered]@{
+            workload = $workload
+            baseUrl = if ($workload -eq 'admin-setting-read') { "http://127.0.0.1:$AdminPort" } else { "http://127.0.0.1:$GatewayPort" }
+            requests = 4
+            concurrency = 2
+            warmupRequests = 2
+            timeoutSeconds = 5
+        }
+        if ($workload -eq 'admin-setting-read') {
+            $configuration.settingKey = 'IpFilter:Enabled'
+            $configuration.expectedValue = 'true'
+            $benchmarkKey = $MasterKey
+        } else {
+            $configuration.model = 'native-aot-model'
+            $configuration.prompt = 'native benchmark workload'
+            $configuration.expectedContent = if ($workload -eq 'gateway-chat-sse') { 'native stream response' } else { 'native provider response' }
+            $configuration.expectedPromptTokens = 10
+            $configuration.expectedCompletionTokens = 5
+            $benchmarkKey = 'condt_native_aot_parity'
+        }
+        $configurationPath = Join-Path $logRoot "$workload.configuration.json"
+        $configuration | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $configurationPath -Encoding utf8
+        $benchmarkArguments = @('--benchmark-workload', $configurationPath)
+        $benchmarkFile = $nativeProbe
+        if (-not (Test-Path -LiteralPath $nativeProbe -PathType Leaf)) {
+            $benchmarkFile = (Get-Command dotnet).Source
+            $benchmarkArguments = @($probeDll) + $benchmarkArguments
+        }
+        $benchmarkOutput = Invoke-PrivateFixtureProcess $benchmarkFile $benchmarkArguments @{
+            CONDUIT_NATIVE_BENCHMARK_API_KEY = $benchmarkKey
+        } 'Authenticated benchmark workload'
+        try { $benchmarkReport = $benchmarkOutput | ConvertFrom-Json }
+        catch { throw 'Authenticated benchmark workload returned invalid JSON.' }
+        $result = @($benchmarkReport.workloads)
+        if ($benchmarkReport.schemaVersion -ne 2 -or $result.Count -ne 1 -or
+            $result[0].id -cne $workload -or $result[0].authenticated -ne $true -or
+            $result[0].requested -ne 4 -or $result[0].executed -ne 4 -or
+            $result[0].completed -ne 4 -or $result[0].failures -ne 0 -or
+            $result[0].warmupRequests -ne 2 -or $result[0].concurrency -ne 2 -or
+            $result[0].timeoutSeconds -ne 5 -or
+            $result[0].inputFingerprint -cnotmatch '\A[0-9a-f]{64}\z') {
+            throw 'Authenticated benchmark workload did not complete its configured requests.'
+        }
+        $benchmarkOutput | Set-Content -LiteralPath (Join-Path $logRoot "$workload.benchmark.json") -Encoding utf8
+        Write-Host "  PASS  Authenticated benchmark workload $workload"
+    }
     foreach ($hostProcess in @($admin, $gateway, $secondary)) {
         if ($hostProcess.HasExited) { throw "Native host $($hostProcess.Id) exited during dependency recovery." }
     }
