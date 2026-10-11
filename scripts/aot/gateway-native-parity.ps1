@@ -34,6 +34,8 @@ $artifactRoot = [IO.Path]::GetFullPath($ArtifactDirectory)
 $runtimeRoot = Join-Path $artifactRoot 'runtime'
 $migratorProject = Join-Path $repoRoot 'tools/ConduitLLM.Migrator'
 $probeProject = Join-Path $repoRoot 'Tests/ConduitLLM.GatewayNativeAotTests'
+$publisherProject = Join-Path $repoRoot 'tools/WolverineSmokePublisher'
+$publisherDll = Join-Path $publisherProject 'bin/Release/net10.0/WolverineSmokePublisher.dll'
 $logRoot = Join-Path $artifactRoot "reports/gateway-parity-$PID"
 New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
 
@@ -97,9 +99,15 @@ if (-not $NoBuild) {
     if ($LASTEXITCODE -ne 0) { throw 'Migrator build failed.' }
     dotnet build $probeProject -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Native parity probe build failed.' }
+    dotnet build $publisherProject -c Release
+    if ($LASTEXITCODE -ne 0) { throw 'Wolverine media publisher build failed.' }
+}
+if (-not (Test-Path -LiteralPath $publisherDll -PathType Leaf)) {
+    throw "Wolverine media publisher not found: $publisherDll"
 }
 
 $env:DATABASE_URL = $DatabaseUrl
+$env:CONDUIT_NATIVE_MESSAGE_PUBLISHER_PATH = $publisherDll
 $env:REDIS_URL = $RedisUrl
 $env:CONDUIT_MEDIA_STORAGE_TYPE = 'S3'
 $env:CONDUIT_S3_ENDPOINT = $S3Endpoint

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -571,6 +572,7 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
 
         await AssertAuthenticatedSignalRConnectionsAsync();
         await AssertPublicSignalRConnectionAsync();
+        await AssertWolverineMediaNotificationsAsync();
 
         await using var redis = await ConnectionMultiplexer.ConnectAsync(settings.RedisConnectionString);
         var database = redis.GetDatabase();
@@ -778,6 +780,124 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             timeout.Token);
     }
 
+    private async Task AssertWolverineMediaNotificationsAsync()
+    {
+        await using var redis = await ConnectionMultiplexer.ConnectAsync(settings.RedisConnectionString);
+        await WaitForSignalRConnectionCountAsync(redis.GetDatabase(), 0,
+            "previous native hub connections are released before media subscriptions");
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        await using var image = await NativeSignalRClient.ConnectAsync(settings.Gateway,
+            "/hubs/image-generation", NativeParityFixture.VirtualKey, timeout.Token);
+        await using var video = await NativeSignalRClient.ConnectAsync(settings.SecondaryGateway,
+            "/hubs/video-generation", NativeParityFixture.VirtualKey, timeout.Token);
+        await image.InvokeAsync("SubscribeToTask", $$"""["{{NativeParityFixture.ImageNotificationTaskId}}"]""", timeout.Token);
+        await video.InvokeAsync("SubscribeToTask", $$"""["{{NativeParityFixture.VideoNotificationTaskId}}"]""", timeout.Token);
+
+        using var request = AuthorizedRequest(HttpMethod.Post, "v1/conduit/auth/ephemeral-key");
+        request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+        using var response = await _gateway.SendAsync(request, timeout.Token);
+        await ExpectAsync(response, HttpStatusCode.OK, "media subscription ephemeral key creation");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
+        var ephemeralKey = GetString(document.RootElement, "ephemeral_key");
+        await using var publicVideo = await NativeSignalRClient.ConnectAsync(settings.Gateway,
+            "/hubs/public/video-generation", bearerToken: null, timeout.Token);
+        await publicVideo.InvokeAsync("SubscribeToTask",
+            $$"""["{{NativeParityFixture.VideoNotificationTaskId}}","{{ephemeralKey}}"]""", timeout.Token);
+        await publicVideo.WaitForTargetAsync("taskSubscribed", timeout.Token);
+
+        var probeId = Guid.NewGuid().ToString("N");
+        var publishedAt = DateTime.UtcNow;
+        await PublishMediaNotificationsAsync(probeId, timeout.Token);
+        var progress = GetHubArguments(await image.WaitForTargetAsync("ImageGenerationProgress", timeout.Token),
+            "ImageGenerationProgress", 1)[0];
+        AssertJsonFields(progress, "taskId", "progressPercentage", "status", "imagesCompleted", "totalImages", "message", "timestamp");
+        Equal(NativeParityFixture.ImageNotificationTaskId, progress.GetProperty("taskId").GetString()!, "native image progress task");
+        Equal($"native-progress-{probeId}", progress.GetProperty("message").GetString()!, "Wolverine native image progress delivery");
+        Equal("processing", progress.GetProperty("status").GetString()!, "native image progress status");
+        True(progress.GetProperty("progressPercentage").GetInt32() == 50 &&
+             progress.GetProperty("imagesCompleted").GetInt32() == 1 && progress.GetProperty("totalImages").GetInt32() == 2,
+            "native image progress preserves computed percentage and counts");
+        var progressTimestamp = progress.GetProperty("timestamp").GetDateTime();
+        True(progressTimestamp.Kind == DateTimeKind.Utc && progressTimestamp >= publishedAt && progressTimestamp <= DateTime.UtcNow,
+            "native image progress includes the handler UTC timestamp");
+
+        var timestamp = new DateTime(2026, 10, 10, 1, 2, 3, DateTimeKind.Utc);
+        var started = GetHubArguments(await video.WaitForTargetAsync("VideoGenerationStarted", timeout.Token), "VideoGenerationStarted", 1)[0];
+        AssertJsonFields(started, "taskId", "provider", "startedAt", "estimatedSeconds");
+        Equal(NativeParityFixture.VideoNotificationTaskId, started.GetProperty("taskId").GetString()!, "native video started task");
+        Equal($"native-provider-{probeId}", started.GetProperty("provider").GetString()!, "Wolverine native video started delivery");
+        True(started.GetProperty("startedAt").GetDateTime() is { Kind: DateTimeKind.Utc } startedAt && startedAt == timestamp &&
+             started.GetProperty("estimatedSeconds").ValueKind == JsonValueKind.Null,
+            "native private video started preserves timestamp and null estimate");
+        var publicStarted = GetHubArguments(await publicVideo.WaitForTargetAsync("TaskProgress", timeout.Token), "TaskProgress", 1)[0];
+        AssertJsonFields(publicStarted, "taskId", "status", "progress", "message", "startedAt", "estimatedSeconds");
+        Equal(NativeParityFixture.VideoNotificationTaskId, publicStarted.GetProperty("taskId").GetString()!, "native public started task");
+        Equal("started", publicStarted.GetProperty("status").GetString()!, "native public started status");
+        Equal($"Video generation started with native-provider-{probeId}", publicStarted.GetProperty("message").GetString()!,
+            "Wolverine native public started delivery");
+        True(publicStarted.GetProperty("progress").GetInt32() == 0 &&
+             publicStarted.GetProperty("startedAt").GetDateTime() is { Kind: DateTimeKind.Utc } publicStartedAt && publicStartedAt == timestamp &&
+             publicStarted.GetProperty("estimatedSeconds").ValueKind == JsonValueKind.Null,
+            "native public video started preserves zero, timestamp and null estimate");
+
+        var failed = GetHubArguments(await video.WaitForTargetAsync("VideoGenerationFailed", timeout.Token), "VideoGenerationFailed", 1)[0];
+        AssertJsonFields(failed, "taskId", "status", "error", "errorCode", "isRetryable", "retryCount", "maxRetries", "nextRetryAt", "failedAt");
+        Equal(NativeParityFixture.VideoNotificationTaskId, failed.GetProperty("taskId").GetString()!, "native video failure task");
+        Equal("failed", failed.GetProperty("status").GetString()!, "native video failure status");
+        Equal($"native-failure-{probeId}", failed.GetProperty("error").GetString()!, "Wolverine native video failure delivery");
+        True(!failed.GetProperty("isRetryable").GetBoolean() && failed.GetProperty("retryCount").GetInt32() == 0 &&
+             failed.GetProperty("maxRetries").GetInt32() == 3 && failed.GetProperty("errorCode").ValueKind == JsonValueKind.Null &&
+             failed.GetProperty("nextRetryAt").ValueKind == JsonValueKind.Null &&
+             failed.GetProperty("failedAt").GetDateTime() is { Kind: DateTimeKind.Utc } failedAt && failedAt == timestamp,
+            "native private video failure preserves false, zero, nulls and UTC timestamp");
+        var publicFailed = GetHubArguments(await publicVideo.WaitForTargetAsync("TaskFailed", timeout.Token), "TaskFailed", 1)[0];
+        AssertJsonFields(publicFailed, "taskId", "error");
+        Equal(NativeParityFixture.VideoNotificationTaskId, publicFailed.GetProperty("taskId").GetString()!, "native public failure task");
+        Equal($"native-failure-{probeId}", publicFailed.GetProperty("error").GetString()!, "Wolverine native public video failure delivery");
+    }
+
+    private static async Task PublishMediaNotificationsAsync(string probeId, CancellationToken cancellationToken)
+    {
+        var publisherPath = Environment.GetEnvironmentVariable("CONDUIT_NATIVE_MESSAGE_PUBLISHER_PATH");
+        if (string.IsNullOrWhiteSpace(publisherPath) || !File.Exists(publisherPath))
+        {
+            throw new InvalidOperationException("CONDUIT_NATIVE_MESSAGE_PUBLISHER_PATH must identify the built WolverineSmokePublisher DLL.");
+        }
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (var argument in new[] { publisherPath, probeId, "--media-notifications",
+                     NativeParityFixture.ImageNotificationTaskId, NativeParityFixture.VideoNotificationTaskId })
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start the Wolverine media publisher.");
+        var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+            var output = await stdout;
+            var errors = await stderr;
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"Wolverine media publisher exited with {process.ExitCode}: {output}\n{errors}");
+            }
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync();
+            }
+        }
+    }
+
     private static JsonElement GetHubArguments(string frame, string target, int count)
     {
         using var document = JsonDocument.Parse(frame);
@@ -916,6 +1036,8 @@ internal static class NativeParityFixture
     public const string VirtualKey = "condt_native_aot_parity";
     public const string ModelAlias = "native-aot-model";
     public const string TaskId = "task_native_aot_parity";
+    public const string ImageNotificationTaskId = "task_native_aot_image_notification";
+    public const string VideoNotificationTaskId = "task_native_aot_video_notification";
     public const string MediaPrompt = "native-s3-media-persistence";
     public const string FixtureOwner = "native-aot-parity";
     private const int MediaPolicyId = -9010;
@@ -946,6 +1068,8 @@ internal static class NativeParityFixture
             now);
         await ResetAccountingAsync(connection, transaction, groupId, keyId);
         await UpsertAsyncTaskAsync(connection, transaction, keyId, now);
+        await UpsertAsyncTaskAsync(connection, transaction, keyId, now, ImageNotificationTaskId, "native_signalr_probe");
+        await UpsertAsyncTaskAsync(connection, transaction, keyId, now, VideoNotificationTaskId, "native_signalr_probe");
 
         await transaction.CommitAsync();
         await ResetRedisAsync(redisConnectionString, groupId);
@@ -1152,7 +1276,9 @@ internal static class NativeParityFixture
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         int keyId,
-        DateTime now)
+        DateTime now,
+        string taskId = TaskId,
+        string type = "image_generation")
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -1162,7 +1288,7 @@ internal static class NativeParityFixture
                 "VirtualKeyId", "Metadata", "IsArchived", "Version", "RetryCount",
                 "MaxRetries", "IsRetryable")
             VALUES (
-                @taskId, 'image_generation', 0, 0, @now, @now,
+                @taskId, @type, 0, 0, @now, @now,
                 @keyId, @metadata, false, 0, 0, 3, true)
             ON CONFLICT ("Id") DO UPDATE SET
                 "Type" = EXCLUDED."Type",
@@ -1190,7 +1316,8 @@ internal static class NativeParityFixture
                 "IsRetryable" = true,
                 "NextRetryAt" = NULL
             """;
-        command.Parameters.AddWithValue("taskId", NpgsqlDbType.Varchar, TaskId);
+        command.Parameters.AddWithValue("taskId", NpgsqlDbType.Varchar, taskId);
+        command.Parameters.AddWithValue("type", NpgsqlDbType.Varchar, type);
         command.Parameters.AddWithValue("keyId", NpgsqlDbType.Integer, keyId);
         command.Parameters.AddWithValue(
             "metadata",
@@ -1210,7 +1337,9 @@ internal static class NativeParityFixture
             {
                 $"*group:{groupId}*",
                 $"signalr:vk:{VirtualKeyHash}:*",
-                $"async:task:{TaskId}"
+                $"async:task:{TaskId}",
+                $"async:task:{ImageNotificationTaskId}",
+                $"async:task:{VideoNotificationTaskId}"
             }
             .SelectMany(pattern => server.Keys(database.Database, pattern: pattern))
             .Distinct()
