@@ -44,6 +44,18 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
         [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "<IsDeleted>k__BackingField")]
         public static extern ref bool IsDeleted(VirtualKeyGroupTransaction @this);
 
+        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "<OriginalAmount>k__BackingField")]
+        public static extern ref decimal? OriginalAmount(VirtualKeyGroupTransaction @this);
+
+        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "<OriginalAmountEvidence>k__BackingField")]
+        public static extern ref string OriginalAmountEvidence(VirtualKeyGroupTransaction @this);
+
+        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "<OriginalAmountVerifiedAtUtc>k__BackingField")]
+        public static extern ref DateTime? OriginalAmountVerifiedAtUtc(VirtualKeyGroupTransaction @this);
+
+        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "<OriginalAmountVerifiedBy>k__BackingField")]
+        public static extern ref string OriginalAmountVerifiedBy(VirtualKeyGroupTransaction @this);
+
         [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "<ReferenceId>k__BackingField")]
         public static extern ref string ReferenceId(VirtualKeyGroupTransaction @this);
 
