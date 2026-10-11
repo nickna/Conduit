@@ -1,5 +1,8 @@
+using System.Text.Json;
+
 using ConduitLLM.Admin.Endpoints;
 using ConduitLLM.Admin.Interfaces;
+using ConduitLLM.Admin.Serialization;
 
 using AwesomeAssertions;
 
@@ -21,6 +24,10 @@ public class HealthMonitoringAggregationTests
 
         status.Status.Should().Be("healthy");
         status.Instances.Should().HaveCount(2);
+        var details = JsonSerializer.SerializeToElement(status, AdminJsonOptions.Create()).GetProperty("details");
+        details.GetProperty("healthyInstances").GetInt32().Should().Be(2);
+        details.EnumerateObject().Should().HaveCount(3);
+        details.TryGetProperty("reason", out _).Should().BeFalse();
     }
 
     [Fact]
@@ -76,6 +83,11 @@ public class HealthMonitoringAggregationTests
 
         status.Status.Should().Be("unknown");
         status.Instances.Should().BeEmpty();
+        var details = JsonSerializer.SerializeToElement(status, AdminJsonOptions.Create()).GetProperty("details");
+        details.GetProperty("healthyInstances").GetInt32().Should().Be(0);
+        details.GetProperty("totalInstances").GetInt32().Should().Be(0);
+        details.GetProperty("reason").GetString().Should().Be("No instance heartbeat has been received");
+        details.EnumerateObject().Should().HaveCount(4);
     }
 
     private static ServiceHeartbeatSnapshot Heartbeat(

@@ -29,6 +29,48 @@ namespace ConduitLLM.SerializationTests;
 public sealed class SourceGeneratedJsonCompatibilityTests
 {
     [Fact]
+    public void Admin_health_details_preserve_branch_shapes_without_reflection()
+    {
+        (object Details, string Json)[] cases =
+        [
+            (new DatabaseHealthDetails(true, "Npgsql"),
+                """{"connectionPooling":true,"provider":"Npgsql"}"""),
+            (new HeartbeatHealthDetails("heartbeat", 0, 0, "waiting"),
+                """{"source":"heartbeat","healthyInstances":0,"totalInstances":0,"reason":"waiting"}"""),
+            (new HeartbeatHealthDetails("heartbeat", 1, 2),
+                """{"source":"heartbeat","healthyInstances":1,"totalInstances":2}"""),
+            (new RedisFallbackHealthDetails(false, "in-memory fallback", "unavailable"),
+                """{"configured":false,"mode":"in-memory fallback","description":"unavailable"}"""),
+            (new RedisHealthDetails(true, 0),
+                """{"configured":true,"pingMilliseconds":0}"""),
+            (new RedisErrorHealthDetails(true, "unavailable"),
+                """{"configured":true,"error":"unavailable"}"""),
+            (new InMemoryMessagingHealthDetails("Wolverine", "in-memory", false, "local"),
+                """{"backend":"Wolverine","transport":"in-memory","durable":false,"description":"local"}"""),
+            (new DurableMessagingHealthDetails("Wolverine", "PostgreSQL", true,
+                    [new MessagingHealthCheckDetails("bus", "Healthy", null)], null),
+                """{"backend":"Wolverine","transport":"PostgreSQL","durable":true,"checks":[{"name":"bus","status":"Healthy","description":null}],"error":null}"""),
+            (new MessagingErrorHealthDetails("Wolverine", "unavailable"),
+                """{"backend":"Wolverine","error":"unavailable"}"""),
+            (new StorageHealthDetails("memory", "local", true, null, null),
+                """{"mode":"memory","description":"local","ephemeral":true,"bucket":null,"endpoint":null}"""),
+            (new StorageErrorHealthDetails("s3", "unavailable"),
+                """{"mode":"s3","error":"unavailable"}""")
+        ];
+        var response = new ServiceHealthResponse
+        {
+            Services = cases.Select(value => new ServiceStatusDto { Details = value.Details }).ToList()
+        };
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(response, AdminJsonOptions.Create()));
+        var services = document.RootElement.GetProperty("services");
+        for (var index = 0; index < cases.Length; index++)
+        {
+            AssertJsonEqual(cases[index].Json, services[index].GetProperty("details").GetRawText());
+        }
+    }
+
+    [Fact]
     public void Admin_collection_wrapper_resolves_runtime_dto_items_without_reflection()
     {
         var page = new PagedResult<object>
