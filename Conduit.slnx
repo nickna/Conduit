@@ -25,6 +25,7 @@
     <Project Path="Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj" />
     <Project Path="Tests/ConduitLLM.PersistenceAotTests/ConduitLLM.PersistenceAotTests.csproj" />
     <Project Path="Tests/ConduitLLM.GatewayNativeAotTests/ConduitLLM.GatewayNativeAotTests.csproj" />
+    <Project Path="Tests/ConduitLLM.SchemaStartupFixtures/ConduitLLM.SchemaStartupFixtures.csproj" />
     <Project Path="Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj" />
     <Project Path="Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj" />
   </Folder>

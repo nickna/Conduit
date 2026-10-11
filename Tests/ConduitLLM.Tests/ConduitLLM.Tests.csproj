@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ConduitLLM.SchemaStartupFixtures\ConduitLLM.SchemaStartupFixtures.csproj" />
     <PackageReference Include="AngleSharp" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="coverlet.msbuild">
