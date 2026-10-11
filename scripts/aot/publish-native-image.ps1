@@ -80,6 +80,7 @@ foreach ($definition in $definitions) {
         "-p:PublishAot=true", "-p:ConduitAotAudit=$($definition.audit.ToString().ToLowerInvariant())",
         "-p:StripSymbols=true", "-p:UseSharedCompilation=false",
         "-p:Version=$(ConvertTo-MSBuildPropertyValue $Version)", "-p:InformationalVersion=$(ConvertTo-MSBuildPropertyValue $Version)",
+        "-p:IncludeSourceRevisionInInformationalVersion=false",
         "-p:ConduitCommitSha=$(ConvertTo-MSBuildPropertyValue $CommitSha)",
         "-p:ConduitBuildTimestamp=$(ConvertTo-MSBuildPropertyValue $BuildTimestamp)",
         "-p:NativeIntermediateOutputPath=$(ConvertTo-MSBuildPropertyValue $intermediate)",

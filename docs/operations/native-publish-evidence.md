@@ -253,6 +253,14 @@ It checks the source again after both native components have been published,
 before writing their manifests and the image summary. Missing Git metadata,
 tracked or untracked changes, and mismatched revisions fail that policy.
 
+Both component publishes set `IncludeSourceRevisionInInformationalVersion=false`
+so the supplied informational version remains exact. The SDK otherwise
+[appends the Git revision](https://learn.microsoft.com/en-us/dotnet/core/compatibility/sdk/8.0/source-link)
+during assembly metadata generation, including when an informational version was
+supplied explicitly. The publisher still requires the captured version,
+informational version, commit and timestamp to match its invocation. The full
+Git revision remains recorded independently in the source and commit metadata.
+
 Local publishing defaults to `-SourcePolicy local`. A filtered local Docker
 context can therefore retain unavailable source provenance for local checks;
 the declared commit metadata does not supply a missing Git identity. Historical

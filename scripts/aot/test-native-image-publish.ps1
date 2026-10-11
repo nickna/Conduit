@@ -93,11 +93,13 @@ function Get-ChildEnvironment([string] $CaseRoot, [string] $Scenario, $SourceFix
         CONDUIT_IMAGE_TEST_PUBLISHER = $producer; CONDUIT_IMAGE_TEST_DOTNET = $script:fakeDotnet
         CONDUIT_IMAGE_TEST_DRIVER = $script:pwshPath; CONDUIT_IMAGE_TEST_TOOLROOT = $script:toolRoot
         CONDUIT_IMAGE_TEST_SOURCE_ROOT = $null; CONDUIT_IMAGE_TEST_TRACKED_FILE = $null
+        CONDUIT_IMAGE_TEST_SOURCE_REVISION = $null
     }
     if ($null -ne $SourceFixture) {
         $environment.CONDUIT_IMAGE_TEST_PUBLISHER = $SourceFixture.Producer
         $environment.CONDUIT_IMAGE_TEST_SOURCE_ROOT = $SourceFixture.Root
         $environment.CONDUIT_IMAGE_TEST_TRACKED_FILE = $SourceFixture.TrackedFile
+        $environment.CONDUIT_IMAGE_TEST_SOURCE_REVISION = $SourceFixture.Head
         $environment.GIT_CONFIG_NOSYSTEM = '1'; $environment.GIT_CONFIG_GLOBAL = $SourceFixture.GlobalConfig
         foreach ($name in @('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY',
             'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_CONFIG', 'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS') +
@@ -235,6 +237,21 @@ function Invoke-ImageCase([string] $Service, [string] $Scenario, [bool] $Success
                 -not [string]::IsNullOrEmpty((Invoke-FixtureGit $sourceFixture.Root $sourceFixture.GlobalConfig @('status', '--porcelain', '--untracked-files=normal'))) -and
                 $result.Stdout.Contains('Owned image native publish complete.', [StringComparison]::Ordinal)) 'Strict final source rejection did not follow two completed publishes and a real tracked mutation.'
         }
+        if ($Scenario -ceq 'strict-informational-mismatch') {
+            $appRecord = @($records | Where-Object role -CEQ 'application')
+            $healthRecord = @($records | Where-Object role -CEQ 'health-probe')
+            Assert-Contract ($appRecord.Count -eq 1 -and $healthRecord.Count -eq 1 -and
+                $appRecord[0].capture.InformationalVersion -ceq $fixtureVersion -and
+                $healthRecord[0].capture.InformationalVersion -ceq ($fixtureVersion + '+' + $sourceFixture.Head) -and
+                $healthRecord[0].capture.Version -ceq $fixtureVersion -and
+                $healthRecord[0].capture.ConduitCommitSha -ceq $sourceFixture.Head -and
+                $healthRecord[0].capture.ConduitBuildTimestamp -ceq $fixtureTimestamp -and
+                $result.Stdout.Contains('Owned image native publish complete.', [StringComparison]::Ordinal)) 'Informational-version rejection did not follow a real Git-only health metadata mismatch.'
+            foreach ($record in $records) {
+                $flags = @($record.arguments | Where-Object { $_ -imatch '\A-p:IncludeSourceRevisionInInformationalVersion=' })
+                Assert-Contract ($flags.Count -eq 1 -and $flags[0] -ceq '-p:IncludeSourceRevisionInInformationalVersion=false') 'Metadata mismatch fixture did not retain the explicit SDK suffix switch in both publishes.'
+            }
+        }
         if ($Scenario -cin @('health-sidecar', 'payload-collision', 'copied-binary-mismatch', 'capture-root-mismatch', 'health-linker-warning')) {
             Assert-Contract ($result.Stdout.Contains('Owned image native publish complete.', [StringComparison]::Ordinal)) 'Intended image rejection preceded all fake native output.'
         }
@@ -278,6 +295,8 @@ function Invoke-ImageCase([string] $Service, [string] $Scenario, [bool] $Success
             $roleRecords = @($records | Where-Object { $_.role -ceq $role })
             Assert-Contract ($roleRecords.Count -eq 1 -and $roleRecords[0].capture.Count -eq 30) 'Image producer did not capture both complete selected toolchains.'
             $capture = $roleRecords[0].capture
+            $suffixFlags = @($roleRecords[0].arguments | Where-Object { $_ -imatch '\A-p:IncludeSourceRevisionInInformationalVersion=' })
+            Assert-Contract ($suffixFlags.Count -eq 1 -and $suffixFlags[0] -ceq '-p:IncludeSourceRevisionInInformationalVersion=false') 'Each image component must disable SDK informational-version suffixing exactly once.'
             $expectedIntermediate = Join-Path $artifact ('native-intermediates/' + $image.buildId + '/' + $role)
             $expectedOutput = Join-Path $artifact ('native-outputs/' + $image.buildId + '/' + $role)
             $trim = [char[]]@([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
@@ -290,8 +309,12 @@ function Invoke-ImageCase([string] $Service, [string] $Scenario, [bool] $Success
                 $manifest.toolchain.ilCompiler.sha256 -ceq (Get-FileDigest $script:compiler) -and
                 $manifest.toolchain.nativeLinkerDriver.sha256 -ceq (Get-FileDigest $script:pwshPath) -and
                 $manifest.publishProperties.conduitAotAudit -eq ($role -ceq 'application')) 'Image executable/toolchain/audit identity differs from selected native outputs.'
-            Assert-Contract ($capture.Version -ceq $fixtureVersion -and $capture.ConduitBuildTimestamp -ceq $fixtureTimestamp -and
+            Assert-Contract ($capture.Version -ceq $fixtureVersion -and $capture.InformationalVersion -ceq $fixtureVersion -and $capture.ConduitBuildTimestamp -ceq $fixtureTimestamp -and
                 $capture.ConduitCommitSha -ceq $image.commitMetadata.commitSha) 'Image components were published with different declared commit metadata.'
+            if ($null -ne $sourceFixture) {
+                Assert-Contract ($roleRecords[0].sdkSourceRevision -ceq $sourceFixture.Head -and
+                    $roleRecords[0].sdkRevisionSuffixEnabled -is [bool] -and -not $roleRecords[0].sdkRevisionSuffixEnabled) 'Real Git fixture did not exercise SDK source-revision suffix suppression.'
+            }
             Assert-Contract (@(Get-ChildItem -LiteralPath (Join-Path $artifact ('symbols/' + $role)) -Recurse -File -Force).Count -eq 2) 'Nested/root debug symbols were not both split.'
         }
         Assert-Contract (-not [string]::IsNullOrWhiteSpace($records[0].capture.InformationalVersion) -and
@@ -438,6 +461,17 @@ try {
         [IO.Directory]::CreateDirectory($capturedIntermediate) | Out-Null
     }
     $toolRoot = $env:CONDUIT_IMAGE_TEST_TOOLROOT; $driver = $env:CONDUIT_IMAGE_TEST_DRIVER
+    # Model SDK defaults against the independently committed source fixture's
+    # HEAD, rather than trusting the publisher's declared commit property.
+    $sdkSourceRevision = [Environment]::GetEnvironmentVariable('CONDUIT_IMAGE_TEST_SOURCE_REVISION')
+    $sdkRevisionSuffixEnabled = [string]$properties.IncludeSourceRevisionInInformationalVersion -ine 'false'
+    $informationalVersion = [string]$properties.InformationalVersion
+    if (-not [string]::IsNullOrEmpty($sdkSourceRevision) -and $sdkRevisionSuffixEnabled) {
+        $informationalVersion += '+' + $sdkSourceRevision
+    }
+    if ($scenario -ceq 'strict-informational-mismatch' -and $role -ceq 'health-probe') {
+        $informationalVersion += '+' + $sdkSourceRevision
+    }
     $capture = [ordered]@{
         NETCoreSdkVersion='10.0.401'; RuntimeIdentifier=$rid; PublishAot='true'; Configuration='Release'
         IlcHostPackagePath=$toolRoot; RuntimePackagePath=(Join-Path $toolRoot 'runtime'); IlcToolsPath=(Join-Path $toolRoot 'tools'); ILCompilerTargetsPath=(Join-Path $toolRoot 'selected.targets')
@@ -445,9 +479,10 @@ try {
         _hostOS=$(if($IsWindows){'win'}else{'linux'}); _hostArchitecture='x64'; _targetOS=$(if($rid -ceq 'win-x64'){'win'}else{'linux'}); _targetArchitecture='x64'
         NativeIntermediateOutputPath=$capturedIntermediate; NativeOutputPath=$nativeOutput; NativeObject=$object; NativeBinary=$binary; AssemblyName=$assembly
         SelfContained='true'; StripSymbols='true'; ConduitAotAudit=[string]$properties.ConduitAotAudit; UseSharedCompilation='false'
-        Version=[string]$properties.Version; InformationalVersion=[string]$properties.InformationalVersion; ConduitCommitSha=[string]$properties.ConduitCommitSha; ConduitBuildTimestamp=[string]$properties.ConduitBuildTimestamp
+        Version=[string]$properties.Version; InformationalVersion=$informationalVersion; ConduitCommitSha=[string]$properties.ConduitCommitSha; ConduitBuildTimestamp=[string]$properties.ConduitBuildTimestamp
     }
     $record['role']=$role; $record['capture']=$capture
+    $record['sdkSourceRevision']=$sdkSourceRevision; $record['sdkRevisionSuffixEnabled']=$sdkRevisionSuffixEnabled
     [IO.File]::WriteAllText($recordPath, (ConvertTo-Json -InputObject $record -Depth 8), [Text.UTF8Encoding]::new($false))
     $lines = [Collections.Generic.List[string]]::new()
     foreach($name in $capture.Keys){$lines.Add($name+'='+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$capture[$name])))}
@@ -468,7 +503,7 @@ catch{[Console]::Error.WriteLine('Owned image dotnet failed; type='+$_.Exception
     . (Join-Path $PSScriptRoot 'native-image-publish-evidence.ps1')
     $names = @('CONDUIT_IMAGE_TEST_ROOT','CONDUIT_IMAGE_TEST_SCENARIO','CONDUIT_IMAGE_TEST_PUBLISHER',
         'CONDUIT_IMAGE_TEST_DOTNET','CONDUIT_IMAGE_TEST_DRIVER','CONDUIT_IMAGE_TEST_TOOLROOT',
-        'CONDUIT_IMAGE_TEST_SOURCE_ROOT','CONDUIT_IMAGE_TEST_TRACKED_FILE','GIT_CONFIG_NOSYSTEM','GIT_CONFIG_GLOBAL',
+        'CONDUIT_IMAGE_TEST_SOURCE_ROOT','CONDUIT_IMAGE_TEST_TRACKED_FILE','CONDUIT_IMAGE_TEST_SOURCE_REVISION','GIT_CONFIG_NOSYSTEM','GIT_CONFIG_GLOBAL',
         'GIT_DIR','GIT_WORK_TREE','GIT_INDEX_FILE','GIT_COMMON_DIR','GIT_OBJECT_DIRECTORY','GIT_ALTERNATE_OBJECT_DIRECTORIES','GIT_CONFIG','GIT_CONFIG_COUNT','GIT_CONFIG_PARAMETERS')
     $parentEnvironment = @{}
     foreach ($name in $names) { $parentEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
@@ -508,6 +543,7 @@ catch{[Console]::Error.WriteLine('Owned image dotnet failed; type='+$_.Exception
         Invoke-ImageCase 'gateway' $scenario $false 0 | Out-Null
     }
     Invoke-ImageCase 'gateway' 'strict-mutated-during-publish' $false 2 | Out-Null
+    Invoke-ImageCase 'gateway' 'strict-informational-mismatch' $false 2 | Out-Null
 
     $evidenceHashes = @{}
     foreach ($file in Get-ChildItem -LiteralPath (Join-Path $gateway.Artifact 'evidence') -File -Filter '*.json') { $evidenceHashes[$file.FullName] = Get-FileDigest $file.FullName }
