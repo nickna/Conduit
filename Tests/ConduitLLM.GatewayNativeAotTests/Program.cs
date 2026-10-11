@@ -32,27 +32,30 @@ if (args is ["--seed"])
     return;
 }
 
-if (args is ["--cleanup-function-fixture"])
+if (args is ["--cleanup-function-fixture"] or ["--cleanup-mcp-function-fixture"])
 {
+    var mcp = args[0] == "--cleanup-mcp-function-fixture";
+    var profile = mcp ? NativeFunctionFixtureProfile.Mcp : NativeFunctionFixtureProfile.Exa;
+    var label = mcp ? "Owned MCP function fixture cleanup" : "Owned function fixture cleanup";
     try
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
-        var owner = ProbeSettings.FunctionFixtureOwnerFromEnvironment();
-        var snapshot = await NativeFunctionFixture.ReadAsync(source, owner, deadline.Token);
+        var owner = mcp ? ProbeSettings.McpFixtureOwnerFromEnvironment() : ProbeSettings.FunctionFixtureOwnerFromEnvironment();
+        var snapshot = await NativeFunctionFixture.ReadAsync(source, owner, profile, deadline.Token);
         if (snapshot is not null)
         {
             // Hosts have already stopped. Keep the ownership rows until Redis
             // cleanup succeeds, so a failed cleanup can be retried safely.
             await NativeFunctionFixtureRedisCleanup.DeleteAsync(
                 ProbeSettings.RedisConnectionStringFromEnvironment(), snapshot, deadline.Token);
-            await NativeFunctionFixture.DeleteAsync(source, owner, deadline.Token);
+            await NativeFunctionFixture.DeleteAsync(source, owner, profile, deadline.Token);
         }
-        Console.WriteLine("Owned function fixture cleanup: PASS");
+        Console.WriteLine(label + ": PASS");
     }
     catch (Exception)
     {
-        Console.Error.WriteLine("Owned function fixture cleanup failed.");
+        Console.Error.WriteLine(label + " failed.");
         Environment.ExitCode = 1;
     }
     return;
@@ -99,6 +102,10 @@ if (args is ["--function-execution"])
         await NativeFunctionExecutionProbe.RunAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_URL"),
             ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"), ProbeSettings.ProviderUriFromEnvironment(),
             source, ProbeSettings.FunctionFixtureOwnerFromEnvironment(), NativeParityFixture.VirtualKey, CancellationToken.None);
+        await NativeFunctionExecutionProbe.RunMcpAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_URL"),
+            ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"), source,
+            ProbeSettings.McpFixtureOwnerFromEnvironment(), ProbeSettings.ProtectedFunctionKeyFromEnvironment(),
+            ProbeSettings.FunctionFixtureOwnerFromEnvironment(), NativeParityFixture.VirtualKey, CancellationToken.None);
     }
     catch (Exception exception)
     {
@@ -136,7 +143,14 @@ internal sealed record ProbeSettings(
         RequiredUri("CONDUIT_NATIVE_PROVIDER_URL");
 
     public static Guid FunctionFixtureOwnerFromEnvironment() =>
-        Guid.TryParseExact(Required("CONDUIT_NATIVE_FUNCTION_FIXTURE_OWNER"), "N", out var owner)
+        FixtureOwner("CONDUIT_NATIVE_FUNCTION_FIXTURE_OWNER");
+
+    public static Guid McpFixtureOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_MCP_FIXTURE_OWNER");
+
+    public static string ProtectedFunctionKeyFromEnvironment() => Required("CONDUIT_NATIVE_FUNCTION_PROTECTED_KEY");
+
+    private static Guid FixtureOwner(string name) =>
+        Guid.TryParseExact(Required(name), "N", out var owner)
             && owner != Guid.Empty
                 ? owner
                 : throw new InvalidOperationException("A nonempty function fixture owner GUID is required.");
@@ -197,9 +211,14 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         await AssertS3MediaWorkflowAsync();
         await AssertSignalRAndRedisAsync();
         await using (var source = NpgsqlDataSource.Create(settings.DatabaseConnectionString))
+        {
             await NativeFunctionExecutionProbe.RunAsync(settings.Gateway, settings.SecondaryGateway,
                 settings.Provider, source, ProbeSettings.FunctionFixtureOwnerFromEnvironment(),
                 NativeParityFixture.VirtualKey, CancellationToken.None);
+            await NativeFunctionExecutionProbe.RunMcpAsync(settings.Gateway, settings.SecondaryGateway, source,
+                ProbeSettings.McpFixtureOwnerFromEnvironment(), ProbeSettings.ProtectedFunctionKeyFromEnvironment(),
+                ProbeSettings.FunctionFixtureOwnerFromEnvironment(), NativeParityFixture.VirtualKey, CancellationToken.None);
+        }
         Console.WriteLine("Gateway NativeAOT supported protocol/infrastructure probe: PASS");
     }
 

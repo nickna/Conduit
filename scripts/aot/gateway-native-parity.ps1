@@ -217,6 +217,7 @@ if (-not (Test-Path -LiteralPath $startupFixtureDll -PathType Leaf)) { throw "Sc
 
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $functionSeedAttempted = $false
+$mcpSeedAttempted = $false
 $parityFailure = $null
 try {
     Set-GateEnvironment 'DATABASE_URL' $DatabaseUrl
@@ -284,6 +285,7 @@ try {
     $protectedFunctionKey = Invoke-FunctionCredentialFixture $startupFixtureDll $routes.directRedis 'native-aot-function-key-32-bytes'
     Set-GateEnvironment 'CONDUIT_NATIVE_FUNCTION_PROTECTED_KEY' $protectedFunctionKey
     Set-GateEnvironment 'CONDUIT_NATIVE_FUNCTION_FIXTURE_OWNER' ([Guid]::NewGuid().ToString('N'))
+    Set-GateEnvironment 'CONDUIT_NATIVE_MCP_FIXTURE_OWNER' ([Guid]::NewGuid().ToString('N'))
 
     Write-Host 'Seeding typed-store authentication and IP-filter fixtures...'
     # Set this before the call: a seed that committed but lost its acknowledgement
@@ -346,6 +348,9 @@ try {
     Set-GateEnvironment 'CONDUIT_NATIVE_ADMIN_URL' "http://127.0.0.1:$AdminPort"
     Set-GateEnvironment 'CONDUIT_NATIVE_GATEWAY_URL' "http://127.0.0.1:$GatewayPort"
     Set-GateEnvironment 'CONDUIT_NATIVE_GATEWAY_SECONDARY_URL' "http://127.0.0.1:$SecondaryGatewayPort"
+    # The in-process MCP server binds port zero and its fixture is created by the
+    # probe. Track the attempt before invocation even if its acknowledgement is lost.
+    $mcpSeedAttempted = $true
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
         & $nativeProbe
     } else {
@@ -369,16 +374,28 @@ finally {
     try {
         # Stop/reap every owned producer before removing its SQL or Redis state.
         Stop-OwnedParityProcesses $processes
-        if ($functionSeedAttempted) {
-            if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
-                $cleanupOutput = Invoke-PrivateFixtureProcess $nativeProbe @('--cleanup-function-fixture') @{} 'Owned function fixture cleanup'
-            } else {
-                $cleanupOutput = Invoke-PrivateFixtureProcess (Get-Command dotnet).Source @($probeDll, '--cleanup-function-fixture') @{} 'Owned function fixture cleanup'
+        $fixtureCleanupFailures = [Collections.Generic.List[Exception]]::new()
+        foreach ($cleanup in @(
+            [pscustomobject]@{ Attempted = $mcpSeedAttempted; Argument = '--cleanup-mcp-function-fixture'; Label = 'Owned MCP function fixture cleanup' },
+            [pscustomobject]@{ Attempted = $functionSeedAttempted; Argument = '--cleanup-function-fixture'; Label = 'Owned function fixture cleanup' }
+        )) {
+            if (-not $cleanup.Attempted) { continue }
+            try {
+                if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
+                    $cleanupOutput = Invoke-PrivateFixtureProcess $nativeProbe @($cleanup.Argument) @{} $cleanup.Label
+                } else {
+                    $cleanupOutput = Invoke-PrivateFixtureProcess (Get-Command dotnet).Source @($probeDll, $cleanup.Argument) @{} $cleanup.Label
+                }
+                $expected = '\A' + [regex]::Escape($cleanup.Label + ': PASS') + '(?:\r?\n)?\z'
+                if ($cleanupOutput -cnotmatch $expected) { throw ($cleanup.Label + ' returned an invalid result.') }
+                Write-Host ('  PASS  ' + $cleanup.Label)
+            } catch {
+                # A failure for one owner must not prevent cleanup of the other.
+                $fixtureCleanupFailures.Add($_.Exception)
             }
-            if ($cleanupOutput -cnotmatch '\AOwned function fixture cleanup: PASS(?:\r?\n)?\z') {
-                throw 'Owned function fixture cleanup returned an invalid result.'
-            }
-            Write-Host '  PASS  owned function SQL/Redis fixture cleanup'
+        }
+        if ($fixtureCleanupFailures.Count) {
+            throw [AggregateException]::new('Owned function fixtures could not all be cleaned.', $fixtureCleanupFailures)
         }
     } catch {
         if ($parityFailure) {

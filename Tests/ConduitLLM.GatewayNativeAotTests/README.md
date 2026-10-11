@@ -103,6 +103,21 @@ chat-log function metadata are tracked in
 establish MCP, provider-hosted tools, agentic SSE, parallel/dependent calls or
 function audit/retention support. Published Linux verification remains required.
 
+A separate inline MCP phase binds its TCP upstream inside the probe process on
+port zero, then creates a distinct GUID-owned configuration using the protected
+credential. Each Gateway executes `native_search` once; the probe checks all 24
+execution fields and 28 request-log fields against SQL, opposite-host reads,
+ownership denial, exact configured charges and stable settlement. The caller's
+reserved routing parameter remains in stored input and is removed from outbound
+tool arguments. Unicode text, nested structured content and omission of binary
+content are checked independently, including the original compact response size
+before JSONB normalization. The complete upstream counters and Exa accounting
+remain unchanged during reads. After producer shutdown, cleanup attempts both
+profiles independently and retains SQL ownership if Redis deletion fails. The
+Linux gate publishes this in-process upstream as part of the native probe; a
+passing published run is required to qualify this positive stateless MCP path.
+MCP agentic workflows, legacy sessions, SSE and failure billing remain separate.
+
 The probe preserves the current provider-error diagnostics in failed POST/GET
 responses; parity does not establish that these diagnostics are suitable for
 External error mode. The six-versus-eight decimal reporting discrepancy is tracked
