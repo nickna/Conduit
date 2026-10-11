@@ -43,9 +43,13 @@ The native gate uses `CONDUIT_MIGRATION_MODE=Wait` after the standalone migrator
 and requires `/health/ready` to return 200 from Admin and both Gateways. In its
 disposable parity database, it inserts one uniquely named future migration-history
 row, requires readiness 503 and liveness 200 from the same three processes, removes
-only that row in bounded cleanup, and requires readiness 200 again. Database and
-Redis outage/recovery, and startup against missing or stale schemas, still need
-published-process proof before the full readiness exclusion can be removed. The
+only that row in bounded cleanup, and requires readiness 200 again. Owned loopback
+TCP proxies then interrupt the hosts' Redis and PostgreSQL connections. Redis loss
+must produce Gateway readiness 503 while Admin remains ready; PostgreSQL loss must
+produce readiness 503 from all three hosts. Every liveness response must remain
+200, and all three readiness responses must recover to 200 without host restarts.
+Startup against missing or stale schemas still needs published-process proof
+before the full readiness exclusion can be removed. The
 authenticated model-discovery proof covers `/v1/models`, model retrieval, and
 model metadata. It does not cover the newer `/v1/discovery/models` or
 `/v1/discovery/functions` query paths. Likewise, connecting a video hub or cancelling
@@ -131,6 +135,19 @@ seconds to accommodate leader election and the one-minute collection interval.
 The response-time histogram observes the database mean once per collection, so
 the gate checks its sum/count rather than assuming two histogram observations.
 Bounded cleanup removes only those owned rows before request-accounting workflows.
+
+The outage gate uses loopback control protected by a per-run token, closes its own
+forwarded connections while blocked, and restores both routes with a fresh cleanup
+deadline. It never stops the PostgreSQL or Redis servers. Migration and fixture
+setup use the original dependency routes; child hosts use the proxy routes, while
+probe SQL/Redis reads and cleanup keep direct access. The script restores its
+environment and stops only processes it started. Actual authenticated database,
+provider, media, Redis and cross-host SignalR workflows run after dependency
+recovery. The fixture requires single TCP endpoints without Redis Sentinel and
+rejects PostgreSQL VerifyFull TLS, whose original certificate hostname cannot be
+preserved by changing the connection host to loopback. Router option-preservation
+tests do not extend the hosts' existing URI parsing contract; its inconsistencies
+are tracked in [#1561](https://github.com/nickna/Conduit/issues/1561).
 
 ## Third-party NativeAOT risk ledger
 

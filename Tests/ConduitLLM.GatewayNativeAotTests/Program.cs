@@ -34,7 +34,9 @@ if (args is ["--proxy-routes"])
                 ?? throw new InvalidOperationException("CONDUIT_NATIVE_PROXY_POSTGRES_PORT is required."))),
         ["redis"] = NativeDependencyRoutes.RedirectRedis(redis,
             int.Parse(Environment.GetEnvironmentVariable("CONDUIT_NATIVE_PROXY_REDIS_PORT")
-                ?? throw new InvalidOperationException("CONDUIT_NATIVE_PROXY_REDIS_PORT is required.")))
+                ?? throw new InvalidOperationException("CONDUIT_NATIVE_PROXY_REDIS_PORT is required."))),
+        ["directDatabase"] = NativeDependencyRoutes.ParseDatabase(database).ConnectionString,
+        ["directRedis"] = redis.ToString(includePassword: true)
     };
     Console.WriteLine(routes.ToJsonString());
     return;
@@ -62,7 +64,9 @@ internal sealed record ProbeSettings(
     Uri SecondaryGateway,
     Uri Provider,
     string DatabaseConnectionString,
-    string RedisConnectionString)
+    string RedisConnectionString,
+    Uri DependencyControl,
+    string DependencyControlToken)
 {
     public static ProbeSettings FromEnvironment() => new(
         RequiredUri("CONDUIT_NATIVE_ADMIN_URL"),
@@ -70,18 +74,23 @@ internal sealed record ProbeSettings(
         RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"),
         ProviderUriFromEnvironment(),
         DatabaseConnectionStringFromEnvironment(),
-        RedisConnectionStringFromEnvironment());
+        RedisConnectionStringFromEnvironment(),
+        RequiredUri("CONDUIT_NATIVE_PROXY_CONTROL_URL"),
+        Required("CONDUIT_NATIVE_PROXY_TOKEN"));
 
     public static Uri ProviderUriFromEnvironment() =>
         RequiredUri("CONDUIT_NATIVE_PROVIDER_URL");
 
     public static string RedisConnectionStringFromEnvironment() =>
-        NativeDependencyRoutes.ParseRedis(Environment.GetEnvironmentVariable("REDIS_URL"),
-            Environment.GetEnvironmentVariable("CONDUIT_REDIS_CONNECTION_STRING")).ToString(includePassword: true);
+        Environment.GetEnvironmentVariable("CONDUIT_NATIVE_DIRECT_REDIS_CONNECTION_STRING") is { Length: > 0 } direct
+            ? direct
+            : NativeDependencyRoutes.ParseRedis(Environment.GetEnvironmentVariable("REDIS_URL"),
+                Environment.GetEnvironmentVariable("CONDUIT_REDIS_CONNECTION_STRING")).ToString(includePassword: true);
 
     public static string DatabaseConnectionStringFromEnvironment()
     {
-        return NativeDependencyRoutes.ParseDatabase(Required("DATABASE_URL")).ConnectionString;
+        return Environment.GetEnvironmentVariable("CONDUIT_NATIVE_DIRECT_DATABASE_CONNECTION_STRING") is { Length: > 0 } direct
+            ? direct : NativeDependencyRoutes.ParseDatabase(Required("DATABASE_URL")).ConnectionString;
     }
 
     private static Uri RequiredUri(string name) =>
@@ -117,6 +126,9 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         await AssertRuntimeAndOperationsAsync();
         await AssertSchemaReadinessAsync();
         await AssertMetricAggregatesAsync();
+        using (var control = CreateClient(settings.DependencyControl))
+            await new NativeDependencyRecoveryProbe(_admin, _gateway, _secondaryGateway,
+                control, settings.DependencyControlToken).RunAsync();
         await AssertAsyncTaskPersistenceAsync();
         await AssertProviderTransportAsync();
         await AssertS3MediaWorkflowAsync();
