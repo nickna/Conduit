@@ -376,6 +376,23 @@ financial precision and External-mode provider diagnostics are tracked in
 [#1574](https://github.com/nickna/Conduit/issues/1574) and
 [#1575](https://github.com/nickna/Conduit/issues/1575).
 
+The configured-function agentic probe now follows the complete inline proof. Four
+non-streaming chats cover both aliases on both Gateway hosts, with two actual LLM
+calls and one Exa execution per chat. It checks schema discovery and the matching
+rich tool-result handoff, aggregate 20/10-token usage, all 24 persisted execution
+fields, opposite-host GET/ownership and all 28 chat-log scalars. Independent SQL
+requires the combined per-chat charge `0.12515001`, six total success logs and
+stable final group spend `0.75060006` alongside log/ledger sums `0.750600`.
+OpenAI's wildcard capability makes prompt caching eligible; no policy is applied
+without caching intent. The real two-host managed native-profile HTTP probe and
+fully enabled Gateway/probe analyzer builds pass with zero IL diagnostics. The
+published Linux gate must pass this new phase before native qualification. Response
+cost summaries, summary iteration and omitted chat-log function metadata are
+preserved and tracked in [#1577](https://github.com/nickna/Conduit/issues/1577),
+[#1578](https://github.com/nickna/Conduit/issues/1578) and
+[#1579](https://github.com/nickna/Conduit/issues/1579). Provider-hosted tool pricing,
+MCP, agentic SSE, parallel/dependent tools and excluded workers remain separate work.
+
 The native capability endpoint explicitly names `inline-function-execution`,
 `agentic-tool-and-function-workflows`, `function-audit-and-retention`, and
 `billing-reconciliation` alongside the existing EF, authentication-cache and

@@ -294,6 +294,17 @@ Paired HTTP tests preserve explicit-null global defaults and the inherited omitt
 flag initializers; the latter bypass the documented global defaults and are tracked
 in [#1576](https://github.com/nickna/Conduit/issues/1576).
 
+The next process proof carries a non-streaming OpenAI-compatible chat through one
+configured Exa call and a final LLM reply on both aliases and both Gateway hosts.
+It uses the selected configuration, discovery, credential, pricing and execution
+stores without provider-hosted tool usage. Four chats verify generated schemas,
+matching tool results, complete persisted executions, opposite-host ownership,
+aggregate token usage and settled combined charges. Managed native-profile HTTP
+verification passes; the same probe is mandatory in the published Linux gate.
+Cost-summary, iteration and chat-log attribution quirks remain unchanged and are
+tracked in #1577, #1578 and #1579. Provider-hosted tool pricing, MCP, agentic SSE,
+parallel/dependent calls and audit/retention require separate workload proofs.
+
 ## Options considered
 
 1. **Wait for production-supported EF NativeAOT.** Rejected as the only plan: it

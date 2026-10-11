@@ -48,8 +48,8 @@ guarded chat requests through both aliases on both Gateways before any execution
 using the separate owned key. Authentication and missing/disabled IDs precede
 iteration validation. The complete provider counter snapshot and owned accounting
 stay unchanged through several spend flush windows, and the full host's correlation
-header remains the caller's value before billing setup. This checks preflight only;
-it does not prove a successful agentic conversation.
+header remains the caller's value before billing setup. These guarded requests
+check preflight before the successful workloads.
 
 The probe then sends
 one successful search and one real provider rejection through each Gateway, reads
@@ -59,6 +59,23 @@ proof's pricing, two successful request logs, balance, and settled ledger totals
 Ownership denial, missing executions, unauthenticated reads, and unbilled failures
 are checked too. The published two-host process gate must pass before this work
 can establish native function execution support.
+
+The final phase runs one automatic Exa search followed by a final LLM reply on
+both chat aliases and both Gateways. Each request carries its own GUID-marked
+prompt. The provider requires the advertised schema and matching assistant/tool
+messages; the probe checks aggregate token usage, execution summaries, all 24
+persisted execution fields, opposite-host reads and ownership denial. Four chats
+produce four combined LLM/function charges alongside the two inline charges.
+Independent SQL checks preserve the distinct execution/group and log/ledger
+precision and require stable accounting through multiple spend flushes. Response
+cost summaries and iteration values retain their inherited behavior; the SQL
+charge is checked separately. These cost summaries, zero iteration and omitted
+chat-log function metadata are tracked in
+[#1577](https://github.com/nickna/Conduit/issues/1577),
+[#1578](https://github.com/nickna/Conduit/issues/1578) and
+[#1579](https://github.com/nickna/Conduit/issues/1579). This bounded non-streaming Exa workflow does not
+establish MCP, provider-hosted tools, agentic SSE, parallel/dependent calls or
+function audit/retention support. Published Linux verification remains required.
 
 The probe preserves the current provider-error diagnostics in failed POST/GET
 responses; parity does not establish that these diagnostics are suitable for

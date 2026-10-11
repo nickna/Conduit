@@ -8,7 +8,7 @@ using Npgsql;
 using NpgsqlTypes;
 
 /// <summary>Exercises real native Gateway function transport, persistence and settled accounting.</summary>
-internal static class NativeFunctionExecutionProbe
+internal static partial class NativeFunctionExecutionProbe
 {
     private const string ExecutePath = "v1/conduit/functions/execute";
     private const decimal Price = 0.12500001m;
@@ -27,7 +27,7 @@ internal static class NativeFunctionExecutionProbe
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrWhiteSpace(otherVirtualKey);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(TimeSpan.FromSeconds(90));
+        deadline.CancelAfter(TimeSpan.FromSeconds(180));
         var token = deadline.Token;
         var fixture = await NativeFunctionFixture.ReadAsync(source, owner, token)
             ?? throw new InvalidOperationException("Native function HTTP fixture is missing.");
@@ -106,6 +106,7 @@ internal static class NativeFunctionExecutionProbe
             finalState.ChunkedRequests - baseline.ChunkedRequests == 4,
             "two successful/two failed authenticated real chunked Exa requests");
         Console.WriteLine("Native function HTTP execution: PASS (both Gateways, four persisted 24-field executions, cross-host reads, configured pricing and settled accounting).");
+        await AssertAgenticExecutionAsync(gateways, upstream, source, fixture, otherVirtualKey, token);
     }
 
     private static async Task AssertChatConfigurationPreflightAsync(HttpClient[] gateways, HttpClient provider,
