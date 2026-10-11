@@ -398,7 +398,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
 try {
     [IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
     [Environment]::SetEnvironmentVariable('CONDUIT_NATIVE_BENCHMARK_API_KEY', $privateKey)
-    [Environment]::SetEnvironmentVariable('CONDUIT_COLLECTOR_TEST_PWSH', (Get-Command pwsh).Source)
+    [Environment]::SetEnvironmentVariable('CONDUIT_COLLECTOR_TEST_PWSH', (Get-Command pwsh -CommandType Application | Select-Object -First 1).Source)
     [Environment]::SetEnvironmentVariable('CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS', '1000')
     [Environment]::SetEnvironmentVariable('CONDUIT_CORE_RATE_LIMIT_WINDOW_SECONDS', '60')
     $processIdentityHelper = Join-Path $temporaryRoot 'process-identity.ps1'
