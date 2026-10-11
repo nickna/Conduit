@@ -105,11 +105,105 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
     {
         await AssertRuntimeAndOperationsAsync();
         await AssertSchemaReadinessAsync();
+        await AssertMetricAggregatesAsync();
         await AssertAsyncTaskPersistenceAsync();
         await AssertProviderTransportAsync();
         await AssertS3MediaWorkflowAsync();
         await AssertSignalRAndRedisAsync();
         Console.WriteLine("Gateway NativeAOT supported protocol/infrastructure probe: PASS");
+    }
+
+    private async Task AssertMetricAggregatesAsync()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(150));
+        var owner = Guid.NewGuid().ToString("N");
+        var model = $"native_metric_model_{owner}";
+        var provider = $"native_metrics_{owner}";
+        Exception? assertionFailure = null;
+        try
+        {
+            var inserted = await SetMetricRowsAsync(model, provider, present: true, deadline.Token);
+            True(inserted == 2, $"two owned native metric request rows (inserted {inserted})");
+            while (true)
+            {
+                var primary = await ReadMetricsAsync(_gateway, deadline.Token);
+                var secondary = await ReadMetricsAsync(_secondaryGateway, deadline.Token);
+                // Business collection is leader-elected; task collection runs on
+                // every host. Never require one particular Gateway to win election.
+                if ((NativeMetricSamples.HasBusinessAggregates(primary, model, provider) ||
+                     NativeMetricSamples.HasBusinessAggregates(secondary, model, provider)) &&
+                    NativeMetricSamples.HasPendingNotificationTasks(primary) &&
+                    NativeMetricSamples.HasPendingNotificationTasks(secondary))
+                    break;
+                await Task.Delay(TimeSpan.FromSeconds(1), deadline.Token);
+            }
+        }
+        catch (Exception exception)
+        {
+            assertionFailure = exception;
+            throw;
+        }
+        finally
+        {
+            using var cleanupDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            try
+            {
+                await SetMetricRowsAsync(model, provider, present: false, cleanupDeadline.Token);
+            }
+            catch (Exception cleanupFailure)
+            {
+                var message = $"Could not remove owned metric fixture {owner}.";
+                if (assertionFailure is not null)
+                    throw new AggregateException(message, assertionFailure, cleanupFailure);
+                throw new InvalidOperationException(message, cleanupFailure);
+            }
+        }
+        Console.WriteLine("Native exact cost, latency, active-model and task-queue aggregates: PASS");
+    }
+
+    private static async Task<string> ReadMetricsAsync(HttpClient client, CancellationToken cancellationToken)
+    {
+        using var response = await client.GetAsync("metrics", cancellationToken);
+        await ExpectAsync(response, HttpStatusCode.OK, "native metric aggregates");
+        return await response.Content.ReadAsStringAsync(cancellationToken);
+    }
+
+    private async Task<int> SetMetricRowsAsync(
+        string model, string provider, bool present, CancellationToken cancellationToken)
+    {
+        await using var dataSource = NpgsqlDataSource.Create(settings.DatabaseConnectionString);
+        await using var command = dataSource.CreateCommand(present
+            ? """
+              INSERT INTO "RequestLogs" (
+                  "VirtualKeyId", "ModelName", "ProviderType", "RequestType",
+                  "InputTokens", "OutputTokens", "Cost", "ResponseTimeMs", "Timestamp", "BilledAtUtc",
+                  "PromptCachingEligible", "PromptCachingPolicyApplied", "CachedReadSavings",
+                  "CacheWritePremium", "RoutingAffinityUsed", "RoutingFailoverCount")
+              SELECT key."Id", @model, @provider, 'native_metrics_probe',
+                  0, 0, sample.cost, sample.latency, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                  false, false, 0, 0, false, 0
+              FROM "VirtualKeys" key
+              JOIN "VirtualKeyGroups" group_row ON group_row."Id" = key."VirtualKeyGroupId"
+              CROSS JOIN (VALUES (1.25, 100.0), (0.75, 300.0)) sample(cost, latency)
+              WHERE key."KeyHash" = @keyHash AND group_row."ExternalGroupId" = @keyOwner
+              """
+            : """
+              DELETE FROM "RequestLogs" log
+              USING "VirtualKeys" key, "VirtualKeyGroups" group_row
+              WHERE log."VirtualKeyId" = key."Id"
+                  AND group_row."Id" = key."VirtualKeyGroupId"
+                  AND key."KeyHash" = @keyHash AND group_row."ExternalGroupId" = @keyOwner
+                  AND log."ModelName" = @model AND log."ProviderType" = @provider
+                  AND log."RequestType" = 'native_metrics_probe'
+              """);
+        command.CommandTimeout = 10;
+        command.Parameters.Add(new NpgsqlParameter<string>("model", NpgsqlDbType.Varchar) { TypedValue = model });
+        command.Parameters.Add(new NpgsqlParameter<string>("provider", NpgsqlDbType.Varchar) { TypedValue = provider });
+        command.Parameters.Add(new NpgsqlParameter<string>("keyHash", NpgsqlDbType.Varchar)
+        { TypedValue = NativeParityFixture.VirtualKeyHash });
+        command.Parameters.Add(new NpgsqlParameter<string>("keyOwner", NpgsqlDbType.Varchar)
+        { TypedValue = NativeParityFixture.FixtureOwner });
+        return await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private async Task AssertSchemaReadinessAsync()
