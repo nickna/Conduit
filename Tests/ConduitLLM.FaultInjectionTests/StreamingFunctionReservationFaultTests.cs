@@ -56,8 +56,8 @@ public sealed class StreamingFunctionReservationFaultTests(BillingFaultFixture f
         var client = new Mock<ILLMClient>();
         client.SetupSequence(service => service.StreamChatCompletionAsync(
                 It.IsAny<ChatCompletionRequest>(), null, It.IsAny<CancellationToken>()))
-            .Returns(FunctionToolStream())
-            .Returns(PartialStreamWithoutUsage(disconnect.Token));
+            .Returns(FunctionToolStreamAsync())
+            .Returns(PartialStreamWithoutUsageAsync(disconnect.Token));
         var factory = new Mock<ILLMClientFactory>();
         factory.Setup(service => service.GetClientAsync("fault-model", It.IsAny<CancellationToken>()))
             .ReturnsAsync(client.Object);
@@ -202,7 +202,7 @@ public sealed class StreamingFunctionReservationFaultTests(BillingFaultFixture f
             .Balance.Should().Be(100m - functionCost);
     }
 
-    private static async IAsyncEnumerable<ChatCompletionChunk> FunctionToolStream()
+    private static async IAsyncEnumerable<ChatCompletionChunk> FunctionToolStreamAsync()
     {
         yield return new ChatCompletionChunk
         {
@@ -241,7 +241,7 @@ public sealed class StreamingFunctionReservationFaultTests(BillingFaultFixture f
         }
     }
 
-    private static async IAsyncEnumerable<ChatCompletionChunk> PartialStreamWithoutUsage(
+    private static async IAsyncEnumerable<ChatCompletionChunk> PartialStreamWithoutUsageAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
