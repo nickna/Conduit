@@ -49,6 +49,7 @@ namespace ConduitLLM.Providers.Serialization;
 [JsonSerializable(typeof(CloudflareImageResponse))]
 [JsonSerializable(typeof(CloudflareModelsSearchResponse))]
 [JsonSerializable(typeof(ReplicatePredictionRequest))]
+[JsonSerializable(typeof(List<ReplicateLlamaChatMessage>))]
 [JsonSerializable(typeof(ReplicatePredictionResponse))]
 [JsonSerializable(typeof(Dictionary<string, object>))]
 [JsonSerializable(typeof(List<object>))]
