@@ -6772,7 +6772,7 @@ export interface components {
       providerModelId?: null | string;
       /** @description Incident or provider evidence reference confirming success and ownership of the output. */
       evidence?: null | string;
-      /** @description Verified public HTTPS URLs for the original output; recovery validates and stores each item. */
+      /** @description One to ten verified public HTTPS URLs for the original output; recovery validates and stores each item. */
       resultUrls?: null | string[];
       /**
        * Format: double

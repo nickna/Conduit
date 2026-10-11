@@ -61773,7 +61773,6 @@
             "description": "Incident or provider evidence reference confirming success and ownership of the output."
           },
           "resultUrls": {
-            "maxItems": 10,
             "type": [
               "null",
               "array"
@@ -61781,7 +61780,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Verified public HTTPS URLs for the original output; recovery validates and stores each item."
+            "description": "One to ten verified public HTTPS URLs for the original output; recovery validates and stores each item."
           },
           "providerCost": {
             "maximum": 1000000000,
