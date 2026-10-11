@@ -61,6 +61,7 @@ namespace ConduitLLM.Core.Services.Abstractions
         protected readonly IProviderErrorTranslator _providerErrorTranslator;
         private readonly IBatchSpendUpdateService? _batchSpendService;
         private readonly IMediaTaskTerminalWriter? _terminalWriter;
+        private readonly IMediaTaskReconciliationStore? _reconciliationStore;
         private string? _workerId;
 
         protected MediaGenerationOrchestrator(
@@ -80,7 +81,8 @@ namespace ConduitLLM.Core.Services.Abstractions
             ILogger logger,
             IBatchSpendUpdateService? batchSpendService = null,
             IProviderErrorTranslator? providerErrorTranslator = null,
-            IMediaTaskTerminalWriter? terminalWriter = null)
+            IMediaTaskTerminalWriter? terminalWriter = null,
+            IMediaTaskReconciliationStore? reconciliationStore = null)
         {
             _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
             _taskService = taskService ?? throw new ArgumentNullException(nameof(taskService));
@@ -98,6 +100,7 @@ namespace ConduitLLM.Core.Services.Abstractions
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _batchSpendService = batchSpendService;
             _terminalWriter = terminalWriter;
+            _reconciliationStore = reconciliationStore;
             // Default to External so an unwired construction sanitizes rather than leaks.
             _providerErrorTranslator = providerErrorTranslator
                 ?? new ProviderErrorTranslator(new CustomerErrorOptions());
@@ -248,6 +251,11 @@ namespace ConduitLLM.Core.Services.Abstractions
                     return;
                 }
                 providerInvocationStarted = true;
+                if (_reconciliationStore != null)
+                    await _reconciliationStore.RecordInvocationAsync(GetRequestId(request), workerId,
+                        new MediaProviderOperation(modelInfo.ProviderId, 0, modelInfo.ModelId, modelInfo.ProviderName), taskCts.Token);
+                using var operationScope = _reconciliationStore == null ? null : new Utilities.MediaProviderOperationScope(
+                    (operation, token) => _reconciliationStore.RecordOperationAsync(GetRequestId(request), workerId, operation, token));
                 var response = await ExecuteGenerationAsync(generationRequest, modelInfo, virtualKey, taskCts.Token);
                 providerInvocationCompleted = await _taskService.MarkProviderInvocationCompletedAsync(
                     GetRequestId(request), workerId, cancellationToken: taskCts.Token);

@@ -51,6 +51,7 @@ namespace ConduitLLM.Core.Serialization;
 [JsonSerializable(typeof(VideoGenerationCompleted))]
 [JsonSerializable(typeof(VideoGenerationFailed))]
 [JsonSerializable(typeof(IndeterminateMediaTaskRetryRequested))]
+[JsonSerializable(typeof(IndeterminateMediaTaskRecoveryRequested))]
 [JsonSerializable(typeof(BatchSpendFlushRequestedEvent))]
 [JsonSerializable(typeof(GlobalSettingChanged))]
 [JsonSerializable(typeof(GlobalSettingsReloadRequested))]

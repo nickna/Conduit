@@ -37,7 +37,7 @@ using ConduitLLM.Gateway.Consumers;
 
 namespace ConduitLLM.IntegrationTests.Infrastructure;
 
-[CollectionDefinition("Durable media dispatch")]
+[CollectionDefinition("Durable media dispatch", DisableParallelization = true)]
 public sealed class MediaDispatchCollection : ICollectionFixture<MediaDispatchFixture>;
 
 public sealed class MediaDispatchFixture : IAsyncLifetime
@@ -48,6 +48,9 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     public string ConnectionString => _postgres.GetConnectionString();
     public Mock<ILLMClient> Provider { get; } = new();
     public Mock<IDistributedCache> Cache { get; } = new();
+    public Mock<IMediaStorageService> RecoveryStorage { get; } = new();
+    public Mock<IHttpClientFactory> RecoveryClients { get; } = new();
+    public int RecoveryNotifications;
     public int HandledImages;
     public Func<Task>? BeforeKeyValidation { get; set; }
     public IBatchSpendUpdateService? Reservations { get; set; }
@@ -71,7 +74,7 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     }
     public async Task DisposeAsync() => await _postgres.DisposeAsync();
 
-    public IHost Host(bool worker, bool notificationsFail = false, bool webhooks = false, string durabilitySchema = "wolverine_media_test")
+    public IHost Host(bool worker, bool notificationsFail = false, bool webhooks = false, string durabilitySchema = "wolverine_media_test", bool reconciliation = false)
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -97,6 +100,7 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
                 services.AddSingleton(Cache.Object);
                 services.AddScoped<IMediaTaskRecovery, MediaTaskRecovery>();
                 services.AddScoped<IMediaTaskTerminalWriter, MediaTaskTerminalWriter>();
+                services.AddScoped<IMediaTaskReconciliationStore, MediaTaskReconciliationStore>();
                 services.AddScoped<IWebhookRecovery, WebhookDeliveryStore>();
                 if (webhooks)
                 {
@@ -117,6 +121,22 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
                     services.AddScoped<IEventHandler<ImageGenerationRequested>>(sp => new ObservedImages(sp.GetRequiredService<ImageGenerationOrchestrator>(), this));
                     services.AddScoped<IEventHandler<VideoGenerationRequested>, VideoGenerationOrchestrator>();
                     services.AddScoped<IEventHandler<SpendUpdateRequested>>(_ => new DebitHandler(this));
+                }
+                if (reconciliation)
+                {
+                    services.AddSingleton(RecoveryStorage.Object);
+                    services.AddHttpClient();
+                    var clientFactory = services.Last(x => x.ServiceType == typeof(IHttpClientFactory));
+                    services.AddSingleton<IHttpClientFactory>(sp => new RecoveryClientFactory(
+                        (IHttpClientFactory)clientFactory.ImplementationFactory!(sp), RecoveryClients.Object));
+                    services.TryAddSingleton(_ => NpgsqlDataSource.Create(ConnectionString));
+                    services.AddScoped<IEventHandler<IndeterminateMediaTaskRecoveryRequested>,
+                        ConduitLLM.Gateway.EventHandlers.IndeterminateMediaTaskRecoveryRequestedHandler>();
+                    services.AddScoped<IEventHandler<AsyncTaskUpdated>>(_ => new RecoveryObserver(this));
+                    services.AddScoped<ConduitLLM.Persistence.Interfaces.IMediaRuntimeStore,
+                        ConduitLLM.Persistence.Npgsql.NpgsqlMediaRuntimeStore>();
+                    services.AddScoped<IMediaLifecycleService, MediaLifecycleService>();
+                    services.AddScoped<IEventHandler<MediaGenerationCompleted>, ConduitLLM.Gateway.EventHandlers.MediaLifecycleHandler>();
                 }
             })
             .AddConduitWolverine(config, ConnectionString, "media-dispatch-test", options =>
@@ -147,6 +167,13 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
                     options.ListenToPostgresqlQueue("image-generation-events").PollingInterval(TimeSpan.FromMilliseconds(50));
                     options.ListenToPostgresqlQueue("video-generation-events").PollingInterval(TimeSpan.FromMilliseconds(50));
                     options.ListenToPostgresqlQueue("spend-update-events").PollingInterval(TimeSpan.FromMilliseconds(50));
+                }
+                if (reconciliation)
+                {
+                    options.AddEventBridge<IndeterminateMediaTaskRecoveryRequested>();
+                    options.AddEventBridge<AsyncTaskUpdated>();
+                    options.AddEventBridge<MediaGenerationCompleted>();
+                    options.ListenToPostgresqlQueue("gateway-events").PollingInterval(TimeSpan.FromMilliseconds(50));
                 }
             }).Build();
     }
@@ -188,14 +215,14 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
 
     public async Task ResetAsync()
     {
-        Provider.Reset(); Cache.Reset();
+        Provider.Reset(); Cache.Reset(); RecoveryStorage.Reset(); RecoveryClients.Reset(); RecoveryNotifications = 0;
         HandledImages = 0; BeforeKeyValidation = null; Reservations = null;
         ReceiverAdmission = null; WebhookNotifications.Reset();
         Provider.As<IVideoGenerationClient>().Setup(p => p.CreateVideoAsync(It.IsAny<VideoGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new VideoGenerationResponse { Created = 1, Data = [] });
         Provider.Setup(p => p.CreateImageAsync(It.IsAny<ImageGenerationRequest>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ImageGenerationResponse { Created = 1, Data = [] });
-        await SqlAsync("TRUNCATE TABLE \"AsyncTasks\", \"VirtualKeyGroupTransactions\", \"WebhookDeliveries\", \"WebhookReplayAudits\"; UPDATE \"VirtualKeyGroups\" SET \"Balance\" = 100");
+        await SqlAsync("TRUNCATE TABLE \"AsyncTasks\", \"VirtualKeyGroupTransactions\", \"WebhookDeliveries\", \"WebhookReplayAudits\", \"MediaRecords\"; UPDATE \"VirtualKeyGroups\" SET \"Balance\" = 100");
         // Every host/subprocess from the preceding case has stopped. Isolate the
         // disposable test database's transport queues from historical deliveries.
         await SqlAsync("""
@@ -205,6 +232,21 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
               EXECUTE format('TRUNCATE TABLE wolverine_queues.%I CASCADE', row.tablename);
             END LOOP; END $$;
             """);
+    }
+
+    private sealed class RecoveryObserver(MediaDispatchFixture fixture) : IEventHandler<AsyncTaskUpdated>
+    {
+        public Task HandleAsync(AsyncTaskUpdated message, IEventContext context)
+        {
+            if (message.IsCompleted) Interlocked.Increment(ref fixture.RecoveryNotifications);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecoveryClientFactory(IHttpClientFactory original, IHttpClientFactory recovery) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => name == ConduitLLM.Core.Utilities.MediaRecoveryDestination.ClientName
+            ? recovery.CreateClient(name) : original.CreateClient(name);
     }
 
     public async Task SqlAsync(string sql)

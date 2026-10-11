@@ -4740,7 +4740,7 @@
           "Tasks"
         ],
         "summary": "Resolve an indeterminate asynchronous task",
-        "description": "Records an operator decision for an indeterminate task. Returns 202 when resolution is accepted or 204 when no further work is required.",
+        "description": "Records retry, failed_no_charge, or completed_no_charge. Recovery requires verified original provider output and a stable dispatch ID; it imports media without repeating generation or charging the customer. Returns 202 for durable dispatch, 204 for failure resolution, or 409 for a competing decision.",
         "operationId": "Tasks_ResolveIndeterminate",
         "parameters": [
           {
@@ -4813,6 +4813,24 @@
           },
           "404": {
             "description": "Not Found",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -57120,6 +57138,44 @@
               "null",
               "string"
             ]
+          },
+          "providerId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "providerModelId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reconciliationDispatchId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reconciliationOutcome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "billingDisposition": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "providerCost": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
           }
         }
       },
@@ -61649,7 +61705,8 @@
         "type": "object",
         "properties": {
           "resolution": {
-            "type": "string"
+            "type": "string",
+            "description": "Operator disposition: retry, failed_no_charge, or completed_no_charge."
           },
           "reason": {
             "maxLength": 500,
@@ -61663,6 +61720,78 @@
               "null",
               "string"
             ]
+          },
+          "dispatchId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Stable idempotency ID supplied by the operator for completed_no_charge.",
+            "format": "uuid"
+          },
+          "virtualKeyId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "Owner of the original task; required for completed_no_charge.",
+            "format": "int32"
+          },
+          "providerId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "Original provider ID, verified against captured context when available.",
+            "format": "int32"
+          },
+          "model": {
+            "maxLength": 200,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Original model alias, verified against the persisted generation request."
+          },
+          "providerModelId": {
+            "maxLength": 200,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Original provider model identifier, verified against captured context when available."
+          },
+          "evidence": {
+            "maxLength": 500,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Incident or provider evidence reference confirming success and ownership of the output."
+          },
+          "resultUrls": {
+            "maxItems": 10,
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Verified public HTTPS URLs for the original output; recovery validates and stores each item."
+          },
+          "providerCost": {
+            "maximum": 1000000000,
+            "minimum": 0,
+            "type": [
+              "null",
+              "number"
+            ],
+            "description": "Known provider cost written off without creating a customer debit or refund.",
+            "format": "double"
           }
         }
       },

@@ -70,15 +70,19 @@ if (webhookWorker)
     await Task.Delay(Timeout.InfiniteTimeSpan);
     return;
 }
-if (args.FirstOrDefault() == "terminal")
+if (args.FirstOrDefault() is "terminal" or "terminal-recovery")
 {
     Console.WriteLine("TERMINAL:starting");
     var writer = new MediaTaskTerminalWriter(host.Services.GetRequiredService<IWolverineRuntime>(),
         host.Services.GetRequiredService<Microsoft.Extensions.Caching.Distributed.IDistributedCache>(),
         host.Services.GetRequiredService<IEventBus>(), NullLogger<MediaTaskTerminalWriter>.Instance);
-    await writer.CommitAsync(new(args[1], TaskState.Completed, "terminal-crash-test", Progress: 100,
+    var reconciliation = args[0] == "terminal-recovery" ? args[3] : null;
+    await writer.CommitAsync(new(args[1], TaskState.Completed, reconciliation == null ? "terminal-crash-test" : null, Progress: 100,
+        ResultJson: reconciliation == null ? null : "{\"model\":\"test-model\",\"data\":[{\"url\":\"https://stored.example/recovered\"}]}",
         Webhook: new() { TaskId = args[1], VirtualKeyId = 1, WebhookUrl = args[2], PayloadJson = "{\"status\":\"completed\"}",
-            Headers = new() { ["Authorization"] = "Bearer crash-test" } }));
+            Headers = new() { ["Authorization"] = "Bearer crash-test" } }, ReconciliationDispatchId: reconciliation,
+        RecoveredMedia: reconciliation == null ? null : [new() { VirtualKeyId = 1, MediaUrl = "https://stored.example/recovered",
+            StorageKey = "recovered", FileSizeBytes = 67, ContentType = "image/png", GeneratedByModel = "provider-model", MediaType = MediaType.Image }]));
     Console.WriteLine("TERMINAL:committed");
     await Task.Delay(Timeout.InfiniteTimeSpan);
     return;

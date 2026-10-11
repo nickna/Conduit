@@ -387,7 +387,7 @@ namespace ConduitLLM.Configuration.Repositories
                     var affected = completed
                         ? await query.ExecuteUpdateAsync(setters => setters
                             .SetProperty(t => t.ProviderInvocationCompletedAt, now)
-                            .SetProperty(t => t.ProviderOperationId, providerOperationId)
+                            .SetProperty(t => t.ProviderOperationId, t => providerOperationId ?? t.ProviderOperationId)
                             .SetProperty(t => t.UpdatedAt, now), cancellationToken)
                         : await query.ExecuteUpdateAsync(setters => setters
                             .SetProperty(t => t.ProviderInvocationStartedAt, now)
@@ -400,7 +400,7 @@ namespace ConduitLLM.Configuration.Repositories
                 if (completed)
                 {
                     task.ProviderInvocationCompletedAt = now;
-                    task.ProviderOperationId = providerOperationId;
+                    task.ProviderOperationId = providerOperationId ?? task.ProviderOperationId;
                 }
                 else
                 {
@@ -421,7 +421,8 @@ namespace ConduitLLM.Configuration.Repositories
             return await ExecuteAsync(async context =>
             {
                 var now = DateTime.UtcNow;
-                var query = context.AsyncTasks.Where(task => task.Id == taskId && task.State == 6);
+                var query = context.AsyncTasks.Where(task => task.Id == taskId && task.State == 6 &&
+                    (task.LeasedBy == null || !task.LeasedBy.StartsWith("reconcile:")));
                 var affected = providerOperationId == null
                     ? await query.ExecuteUpdateAsync(setters => setters
                         .SetProperty(task => task.State, 3)
@@ -467,6 +468,7 @@ namespace ConduitLLM.Configuration.Repositories
                 var mediaTypes = new[] { "image_generation", "video_generation" };
                 var affected = await context.AsyncTasks
                     .Where(task => task.Id == taskId && task.State == 6 &&
+                        (task.LeasedBy == null || !task.LeasedBy.StartsWith("reconcile:")) &&
                         mediaTypes.Contains(task.Type) && task.RetryCount < task.MaxRetries)
                     .ExecuteUpdateAsync(setters => setters
                         .SetProperty(task => task.State, 0)

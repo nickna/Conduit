@@ -251,7 +251,7 @@ export interface paths {
     put?: never;
     /**
      * Resolve an indeterminate asynchronous task
-     * @description Records an operator decision for an indeterminate task. Returns 202 when resolution is accepted or 204 when no further work is required.
+     * @description Records retry, failed_no_charge, or completed_no_charge. Recovery requires verified original provider output and a stable dispatch ID; it imports media without repeating generation or charging the customer. Returns 202 for durable dispatch, 204 for failure resolution, or 409 for a competing decision.
      */
     post: operations["Tasks_ResolveIndeterminate"];
     delete?: never;
@@ -4815,6 +4815,14 @@ export interface components {
       /** Format: date-time */
       providerInvocationCompletedAt: null | string;
       providerOperationId: null | string;
+      /** Format: int32 */
+      providerId?: null | number;
+      providerModelId?: null | string;
+      reconciliationDispatchId?: null | string;
+      reconciliationOutcome?: null | string;
+      billingDisposition?: null | string;
+      /** Format: double */
+      providerCost?: null | number;
     };
     IpCheckResult: {
       isAllowed: boolean;
@@ -6739,9 +6747,38 @@ export interface components {
     /** @enum {unknown} */
     RequestBillingMethod: "modelCost" | "providerReportedCost" | null;
     ResolveIndeterminateTaskDto: {
+      /** @description Operator disposition: retry, failed_no_charge, or completed_no_charge. */
       resolution: string;
       reason: string;
       providerOperationId?: null | string;
+      /**
+       * Format: uuid
+       * @description Stable idempotency ID supplied by the operator for completed_no_charge.
+       */
+      dispatchId?: null | string;
+      /**
+       * Format: int32
+       * @description Owner of the original task; required for completed_no_charge.
+       */
+      virtualKeyId?: null | number;
+      /**
+       * Format: int32
+       * @description Original provider ID, verified against captured context when available.
+       */
+      providerId?: null | number;
+      /** @description Original model alias, verified against the persisted generation request. */
+      model?: null | string;
+      /** @description Original provider model identifier, verified against captured context when available. */
+      providerModelId?: null | string;
+      /** @description Incident or provider evidence reference confirming success and ownership of the output. */
+      evidence?: null | string;
+      /** @description Verified public HTTPS URLs for the original output; recovery validates and stores each item. */
+      resultUrls?: null | string[];
+      /**
+       * Format: double
+       * @description Known provider cost written off without creating a customer debit or refund.
+       */
+      providerCost?: null | number;
     };
     /** @description Summary of a retention policy for display. */
     RetentionPolicySummaryDto: {
@@ -10347,6 +10384,17 @@ export interface operations {
       };
       /** @description Not Found */
       404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["AdminProblemDetails"];
+        };
+      };
+      /** @description Conflict */
+      409: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */
           "x-request-id"?: string;
