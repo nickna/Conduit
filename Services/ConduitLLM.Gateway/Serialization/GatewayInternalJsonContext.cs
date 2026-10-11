@@ -108,4 +108,8 @@ internal sealed record FunctionExecutionResultsMetadata(
     [property: JsonPropertyName("totalCost")] decimal TotalCost,
     [property: JsonPropertyName("successCount")] int SuccessCount,
     [property: JsonPropertyName("failedCount")] int FailedCount,
-    [property: JsonPropertyName("functionCalls")] List<ToolExecutionEvent> FunctionCalls);
+    [property: JsonPropertyName("functionCalls")] List<ToolExecutionEvent> FunctionCalls,
+    [property: JsonPropertyName("billingRequestId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? BillingRequestId = null,
+    [property: JsonPropertyName("requestId"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RequestId = null,
+    [property: JsonPropertyName("costBreakdown"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] FunctionExecutionCostBreakdown? CostBreakdown = null,
+    [property: JsonPropertyName("providerToolUsage"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ToolUsageData? ProviderToolUsage = null);

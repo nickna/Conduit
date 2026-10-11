@@ -138,13 +138,13 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                     int (decimal v) => ((object)v).GetHashCode(),
                     decimal (decimal v) => v),
                 mappingInfo: new RelationalTypeMappingInfo(
-                    storeTypeName: "numeric(10,6)",
-                    precision: 10,
-                    scale: 6));
+                    storeTypeName: "numeric(12,8)",
+                    precision: 12,
+                    scale: 8));
             calculatedCost.SetComparer(new NullableValueComparer<decimal>(calculatedCost.TypeMapping.Comparer));
             calculatedCost.SetKeyComparer(new NullableValueComparer<decimal>(calculatedCost.TypeMapping.KeyComparer));
             calculatedCost.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
-            calculatedCost.AddAnnotation("Relational:ColumnType", "decimal(10, 6)");
+            calculatedCost.AddAnnotation("Relational:ColumnType", "decimal(12, 8)");
 
             var eventType = runtimeEntityType.AddProperty(
                 "EventType",
@@ -709,13 +709,13 @@ toolUsageCost.TypeMapping = NpgsqlDecimalTypeMapping.Default.Clone(
         int (decimal v) => ((object)v).GetHashCode(),
         decimal (decimal v) => v),
     mappingInfo: new RelationalTypeMappingInfo(
-        storeTypeName: "numeric(10,6)",
-        precision: 10,
-        scale: 6));
+        storeTypeName: "numeric(12,8)",
+        precision: 12,
+        scale: 8));
 toolUsageCost.SetComparer(new NullableValueComparer<decimal>(toolUsageCost.TypeMapping.Comparer));
 toolUsageCost.SetKeyComparer(new NullableValueComparer<decimal>(toolUsageCost.TypeMapping.KeyComparer));
 toolUsageCost.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
-toolUsageCost.AddAnnotation("Relational:ColumnType", "decimal(10, 6)");
+toolUsageCost.AddAnnotation("Relational:ColumnType", "decimal(12, 8)");
 
 var toolUsageJson = runtimeEntityType.AddProperty(
     "ToolUsageJson",

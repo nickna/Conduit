@@ -86,6 +86,7 @@ namespace ConduitLLM.Gateway.Endpoints
             var functionExecutionResults = agenticMetrics.FunctionCalls
                 .Select(fc => new ToolExecutionEvent
                 {
+                    Iteration = fc.Iteration,
                     ToolCallId = fc.ToolCallId,
                     FunctionName = fc.FunctionName,
                     Status = fc.Success ? "completed" : "failed",
