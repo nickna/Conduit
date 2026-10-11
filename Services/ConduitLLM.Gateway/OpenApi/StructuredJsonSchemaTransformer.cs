@@ -35,15 +35,8 @@ public sealed class StructuredJsonSchemaTransformer : IOpenApiSchemaTransformer
         }
         else if (IsProperty(context, typeof(Message), nameof(Message.Content)))
         {
-            schema.OneOf =
-            [
-                new OpenApiSchema { Type = JsonSchemaType.String },
-                ArrayOf(new OpenApiSchema
-                {
-                    Type = JsonSchemaType.Object,
-                    AdditionalPropertiesAllowed = true
-                })
-            ];
+            schema.Type = null;
+            schema.OneOf = ChatUnionSchemas.Content().OneOf;
         }
         else if (IsProperty(context, typeof(ChatCompletionRequest), nameof(ChatCompletionRequest.Stop)))
         {
@@ -58,15 +51,8 @@ public sealed class StructuredJsonSchemaTransformer : IOpenApiSchemaTransformer
 
         if (context.JsonTypeInfo.Type == typeof(ToolChoice))
         {
-            schema.OneOf =
-            [
-                new OpenApiSchema { Type = JsonSchemaType.String },
-                new OpenApiSchema
-                {
-                    Type = JsonSchemaType.Object,
-                    AdditionalPropertiesAllowed = true
-                }
-            ];
+            schema.Type = null;
+            schema.OneOf = ChatUnionSchemas.ToolChoice().OneOf;
         }
 
         if (context.JsonTypeInfo.Type == typeof(ChatCompletionRequest))

@@ -79,3 +79,10 @@ Redocly uses `recommended-strict`, plus contact, parameter-description, tag-defi
 The manual media-retention cleanup route always returns 501. Its single `operation-2xx-response` lint exception preserves that honest contract. Tests freeze the exact ignored rule/location; do not advertise a fictional successful result. Implementing or removing the stub requires updating its contract, exception, and tests together.
 
 Task cleanup responses retain the established `cleaned_up` and `older_than_hours` names. These are the only semantic casing exceptions. Their removal requires a versioned compatibility decision. Referenced binary upload schemas are valid and do not need media-type exceptions. OpenAI conformance checks remain independently enforced.
+
+The pinned baseline compares the supported chat content-part and function tool-choice unions
+recursively, including required members, JSON types, enum restrictions, and image URI format.
+Mutation tests guard against arbitrary-object fallbacks and lost discriminator mappings. Other
+conformance checks cover a bounded set of fields and types; they do not establish full recursive
+equivalence with the entire upstream specification. Provider video, additional audio formats,
+and unknown content types are described separately on `/v1/conduit/chat/completions`.

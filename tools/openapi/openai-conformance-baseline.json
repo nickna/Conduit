@@ -1,12 +1,246 @@
 {
-  "version": 2,
-  "description": "Enforces top-level fields on compatible operations, nested model objects, and selected field types. Does not compare enums, constraints, nullability, or unlisted nested schemas.",
+  "version": 3,
+  "description": "Enforces top-level fields, nested model objects, selected field types, and recursive supported chat content/tool-choice unions. Other unlisted schemas and constraints are not compared; this is not full pinned-schema equivalence.",
   "source": {
     "repository": "https://github.com/openai/openai-openapi",
     "commit": "5c044be3bf3a42854e99e34616564eeb2124a317",
     "document": "openapi.json"
   },
   "enforcement": "enforced",
+  "chatUnions": {
+    "contentParts": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "file",
+            "type"
+          ],
+          "properties": {
+            "file": {
+              "type": "object",
+              "properties": {
+                "file_data": {
+                  "type": "string"
+                },
+                "file_id": {
+                  "type": "string"
+                },
+                "filename": {
+                  "type": "string"
+                }
+              }
+            },
+            "prompt_cache_breakpoint": {
+              "type": "object",
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "explicit"
+                  ]
+                }
+              }
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "file"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "image_url",
+            "type"
+          ],
+          "properties": {
+            "image_url": {
+              "type": "object",
+              "required": [
+                "url"
+              ],
+              "properties": {
+                "detail": {
+                  "type": "string",
+                  "enum": [
+                    "auto",
+                    "high",
+                    "low"
+                  ]
+                },
+                "url": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              }
+            },
+            "prompt_cache_breakpoint": {
+              "type": "object",
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "explicit"
+                  ]
+                }
+              }
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "image_url"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "input_audio",
+            "type"
+          ],
+          "properties": {
+            "input_audio": {
+              "type": "object",
+              "required": [
+                "data",
+                "format"
+              ],
+              "properties": {
+                "data": {
+                  "type": "string"
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "mp3",
+                    "wav"
+                  ]
+                }
+              }
+            },
+            "prompt_cache_breakpoint": {
+              "type": "object",
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "explicit"
+                  ]
+                }
+              }
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "input_audio"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "refusal",
+            "type"
+          ],
+          "properties": {
+            "refusal": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "refusal"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "text",
+            "type"
+          ],
+          "properties": {
+            "prompt_cache_breakpoint": {
+              "type": "object",
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "explicit"
+                  ]
+                }
+              }
+            },
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "text"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "toolChoice": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "function",
+            "type"
+          ],
+          "properties": {
+            "function": {
+              "type": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              }
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "function"
+              ]
+            }
+          }
+        },
+        {
+          "type": "string",
+          "enum": [
+            "auto",
+            "none",
+            "required"
+          ]
+        }
+      ]
+    }
+  },
   "operations": {
     "GET /v1/models": {
       "request": null,
