@@ -19,6 +19,42 @@ if (args is ["--seed"])
         ProbeSettings.DatabaseConnectionStringFromEnvironment(),
         ProbeSettings.ProviderUriFromEnvironment(),
         ProbeSettings.RedisConnectionStringFromEnvironment());
+    if (Environment.GetEnvironmentVariable("CONDUIT_NATIVE_FUNCTION_FIXTURE_OWNER") is not null)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        await NativeFunctionFixture.CreateAsync(source, ProbeSettings.FunctionFixtureOwnerFromEnvironment(),
+            ProbeSettings.ProviderUriFromEnvironment(),
+            Environment.GetEnvironmentVariable("CONDUIT_NATIVE_FUNCTION_PROTECTED_KEY")
+                ?? throw new InvalidOperationException("A protected function fixture credential is required."),
+            deadline.Token);
+    }
+    return;
+}
+
+if (args is ["--cleanup-function-fixture"])
+{
+    try
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        var owner = ProbeSettings.FunctionFixtureOwnerFromEnvironment();
+        var snapshot = await NativeFunctionFixture.ReadAsync(source, owner, deadline.Token);
+        if (snapshot is not null)
+        {
+            // Hosts have already stopped. Keep the ownership rows until Redis
+            // cleanup succeeds, so a failed cleanup can be retried safely.
+            await NativeFunctionFixtureRedisCleanup.DeleteAsync(
+                ProbeSettings.RedisConnectionStringFromEnvironment(), snapshot, deadline.Token);
+            await NativeFunctionFixture.DeleteAsync(source, owner, deadline.Token);
+        }
+        Console.WriteLine("Owned function fixture cleanup: PASS");
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Owned function fixture cleanup failed.");
+        Environment.ExitCode = 1;
+    }
     return;
 }
 
@@ -55,6 +91,23 @@ if (args is ["--mock-provider"])
     return;
 }
 
+if (args is ["--function-execution"])
+{
+    try
+    {
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        await NativeFunctionExecutionProbe.RunAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_URL"),
+            ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"), ProbeSettings.ProviderUriFromEnvironment(),
+            source, ProbeSettings.FunctionFixtureOwnerFromEnvironment(), NativeParityFixture.VirtualKey, CancellationToken.None);
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine("Function HTTP proof failed: " + exception.Message);
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
 var settings = ProbeSettings.FromEnvironment();
 var probe = new GatewayNativeParityProbe(settings);
 await probe.RunAsync();
@@ -82,6 +135,12 @@ internal sealed record ProbeSettings(
     public static Uri ProviderUriFromEnvironment() =>
         RequiredUri("CONDUIT_NATIVE_PROVIDER_URL");
 
+    public static Guid FunctionFixtureOwnerFromEnvironment() =>
+        Guid.TryParseExact(Required("CONDUIT_NATIVE_FUNCTION_FIXTURE_OWNER"), "N", out var owner)
+            && owner != Guid.Empty
+                ? owner
+                : throw new InvalidOperationException("A nonempty function fixture owner GUID is required.");
+
     public static string RedisConnectionStringFromEnvironment() =>
         Environment.GetEnvironmentVariable("CONDUIT_NATIVE_DIRECT_REDIS_CONNECTION_STRING") is { Length: > 0 } direct
             ? direct
@@ -94,7 +153,7 @@ internal sealed record ProbeSettings(
             ? direct : NativeDependencyRoutes.ParseDatabase(Required("DATABASE_URL")).ConnectionString;
     }
 
-    private static Uri RequiredUri(string name) =>
+    public static Uri RequiredUri(string name) =>
         new($"{Required(name).TrimEnd('/')}/", UriKind.Absolute);
 
     private static string Required(string name) =>
@@ -137,6 +196,10 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         await AssertChunkedProviderRequestAsync();
         await AssertS3MediaWorkflowAsync();
         await AssertSignalRAndRedisAsync();
+        await using (var source = NpgsqlDataSource.Create(settings.DatabaseConnectionString))
+            await NativeFunctionExecutionProbe.RunAsync(settings.Gateway, settings.SecondaryGateway,
+                settings.Provider, source, ProbeSettings.FunctionFixtureOwnerFromEnvironment(),
+                NativeParityFixture.VirtualKey, CancellationToken.None);
         Console.WriteLine("Gateway NativeAOT supported protocol/infrastructure probe: PASS");
     }
 

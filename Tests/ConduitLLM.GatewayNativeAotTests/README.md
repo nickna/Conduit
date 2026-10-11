@@ -16,6 +16,14 @@ owned graph and rejects unrelated references through canonical or shadow foreign
 keys, including unsupported virtual-key cascade children. It deletes only that
 owner's rows and is safe to repeat after successful deletion.
 
+The parity harness generates the owner before seeding and passes a production-
+protected credential to `--seed`. After all owned processes stop and are reaped,
+`--cleanup-function-fixture` validates the graph, deletes its exact Redis keys and
+delimited key families, then removes SQL rows. A Redis failure leaves SQL ownership
+available for retry. Shared key rings, catalog keys, streams, and unrelated owner
+state are preserved. Cleanup failure fails the gate and parent environment values
+are restored in all cases.
+
 The provider's `/search` route validates `x-api-key`, accepts generated chunked
 JSON from the production Exa client, returns a structured Unicode result, and
 has separate function counters. It omits `costDollars` so the execution proof must
@@ -27,5 +35,16 @@ spend-history, and ledger columns alongside eight-decimal function costs and gro
 balances. Billing verification must compare each persisted value at its actual
 column precision.
 
-These fixture tests do not establish native function execution support. The
-published two-host HTTP, persistence, and billing proof remains a separate gate.
+`NativeFunctionExecutionProbe` runs after the existing protocol checks. It sends
+one successful search and one real provider rejection through each Gateway, reads
+all four executions through the opposite host, and compares the HTTP contracts
+against an independent 24-column SQL oracle. A separate key/group isolates the
+proof's pricing, two successful request logs, balance, and settled ledger totals.
+Ownership denial, missing executions, unauthenticated reads, and unbilled failures
+are checked too. The published two-host process gate must pass before this work
+can establish native function execution support.
+
+The probe preserves the current provider-error diagnostics in failed POST/GET
+responses; parity does not establish that these diagnostics are suitable for
+External error mode. The six-versus-eight decimal reporting discrepancy is tracked
+in [#1574](https://github.com/nickna/Conduit/issues/1574).

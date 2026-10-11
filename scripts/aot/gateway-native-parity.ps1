@@ -96,42 +96,65 @@ function Set-GateEnvironment([string]$name, $value) {
     [Environment]::SetEnvironmentVariable($name, $environmentValue)
 }
 
-function Invoke-FunctionCredentialFixture([string]$fixtureDll, [string]$redisConnectionString, [string]$plaintext) {
-    $startInfo = [Diagnostics.ProcessStartInfo]::new((Get-Command dotnet).Source)
+function Invoke-PrivateFixtureProcess(
+    [string]$filePath, [string[]]$arguments, [hashtable]$childEnvironment, [string]$operation,
+    [ValidateRange(100, 30000)][int]$timeoutMilliseconds = 30000
+) {
+    $startInfo = [Diagnostics.ProcessStartInfo]::new($filePath)
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
-    $startInfo.ArgumentList.Add($fixtureDll)
-    $startInfo.ArgumentList.Add('protect-function-key')
-    $startInfo.Environment['CONDUIT_NATIVE_FUNCTION_PLAINTEXT_KEY'] = $plaintext
-    $startInfo.Environment['CONDUIT_NATIVE_FUNCTION_REDIS_CONNECTION_STRING'] = $redisConnectionString
+    foreach ($argument in $arguments) { $startInfo.ArgumentList.Add($argument) }
+    foreach ($name in $childEnvironment.Keys) { $startInfo.Environment[$name] = $childEnvironment[$name] }
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
+    $started = $false
+    $cleanup = $null
     try {
-        if (-not $process.Start()) { throw 'Function credential fixture could not start.' }
+        $started = $process.Start()
+        if (-not $started) { throw "$operation could not start." }
         # Both streams stay private; never include their contents in gate diagnostics.
         $stdout = $process.StandardOutput.ReadToEndAsync()
         $stderr = $process.StandardError.ReadToEndAsync()
         $streams = [Threading.Tasks.Task[]]@($stdout, $stderr)
-        if (-not $process.WaitForExit(30000)) {
+        if (-not $process.WaitForExit($timeoutMilliseconds)) {
             $cleanup = [Diagnostics.Stopwatch]::StartNew()
             try { $process.Kill($true) } catch {
-                if (-not $process.HasExited) { throw 'Function credential fixture termination failed.' }
+                if (-not $process.HasExited) { throw "$operation termination failed." }
             }
             $remaining = [Math]::Max(0, 5000 - [int]$cleanup.ElapsedMilliseconds)
-            if (-not $process.WaitForExit($remaining)) { throw 'Function credential fixture could not be reaped.' }
+            if (-not $process.WaitForExit($remaining)) { throw "$operation could not be reaped." }
             $remaining = [Math]::Max(0, 5000 - [int]$cleanup.ElapsedMilliseconds)
             if (-not [Threading.Tasks.Task]::WaitAll($streams, $remaining)) {
-                throw 'Function credential fixture output did not close.'
+                throw "$operation output did not close."
             }
-            throw 'Function credential fixture timed out.'
+            throw "$operation timed out."
         }
         if (-not [Threading.Tasks.Task]::WaitAll($streams, 5000)) {
-            throw 'Function credential fixture output did not close.'
+            throw "$operation output did not close."
         }
-        if ($process.ExitCode -ne 0) { throw 'Function credential fixture failed.' }
-        $output = $stdout.GetAwaiter().GetResult()
+        if ($process.ExitCode -ne 0) { throw "$operation failed." }
+        return $stdout.GetAwaiter().GetResult()
+    } finally {
+        try {
+            if ($started -and -not $process.HasExited) {
+                if ($null -eq $cleanup) { $cleanup = [Diagnostics.Stopwatch]::StartNew() }
+                $process.Kill($true)
+                $remaining = [Math]::Max(0, 5000 - [int]$cleanup.ElapsedMilliseconds)
+                if (-not $process.WaitForExit($remaining)) { throw "$operation could not be reaped." }
+            }
+        } finally {
+            $process.Dispose()
+        }
+    }
+}
+
+function Invoke-FunctionCredentialFixture([string]$fixtureDll, [string]$redisConnectionString, [string]$plaintext) {
+        $output = Invoke-PrivateFixtureProcess (Get-Command dotnet).Source @($fixtureDll, 'protect-function-key') @{
+            CONDUIT_NATIVE_FUNCTION_PLAINTEXT_KEY = $plaintext
+            CONDUIT_NATIVE_FUNCTION_REDIS_CONNECTION_STRING = $redisConnectionString
+        } 'Function credential fixture'
         if ($output.Length -gt 2002 -or $output -cnotmatch '\Aenc:v1:[A-Za-z0-9_-]+(?:\r?\n)?\z') {
             throw 'Function credential fixture returned invalid ciphertext.'
         }
@@ -140,9 +163,25 @@ function Invoke-FunctionCredentialFixture([string]$fixtureDll, [string]$redisCon
             throw 'Function credential fixture did not protect its input.'
         }
         return $ciphertext
-    } finally {
-        $process.Dispose()
+}
+
+function Stop-OwnedParityProcesses([Collections.Generic.List[Diagnostics.Process]]$ownedProcesses) {
+    $failures = [Collections.Generic.List[Exception]]::new()
+    $deadline = [Diagnostics.Stopwatch]::StartNew()
+    foreach ($process in $ownedProcesses) {
+        try {
+            if (-not $process.HasExited) { $process.Kill($true) }
+            $remaining = [Math]::Max(0, 30000 - [int]$deadline.ElapsedMilliseconds)
+            if (-not $process.WaitForExit($remaining)) {
+                throw "Owned parity process $($process.Id) could not be reaped."
+            }
+        } catch {
+            $failures.Add($_.Exception)
+        } finally {
+            $process.Dispose()
+        }
     }
+    if ($failures.Count) { throw [AggregateException]::new('Owned parity hosts could not all be stopped.', $failures) }
 }
 
 function Wait-ForHttp([string]$url, [string]$name) {
@@ -177,6 +216,8 @@ if (-not (Test-Path -LiteralPath $publisherDll -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $startupFixtureDll -PathType Leaf)) { throw "Schema startup fixture tool not found: $startupFixtureDll" }
 
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
+$functionSeedAttempted = $false
+$parityFailure = $null
 try {
     Set-GateEnvironment 'DATABASE_URL' $DatabaseUrl
     Set-GateEnvironment 'CONDUIT_NATIVE_MESSAGE_PUBLISHER_PATH' $publisherDll
@@ -188,6 +229,7 @@ try {
     Set-GateEnvironment 'CONDUIT_S3_BUCKET_NAME' $S3BucketName
     Set-GateEnvironment 'CONDUIT_S3_REGION' $S3Region
     Set-GateEnvironment 'CONDUIT_MASTER_KEY' $MasterKey
+    Set-GateEnvironment 'CONDUIT_CUSTOMER_MODE' 'External'
     Set-GateEnvironment 'CONDUIT_NATIVE_PROVIDER_URL' "http://127.0.0.1:$ProviderPort"
     Set-GateEnvironment 'CONDUIT_MIGRATION_MODE' 'Wait'
     Set-GateEnvironment 'CONDUIT_MIGRATION_WAIT_TIMEOUT_SECONDS' '0'
@@ -237,8 +279,12 @@ try {
 
     $protectedFunctionKey = Invoke-FunctionCredentialFixture $startupFixtureDll $routes.directRedis 'native-aot-function-key-32-bytes'
     Set-GateEnvironment 'CONDUIT_NATIVE_FUNCTION_PROTECTED_KEY' $protectedFunctionKey
+    Set-GateEnvironment 'CONDUIT_NATIVE_FUNCTION_FIXTURE_OWNER' ([Guid]::NewGuid().ToString('N'))
 
     Write-Host 'Seeding typed-store authentication and IP-filter fixtures...'
+    # Set this before the call: a seed that committed but lost its acknowledgement
+    # still requires owner-checked, idempotent cleanup.
+    $functionSeedAttempted = $true
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
         & $nativeProbe --seed
     } else {
@@ -307,6 +353,7 @@ try {
     }
 }
 catch {
+    $parityFailure = $_
     Write-Host "Native parity logs: $logRoot" -ForegroundColor Yellow
     foreach ($file in Get-ChildItem -LiteralPath $logRoot -File) {
         Write-Host "===== $($file.Name) ====="
@@ -315,12 +362,29 @@ catch {
     throw
 }
 finally {
-    foreach ($process in $processes) {
-        if ($process -and -not $process.HasExited) {
-            try { Stop-Process -Id $process.Id -Force -Confirm:$false } catch {}
+    try {
+        # Stop/reap every owned producer before removing its SQL or Redis state.
+        Stop-OwnedParityProcesses $processes
+        if ($functionSeedAttempted) {
+            if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
+                $cleanupOutput = Invoke-PrivateFixtureProcess $nativeProbe @('--cleanup-function-fixture') @{} 'Owned function fixture cleanup'
+            } else {
+                $cleanupOutput = Invoke-PrivateFixtureProcess (Get-Command dotnet).Source @($probeDll, '--cleanup-function-fixture') @{} 'Owned function fixture cleanup'
+            }
+            if ($cleanupOutput -cnotmatch '\AOwned function fixture cleanup: PASS(?:\r?\n)?\z') {
+                throw 'Owned function fixture cleanup returned an invalid result.'
+            }
+            Write-Host '  PASS  owned function SQL/Redis fixture cleanup'
         }
-    }
-    foreach ($name in $originalEnvironment.Keys) {
-        Set-GateEnvironment $name $originalEnvironment[$name]
+    } catch {
+        if ($parityFailure) {
+            throw [AggregateException]::new('Native parity and owned fixture cleanup both failed.',
+                [Exception[]]@($parityFailure.Exception, $_.Exception))
+        }
+        throw
+    } finally {
+        foreach ($name in $originalEnvironment.Keys) {
+            Set-GateEnvironment $name $originalEnvironment[$name]
+        }
     }
 }
