@@ -253,6 +253,10 @@ function Get-CaseFailureDiagnostic([string] $CaseRoot, [object[]] $Commands, [ob
 function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $ExpectedFailure,
     [string] $ExistingOutputPath = '', [switch] $CaptureResult) {
     $caseRoot = New-CaseRoot $Scenario
+    $indexedJit = $Scenario -cin @('jit-index', 'jit-index-ambiguous', 'jit-index-missing', 'jit-index-malformed')
+    $jitRootImage = 'example.invalid/conduit-jit@sha256:' + $(if ($indexedJit) { '4' * 64 } else { '1' * 64 })
+    $jitSelectedImage = 'example.invalid/conduit-jit@sha256:' + ('2' * 64)
+    $expectedJitPullBytes = if ($indexedJit) { 518 } else { 700 }
     $packageFixture = $script:packages[$Service]
     $selectedFixture = switch ($Scenario) {
         'package-wrong-service' { $script:packages['gateway'] }
@@ -281,7 +285,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     $probePath = if ($Service -eq 'admin') { $nativeDriver } else { $managedProbe }
     $parameters = @{
         Service = $Service
-        JitImage = 'example.invalid/conduit-jit@sha256:' + ('1' * 64)
+        JitImage = $jitRootImage
         NativeImage = if ($Scenario -cin @('package-dirty', 'package-unavailable', 'package-hold')) { $selectedFixture.requestedImage } else { $packageFixture.requestedImage }
         NativePackagingDirectory = $packageDirectory
         DatabaseUrl = 'postgresql://fixture:' + $privateDatabasePassword + '@127.0.0.1:5432/fixture'
@@ -439,6 +443,12 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
             'package-dirty', 'package-unavailable', 'package-hold', 'candidate-config', 'candidate-selected-swap')) {
             Assert-Contract ($created.Count -eq 0 -and $drivers.Count -eq 0) 'Publication rejection reached a measured container or workload.'
         }
+        if ($indexedJit) {
+            $manifestCommands = @($commands | Where-Object { $_.arguments[0] -ceq 'manifest' })
+            Assert-Contract ($manifestCommands.Count -eq 1 -and $manifestCommands[0].arguments.Count -eq 3 -and
+                $manifestCommands[0].arguments[1] -ceq 'inspect' -and $manifestCommands[0].arguments[2] -ceq $jitRootImage -and
+                $created.Count -eq 0 -and $drivers.Count -eq 0) 'Invalid JIT index reached a selected manifest, container or workload.'
+        }
         if ($Scenario -eq 'native-selected-mismatch') {
             Assert-Contract ($created.Count -eq 2 -and $drivers.Count -eq $(if ($Service -eq 'gateway') { 2 } else { 1 }) -and
                 (Read-Records (Join-Path $caseRoot 'active')).Count -eq 0 -and
@@ -515,12 +525,23 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     foreach ($sample in $report.samples) {
         $expectedPairOrder = if ($sample.pair % 2 -eq 1) { 'jit|native-aot' } else { 'native-aot|jit' }
         Assert-Contract (($sample.order -join '|') -ceq $expectedPairOrder) 'Raw sample pair order is incorrect.'
+        Assert-Contract ($sample.jit.pullBytes -eq $expectedJitPullBytes) 'Raw JIT sample lost selected-manifest pull bytes.'
         Assert-NativeBenchmarkFixtureBinding $sample.native.imageBinding $packageFixture
         Assert-Contract ($sample.native.nativeContainerId -is [string] -and $sample.native.nativeContainerId -cmatch '\A[0-9a-f]{64}\z' -and
             @($created | Where-Object { $_.id -ceq $sample.native.nativeContainerId -and $_.runtime -ceq 'native-aot' }).Count -eq 1) 'Raw native sample omitted its actual owned container identity.'
     }
     Assert-Contract ($report.jit.imageBytes -eq 1000 -and $report.native.imageBytes -eq 800 -and
-        $report.jit.pullBytes -eq 700 -and $report.native.pullBytes -eq $packageFixture.oci.layer.size) 'Collector mixed image and original selected-layer pull sizes.'
+        $report.jit.pullBytes -eq $expectedJitPullBytes -and $report.native.pullBytes -eq $packageFixture.oci.layer.size) 'Collector mixed image and original selected-layer pull sizes.'
+    if ($indexedJit) {
+        $manifestCommands = @($commands | Where-Object { $_.arguments[0] -ceq 'manifest' } | Sort-Object ordinal)
+        Assert-Contract ($manifestCommands.Count -eq 2 -and $manifestCommands[0].arguments.Count -eq 3 -and
+            $manifestCommands[1].arguments.Count -eq 3 -and $manifestCommands[0].arguments[1] -ceq 'inspect' -and
+            $manifestCommands[1].arguments[1] -ceq 'inspect' -and $manifestCommands[0].arguments[2] -ceq $jitRootImage -and
+            $manifestCommands[1].arguments[2] -ceq $jitSelectedImage) 'Collector did not inspect the original JIT index and exact selected manifest in order.'
+        $jitRuns = @($commands | Where-Object { $_.arguments[0] -ceq 'run' -and $_.arguments -ccontains 'conduit.native-benchmark.runtime=jit' })
+        Assert-Contract ($jitRuns.Count -eq 6 -and
+            @($jitRuns | Where-Object { $_.arguments[-1] -cne ('sha256:' + ('1' * 64)) }).Count -eq 0) 'Indexed JIT collection did not launch every warm/measured pair by the observed immutable local image ID.'
+    }
     $script:cases++
     if ($CaptureResult) { return ,[ordered]@{ outputPath = $parameters.OutputPath; evidence = $attemptEvidence } }
     }
@@ -817,6 +838,9 @@ if (-not [string]::IsNullOrEmpty($ChildArgumentsJson)) {
 $root = $env:CONDUIT_COLLECTOR_TEST_ROOT
 $scenario = $env:CONDUIT_COLLECTOR_TEST_SCENARIO
 function Save-Record([string] $Directory, $Value) {
+    if ($Directory -ceq 'commands') {
+        $Value['ordinal'] = @(Get-ChildItem -LiteralPath (Join-Path $root $Directory) -File).Count + 1
+    }
     $path = Join-Path (Join-Path $root $Directory) ([Guid]::NewGuid().ToString('N') + '.json')
     [IO.File]::WriteAllText($path, ($Value | ConvertTo-Json -Depth 20))
 }
@@ -900,6 +924,27 @@ if ($Mode -eq 'docker') {
     }
     if ($CommandArguments[0] -eq 'manifest') {
         if (-not $CommandArguments[-1].StartsWith('example.invalid/conduit-jit@', [StringComparison]::Ordinal)) { throw 'Native metadata consulted an unrelated registry manifest.' }
+        if ($scenario -cin @('jit-index', 'jit-index-ambiguous', 'jit-index-missing', 'jit-index-malformed')) {
+            if ($CommandArguments.Count -ne 3 -or $CommandArguments[1] -cne 'inspect') { throw 'JIT manifest command shape differs.' }
+            if ($CommandArguments[-1] -ceq ('example.invalid/conduit-jit@sha256:' + ('4' * 64))) {
+                $amd64 = @{ digest = 'sha256:' + ('2' * 64); platform = @{ os = 'linux'; architecture = 'amd64' } }
+                $arm64 = @{ digest = 'sha256:' + ('3' * 64); platform = @{ os = 'linux'; architecture = 'arm64' } }
+                $platforms = switch ($scenario) {
+                    'jit-index-ambiguous' { @($amd64, $amd64, $arm64) }
+                    'jit-index-missing' { @($arm64) }
+                    'jit-index-malformed' { $amd64.digest = 'sha256:invalid'; @($amd64, $arm64) }
+                    default { @($amd64, $arm64) }
+                }
+                @{ schemaVersion = 2; manifests = @($platforms) } | ConvertTo-Json -Depth 5 -Compress
+                exit 0
+            }
+            if ($scenario -ceq 'jit-index' -and
+                $CommandArguments[-1] -ceq ('example.invalid/conduit-jit@sha256:' + ('2' * 64))) {
+                @{ schemaVersion = 2; layers = @(@{ size = 211 }, @{ size = 307 }) } | ConvertTo-Json -Depth 5 -Compress
+                exit 0
+            }
+            throw 'JIT metadata consulted an unexpected selected manifest.'
+        }
         @{ schemaVersion = 2; layers = @(@{ size = 700 }) } | ConvertTo-Json -Depth 5 -Compress
         exit 0
     }
@@ -1328,6 +1373,10 @@ if ($env:CONDUIT_COLLECTOR_HELPER_VALUE -eq 'timeout') {
 
     $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult
     Invoke-CollectorCase 'gateway' 'success' $null
+    Invoke-CollectorCase 'admin' 'jit-index' $null
+    foreach ($scenario in @('jit-index-ambiguous', 'jit-index-missing', 'jit-index-malformed')) {
+        Invoke-CollectorCase 'admin' $scenario 'No qualification was recorded.'
+    }
     Invoke-CollectorCase 'admin' 'even-pairs' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'case-duplicate-environment' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'revision-mismatch' 'No qualification was recorded.'

@@ -393,14 +393,14 @@ function Get-ImageMetadata([string] $Image, $NativeEvidence = $null) {
     if ($manifestResult.ExitCode -ne 0) { throw 'Image manifest inspection failed.' }
     $manifest = $manifestResult.Stdout | ConvertFrom-Json -AsHashtable
     if ($manifest.ContainsKey('manifests')) {
-        $matches = @($manifest.manifests | Where-Object {
+        $platformCandidates = @($manifest.manifests | Where-Object {
             $_.platform.os -ceq 'linux' -and $_.platform.architecture -ceq 'amd64'
         })
-        if ($matches.Count -ne 1 -or $matches[0].digest -cnotmatch '^sha256:[0-9a-f]{64}$') {
+        if ($platformCandidates.Count -ne 1 -or $platformCandidates[0].digest -cnotmatch '^sha256:[0-9a-f]{64}$') {
             throw 'Image platform manifest is invalid.'
         }
         $repository = $Image.Substring(0, $Image.LastIndexOf('@'))
-        $manifestResult = Invoke-Docker @('manifest', 'inspect', ($repository + '@' + $matches[0].digest))
+        $manifestResult = Invoke-Docker @('manifest', 'inspect', ($repository + '@' + $platformCandidates[0].digest))
         if ($manifestResult.ExitCode -ne 0) { throw 'Image platform manifest inspection failed.' }
         $manifest = $manifestResult.Stdout | ConvertFrom-Json -AsHashtable
     }
