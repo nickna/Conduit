@@ -60,7 +60,9 @@ internal sealed class RedisNetworkProxy : IAsyncDisposable
                 _forwarders.Add(ForwardAsync(client));
             }
         }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        // Stopping the listener can race the canceled accept and surface a socket/disposal error.
+        catch (Exception exception) when (_lifetime.IsCancellationRequested
+            && exception is OperationCanceledException or SocketException or ObjectDisposedException) { }
     }
 
     private async Task ForwardAsync(TcpClient client)
