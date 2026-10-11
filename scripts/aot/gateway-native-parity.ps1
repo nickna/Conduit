@@ -69,7 +69,8 @@ function Start-LoggedProcess(
     [string]$filePath,
     [string[]]$argumentList,
     [string]$workingDirectory,
-    [string]$urls
+    [string]$urls,
+    [hashtable]$childEnvironment = @{}
 ) {
     if ($urls) { Set-GateEnvironment 'ASPNETCORE_URLS' $urls }
     $arguments = @{
@@ -81,6 +82,7 @@ function Start-LoggedProcess(
         PassThru = $true
     }
     if ($IsWindows) { $arguments.WindowStyle = 'Hidden' } else { $arguments.NoNewWindow = $true }
+    if ($childEnvironment.Count) { $arguments.Environment = $childEnvironment }
     $process = Start-Process @arguments
     Write-Host "Started $name (pid $($process.Id))"
     return $process
@@ -311,6 +313,7 @@ $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $functionSeedAttempted = $false
 $mcpSeedAttempted = $false
 $adminSettingsAttempted = $false
+$adminIpAttempted = $false
 $billingAuditAttempted = $false
 $parityFailure = $null
 try {
@@ -383,6 +386,7 @@ try {
     Set-GateEnvironment 'CONDUIT_NATIVE_FUNCTION_FIXTURE_OWNER' ([Guid]::NewGuid().ToString('N'))
     Set-GateEnvironment 'CONDUIT_NATIVE_MCP_FIXTURE_OWNER' ([Guid]::NewGuid().ToString('N'))
     Set-GateEnvironment 'CONDUIT_NATIVE_ADMIN_SETTINGS_OWNER' ([Guid]::NewGuid().ToString('N'))
+    Set-GateEnvironment 'CONDUIT_NATIVE_ADMIN_IP_OWNER' ([Guid]::NewGuid().ToString('N'))
     Set-GateEnvironment 'CONDUIT_NATIVE_BILLING_AUDIT_FIXTURE_OWNER' ([Guid]::NewGuid().ToString('N'))
     Set-GateEnvironment 'CONDUIT_API_TO_API_BACKEND_AUTH_KEY' $MasterKey
 
@@ -423,7 +427,16 @@ try {
     Wait-ForHttp "http://127.0.0.1:$ProviderPort/health" 'OpenAI-compatible provider stub'
 
     $adminExecutable = Get-NativeExecutable 'Admin'
-    $admin = Start-LoggedProcess 'admin' $adminExecutable @() (Split-Path $adminExecutable) "http://127.0.0.1:$AdminPort"
+    # Apply security overrides only to this owned Admin child. The alternate
+    # source-IP proof must reach the database rules without a private-IP bypass.
+    $adminSecurity = @{
+        CONDUIT_ADMIN_IP_FILTERING_ENABLED = 'true'
+        CONDUIT_ADMIN_IP_FILTER_ALLOW_PRIVATE = 'false'
+        CONDUIT_ADMIN_IP_FILTER_MODE = 'permissive'
+        CONDUIT_ADMIN_IP_FILTER_WHITELIST = ''
+        CONDUIT_ADMIN_IP_FILTER_BLACKLIST = ''
+    }
+    $admin = Start-LoggedProcess 'admin' $adminExecutable @() (Split-Path $adminExecutable) "http://127.0.0.1:$AdminPort" $adminSecurity
     $processes.Add($admin)
     Wait-ForHttp "http://127.0.0.1:$AdminPort/health/live" 'native Admin liveness'
     Wait-ForHttp "http://127.0.0.1:$AdminPort/health/ready" 'native Admin readiness'
@@ -463,6 +476,19 @@ try {
         dotnet (Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll')
     }
     if ($LASTEXITCODE -ne 0) { throw "Gateway native parity probe exited with $LASTEXITCODE." }
+
+    # The owner is known before POST and cleanup is repeated after producers are
+    # reaped, covering an unknown committed HTTP outcome or a late request.
+    $adminIpAttempted = $true
+    if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
+        $adminIpOutput = Invoke-PrivateFixtureProcess $nativeProbe @('--admin-ip-filters') @{} 'Native Admin IP-filter HTTP/security proof'
+    } else {
+        $adminIpOutput = Invoke-PrivateFixtureProcess $dotnet @($probeDll, '--admin-ip-filters') @{} 'Native Admin IP-filter HTTP/security proof'
+    }
+    if ($adminIpOutput -cnotmatch '\ANative Admin IP filters HTTP/security: PASS(?:\r?\n)?\z') {
+        throw 'Native Admin IP-filter proof returned an invalid result.'
+    }
+    Write-Host '  PASS  Native Admin IP filters HTTP/security'
 
     # Run the same bounded, authenticated workload driver used by the benchmark
     # collector. These small correctness samples are not promotion measurements.
@@ -597,6 +623,7 @@ finally {
         Stop-OwnedParityProcesses $processes
         $fixtureCleanupFailures = [Collections.Generic.List[Exception]]::new()
         foreach ($cleanup in @(
+            [pscustomobject]@{ Attempted = $adminIpAttempted; Argument = '--cleanup-admin-ip-filters'; Label = 'Owned Admin IP-filter fixture cleanup' },
             [pscustomobject]@{ Attempted = $billingAuditAttempted; Argument = '--cleanup-billing-audit-fixture'; Label = 'Owned BillingAudit lifecycle fixture cleanup' },
             [pscustomobject]@{ Attempted = $adminSettingsAttempted; Argument = '--cleanup-admin-global-settings'; Label = 'Owned Admin global-setting fixture cleanup' },
             [pscustomobject]@{ Attempted = $mcpSeedAttempted; Argument = '--cleanup-mcp-function-fixture'; Label = 'Owned MCP function fixture cleanup' },

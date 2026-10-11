@@ -14,6 +14,8 @@ on:
       - 'Services/**/*.csproj'
       - 'Services/**/Dockerfile.native'
       - 'Tests/ConduitLLM.GatewayNativeAotTests/**'
+      - 'Tests/ConduitLLM.Tests/Admin/Filters/**'
+      - 'Tests/ConduitLLM.Tests/HostCompositionTests.cs'
       - 'Tests/ConduitLLM.IntegrationTests/**'
       - 'Tests/ConduitLLM.PersistenceAotTests/**'
       - 'Tests/ConduitLLM.SchemaStartupFixtures/**'
@@ -101,6 +103,39 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes clang zlib1g-dev
+
+      - name: Admin conditional requests and JIT composition
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests
+          suite: admin-conditional-requests-jit
+          filter: FullyQualifiedName~AdminContractEndpointFilterTests|FullyQualifiedName~IpFilterVersionEndpointFilterTests|FullyQualifiedName~IpFilterConditionalRequestHttpTests|FullyQualifiedName~HostCompositionTests
+          minimum: '71'
+        env:
+          CONDUIT_CACHE_TEST_REDIS: 127.0.0.1:6379
+
+      - name: Native-profile host composition
+        shell: pwsh
+        run: |
+          $results = 'artifacts/tests/native-host-composition'
+          New-Item -ItemType Directory -Force $results | Out-Null
+          dotnet test Tests/ConduitLLM.Tests --configuration Release -p:DefineConstants=CONDUIT_NATIVE_AOT `
+            --filter 'FullyQualifiedName~HostCompositionTests' `
+            --logger 'trx;LogFileName=native-host-composition.trx' --results-directory $results
+          $testExit = $LASTEXITCODE
+          python scripts/ci/test-evidence.py "$results/native-host-composition.trx" --minimum 10 --maximum-skips 0
+          if ($LASTEXITCODE -ne 0 -or $testExit -ne 0) { throw 'Native host composition validation failed.' }
+        env:
+          CONDUIT_CACHE_TEST_REDIS: 127.0.0.1:6379
+
+      - name: Retain native-profile composition diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tests-native-host-composition
+          path: artifacts/tests/native-host-composition
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Publish both native services
         shell: pwsh

@@ -77,6 +77,30 @@ if (args is ["--cleanup-function-fixture"] or ["--cleanup-mcp-function-fixture"]
     return;
 }
 
+if (args is ["--admin-ip-filters"] or ["--cleanup-admin-ip-filters"])
+{
+    try
+    {
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        if (args[0] == "--admin-ip-filters")
+            await NativeAdminIpFilterProbe.RunAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_ADMIN_URL"), source,
+                ProbeSettings.AdminIpOwnerFromEnvironment(), ProbeSettings.FunctionFixtureOwnerFromEnvironment(),
+                ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
+        else
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            await NativeAdminIpFilterProbe.CleanupAsync(source, ProbeSettings.AdminIpOwnerFromEnvironment(), deadline.Token);
+            Console.WriteLine("Owned Admin IP-filter fixture cleanup: PASS");
+        }
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Native Admin IP-filter operation failed.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
 if (args is ["--cleanup-admin-global-settings"])
 {
     try
@@ -248,6 +272,8 @@ internal sealed record ProbeSettings(
     public static Guid McpFixtureOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_MCP_FIXTURE_OWNER");
 
     public static Guid AdminSettingsOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_ADMIN_SETTINGS_OWNER");
+
+    public static Guid AdminIpOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_ADMIN_IP_OWNER");
 
     public static Guid BillingAuditOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_BILLING_AUDIT_FIXTURE_OWNER");
 

@@ -78,7 +78,9 @@ Contracts live in `Shared/ConduitLLM.Persistence.Abstractions`; typed implementa
 live in `Shared/ConduitLLM.Persistence.Npgsql`. Core native Gateway store selection is centralized
 in `Services/ConduitLLM.Gateway/Extensions/NativeRuntimePersistenceExtensions.cs`.
 JIT Gateway and JIT Admin retain EF-backed implementations. Native Admin also selects
-its typed global-setting repository. Both native hosts select the typed billing-audit
+its typed global-setting and IP-filter repositories. IP-filter conditional requests
+read versions through that same typed repository, including after mutations, without
+resolving an EF context. Both native hosts select the typed billing-audit
 batch writer through their billing-service registrations, with a per-host timer and
 shutdown drain; other Admin management paths remain EF-backed. The shared contract tests are
 under `Tests/ConduitLLM.IntegrationTests/Tests`; they run against real PostgreSQL in
@@ -87,7 +89,7 @@ the NativeAOT workflow.
 | Slice / contract | Shared EF/Npgsql contract test | Published native evidence and limit |
 |---|---|---|
 | Global settings / `IGlobalSettingRepository` | `GlobalSettingRepositoryParityTests` | Persistence probe exercises ordered reads, key/id lookup, writes, upsert, and delete. |
-| IP-filter policy / `IIpFilterRepository` | `IpFilterRepositoryParityTests` | Persistence probe exercises scoped CRUD and UTC/null columns; Gateway probe authenticates under global/per-key default-deny policy. Optimistic concurrency/FK cases have shared-contract evidence. |
+| IP-filter policy / `IIpFilterRepository` | `IpFilterRepositoryParityTests`, `IpFilterVersionEndpointFilterTests` | Persistence probe exercises scoped CRUD and UTC/null columns; Gateway probe authenticates under global/per-key default-deny policy. The native Admin HTTP gate checks all 12 SQL/11 DTO fields, paginated global/enabled/per-key reads, merge patches, strong ETags, 428/412, no-op/deletion/missing-resource behavior and database-rule enforcement using a real `127.0.0.2` source socket. Three GUID-owned names are cleaned again after producers stop; every unrelated IP/global-setting scalar must remain unchanged. Optimistic concurrency/FK cases have shared-contract evidence. Other resource-version paths retain EF. |
 | Providers and credentials / `IProviderRepository`, `IProviderKeyCredentialRepository` | `ProviderPersistenceParityTests` | Persistence probe exercises JSONB, credential graphs, primary rotation, and cascade; Gateway provider process checks resolved credentials. Failed-rotation rollback has shared-contract evidence. Admin credential validation remains a separate EF consumer. |
 | Virtual-key runtime / `IVirtualKeyRuntimeStore` | `VirtualKeyRuntimePersistenceParityTests` | Persistence probe covers hydrated snapshots, concurrent/idempotent ledger debits; Gateway probe checks exact settled request costs, balances, and lifetime spend. Management CRUD remains EF. |
 | Model routing / `IModelProviderMappingRuntimeStore` | `ModelProviderMappingRuntimePersistenceParityTests` | Persistence probe covers route graphs/policy; Gateway probe exercises `/v1/models`, model retrieval/metadata, and provider pricing. This does not cover the separate `/v1/conduit/discovery/models` EF projection or its warmer. |

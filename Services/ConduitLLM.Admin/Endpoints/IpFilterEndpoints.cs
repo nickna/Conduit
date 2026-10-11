@@ -4,6 +4,9 @@ using ConduitLLM.Admin.Extensions;
 using ConduitLLM.Admin.Interfaces;
 using ConduitLLM.Admin.Filters;
 using ConduitLLM.Configuration.DTOs.IpFilter;
+#if CONDUIT_NATIVE_AOT
+using ConduitLLM.Configuration.Interfaces;
+#endif
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -35,10 +38,16 @@ public class IpFilterEndpoints : AdminEndpointHandlerBase
     public static IEndpointRouteBuilder MapIpFilterEndpoints(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/v1/admin/ip-filters")
-            .RequireAuthorization("MasterKeyPolicy")
-            .AddEndpointFilter<VersionedResourceEndpointFilter>()
-            .AddEndpointFilter<OperationLoggingEndpointFilter>()
-            .WithTags("IP Filters");
+            .RequireAuthorization("MasterKeyPolicy");
+#if CONDUIT_NATIVE_AOT
+        group.AddEndpointFilterFactory((_, next) => async invocation =>
+            await VersionedResourceEndpointFilter.CreateWithRuntimePersistence(
+                invocation.HttpContext.RequestServices.GetRequiredService<IIpFilterRepository>())
+                .InvokeAsync(invocation, next));
+#else
+        group.AddEndpointFilter<VersionedResourceEndpointFilter>();
+#endif
+        group.AddEndpointFilter<OperationLoggingEndpointFilter>().WithTags("IP Filters");
 
         group.MapGet("/", ([FromServices] IpFilterEndpoints endpoints) => endpoints.GetAllFilters())
             .WithName("IpFilter_GetAll")

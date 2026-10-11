@@ -92,6 +92,7 @@ public sealed class HostCompositionTests
         ResolveRuntimeServices(builder.Services, app.Services);
         AssertBillingAuditComposition(builder.Services, app.Services);
         AssertAdminGlobalSettingComposition(builder.Services, app.Services);
+        AssertAdminIpFilterComposition(builder.Services, app.Services);
         AssertFunctionClientComposition(builder.Services, app.Services, false);
         AssertFunctionDiscoveryComposition(builder.Services, app.Services, false);
         AssertFunctionExecutionComposition(builder.Services, app.Services, false);
@@ -127,7 +128,11 @@ public sealed class HostCompositionTests
         AssertFunctionsEndpointComposition(builder.Services, app.Services, gateway);
         AssertChatEndpointComposition(builder.Services, app.Services, gateway);
         await AssertFunctionCostCompositionAsync(builder.Services, app.Services, gateway);
-        if (!gateway) AssertAdminGlobalSettingComposition(builder.Services, app.Services);
+        if (!gateway)
+        {
+            AssertAdminGlobalSettingComposition(builder.Services, app.Services);
+            AssertAdminIpFilterComposition(builder.Services, app.Services);
+        }
         Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(StackExchange.Redis.IConnectionMultiplexer));
         if (gateway)
         {
@@ -503,6 +508,42 @@ public sealed class HostCompositionTests
             Assert.NotNull(field);
             return field.GetValue(endpoint);
         }
+    }
+
+    private static void AssertAdminIpFilterComposition(IServiceCollection descriptors, IServiceProvider provider)
+    {
+        var descriptor = Assert.Single(descriptors, item => item.ServiceType == typeof(IIpFilterRepository));
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var firstRepository = first.ServiceProvider.GetRequiredService<IIpFilterRepository>();
+        var secondRepository = second.ServiceProvider.GetRequiredService<IIpFilterRepository>();
+#if CONDUIT_NATIVE_AOT
+        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+        Assert.Equal(typeof(NpgsqlIpFilterRepository), descriptor.ImplementationType);
+        var repository = Assert.IsType<NpgsqlIpFilterRepository>(firstRepository);
+        Assert.Same(repository, secondRepository);
+        var dataSourceField = typeof(NpgsqlIpFilterRepository).GetField("_dataSource",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(dataSourceField);
+        Assert.Same(provider.GetRequiredService<NpgsqlDataSource>(), dataSourceField.GetValue(repository));
+#else
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+        Assert.Equal(typeof(IpFilterRepository), descriptor.ImplementationType);
+        Assert.IsType<IpFilterRepository>(firstRepository);
+        Assert.IsType<IpFilterRepository>(secondRepository);
+        Assert.NotSame(firstRepository, secondRepository);
+#endif
+        var serviceDescriptor = Assert.Single(descriptors, item => item.ServiceType == typeof(IAdminIpFilterService));
+        Assert.Equal(ServiceLifetime.Scoped, serviceDescriptor.Lifetime);
+        Assert.Equal(typeof(AdminIpFilterService), serviceDescriptor.ImplementationType);
+        var firstService = Assert.IsType<AdminIpFilterService>(first.ServiceProvider.GetRequiredService<IAdminIpFilterService>());
+        var secondService = Assert.IsType<AdminIpFilterService>(second.ServiceProvider.GetRequiredService<IAdminIpFilterService>());
+        Assert.NotSame(firstService, secondService);
+        var repositoryField = typeof(AdminIpFilterService).GetField("_ipFilterRepository",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(repositoryField);
+        Assert.Same(firstRepository, repositoryField.GetValue(firstService));
+        Assert.Same(secondRepository, repositoryField.GetValue(secondService));
     }
 
     private static void AssertAdminGlobalSettingComposition(IServiceCollection descriptors, IServiceProvider provider)

@@ -158,6 +158,23 @@ The probe uses bounded cleanup, and the parent repeats
 cannot escape fixture cleanup. Published Linux execution is required before this
 Admin path qualifies for native promotion.
 
+`--admin-ip-filters` exercises native Admin's typed IP repository and its
+conditional-request filter. Three exact GUID-owned names cover global allow/deny
+rules and an enabled per-key deny rule. The probe independently reads all 12 SQL
+columns and compares all 11 HTTP DTO fields, paginated global/enabled/per-key
+selections, strong persisted ETags, missing/stale/weak preconditions, empty and
+matching/wildcard merge patches, deletion and missing-resource 404s. The control
+client binds `127.0.0.1`; the candidate client binds a real `127.0.0.2` socket and
+checks deny/allow transitions as the global rules change. It sends no forwarding
+headers. Security overrides apply only to the owned Admin child, including
+disabling the private-IP bypass. The probe reads settings and `/check` without
+mutating existing settings. Every unrelated IP and global-setting scalar must
+retain its fingerprint. The parent repeats `--cleanup-admin-ip-filters` after
+reaping producers and before deleting the per-key fixture; each cleanup has a
+fresh deadline and deletes only the three exact owned names. Other Admin
+versioned resources keep their EF reader. Their missing rows now reach their
+handlers without synthetic version headers or precondition failures.
+
 `--benchmark-workload <configuration.json>` runs one closed authenticated workload
 against an existing fixture: `admin-setting-read`, `gateway-chat-nonstream`, or
 `gateway-chat-sse`. The strict configuration contains `workload`, `baseUrl`,

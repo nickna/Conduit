@@ -26,10 +26,12 @@ namespace ConduitLLM.Admin.Extensions
             // Add repositories
             services.AddRepositories();
 #if CONDUIT_NATIVE_AOT
-            // Use the parity-tested fixed-query store for the selected native
-            // settings endpoints and the shared settings cache.
+            // Use the parity-tested fixed-query stores for native settings and
+            // IP-filter administration, including their shared runtime caches.
             services.RemoveAll<IGlobalSettingRepository>();
             services.AddSingleton<IGlobalSettingRepository, NpgsqlGlobalSettingRepository>();
+            services.RemoveAll<IIpFilterRepository>();
+            services.AddSingleton<IIpFilterRepository, NpgsqlIpFilterRepository>();
 #endif
 
             // Add caching services

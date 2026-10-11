@@ -171,6 +171,39 @@ public sealed class AdminContractEndpointFilterTests
         Assert.Equal(expectedStatus, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
     }
 
+    [Theory]
+    [InlineData("/v1/admin/virtual-keys/999", "GET", null)]
+    [InlineData("/v1/admin/virtual-keys/999", "PATCH", null)]
+    [InlineData("/v1/admin/virtual-keys/999", "DELETE", null)]
+    [InlineData("/v1/admin/virtual-keys/999", "PATCH", "\"stale\"")]
+    [InlineData("/v1/admin/virtual-keys/999", "DELETE", "*")]
+    [InlineData("/v1/admin/virtual-key-groups/999", "GET", null)]
+    [InlineData("/v1/admin/virtual-key-groups/999", "PATCH", null)]
+    [InlineData("/v1/admin/virtual-key-groups/999", "DELETE", null)]
+    [InlineData("/v1/admin/virtual-key-groups/999", "PATCH", "\"stale\"")]
+    [InlineData("/v1/admin/virtual-key-groups/999", "DELETE", "*")]
+    [InlineData("/v1/admin/ip-filters/999", "GET", null)]
+    [InlineData("/v1/admin/ip-filters/999", "PATCH", null)]
+    [InlineData("/v1/admin/ip-filters/999", "DELETE", null)]
+    [InlineData("/v1/admin/ip-filters/999", "PATCH", "\"stale\"")]
+    [InlineData("/v1/admin/ip-filters/999", "DELETE", "*")]
+    public async Task VersionFilter_MissingResourcesReachHandlerWithoutSyntheticVersion(
+        string path, string method, string? ifMatch)
+    {
+        await using var database = new SqliteTestDatabase();
+        var context = Context(method, path, 999, database.CreateDbContextFactory());
+        if (ifMatch is not null) context.HttpContext.Request.Headers.IfMatch = ifMatch;
+        var called = false;
+        var result = await new VersionedResourceEndpointFilter().InvokeAsync(context, _ =>
+        {
+            called = true;
+            return ValueTask.FromResult<object?>(Results.NotFound());
+        });
+        Assert.True(called);
+        Assert.Equal(StatusCodes.Status404NotFound, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+        Assert.False(context.HttpContext.Response.Headers.ContainsKey("ETag"));
+    }
+
     private static TestInvocationContext Context(
         string method,
         string path,
