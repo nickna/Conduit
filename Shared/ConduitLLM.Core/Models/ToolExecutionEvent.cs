@@ -9,6 +9,13 @@ namespace ConduitLLM.Core.Models;
 public class ToolExecutionEvent
 {
     /// <summary>
+    /// Originating agentic iteration (1-indexed), when the event belongs to an agentic loop.
+    /// </summary>
+    [JsonPropertyName("iteration")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Iteration { get; set; }
+
+    /// <summary>
     /// The tool call ID from the LLM response.
     /// </summary>
     [JsonPropertyName("tool_call_id")]

@@ -36,13 +36,13 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Transaction amount (always positive, type determines if it's added or subtracted)
         /// </summary>
-        [Column(TypeName = "decimal(18, 6)")]
+        [Column(TypeName = "decimal(20, 8)")]
         public decimal Amount { get; set; }
 
         /// <summary>
         /// Balance after this transaction
         /// </summary>
-        [Column(TypeName = "decimal(18, 6)")]
+        [Column(TypeName = "decimal(20, 8)")]
         public decimal BalanceAfter { get; set; }
 
         /// <summary>

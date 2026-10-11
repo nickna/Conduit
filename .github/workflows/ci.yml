@@ -202,6 +202,14 @@ jobs:
           project: Tests/ConduitLLM.FaultInjectionTests/ConduitLLM.FaultInjectionTests.csproj
           suite: billing-fault-injection
 
+      - name: Verify persisted financial precision and migration
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj
+          suite: billing-persistence
+          filter: Component=BillingPersistence
+          minimum: '3'
+
   billing-invariants:
     name: Billing invariants
     needs: [select]
