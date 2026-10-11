@@ -70,7 +70,8 @@
     <PackageVersion Include="Microsoft.ML.Tokenizers.Data.R50kBase" Version="2.0.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <!-- Security override for Microsoft.AspNetCore.OpenApi transitives (GHSA-v5pm-xwqc-g5wc, high; fixed in 2.7.5). -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="3.10.2" />
+    <!-- ASP.NET Core OpenAPI 10.x requires OpenAPI.NET 2.x; revisit the major with the framework upgrade. -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
     <PackageVersion Include="ModelContextProtocol.Core" Version="2.2.0" />
     <PackageVersion Include="Moq" Version="4.21.0" />
     <PackageVersion Include="Moq.Contrib.HttpClient" Version="1.4.0" />

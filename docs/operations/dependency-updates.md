@@ -16,6 +16,12 @@ and permits at most two open PRs. Retired SDK packages are not monitored. Major
 updates are offered for review as well; grouping does not establish compatibility.
 No updates are automatically merged or exempted from required validation.
 
+NuGet currently defers `Microsoft.OpenApi` 3 and later because
+`Microsoft.AspNetCore.OpenApi` 10.x requires OpenAPI.NET 2.x. The central version
+keeps the compatible 2.x patch updates and the existing security override.
+Revisit the NuGet Dependabot ignore when upgrading the ASP.NET Core OpenAPI
+framework package, following [Microsoft's compatibility guidance](https://github.com/microsoft/OpenAPI.NET/blob/main/docs/upgrade-guide-3.md).
+
 WebAdmin currently defers ESLint 10 (`eslint` and `@eslint/js`) because
 `eslint-plugin-react` 7.37.5 supports ESLint only through major 9. TypeScript 7
 is deferred because `ts-jest` 29.4.14 requires TypeScript `<7` and
