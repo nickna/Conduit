@@ -1,6 +1,8 @@
 # Keep this configuration on master (the default and active development branch).
 # GitHub Actions updates remain manual because reviewed SHAs must also be updated
 # in scripts/ci/action-versions.json. See docs/operations/dependency-updates.md.
+# Batch minor/patch updates per job; review majors by family or individually.
+# Keep at most two version-update PRs open per job to avoid a maintenance flood.
 version: 2
 updates:
   - package-ecosystem: nuget
@@ -9,30 +11,50 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 2
     groups:
+      nuget-minor-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
       efcore:
+        update-types:
+          - major
         patterns:
           - Microsoft.EntityFrameworkCore*
           - Npgsql*
           - Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore
       opentelemetry:
+        update-types:
+          - major
         patterns:
           - OpenTelemetry*
       aspnetcore:
+        update-types:
+          - major
         patterns:
           - Microsoft.AspNetCore*
           - Microsoft.Extensions*
       tokenizers:
+        update-types:
+          - major
         patterns:
           - Microsoft.ML.Tokenizers*
       wolverine:
+        update-types:
+          - major
         patterns:
           - WolverineFx*
       fusioncache:
+        update-types:
+          - major
         patterns:
           - ZiggyCreatures.FusionCache*
       test:
+        update-types:
+          - major
         patterns:
           - xunit*
           - Xunit.*
@@ -51,7 +73,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
     ignore:
       # React's lint plugin currently supports ESLint through major 9.
       - dependency-name: eslint
@@ -65,10 +87,20 @@ updates:
       - dependency-name: '@types/node'
         versions: ['>=23']
     groups:
+      webadmin-minor-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
       mantine:
+        update-types:
+          - major
         patterns:
           - '@mantine/*'
       next-react:
+        update-types:
+          - major
         patterns:
           - next
           - '@next/*'
@@ -77,12 +109,10 @@ updates:
           - '@types/react'
           - '@types/react-dom'
       signalr:
+        update-types:
+          - major
         patterns:
           - '@microsoft/signalr*'
-      development:
-        dependency-type: development
-        patterns:
-          - '*'
 
   - package-ecosystem: npm
     directory: /tools/openapi
@@ -95,6 +125,9 @@ updates:
       openapi-tooling:
         patterns:
           - '*'
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: npm
     directory: /tools/ci
@@ -107,3 +140,6 @@ updates:
       ci-tooling:
         patterns:
           - '*'
+        update-types:
+          - minor
+          - patch
