@@ -57,7 +57,7 @@ public sealed class SpendTimestampAttributionTests
         Assert.True(await fixture.Service.UpdateSpendAsync(41, 2.75m, AsKind(kind)));
 
         Assert.Equal(WindowUtc, fixture.BillingWindow);
-        Assert.Equal(DateTimeKind.Utc, fixture.BillingWindow.Value.Kind);
+        Assert.Equal(DateTimeKind.Utc, Assert.IsType<DateTime>(fixture.BillingWindow).Kind);
     }
 
     [Theory]
@@ -116,7 +116,7 @@ public sealed class SpendTimestampAttributionTests
         else
         {
             Assert.Equal(WindowUtc, fixture.BillingWindow);
-            Assert.Equal(DateTimeKind.Utc, fixture.BillingWindow.Value.Kind);
+            Assert.Equal(DateTimeKind.Utc, Assert.IsType<DateTime>(fixture.BillingWindow).Kind);
         }
     }
 
@@ -157,7 +157,7 @@ public sealed class SpendTimestampAttributionTests
         }, new TestEventContext());
 
         Assert.Equal(WindowUtc, fixture.BillingWindow);
-        Assert.Equal(DateTimeKind.Utc, fixture.BillingWindow.Value.Kind);
+        Assert.Equal(DateTimeKind.Utc, Assert.IsType<DateTime>(fixture.BillingWindow).Kind);
     }
 
     [Theory]
