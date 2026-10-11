@@ -41,4 +41,44 @@ public class SpendReservationServiceTests
 
         Assert.Same(expected, result);
     }
+
+    [Fact]
+    public async Task RecordKnownIndeterminateSpend_DelegatesKnownAmountAndOriginalTimestamp()
+    {
+        var billedAt = new DateTime(2026, 10, 10, 23, 59, 0, DateTimeKind.Utc);
+        var expected = new SpendReservationSettlementResult(SpendReservationSettlementStatus.Settled, 0.05m);
+        var batch = new Mock<IBatchSpendUpdateService>();
+        batch.Setup(x => x.RecordIndeterminateSpendReservationAsync(7, "partial", 0.05m, "usage missing", billedAt))
+            .ReturnsAsync(expected);
+        var service = new SpendReservationService(batch.Object, Mock.Of<ILogger<SpendReservationService>>());
+
+        Assert.Same(expected, await service.RecordKnownIndeterminateSpendAsync(
+            7, "partial", 0.05m, "usage missing", billedAt));
+        batch.VerifyAll();
+    }
+
+    [Fact]
+    public async Task MarkIndeterminate_PersistsEvidenceWithoutReplacingAcceptedKnownAmount()
+    {
+        var batch = new Mock<IBatchSpendUpdateService>();
+        batch.Setup(x => x.RecordIndeterminateSpendReservationAsync(7, "partial", null, "usage missing", null))
+            .ReturnsAsync(new SpendReservationSettlementResult(SpendReservationSettlementStatus.AlreadySettled, 0.05m));
+        var service = new SpendReservationService(batch.Object, Mock.Of<ILogger<SpendReservationService>>());
+
+        await service.MarkIndeterminateAsync(7, "partial", "usage missing");
+
+        batch.VerifyAll();
+    }
+
+    [Fact]
+    public async Task MarkIndeterminate_PersistenceNotAccepted_ThrowsInsteadOfReportingSuccess()
+    {
+        var batch = new Mock<IBatchSpendUpdateService>();
+        batch.Setup(x => x.RecordIndeterminateSpendReservationAsync(7, "partial", null, "usage missing", null))
+            .ReturnsAsync(new SpendReservationSettlementResult(SpendReservationSettlementStatus.Missing, 0m));
+        var service = new SpendReservationService(batch.Object, Mock.Of<ILogger<SpendReservationService>>());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.MarkIndeterminateAsync(7, "partial", "usage missing"));
+    }
 }

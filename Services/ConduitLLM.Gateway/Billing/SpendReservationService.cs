@@ -36,6 +36,10 @@ public interface ISpendReservationService
         int virtualKeyId,
         string billingRequestId,
         string reason);
+
+    Task<SpendReservationSettlementResult> RecordKnownIndeterminateSpendAsync(
+        int virtualKeyId, string billingRequestId, decimal knownAmount, string reason,
+        DateTime? billedAtUtc = null);
 }
 
 public sealed class SpendReservationService : ISpendReservationService
@@ -96,7 +100,7 @@ public sealed class SpendReservationService : ISpendReservationService
     public Task ReleaseAsync(int virtualKeyId, string billingRequestId) =>
         _batchSpendService.ReleaseSpendReservationAsync(virtualKeyId, billingRequestId);
 
-    public Task MarkIndeterminateAsync(
+    public async Task MarkIndeterminateAsync(
         int virtualKeyId,
         string billingRequestId,
         string reason)
@@ -107,6 +111,15 @@ public sealed class SpendReservationService : ISpendReservationService
             billingRequestId,
             virtualKeyId,
             reason);
-        return Task.CompletedTask;
+        var result = await _batchSpendService.RecordIndeterminateSpendReservationAsync(
+            virtualKeyId, billingRequestId, null, reason);
+        if (result.Status is not (SpendReservationSettlementStatus.Settled or SpendReservationSettlementStatus.AlreadySettled))
+            throw new InvalidOperationException($"Indeterminate reservation persistence returned {result.Status}");
     }
+
+    public Task<SpendReservationSettlementResult> RecordKnownIndeterminateSpendAsync(
+        int virtualKeyId, string billingRequestId, decimal knownAmount, string reason,
+        DateTime? billedAtUtc = null) =>
+        _batchSpendService.RecordIndeterminateSpendReservationAsync(
+            virtualKeyId, billingRequestId, knownAmount, reason, billedAtUtc);
 }

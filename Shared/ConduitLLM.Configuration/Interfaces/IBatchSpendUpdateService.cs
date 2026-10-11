@@ -13,6 +13,25 @@ namespace ConduitLLM.Configuration.Interfaces
         SpendReservationSettlementStatus Status,
         decimal ActualAmount);
 
+    public enum SpendReconciliationDisposition
+    {
+        AuthoritativeProviderCost,
+        ProviderCostWaived
+    }
+
+    public sealed record SpendReservationReconciliation(
+        string BillingRequestId,
+        int VirtualKeyId,
+        decimal KnownAmount,
+        decimal HeldAmount,
+        DateTime BillingWindowStartUtc,
+        string Reason,
+        bool Resolved,
+        decimal? ProviderAmount,
+        string? Disposition,
+        string? AuditActor,
+        string? AuditNote);
+
     /// <summary>
     /// Interface for batch spend update service
     /// </summary>
@@ -64,6 +83,25 @@ namespace ConduitLLM.Configuration.Interfaces
         /// Releases a previously-created spend reservation.
         /// </summary>
         Task ReleaseSpendReservationAsync(int virtualKeyId, string reservationId);
+
+        /// <summary>
+        /// Durably marks unresolved provider accounting and atomically queues cumulative known
+        /// spend once, retaining the unconsumed reservation hold. Null leaves known spend unchanged.
+        /// </summary>
+        Task<SpendReservationSettlementResult> RecordIndeterminateSpendReservationAsync(
+            int virtualKeyId, string reservationId, decimal? knownAmount, string reason,
+            DateTime? billedAtUtc = null);
+
+        Task<SpendReservationReconciliation?> GetSpendReservationReconciliationAsync(
+            int virtualKeyId, string reservationId);
+
+        /// <summary>
+        /// Resolves only the provider portion from authoritative cost or an audited waiver,
+        /// queues any confirmed cost once in the original billing window, and releases the hold.
+        /// </summary>
+        Task<SpendReservationSettlementResult> ReconcileSpendReservationAsync(
+            int virtualKeyId, string reservationId, decimal providerAmount,
+            SpendReconciliationDisposition disposition, string auditActor, string auditNote);
 
         /// <summary>
         /// Queues a spend update to an in-memory fallback queue.

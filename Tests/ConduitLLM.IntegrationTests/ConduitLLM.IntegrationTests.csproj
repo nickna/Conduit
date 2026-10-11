@@ -43,4 +43,10 @@
     <ProjectReference Include="../../tools/ConduitLLM.MediaDispatchProbe/ConduitLLM.MediaDispatchProbe.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="../../scripts/db/approve-legacy-ledger-replay.sql"
+          Link="TestData/approve-legacy-ledger-replay.sql"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

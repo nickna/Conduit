@@ -33,9 +33,8 @@ namespace ConduitLLM.Configuration.Services
                 if (!RedisUrlRegex.IsMatch(redisUrl))
                 {
                     logger.LogWarning(
-                        "{ServiceName}: Redis URL format appears invalid. Expected format: redis://[username]:[password]@hostname:port. URL: {RedisUrl}",
-                        serviceName,
-                        SanitizeUrlForLogging(redisUrl));
+                        "{ServiceName}: Redis URL format appears invalid. Expected format: redis://[username]:[password]@hostname:port",
+                        serviceName);
                     return false;
                 }
                 
@@ -46,9 +45,8 @@ namespace ConduitLLM.Configuration.Services
                 if (redisUrl.Contains(" "))
                 {
                     logger.LogWarning(
-                        "{ServiceName}: Redis URL contains spaces. This is likely invalid. URL: {RedisUrl}",
-                        serviceName,
-                        SanitizeUrlForLogging(redisUrl));
+                        "{ServiceName}: Redis URL contains spaces. This is likely invalid",
+                        serviceName);
                     return false;
                 }
 
@@ -56,9 +54,8 @@ namespace ConduitLLM.Configuration.Services
                 if (!redisUrl.Contains(":637") && !redisUrl.Contains(":638") && !redisUrl.Contains(":"))
                 {
                     logger.LogWarning(
-                        "{ServiceName}: Redis URL appears to be missing port number. Default Redis port is 6379. URL: {RedisUrl}",
-                        serviceName,
-                        SanitizeUrlForLogging(redisUrl));
+                        "{ServiceName}: Redis URL appears to be missing port number. Default Redis port is 6379",
+                        serviceName);
                 }
 
                 logger.LogInformation(
@@ -69,49 +66,13 @@ namespace ConduitLLM.Configuration.Services
             }
             catch (Exception ex)
             {
-                logger.LogError(ex,
-                    "{ServiceName}: Failed to validate Redis URL. URL: {RedisUrl}",
+                // Input and exception messages can both contain credentials. Omit them even
+                // when malformed input cannot be parsed or sanitized safely.
+                logger.LogError(
+                    "{ServiceName}: Failed to validate Redis URL ({ExceptionType})",
                     serviceName,
-                    SanitizeUrlForLogging(redisUrl));
+                    ex.GetType().Name);
                 return false;
-            }
-        }
-
-        /// <summary>
-        /// Sanitizes a Redis URL for safe logging by masking sensitive information
-        /// </summary>
-        /// <param name="redisUrl">The URL to sanitize</param>
-        /// <returns>Sanitized URL safe for logging</returns>
-        private static string SanitizeUrlForLogging(string redisUrl)
-        {
-            if (string.IsNullOrWhiteSpace(redisUrl))
-            {
-                return "(empty)";
-            }
-
-            try
-            {
-                // Replace password with asterisks
-                var match = RedisUrlRegex.Match(redisUrl);
-                if (match.Success && match.Groups["password"].Success)
-                {
-                    var password = match.Groups["password"].Value;
-                    return redisUrl.Replace(password, "****");
-                }
-
-                // If no password found, return as-is (already safe)
-                return redisUrl;
-            }
-            catch
-            {
-                // If any error, just mask everything after ://
-                var protocolIndex = redisUrl.IndexOf("://", StringComparison.OrdinalIgnoreCase);
-                if (protocolIndex > 0)
-                {
-                    return redisUrl.Substring(0, protocolIndex + 3) + "****";
-                }
-                
-                return "(invalid)";
             }
         }
     }

@@ -141,6 +141,31 @@ public sealed class SourceGeneratedJsonCompatibilityTests
         AssertJsonEqual(
             ReadFixture("wolverine-spend-update.json"),
             JsonSerializer.Serialize(value, typeof(SpendUpdateRequested), runtimeOptions));
+
+        var legacy = JsonSerializer.Deserialize(
+            ReadFixture("wolverine-spend-update.json"),
+            CoreMessagingJsonContext.Default.SpendUpdateRequested)!;
+        Assert.Null(legacy.BilledAtUtc);
+        Assert.Equal(FixtureTime, legacy.Timestamp);
+    }
+
+    [Fact]
+    public void Wolverine_spend_usage_timestamp_round_trips_without_reflection()
+    {
+        var billedAtUtc = new DateTime(2000, 1, 1, 2, 37, 0, DateTimeKind.Utc);
+        var legacy = JsonSerializer.Deserialize(
+            ReadFixture("wolverine-spend-update.json"),
+            CoreMessagingJsonContext.Default.SpendUpdateRequested)!;
+        var value = legacy with { BilledAtUtc = billedAtUtc };
+
+        var json = JsonSerializer.Serialize(value, CoreMessagingJsonContext.Default.SpendUpdateRequested);
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal("2000-01-01T02:37:00Z", document.RootElement.GetProperty("BilledAtUtc").GetString());
+
+        var restored = JsonSerializer.Deserialize(json, CoreMessagingJsonContext.Default.SpendUpdateRequested)!;
+        Assert.Equal(billedAtUtc, restored.BilledAtUtc);
+        Assert.Equal(DateTimeKind.Utc, restored.BilledAtUtc!.Value.Kind);
+        Assert.Equal(FixtureTime, restored.Timestamp);
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using ConduitLLM.Configuration.Enums;
 using ConduitLLM.Configuration.Exceptions;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Utilities;
+using ConduitLLM.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -210,6 +211,7 @@ public class VirtualKeyGroupRepository : RepositoryBase<VirtualKeyGroup, int>, I
         DateTime? billingWindowStartUtc)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
+        VirtualKeyBalanceReplayEvidence.ValidateAmount(amount, idempotencyKey);
 
         try
         {
@@ -227,7 +229,7 @@ public class VirtualKeyGroupRepository : RepositoryBase<VirtualKeyGroup, int>, I
                     var expectedType = amount > 0 ? TransactionType.Credit : TransactionType.Debit;
                     if (duplicate.VirtualKeyGroupId != groupId ||
                         duplicate.TransactionType != expectedType ||
-                        duplicate.Amount != Math.Abs(amount) ||
+                        !VirtualKeyBalanceReplayEvidence.AmountMatches(duplicate.Amount, duplicate.OriginalAmount, amount) ||
                         duplicate.ReferenceType != referenceType ||
                         duplicate.ReferenceId != referenceId ||
                         duplicate.BillingWindowStartUtc != billingWindowStartUtc)
@@ -263,7 +265,7 @@ public class VirtualKeyGroupRepository : RepositoryBase<VirtualKeyGroup, int>, I
                 var expectedType = amount > 0 ? TransactionType.Credit : TransactionType.Debit;
                 if (winner.VirtualKeyGroupId != groupId ||
                     winner.TransactionType != expectedType ||
-                    winner.Amount != Math.Abs(amount) ||
+                    !VirtualKeyBalanceReplayEvidence.AmountMatches(winner.Amount, winner.OriginalAmount, amount) ||
                     winner.ReferenceType != referenceType ||
                     winner.ReferenceId != referenceId ||
                     winner.BillingWindowStartUtc != billingWindowStartUtc)
@@ -338,6 +340,7 @@ public class VirtualKeyGroupRepository : RepositoryBase<VirtualKeyGroup, int>, I
             initiatedBy ?? "System"
         );
         transaction.IdempotencyKey = idempotencyKey;
+        transaction.OriginalAmount = idempotencyKey is null ? null : Math.Abs(amount);
         transaction.BillingWindowStartUtc = billingWindowStartUtc;
 
         context.VirtualKeyGroupTransactions.Add(transaction);
@@ -408,6 +411,7 @@ public class VirtualKeyGroupRepository : RepositoryBase<VirtualKeyGroup, int>, I
                 referenceId,
                 initiatedBy ?? "System");
             transaction.IdempotencyKey = idempotencyKey;
+            transaction.OriginalAmount = idempotencyKey is null ? null : Math.Abs(amount);
             transaction.BillingWindowStartUtc = billingWindowStartUtc;
 
             context.VirtualKeyGroupTransactions.Add(transaction);

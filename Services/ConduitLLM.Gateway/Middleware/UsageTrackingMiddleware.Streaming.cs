@@ -42,6 +42,11 @@ namespace ConduitLLM.Gateway.Middleware
 
             if (usage is null)
             {
+                if (accountingSnapshot?.Reservation?.InvocationStarted == true)
+                {
+                    context.GetOrCreateRequestAccountingContext().MarkIndeterminate(
+                        "Provider invocation ended without resolved streaming usage");
+                }
                 // Function execution cost is known independently of provider token usage. A provider
                 // may omit its final usage chunk (or the client may disconnect after functions ran),
                 // so preserve that charge before returning from the token-usage path.
@@ -50,16 +55,17 @@ namespace ConduitLLM.Gateway.Middleware
                 if (endpointType == "chat" && functionCost > 0m)
                 {
                     var functionVirtualKeyId = (int)context.Items[HttpContextKeys.VirtualKeyId]!;
-                    await RecordSpendOrSettleReservationAsync(
+                    var accepted = await RecordKnownStreamingSpendAsync(
                         context,
                         functionVirtualKeyId,
                         functionCost,
                         batchSpendService,
                         virtualKeyService);
 
-                    _logger.LogInformation(
-                        "Billed known streaming function cost for VirtualKey {VirtualKeyId} despite missing token usage: {Cost:C}",
-                        functionVirtualKeyId, functionCost);
+                    if (accepted)
+                        _logger.LogInformation(
+                            "Preserved known streaming function cost for VirtualKey {VirtualKeyId} despite missing token usage: {Cost:C}",
+                            functionVirtualKeyId, functionCost);
 
                     var functionUsage = new Usage
                     {
@@ -77,7 +83,7 @@ namespace ConduitLLM.Gateway.Middleware
                     await LogRequestAsync(
                         context,
                         functionVirtualKeyId,
-                        accountingSnapshot?.ProviderUsage?.Model ?? "unknown",
+                        accountingSnapshot?.RequestedModel ?? "unknown",
                         functionUsage,
                         functionCost,
                         requestLogService,
