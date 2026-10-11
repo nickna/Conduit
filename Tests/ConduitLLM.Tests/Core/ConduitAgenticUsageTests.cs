@@ -230,9 +230,10 @@ public class ConduitAgenticUsageTests
             }
 
             Assert.NotNull(lastChunk);
-            Assert.Equal(FinishReason.Stop, Assert.Single(lastChunk.Choices!).FinishReason);
-            Assert.Equal(maximumIterations == 1 ? 30 : 60, lastChunk.Usage?.TotalTokens);
-            Assert.Equal(maximumIterations == 1 ? 2 : 3, lastChunk.ProviderCallUsage?.Iteration);
+            var nonNullLastChunk = lastChunk!;
+            Assert.Equal(FinishReason.Stop, Assert.Single(nonNullLastChunk.Choices!).FinishReason);
+            Assert.Equal(maximumIterations == 1 ? 30 : 60, nonNullLastChunk.Usage?.TotalTokens);
+            Assert.Equal(maximumIterations == 1 ? 2 : 3, nonNullLastChunk.ProviderCallUsage?.Iteration);
             Assert.Equal(expectedIterations, events.Where(item => item.Status != "started")
                 .Select(item => item.Iteration!.Value));
             Assert.Equal(expectedIterations, events.Where(item => item.Status == "started")
