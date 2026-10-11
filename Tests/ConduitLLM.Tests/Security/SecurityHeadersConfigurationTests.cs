@@ -152,14 +152,9 @@ public sealed class SecurityHeadersConfigurationTests
 
         Assert.Throws<FormatException>(() =>
         {
-            if (gateway)
-            {
-                _ = provider.GetRequiredService<IOptions<GatewaySecurityOptions>>().Value;
-            }
-            else
-            {
-                _ = provider.GetRequiredService<IOptions<AdminSecurityOptions>>().Value;
-            }
+            _ = gateway
+                ? (SecurityOptionsBase)provider.GetRequiredService<IOptions<GatewaySecurityOptions>>().Value
+                : provider.GetRequiredService<IOptions<AdminSecurityOptions>>().Value;
         });
     }
 

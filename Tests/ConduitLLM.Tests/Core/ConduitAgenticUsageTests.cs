@@ -184,12 +184,16 @@ public class ConduitAgenticUsageTests
         client.SetupSequence(x => x.CreateChatCompletionAsync(
                 It.IsAny<ChatCompletionRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(CreateResponse(FinishReason.ToolCalls, new Usage { TotalTokens = 10 }, true))
-            .ReturnsAsync(CreateResponse(FinishReason.ToolCalls, new Usage { TotalTokens = 20 }, true))
+            .ReturnsAsync(CreateResponse(
+                maximumIterations == 1 ? FinishReason.Stop : FinishReason.ToolCalls,
+                new Usage { TotalTokens = 20 }, maximumIterations > 1))
             .ReturnsAsync(CreateResponse(FinishReason.Stop, new Usage { TotalTokens = 30 }));
         client.SetupSequence(x => x.StreamChatCompletionAsync(
                 It.IsAny<ChatCompletionRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .Returns(Stream(CreateChunk(FinishReason.ToolCalls, new Usage { TotalTokens = 10 }, true)))
-            .Returns(Stream(CreateChunk(FinishReason.ToolCalls, new Usage { TotalTokens = 20 }, true)))
+            .Returns(Stream(CreateChunk(
+                maximumIterations == 1 ? FinishReason.Stop : FinishReason.ToolCalls,
+                new Usage { TotalTokens = 20 }, maximumIterations > 1)))
             .Returns(Stream(CreateChunk(FinishReason.Stop, new Usage { TotalTokens = 30 })));
         var executionService = new Mock<IFunctionExecutionService>();
         var executionCount = 0;
@@ -214,6 +218,7 @@ public class ConduitAgenticUsageTests
         if (streaming)
         {
             var events = new List<ToolExecutionEvent>();
+            ChatCompletionChunk? lastChunk = null;
             await foreach (var chunk in conduit.StreamChatCompletionAsync(
                 request, virtualKeyId: 42, onToolExecutingEvent: (executionEvent, _) =>
                 {
@@ -221,8 +226,13 @@ public class ConduitAgenticUsageTests
                     return Task.CompletedTask;
                 }))
             {
+                lastChunk = chunk;
             }
 
+            Assert.NotNull(lastChunk);
+            Assert.Equal(FinishReason.Stop, Assert.Single(lastChunk.Choices!).FinishReason);
+            Assert.Equal(maximumIterations == 1 ? 30 : 60, lastChunk.Usage?.TotalTokens);
+            Assert.Equal(maximumIterations == 1 ? 2 : 3, lastChunk.ProviderCallUsage?.Iteration);
             Assert.Equal(expectedIterations, events.Where(item => item.Status != "started")
                 .Select(item => item.Iteration!.Value));
             Assert.Equal(expectedIterations, events.Where(item => item.Status == "started")
