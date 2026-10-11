@@ -7,6 +7,7 @@ $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $collector = Join-Path $repositoryRoot 'scripts/aot/measure-native-container.ps1'
 . (Join-Path $PSScriptRoot 'native-benchmark-test-fixtures.ps1')
 . (Join-Path $PSScriptRoot 'native-benchmark-image-evidence.ps1')
+. (Join-Path $PSScriptRoot 'native-benchmark-attempt-evidence.ps1')
 $temporaryRoot = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) ('conduit-collector-contract-' + [Guid]::NewGuid().ToString('N'))))
 $environmentNames = @('CONDUIT_COLLECTOR_TEST_ROOT', 'CONDUIT_COLLECTOR_TEST_SCENARIO', 'CONDUIT_COLLECTOR_TEST_PWSH',
     'CONDUIT_NATIVE_BENCHMARK_API_KEY', 'CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS', 'CONDUIT_CORE_RATE_LIMIT_WINDOW_SECONDS',
@@ -30,6 +31,88 @@ function Read-Records([string] $Path) {
     return ,@(Get-ChildItem -LiteralPath $Path -File | Sort-Object Name | ForEach-Object {
         [IO.File]::ReadAllText($_.FullName) | ConvertFrom-Json -AsHashtable
     })
+}
+
+function Read-AttemptContractJson([string] $Path) {
+    return ,([IO.File]::ReadAllText($Path) | ConvertFrom-Json -AsHashtable -DateKind String)
+}
+
+function Get-AttemptContractHash([string] $Path) {
+    return [Convert]::ToHexStringLower([Security.Cryptography.SHA256]::HashData([IO.File]::ReadAllBytes($Path)))
+}
+
+function Assert-AttemptContractPrivacy([string] $OutputPath) {
+    foreach ($file in Get-ChildItem -LiteralPath ($OutputPath + '.attempts') -File -Recurse -Filter '*.json') {
+        $text = [IO.File]::ReadAllText($file.FullName)
+        foreach ($secret in @($privateKey, $privateDatabasePassword, $privateRedisPassword, 'private-child-diagnostic')) {
+            Assert-Contract (-not $text.Contains($secret)) 'Benchmark attempt evidence retained private configuration.'
+        }
+    }
+}
+
+function Get-AttemptContractMetadata([string] $OutputPath, [string] $Service, [string] $Status) {
+    $latestPath = Join-Path ($OutputPath + '.attempts') 'latest.json'
+    Assert-Contract ([IO.File]::Exists($latestPath)) 'Collector did not retain its latest attempt.'
+    $latest = Read-AttemptContractJson $latestPath
+    Assert-Contract ($latest.Count -eq 4 -and ($latest.schemaVersion -is [long] -or $latest.schemaVersion -is [int]) -and $latest.schemaVersion -eq 1 -and
+        $latest.kind -ceq 'conduit-native-benchmark-latest-attempt' -and $latest.service -ceq $Service -and
+        $latest.attemptId -is [string] -and $latest.attemptId -cmatch '\A[0-9a-f]{32}\z') 'Latest attempt identity is invalid.'
+    $attemptPath = Join-Path (Join-Path ($OutputPath + '.attempts') $latest.attemptId) 'attempt.json'
+    $attempt = Read-AttemptContractJson $attemptPath
+    Assert-Contract ($attempt.Count -eq 9 -and ($attempt.schemaVersion -is [long] -or $attempt.schemaVersion -is [int]) -and $attempt.schemaVersion -eq 1 -and
+        $attempt.kind -ceq 'conduit-native-benchmark-attempt' -and $attempt.attemptId -ceq $latest.attemptId -and
+        $attempt.service -ceq $Service -and $attempt.status -ceq $Status) 'Retained attempt state is invalid.'
+    [DateTimeOffset]$started = [DateTimeOffset]::MinValue
+    Assert-Contract ($attempt.startedAt -is [string] -and
+        [DateTimeOffset]::TryParse($attempt.startedAt, [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::RoundtripKind, [ref]$started) -and $started.Offset -eq [TimeSpan]::Zero) 'Attempt start time is invalid.'
+    if ($Status -ceq 'running') {
+        Assert-Contract ($null -eq $attempt.completedAt -and $null -eq $attempt.reportSha256 -and
+            $null -eq $attempt.failureCode) 'Running attempt contains a terminal result.'
+    }
+    else {
+        [DateTimeOffset]$completed = [DateTimeOffset]::MinValue
+        Assert-Contract ($attempt.completedAt -is [string] -and
+            [DateTimeOffset]::TryParse($attempt.completedAt, [Globalization.CultureInfo]::InvariantCulture,
+                [Globalization.DateTimeStyles]::RoundtripKind, [ref]$completed) -and
+            $completed.Offset -eq [TimeSpan]::Zero -and $completed -ge $started) 'Attempt completion time is invalid.'
+        if ($Status -ceq 'failed') {
+            Assert-Contract ($attempt.failureCode -is [string] -and
+                $attempt.failureCode -cin @('collection-failed', 'cleanup-failed', 'publication-failed') -and
+                $null -eq $attempt.reportSha256) 'Failed attempt did not retain only a controlled failure code.'
+        }
+    }
+    Assert-AttemptContractPrivacy $OutputPath
+    return ,[ordered]@{ latest = $latest; attempt = $attempt; latestPath = $latestPath; attemptPath = $attemptPath }
+}
+
+function Assert-AttemptContractReaderRejected([string] $OutputPath, [string] $Service) {
+    $rejected = $false
+    try { $unexpected = Read-NativeBenchmarkAttemptEvidence -OutputPath $OutputPath -Service $Service }
+    catch { $rejected = $true }
+    Assert-Contract $rejected 'Attempt reader accepted incomplete or mismatched latest evidence.'
+}
+
+function Assert-AttemptContractSuccess([string] $OutputPath, [string] $Service) {
+    $metadata = Get-AttemptContractMetadata $OutputPath $Service 'succeeded'
+    $results = @(Read-NativeBenchmarkAttemptEvidence -OutputPath $OutputPath -Service $Service)
+    Assert-Contract ($results.Count -eq 1 -and $results[0] -is [Collections.IDictionary] -and
+        $results[0].Count -eq 7) 'Attempt reader did not return exactly one closed evidence object.'
+    $evidence = $results[0]
+    $expectedArchive = Join-Path (Join-Path ($OutputPath + '.attempts') $metadata.latest.attemptId) 'benchmark.json'
+    Assert-Contract ($evidence.reportPath -ceq $OutputPath -and [IO.File]::Exists($expectedArchive) -and
+        (Get-AttemptContractHash $OutputPath) -ceq (Get-AttemptContractHash $expectedArchive) -and
+        $evidence.reportSha256 -ceq (Get-AttemptContractHash $expectedArchive) -and
+        $metadata.attempt.reportSha256 -ceq $evidence.reportSha256 -and
+        $evidence.latestSha256 -ceq (Get-AttemptContractHash $metadata.latestPath) -and
+        $evidence.attemptSha256 -ceq (Get-AttemptContractHash $metadata.attemptPath)) 'Attempt hashes or archived alias differ from original bytes.'
+    $report = $evidence.report
+    Assert-Contract ($report.schemaVersion -eq 4 -and $report.service -ceq $Service -and
+        $report.collection.Count -eq 3 -and $report.collection.attemptId -ceq $metadata.latest.attemptId -and
+        $report.collection.startedAt -ceq $metadata.attempt.startedAt -and
+        $report.collection.completedAt -ceq $metadata.attempt.completedAt -and
+        $report.generatedAt -ceq $metadata.attempt.completedAt -and $null -eq $metadata.attempt.failureCode) 'Benchmark collection identity is not joined to its succeeded latest attempt.'
+    return ,$evidence
 }
 
 function Get-OwnedProcessIdentityToken([Diagnostics.Process] $Process) {
@@ -167,7 +250,8 @@ function Get-CaseFailureDiagnostic([string] $CaseRoot, [object[]] $Commands, [ob
     }
 }
 
-function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $ExpectedFailure) {
+function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $ExpectedFailure,
+    [string] $ExistingOutputPath = '', [switch] $CaptureResult) {
     $caseRoot = New-CaseRoot $Scenario
     $packageFixture = $script:packages[$Service]
     $selectedFixture = switch ($Scenario) {
@@ -207,7 +291,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         EnvironmentEvidencePath = $environmentPath
         ContainerEnvironmentPath = $caseEnvironmentPath
         PairedRuns = 5
-        OutputPath = Join-Path $caseRoot 'report.json'
+        OutputPath = if ([string]::IsNullOrEmpty($ExistingOutputPath)) { Join-Path $caseRoot 'report.json' } else { $ExistingOutputPath }
         Port = (Get-TestPort)
         DockerCommandPath = $dockerCommand
         DotnetCommandPath = $dotnetCommand
@@ -222,6 +306,17 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     if ($Scenario -eq 'candidate-selected-swap') { $parameters.NativeImage = 'example.invalid/conduit-' + $Service + '@' + $packageFixture.oci.selectedDescriptor.digest }
     if ($Scenario -eq 'driver-timeout') { $parameters.WorkloadTimeoutSeconds = 5 }
     if ($Scenario -eq 'even-pairs') { $parameters.PairedRuns = 6 }
+    $priorAliasHash = if ([IO.File]::Exists($parameters.OutputPath)) { Get-AttemptContractHash $parameters.OutputPath } else { $null }
+    $priorEvidence = $null
+    $priorLatestId = $null
+    if ($null -ne $priorAliasHash) {
+        # Historical alias inspection is only the test's preservation oracle.
+        # The public reader must still reject a later failed or running attempt.
+        $priorReport = Read-AttemptContractJson $parameters.OutputPath
+        $priorArchive = Join-Path (Join-Path ($parameters.OutputPath + '.attempts') $priorReport.collection.attemptId) 'benchmark.json'
+        $priorEvidence = [ordered]@{ reportPath = $priorArchive; reportSha256 = Get-AttemptContractHash $priorArchive }
+        $priorLatestId = (Read-AttemptContractJson (Join-Path ($parameters.OutputPath + '.attempts') 'latest.json')).attemptId
+    }
     $caseServers = [Collections.Generic.List[object]]::new()
     $casePrimaryFailure = $null
     $caseStage = 'readiness-setup'
@@ -299,7 +394,18 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     $caseStage = 'failure-oracle'
     if (-not [string]::IsNullOrEmpty($ExpectedFailure)) {
         Assert-Contract ($null -ne $failure -and $failure.Contains($ExpectedFailure)) ('Expected controlled collector failure was absent: ' + $Scenario)
-        Assert-Contract (-not [IO.File]::Exists($parameters.OutputPath)) 'Failed collector recorded a qualification.'
+        if ($null -eq $priorAliasHash) {
+            Assert-Contract (-not [IO.File]::Exists($parameters.OutputPath)) 'Failed collector recorded a qualification.'
+        }
+        else {
+            Assert-Contract ((Get-AttemptContractHash $parameters.OutputPath) -ceq $priorAliasHash -and
+                (Get-AttemptContractHash $priorEvidence.reportPath) -ceq $priorEvidence.reportSha256) 'Failed rerun changed a prior successful alias or archive.'
+        }
+        $failedAttempt = Get-AttemptContractMetadata $parameters.OutputPath $Service 'failed'
+        Assert-AttemptContractReaderRejected $parameters.OutputPath $Service
+        if ($null -ne $priorEvidence) {
+            Assert-Contract ($failedAttempt.latest.attemptId -cne $priorLatestId) 'Failed rerun did not supersede the prior latest attempt.'
+        }
         if ($Scenario -in @('even-pairs', 'case-duplicate-environment')) {
             Assert-Contract ($commands.Count -eq 0 -and $drivers.Count -eq 0) 'Even paired runs reached external commands.'
         }
@@ -344,6 +450,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
                 (Read-Records (Join-Path $caseRoot 'active')).Count -eq 0) 'Late package mutation was not rejected after all complete pairs and cleanup.'
         }
         $script:cases++
+        if ($CaptureResult) { return ,[ordered]@{ outputPath = $parameters.OutputPath; metadata = $failedAttempt } }
         return
     }
     $caseStage = 'positive-oracle'
@@ -352,8 +459,9 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     foreach ($secret in @($privateKey, $privateDatabasePassword, $privateRedisPassword, 'private-child-diagnostic')) {
         Assert-Contract (-not $reportText.Contains($secret)) 'Collector retained private command configuration in its report.'
     }
-    $report = $reportText | ConvertFrom-Json -AsHashtable
-    Assert-Contract ($report.schemaVersion -eq 3 -and $report.service -ceq $Service -and $report.pairedRuns -eq 5 -and $report.samples.Count -eq 5) 'Collector report identity or paired sample count is wrong.'
+    $attemptEvidence = Assert-AttemptContractSuccess $parameters.OutputPath $Service
+    $report = $attemptEvidence.report
+    Assert-Contract ($report.schemaVersion -eq 4 -and $report.service -ceq $Service -and $report.pairedRuns -eq 5 -and $report.samples.Count -eq 5) 'Collector report identity or paired sample count is wrong.'
     Assert-NativeBenchmarkFixtureIdentity $report.nativeEvidence $packageFixture
     Assert-NativeBenchmarkFixtureBinding $report.nativePublish.imageBinding $packageFixture
     Assert-Contract ($report.nativePublish.Count -eq 8 -and $report.nativePublish.service -ceq $(if ($Service -eq 'admin') { 'Admin' } else { 'Gateway' }) -and
@@ -414,6 +522,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     Assert-Contract ($report.jit.imageBytes -eq 1000 -and $report.native.imageBytes -eq 800 -and
         $report.jit.pullBytes -eq 700 -and $report.native.pullBytes -eq $packageFixture.oci.layer.size) 'Collector mixed image and original selected-layer pull sizes.'
     $script:cases++
+    if ($CaptureResult) { return ,[ordered]@{ outputPath = $parameters.OutputPath; evidence = $attemptEvidence } }
     }
     catch {
         $casePrimaryFailure = $_.Exception
@@ -438,6 +547,250 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
                 ', type ' + $primaryType + ', classification ' + $primaryClassification +
                 '; cleanup stages ' + ($caseCleanupFailures -join '|') + '.')
         }
+    }
+}
+
+function New-AttemptContractReport($Source) {
+    return ,($Source | ConvertTo-Json -Depth 64 | ConvertFrom-Json -AsHashtable -DateKind String)
+}
+
+function Invoke-AttemptLifecycleContracts($SuccessfulCase) {
+    $outputPath = Join-Path $temporaryRoot 'attempt-lifecycle.json'
+    $sourceReport = $SuccessfulCase.evidence.report
+    $first = $null
+    $second = $null
+    try {
+        $startResults = @(Start-NativeBenchmarkAttempt -OutputPath $outputPath -Service 'admin')
+        Assert-Contract ($startResults.Count -eq 1 -and $startResults[0] -is [Collections.IDictionary]) 'Attempt start emitted more than its context.'
+        $first = $startResults[0]
+        $report = New-AttemptContractReport $sourceReport
+        Assert-Contract (@(Complete-NativeBenchmarkAttempt -Context $first -Report $report).Count -eq 0) 'Attempt completion emitted incidental output.'
+    }
+    finally { if ($null -ne $first) { Close-NativeBenchmarkAttempt -Context $first } }
+    $firstEvidence = Assert-AttemptContractSuccess $outputPath 'admin'
+    $firstArchivePath = Join-Path (Join-Path ($outputPath + '.attempts') $firstEvidence.latest.attemptId) 'benchmark.json'
+    $firstArchiveHash = Get-AttemptContractHash $firstArchivePath
+    try {
+        $second = Start-NativeBenchmarkAttempt -OutputPath $outputPath -Service 'admin'
+        $running = Get-AttemptContractMetadata $outputPath 'admin' 'running'
+        Assert-Contract ($running.latest.attemptId -cne $firstEvidence.latest.attemptId -and
+            (Get-AttemptContractHash $outputPath) -ceq $firstEvidence.reportSha256) 'Starting a rerun changed the prior alias or reused an attempt ID.'
+        Assert-AttemptContractReaderRejected $outputPath 'admin'
+        $secondReport = New-AttemptContractReport $sourceReport
+        Assert-Contract (@(Complete-NativeBenchmarkAttempt -Context $second -Report $secondReport).Count -eq 0) 'Second attempt completion emitted incidental output.'
+    }
+    finally { if ($null -ne $second) { Close-NativeBenchmarkAttempt -Context $second } }
+    $secondEvidence = Assert-AttemptContractSuccess $outputPath 'admin'
+    Assert-Contract ($secondEvidence.latest.attemptId -cne $firstEvidence.latest.attemptId -and
+        [IO.File]::Exists($firstArchivePath) -and
+        (Get-AttemptContractHash $firstArchivePath) -ceq $firstArchiveHash -and
+        (Get-AttemptContractHash $outputPath) -ceq $secondEvidence.reportSha256 -and
+        @(Get-ChildItem -LiteralPath ($outputPath + '.attempts') -Directory | Where-Object { $_.Name -cmatch '\A[0-9a-f]{32}\z' }).Count -eq 2) 'Successful replacement did not retain both immutable report archives.'
+    $script:cases++
+
+    $legacyPath = Join-Path $temporaryRoot 'attempt-legacy-schema3.json'
+    $legacyReport = New-AttemptContractReport $sourceReport
+    $legacyReport.schemaVersion = 3
+    $legacyReport.Remove('collection') | Out-Null
+    [IO.File]::WriteAllText($legacyPath, (ConvertTo-Json -InputObject $legacyReport -Depth 64), [Text.UTF8Encoding]::new($false))
+    $legacyHash = Get-AttemptContractHash $legacyPath
+    Assert-AttemptContractReaderRejected $legacyPath 'admin'
+    $legacyContext = $null
+    try {
+        $legacyContext = Start-NativeBenchmarkAttempt -OutputPath $legacyPath -Service 'admin'
+        Complete-NativeBenchmarkAttempt -Context $legacyContext -Report (New-AttemptContractReport $sourceReport)
+    }
+    finally { if ($null -ne $legacyContext) { Close-NativeBenchmarkAttempt -Context $legacyContext } }
+    $legacyEvidence = Assert-AttemptContractSuccess $legacyPath 'admin'
+    $retainedLegacyPath = Join-Path (Join-Path ($legacyPath + '.attempts') 'legacy') ($legacyHash + '.json')
+    Assert-Contract ([IO.File]::Exists($retainedLegacyPath) -and
+        (Get-AttemptContractHash $retainedLegacyPath) -ceq $legacyHash -and
+        (Read-AttemptContractJson $retainedLegacyPath).schemaVersion -eq 3 -and
+        -not [IO.File]::Exists((Join-Path ([IO.Path]::GetDirectoryName($retainedLegacyPath)) 'attempt.json')) -and
+        $legacyEvidence.report.schemaVersion -eq 4) 'Replacing a legacy report did not preserve original bytes without invented successful attempt metadata.'
+    Assert-AttemptContractReaderRejected $retainedLegacyPath 'admin'
+    $script:cases++
+
+    $lockPath = Join-Path ($outputPath + '.attempts') 'writer.lock'
+    $oldLockAttributes = [IO.File]::GetAttributes($lockPath)
+    $oldLockMode = if ($IsLinux) { [IO.File]::GetUnixFileMode($lockPath) } else { $null }
+    $oldLockHash = Get-AttemptContractHash $lockPath
+    $oldLatestHash = Get-AttemptContractHash (Join-Path ($outputPath + '.attempts') 'latest.json')
+    try {
+        [IO.File]::SetAttributes($lockPath, ($oldLockAttributes -bor [IO.FileAttributes]::ReadOnly))
+        if ($IsLinux) {
+            $writeBits = [IO.UnixFileMode]::UserWrite -bor [IO.UnixFileMode]::GroupWrite -bor [IO.UnixFileMode]::OtherWrite
+            [IO.File]::SetUnixFileMode($lockPath, ($oldLockMode -band (-bnot $writeBits)))
+            Assert-Contract (([IO.File]::GetUnixFileMode($lockPath) -band $writeBits) -eq 0) 'Retained lock still has Linux write permission bits.'
+            # A privileged Linux host may bypass DAC; Windows below independently
+            # proves that the read-only attribute rejects a write-access handle.
+        }
+        if ($IsWindows) {
+            $writeRejected = $false
+            $unexpectedWriteHandle = $null
+            try { $unexpectedWriteHandle = [IO.FileStream]::new($lockPath, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) }
+            catch [UnauthorizedAccessException] { $writeRejected = $true }
+            finally { if ($null -ne $unexpectedWriteHandle) { $unexpectedWriteHandle.Dispose() } }
+            Assert-Contract $writeRejected 'Windows retained lock fixture did not enforce read-only write-access rejection.'
+        }
+        $readOnlyEvidence = Assert-AttemptContractSuccess $outputPath 'admin'
+        Assert-Contract ($readOnlyEvidence.reportSha256 -ceq $secondEvidence.reportSha256 -and
+            (Get-AttemptContractHash $lockPath) -ceq $oldLockHash -and
+            (Get-AttemptContractHash (Join-Path ($outputPath + '.attempts') 'latest.json')) -ceq $oldLatestHash) 'Read-only verification mutated retained attempt evidence.'
+    }
+    finally {
+        [IO.File]::SetAttributes($lockPath, $oldLockAttributes)
+        if ($IsLinux) { [IO.File]::SetUnixFileMode($lockPath, $oldLockMode) }
+    }
+    $script:cases++
+
+    $context = $null
+    try {
+        $context = Start-NativeBenchmarkAttempt -OutputPath $outputPath -Service 'admin'
+        $running = Get-AttemptContractMetadata $outputPath 'admin' 'running'
+        $latestHash = Get-AttemptContractHash $running.latestPath
+        $concurrentRejected = $false
+        $unexpectedContext = $null
+        try { $unexpectedContext = Start-NativeBenchmarkAttempt -OutputPath $outputPath -Service 'admin' }
+        catch { $concurrentRejected = $true }
+        finally { if ($null -ne $unexpectedContext) { Close-NativeBenchmarkAttempt -Context $unexpectedContext } }
+        Assert-Contract ($concurrentRejected -and (Get-AttemptContractHash $running.latestPath) -ceq $latestHash -and
+            (Get-AttemptContractHash $outputPath) -ceq $secondEvidence.reportSha256) 'Concurrent start did not refuse the held writer lock without mutation.'
+        Assert-AttemptContractReaderRejected $outputPath 'admin'
+        Assert-Contract (@(Set-NativeBenchmarkAttemptFailed -Context $context -FailureCode 'collection-failed').Count -eq 0) 'Failed attempt publication emitted incidental output.'
+    }
+    finally { if ($null -ne $context) { Close-NativeBenchmarkAttempt -Context $context } }
+    $failed = Get-AttemptContractMetadata $outputPath 'admin' 'failed'
+    Assert-Contract ($failed.attempt.failureCode -ceq 'collection-failed' -and
+        (Get-AttemptContractHash $outputPath) -ceq $secondEvidence.reportSha256) 'A failed latest attempt altered the previous successful alias.'
+    Assert-AttemptContractReaderRejected $outputPath 'admin'
+    $script:cases++
+
+    $abandonedPath = Join-Path $temporaryRoot 'attempt-abandoned.json'
+    $abandoned = $null
+    try { $abandoned = Start-NativeBenchmarkAttempt -OutputPath $abandonedPath -Service 'admin' }
+    finally { if ($null -ne $abandoned) { Close-NativeBenchmarkAttempt -Context $abandoned } }
+    $unused = Get-AttemptContractMetadata $abandonedPath 'admin' 'running'
+    Assert-AttemptContractReaderRejected $abandonedPath 'admin'
+    $script:cases++
+
+    $crashPath = Join-Path $temporaryRoot 'attempt-child-exit.json'
+    $crashChild = Join-Path $temporaryRoot 'attempt-child-exit.ps1'
+    @'
+param([string] $HelperPath, [string] $OutputPath)
+$ErrorActionPreference = 'Stop'
+. $HelperPath
+$context = Start-NativeBenchmarkAttempt -OutputPath $OutputPath -Service 'admin'
+# A real child process exits with its lock still held; the OS releases the handle,
+# while retained running metadata must continue to disqualify its latest result.
+[Environment]::Exit(0)
+'@ | Set-Content -LiteralPath $crashChild -Encoding utf8NoBOM
+    $child = Invoke-BoundedProcess $crashChild @((Join-Path $PSScriptRoot 'native-benchmark-attempt-evidence.ps1'), $crashPath) 10
+    Assert-Contract ($child.ExitCode -eq 0 -and [string]::IsNullOrWhiteSpace($child.Stdout) -and
+        [string]::IsNullOrWhiteSpace($child.Stderr)) 'Owned crashed-attempt fixture did not exit cleanly without diagnostic output.'
+    $unused = Get-AttemptContractMetadata $crashPath 'admin' 'running'
+    Assert-AttemptContractReaderRejected $crashPath 'admin'
+    $script:cases++
+
+    $publicationPath = Join-Path $temporaryRoot 'attempt-publication-obstruction.json'
+    $publication = $null
+    try {
+        $publication = Start-NativeBenchmarkAttempt -OutputPath $publicationPath -Service 'admin'
+        # This is a real file-system conflict at the final atomic alias target.
+        [IO.Directory]::CreateDirectory($publicationPath) | Out-Null
+        $publicationRejected = $false
+        try { Complete-NativeBenchmarkAttempt -Context $publication -Report (New-AttemptContractReport $sourceReport) }
+        catch { $publicationRejected = $true }
+        Assert-Contract $publicationRejected 'A blocked atomic alias publication was accepted.'
+        Set-NativeBenchmarkAttemptFailed -Context $publication -FailureCode 'publication-failed'
+    }
+    finally { if ($null -ne $publication) { Close-NativeBenchmarkAttempt -Context $publication } }
+    $failed = Get-AttemptContractMetadata $publicationPath 'admin' 'failed'
+    Assert-Contract ($failed.attempt.failureCode -ceq 'publication-failed' -and -not [IO.File]::Exists($publicationPath)) 'Publication failure did not leave failed latest metadata without a success alias.'
+    Assert-AttemptContractReaderRejected $publicationPath 'admin'
+    $script:cases++
+
+    $wrongCasePath = Join-Path $temporaryRoot 'attempt-wrong-property-case.json'
+    $wrongCaseContext = $null
+    try {
+        $wrongCaseContext = Start-NativeBenchmarkAttempt -OutputPath $wrongCasePath -Service 'admin'
+        $wrongCaseReport = New-AttemptContractReport $sourceReport
+        $wrongCaseReport.Remove('schemaVersion') | Out-Null
+        $wrongCaseReport.Add('SchemaVersion', 4)
+        $wrongCaseFailure = $null
+        try { Complete-NativeBenchmarkAttempt -Context $wrongCaseContext -Report $wrongCaseReport }
+        catch { $wrongCaseFailure = $_.Exception.Message }
+        Assert-Contract ($wrongCaseFailure -ceq 'Native benchmark attempt publication failed.') 'Wrong-cased report identity did not fail with controlled publication refusal.'
+        Set-NativeBenchmarkAttemptFailed -Context $wrongCaseContext -FailureCode 'publication-failed'
+    }
+    finally { if ($null -ne $wrongCaseContext) { Close-NativeBenchmarkAttempt -Context $wrongCaseContext } }
+    $failed = Get-AttemptContractMetadata $wrongCasePath 'admin' 'failed'
+    Assert-Contract ($failed.attempt.failureCode -ceq 'publication-failed' -and
+        -not [IO.File]::Exists($wrongCasePath)) 'Wrong-cased identity published a success alias or lost its failure status.'
+    Assert-AttemptContractReaderRejected $wrongCasePath 'admin'
+    $script:cases++
+
+    # Start a clean succeeded lineage for independent retained-byte and ID guards.
+    $tamperPath = Join-Path $temporaryRoot 'attempt-tamper.json'
+    $tamperContext = $null
+    try {
+        $tamperContext = Start-NativeBenchmarkAttempt -OutputPath $tamperPath -Service 'admin'
+        Complete-NativeBenchmarkAttempt -Context $tamperContext -Report (New-AttemptContractReport $sourceReport)
+    }
+    finally { if ($null -ne $tamperContext) { Close-NativeBenchmarkAttempt -Context $tamperContext } }
+    $trusted = Assert-AttemptContractSuccess $tamperPath 'admin'
+    $trustedArchive = Join-Path (Join-Path ($tamperPath + '.attempts') $trusted.latest.attemptId) 'benchmark.json'
+    Assert-AttemptContractReaderRejected $tamperPath 'gateway'
+    $script:cases++
+    $metadata = Get-AttemptContractMetadata $tamperPath 'admin' 'succeeded'
+    $originalBytes = @{}
+    foreach ($path in @($tamperPath, $trustedArchive, $metadata.attemptPath, $metadata.latestPath)) {
+        $originalBytes[$path] = [IO.File]::ReadAllBytes($path)
+    }
+    foreach ($scenario in @('archived-bytes', 'alias-bytes', 'attempt-report-hash', 'latest-id', 'attempt-schema-type', 'joined-report-id', 'completion-before-start')) {
+        try {
+            switch ($scenario) {
+                'archived-bytes' { [IO.File]::AppendAllText($trustedArchive, "`n", [Text.UTF8Encoding]::new($false)) }
+                'alias-bytes' { [IO.File]::AppendAllText($tamperPath, "`n", [Text.UTF8Encoding]::new($false)) }
+                'attempt-report-hash' {
+                    $modified = Read-AttemptContractJson $metadata.attemptPath
+                    $modified.reportSha256 = '0' * 64
+                    [IO.File]::WriteAllText($metadata.attemptPath, (ConvertTo-Json -InputObject $modified -Depth 8), [Text.UTF8Encoding]::new($false))
+                }
+                'latest-id' {
+                    $modified = Read-AttemptContractJson $metadata.latestPath
+                    $modified.attemptId = [Guid]::NewGuid().ToString('N')
+                    [IO.File]::WriteAllText($metadata.latestPath, (ConvertTo-Json -InputObject $modified -Depth 8), [Text.UTF8Encoding]::new($false))
+                }
+                'attempt-schema-type' {
+                    $modified = Read-AttemptContractJson $metadata.attemptPath
+                    $modified.schemaVersion = '1'
+                    [IO.File]::WriteAllText($metadata.attemptPath, (ConvertTo-Json -InputObject $modified -Depth 8), [Text.UTF8Encoding]::new($false))
+                }
+                { $_ -cin @('joined-report-id', 'completion-before-start') } {
+                    $modifiedReport = Read-AttemptContractJson $trustedArchive
+                    $modifiedAttempt = Read-AttemptContractJson $metadata.attemptPath
+                    if ($scenario -ceq 'joined-report-id') { $modifiedReport.collection.attemptId = [Guid]::NewGuid().ToString('N') }
+                    else {
+                        $invalidTime = '1999-01-01T00:00:00.0000000Z'
+                        $modifiedReport.collection.completedAt = $invalidTime
+                        $modifiedReport.generatedAt = $invalidTime
+                        $modifiedAttempt.completedAt = $invalidTime
+                    }
+                    $modifiedText = ConvertTo-Json -InputObject $modifiedReport -Depth 64
+                    [IO.File]::WriteAllText($trustedArchive, $modifiedText, [Text.UTF8Encoding]::new($false))
+                    [IO.File]::WriteAllText($tamperPath, $modifiedText, [Text.UTF8Encoding]::new($false))
+                    $modifiedAttempt.reportSha256 = Get-AttemptContractHash $trustedArchive
+                    [IO.File]::WriteAllText($metadata.attemptPath, (ConvertTo-Json -InputObject $modifiedAttempt -Depth 8), [Text.UTF8Encoding]::new($false))
+                }
+            }
+            Assert-AttemptContractReaderRejected $tamperPath 'admin'
+            $script:cases++
+        }
+        finally {
+            foreach ($path in $originalBytes.Keys) { [IO.File]::WriteAllBytes($path, $originalBytes[$path]) }
+        }
+        $unused = Assert-AttemptContractSuccess $tamperPath 'admin'
     }
 }
 
@@ -973,7 +1326,7 @@ if ($env:CONDUIT_COLLECTOR_HELPER_VALUE -eq 'timeout') {
         [Math]::Round($watch.Elapsed.TotalSeconds, 3) + ', controlled failure matched ' + $matchedFailure + '.')
     $cases++
 
-    Invoke-CollectorCase 'admin' 'success' $null
+    $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult
     Invoke-CollectorCase 'gateway' 'success' $null
     Invoke-CollectorCase 'admin' 'even-pairs' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'case-duplicate-environment' 'No qualification was recorded.'
@@ -992,6 +1345,11 @@ if ($env:CONDUIT_COLLECTOR_HELPER_VALUE -eq 'timeout') {
     }
     Invoke-CollectorCase 'gateway' 'native-selected-mismatch' 'Native benchmark container image binding failed.'
     Invoke-CollectorCase 'gateway' 'package-late-mutation' 'Native benchmark image changed during collection.'
+    # A previous successful alias is deliberately present for both real reruns.
+    # Readers must reject the newly failed latest attempt even though A survives.
+    Invoke-CollectorCase 'admin' 'even-pairs' 'No qualification was recorded.' -ExistingOutputPath $successfulAdmin.outputPath
+    Invoke-CollectorCase 'admin' 'driver-nonzero' 'No qualification was recorded.' -ExistingOutputPath $successfulAdmin.outputPath
+    Invoke-AttemptLifecycleContracts $successfulAdmin
 }
 catch { $proofFailure = $_.Exception }
 finally {
@@ -1047,4 +1405,4 @@ if ($cleanupFailures.Count -gt 0) {
     throw ('Collector contract fixture cleanup failed; cleanup failures ' + $cleanupFailures.Count + '.')
 }
 if ($null -ne $proofFailure) { throw $proofFailure }
-Write-Host ('PASS: ' + $cases + ' collector contracts; owned mocked Docker/driver processes, authenticated workload pairs, warm exclusion, private deadlines and strict cleanup.')
+Write-Host ('PASS: ' + $cases + ' collector contracts; owned mocked Docker/driver processes, authenticated workload pairs, warm exclusion, private deadlines, strict cleanup and latest-attempt evidence.')

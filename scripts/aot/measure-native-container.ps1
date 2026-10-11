@@ -27,8 +27,11 @@ param(
 $ErrorActionPreference = 'Stop'
 $Service = $Service.ToLowerInvariant()
 . (Join-Path $PSScriptRoot 'native-benchmark-image-evidence.ps1')
+. (Join-Path $PSScriptRoot 'native-benchmark-attempt-evidence.ps1')
 $privateRoot = $null
 $collectionFailure = $null
+$attempt = $null
+$privateCleanupFailed = $false
 
 function Get-SafeFailureMessage([Exception] $Exception, [string] $Fallback) {
     $allowed = @(
@@ -655,6 +658,8 @@ function Get-Percent([double] $Jit, [double] $Native, [switch] $Increase) {
 }
 
 try {
+    if ([string]::IsNullOrWhiteSpace($OutputPath)) { $OutputPath = "artifacts/native-benchmark/$Service.json" }
+    $attempt = Start-NativeBenchmarkAttempt -OutputPath $OutputPath -Service $Service
     if ($PSBoundParameters.ContainsKey('Requests') -or $PSBoundParameters.ContainsKey('Concurrency') -or $PairedRuns % 2 -ne 1) {
         throw 'Use matching workload configurations and an odd paired run count.'
     }
@@ -752,7 +757,7 @@ try {
     }
     catch { throw 'Native benchmark image changed during collection.' }
     $report = [pscustomobject]@{
-        schemaVersion = 3; generatedAt = [DateTimeOffset]::UtcNow.ToString('O'); service = $Service; platform = 'linux-x64'
+        schemaVersion = 4; generatedAt = $null; collection = $null; service = $Service; platform = 'linux-x64'
         pairedRuns = $PairedRuns
         methodology = 'One unrecorded warm pair, then alternating cold JIT/native container pairs; authenticated workload latency includes complete JSON/SSE response validation. Memory is Docker container usage in bytes, sampled during workload execution.'
         environment = $environment; jit = $jit; native = $native; samples = @($samples.ToArray()); nativePublish = $nativePublish
@@ -774,18 +779,30 @@ finally {
         }
     }
     catch {
+        $privateCleanupFailed = $true
         $collectionFailure = if ($null -ne $collectionFailure) {
             $collectionFailure + ' Private benchmark file cleanup also failed.'
         }
         else { 'Private benchmark file cleanup failed.' }
     }
 }
-if ($null -ne $collectionFailure) { throw ($collectionFailure + ' No qualification was recorded.') }
 try {
-    if ([string]::IsNullOrWhiteSpace($OutputPath)) { $OutputPath = "artifacts/native-benchmark/$Service.json" }
-    $parent = Split-Path -Parent ([System.IO.Path]::GetFullPath($OutputPath))
-    if (-not [System.IO.Directory]::Exists($parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
-    [System.IO.File]::WriteAllText([System.IO.Path]::GetFullPath($OutputPath), ($report | ConvertTo-Json -Depth 20), [System.Text.UTF8Encoding]::new($false))
+    if ($null -ne $collectionFailure) {
+        if ($null -ne $attempt) {
+            try {
+                $failureCode = if ($privateCleanupFailed) { 'cleanup-failed' } else { 'collection-failed' }
+                Set-NativeBenchmarkAttemptFailed -Context $attempt -FailureCode $failureCode
+            }
+            catch { $collectionFailure += ' Attempt failure status could not be recorded.' }
+        }
+        throw ($collectionFailure + ' No qualification was recorded.')
+    }
+    try { Complete-NativeBenchmarkAttempt -Context $attempt -Report $report }
+    catch {
+        try { Set-NativeBenchmarkAttemptFailed -Context $attempt -FailureCode 'publication-failed' }
+        catch { throw 'Native benchmark report and failure status could not be recorded.' }
+        throw 'Native benchmark report could not be recorded.'
+    }
     Write-Host 'Wrote matched authenticated JIT versus NativeAOT benchmark.'
 }
-catch { throw 'Native benchmark report could not be recorded.' }
+finally { if ($null -ne $attempt) { Close-NativeBenchmarkAttempt -Context $attempt } }
