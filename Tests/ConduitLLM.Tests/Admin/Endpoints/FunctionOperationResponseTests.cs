@@ -96,7 +96,10 @@ public sealed class FunctionOperationResponseTests
     {
         using var services = new ServiceCollection().AddLogging()
             .Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
-                AdminJsonOptions.Configure(options.SerializerOptions))
+            {
+                options.SerializerOptions.TypeInfoResolverChain.Clear();
+                AdminJsonOptions.Configure(options.SerializerOptions);
+            })
             .BuildServiceProvider();
         var context = new DefaultHttpContext { RequestServices = services };
         await using var stream = new MemoryStream();

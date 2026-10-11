@@ -20,11 +20,7 @@ public sealed class FunctionCostsEndpointsTests
     {
         var service = new Mock<IFunctionCostService>(MockBehavior.Strict);
         service.Setup(value => value.ClearCacheAsync()).Returns(Task.CompletedTask);
-        using var services = new ServiceCollection()
-            .AddLogging()
-            .Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
-                AdminJsonOptions.Configure(options.SerializerOptions))
-            .BuildServiceProvider();
+        using var services = CreateServiceProvider();
         var context = new DefaultHttpContext { RequestServices = services };
         context.Response.Body = new MemoryStream();
         var handler = typeof(FunctionCostsEndpoints).GetMethod(
@@ -43,4 +39,23 @@ public sealed class FunctionCostsEndpointsTests
         Assert.Single(body.RootElement.EnumerateObject());
         service.Verify(value => value.ClearCacheAsync(), Times.Once);
     }
+
+    [Fact]
+    public async Task ProductionResultFixture_RejectsUnregisteredResponsePayloads()
+    {
+        using var services = CreateServiceProvider();
+        var context = new DefaultHttpContext { RequestServices = services };
+        context.Response.Body = new MemoryStream();
+
+        await Assert.ThrowsAsync<NotSupportedException>(() =>
+            Results.Ok(new { unregistered = "payload" }).ExecuteAsync(context));
+    }
+
+    private static ServiceProvider CreateServiceProvider() =>
+        new ServiceCollection().AddLogging()
+            .Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+            {
+                options.SerializerOptions.TypeInfoResolverChain.Clear();
+                AdminJsonOptions.Configure(options.SerializerOptions);
+            }).BuildServiceProvider();
 }
