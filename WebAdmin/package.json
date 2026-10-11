@@ -60,8 +60,8 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@next/eslint-plugin-next": "^16.1.6",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.15.21",
     "@types/react": "^19.3.0",
@@ -70,17 +70,17 @@
     "eslint": "^9.39.2",
     "eslint-plugin-eslint-comments": "^3.2.0",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "globals": "^17.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
-    "knip": "^6.32.2",
+    "knip": "^6.40.0",
     "stylelint": "^17.1.0",
     "stylelint-config-standard": "^40.0.0",
-    "stylelint-order": "^7.0.1",
+    "stylelint-order": "^8.1.1",
     "stylelint-scss": "^7.0.0",
     "ts-jest": "^29.4.6",
-    "typescript-eslint": "^8.54.0"
+    "typescript-eslint": "^8.71.1"
   },
   "overrides": {
     "brace-expansion@1.1.12": "1.1.21",
