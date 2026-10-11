@@ -14,6 +14,7 @@ using ConduitLLM.Configuration.DTOs.SignalR;
 using ConduitLLM.Configuration.Serialization;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Models.Responses;
 using ConduitLLM.Core.Serialization;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.DTOs;
@@ -28,6 +29,34 @@ namespace ConduitLLM.SerializationTests;
 
 public sealed class SourceGeneratedJsonCompatibilityTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Gateway_response_completion_details_resolve_inside_stream_envelopes(bool failed)
+    {
+        var response = new ResponseObject
+        {
+            CreatedAt = 1, Id = "resp-fixture", Object = "response", Model = "fixture",
+            Status = failed ? "failed" : "incomplete",
+            Error = failed ? new ResponseFailureDetails("provider_response_error", "unavailable") : null,
+            IncompleteDetails = failed ? null : new ResponseIncompleteDetails("max_output_tokens"),
+            Instructions = null, Metadata = [], Output = [], ParallelToolCalls = true,
+            Temperature = null, ToolChoice = "auto", Tools = [], TopP = null
+        };
+        var envelope = new ResponseStreamEvent
+        {
+            Type = failed ? "response.failed" : "response.incomplete",
+            SequenceNumber = 1, Response = response
+        };
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(envelope, GatewayJsonOptions.Create()));
+        var result = document.RootElement.GetProperty("response");
+        AssertJsonEqual(failed
+                ? """{"code":"provider_response_error","message":"unavailable"}"""
+                : """{"reason":"max_output_tokens"}""",
+            result.GetProperty(failed ? "error" : "incomplete_details").GetRawText());
+    }
+
     [Fact]
     public void Admin_health_details_preserve_branch_shapes_without_reflection()
     {

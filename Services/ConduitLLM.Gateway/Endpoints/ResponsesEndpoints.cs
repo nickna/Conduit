@@ -482,7 +482,7 @@ public sealed class ResponsesEndpoints : GatewayEndpointHandlerBase
                 instructions,
                 [finalItem],
                 ConvertUsage(usage),
-                incompleteDetails: incompleteReason is null ? null : new { reason = incompleteReason });
+                incompleteDetails: incompleteReason is null ? null : new ResponseIncompleteDetails(incompleteReason));
             var terminalEvent = incompleteReason is null ? "response.completed" : "response.incomplete";
             await WriteEventAsync(
                 terminalEvent,
@@ -531,9 +531,7 @@ public sealed class ResponsesEndpoints : GatewayEndpointHandlerBase
                         instructions,
                         [],
                         null,
-                        customerError?.Detail is { } detail
-                            ? new { code = "provider_response_error", message = errorMessage, provider_error = detail }
-                            : (object)new { code = "provider_response_error", message = errorMessage });
+                        new ResponseFailureDetails("provider_response_error", errorMessage, customerError?.Detail));
                     await WriteEventAsync(
                         "response.failed",
                         Event("response.failed", ++sequence, ("response", failed)),
@@ -816,7 +814,7 @@ public sealed class ResponsesEndpoints : GatewayEndpointHandlerBase
             instructions,
             [item],
             ConvertUsage(chatResponse.Usage),
-            incompleteDetails: incompleteReason is null ? null : new { reason = incompleteReason });
+            incompleteDetails: incompleteReason is null ? null : new ResponseIncompleteDetails(incompleteReason));
     }
 
     private static ResponseObject CreateResponseObject(
@@ -828,8 +826,8 @@ public sealed class ResponsesEndpoints : GatewayEndpointHandlerBase
         string? instructions,
         List<ResponseOutputMessage> output,
         ResponseUsage? usage,
-        object? error = null,
-        object? incompleteDetails = null) =>
+        ResponseFailureDetails? error = null,
+        ResponseIncompleteDetails? incompleteDetails = null) =>
         new()
         {
             Id = id,

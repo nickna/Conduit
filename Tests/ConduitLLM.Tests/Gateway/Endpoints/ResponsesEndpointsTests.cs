@@ -5,6 +5,7 @@ using System.Text.Json;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Models.Responses;
 using ConduitLLM.Gateway.Endpoints;
@@ -24,7 +25,7 @@ namespace ConduitLLM.Tests.Gateway.Endpoints;
 
 public sealed class ResponsesEndpointsTests
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = GatewayJsonOptions.Create();
 
     [Fact]
     public void Translate_MapsInstructionsAndStringInputToChat()
@@ -249,16 +250,28 @@ public sealed class ResponsesEndpointsTests
         accounting.Transport.ProviderChunksObserved.Should().Be(3);
     }
 
-    [Fact]
-    public async Task CreateResponse_EmitsFailureEventsAndMarksUsageIndeterminate()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task CreateResponse_EmitsFailureEventsAndMarksUsageIndeterminate(
+        bool includeProviderDetail, bool providerFailure)
     {
         var executor = new Mock<IResponsesChatExecutor>();
         executor.Setup(service => service.StreamAsync(
                 It.IsAny<ChatCompletionRequest>(),
                 7,
                 It.IsAny<CancellationToken>()))
-            .Returns(FailingStream());
-        var (endpoint, context) = CreateEndpoint(executor.Object);
+            .Returns(FailingStream(providerFailure
+                ? new LLMCommunicationException("provider failed", System.Net.HttpStatusCode.ServiceUnavailable, null)
+                : new InvalidOperationException("provider failed")));
+        var translator = new Mock<IProviderErrorTranslator>();
+        translator.Setup(value => value.Translate(It.IsAny<Exception>(), It.IsAny<string>()))
+            .Returns(new CustomerFacingProviderError("provider unavailable", ProviderErrorType.Unknown,
+                includeProviderDetail
+                    ? new ProviderErrorDetail("test-provider", "unknown", 503, "upstream unavailable")
+                    : null));
+        var (endpoint, context) = CreateEndpoint(executor.Object, translator.Object);
 
         await endpoint.CreateResponse(Deserialize(
             """{"model":"model-a","input":"Hello","store":false,"stream":true}"""));
@@ -266,13 +279,73 @@ public sealed class ResponsesEndpointsTests
         var body = ReadBody(context);
         body.Should().Contain("event: error");
         body.Should().Contain("event: response.failed");
+        var failedFrame = body.Split("\n\n", StringSplitOptions.RemoveEmptyEntries)
+            .Single(frame => frame.StartsWith("event: response.failed\n"));
+        using var failed = JsonDocument.Parse(failedFrame.Split('\n')[1]["data: ".Length..]);
+        var error = failed.RootElement.GetProperty("response").GetProperty("error");
+        error.GetProperty("code").GetString().Should().Be("provider_response_error");
+        error.GetProperty("message").GetString().Should().Be(providerFailure
+            ? "provider unavailable" : "The provider stream terminated before completion.");
+        error.TryGetProperty("provider_error", out var detail).Should().Be(includeProviderDetail);
+        error.EnumerateObject().Should().HaveCount(includeProviderDetail ? 3 : 2);
+        if (includeProviderDetail)
+        {
+            detail.GetProperty("provider").GetString().Should().Be("test-provider");
+        }
         var accounting = context.GetRequestAccountingSnapshot();
         accounting!.IsIndeterminate.Should().BeTrue();
         accounting.Transport!.Outcome.Should().Be(StreamTransportOutcome.ProviderFailed);
     }
 
+    [Theory]
+    [InlineData("length", "max_output_tokens", false)]
+    [InlineData("content_filter", "content_filter", false)]
+    [InlineData("length", "max_output_tokens", true)]
+    [InlineData("content_filter", "content_filter", true)]
+    public async Task CreateResponse_IncompleteResultsUseGeneratedDetails(
+        string finishReason, string expectedReason, bool stream)
+    {
+        var executor = new Mock<IResponsesChatExecutor>();
+        executor.Setup(service => service.CreateAsync(
+                It.IsAny<ChatCompletionRequest>(), 7, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ChatCompletionResponse
+            {
+                Id = "chatcmpl_partial", Model = "provider-model", Created = 1, Object = "chat.completion",
+                Choices = [new Choice
+                {
+                    Index = 0, FinishReason = finishReason,
+                    Message = new Message { Role = "assistant", Content = "partial" }
+                }]
+            });
+        executor.Setup(service => service.StreamAsync(
+                It.IsAny<ChatCompletionRequest>(), 7, It.IsAny<CancellationToken>()))
+            .Returns(IncompleteStream(finishReason));
+        var (endpoint, context) = CreateEndpoint(executor.Object);
+        var request = Deserialize("""{"model":"model-a","input":"Hello","store":false}""");
+        request.Stream = stream;
+
+        var result = await endpoint.CreateResponse(request);
+        if (!stream)
+        {
+            await ExecuteResultAsync(result, context);
+        }
+        var payload = ReadBody(context);
+        if (stream)
+        {
+            var finalFrame = payload.Split("\n\n", StringSplitOptions.RemoveEmptyEntries)
+                .Single(frame => frame.StartsWith("event: response.incomplete\n"));
+            payload = finalFrame.Split('\n')[1]["data: ".Length..];
+        }
+        using var document = JsonDocument.Parse(payload);
+        var response = stream ? document.RootElement.GetProperty("response") : document.RootElement;
+        response.GetProperty("status").GetString().Should().Be("incomplete");
+        var details = response.GetProperty("incomplete_details");
+        details.GetProperty("reason").GetString().Should().Be(expectedReason);
+        details.EnumerateObject().Should().HaveCount(1);
+    }
+
     private static (ResponsesEndpoints Endpoint, DefaultHttpContext Context) CreateEndpoint(
-        IResponsesChatExecutor executor)
+        IResponsesChatExecutor executor, IProviderErrorTranslator? providerErrorTranslator = null)
     {
         var mappingService = new Mock<IModelProviderMappingService>();
         mappingService.Setup(service => service.GetMappingByModelAliasAsync(It.IsAny<string>()))
@@ -290,7 +363,11 @@ public sealed class ResponsesEndpointsTests
 
         var services = new ServiceCollection()
             .AddLogging()
-            .ConfigureHttpJsonOptions(options => options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
+            .ConfigureHttpJsonOptions(options =>
+            {
+                options.SerializerOptions.TypeInfoResolverChain.Clear();
+                GatewayJsonOptions.Configure(options.SerializerOptions);
+            })
             .BuildServiceProvider();
         var context = new DefaultHttpContext
         {
@@ -314,7 +391,7 @@ public sealed class ResponsesEndpointsTests
             billingAdmissionOptions: Options.Create(new BillingAdmissionOptions
             {
                 Mode = BillingAdmissionMode.Off
-            }));
+            }), providerErrorTranslator: providerErrorTranslator);
         return (endpoint, context);
     }
 
@@ -350,13 +427,26 @@ public sealed class ResponsesEndpointsTests
         };
     }
 
-    private static async IAsyncEnumerable<ChatCompletionChunk> FailingStream()
+    private static async IAsyncEnumerable<ChatCompletionChunk> FailingStream(Exception failure)
     {
         await Task.Yield();
-        throw new InvalidOperationException("provider failed");
+        throw failure;
 #pragma warning disable CS0162
         yield break;
 #pragma warning restore CS0162
+    }
+
+    private static async IAsyncEnumerable<ChatCompletionChunk> IncompleteStream(string finishReason)
+    {
+        yield return Chunk("partial");
+        await Task.Yield();
+        yield return new ChatCompletionChunk
+        {
+            Choices = [new StreamingChoice
+            {
+                Index = 0, Delta = new DeltaContent(), FinishReason = finishReason
+            }]
+        };
     }
 
     private static ChatCompletionChunk Chunk(string content) =>
