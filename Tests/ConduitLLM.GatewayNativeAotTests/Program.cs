@@ -104,11 +104,86 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
     public async Task RunAsync()
     {
         await AssertRuntimeAndOperationsAsync();
+        await AssertSchemaReadinessAsync();
         await AssertAsyncTaskPersistenceAsync();
         await AssertProviderTransportAsync();
         await AssertS3MediaWorkflowAsync();
         await AssertSignalRAndRedisAsync();
         Console.WriteLine("Gateway NativeAOT supported protocol/infrastructure probe: PASS");
+    }
+
+    private async Task AssertSchemaReadinessAsync()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        await AssertHostHealthAsync(HttpStatusCode.OK, "current schema", deadline.Token);
+
+        // This gate owns a disposable database. A committed, uniquely named future
+        // version makes every host observe a mismatch without changing the schema.
+        var marker = $"99991231235959_NativeAotReadiness_{Guid.NewGuid():N}";
+        Exception? assertionFailure = null;
+        try
+        {
+            await SetSchemaMarkerAsync(marker, present: true, deadline.Token);
+            await AssertHostHealthAsync(HttpStatusCode.ServiceUnavailable,
+                "future schema", deadline.Token);
+        }
+        catch (Exception exception)
+        {
+            assertionFailure = exception;
+            throw;
+        }
+        finally
+        {
+            // Cleanup also runs after a timeout or a failed insert acknowledgement;
+            // its fresh token allows removal even when the assertion was cancelled.
+            using var cleanupDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            try
+            {
+                await SetSchemaMarkerAsync(marker, present: false, cleanupDeadline.Token);
+            }
+            catch (Exception cleanupFailure)
+            {
+                var message = $"Could not remove owned readiness fixture {marker}.";
+                if (assertionFailure is not null)
+                    throw new AggregateException(message, assertionFailure, cleanupFailure);
+                throw new InvalidOperationException(message, cleanupFailure);
+            }
+        }
+
+        await AssertHostHealthAsync(HttpStatusCode.OK, "restored schema", deadline.Token);
+        Console.WriteLine("Native live schema readiness and recovery: PASS");
+    }
+
+    private async Task SetSchemaMarkerAsync(string marker, bool present, CancellationToken cancellationToken)
+    {
+        await using var dataSource = NpgsqlDataSource.Create(settings.DatabaseConnectionString);
+        await using var command = dataSource.CreateCommand(present
+            ? """
+              INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+              VALUES (@marker, 'native-readiness-probe')
+              """
+            : """
+              DELETE FROM "__EFMigrationsHistory" WHERE "MigrationId" = @marker
+              """);
+        command.CommandTimeout = 10;
+        command.Parameters.Add(new NpgsqlParameter<string>("marker", NpgsqlDbType.Varchar)
+        {
+            TypedValue = marker
+        });
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task AssertHostHealthAsync(
+        HttpStatusCode readiness, string stage, CancellationToken cancellationToken)
+    {
+        foreach (var (client, name) in new[]
+                 { (_admin, "Admin"), (_gateway, "primary Gateway"), (_secondaryGateway, "secondary Gateway") })
+        {
+            using var ready = await client.GetAsync("health/ready", cancellationToken);
+            await ExpectAsync(ready, readiness, $"{name} readiness with {stage}");
+            using var live = await client.GetAsync("health/live", cancellationToken);
+            await ExpectAsync(live, HttpStatusCode.OK, $"{name} liveness with {stage}");
+        }
     }
 
     private async Task AssertRuntimeAndOperationsAsync()

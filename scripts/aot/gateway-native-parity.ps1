@@ -6,6 +6,8 @@
 .DESCRIPTION
     Starts a native Admin and two native Gateway executables against real PostgreSQL,
     Redis, and S3-compatible storage, then runs the native supported-boundary probe.
+    Use a disposable parity database: fixture seeding changes application data and
+    the readiness proof temporarily adds its own migration-history row.
 #>
 [CmdletBinding()]
 param(
@@ -117,7 +119,8 @@ $env:CONDUIT_S3_BUCKET_NAME = $S3BucketName
 $env:CONDUIT_S3_REGION = $S3Region
 $env:CONDUIT_MASTER_KEY = $MasterKey
 $env:CONDUIT_NATIVE_PROVIDER_URL = "http://127.0.0.1:$ProviderPort"
-$env:CONDUIT_MIGRATION_MODE = 'Skip'
+$env:CONDUIT_MIGRATION_MODE = 'Wait'
+$env:CONDUIT_MIGRATION_WAIT_TIMEOUT_SECONDS = '0'
 $env:ConduitLLM__Messaging__Backend = 'Wolverine'
 $env:BatchSpending__FlushIntervalSeconds = '1'
 $env:SignalR__ConnectionLimits__MaxConnectionsPerVirtualKey = '2'
@@ -166,15 +169,18 @@ try {
     $admin = Start-LoggedProcess 'admin' $adminExecutable @() (Split-Path $adminExecutable) "http://127.0.0.1:$AdminPort"
     $processes.Add($admin)
     Wait-ForHttp "http://127.0.0.1:$AdminPort/health/live" 'native Admin liveness'
+    Wait-ForHttp "http://127.0.0.1:$AdminPort/health/ready" 'native Admin readiness'
 
     $gatewayExecutable = Get-NativeExecutable 'Gateway'
     $gateway = Start-LoggedProcess 'gateway-primary' $gatewayExecutable @() (Split-Path $gatewayExecutable) "http://127.0.0.1:$GatewayPort"
     $processes.Add($gateway)
     Wait-ForHttp "http://127.0.0.1:$GatewayPort/health/runtime-capabilities" 'primary native Gateway'
+    Wait-ForHttp "http://127.0.0.1:$GatewayPort/health/ready" 'primary native Gateway readiness'
 
     $secondary = Start-LoggedProcess 'gateway-secondary' $gatewayExecutable @() (Split-Path $gatewayExecutable) "http://127.0.0.1:$SecondaryGatewayPort"
     $processes.Add($secondary)
     Wait-ForHttp "http://127.0.0.1:$SecondaryGatewayPort/health/runtime-capabilities" 'secondary native Gateway'
+    Wait-ForHttp "http://127.0.0.1:$SecondaryGatewayPort/health/ready" 'secondary native Gateway readiness'
 
     $env:CONDUIT_NATIVE_ADMIN_URL = "http://127.0.0.1:$AdminPort"
     $env:CONDUIT_NATIVE_GATEWAY_URL = "http://127.0.0.1:$GatewayPort"

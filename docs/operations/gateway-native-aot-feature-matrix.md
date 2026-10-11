@@ -39,8 +39,13 @@ The following features are excluded from the first native image and appear in `e
 - `redis-virtual-key-authentication-cache`
 - `readiness-and-database-health`
 
-The native gate explicitly sets `CONDUIT_MIGRATION_MODE=Skip` and checks liveness,
-not `/health/ready`; schema-wait and database-health parity remain unproven. The
+The native gate uses `CONDUIT_MIGRATION_MODE=Wait` after the standalone migrator
+and requires `/health/ready` to return 200 from Admin and both Gateways. In its
+disposable parity database, it inserts one uniquely named future migration-history
+row, requires readiness 503 and liveness 200 from the same three processes, removes
+only that row in bounded cleanup, and requires readiness 200 again. Database and
+Redis outage/recovery, and startup against missing or stale schemas, still need
+published-process proof before the full readiness exclusion can be removed. The
 authenticated model-discovery proof covers `/v1/models`, model retrieval, and
 model metadata. It does not cover the newer `/v1/discovery/models` or
 `/v1/discovery/functions` query paths. Likewise, connecting a video hub or cancelling
