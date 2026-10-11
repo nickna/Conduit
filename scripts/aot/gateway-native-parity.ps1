@@ -230,6 +230,10 @@ try {
     Set-GateEnvironment 'CONDUIT_S3_REGION' $S3Region
     Set-GateEnvironment 'CONDUIT_MASTER_KEY' $MasterKey
     Set-GateEnvironment 'CONDUIT_CUSTOMER_MODE' 'External'
+    # The complete protocol/function suite shares one loopback IP. Set the
+    # declared Gateway limit explicitly so both base and Gateway option views
+    # agree, while retaining IP limiting and the separate per-key limits.
+    Set-GateEnvironment 'CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS' '1000'
     Set-GateEnvironment 'CONDUIT_NATIVE_PROVIDER_URL' "http://127.0.0.1:$ProviderPort"
     Set-GateEnvironment 'CONDUIT_MIGRATION_MODE' 'Wait'
     Set-GateEnvironment 'CONDUIT_MIGRATION_WAIT_TIMEOUT_SECONDS' '0'

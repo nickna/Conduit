@@ -393,6 +393,15 @@ preserved and tracked in [#1577](https://github.com/nickna/Conduit/issues/1577),
 [#1579](https://github.com/nickna/Conduit/issues/1579). Provider-hosted tool pricing,
 MCP, agentic SSE, parallel/dependent tools and excluded workers remain separate work.
 
+The expanded published gate at `eea32722` reached the inherited IP limiter's
+100-request default and returned 429 before completing the new preflight phase.
+The harness now explicitly applies the declared 1,000-request Gateway limit to
+its owned hosts, retaining both IP and per-key limiting. A local managed native
+profile rerun passed 101 authenticated validation rejections in under a second,
+then the complete inline/agentic proof and repeated owned cleanup. The options
+divergence is tracked in [#1580](https://github.com/nickna/Conduit/issues/1580);
+published verification of the corrected complete gate remains required.
+
 The native capability endpoint explicitly names `inline-function-execution`,
 `agentic-tool-and-function-workflows`, `function-audit-and-retention`, and
 `billing-reconciliation` alongside the existing EF, authentication-cache and

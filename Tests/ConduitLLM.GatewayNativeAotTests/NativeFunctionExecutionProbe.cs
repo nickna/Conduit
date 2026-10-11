@@ -149,7 +149,9 @@ internal static partial class NativeFunctionExecutionProbe
                 request.Headers.Add("x-request-id", correlationId);
                 request.Content = JsonContent.Create(ChatPreflightBody(ids), NativeProbeJsonContext.Default.JsonElement);
                 using var response = await gateway.SendAsync(request, ct);
-                Require(response.StatusCode == HttpStatusCode.BadRequest, "native chat configuration rejection on both routes and hosts");
+                Require(response.StatusCode == HttpStatusCode.BadRequest,
+                    $"native chat configuration rejection on {gateway.BaseAddress!.Authority}/{path} " +
+                    $"for {code}: expected 400, received {(int)response.StatusCode}");
                 Require(response.Headers.TryGetValues("x-request-id", out var responseIds) &&
                     responseIds.SequenceEqual([correlationId]), "chat preflight retains middleware correlation ID before billing setup");
                 var root = await JsonAsync(response, ct);

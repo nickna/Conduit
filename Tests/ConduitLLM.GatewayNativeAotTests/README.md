@@ -43,6 +43,13 @@ spend-history, and ledger columns alongside eight-decimal function costs and gro
 balances. Billing verification must compare each persisted value at its actual
 column precision.
 
+The complete harness explicitly sets `CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS=1000`
+for its owned hosts because every phase shares one loopback IP. IP limiting stays
+enabled, and the fixture keys retain their separate RPM/RPD limits. The tracked
+environment setting is restored during cleanup.
+The inherited base/derived option mismatch is tracked in
+[#1580](https://github.com/nickna/Conduit/issues/1580).
+
 `NativeFunctionExecutionProbe` runs after the existing protocol checks. It sends
 guarded chat requests through both aliases on both Gateways before any execution,
 using the separate owned key. Authentication and missing/disabled IDs precede
