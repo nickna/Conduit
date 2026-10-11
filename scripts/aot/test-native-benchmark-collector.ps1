@@ -30,6 +30,24 @@ function Read-Records([string] $Path) {
     })
 }
 
+function Get-OwnedProcessIdentityToken([Diagnostics.Process] $Process) {
+    if ($IsLinux) {
+        # /proc field 22 has no separately calculated wall-clock boot origin.
+        $stat = [IO.File]::ReadAllText('/proc/' + $Process.Id + '/stat')
+        $separator = $stat.LastIndexOf(') ', [StringComparison]::Ordinal)
+        if ($separator -lt 0) { throw 'Owned process stat framing is invalid.' }
+        $fields = $stat.Substring($separator + 2).Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+        [ulong]$start = 0
+        if ($fields.Count -le 19 -or
+            -not [ulong]::TryParse($fields[19], [Globalization.NumberStyles]::None,
+                [Globalization.CultureInfo]::InvariantCulture, [ref]$start) -or $start -eq 0) {
+            throw 'Owned process start token is invalid.'
+        }
+        return 'linux:' + $start.ToString([Globalization.CultureInfo]::InvariantCulture)
+    }
+    return 'windows:' + $Process.StartTime.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture)
+}
+
 function Test-OwnedProcessStopped([string] $IdentityPath, [switch] $Stop) {
     if (-not [IO.File]::Exists($IdentityPath)) { return }
     $identity = ([IO.File]::ReadAllText($IdentityPath)).Split('|')
@@ -37,7 +55,7 @@ function Test-OwnedProcessStopped([string] $IdentityPath, [switch] $Stop) {
     $ownedProcess = Get-Process -Id ([int]$identity[0]) -ErrorAction SilentlyContinue
     if ($null -eq $ownedProcess) { return }
     try {
-        Assert-Contract ($ownedProcess.StartTime.ToUniversalTime().Ticks -eq [long]$identity[1]) 'Fixture cleanup rejected a reused PID.'
+        Assert-Contract ((Get-OwnedProcessIdentityToken $ownedProcess) -ceq $identity[1]) 'Fixture cleanup rejected a reused PID.'
         $statPath = '/proc/' + $ownedProcess.Id + '/stat'
         $zombie = $IsLinux -and [IO.File]::Exists($statPath) -and
             [IO.File]::ReadAllText($statPath) -match '^\d+ \(.+\) Z '
@@ -53,35 +71,42 @@ function Test-OwnedProcessStopped([string] $IdentityPath, [switch] $Stop) {
 }
 
 function Stop-OwnedReadinessServer($Record) {
-    $failures = 0
+    $failures = [Collections.Generic.List[string]]::new()
+    $stage = 'identity-file'
     try {
-        $expectedIdentity = [string]$Record.Id + '|' + [string]$Record.StartTicks
+        $expectedIdentity = [string]$Record.Id + '|' + $Record.StartToken
         Assert-Contract ([IO.File]::Exists($Record.IdentityPath) -and
             [IO.File]::ReadAllText($Record.IdentityPath) -ceq $expectedIdentity) 'Owned readiness identity file was rejected.'
+        $stage = 'identity-process-reap'
         Test-OwnedProcessStopped $Record.IdentityPath -Stop
     }
-    catch { $failures++ }
+    catch { $failures.Add($stage + ':' + $_.Exception.GetType().FullName) }
     # An identity-file error must never discard the still-live original handle.
     # Verify this original Process against its captured identity before fallback.
+    $stage = 'original-handle'
     try {
-        Assert-Contract ($Record.Process.Id -eq $Record.Id -and
-            $Record.Process.StartTime.ToUniversalTime().Ticks -eq $Record.StartTicks) 'Original owned readiness handle was rejected.'
-        if (-not $Record.Process.HasExited) { $Record.Process.Kill($true) }
+        Assert-Contract ($Record.Process.Id -eq $Record.Id) 'Original owned readiness handle was rejected.'
+        if (-not $Record.Process.HasExited) {
+            Assert-Contract ((Get-OwnedProcessIdentityToken $Record.Process) -ceq $Record.StartToken) 'Original owned readiness handle was rejected.'
+            $Record.Process.Kill($true)
+        }
+        $stage = 'original-process-reap'
         Assert-Contract ($Record.Process.WaitForExit(5000)) 'Original owned readiness child did not reap.'
         $Record.Reaped = $true
     }
-    catch { $failures++ }
+    catch { $failures.Add($stage + ':' + $_.Exception.GetType().FullName) }
     finally {
         if ($Record.Reaped) {
             $Record.Process.Dispose()
             $Record.Disposed = $true
             foreach ($path in @($Record.IdentityPath, $Record.AssociationPath)) {
                 try { if ([IO.File]::Exists($path)) { Remove-Item -LiteralPath $path -Force } }
-                catch { $failures++ }
+                catch { $failures.Add('identity-file-removal:' + $_.Exception.GetType().FullName) }
             }
         }
     }
-    if ($failures -gt 0) { throw ('Owned readiness cleanup failed; failures ' + $failures + '.') }
+    $Record.CleanupDiagnostics = @($failures.ToArray())
+    if ($failures.Count -gt 0) { throw 'Owned readiness cleanup failed.' }
 }
 
 function New-CaseRoot([string] $Scenario) {
@@ -178,6 +203,9 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     if ($Scenario -eq 'driver-timeout') { $parameters.WorkloadTimeoutSeconds = 5 }
     if ($Scenario -eq 'even-pairs') { $parameters.PairedRuns = 6 }
     $caseServers = [Collections.Generic.List[object]]::new()
+    $casePrimaryFailure = $null
+    $caseStage = 'readiness-setup'
+    $failureDiagnostic = $null
     try {
     if ($Scenario -cnotin @('even-pairs', 'case-duplicate-environment', 'revision-mismatch')) {
         # Readiness listeners belong to this test process. Spawning a persistent
@@ -201,11 +229,12 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
             $serverProcess = [Diagnostics.Process]::Start($start)
             $serverRecord = [pscustomobject]@{ Process = $serverProcess; IdentityPath = $identityPath
                 AssociationPath = $associationPath; Id = $serverProcess.Id
-                StartTicks = $serverProcess.StartTime.ToUniversalTime().Ticks; Reaped = $false; Disposed = $false }
+                StartToken = Get-OwnedProcessIdentityToken $serverProcess; Reaped = $false; Disposed = $false
+                CleanupDiagnostics = @() }
             $caseServers.Add($serverRecord)
             $ownedReadinessServers.Add($serverRecord)
             [IO.File]::WriteAllText($identityPath,
-                ([string]$serverRecord.Id + '|' + [string]$serverRecord.StartTicks))
+                ([string]$serverRecord.Id + '|' + $serverRecord.StartToken))
             [IO.File]::WriteAllText($associationPath, $identityPath)
         }
     }
@@ -214,8 +243,10 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     $watch = [Diagnostics.Stopwatch]::StartNew()
     $failure = $null
     $publicOutput = ''
+    $caseStage = 'collector-invocation'
     try { $publicOutput = (& $collector @parameters 6>&1 | Out-String) }
     catch { $failure = $_.Exception.Message }
+    $caseStage = 'privacy-assertions'
     foreach ($name in $environmentNames) {
         Assert-Contract ([Environment]::GetEnvironmentVariable($name) -ceq $before[$name]) ('Collector mutated parent environment: ' + $name)
     }
@@ -226,6 +257,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     $drivers = Read-Records (Join-Path $caseRoot 'drivers')
     $created = Read-Records (Join-Path $caseRoot 'created')
     $failureDiagnostic = Get-CaseFailureDiagnostic $caseRoot $commands $drivers $created $failure
+    $caseStage = 'fixture-record-assertions'
     foreach ($container in $created) {
         Assert-Contract ($container.canonicalEnvironment -and $container.backendCredentialCorrect) 'Mandatory environment canonicalization or independent backend credential preservation failed.'
     }
@@ -243,6 +275,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         Assert-Contract $driver.benchmarkCredentialPresent 'Driver did not receive its private credential.'
         Assert-Contract (-not [IO.File]::Exists($driver.configurationPath)) 'Collector retained a private workload configuration.'
     }
+    $caseStage = 'failure-oracle'
     if (-not [string]::IsNullOrEmpty($ExpectedFailure)) {
         Assert-Contract ($null -ne $failure -and $failure.Contains($ExpectedFailure)) ('Expected controlled collector failure was absent: ' + $Scenario)
         Assert-Contract (-not [IO.File]::Exists($parameters.OutputPath)) 'Failed collector recorded a qualification.'
@@ -278,6 +311,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         $script:cases++
         return
     }
+    $caseStage = 'positive-oracle'
     Assert-Contract ($null -eq $failure) ('Successful fake collection failed; ' + $failureDiagnostic.Text)
     $reportText = [IO.File]::ReadAllText($parameters.OutputPath)
     foreach ($secret in @($privateKey, $privateDatabasePassword, $privateRedisPassword, 'private-child-diagnostic')) {
@@ -335,13 +369,29 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         $report.jit.pullBytes -eq 700 -and $report.native.pullBytes -eq 500) 'Collector mixed image and compressed pull sizes.'
     $script:cases++
     }
+    catch {
+        $casePrimaryFailure = $_.Exception
+        throw
+    }
     finally {
-        $caseCleanupFailures = 0
+        $caseCleanupFailures = [Collections.Generic.List[string]]::new()
         foreach ($server in $caseServers) {
             try { Stop-OwnedReadinessServer $server }
-            catch { $caseCleanupFailures++ }
+            catch {
+                $safeDetails = if ($server.CleanupDiagnostics.Count -gt 0) {
+                    $server.CleanupDiagnostics -join ','
+                }
+                else { 'cleanup-unclassified:' + $_.Exception.GetType().FullName }
+                $caseCleanupFailures.Add($safeDetails)
+            }
         }
-        if ($caseCleanupFailures -gt 0) { throw ('Collector case readiness cleanup failed; failures ' + $caseCleanupFailures + '.') }
+        if ($caseCleanupFailures.Count -gt 0) {
+            $primaryType = if ($null -ne $casePrimaryFailure) { $casePrimaryFailure.GetType().FullName } else { 'none' }
+            $primaryClassification = if ($null -ne $failureDiagnostic) { $failureDiagnostic.Classification } else { 'unclassified' }
+            throw ('Collector case readiness cleanup failed; primary stage ' + $caseStage +
+                ', type ' + $primaryType + ', classification ' + $primaryClassification +
+                '; cleanup stages ' + ($caseCleanupFailures -join '|') + '.')
+        }
     }
 }
 
@@ -351,12 +401,17 @@ try {
     [Environment]::SetEnvironmentVariable('CONDUIT_COLLECTOR_TEST_PWSH', (Get-Command pwsh).Source)
     [Environment]::SetEnvironmentVariable('CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS', '1000')
     [Environment]::SetEnvironmentVariable('CONDUIT_CORE_RATE_LIMIT_WINDOW_SECONDS', '60')
+    $processIdentityHelper = Join-Path $temporaryRoot 'process-identity.ps1'
+    [IO.File]::WriteAllText($processIdentityHelper,
+        ('function Get-OwnedProcessIdentityToken {' + [Environment]::NewLine +
+            (Get-Item Function:\Get-OwnedProcessIdentityToken).ScriptBlock.ToString() + [Environment]::NewLine + '}'))
     $fixture = Join-Path $temporaryRoot 'fixture.ps1'
     @'
 [CmdletBinding()]
 param([Parameter(Mandatory)][string] $Mode, [string[]] $CommandArguments = @(), [string] $ChildArgumentsJson)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+. (Join-Path $PSScriptRoot 'process-identity.ps1')
 if (-not [string]::IsNullOrEmpty($ChildArgumentsJson)) {
     $CommandArguments = @($ChildArgumentsJson | ConvertFrom-Json)
 }
@@ -376,7 +431,7 @@ function Stop-Identity([string] $Path) {
     $owned = Get-Process -Id ([int]$identity[0]) -ErrorAction SilentlyContinue
     if ($null -ne $owned) {
         try {
-            if ($owned.StartTime.ToUniversalTime().Ticks -ne [long]$identity[1]) { throw 'Reused owned fixture PID.' }
+            if ((Get-OwnedProcessIdentityToken $owned) -cne $identity[1]) { throw 'Reused owned fixture PID.' }
             if (-not $owned.HasExited) { $owned.Kill($true); if (-not $owned.WaitForExit(5000)) { throw 'Fixture reap failed.' } }
         }
         finally { $owned.Dispose() }
@@ -401,10 +456,7 @@ function Start-Child([string] $ChildMode, [string[]] $ChildArguments) {
 if ($Mode -eq 'sleep') { Start-Sleep -Seconds 60; exit 0 }
 if ($Mode -eq 'health') {
     $port = [int]$CommandArguments[0]
-    $identityPath = $CommandArguments[1]
-    $current = [Diagnostics.Process]::GetCurrentProcess()
-    try { [IO.File]::WriteAllText($identityPath, ($current.Id.ToString() + '|' + $current.StartTime.ToUniversalTime().Ticks)) }
-    finally { $current.Dispose() }
+    # The parent alone writes the readiness identity before associating the port.
     $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port)
     $listener.Start()
     try {
@@ -485,7 +537,7 @@ if ($Mode -eq 'docker') {
         $healthIdentity = [IO.File]::ReadAllText($identityPath).Split('|')
         $health = Get-Process -Id ([int]$healthIdentity[0]) -ErrorAction Stop
         try {
-            if ($health.StartTime.ToUniversalTime().Ticks -ne [long]$healthIdentity[1] -or $health.HasExited) {
+            if ($health.HasExited -or (Get-OwnedProcessIdentityToken $health) -cne $healthIdentity[1]) {
                 throw 'Owned readiness fixture identity does not match.'
             }
         }
@@ -609,7 +661,7 @@ if ($Mode -eq 'driver' -or $Mode -eq 'dotnet') {
             [IO.File]::WriteAllText($tracePath, (ConvertTo-Json -InputObject @($trace.ToArray()) -Compress))
             try {
                 [IO.File]::WriteAllText((Join-Path $root 'processes/driver-descendant.identity'),
-                    ($descendant.Id.ToString() + '|' + $descendant.StartTime.ToUniversalTime().Ticks))
+                    ($descendant.Id.ToString() + '|' + (Get-OwnedProcessIdentityToken $descendant)))
                 $trace.Add(@{ stage = 'identity-written' })
                 [IO.File]::WriteAllText($tracePath, (ConvertTo-Json -InputObject @($trace.ToArray()) -Compress))
             }
@@ -771,6 +823,7 @@ throw 'Unknown fixture mode.'
     @'
 param([string] $Value)
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+. (Join-Path $PSScriptRoot 'process-identity.ps1')
 [Console]::Out.WriteLine($Value)
 [Console]::Out.WriteLine($env:CONDUIT_COLLECTOR_HELPER_VALUE)
 [Console]::Out.WriteLine([string]::IsNullOrEmpty($env:CONDUIT_NATIVE_BENCHMARK_API_KEY))
@@ -788,7 +841,7 @@ if ($env:CONDUIT_COLLECTOR_HELPER_VALUE -eq 'timeout') {
     foreach ($argument in @('-NoProfile', '-File', $env:CONDUIT_COLLECTOR_HELPER_SLEEPER)) { $start.ArgumentList.Add($argument) }
     $child = [Diagnostics.Process]::Start($start)
     try { [IO.File]::WriteAllText($env:CONDUIT_COLLECTOR_HELPER_IDENTITY,
-        ($child.Id.ToString() + '|' + $child.StartTime.ToUniversalTime().Ticks)) }
+        ($child.Id.ToString() + '|' + (Get-OwnedProcessIdentityToken $child))) }
     finally { $child.Dispose() }
     Start-Sleep -Seconds 60
 }
