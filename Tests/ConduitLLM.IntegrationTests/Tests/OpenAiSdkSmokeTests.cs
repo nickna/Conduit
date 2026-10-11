@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
+using System.Text;
+using System.Text.Json;
 
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
@@ -32,7 +35,8 @@ public sealed class OpenAiSdkSmokeTests
     private static readonly TimeSpan ProcessTimeout = TimeSpan.FromSeconds(60);
     private static readonly string[] ExpectedOperations =
     [
-        "models", "chat", "responses", "embeddings", "images", "speech"
+        "models.list", "models.retrieve", "chat.create", "chat.stream",
+        "responses.create", "responses.stream", "embeddings", "images", "speech"
     ];
 
     [Fact]
@@ -88,6 +92,9 @@ public sealed class OpenAiSdkSmokeTests
                 smokeDirectory,
                 baseUrl);
             AssertOperations(counters, "Python");
+
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "smoke-key");
+            await AssertStreamDialectsAsync(client);
         }
         finally
         {
@@ -156,6 +163,33 @@ public sealed class OpenAiSdkSmokeTests
         {
             Assert.Fail(BuildProcessFailure(sdk, $"exited with code {process.ExitCode}", stdout, stderr));
         }
+    }
+
+    private static async Task AssertStreamDialectsAsync(HttpClient client)
+    {
+        const string body = """{"model":"chat-model","messages":[{"role":"user","content":"SDK smoke test"}],"stream":true}""";
+        using var standardBody = new StringContent(body, Encoding.UTF8, "application/json");
+        using var standard = await client.PostAsync("/v1/chat/completions", standardBody);
+        standard.EnsureSuccessStatusCode();
+        var standardStream = await standard.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("event:", standardStream);
+        Assert.EndsWith("data: [DONE]\n\n", standardStream);
+        var chunkLines = standardStream.Split('\n').Where(line => line.StartsWith("data: {")).ToArray();
+        Assert.NotEmpty(chunkLines);
+        foreach (var line in chunkLines)
+        {
+            using var chunk = JsonDocument.Parse(line[6..]);
+            Assert.Equal("chat.completion.chunk", chunk.RootElement.GetProperty("object").GetString());
+            Assert.False(chunk.RootElement.TryGetProperty("usage", out _));
+        }
+
+        using var enhancedBody = new StringContent(body, Encoding.UTF8, "application/json");
+        using var enhanced = await client.PostAsync("/v1/conduit/chat/completions", enhancedBody);
+        enhanced.EnsureSuccessStatusCode();
+        var enhancedStream = await enhanced.Content.ReadAsStringAsync();
+        Assert.Contains("event: metrics-final", enhancedStream);
+        Assert.Contains("\"object\":\"chat.completion.chunk\"", enhancedStream);
+        Assert.EndsWith("data: [DONE]\n\n", enhancedStream);
     }
 
     private static void AssertOperations(GatewayInvocationCounters counters, string sdk)
@@ -262,14 +296,14 @@ internal sealed class SmokeGatewayFactory(GatewayInvocationCounters counters) : 
             .Setup(repository => repository.GetPaginatedAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((int page, int _, CancellationToken _) =>
             {
-                counters.Increment("models");
+                counters.Increment("models.list");
                 return page == 1 ? (mappings, mappings.Count) : ([], mappings.Count);
             });
         mappingRepository
             .Setup(repository => repository.GetByModelNameAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string alias, CancellationToken _) =>
             {
-                counters.Increment("models");
+                counters.Increment("models.retrieve");
                 return mappings.FirstOrDefault(mapping => mapping.ModelAlias == alias);
             });
         services.RemoveAll<IModelProviderMappingRepository>();
@@ -461,7 +495,7 @@ internal sealed class SmokeProviderClient(
         string? apiKey = null,
         CancellationToken cancellationToken = default)
     {
-        CountChatOperation();
+        CountChatOperation(request, streaming: false);
         return Task.FromResult(new ChatCompletionResponse
         {
             Id = "chatcmpl_smoke",
@@ -486,7 +520,10 @@ internal sealed class SmokeProviderClient(
         string? apiKey = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        CountChatOperation();
+        CountChatOperation(request, streaming: true);
+        // Match the OpenAI provider's upstream usage opt-in for accounting.
+        // This must not change whether the original caller receives usage.
+        request.StreamOptions ??= new StreamOptions { IncludeUsage = true };
         yield return new ChatCompletionChunk
         {
             Id = "chatcmpl_smoke",
@@ -529,6 +566,7 @@ internal sealed class SmokeProviderClient(
         CancellationToken cancellationToken = default)
     {
         counters.Increment("embeddings");
+        Assert.Equal("float", request.EncodingFormat);
         return Task.FromResult(new EmbeddingResponse
         {
             Object = "list",
@@ -544,6 +582,7 @@ internal sealed class SmokeProviderClient(
         CancellationToken cancellationToken = default)
     {
         counters.Increment("images");
+        Assert.Equal("b64_json", request.ResponseFormat);
         return Task.FromResult(new ImageGenerationResponse
         {
             Created = 1,
@@ -558,6 +597,7 @@ internal sealed class SmokeProviderClient(
         CancellationToken cancellationToken = default)
     {
         counters.Increment("speech");
+        Assert.Equal("mp3", request.ResponseFormat);
         return Task.FromResult(new TextToSpeechResponse
         {
             AudioData = [0x49, 0x44, 0x33, 0x04, 0x00, 0x00],
@@ -567,10 +607,26 @@ internal sealed class SmokeProviderClient(
         });
     }
 
-    private void CountChatOperation()
+    private void CountChatOperation(ChatCompletionRequest request, bool streaming)
     {
         var path = httpContextAccessor.HttpContext?.Request.Path.Value;
-        counters.Increment(string.Equals(path, "/v1/responses", StringComparison.Ordinal) ? "responses" : "chat");
+        var responses = string.Equals(path, "/v1/responses", StringComparison.Ordinal);
+        counters.Increment($"{(responses ? "responses" : "chat")}.{(streaming ? "stream" : "create")}");
+        if (!responses && !streaming)
+        {
+            // Verify the official clients' modern options reach the provider as
+            // typed values rather than merely surviving in extension data.
+            Assert.Equal(16, request.MaxCompletionTokens);
+            Assert.Equal("low", request.ReasoningEffort);
+            Assert.False(request.ParallelToolCalls);
+            Assert.Equal(new[] { "text" }, request.Modalities);
+            Assert.Equal("content", request.Prediction?.Type);
+            Assert.Equal("ok", request.Prediction?.Content.GetString());
+            Assert.True(request.Logprobs);
+            Assert.Equal(1, request.TopLogprobs);
+            Assert.Equal("default", request.ServiceTier);
+            Assert.Equal("none", request.ToolChoice?.GetSerializedValue());
+        }
     }
 }
 

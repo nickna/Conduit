@@ -97,6 +97,8 @@ namespace ConduitLLM.Core.Middleware
             // Reduce cardinality by normalizing to known endpoint patterns
             if (path.StartsWith("/v1/chat/completions", StringComparison.OrdinalIgnoreCase))
                 return "/v1/chat/completions";
+            if (path.StartsWith("/v1/conduit/chat/completions", StringComparison.OrdinalIgnoreCase))
+                return "/v1/conduit/chat/completions";
             if (path.StartsWith("/v1/embeddings", StringComparison.OrdinalIgnoreCase))
                 return "/v1/embeddings";
             if (path.StartsWith("/v1/images", StringComparison.OrdinalIgnoreCase))

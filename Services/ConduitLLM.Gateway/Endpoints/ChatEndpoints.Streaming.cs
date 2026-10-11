@@ -111,12 +111,17 @@ namespace ConduitLLM.Gateway.Endpoints
         {
             _logger.LogInformation("Handling streaming request.");
             GatewayOpsMetrics.RecordStreamingRequest(request.Model, "started");
+            // Providers may enable upstream usage on this request for accounting.
+            // Preserve the caller's opt-in before provider execution mutates it.
+            var includeUsage = request.StreamOptions?.IncludeUsage == true;
 
             var bufferingFeature = HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>();
             bufferingFeature?.DisableBuffering();
 
             var response = HttpContext.Response;
-            var sseWriter = response.CreateEnhancedSSEWriter(_jsonSerializerOptions);
+            var sseWriter = response.CreateEnhancedSSEWriter(
+                _jsonSerializerOptions,
+                enhancedEvents: Request.Path.StartsWithSegments("/v1/conduit", StringComparison.OrdinalIgnoreCase));
 
             var accountingContext = HttpContext.GetOrCreateRequestAccountingContext();
             var requestId = accountingContext.BillingRequestId;
@@ -151,12 +156,13 @@ namespace ConduitLLM.Gateway.Endpoints
                     AccumulateContent(chunk, state);
                     AccumulateToolCalls(chunk, state);
                     CaptureUsageData(chunk, request, state);
+                    state.LastChunk = chunk;
                     await WriteChunkToStream(chunk, sseWriter, metricsCollector, cancellationToken);
                     state.Outcome = StreamTransportOutcome.Emitting;
                     await EmitPeriodicMetrics(chunk, sseWriter, metricsCollector, cancellationToken);
                 }
 
-                await WriteStreamingCompletionEventsAsync(state, metricsCollector, sseWriter, cancellationToken);
+                await WriteStreamingCompletionEventsAsync(request, includeUsage, state, metricsCollector, sseWriter, cancellationToken);
                 state.Outcome = StreamTransportOutcome.Completed;
 
                 _logger.LogInformation("Streaming completed: {ChunkCount} chunks over {Duration}ms",
@@ -363,6 +369,25 @@ namespace ConduitLLM.Gateway.Endpoints
             StreamingMetricsCollector metricsCollector,
             CancellationToken cancellationToken)
         {
+            if (!sseWriter.EnhancedEventsEnabled)
+            {
+                // Usage remains in the provider chunk for accounting. The standard stream sends
+                // it once, in a final empty-choices chunk, only when the caller requests it.
+                if (chunk.Usage is not null && chunk.Choices.Count == 0)
+                {
+                    return;
+                }
+                await sseWriter.WriteContentEventAsync(new ChatCompletionChunk
+                {
+                    Id = chunk.Id,
+                    Object = chunk.Object,
+                    Created = chunk.Created,
+                    Model = chunk.Model,
+                    SystemFingerprint = chunk.SystemFingerprint,
+                    Choices = chunk.Choices
+                }, cancellationToken);
+                return;
+            }
             if (chunk.Choices?.Count > 0 && !string.IsNullOrEmpty(chunk.Choices[0].Delta?.Reasoning))
             {
                 await sseWriter.WriteReasoningEventAsync(chunk.Choices[0].Delta.Reasoning!, cancellationToken);
@@ -481,11 +506,31 @@ namespace ConduitLLM.Gateway.Endpoints
         }
 
         private async Task WriteStreamingCompletionEventsAsync(
+            ChatCompletionRequest request,
+            bool includeUsage,
             StreamingAccumulatorState state,
             StreamingMetricsCollector metricsCollector,
             EnhancedSSEResponseWriter sseWriter,
             CancellationToken cancellationToken)
         {
+            if (!sseWriter.EnhancedEventsEnabled)
+            {
+                if (includeUsage &&
+                    state.StreamingUsage is not null && state.LastChunk is { } lastChunk)
+                {
+                    await sseWriter.WriteContentEventAsync(new ChatCompletionChunk
+                    {
+                        Id = lastChunk.Id,
+                        Created = lastChunk.Created,
+                        Model = lastChunk.Model ?? request.Model,
+                        SystemFingerprint = lastChunk.SystemFingerprint,
+                        Choices = [],
+                        Usage = state.StreamingUsage
+                    }, cancellationToken);
+                }
+                await sseWriter.WriteDoneEventAsync(cancellationToken);
+                return;
+            }
             _logger.LogInformation("StreamingUsage before GetFinalMetrics: {Usage}",
                 state.StreamingUsage != null ?
                 $"Prompt={state.StreamingUsage.PromptTokens}, Completion={state.StreamingUsage.CompletionTokens}, Total={state.StreamingUsage.TotalTokens}" :
@@ -615,6 +660,7 @@ namespace ConduitLLM.Gateway.Endpoints
             public StreamTransportOutcome Outcome { get; set; }
             public DateTimeOffset? ProviderFirstChunkAt { get; set; }
             public Usage? StreamingUsage { get; set; }
+            public ChatCompletionChunk? LastChunk { get; set; }
             public string? StreamingModel { get; set; }
             public BoundedStringAccumulator ContentAccumulator { get; }
             public Dictionary<int, StreamingToolCallAccumulator> AccumulatedToolCalls { get; } = new();

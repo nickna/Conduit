@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
@@ -35,6 +36,35 @@ public sealed class GatewayJsonOptionsTests
             GatewayJsonOptions.Create());
 
         Assert.Throws<JsonException>(deserialize);
+    }
+
+    [Theory]
+    [InlineData(typeof(ChatCompletionRequest), """{"model":"test","messages":[],"max_tokens":256}""", "max_tokens", 256)]
+    [InlineData(typeof(ChatCompletionRequest), """{"model":"test","messages":[],"max_completion_tokens":512}""", "max_completion_tokens", 512)]
+    [InlineData(typeof(ChatCompletionRequest), """{"model":"test","messages":[],"temperature":0.75}""", "temperature", 0.75)]
+    [InlineData(typeof(EmbeddingRequest), """{"model":"test","input":"hello","dimensions":256}""", "dimensions", 256)]
+    [InlineData(typeof(ImageGenerationRequest), """{"prompt":"A tree","n":2}""", "n", 2)]
+    public void ConfiguringWebDefaultsAcceptsNumbersAndRejectsQuotedNumericRequestProperties(
+        Type requestType,
+        string json,
+        string propertyName,
+        double expectedValue)
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        GatewayJsonOptions.Configure(options);
+
+        var request = JsonSerializer.Deserialize(json, requestType, options);
+        Assert.NotNull(request);
+        var serialized = JsonSerializer.SerializeToElement(request, requestType, options);
+        var number = serialized.GetProperty(propertyName);
+        Assert.Equal(JsonValueKind.Number, number.ValueKind);
+        Assert.Equal(expectedValue, number.GetDouble());
+
+        var quotedPayload = JsonNode.Parse(json)!;
+        quotedPayload[propertyName] = number.GetRawText();
+        var exception = Assert.Throws<JsonException>(() =>
+            JsonSerializer.Deserialize(quotedPayload.ToJsonString(), requestType, options));
+        Assert.Equal($"$.{propertyName}", exception.Path);
     }
 
     [Fact]

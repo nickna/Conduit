@@ -1,4 +1,6 @@
 {
+  "version": 2,
+  "description": "Enforces top-level fields on compatible operations, nested model objects, and selected field types. Does not compare enums, constraints, nullability, or unlisted nested schemas.",
   "source": {
     "repository": "https://github.com/openai/openai-openapi",
     "commit": "5c044be3bf3a42854e99e34616564eeb2124a317",
@@ -16,7 +18,120 @@
         "required": [
           "data",
           "object"
-        ]
+        ],
+        "schemas": {
+          "": {
+            "types": [
+              "object"
+            ],
+            "properties": [
+              "data",
+              "object"
+            ],
+            "required": [
+              "data",
+              "object"
+            ]
+          },
+          "/properties/data": {
+            "types": [
+              "array"
+            ]
+          },
+          "/properties/data/items": {
+            "types": [
+              "object"
+            ],
+            "properties": [
+              "created",
+              "id",
+              "object",
+              "owned_by"
+            ],
+            "required": [
+              "created",
+              "id",
+              "object",
+              "owned_by"
+            ]
+          },
+          "/properties/data/items/properties/id": {
+            "types": [
+              "string"
+            ]
+          },
+          "/properties/data/items/properties/object": {
+            "types": [
+              "string"
+            ]
+          },
+          "/properties/data/items/properties/created": {
+            "types": [
+              "integer"
+            ]
+          },
+          "/properties/data/items/properties/owned_by": {
+            "types": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /v1/models/{model}": {
+      "request": null,
+      "response": {
+        "properties": [
+          "created",
+          "id",
+          "object",
+          "owned_by"
+        ],
+        "required": [
+          "created",
+          "id",
+          "object",
+          "owned_by"
+        ],
+        "schemas": {
+          "": {
+            "types": [
+              "object"
+            ],
+            "properties": [
+              "created",
+              "id",
+              "object",
+              "owned_by"
+            ],
+            "required": [
+              "created",
+              "id",
+              "object",
+              "owned_by"
+            ]
+          },
+          "/properties/id": {
+            "types": [
+              "string"
+            ]
+          },
+          "/properties/object": {
+            "types": [
+              "string"
+            ]
+          },
+          "/properties/created": {
+            "types": [
+              "integer"
+            ]
+          },
+          "/properties/owned_by": {
+            "types": [
+              "string"
+            ]
+          }
+        }
       }
     },
     "POST /v1/embeddings": {
@@ -31,7 +146,14 @@
         "required": [
           "input",
           "model"
-        ]
+        ],
+        "schemas": {
+          "/properties/dimensions": {
+            "types": [
+              "integer"
+            ]
+          }
+        }
       },
       "response": {
         "properties": [
@@ -92,7 +214,89 @@
         "required": [
           "messages",
           "model"
-        ]
+        ],
+        "schemas": {
+          "/properties/temperature": {
+            "types": [
+              "number"
+            ]
+          },
+          "/properties/top_p": {
+            "types": [
+              "number"
+            ]
+          },
+          "/properties/max_tokens": {
+            "types": [
+              "integer"
+            ]
+          },
+          "/properties/max_completion_tokens": {
+            "types": [
+              "integer"
+            ]
+          },
+          "/properties/n": {
+            "types": [
+              "integer"
+            ]
+          },
+          "/properties/seed": {
+            "types": [
+              "integer"
+            ]
+          },
+          "/properties/frequency_penalty": {
+            "types": [
+              "number"
+            ]
+          },
+          "/properties/presence_penalty": {
+            "types": [
+              "number"
+            ]
+          },
+          "/properties/reasoning_effort": {
+            "types": [
+              "string"
+            ]
+          },
+          "/properties/parallel_tool_calls": {
+            "types": [
+              "boolean"
+            ]
+          },
+          "/properties/modalities": {
+            "types": [
+              "array"
+            ]
+          },
+          "/properties/audio": {
+            "types": [
+              "object"
+            ]
+          },
+          "/properties/prediction": {
+            "types": [
+              "object"
+            ]
+          },
+          "/properties/logprobs": {
+            "types": [
+              "boolean"
+            ]
+          },
+          "/properties/top_logprobs": {
+            "types": [
+              "integer"
+            ]
+          },
+          "/properties/service_tier": {
+            "types": [
+              "string"
+            ]
+          }
+        }
       },
       "response": {
         "properties": [
@@ -112,7 +316,14 @@
           "id",
           "model",
           "object"
-        ]
+        ],
+        "schemas": {
+          "/properties/created": {
+            "types": [
+              "integer"
+            ]
+          }
+        }
       }
     },
     "POST /v1/responses": {
@@ -264,7 +475,14 @@
           "input",
           "model",
           "voice"
-        ]
+        ],
+        "schemas": {
+          "/properties/speed": {
+            "types": [
+              "number"
+            ]
+          }
+        }
       },
       "response": null
     },
@@ -288,7 +506,24 @@
         ],
         "required": [
           "prompt"
-        ]
+        ],
+        "schemas": {
+          "/properties/n": {
+            "types": [
+              "integer"
+            ]
+          },
+          "/properties/output_compression": {
+            "types": [
+              "integer"
+            ]
+          },
+          "/properties/partial_images": {
+            "types": [
+              "integer"
+            ]
+          }
+        }
       },
       "response": {
         "properties": [
@@ -302,7 +537,14 @@
         ],
         "required": [
           "created"
-        ]
+        ],
+        "schemas": {
+          "/properties/created": {
+            "types": [
+              "integer"
+            ]
+          }
+        }
       }
     }
   }

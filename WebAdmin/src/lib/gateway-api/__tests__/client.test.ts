@@ -8,6 +8,9 @@ import {
   type ChatAttachment,
 } from "..";
 import { RetryStrategyType } from "@/lib/conduit-common";
+import { TextDecoder } from "node:util";
+
+Object.assign(globalThis, { TextDecoder });
 
 describe("GatewayClient", () => {
   beforeEach(() => jest.clearAllMocks());
@@ -62,6 +65,38 @@ describe("GatewayClient", () => {
     expect((request as Request).url).toBe("https://gateway.test/v1/conduit/auth/ephemeral-key");
     expect((request as Request).method).toBe("POST");
     expect((request as Request).headers.get("Authorization")).toBe("Bearer webadmin-key");
+  });
+
+  it("uses the Conduit chat route and preserves enhanced streaming events", async () => {
+    const payload = Buffer.from(
+      'event: reasoning\ndata: {"content":"thinking"}\n\n' +
+      'event: metrics-final\ndata: {"total_tokens":2}\n\n' +
+      'data: [DONE]\n\n',
+    );
+    let read = false;
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: async () => {
+            if (read) return { done: true, value: undefined };
+            read = true;
+            return { done: false, value: payload };
+          },
+        }),
+      },
+    } as unknown as Response);
+    const client = new GatewayClient({ apiKey: "vk_test", baseURL: "https://gateway.test" });
+
+    const stream = await client.chat.create({ model: "chat-model", messages: [], stream: true });
+    const events = [];
+    for await (const event of stream) events.push(event);
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://gateway.test/v1/conduit/chat/completions");
+    expect(fetchMock.mock.calls[0][1]).toEqual(expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer vk_test" }),
+    }));
+    expect(events).toEqual([{ content: "thinking" }, { total_tokens: 2 }]);
   });
 
   it("uses canonical function fields and the idempotency header", async () => {

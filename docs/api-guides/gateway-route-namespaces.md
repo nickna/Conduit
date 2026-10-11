@@ -22,6 +22,7 @@ for examples and validation instructions.
 |---|---|
 | `/v1/auth/...` | `/v1/conduit/auth/...` |
 | `/v1/batch/...` | `/v1/conduit/batch/...` |
+| Chat with Conduit SSE events | `/v1/conduit/chat/completions` |
 | `/v1/discovery/...` | `/v1/conduit/discovery/...` |
 | `/v1/downloads/...` | `/v1/conduit/downloads/...` |
 | `/v1/functions/...` | `/v1/conduit/functions/...` |
@@ -37,6 +38,20 @@ for examples and validation instructions.
 The old extension routes are intentionally not retained as aliases. This keeps
 the generated contract unambiguous and prevents new non-OpenAI resources from
 leaking into the reserved namespace.
+
+Chat streaming uses two routes with the same execution, virtual-key checks,
+rate limits, and accounting. `/v1/chat/completions` sends OpenAI chat chunks and
+`data: [DONE]`; errors use the nested OpenAI error envelope. With
+`stream_options.include_usage=true`, provider-reported usage appears once in a
+final chunk with an empty `choices` array. If the provider supplies no usage,
+there is no final usage chunk; accounting can still estimate usage after the
+stream closes.
+
+`/v1/conduit/chat/completions` additionally sends named `metrics`,
+`metrics-final`, `reasoning`, and tool-progress events. WebAdmin uses this route
+to retain its performance and agent progress displays. Official OpenAI SDKs
+should use the standard route because they interpret named extension events as
+chat chunks.
 
 ## Error contract
 
