@@ -140,6 +140,51 @@ CONDUIT_TRUSTED_PROXY_KNOWN_PROXIES=             # extra trusted proxy IPs (comm
 CONDUIT_TRUSTED_PROXY_FORWARD_LIMIT=1
 ```
 
+### Discovery Rate Limits
+
+Configure discovery limits under `CoreApi:Security:RateLimiting:Discovery` in
+`appsettings.json`. The general IP limiter must be enabled for discovery limits to
+run. Discovery has its own quotas and windows, and `Discovery.Enabled=false`
+disables discovery checks while retaining the general IP limit:
+
+```json
+{
+  "CoreApi": {
+    "Security": {
+      "RateLimiting": {
+        "Discovery": {
+          "Enabled": true,
+          "MaxRequests": 500,
+          "WindowSeconds": 300,
+          "MaxCapabilityChecksPerModel": 20,
+          "CapabilityCheckWindowSeconds": 600,
+          "DiscoveryPaths": [
+            "/v1/conduit/discovery/",
+            "/v1/models/",
+            "/capabilities/"
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+The example shows the defaults. Omitted settings retain their defaults; a configured
+`DiscoveryPaths` array replaces the default routes. Paths match a route root and its
+descendants, without matching unrelated prefixes or substrings. A trailing slash on
+a configured root is optional, so `/v1/models/` also covers `/v1/models`.
+Roots must be nonblank absolute paths starting with `/`; invalid configuration is
+rejected during startup. An empty array disables discovery route matching.
+
+The standard ASP.NET Core environment-variable form is supported, for example
+`CoreApi__Security__RateLimiting__Discovery__MaxRequests=7` and
+`CoreApi__Security__RateLimiting__Discovery__DiscoveryPaths__0=/v1/models`.
+The flat `CONDUIT_CORE_RATE_LIMITING_ENABLED`, `CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS`,
+and `CONDUIT_CORE_RATE_LIMIT_WINDOW_SECONDS` variables continue to take precedence
+over the corresponding parent `CoreApi:Security:RateLimiting` settings; they do not
+override the discovery subsection.
+
 ## Shared Security Tracking
 
 The Gateway API shares security data with Admin API and WebAdmin through Redis:

@@ -19,6 +19,21 @@ namespace ConduitLLM.Security.Options
             {
                 ConfigureBaseSecurityOptions(options, configuration, "CONDUIT_ADMIN_");
 
+                // Retain the limit names previously published in .env.example. Canonical
+                // names take precedence when both forms are supplied.
+                options.RateLimiting.MaxRequests = GetConfigValue(configuration,
+                    "CONDUIT_ADMIN_RATE_LIMIT_MAX_REQUESTS", options.RateLimiting.MaxRequests,
+                    "CONDUIT_ADMIN_RATE_LIMITING_MAX_REQUESTS");
+                options.RateLimiting.WindowSeconds = GetConfigValue(configuration,
+                    "CONDUIT_ADMIN_RATE_LIMIT_WINDOW_SECONDS", options.RateLimiting.WindowSeconds,
+                    "CONDUIT_ADMIN_RATE_LIMITING_WINDOW_SECONDS");
+                options.FailedAuth.MaxAttempts = GetConfigValue(configuration,
+                    "CONDUIT_ADMIN_MAX_FAILED_AUTH_ATTEMPTS", options.FailedAuth.MaxAttempts,
+                    "CONDUIT_ADMIN_FAILED_AUTH_MAX_ATTEMPTS");
+                options.FailedAuth.BanDurationMinutes = GetConfigValue(configuration,
+                    "CONDUIT_ADMIN_AUTH_BAN_DURATION_MINUTES", options.FailedAuth.BanDurationMinutes,
+                    "CONDUIT_ADMIN_FAILED_AUTH_BAN_DURATION_MINUTES");
+
                 // API Authentication (Admin-specific)
                 options.ApiAuth.ApiKeyHeader = configuration["CONDUIT_ADMIN_API_KEY_HEADER"]
                     ?? SecurityHeaderNames.ApiKey;
@@ -59,6 +74,17 @@ namespace ConduitLLM.Security.Options
                     options.RateLimiting.ExcludedPaths = ParseCommaSeparatedList(rateLimitExcluded);
                 }
 
+                // Bind discovery separately so its settings do not change the parent
+                // limiter's established environment-variable precedence.
+                var discoverySection = configuration.GetSection("CoreApi:Security:RateLimiting:Discovery");
+                if (discoverySection.GetSection(nameof(DiscoveryRateLimitOptions.DiscoveryPaths)).Exists())
+                {
+                    // Configuration binding appends to initialized lists; configured
+                    // route roots must replace the defaults instead.
+                    options.RateLimiting.Discovery.DiscoveryPaths.Clear();
+                }
+                discoverySection.Bind(options.RateLimiting.Discovery);
+
                 // Failed Auth (Gateway has TrackAcrossKeys)
                 options.FailedAuth.TrackAcrossKeys = GetConfigValue(configuration, "CONDUIT_CORE_TRACK_FAILED_AUTH_ACROSS_KEYS",
                     configuration.GetValue<bool>("CoreApi:Security:FailedAuth:TrackAcrossKeys", true));
@@ -80,6 +106,13 @@ namespace ConduitLLM.Security.Options
                     options.VirtualKey.KeyHeaders = ParseCommaSeparatedList(keyHeaders);
                 }
             });
+
+            services.AddOptions<GatewaySecurityOptions>()
+                .Validate(options => options.RateLimiting.Discovery.DiscoveryPaths != null
+                    && options.RateLimiting.Discovery.DiscoveryPaths.All(path =>
+                        !string.IsNullOrWhiteSpace(path) && path.StartsWith('/')),
+                    "Gateway discovery rate-limit paths must be nonblank absolute route roots starting with '/'.")
+                .ValidateOnStart();
 
             return services;
         }
@@ -218,9 +251,14 @@ namespace ConduitLLM.Security.Options
         /// <summary>
         /// Helper to get config value with fallback
         /// </summary>
-        private static T GetConfigValue<T>(IConfiguration configuration, string envKey, T fallback) where T : struct
+        private static T GetConfigValue<T>(
+            IConfiguration configuration,
+            string envKey,
+            T fallback,
+            string? legacyEnvKey = null) where T : struct
         {
-            var value = configuration[envKey];
+            var value = configuration[envKey]
+                ?? (legacyEnvKey == null ? null : configuration[legacyEnvKey]);
             if (string.IsNullOrEmpty(value))
             {
                 return fallback;
