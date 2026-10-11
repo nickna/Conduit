@@ -14,14 +14,28 @@ param(
 
     [string] $AdminCanaryEvidencePath,
 
+    [string] $NativePackagingDirectory,
+
     [switch] $ReportOnly
 )
 
+$Service = $Service.ToLowerInvariant()
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'native-benchmark-image-evidence.ps1')
 $policy = Get-Content -LiteralPath $PolicyPath -Raw | ConvertFrom-Json
-$benchmark = Get-Content -LiteralPath $BenchmarkPath -Raw | ConvertFrom-Json
 $evidence = Get-Content -LiteralPath $CanaryEvidencePath -Raw | ConvertFrom-Json
 $failures = [System.Collections.Generic.List[string]]::new()
+try {
+    # Preserve integer and finite fractional metrics, while rejecting duplicate
+    # JSON keys before PowerShell object conversion can discard them.
+    $benchmarkDocument = Read-NativeImageOciEvidenceDocument -Path $BenchmarkPath
+    $benchmarkValue = Get-NativeEvidenceObject $benchmarkDocument['value']
+    $benchmark = $benchmarkValue | ConvertTo-Json -Depth 64 -Compress | ConvertFrom-Json -DateKind String
+}
+catch {
+    $benchmark = [pscustomobject]@{}
+    $failures.Add('benchmark document is malformed or exceeds its bounded JSON contract')
+}
 
 function Test-FiniteNumber($Value) {
     if ($null -eq $Value -or $Value -is [string] -or $Value -is [bool]) { return $false }
@@ -182,12 +196,38 @@ if (@($policy.sequence).Count -ne 2 -or $policy.sequence[0] -ne 'admin' -or $pol
     $failures.Add('promotion policy sequence must be Admin followed by Gateway')
 }
 $benchmarkSchema = Get-RequiredPositiveInteger $benchmark 'schemaVersion' 'benchmark schema version'
-if ($benchmarkSchema -ne 2) { $failures.Add('benchmark schema version 2 with authenticated workload samples is required') }
+if ($benchmarkSchema -notin @(2, 3)) { $failures.Add('benchmark schema version 2 with authenticated workload samples is required') }
+if ($benchmarkSchema -ne 3) { $failures.Add('benchmark schema version 3 with retained native image binding is required') }
+elseif ($benchmark.schemaVersion.GetType() -notin @([sbyte], [byte], [int16], [uint16], [int32], [uint32], [int64], [uint64])) {
+    $failures.Add('benchmark schema version 3 must be an integer')
+}
 if ($benchmark.service -ne $Service) { $failures.Add('benchmark service does not match the requested promotion') }
 if ($benchmark.platform -ne 'linux-x64') { $failures.Add('benchmark platform is not linux-x64') }
 $generatedAt = [DateTimeOffset]::MinValue
 if (-not [DateTimeOffset]::TryParse([string]$benchmark.generatedAt, [ref]$generatedAt)) { $failures.Add('benchmark generation time is invalid') }
 elseif ($generatedAt -gt [DateTimeOffset]::UtcNow.AddMinutes(5)) { $failures.Add('benchmark generation time is in the future') }
+
+$nativeImageEvidence = $null
+$boundNativeImage = $null
+if ($benchmarkSchema -eq 3) {
+    if ([string]::IsNullOrWhiteSpace($NativePackagingDirectory)) {
+        $failures.Add('native image binding requires retained packaging evidence')
+    }
+    elseif ($benchmark.native.image -isnot [string]) {
+        $failures.Add('native image binding requires a digest-pinned benchmark image')
+    }
+    else {
+        try {
+            $boundNativeImage = $benchmark.native.image
+            $nativeImageEvidence = Read-NativeBenchmarkImageEvidence -Directory $NativePackagingDirectory -Service $Service -NativeImage $boundNativeImage
+            Assert-NativeBenchmarkImageEvidenceEqual -Expected $nativeImageEvidence['identity'] -Actual $benchmark.nativeEvidence
+            if ($evidence.candidateDigest -isnot [string] -or $evidence.candidateDigest -cne $nativeImageEvidence['identity']['requestedDigest']) {
+                $failures.Add('native image binding digest does not match canary evidence')
+            }
+        }
+        catch { $failures.Add('native image binding could not be verified from retained packaging evidence') }
+    }
+}
 
 $canaryTimes = Test-CanaryEvidence $evidence $Service 'canary evidence'
 if ($Service -eq 'gateway') {
@@ -299,6 +339,22 @@ function Get-Variant($Variant, [string] $Name, [string] $Description, [bool] $Ra
         $metrics[$metric] = if ($metric -eq 'coldReadinessMilliseconds') { Get-RequiredPositiveNumber $Variant $metric "$Description $metric" }
             else { Get-RequiredPositiveInteger $Variant $metric "$Description $metric" }
     }
+    if ($Name -eq 'native' -and $benchmarkSchema -eq 3) {
+        if ($RawSample -and ($Variant.nativeContainerId -isnot [string] -or $Variant.nativeContainerId -cnotmatch '\A[0-9a-f]{64}\z')) {
+            $failures.Add("$Description native container binding is missing or invalid")
+        }
+        if ($null -ne $nativeImageEvidence) {
+            try { Assert-NativeBenchmarkImageEvidenceEqual -Expected $nativeImageEvidence['binding'] -Actual $Variant.imageBinding }
+            catch { $failures.Add("$Description native image binding differs from retained packaging evidence") }
+            if ($Variant.image -isnot [string] -or $Variant.image -cne $boundNativeImage -or
+                $Variant.imageRevision -isnot [string] -or $Variant.imageRevision -cne $nativeImageEvidence['identity']['source']['revision']) {
+                $failures.Add("$Description native image binding has a different image or source revision")
+            }
+            if ($null -ne $metrics.pullBytes -and $metrics.pullBytes -ne $nativeImageEvidence['pullBytes']) {
+                $failures.Add("$Description native image binding pull size differs from verified selected layers")
+            }
+        }
+    }
     if ($metrics.peakMemoryBytes -lt $metrics.idleMemoryBytes -or $metrics.peakMemoryBytes -lt $metrics.steadyStateMemoryBytes) { $failures.Add("$Description peak memory is below its recorded idle or steady-state memory") }
     return [pscustomobject]@{ image = $image; imageRevision = $Variant.imageRevision; metrics = $metrics; workloads = Get-WorkloadMap $Variant.workloads $Description $RawSample }
 }
@@ -306,6 +362,7 @@ $variants = @{}
 foreach ($name in 'jit', 'native') { $variants[$name] = Get-Variant $benchmark.$name $name "$name median" $false }
 if ($variants.jit.imageRevision -cne $variants.native.imageRevision) { $failures.Add('JIT and native image revisions must match') }
 $rawVariants = @{ jit = [System.Collections.Generic.List[object]]::new(); native = [System.Collections.Generic.List[object]]::new() }
+$nativeContainerIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 $baseline = $null
 $index = 0
 foreach ($sample in @($benchmark.samples | Select-Object -First 21)) {
@@ -316,6 +373,11 @@ foreach ($sample in @($benchmark.samples | Select-Object -First 21)) {
     if ($sample.order -isnot [array] -or @($sample.order).Count -ne 2 -or (@($sample.order) -join '|') -cne ($order -join '|')) { $failures.Add("sample $index runtime order must alternate across recorded pairs") }
     foreach ($name in 'jit', 'native') {
         $raw = Get-Variant $sample.$name $name "sample $index $name" $true
+        if ($name -eq 'native' -and $benchmarkSchema -eq 3 -and $sample.native.nativeContainerId -is [string] -and
+            $sample.native.nativeContainerId -cmatch '\A[0-9a-f]{64}\z' -and
+            -not $nativeContainerIds.Add($sample.native.nativeContainerId)) {
+            $failures.Add("sample $index native container binding repeats a recorded cold-start container")
+        }
         $rawVariants[$name].Add($raw)
         if ($raw.image -cne $variants[$name].image) { $failures.Add("sample $index $name image differs from its median variant") }
         if ($raw.imageRevision -cne $variants[$name].imageRevision) { $failures.Add("sample $index $name image revision differs from its median variant") }
@@ -367,6 +429,10 @@ else {
     Get-RequiredPositiveNumber $nativePublish 'executableBytes' 'native executable size' | Out-Null
     Get-RequiredPositiveNumber $nativePublish 'runtimeArtifactBytes' 'native runtime artifact size' | Out-Null
 }
+if ($benchmarkSchema -eq 3 -and $null -ne $nativeImageEvidence) {
+    try { Assert-NativeBenchmarkImageEvidenceEqual -Expected $nativeImageEvidence['nativePublish'] -Actual $nativePublish }
+    catch { $failures.Add('native publish binding differs from retained image packaging evidence') }
+}
 function Test-CalculatedComparison([string] $Description, $Object, [string] $PropertyName, $JitValue, $NativeValue, [bool] $IsIncrease) {
     $recorded = Get-RequiredNumber $Object $PropertyName $Description
     if ($null -eq $recorded -or $null -eq $JitValue -or $null -eq $NativeValue) { return $recorded }
@@ -409,6 +475,16 @@ foreach ($id in $requiredIds) {
         if ($metric -eq 'p99' -and $null -ne $regression -and $null -ne $maximumP99 -and $regression -gt $maximumP99) { $failures.Add("$id p99 latency regression exceeds threshold") }
     }
     if ($null -ne $throughput -and $null -ne $minimumThroughput -and $throughput -lt $minimumThroughput) { $failures.Add("$id throughput improvement is below threshold") }
+}
+
+if ($benchmarkSchema -eq 3 -and $null -ne $nativeImageEvidence) {
+    try {
+        $finalNativeImageEvidence = Read-NativeBenchmarkImageEvidence -Directory $NativePackagingDirectory -Service $Service -NativeImage $boundNativeImage
+        foreach ($field in 'identity', 'binding', 'nativePublish', 'pullBytes') {
+            Assert-NativeBenchmarkImageEvidenceEqual -Expected $nativeImageEvidence[$field] -Actual $finalNativeImageEvidence[$field]
+        }
+    }
+    catch { $failures.Add('native image binding changed or could not be reverified after evaluation') }
 }
 
 $decision = if ($failures.Count -eq 0) { 'promote' } else { 'hold' }

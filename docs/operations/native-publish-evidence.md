@@ -225,9 +225,18 @@ Schema-1 packages remain readable for historical inspection and local smoke
 checks. Schema-2 packages from a classic image store or an engine without the
 required descriptor observations retain an explicit association hold. Local
 smoke checks can still run in that state; they do not qualify an image digest.
-Both versions keep `registryDigestQualification=false`. Baseline consumers must
-also establish source, build, payload, and candidate digest identity before
-promotion qualification, as tracked in #1582.
+Both versions keep `registryDigestQualification=false`. The benchmark collector
+and promotion evaluator establish their own candidate binding through
+`native-benchmark-image-evidence.ps1`. They require the exact digest-pinned
+requested image reference, a verified original OCI association, and clean Git
+source matching the declared commit and OCI revision. Schema-3 benchmarks retain
+the packaging report hash, build ID, both executable/toolchain records, runtime
+inventory hash and three publish manifest hashes. Every native sample, its
+median and publish metrics carry the same sealed binding. The evaluator replays
+an explicitly supplied retained packaging directory, including after its
+calculations. Changed files, source, build, digest roles or metrics produce HOLD.
+This binding leaves the operational promotion policy and its provenance,
+benchmark, soak and rollback requirements in force.
 
 ## Native build source
 

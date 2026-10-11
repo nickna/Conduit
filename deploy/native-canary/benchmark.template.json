@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "generatedAt": null,
   "service": "admin",
   "platform": "linux-x64",
@@ -41,6 +41,7 @@
     "runtime": "native-aot",
     "image": null,
     "imageRevision": null,
+    "imageBinding": null,
     "imageBytes": null,
     "pullBytes": null,
     "coldReadinessMilliseconds": null,
@@ -51,6 +52,7 @@
   },
   "samples": [],
   "nativePublish": null,
+  "nativeEvidence": null,
   "comparison": {
     "common": {
       "imageSizeReductionPercent": null,
@@ -62,5 +64,5 @@
     },
     "workloads": []
   },
-  "notes": "Unfilled schema example; it must fail promotion. Use measure-native-container.ps1 output with all raw paired samples and authenticated workload results."
+  "notes": "Unfilled schema example; it must fail promotion. Use measure-native-container.ps1 schema-3 output with all raw paired samples, authenticated workload results and sealed native image evidence. Retain its complete packaging bundle."
 }

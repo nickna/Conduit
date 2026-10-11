@@ -5,6 +5,8 @@ param()
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $collector = Join-Path $repositoryRoot 'scripts/aot/measure-native-container.ps1'
+. (Join-Path $PSScriptRoot 'native-benchmark-test-fixtures.ps1')
+. (Join-Path $PSScriptRoot 'native-benchmark-image-evidence.ps1')
 $temporaryRoot = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) ('conduit-collector-contract-' + [Guid]::NewGuid().ToString('N'))))
 $environmentNames = @('CONDUIT_COLLECTOR_TEST_ROOT', 'CONDUIT_COLLECTOR_TEST_SCENARIO', 'CONDUIT_COLLECTOR_TEST_PWSH',
     'CONDUIT_NATIVE_BENCHMARK_API_KEY', 'CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS', 'CONDUIT_CORE_RATE_LIMIT_WINDOW_SECONDS',
@@ -167,6 +169,19 @@ function Get-CaseFailureDiagnostic([string] $CaseRoot, [object[]] $Commands, [ob
 
 function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $ExpectedFailure) {
     $caseRoot = New-CaseRoot $Scenario
+    $packageFixture = $script:packages[$Service]
+    $selectedFixture = switch ($Scenario) {
+        'package-wrong-service' { $script:packages['gateway'] }
+        'package-cross-build' { $script:packages['admin-other'] }
+        'package-dirty' { $script:packages['admin-dirty'] }
+        'package-unavailable' { $script:packages['admin-unavailable'] }
+        'package-hold' { $script:packages['admin-hold'] }
+        default { $packageFixture }
+    }
+    $packageDirectory = Join-Path $caseRoot 'package'
+    Copy-NativeBenchmarkPackagingFixture $selectedFixture $packageDirectory
+    [IO.File]::WriteAllText((Join-Path $caseRoot 'native-image.json'), (ConvertTo-Json -InputObject $packageFixture.image -Depth 32))
+    [IO.File]::WriteAllText((Join-Path $caseRoot 'native-selected.json'), (ConvertTo-Json -InputObject $packageFixture.oci.selectedDescriptor -Depth 32))
     [IO.File]::WriteAllText((Join-Path $caseRoot 'expected-admin.key'), $privateKey)
     $caseEnvironmentPath = Join-Path $caseRoot 'input.env'
     $caseEnvironmentLines = @('database_url=postgresql://ignored:ignored@localhost:1/ignored',
@@ -183,7 +198,8 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     $parameters = @{
         Service = $Service
         JitImage = 'example.invalid/conduit-jit@sha256:' + ('1' * 64)
-        NativeImage = 'example.invalid/conduit-native@sha256:' + ('2' * 64)
+        NativeImage = if ($Scenario -cin @('package-dirty', 'package-unavailable', 'package-hold')) { $selectedFixture.requestedImage } else { $packageFixture.requestedImage }
+        NativePackagingDirectory = $packageDirectory
         DatabaseUrl = 'postgresql://fixture:' + $privateDatabasePassword + '@127.0.0.1:5432/fixture'
         RedisUrl = 'redis://:' + $privateRedisPassword + '@127.0.0.1:6379/0'
         WorkloadConfigurationPaths = $configurationPaths
@@ -200,6 +216,10 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         ReadinessTimeoutSeconds = 10
         CleanupTimeoutSeconds = 5
     }
+    if ($Scenario -eq 'package-absent') { $parameters.Remove('NativePackagingDirectory') }
+    if ($Scenario -eq 'legacy-baseline') { $parameters.NativeBaselinePath = $environmentPath }
+    if ($Scenario -eq 'candidate-config') { $parameters.NativeImage = 'example.invalid/conduit-' + $Service + '@' + $packageFixture.oci.configDigest }
+    if ($Scenario -eq 'candidate-selected-swap') { $parameters.NativeImage = 'example.invalid/conduit-' + $Service + '@' + $packageFixture.oci.selectedDescriptor.digest }
     if ($Scenario -eq 'driver-timeout') { $parameters.WorkloadTimeoutSeconds = 5 }
     if ($Scenario -eq 'even-pairs') { $parameters.PairedRuns = 6 }
     $caseServers = [Collections.Generic.List[object]]::new()
@@ -207,7 +227,8 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     $caseStage = 'readiness-setup'
     $failureDiagnostic = $null
     try {
-    if ($Scenario -cnotin @('even-pairs', 'case-duplicate-environment', 'revision-mismatch')) {
+    if ($Scenario -cnotin @('even-pairs', 'case-duplicate-environment', 'revision-mismatch', 'package-absent', 'legacy-baseline',
+        'package-wrong-service', 'package-cross-build', 'package-dirty', 'package-unavailable', 'package-hold', 'candidate-config', 'candidate-selected-swap')) {
         # Readiness listeners belong to this test process. Spawning a persistent
         # listener inside captured Docker would retain inherited pipe handles on
         # Windows, preventing that short-lived command from reaching EOF.
@@ -308,6 +329,20 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
             Test-OwnedProcessStopped $identityPath
             Assert-Contract ($failureDiagnostic.Classification -ceq 'Private command failed.') 'Timeout fixture failed for a reason other than the bounded command deadline.'
         }
+        if ($Scenario -cin @('package-absent', 'legacy-baseline', 'package-wrong-service', 'package-cross-build',
+            'package-dirty', 'package-unavailable', 'package-hold', 'candidate-config', 'candidate-selected-swap')) {
+            Assert-Contract ($created.Count -eq 0 -and $drivers.Count -eq 0) 'Publication rejection reached a measured container or workload.'
+        }
+        if ($Scenario -eq 'native-selected-mismatch') {
+            Assert-Contract ($created.Count -eq 2 -and $drivers.Count -eq $(if ($Service -eq 'gateway') { 2 } else { 1 }) -and
+                (Read-Records (Join-Path $caseRoot 'active')).Count -eq 0 -and
+                @($commands | Where-Object { $_.arguments[0] -ceq 'rm' }).Count -eq 2) 'Selected-manifest rejection did not clean both independently owned warm containers.'
+        }
+        if ($Scenario -eq 'package-late-mutation') {
+            Assert-Contract ($created.Count -eq 12 -and $drivers.Count -eq $(if ($Service -eq 'gateway') { 24 } else { 12 }) -and
+                [IO.File]::Exists((Join-Path $caseRoot 'package-mutated')) -and
+                (Read-Records (Join-Path $caseRoot 'active')).Count -eq 0) 'Late package mutation was not rejected after all complete pairs and cleanup.'
+        }
         $script:cases++
         return
     }
@@ -318,7 +353,15 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         Assert-Contract (-not $reportText.Contains($secret)) 'Collector retained private command configuration in its report.'
     }
     $report = $reportText | ConvertFrom-Json -AsHashtable
-    Assert-Contract ($report.schemaVersion -eq 2 -and $report.service -ceq $Service -and $report.pairedRuns -eq 5 -and $report.samples.Count -eq 5) 'Collector report identity or paired sample count is wrong.'
+    Assert-Contract ($report.schemaVersion -eq 3 -and $report.service -ceq $Service -and $report.pairedRuns -eq 5 -and $report.samples.Count -eq 5) 'Collector report identity or paired sample count is wrong.'
+    Assert-NativeBenchmarkFixtureIdentity $report.nativeEvidence $packageFixture
+    Assert-NativeBenchmarkFixtureBinding $report.nativePublish.imageBinding $packageFixture
+    Assert-Contract ($report.nativePublish.Count -eq 8 -and $report.nativePublish.service -ceq $(if ($Service -eq 'admin') { 'Admin' } else { 'Gateway' }) -and
+        $report.nativePublish.rid -ceq 'linux-x64') 'Collector publication role or complete metrics shape is wrong.'
+    foreach ($metric in @('publishDurationMilliseconds', 'applicationPublishDurationMilliseconds', 'healthProbePublishDurationMilliseconds', 'executableBytes', 'runtimeArtifactBytes')) {
+        Assert-Contract ($report.nativePublish[$metric] -eq $packageFixture.metrics[$metric]) 'Collector publication metric differs from the sealed complete image.'
+    }
+    Assert-NativeBenchmarkFixtureBinding $report.native.imageBinding $packageFixture
     Assert-Contract ($created.Count -eq 12 -and (Read-Records (Join-Path $caseRoot 'active')).Count -eq 0) 'Collector did not remove all twelve warm and measured containers.'
     $orderedCreated = @($created | Sort-Object ordinal)
     $expectedOrder = @('jit', 'native-aot', 'jit', 'native-aot', 'native-aot', 'jit',
@@ -364,9 +407,12 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     foreach ($sample in $report.samples) {
         $expectedPairOrder = if ($sample.pair % 2 -eq 1) { 'jit|native-aot' } else { 'native-aot|jit' }
         Assert-Contract (($sample.order -join '|') -ceq $expectedPairOrder) 'Raw sample pair order is incorrect.'
+        Assert-NativeBenchmarkFixtureBinding $sample.native.imageBinding $packageFixture
+        Assert-Contract ($sample.native.nativeContainerId -is [string] -and $sample.native.nativeContainerId -cmatch '\A[0-9a-f]{64}\z' -and
+            @($created | Where-Object { $_.id -ceq $sample.native.nativeContainerId -and $_.runtime -ceq 'native-aot' }).Count -eq 1) 'Raw native sample omitted its actual owned container identity.'
     }
     Assert-Contract ($report.jit.imageBytes -eq 1000 -and $report.native.imageBytes -eq 800 -and
-        $report.jit.pullBytes -eq 700 -and $report.native.pullBytes -eq 500) 'Collector mixed image and compressed pull sizes.'
+        $report.jit.pullBytes -eq 700 -and $report.native.pullBytes -eq $packageFixture.oci.layer.size) 'Collector mixed image and original selected-layer pull sizes.'
     $script:cases++
     }
     catch {
@@ -486,16 +532,22 @@ if ($Mode -eq 'health') {
 }
 if ($Mode -eq 'docker') {
     Save-Record 'commands' @{ arguments = $CommandArguments; benchmarkCredentialPresent = -not [string]::IsNullOrEmpty($env:CONDUIT_NATIVE_BENCHMARK_API_KEY) }
+    $nativeImage = [IO.File]::ReadAllText((Join-Path $root 'native-image.json')) | ConvertFrom-Json -AsHashtable -DateKind String
     if ($CommandArguments[0] -eq 'image') {
-        $native = $CommandArguments[-1].Contains('native')
+        $native = -not ($CommandArguments[-1].StartsWith('example.invalid/conduit-jit@', [StringComparison]::Ordinal) -or $CommandArguments[-1] -ceq ('sha256:' + ('1' * 64)))
         $revision = if ($scenario -eq 'revision-mismatch' -and $native) { 'b' * 40 } else { 'a' * 40 }
-        @{ Os = 'linux'; Architecture = 'amd64'; Size = $(if ($native) { 800 } else { 1000 });
-            Config = @{ Labels = @{ 'org.opencontainers.image.revision' = $revision } } } | ConvertTo-Json -Depth 5 -Compress
+        if ($native) {
+            $nativeImage['Size'] = 800; $nativeImage.Config.Labels['org.opencontainers.image.revision'] = $revision
+            $nativeImage | ConvertTo-Json -Depth 32 -Compress
+        } else {
+            @{ Id = 'sha256:' + ('1' * 64); Os = 'linux'; Architecture = 'amd64'; Size = 1000;
+                Config = @{ Labels = @{ 'org.opencontainers.image.revision' = $revision } } } | ConvertTo-Json -Depth 5 -Compress
+        }
         exit 0
     }
     if ($CommandArguments[0] -eq 'manifest') {
-        $native = $CommandArguments[-1].Contains('native')
-        @{ schemaVersion = 2; layers = @(@{ size = $(if ($native) { 500 } else { 700 }) }) } | ConvertTo-Json -Depth 5 -Compress
+        if (-not $CommandArguments[-1].StartsWith('example.invalid/conduit-jit@', [StringComparison]::Ordinal)) { throw 'Native metadata consulted an unrelated registry manifest.' }
+        @{ schemaVersion = 2; layers = @(@{ size = 700 }) } | ConvertTo-Json -Depth 5 -Compress
         exit 0
     }
     if ($CommandArguments[0] -eq 'run') {
@@ -523,6 +575,11 @@ if ($Mode -eq 'docker') {
             elseif ($CommandArguments[$index] -eq '--env-file') { $privateEnvironment = $CommandArguments[++$index] }
         }
         Write-RunTrace 'arguments-parsed'
+        $platformIndex = [Array]::IndexOf($CommandArguments, '--platform')
+        if ($platformIndex -lt 0 -or $CommandArguments[$platformIndex + 1] -cne 'linux/amd64') { throw 'Measured image platform was not explicit.' }
+        $native = $labels['conduit.native-benchmark.runtime'] -ceq 'native-aot'
+        $expectedImage = if ($native) { $nativeImage.Id } else { 'sha256:' + ('1' * 64) }
+        if ($CommandArguments[-1] -cne $expectedImage) { throw 'Measured image was not the immutable observed local ID.' }
         $ordinal = @(Get-ChildItem -LiteralPath (Join-Path $root 'created') -File).Count + 1
         $identity = ([long]$ordinal).ToString('x64')
         $associationPath = Join-Path $root ('processes/health-' + $port + '.association')
@@ -584,7 +641,11 @@ if ($Mode -eq 'docker') {
         Write-RunTrace 'environment-validated'
         $record = @{ id = $identity; name = $name; labels = $labels; port = $port; ordinal = $ordinal;
             runtime = $labels['conduit.native-benchmark.runtime']; processIdentity = $identityPath;
-            canonicalEnvironment = $true; backendCredentialCorrect = $true }
+            canonicalEnvironment = $true; backendCredentialCorrect = $true; image = $expectedImage }
+        if ($native) {
+            $record['selectedDescriptor'] = [IO.File]::ReadAllText((Join-Path $root 'native-selected.json')) | ConvertFrom-Json -AsHashtable
+            if ($scenario -ceq 'native-selected-mismatch') { $record.selectedDescriptor.digest = 'sha256:' + ('d' * 64) }
+        }
         [IO.File]::WriteAllText((Join-Path $root ('active/' + $identity + '.json')), ($record | ConvertTo-Json -Depth 8))
         Write-RunTrace 'active-written'
         Save-Record 'created' $record
@@ -608,7 +669,8 @@ if ($Mode -eq 'docker') {
         if ($scenario -eq 'foreign-label' -and @(Get-ChildItem -LiteralPath (Join-Path $root 'drivers') -File).Count -gt 0) {
             $labels['conduit.native-benchmark.owner'] = 'foreign-owner'
         }
-        @{ Id = $record.id; Name = '/' + $record.name; Config = @{ Labels = $labels }; State = @{ Running = $true } } |
+        @{ Id = $record.id; Name = '/' + $record.name; Image = $record.image; ImageManifestDescriptor = $record.selectedDescriptor;
+            Config = @{ Labels = $labels }; State = @{ Running = $true } } |
             ConvertTo-Json -Depth 8 -Compress
         exit 0
     }
@@ -649,6 +711,11 @@ if ($Mode -eq 'driver' -or $Mode -eq 'dotnet') {
     Save-Record 'drivers' @{ dotnetRoute = $dotnetRoute; ordinal = $record.ordinal; runtime = $record.runtime;
         workload = $configuration.workload; configurationPath = $CommandArguments[$marker + 1];
         benchmarkCredentialPresent = -not [string]::IsNullOrEmpty($env:CONDUIT_NATIVE_BENCHMARK_API_KEY) }
+    if ($scenario -ceq 'package-late-mutation' -and $record.ordinal -eq 12 -and
+        -not [IO.File]::Exists((Join-Path $root 'package-mutated'))) {
+        [IO.File]::AppendAllText((Join-Path $root 'package/extracted/conduit-evidence/application.json'), ' ')
+        [IO.File]::WriteAllText((Join-Path $root 'package-mutated'), 'Owned retained package changed during workload')
+    }
     if ($scenario -in @('driver-nonzero', 'foreign-label', 'cleanup-failure')) {
         [Console]::Error.WriteLine('private-child-diagnostic'); exit 17
     }
@@ -710,6 +777,13 @@ throw 'Unknown fixture mode.'
     }
     $managedProbe = Join-Path $temporaryRoot 'managed-probe.dll'
     [IO.File]::WriteAllText($managedProbe, 'This command-routing fixture is intentionally not a .NET assembly.')
+    $script:packages = @{}
+    $script:packages['admin'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
+    $script:packages['gateway'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'gateway'
+    $script:packages['admin-other'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
+    $script:packages['admin-dirty'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -SourceDirty $true
+    $script:packages['admin-unavailable'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -UnavailableSource
+    $script:packages['admin-hold'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -Scenario 'oci-hold-no-descriptors'
     $environmentPath = Join-Path $temporaryRoot 'environment.json'
     @{
         schemaVersion = 1; environmentId = 'collector-contract-host'
@@ -912,6 +986,12 @@ if ($env:CONDUIT_COLLECTOR_HELPER_VALUE -eq 'timeout') {
     Invoke-CollectorCase 'admin' 'incomplete-report' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'child-string-schema' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'fingerprint-mismatch' 'No qualification was recorded.'
+    foreach ($scenario in @('package-absent', 'legacy-baseline', 'package-wrong-service', 'package-cross-build',
+        'package-dirty', 'package-unavailable', 'package-hold', 'candidate-config', 'candidate-selected-swap')) {
+        Invoke-CollectorCase 'admin' $scenario 'No qualification was recorded.'
+    }
+    Invoke-CollectorCase 'gateway' 'native-selected-mismatch' 'Native benchmark container image binding failed.'
+    Invoke-CollectorCase 'gateway' 'package-late-mutation' 'Native benchmark image changed during collection.'
 }
 catch { $proofFailure = $_.Exception }
 finally {

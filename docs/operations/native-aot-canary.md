@@ -135,7 +135,7 @@ Provide `-EnvironmentEvidencePath` containing this credential-free metadata:
   -EnvironmentEvidencePath /secure/benchmark/environment.json `
   -ContainerEnvironmentPath /secure/benchmark/runtime.env `
   -PairedRuns 5 `
-  -NativeBaselinePath artifacts/native-aot/reports/native-baselines.json `
+  -NativePackagingDirectory artifacts/native-image/admin/packaging-<owner> `
   -OutputPath artifacts/native-benchmark/admin.json
 ```
 
@@ -148,13 +148,25 @@ request bodies, expected private content or backing-service connection strings.
 
 The collector runs one unrecorded warm-up pair, then an odd number of recorded
 pairs from five through 21. It alternates JIT/native order, retains every raw
-sample and computes each metric's median. Schema 2 separates common image,
+sample and computes each metric's median. Schema 3 separates common image,
 compressed pull, cold-readiness and idle/steady/peak memory metrics from each
 workload's throughput and full-response p50/p95/p99 latency. Native publish time
-and artifact sizes come from the matching linux-x64 baseline; omitting that
-baseline produces evidence that cannot pass promotion. Supply the baseline from
-the same image build: automated binding of baseline artifacts to image-build
-identity is tracked in [#1582](https://github.com/nickna/Conduit/issues/1582).
+and artifact sizes come from the completed schema-2 packaging bundle for the
+exact requested native image reference. The collector replays its original OCI
+archive, embedded publish manifests and runtime payload, requires a clean Git
+revision matching the declared commit and OCI revision, and retains the build ID,
+toolchain, executable hashes, runtime inventory hash and all three manifest hashes.
+It rejects the old service-only `-NativeBaselinePath` argument. Both container
+variants run by their observed immutable local image IDs on Linux/amd64. Every
+native sample records its actual container ID and verifies the packaged selected
+manifest before and after workloads; cleanup still uses verified ownership.
+The native median and publish metrics retain the same sealed image binding.
+Retain the entire packaging directory with the benchmark. The evaluator accepts
+its relocated directory explicitly and replays it independently. Requested
+repository/index digests, selected manifests, image configs and Docker local IDs
+retain their distinct roles. Historical schema-1/2 benchmarks and packaging
+bundles without a verified OCI association or clean source remain HOLD evidence.
+This association does not establish production provenance or complete a canary.
 Use a distinct output path for each collection attempt and retain its exit status.
 A failed rerun leaves an existing report untouched; automated collection-attempt
 and freshness validation is tracked in
@@ -164,7 +176,8 @@ The evaluator independently recomputes the medians and comparisons, validates
 complete zero-failure workloads and identical load parameters and fingerprints
 across every pair, and applies throughput and p99 thresholds separately to each
 workload. Health-only schema 1 reports, missing or changed samples, different
-source revisions, incomplete metadata and the unfilled benchmark template fail.
+source revisions, changed image/build bindings, incomplete metadata and the
+unfilled benchmark template fail.
 
 No production comparison has been accepted yet. Published native smoke and
 workload-driver correctness tests do not supply operational improvement,
@@ -182,11 +195,13 @@ deployment and monitoring systems, then evaluate it with the benchmark:
 ./scripts/aot/evaluate-native-promotion.ps1 `
   -Service admin `
   -BenchmarkPath artifacts/native-benchmark/admin.json `
+  -NativePackagingDirectory artifacts/native-image/admin/packaging-<owner> `
   -CanaryEvidencePath artifacts/native-canary/admin-evidence.json
 
 ./scripts/aot/evaluate-native-promotion.ps1 `
   -Service gateway `
   -BenchmarkPath artifacts/native-benchmark/gateway.json `
+  -NativePackagingDirectory artifacts/native-image/gateway/packaging-<owner> `
   -CanaryEvidencePath artifacts/native-canary/gateway-evidence.json `
   -AdminCanaryEvidencePath artifacts/native-canary/admin-evidence.json
 ```

@@ -157,7 +157,8 @@ function Write-VerificationOciArchive([string] $Root, $Image, [string] $RootfsAr
         wrapperSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($wrapperBytes)).ToLowerInvariant() }
 }
 
-function New-VerificationFixture([string] $Service, [string] $Scenario) {
+function New-VerificationFixture([string] $Service, [string] $Scenario, [string] $SourceRevision = '',
+    [bool] $SourceDirty = $false, [string] $RequestedRepository = '') {
     $script:sequence++
     $root = Join-Path $temporaryRoot ('case-' + $script:sequence.ToString('D3') + ' café 雪')
     [IO.Directory]::CreateDirectory($root) | Out-Null
@@ -178,14 +179,19 @@ function New-VerificationFixture([string] $Service, [string] $Scenario) {
         hostOs = $(if ($IsWindows) { 'windows' } else { 'linux' }); hostArchitecture = 'x64'; targetOs = 'linux'; targetArchitecture = 'x64'
     }
     $properties = @{ configuration = 'Release'; publishAot = $true; selfContained = $true; stripSymbols = $true; conduitAotAudit = $true; useSharedCompilation = $false }
-    $source = [ordered]@{ status = 'unavailable'; revision = $null; dirty = $null }
+    $source = if ([string]::IsNullOrEmpty($SourceRevision)) {
+        [ordered]@{ status = 'unavailable'; revision = $null; dirty = $null }
+    } else {
+        Assert-VerificationContract ($SourceRevision -cmatch '\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z') 'Synthetic source revision is invalid.'
+        [ordered]@{ status = 'git'; revision = $SourceRevision; dirty = $SourceDirty }
+    }
     $buildId = [Guid]::NewGuid().ToString('N')
     $start = [DateTime]::SpecifyKind([DateTime]'2026-10-11T12:34:56', [DateTimeKind]::Utc)
     $application = Write-NativePublishManifest -DestinationPath (Join-Path $evidence 'application.json') -BuildId $buildId -Service $Service -Rid 'linux-x64' -Source $source -Toolchain $toolchain -PublishProperties $properties -StartedAtUtc $start -CompletedAtUtc $start.AddMilliseconds(200) -RuntimeDirectory $payload -ExecutableName $main
     $properties.conduitAotAudit = $false
     $health = Write-NativePublishManifest -DestinationPath (Join-Path $evidence 'health-probe.json') -BuildId $buildId -Service 'probe' -Rid 'linux-x64' -Source $source -Toolchain $toolchain -PublishProperties $properties -StartedAtUtc $start -CompletedAtUtc $start.AddMilliseconds(100) -RuntimeDirectory $payload -ExecutableName 'conduit-health-probe'
     $identity = Get-NativeRuntimeIdentity $payload $main
-    $metadata = [ordered]@{ version = '8.1.0'; commitSha = 'dev'; buildTimestamp = '2026-10-11T12:34:56.0000000Z' }
+    $metadata = [ordered]@{ version = '8.1.0'; commitSha = $(if ([string]::IsNullOrEmpty($SourceRevision)) { 'dev' } else { $SourceRevision }); buildTimestamp = '2026-10-11T12:34:56.0000000Z' }
     $metrics = [ordered]@{ publishDurationMilliseconds = 300L; applicationPublishDurationMilliseconds = 200L; healthProbePublishDurationMilliseconds = 100L; executableBytes = $identity.executable.bytes; runtimeArtifactBytes = $identity.runtimeArtifactBytes }
     $wrapper = [ordered]@{ schemaVersion = 1; kind = 'conduit-native-image-publish'; buildId = $buildId; service = $Service; rid = 'linux-x64'; commitMetadata = $metadata
         application = @{ path = 'application.json'; sha256 = $application.sha256 }; healthProbe = @{ path = 'health-probe.json'; sha256 = $health.sha256 }; metrics = $metrics }
@@ -208,8 +214,9 @@ function New-VerificationFixture([string] $Service, [string] $Scenario) {
     $oci = Write-VerificationOciArchive $root $image $archive $Scenario
     Write-VerificationJson (Join-Path $root 'image.json') $image
     return [ordered]@{ root = $root; artifact = Join-Path $root 'artifact'; archive = $archive; service = $Service; scenario = $Scenario
-        buildId = $buildId; requestedImage = 'owned-image-verification-fixture:' + $Service; hashes = $expectedHashes
-        metadata = $metadata; metrics = $metrics; runtimeFilesSha256 = $identity.filesSha256; main = $main; oci = $oci; localImageId = $oci.localImageId }
+        buildId = $buildId; requestedImage = $(if ([string]::IsNullOrEmpty($RequestedRepository)) { 'owned-image-verification-fixture:' + $Service } else { $RequestedRepository + '@' + $oci.rootDescriptor.digest }); hashes = $expectedHashes
+        metadata = $metadata; metrics = $metrics; runtimeFilesSha256 = $identity.filesSha256; main = $main; oci = $oci; localImageId = $oci.localImageId
+        source = $source; toolchain = $toolchain; payload = $payload; evidence = $evidence }
 }
 
 function Invoke-VerificationCase([string] $Service, [string] $Scenario, [bool] $Success) {

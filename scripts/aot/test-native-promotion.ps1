@@ -4,17 +4,20 @@ param()
 $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '../..')
 $evaluator = Join-Path $PSScriptRoot 'evaluate-native-promotion.ps1'
+. (Join-Path $PSScriptRoot 'native-benchmark-test-fixtures.ps1')
+. (Join-Path $PSScriptRoot 'native-benchmark-image-evidence.ps1')
 $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) "conduit-native-promotion-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Path $temporaryRoot | Out-Null
 $checks = 0
 
-function Copy-Value($Value) { return $Value | ConvertTo-Json -Depth 30 | ConvertFrom-Json }
+function Copy-Value($Value) { return $Value | ConvertTo-Json -Depth 64 | ConvertFrom-Json -DateKind String }
 function Write-Fixture([string] $Name, $Value) {
     $path = Join-Path $temporaryRoot "$Name.json"
-    $Value | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $path
+    $Value | ConvertTo-Json -Depth 64 | Set-Content -LiteralPath $path
     return $path
 }
-function Invoke-Gate([string] $Service, $Policy, $Benchmark, $Evidence, $AdminEvidence = $null) {
+function Invoke-Gate([string] $Service, $Policy, $Benchmark, $Evidence, $AdminEvidence = $null,
+    [string]$PackagingDirectory = '', [switch]$WithoutPackaging, [string]$RawBenchmarkJson = '') {
     $arguments = @{
         Service = $Service
         PolicyPath = Write-Fixture "policy-$([guid]::NewGuid().ToString('N'))" $Policy
@@ -22,8 +25,16 @@ function Invoke-Gate([string] $Service, $Policy, $Benchmark, $Evidence, $AdminEv
         CanaryEvidencePath = Write-Fixture "evidence-$([guid]::NewGuid().ToString('N'))" $Evidence
         ReportOnly = $true
     }
+    if (-not $WithoutPackaging) {
+        $arguments.NativePackagingDirectory = if ([string]::IsNullOrEmpty($PackagingDirectory)) {
+            $script:packages[$Service.ToLowerInvariant()].artifact
+        } else { $PackagingDirectory }
+    }
+    if (-not [string]::IsNullOrEmpty($RawBenchmarkJson)) {
+        [IO.File]::WriteAllText($arguments.BenchmarkPath, $RawBenchmarkJson, [Text.UTF8Encoding]::new($false))
+    }
     if ($null -ne $AdminEvidence) { $arguments.AdminCanaryEvidencePath = Write-Fixture "admin-$([guid]::NewGuid().ToString('N'))" $AdminEvidence }
-    return ((& $evaluator @arguments) -join [Environment]::NewLine) | ConvertFrom-Json
+    return ((& $evaluator @arguments) -join [Environment]::NewLine) | ConvertFrom-Json -DateKind String
 }
 function Assert-Decision($Result, [string] $Expected, [string] $Description) {
     $script:checks++
@@ -35,7 +46,7 @@ function Assert-Failure($Result, [string] $Pattern, [string] $Description) {
 function New-Evidence([string] $Service, [char] $NativeDigest, [char] $JitDigest) {
     return [ordered]@{
         schemaVersion = 1; service = $Service
-        candidateDigest = "sha256:$([string]$NativeDigest * 64)"
+        candidateDigest = $script:packageEvidence[$Service].binding.requestedDigest
         correspondingJitDigest = "sha256:$([string]$JitDigest * 64)"
         startedAt = '2020-01-01T00:00:00Z'; completedAt = '2020-01-08T00:00:00Z'
         soakHours = 168; healthyWindows = 24; errorRate = 0
@@ -69,14 +80,15 @@ function New-Variant([string] $Service, [bool] $Native, [char] $Digest, [int] $O
     $ids = if ($Service -eq 'admin') { @('admin-setting-read') } else { @('gateway-chat-nonstream', 'gateway-chat-sse') }
     return [ordered]@{
         runtime = if ($Native) { 'native-aot' } else { 'jit' }
-        image = "registry.example.test/conduit-$Service@sha256:$([string]$Digest * 64)"
+        image = if ($Native) { $script:packages[$Service].requestedImage } else { "registry.example.test/conduit-$Service@sha256:$([string]$Digest * 64)" }
         imageRevision = ('1' * 40)
         imageBytes = if ($Native) { 800 } else { 1000 }
-        pullBytes = if ($Native) { 600 } else { 800 }
+        pullBytes = if ($Native) { $script:packageEvidence[$Service].pullBytes } else { 800 }
         coldReadinessMilliseconds = $(if ($Native) { 70 } else { 100 }) + $Offset
         idleMemoryBytes = $(if ($Native) { 700 } else { 1000 }) + $Offset
         steadyStateMemoryBytes = $(if ($Native) { 700 } else { 1000 }) + $Offset
         peakMemoryBytes = $(if ($Native) { 900 } else { 1200 }) + $Offset
+        imageBinding = if ($Native) { $script:packageEvidence[$Service].binding } else { $null }
         workloads = @($ids | ForEach-Object { New-Workload $_ $Native $Offset })
     }
 }
@@ -103,7 +115,7 @@ function Set-Comparisons($Benchmark) {
 }
 function New-Benchmark([string] $Service, [char] $NativeDigest, [char] $JitDigest, [int] $Runs = 5) {
     $result = [ordered]@{
-        schemaVersion = 2; generatedAt = '2020-01-01T00:00:00Z'; service = $Service; platform = 'linux-x64'
+        schemaVersion = 3; generatedAt = '2020-01-01T00:00:00Z'; service = $Service; platform = 'linux-x64'
         pairedRuns = $Runs; methodology = 'Synthetic authenticated paired benchmark contract fixture.'
         environment = [ordered]@{
             schemaVersion = 1; environmentId = 'owned-test-environment'
@@ -114,17 +126,17 @@ function New-Benchmark([string] $Service, [char] $NativeDigest, [char] $JitDiges
         native = New-Variant $Service $true $NativeDigest 0
         samples = @(for ($pair = 1; $pair -le $Runs; $pair++) {
             $offset = $pair - [int][Math]::Ceiling($Runs / 2)
+            $nativeSample = New-Variant $Service $true $NativeDigest $offset
+            $nativeSample.nativeContainerId = [Guid]::NewGuid().ToString('N') + [Guid]::NewGuid().ToString('N')
             [ordered]@{
                 pair = $pair
                 order = if ($pair % 2 -eq 1) { @('jit', 'native-aot') } else { @('native-aot', 'jit') }
                 jit = New-Variant $Service $false $JitDigest $offset
-                native = New-Variant $Service $true $NativeDigest $offset
+                native = $nativeSample
             }
         })
-        nativePublish = [ordered]@{
-            service = if ($Service -eq 'admin') { 'Admin' } else { 'Gateway' }
-            rid = 'linux-x64'; publishDurationMilliseconds = 10000; executableBytes = 50000000; runtimeArtifactBytes = 60000000
-        }
+        nativeEvidence = $script:packageEvidence[$Service].identity
+        nativePublish = $script:packageEvidence[$Service].nativePublish
         comparison = $null
     }
     Set-Comparisons $result
@@ -142,6 +154,14 @@ function Assert-BenchmarkHold([string] $Description, [string] $Pattern, [scriptb
 }
 
 try {
+    $script:packages = @{}
+    $script:packageEvidence = @{}
+    foreach ($service in @('admin', 'gateway')) {
+        $script:packages[$service] = New-NativeBenchmarkPackagingFixture -ParentDirectory $temporaryRoot -Service $service -Revision ('1' * 40)
+        $script:packageEvidence[$service] = Read-NativeBenchmarkImageEvidence -Directory $script:packages[$service].artifact -Service $service -NativeImage $script:packages[$service].requestedImage
+        Assert-NativeBenchmarkFixtureIdentity $script:packageEvidence[$service].identity $script:packages[$service]
+        Assert-NativeBenchmarkFixtureBinding $script:packageEvidence[$service].binding $script:packages[$service]
+    }
     $blockedPolicy = Get-Content -LiteralPath (Join-Path $repoRoot 'deploy/native-canary/promotion-policy.json') -Raw | ConvertFrom-Json
     $openPolicy = Copy-Value $blockedPolicy
     $openPolicy.status = 'open'; $openPolicy.blockedBy = @()
@@ -308,6 +328,142 @@ try {
             Assert-Failure $result 'schema version is missing or not finite' "$type $target schema version"
         }
     }
+
+    # The arithmetic remains synthetic, but every native identity below comes
+    # from a completed original-byte OCI package with independent role hashes.
+    Assert-Decision (Invoke-Gate 'Gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence) 'promote' 'Case-insensitive service retains canonical image identity'
+    $upperHelper = @(Read-NativeBenchmarkImageEvidence -Directory $script:packages.admin.artifact -Service 'ADMIN' -NativeImage $script:packages.admin.requestedImage)
+    if ($upperHelper.Count -ne 1 -or $upperHelper[0].identity.service -cne 'admin') { throw 'Uppercase helper did not return one canonical identity.' }
+    Assert-BenchmarkHold 'Historical schema two cannot qualify' 'schema version 3' { param($b) $b.schemaVersion = 2 }
+    $result = Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -WithoutPackaging
+    Assert-Decision $result 'hold' 'Packaging directory is required'
+    Assert-Failure $result 'requires retained packaging evidence' 'Packaging directory is required'
+    Assert-BenchmarkHold 'Missing native top identity' 'native image binding could not be verified' { param($b) $b.nativeEvidence = $null }
+    Assert-BenchmarkHold 'Extra native top identity key' 'native image binding could not be verified' { param($b) $b.nativeEvidence | Add-Member -NotePropertyName unverified -NotePropertyValue $true }
+    Assert-BenchmarkHold 'Extra image binding key' 'native image binding differs' { param($b) $b.native.imageBinding | Add-Member -NotePropertyName unverified -NotePropertyValue $true }
+    Assert-BenchmarkHold 'Missing image binding key' 'native image binding differs' { param($b) $b.samples[2].native.imageBinding.PSObject.Properties.Remove('buildId') }
+    Assert-BenchmarkHold 'String binding schema' 'native image binding differs' { param($b) $b.samples[2].native.imageBinding.schemaVersion = '1' }
+    Assert-BenchmarkHold 'Boolean binding schema' 'native image binding differs' { param($b) $b.samples[2].native.imageBinding.schemaVersion = $true }
+    Assert-BenchmarkHold 'Raw image singleton array' 'different image or source revision' { param($b) $b.samples[1].native.image = @($b.samples[1].native.image) }
+    Assert-BenchmarkHold 'Raw revision singleton array' 'different image or source revision' { param($b) $b.samples[1].native.imageRevision = @($b.samples[1].native.imageRevision) }
+    Assert-BenchmarkHold 'Missing cold-start container identity' 'native container binding is missing or invalid' { param($b) $b.samples[0].native.PSObject.Properties.Remove('nativeContainerId') }
+    Assert-BenchmarkHold 'Array cold-start container identity' 'native container binding is missing or invalid' { param($b) $b.samples[0].native.nativeContainerId = @($b.samples[0].native.nativeContainerId) }
+    Assert-BenchmarkHold 'Uppercase cold-start container identity' 'native container binding is missing or invalid' { param($b) $b.samples[0].native.nativeContainerId = 'A' * 64 }
+    Assert-BenchmarkHold 'Repeated recorded cold-start container' 'repeats a recorded cold-start container' { param($b) $b.samples[4].native.nativeContainerId = $b.samples[0].native.nativeContainerId }
+    for ($index = 0; $index -lt 5; $index++) {
+        $sampleIndex = $index
+        Assert-BenchmarkHold "Forged native binding in pair $($index + 1)" 'native image binding differs' {
+            param($b) $b.samples[$sampleIndex].native.imageBinding.packagingEvidence.sha256 = 'f' * 64
+        }
+    }
+    foreach ($metric in @('publishDurationMilliseconds', 'applicationPublishDurationMilliseconds', 'healthProbePublishDurationMilliseconds', 'executableBytes', 'runtimeArtifactBytes')) {
+        $publishMetric = $metric
+        Assert-BenchmarkHold "Forged sealed publish metric $metric" 'native publish binding differs' { param($b) $b.nativePublish.$publishMetric += 1 }
+    }
+    Assert-BenchmarkHold 'Publish binding belongs to another build' 'native publish binding differs' { param($b) $b.nativePublish.imageBinding.buildId = 'f' * 32 }
+    Assert-BenchmarkHold 'Forged verified layer pull total' 'pull size differs from verified selected layers' {
+        param($b)
+        $b.native.pullBytes += 1
+        foreach ($sample in $b.samples) { $sample.native.pullBytes += 1 }
+        Set-Comparisons $b
+    }
+    foreach ($role in @('buildId', 'source', 'rootDescriptor', 'selectedManifestDescriptor', 'configDigest', 'runtimeFilesSha256', 'manifestHashes', 'application', 'healthProbe')) {
+        $identityRole = $role
+        Assert-BenchmarkHold "Forged independently sealed identity $role" 'native image binding could not be verified' {
+            param($b)
+            switch ($identityRole) {
+                'source' { $b.nativeEvidence.source.revision = 'f' * 40 }
+                'rootDescriptor' { $b.nativeEvidence.rootDescriptor.digest = $b.nativeEvidence.configDigest }
+                'selectedManifestDescriptor' { $b.nativeEvidence.selectedManifestDescriptor.digest = $b.nativeEvidence.rootDescriptor.digest }
+                'manifestHashes' { $b.nativeEvidence.manifestHashes.'application.json' = 'f' * 64 }
+                'application' { $b.nativeEvidence.application.executable.sha256 = 'f' * 64 }
+                'healthProbe' { $b.nativeEvidence.healthProbe.toolchain.ilCompiler.sha256 = 'f' * 64 }
+                'buildId' { $b.nativeEvidence.buildId = 'f' * 32 }
+                'configDigest' { $b.nativeEvidence.configDigest = $b.nativeEvidence.rootDescriptor.digest }
+                'runtimeFilesSha256' { $b.nativeEvidence.runtimeFilesSha256 = 'f' * 64 }
+            }
+        }
+    }
+    foreach ($role in @('config', 'manifest', 'wrapper')) {
+        $candidateEvidence = Copy-Value $gatewayEvidence
+        $candidateEvidence.candidateDigest = switch ($role) {
+            'config' { $script:packages.gateway.oci.configDigest }
+            'manifest' { $script:packages.gateway.oci.selectedDescriptor.digest }
+            'wrapper' { 'sha256:' + $script:packages.gateway.oci.wrapperSha256 }
+        }
+        $result = Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $candidateEvidence $adminEvidence
+        Assert-Decision $result 'hold' "Requested index cannot be substituted by $role"
+        Assert-Failure $result 'binding digest does not match canary evidence' "Requested index cannot be substituted by $role"
+    }
+    $raw = ConvertTo-Json -InputObject $gatewayBenchmark -Depth 64 -Compress
+    $duplicate = [Text.RegularExpressions.Regex]::new('"nativeContainerId"\s*:').Replace($raw, '"nativeContainerId":"' + ('f' * 64) + '","nativeContainerId":', 1)
+    if ($duplicate -ceq $raw) { throw 'Duplicate JSON fixture did not contain a real duplicate native identity key.' }
+    $result = Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -RawBenchmarkJson $duplicate
+    Assert-Decision $result 'hold' 'Actual duplicate raw native identity JSON'
+    Assert-Failure $result 'benchmark document is malformed' 'Actual duplicate raw native identity JSON'
+
+    $otherBuild = New-NativeBenchmarkPackagingFixture -ParentDirectory $temporaryRoot -Service 'gateway' -Revision ('1' * 40)
+    if ($otherBuild.buildId -ceq $script:packages.gateway.buildId -or $otherBuild.runtimeFilesSha256 -cne $script:packages.gateway.runtimeFilesSha256 -or
+        $otherBuild.source.revision -cne $script:packages.gateway.source.revision -or $otherBuild.metrics.executableBytes -ne $script:packages.gateway.metrics.executableBytes) {
+        throw 'Cross-build fixture must have identical source/payload/metrics and a distinct sealed build.'
+    }
+    $result = Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -PackagingDirectory $otherBuild.artifact
+    Assert-Decision $result 'hold' 'Different build with same source and payload cannot replace package'
+    Assert-Failure $result 'native image binding could not be verified' 'Different build with same source and payload cannot replace package'
+    $otherImageEvidence = Read-NativeBenchmarkImageEvidence -Directory $otherBuild.artifact -Service 'gateway' -NativeImage $otherBuild.requestedImage
+    $crossBuildBenchmark = Copy-Value $gatewayBenchmark
+    $crossBuildBenchmark.nativeEvidence = Copy-Value $otherImageEvidence.identity
+    $crossBuildBenchmark.nativePublish = Copy-Value $otherImageEvidence.nativePublish
+    foreach ($variant in @($crossBuildBenchmark.native) + @($crossBuildBenchmark.samples | ForEach-Object { $_.native })) {
+        $variant.image = $otherBuild.requestedImage
+        $variant.imageBinding = Copy-Value $otherImageEvidence.binding
+    }
+    $crossBuildBenchmark.samples[2].native.imageBinding = Copy-Value $script:packageEvidence.gateway.binding
+    $otherCanary = Copy-Value $gatewayEvidence; $otherCanary.candidateDigest = $otherImageEvidence.binding.requestedDigest
+    $result = Invoke-Gate 'gateway' $openPolicy $crossBuildBenchmark $otherCanary $adminEvidence -PackagingDirectory $otherBuild.artifact
+    Assert-Decision $result 'hold' 'One same-source cold sample belongs to another build'
+    Assert-Failure $result 'sample 3 .*image binding differs' 'One same-source cold sample belongs to another build'
+    foreach ($badSource in @('dirty', 'unavailable', 'hold')) {
+        $options = @{ ParentDirectory = $temporaryRoot; Service = 'gateway'; Revision = ('1' * 40) }
+        switch ($badSource) {
+            'dirty' { $options.SourceDirty = $true }
+            'unavailable' { $options.UnavailableSource = $true }
+            'hold' { $options.Scenario = 'oci-hold-no-descriptors' }
+        }
+        $fixture = New-NativeBenchmarkPackagingFixture @options
+        $badBenchmark = Copy-Value $gatewayBenchmark
+        foreach ($variant in @($badBenchmark.native) + @($badBenchmark.samples | ForEach-Object { $_.native })) { $variant.image = $fixture.requestedImage }
+        $badCanary = Copy-Value $gatewayEvidence; $badCanary.candidateDigest = $fixture.requestedImage.Substring($fixture.requestedImage.LastIndexOf('@') + 1)
+        $result = Invoke-Gate 'gateway' $openPolicy $badBenchmark $badCanary $adminEvidence -PackagingDirectory $fixture.artifact
+        Assert-Decision $result 'hold' "$badSource retained package cannot qualify"
+        Assert-Failure $result 'native image binding could not be verified' "$badSource retained package cannot qualify"
+    }
+    foreach ($mutation in @('package', 'manifest', 'payload', 'oci')) {
+        $clone = Join-Path $temporaryRoot ([Guid]::NewGuid().ToString('N'))
+        Copy-NativeBenchmarkPackagingFixture $script:packages.gateway $clone
+        $path = switch ($mutation) {
+            'package' { Join-Path $clone 'packaging-evidence.json' }
+            'manifest' { Join-Path $clone 'extracted/conduit-evidence/health-probe.json' }
+            'payload' { Join-Path $clone ('extracted/app/' + $script:packages.gateway.main) }
+            'oci' { Join-Path $clone 'image-save.tar' }
+        }
+        [IO.File]::AppendAllText($path, ' ')
+        $result = Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -PackagingDirectory $clone
+        Assert-Decision $result 'hold' "Mutated retained $mutation is rejected"
+        Assert-Failure $result 'native image binding could not be verified' "Mutated retained $mutation is rejected"
+    }
+    $selectedFixture = New-NativeBenchmarkPackagingFixture -ParentDirectory $temporaryRoot -Service 'gateway' -Revision ('1' * 40) -SelectedManifestRequest
+    $originalFixture = $script:packages.gateway; $originalEvidence = $script:packageEvidence.gateway
+    try {
+        $script:packages.gateway = $selectedFixture
+        $script:packageEvidence.gateway = Read-NativeBenchmarkImageEvidence -Directory $selectedFixture.artifact -Service 'gateway' -NativeImage $selectedFixture.requestedImage
+        Assert-NativeBenchmarkFixtureBinding $script:packageEvidence.gateway.binding $selectedFixture
+        Assert-NativeBenchmarkFixtureIdentity $script:packageEvidence.gateway.identity $selectedFixture
+        $selectedBenchmark = New-Benchmark 'gateway' 'c' 'd'
+        $selectedCanary = New-Evidence 'gateway' 'c' 'd'; $selectedCanary.startedAt = $gatewayEvidence.startedAt; $selectedCanary.completedAt = $gatewayEvidence.completedAt
+        Assert-Decision (Invoke-Gate 'gateway' $openPolicy $selectedBenchmark $selectedCanary $adminEvidence) 'promote' 'Selected manifest candidate binds to distinct observed local index'
+    }
+    finally { $script:packages.gateway = $originalFixture; $script:packageEvidence.gateway = $originalEvidence }
 
     Write-Host "Native promotion gate contract tests passed ($checks cases)."
 }

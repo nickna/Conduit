@@ -13,6 +13,7 @@ param(
     [int] $Requests,
     [int] $Concurrency,
     [string] $NativeBaselinePath,
+    [string] $NativePackagingDirectory,
     [string] $OutputPath,
     [ValidateRange(1024, 65534)][int] $Port = 18080,
     [string] $DockerCommandPath = 'docker',
@@ -24,6 +25,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$Service = $Service.ToLowerInvariant()
+. (Join-Path $PSScriptRoot 'native-benchmark-image-evidence.ps1')
 $privateRoot = $null
 $collectionFailure = $null
 
@@ -31,7 +34,9 @@ function Get-SafeFailureMessage([Exception] $Exception, [string] $Fallback) {
     $allowed = @(
         'Private command failed.', 'Private command failed and its cleanup failed.', 'Private command cleanup failed.',
         'Benchmark variant failed.', 'Benchmark variant failed and owned container cleanup failed.',
-        'Owned benchmark container cleanup failed.', 'Container ownership verification failed.'
+        'Owned benchmark container cleanup failed.', 'Container ownership verification failed.',
+        'Native benchmark image binding failed.', 'Native benchmark container image binding failed.',
+        'Native benchmark image changed during collection.'
     )
     if ($Exception.Message -cin $allowed) { return $Exception.Message }
     return $Fallback
@@ -354,10 +359,10 @@ function Set-ContainerEnvironmentValue($Values, [string] $Name, [string] $Value)
     $Values.Add($Name, $Value)
 }
 
-function Get-ImageMetadata([string] $Image) {
+function Get-ImageMetadata([string] $Image, $NativeEvidence = $null) {
     $inspect = Invoke-Docker @('image', 'inspect', '--format', '{{json .}}', $Image)
     if ($inspect.ExitCode -ne 0) { throw 'Image inspection failed.' }
-    $imageData = $inspect.Stdout | ConvertFrom-Json -AsHashtable
+    $imageData = Read-NativeImageVerificationJson $inspect.Stdout
     $revision = $imageData.Config.Labels['org.opencontainers.image.revision']
     if ($imageData.Os -cne 'linux' -or $imageData.Architecture -cne 'amd64' -or
         $imageData.Size -is [string] -or $imageData.Size -is [bool] -or $imageData.Size -le 0 -or
@@ -366,6 +371,21 @@ function Get-ImageMetadata([string] $Image) {
         $revision -isnot [string] -or [string]::IsNullOrWhiteSpace($revision) -or $revision -match '[\r\n\x00]') {
         throw 'Image metadata is invalid.'
     }
+    $localId = $imageData['Id']
+    if ($null -ne $NativeEvidence) {
+        try {
+            if ($localId -isnot [string] -or $localId -cne $NativeEvidence.binding.observedLocalImageId -or
+                $revision -cne $NativeEvidence.binding.sourceRevision) { throw 'Native image observation differs.' }
+            if ($null -ne $imageData['Descriptor']) {
+                $descriptor = Get-NativeOciDescriptor $imageData['Descriptor']
+                $expected = Get-NativeOciDescriptor $NativeEvidence.identity.rootDescriptor
+                if (-not (Test-NativeOciDescriptorCore $expected $descriptor)) { throw 'Native image descriptor differs.' }
+            }
+        }
+        catch { throw 'Native benchmark image binding failed.' }
+        return [pscustomobject]@{ ImageBytes = [long]$imageData.Size; PullBytes = $NativeEvidence.pullBytes; Revision = $revision; LocalId = $localId }
+    }
+    if ($localId -isnot [string] -or $localId -cnotmatch '^sha256:[0-9a-f]{64}$') { throw 'Image local identity is invalid.' }
     $manifestResult = Invoke-Docker @('manifest', 'inspect', $Image)
     if ($manifestResult.ExitCode -ne 0) { throw 'Image manifest inspection failed.' }
     $manifest = $manifestResult.Stdout | ConvertFrom-Json -AsHashtable
@@ -390,10 +410,10 @@ function Get-ImageMetadata([string] $Image) {
             [double]$size -gt ([long]::MaxValue - $pullBytes)) { throw 'Image layer size is invalid.' }
         $pullBytes += [long]$size
     }
-    return [pscustomobject]@{ ImageBytes = [long]$imageData.Size; PullBytes = $pullBytes; Revision = $revision }
+    return [pscustomobject]@{ ImageBytes = [long]$imageData.Size; PullBytes = $pullBytes; Revision = $revision; LocalId = $localId }
 }
 
-function Get-OwnedContainer($Record, [switch] $AllowMissing) {
+function Get-OwnedContainer($Record, [switch] $AllowMissing, [switch] $ValidateNativeImage) {
     $identity = if ($null -ne $Record.Id) { $Record.Id } else { $Record.Name }
     $result = Invoke-Docker @('inspect', '--format', '{{json .}}', $identity) $CleanupTimeoutSeconds
     if ($result.ExitCode -ne 0) {
@@ -403,7 +423,7 @@ function Get-OwnedContainer($Record, [switch] $AllowMissing) {
         }
         throw 'Owned container inspection failed.'
     }
-    $data = $result.Stdout | ConvertFrom-Json -AsHashtable
+    $data = Read-NativeImageVerificationJson $result.Stdout
     if ($data.Id -cnotmatch '^[0-9a-f]{64}$' -or $data.Name -cne ('/' + $Record.Name) -or
         $data.Config.Labels['conduit.native-benchmark.owner'] -cne $Record.Owner -or
         $data.Config.Labels['conduit.native-benchmark.service'] -cne $Service -or
@@ -412,6 +432,15 @@ function Get-OwnedContainer($Record, [switch] $AllowMissing) {
         throw 'Container ownership verification failed.'
     }
     $Record.Id = $data.Id
+    if ($ValidateNativeImage -and $Record.Runtime -ceq 'native-aot') {
+        try {
+            if ($data['Image'] -isnot [string] -or $data['Image'] -cne $nativeEvidence.binding.observedLocalImageId) {
+                throw 'Native container local identity differs.'
+            }
+            Assert-NativeImageRuntimeManifest -Record $nativeEvidence.packaging -Container $data
+        }
+        catch { throw 'Native benchmark container image binding failed.' }
+    }
     return $data
 }
 
@@ -496,17 +525,17 @@ function Measure-Variant([string] $Runtime, [string] $Image, $ImageMetadata, [in
     $samples = [System.Collections.Generic.List[long]]::new()
     $watch = [System.Diagnostics.Stopwatch]::StartNew()
     try {
-        $arguments = @('run', '--detach', '--name', $record.Name,
+        $arguments = @('run', '--detach', '--platform', 'linux/amd64', '--name', $record.Name,
             '--label', ('conduit.native-benchmark.owner=' + $owner),
             '--label', ('conduit.native-benchmark.service=' + $Service),
             '--label', ('conduit.native-benchmark.runtime=' + $Runtime),
             '--add-host', 'host.docker.internal:host-gateway',
-            '--publish', ('127.0.0.1:' + $HostPort + ':8080'), '--env-file', $environmentFile, $Image)
+            '--publish', ('127.0.0.1:' + $HostPort + ':8080'), '--env-file', $environmentFile, $ImageMetadata.LocalId)
         $attempted = $true
         $run = Invoke-Docker $arguments
         if ($run.ExitCode -ne 0 -or $run.Stdout.Trim() -cnotmatch '^[0-9a-f]{64}$') { throw 'Container start failed.' }
         $record.Id = $run.Stdout.Trim()
-        $container = Get-OwnedContainer $record
+        $container = Get-OwnedContainer $record -ValidateNativeImage
         if ($container.State.Running -isnot [bool] -or -not $container.State.Running) { throw 'Container start failed.' }
         $ready = $false
         $readyBudget = [System.Diagnostics.Stopwatch]::StartNew()
@@ -552,6 +581,7 @@ function Measure-Variant([string] $Runtime, [string] $Image, $ImageMetadata, [in
         }
         $steady = Get-ContainerMemory $record.Id
         $samples.Add($steady)
+        $null = Get-OwnedContainer $record -ValidateNativeImage
         $measurement = [pscustomobject]@{
             runtime = $Runtime; image = $Image; imageRevision = $ImageMetadata.Revision
             imageBytes = $ImageMetadata.ImageBytes; pullBytes = $ImageMetadata.PullBytes
@@ -559,6 +589,10 @@ function Measure-Variant([string] $Runtime, [string] $Image, $ImageMetadata, [in
             idleMemoryBytes = $idle; steadyStateMemoryBytes = $steady
             peakMemoryBytes = [long]($samples | Measure-Object -Maximum).Maximum
             memorySamplesBytes = @($samples.ToArray()); workloads = @($rows.ToArray())
+        }
+        if ($Runtime -ceq 'native-aot') {
+            $measurement | Add-Member -NotePropertyName imageBinding -NotePropertyValue $nativeEvidence.binding
+            $measurement | Add-Member -NotePropertyName nativeContainerId -NotePropertyValue $record.Id
         }
     }
     catch {
@@ -591,6 +625,12 @@ function Get-MedianVariant($Samples, [string] $Name) {
     $raw = @($Samples | ForEach-Object { $_.$Name })
     $first = $raw[0]
     $result = [ordered]@{ runtime = $first.runtime; image = $first.image; imageRevision = $first.imageRevision }
+    if ($Name -ceq 'native') {
+        foreach ($sample in $raw) {
+            Assert-NativeBenchmarkImageEvidenceEqual -Expected $nativeEvidence.binding -Actual $sample.imageBinding
+        }
+        $result.imageBinding = $nativeEvidence.binding
+    }
     foreach ($name in $commonNames) { $result[$name] = Get-Median @($raw | ForEach-Object { $_.$name }) }
     $rows = [System.Collections.Generic.List[object]]::new()
     foreach ($id in $requiredIds) {
@@ -622,6 +662,11 @@ try {
         if ($image -cnotmatch '^[a-zA-Z0-9][a-zA-Z0-9._:/-]*@sha256:[0-9a-f]{64}$') { throw 'Images must be pinned by digest.' }
     }
     if (($JitImage -split '@')[1] -ceq ($NativeImage -split '@')[1]) { throw 'JIT and native image digests must differ.' }
+    if ($PSBoundParameters.ContainsKey('NativeBaselinePath') -or [string]::IsNullOrWhiteSpace($NativePackagingDirectory)) {
+        throw 'Native benchmark image binding failed.'
+    }
+    try { $nativeEvidence = Read-NativeBenchmarkImageEvidence -Directory $NativePackagingDirectory -Service $Service -NativeImage $NativeImage }
+    catch { throw 'Native benchmark image binding failed.' }
     $WorkloadProbePath = [System.IO.Path]::GetFullPath($WorkloadProbePath)
     if (-not [System.IO.File]::Exists($WorkloadProbePath)) { throw 'Workload probe is missing.' }
     $apiKey = [Environment]::GetEnvironmentVariable('CONDUIT_NATIVE_BENCHMARK_API_KEY')
@@ -637,21 +682,9 @@ try {
     $database = ConvertTo-ContainerUrl $DatabaseUrl @('postgres', 'postgresql')
     $redis = ConvertTo-ContainerUrl $RedisUrl @('redis', 'rediss')
     $jitMetadata = Get-ImageMetadata $JitImage
-    $nativeMetadata = Get-ImageMetadata $NativeImage
+    $nativeMetadata = Get-ImageMetadata $NativeImage $nativeEvidence
     if ($jitMetadata.Revision -cne $nativeMetadata.Revision) { throw 'JIT and native image revisions must match.' }
-    $nativePublish = $null
-    if (-not [string]::IsNullOrWhiteSpace($NativeBaselinePath)) {
-        $baselineDocument = Read-JsonDocument $NativeBaselinePath
-        try { $baseline = $baselineDocument.RootElement.GetRawText() | ConvertFrom-Json }
-        finally { $baselineDocument.Dispose() }
-        $name = if ($Service -eq 'admin') { 'Admin' } else { 'Gateway' }
-        $matches = @($baseline.services | Where-Object { $_.service -ceq $name -and $_.rid -ceq 'linux-x64' })
-        if ($matches.Count -ne 1) { throw 'Native publish baseline does not match the service.' }
-        $nativePublish = [ordered]@{ service = $name; rid = 'linux-x64' }
-        foreach ($metric in @('publishDurationMilliseconds', 'executableBytes', 'runtimeArtifactBytes')) {
-            $nativePublish[$metric] = Get-ResultNumber $matches[0] $metric -Integer -Positive
-        }
-    }
+    $nativePublish = $nativeEvidence.nativePublish
     $privateRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('conduit-benchmark-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $privateRoot | Out-Null
     Protect-PrivatePath $privateRoot -Directory
@@ -713,11 +746,17 @@ try {
         }
         $workloadComparisons.Add([pscustomobject]$row)
     }
+    try {
+        $finalEvidence = Read-NativeBenchmarkImageEvidence -Directory $NativePackagingDirectory -Service $Service -NativeImage $NativeImage
+        Assert-NativeBenchmarkImageEvidenceEqual -Expected $nativeEvidence.identity -Actual $finalEvidence.identity
+    }
+    catch { throw 'Native benchmark image changed during collection.' }
     $report = [pscustomobject]@{
-        schemaVersion = 2; generatedAt = [DateTimeOffset]::UtcNow.ToString('O'); service = $Service; platform = 'linux-x64'
+        schemaVersion = 3; generatedAt = [DateTimeOffset]::UtcNow.ToString('O'); service = $Service; platform = 'linux-x64'
         pairedRuns = $PairedRuns
         methodology = 'One unrecorded warm pair, then alternating cold JIT/native container pairs; authenticated workload latency includes complete JSON/SSE response validation. Memory is Docker container usage in bytes, sampled during workload execution.'
         environment = $environment; jit = $jit; native = $native; samples = @($samples.ToArray()); nativePublish = $nativePublish
+        nativeEvidence = $nativeEvidence.identity
         comparison = [pscustomobject]@{ common = $comparisonCommon; workloads = @($workloadComparisons.ToArray()) }
     }
 }
