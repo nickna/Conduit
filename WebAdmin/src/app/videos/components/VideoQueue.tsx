@@ -160,7 +160,7 @@ export default function VideoQueue() {
                 </Text>
               </Group>
               
-              <Collapse in={retryHistoryOpen}>
+              <Collapse expanded={retryHistoryOpen}>
                 <List size="sm" mt="xs" spacing="xs">
                   {currentTask.retryHistory.map((retry) => (
                     <List.Item key={`${retry.attemptNumber}-${retry.timestamp}`}>

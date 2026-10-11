@@ -184,7 +184,7 @@ export function ErrorDisplay({
             </Button>
           )}
 
-          <Collapse in={detailsOpen}>
+          <Collapse expanded={detailsOpen}>
             <Stack gap="xs" mt="sm">
               {errorInstance.name !== 'Error' && (
                 <Group>

@@ -311,7 +311,7 @@ export default function FunctionExecutionsPage() {
       >
         {selectedExecution && (
           <Stack gap="md">
-            <Grid gutter="md">
+            <Grid gap="md">
               <Grid.Col span={6}>
                 <Text size="sm" fw={500} c="dimmed">Execution ID</Text>
                 <Code>{selectedExecution.id}</Code>

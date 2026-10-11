@@ -103,7 +103,7 @@ jest.mock('@mantine/core', () => {
 
   interface CollapseProps {
     children: React.ReactNode;
-    in?: boolean;
+    expanded?: boolean;
   }
 
   interface ActionIconProps {
@@ -211,8 +211,8 @@ jest.mock('@mantine/core', () => {
     />
   );
 
-  const Collapse = ({ children, in: inProp }: CollapseProps) =>
-    inProp ? <div data-testid="collapse">{children}</div> : null;
+  const Collapse = ({ children, expanded }: CollapseProps) =>
+    expanded ? <div data-testid="collapse">{children}</div> : null;
 
   const ActionIcon = ({ children, variant, size }: ActionIconProps) => (
     <button
