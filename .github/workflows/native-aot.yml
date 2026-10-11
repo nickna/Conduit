@@ -112,8 +112,8 @@ jobs:
         with:
           project: Tests/ConduitLLM.IntegrationTests
           suite: native-persistence-parity
-          filter: FullyQualifiedName~PersistenceParityTests|FullyQualifiedName~NativePersistenceCleanupParityTests|FullyQualifiedName~GlobalSettingRepositoryParityTests|FullyQualifiedName~IpFilterRepositoryParityTests|FullyQualifiedName~ProviderPersistenceParityTests|FullyQualifiedName~SchemaVersionProbeTests|FullyQualifiedName~NpgsqlConnectionPoolWarmupTests|FullyQualifiedName~FunctionCredentialFixtureTests
-          minimum: '65'
+          filter: FullyQualifiedName~PersistenceParityTests|FullyQualifiedName~NativePersistenceCleanupParityTests|FullyQualifiedName~GlobalSettingRepositoryParityTests|FullyQualifiedName~IpFilterRepositoryParityTests|FullyQualifiedName~ProviderPersistenceParityTests|FullyQualifiedName~SchemaVersionProbeTests|FullyQualifiedName~NpgsqlConnectionPoolWarmupTests|FullyQualifiedName~FunctionCredentialFixtureTests|FullyQualifiedName~NativeFunctionProviderTests
+          minimum: '87'
         env:
           CONDUIT_LOCK_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
           CONDUIT_LOCK_TEST_REDIS: 127.0.0.1:6379

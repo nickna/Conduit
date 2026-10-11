@@ -47,6 +47,10 @@
 
   <ItemGroup>
     <Compile Include="../ConduitLLM.PersistenceAotTests/PersistenceProbeLifecycle.cs" Link="Infrastructure/PersistenceProbeLifecycle.cs" />
+    <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeFunctionFixture.cs" Link="Infrastructure/NativeFunctionFixture.cs" />
+    <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeProviderStub.cs" Link="Infrastructure/NativeProviderStub.cs" />
+    <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeProviderHttpRequestReader.cs" Link="Infrastructure/NativeProviderHttpRequestReader.cs" />
+    <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeProbeJsonContext.cs" Link="Infrastructure/NativeProbeJsonContext.cs" />
   </ItemGroup>
 
 </Project>

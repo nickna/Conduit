@@ -1,9 +1,10 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 
 /// <summary>
-/// Minimal OpenAI-compatible upstream used by the native process gate. Keeping the
+/// Minimal OpenAI-compatible and Exa upstream used by the native process gate. Keeping the
 /// provider in a separate process proves the real HTTP and SSE transport rather than
 /// replacing the production client with an in-memory test double.
 /// </summary>
@@ -21,8 +22,12 @@ internal static class NativeProviderStub
     private static int _authorizationFailures;
     private static int _activeCancellationRequests;
     private static int _cancellationsObserved;
+    private static int _functionRequests;
+    private static int _functionErrorRequests;
+    private static int _functionAuthorizationFailures;
+    private static int _functionChunkedRequests;
 
-    public static async Task RunAsync(Uri baseAddress)
+    public static async Task RunAsync(Uri baseAddress, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(baseAddress);
         if (!baseAddress.IsLoopback || baseAddress.Scheme != Uri.UriSchemeHttp)
@@ -37,8 +42,8 @@ internal static class NativeProviderStub
 
         while (true)
         {
-            var client = await listener.AcceptTcpClientAsync();
-            _ = HandleClientAsync(client).ContinueWith(
+            var client = await listener.AcceptTcpClientAsync(cancellationToken);
+            _ = HandleClientAsync(client, cancellationToken).ContinueWith(
                 static task => Console.Error.WriteLine(task.Exception),
                 CancellationToken.None,
                 TaskContinuationOptions.OnlyOnFaulted,
@@ -46,14 +51,17 @@ internal static class NativeProviderStub
         }
     }
 
-    private static async Task HandleClientAsync(TcpClient client)
+    private static async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
     {
         using (client)
         await using (var stream = client.GetStream())
         {
             NativeProviderHttpRequest? request;
-            using (var requestDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
+            using (var requestDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                requestDeadline.CancelAfter(TimeSpan.FromSeconds(10));
                 request = await NativeProviderHttpRequestReader.ReadAsync(stream, requestDeadline.Token);
+            }
             if (request is null)
             {
                 return;
@@ -68,9 +76,15 @@ internal static class NativeProviderStub
             if (request.Method == "GET" && request.Path == "/probe/state")
             {
                 var state = $$"""
-                    {"non_stream_requests":{{Volatile.Read(ref _nonStreamingRequests)}},"stream_requests":{{Volatile.Read(ref _streamingRequests)}},"image_requests":{{Volatile.Read(ref _imageRequests)}},"error_requests":{{Volatile.Read(ref _errorRequests)}},"authorization_failures":{{Volatile.Read(ref _authorizationFailures)}},"active_cancellation_requests":{{Volatile.Read(ref _activeCancellationRequests)}},"cancellations_observed":{{Volatile.Read(ref _cancellationsObserved)}}}
+                    {"non_stream_requests":{{Volatile.Read(ref _nonStreamingRequests)}},"stream_requests":{{Volatile.Read(ref _streamingRequests)}},"image_requests":{{Volatile.Read(ref _imageRequests)}},"error_requests":{{Volatile.Read(ref _errorRequests)}},"authorization_failures":{{Volatile.Read(ref _authorizationFailures)}},"active_cancellation_requests":{{Volatile.Read(ref _activeCancellationRequests)}},"cancellations_observed":{{Volatile.Read(ref _cancellationsObserved)}},"function_requests":{{Volatile.Read(ref _functionRequests)}},"function_error_requests":{{Volatile.Read(ref _functionErrorRequests)}},"function_authorization_failures":{{Volatile.Read(ref _functionAuthorizationFailures)}},"function_chunked_requests":{{Volatile.Read(ref _functionChunkedRequests)}}}
                     """;
                 await WriteJsonAsync(stream, HttpStatusCode.OK, state);
+                return;
+            }
+
+            if (request.Method == "POST" && request.Path == "/search")
+            {
+                await WriteFunctionSearchAsync(stream, request);
                 return;
             }
 
@@ -133,6 +147,50 @@ internal static class NativeProviderStub
                 {"id":"chatcmpl-native-nonstream","object":"chat.completion","created":1787800000,"model":"native-aot-provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"native provider response"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}
                 """);
         }
+    }
+
+    private static async Task WriteFunctionSearchAsync(NetworkStream stream, NativeProviderHttpRequest request)
+    {
+        if (request.Headers.TryGetValue("Transfer-Encoding", out var encoding) && encoding == "chunked")
+            Interlocked.Increment(ref _functionChunkedRequests);
+        if (!request.Headers.TryGetValue("x-api-key", out var apiKey) || apiKey != NativeFunctionFixture.ApiKey)
+        {
+            Interlocked.Increment(ref _functionAuthorizationFailures);
+            await WriteJsonAsync(stream, HttpStatusCode.Unauthorized,
+                """{"error":{"message":"native function credential rejected","type":"authentication_error"}}""");
+            return;
+        }
+
+        string? query = null;
+        try
+        {
+            using var body = JsonDocument.Parse(request.Body);
+            if (body.RootElement.ValueKind == JsonValueKind.Object &&
+                body.RootElement.TryGetProperty("query", out var value) && value.ValueKind == JsonValueKind.String)
+                query = value.GetString();
+        }
+        catch (JsonException) { }
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            Interlocked.Increment(ref _functionErrorRequests);
+            await WriteJsonAsync(stream, HttpStatusCode.BadRequest,
+                """{"error":{"message":"native function query is required","type":"invalid_request_error"}}""");
+            return;
+        }
+
+        if (query.Contains("native-function-error", StringComparison.Ordinal))
+        {
+            Interlocked.Increment(ref _functionErrorRequests);
+            await WriteJsonAsync(stream, HttpStatusCode.BadRequest,
+                """{"error":{"message":"native function upstream private diagnostic","type":"invalid_request_error","code":"native_bad_query"}}""");
+            return;
+        }
+
+        Interlocked.Increment(ref _functionRequests);
+        // Deliberately omit costDollars so execution must use configured pricing.
+        await WriteJsonAsync(stream, HttpStatusCode.OK, """
+            {"requestId":"native-function-search","resolvedSearchType":"neural","results":[{"title":"Native search 雪 🔎","url":"https://example.test/native-function","publishedDate":"2026-10-11T00:00:00Z","author":"Native fixture","score":0.875,"text":"Unicode text café 雪","highlights":["snow 雪","café"],"highlightScores":[0.875,0.75],"summary":"Native summary","subpages":[{"title":"Nested 雪","url":"https://example.test/native-function/child","text":"Nested content"}],"extras":{"links":["https://example.test/link"],"imageLinks":["https://example.test/image.png"]}}]}
+            """);
     }
 
     private static async Task WriteStreamingResponseAsync(NetworkStream stream)
