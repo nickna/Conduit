@@ -63,7 +63,10 @@ function Invoke-OwnedChild([string] $Script, [string[]] $Arguments, [hashtable] 
     $start.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
     $start.StandardErrorEncoding = [Text.UTF8Encoding]::new($false)
     foreach ($argument in @('-NoProfile', '-File', $Script) + $Arguments) { $start.ArgumentList.Add($argument) }
-    foreach ($name in $Environment.Keys) { $start.Environment[$name] = [string]$Environment[$name] }
+    foreach ($name in $Environment.Keys) {
+        if ($null -eq $Environment[$name]) { $start.Environment.Remove($name) | Out-Null }
+        else { $start.Environment[$name] = [string]$Environment[$name] }
+    }
     $process = [Diagnostics.Process]::Start($start)
     $stdout = $process.StandardOutput.ReadToEndAsync(); $stderr = $process.StandardError.ReadToEndAsync()
     try {
@@ -84,18 +87,106 @@ function Invoke-OwnedChild([string] $Script, [string[]] $Arguments, [hashtable] 
     }
 }
 
-function Get-ChildEnvironment([string] $CaseRoot, [string] $Scenario) {
-    return @{
+function Get-ChildEnvironment([string] $CaseRoot, [string] $Scenario, $SourceFixture = $null) {
+    $environment = @{
         CONDUIT_IMAGE_TEST_ROOT = $CaseRoot; CONDUIT_IMAGE_TEST_SCENARIO = $Scenario
         CONDUIT_IMAGE_TEST_PUBLISHER = $producer; CONDUIT_IMAGE_TEST_DOTNET = $script:fakeDotnet
         CONDUIT_IMAGE_TEST_DRIVER = $script:pwshPath; CONDUIT_IMAGE_TEST_TOOLROOT = $script:toolRoot
+        CONDUIT_IMAGE_TEST_SOURCE_ROOT = $null; CONDUIT_IMAGE_TEST_TRACKED_FILE = $null
     }
+    if ($null -ne $SourceFixture) {
+        $environment.CONDUIT_IMAGE_TEST_PUBLISHER = $SourceFixture.Producer
+        $environment.CONDUIT_IMAGE_TEST_SOURCE_ROOT = $SourceFixture.Root
+        $environment.CONDUIT_IMAGE_TEST_TRACKED_FILE = $SourceFixture.TrackedFile
+        $environment.GIT_CONFIG_NOSYSTEM = '1'; $environment.GIT_CONFIG_GLOBAL = $SourceFixture.GlobalConfig
+        foreach ($name in @('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY',
+            'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_CONFIG', 'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS') +
+            @([Environment]::GetEnvironmentVariables().Keys | Where-Object { $_ -cmatch '^GIT_CONFIG_(?:KEY|VALUE)_[0-9]+$' })) {
+            $environment[$name] = $null
+        }
+    }
+    return $environment
+}
+
+function Invoke-FixtureGit([string] $Root, [string] $GlobalConfig, [string[]] $Arguments) {
+    $start = [Diagnostics.ProcessStartInfo]::new()
+    $start.FileName = $script:gitPath
+    $start.UseShellExecute = $false; $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true
+    foreach ($argument in @('-C', $Root) + $Arguments) { $start.ArgumentList.Add($argument) }
+    $start.Environment['GIT_CONFIG_NOSYSTEM'] = '1'; $start.Environment['GIT_CONFIG_GLOBAL'] = $GlobalConfig
+    foreach ($name in @('GIT_AUTHOR_NAME', 'GIT_COMMITTER_NAME')) { $start.Environment[$name] = 'Owned native image fixture' }
+    foreach ($name in @('GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_EMAIL')) { $start.Environment[$name] = 'native-image-fixture@example.invalid' }
+    foreach ($name in @('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY',
+        'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_CONFIG', 'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS', 'GIT_AUTHOR_DATE', 'GIT_COMMITTER_DATE', 'GIT_TEMPLATE_DIR') +
+        @($start.Environment.Keys | Where-Object { $_ -cmatch '^GIT_CONFIG_(?:KEY|VALUE)_[0-9]+$' })) {
+        $start.Environment.Remove($name) | Out-Null
+    }
+    $process = [Diagnostics.Process]::Start($start)
+    $stdout = $process.StandardOutput.ReadToEndAsync(); $stderr = $process.StandardError.ReadToEndAsync()
+    try {
+        if (-not $process.WaitForExit(15000)) {
+            $process.Kill($true)
+            Assert-Contract ($process.WaitForExit(5000)) 'Owned Git fixture process did not reap.'
+            throw 'Owned Git fixture process exceeded its deadline.'
+        }
+        Assert-Contract ([Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($stdout, $stderr), 5000)) 'Owned Git fixture streams did not close.'
+        Assert-Contract ($process.ExitCode -eq 0) 'Owned Git fixture operation failed.'
+        return $stdout.Result.TrimEnd([char[]]@([char]10, [char]13))
+    }
+    finally {
+        if (-not $process.HasExited) {
+            $process.Kill($true)
+            Assert-Contract ($process.WaitForExit(5000)) 'Owned Git fixture process did not reap during cleanup.'
+        }
+        $process.Dispose()
+    }
+}
+
+function New-SourceFixture([string] $CaseRoot, [bool] $InitializeGit) {
+    $root = Join-Path $CaseRoot 'source café 雪'
+    $scripts = Join-Path $root 'scripts/aot'
+    [IO.Directory]::CreateDirectory($scripts) | Out-Null
+    foreach ($name in @('publish-native-image.ps1', 'native-publish-build.ps1', 'native-publish-evidence.ps1',
+        'native-image-publish-evidence.ps1', 'native-publish-toolchain.targets', 'evaluate-native-linker-warnings.ps1')) {
+        [IO.File]::Copy((Join-Path $PSScriptRoot $name), (Join-Path $scripts $name), $false)
+    }
+    [IO.File]::Copy((Join-Path $PSScriptRoot '../../.gitignore'), (Join-Path $root '.gitignore'), $false)
+    $tracked = Join-Path $root 'source-fixture.txt'
+    [IO.File]::WriteAllText($tracked, 'Owned tracked source café 雪.', [Text.UTF8Encoding]::new($false))
+    $globalConfig = Join-Path $CaseRoot 'empty-git-global.config'; [IO.File]::WriteAllBytes($globalConfig, [byte[]]::new(0))
+    $hooks = Join-Path $CaseRoot 'empty-git-hooks'; [IO.Directory]::CreateDirectory($hooks) | Out-Null
+    $head = $null
+    if ($InitializeGit) {
+        Invoke-FixtureGit $root $globalConfig @('init', '--quiet') | Out-Null
+        foreach ($pair in @(@('core.autocrlf', 'false'), @('core.hooksPath', $hooks), @('commit.gpgsign', 'false'),
+            @('user.name', 'Owned native image fixture'), @('user.email', 'native-image-fixture@example.invalid'))) {
+            Invoke-FixtureGit $root $globalConfig @('config', '--local', $pair[0], $pair[1]) | Out-Null
+        }
+        Invoke-FixtureGit $root $globalConfig @('add', '--', '.') | Out-Null
+        Invoke-FixtureGit $root $globalConfig @('commit', '--quiet', '--message', 'Owned native image source fixture') | Out-Null
+        $head = Invoke-FixtureGit $root $globalConfig @('rev-parse', '--verify', 'HEAD')
+        Assert-Contract ($head -cmatch '\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z' -and
+            [string]::IsNullOrEmpty((Invoke-FixtureGit $root $globalConfig @('status', '--porcelain', '--untracked-files=normal')))) 'Owned source fixture was not a clean real Git commit.'
+    }
+    return [pscustomobject]@{ Root = $root; Producer = Join-Path $scripts 'publish-native-image.ps1'
+        TrackedFile = $tracked; GlobalConfig = $globalConfig; Head = $head }
 }
 
 function Invoke-ImageCase([string] $Service, [string] $Scenario, [bool] $Success, [int] $ExpectedPublishes) {
     $caseRoot = New-OwnedDirectory
     [IO.Directory]::CreateDirectory((Join-Path $caseRoot 'commands')) | Out-Null
     $artifact = Join-Path $caseRoot 'artifact'
+    $sourceFixture = $null
+    if ($Scenario.StartsWith('strict-', [StringComparison]::Ordinal) -or $Scenario -cin @('local-git-dev', 'commit-mismatch')) {
+        $sourceFixture = New-SourceFixture $caseRoot ($Scenario -cne 'strict-unavailable')
+        if ($Scenario -cin @('strict-tracked', 'strict-uppercase-selector')) { [IO.File]::AppendAllText($sourceFixture.TrackedFile, ' changed before publish') }
+        if ($Scenario -ceq 'strict-untracked') { [IO.File]::WriteAllText((Join-Path $sourceFixture.Root 'untracked-source.txt'), 'Owned untracked source') }
+        if ($Scenario -ceq 'strict-ignored-obj') {
+            $obj = Join-Path $sourceFixture.Root 'obj'; [IO.Directory]::CreateDirectory($obj) | Out-Null
+            [IO.File]::WriteAllText((Join-Path $obj 'ignored-output'), 'Owned ignored build output')
+        }
+    }
     $foreign = $null
     if ($Scenario -ceq 'linked-output') {
         $foreign = Join-Path $caseRoot 'external-sentinel'
@@ -109,10 +200,24 @@ function Invoke-ImageCase([string] $Service, [string] $Scenario, [bool] $Success
         [IO.Directory]::CreateDirectory($artifact) | Out-Null
         [IO.File]::WriteAllText((Join-Path $artifact 'sentinel'), 'existing image output')
     }
-    $commit = if ($Scenario -ceq 'commit-mismatch') { '0000000000000000000000000000000000000000' } else { 'dev' }
-    $result = Invoke-OwnedChild $script:wrapper @('-Service', $Service, '-ArtifactDirectory', $artifact,
-        '-Runtime', $script:rid, '-Version', $fixtureVersion, '-CommitSha', $commit, '-BuildTimestamp', $fixtureTimestamp,
-        '-WarningBaselinePath', $script:warningBaseline) (Get-ChildEnvironment $caseRoot $Scenario)
+    $commit = if ($Scenario.StartsWith('strict-', [StringComparison]::Ordinal) -and $null -ne $sourceFixture.Head) { $sourceFixture.Head } else { 'dev' }
+    switch ($Scenario) {
+        { $_ -cin @('commit-mismatch', 'strict-mismatch', 'strict-unavailable') } { $commit = '0' * 40 }
+        'strict-dev' { $commit = 'dev' }
+        'strict-blank-commit' { $commit = '' }
+        'strict-abbreviated-commit' { $commit = $sourceFixture.Head.Substring(0, 12) }
+        'strict-uppercase-commit' {
+            $commit = $sourceFixture.Head.ToUpperInvariant()
+            Assert-Contract ($commit -cne $sourceFixture.Head) 'Owned uppercase commit fixture did not change its spelling.'
+        }
+    }
+    $arguments = @('-Service', $Service, '-ArtifactDirectory', $artifact, '-Runtime', $script:rid,
+        '-Version', $fixtureVersion, '-BuildTimestamp', $fixtureTimestamp, '-WarningBaselinePath', $script:warningBaseline)
+    if ($Scenario -cne 'strict-missing-commit') { $arguments += @('-CommitSha', $commit) }
+    if ($Scenario.StartsWith('strict-', [StringComparison]::Ordinal)) {
+        $arguments += @('-SourcePolicy', $(if ($Scenario -ceq 'strict-uppercase-selector') { 'REQUIRE-CLEAN-GIT' } else { 'require-clean-git' }))
+    }
+    $result = Invoke-OwnedChild $script:wrapper $arguments (Get-ChildEnvironment $caseRoot $Scenario $sourceFixture)
     $records = Get-Records $caseRoot
     $evidence = Join-Path $artifact 'evidence'
     $jsons = if ([IO.Directory]::Exists($evidence)) { @(Get-ChildItem -LiteralPath $evidence -File -Filter '*.json') } else { @() }
@@ -121,6 +226,15 @@ function Invoke-ImageCase([string] $Service, [string] $Scenario, [bool] $Success
     if (-not $Success) {
         Assert-Contract ($result.ExitCode -ne 0 -and $jsons.Count -eq 0) ('Failed image publish left success evidence; ' + $diagnostic)
         if ($ExpectedPublishes -gt 0) { Assert-Contract ([IO.File]::Exists((Join-Path $artifact 'native-image-publish.claim'))) 'Failed image producer discarded its claim.' }
+        if ($Scenario.StartsWith('strict-', [StringComparison]::Ordinal) -and $ExpectedPublishes -eq 0) {
+            Assert-Contract (-not [IO.Directory]::Exists($artifact) -and -not [IO.File]::Exists((Join-Path $artifact 'native-image-publish.claim'))) 'Strict source rejection wrote output or acquired a publish claim.'
+        }
+        if ($Scenario -ceq 'strict-mutated-during-publish') {
+            Assert-Contract ([IO.File]::Exists((Join-Path $caseRoot 'source-mutated')) -and
+                [IO.File]::ReadAllText($sourceFixture.TrackedFile).EndsWith(' changed during health publish', [StringComparison]::Ordinal) -and
+                -not [string]::IsNullOrEmpty((Invoke-FixtureGit $sourceFixture.Root $sourceFixture.GlobalConfig @('status', '--porcelain', '--untracked-files=normal'))) -and
+                $result.Stdout.Contains('Owned image native publish complete.', [StringComparison]::Ordinal)) 'Strict final source rejection did not follow two completed publishes and a real tracked mutation.'
+        }
         if ($Scenario -cin @('health-sidecar', 'payload-collision', 'copied-binary-mismatch', 'capture-root-mismatch', 'health-linker-warning')) {
             Assert-Contract ($result.Stdout.Contains('Owned image native publish complete.', [StringComparison]::Ordinal)) 'Intended image rejection preceded all fake native output.'
         }
@@ -195,6 +309,15 @@ function Invoke-ImageCase([string] $Service, [string] $Scenario, [bool] $Success
             Assert-Contract ($application.source.revision -ceq $image.commitMetadata.commitSha -and
                 $health.source.revision -ceq $application.source.revision) 'Actual source identity is not the requested image revision.'
         }
+        if ($null -ne $sourceFixture) {
+            foreach ($manifest in @($application, $health)) {
+                Assert-Contract ($manifest.source.Count -eq 3 -and $manifest.source.status -ceq 'git' -and
+                    $manifest.source.revision -ceq $sourceFixture.Head -and $manifest.source.dirty -is [bool] -and -not $manifest.source.dirty) 'Owned clean Git source is not bound to both executable manifests.'
+            }
+            Assert-Contract ($image.commitMetadata.commitSha -ceq $sourceFixture.Head -and
+                [string]::IsNullOrEmpty((Invoke-FixtureGit $sourceFixture.Root $sourceFixture.GlobalConfig @('status', '--porcelain', '--untracked-files=normal'))) -and
+                @($records | Where-Object { $_.arguments[1].StartsWith($sourceFixture.Root + [IO.Path]::DirectorySeparatorChar, [StringComparison]::Ordinal) }).Count -eq 2) 'Owned Git HEAD did not bind all three documents or the actual source publish inputs.'
+        }
         [long]$sum = 0
         foreach ($file in $payloadFiles) { $sum += $file.Length }
         Assert-Contract ($image.metrics.runtimeArtifactBytes -eq $sum -and $image.metrics.executableBytes -eq
@@ -226,6 +349,8 @@ function Assert-EvidenceRejected([string] $Evidence, [string] $Payload, [string]
 try {
     [IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
     $script:pwshPath = (Get-Command pwsh -CommandType Application | Select-Object -First 1).Source
+    $script:gitPath = (Get-Command git -CommandType Application | Select-Object -First 1).Source
+    Assert-Contract (-not [string]::IsNullOrWhiteSpace($script:gitPath)) 'Real Git is required for the owned native image source contracts.'
     $script:rid = if ($IsWindows) { 'win-x64' } else { 'linux-x64' }
     $script:toolRoot = New-OwnedDirectory
     [IO.Directory]::CreateDirectory((Join-Path $script:toolRoot 'tools')) | Out-Null
@@ -238,7 +363,7 @@ try {
     $script:wrapper = Join-Path $temporaryRoot 'invoke-image-publisher.ps1'
     $script:fakeDotnet = Join-Path $temporaryRoot 'fake-image-dotnet.ps1'
     [IO.File]::WriteAllText($script:wrapper, @'
-param([string]$Service,[string]$ArtifactDirectory,[string]$Runtime,[string]$Version,[string]$CommitSha,[string]$BuildTimestamp,[string]$WarningBaselinePath)
+param([string]$Service,[string]$ArtifactDirectory,[string]$Runtime,[string]$Version,[string]$CommitSha,[string]$BuildTimestamp,[string]$WarningBaselinePath,[string]$SourcePolicy='local')
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 function dotnet {
@@ -248,7 +373,10 @@ function dotnet {
 }
 if ($env:CONDUIT_IMAGE_TEST_SCENARIO -ceq 'source-unavailable') { function git { $global:LASTEXITCODE = 128 } }
 try {
-    & $env:CONDUIT_IMAGE_TEST_PUBLISHER -Service $Service -ArtifactDirectory $ArtifactDirectory -Runtime $Runtime -Version $Version -CommitSha $CommitSha -BuildTimestamp $BuildTimestamp -WarningBaselinePath $WarningBaselinePath
+    $parameters = @{ Service=$Service; ArtifactDirectory=$ArtifactDirectory; Runtime=$Runtime; Version=$Version;
+        BuildTimestamp=$BuildTimestamp; WarningBaselinePath=$WarningBaselinePath; SourcePolicy=$SourcePolicy }
+    if ($PSBoundParameters.ContainsKey('CommitSha')) { $parameters.CommitSha=$CommitSha }
+    & $env:CONDUIT_IMAGE_TEST_PUBLISHER @parameters
     exit 0
 }
 catch { [Console]::Error.WriteLine('Owned image publisher failed; type=' + $_.Exception.GetType().FullName + '; line=' + [int]$_.InvocationInfo.ScriptLineNumber + '.'); exit 1 }
@@ -260,6 +388,8 @@ $ErrorActionPreference = 'Stop'
 try {
     [string[]]$arguments = @([Text.UTF8Encoding]::new($false,$true).GetString([Convert]::FromBase64String($EncodedArguments)) | ConvertFrom-Json)
     $root = $env:CONDUIT_IMAGE_TEST_ROOT; $scenario = $env:CONDUIT_IMAGE_TEST_SCENARIO
+    $sourceRoot = $env:CONDUIT_IMAGE_TEST_SOURCE_ROOT
+    if (-not [string]::IsNullOrWhiteSpace($sourceRoot) -and -not $arguments[1].StartsWith($sourceRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::Ordinal)) { throw 'Owned publisher used source outside its Git fixture.' }
     $recordPath = Join-Path $root ('commands/' + [Guid]::NewGuid().ToString('N') + '.json')
     $record = [ordered]@{ arguments = $arguments }
     [IO.File]::WriteAllText($recordPath, (ConvertTo-Json -InputObject $record -Depth 8), [Text.UTF8Encoding]::new($false))
@@ -322,6 +452,10 @@ try {
     $lines = [Collections.Generic.List[string]]::new()
     foreach($name in $capture.Keys){$lines.Add($name+'='+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$capture[$name])))}
     [IO.File]::WriteAllLines([string]$properties.ConduitNativeToolchainEvidencePath,$lines,[Text.UTF8Encoding]::new($false))
+    if ($scenario -ceq 'strict-mutated-during-publish' -and $role -ceq 'health-probe') {
+        [IO.File]::AppendAllText($env:CONDUIT_IMAGE_TEST_TRACKED_FILE, ' changed during health publish')
+        [IO.File]::WriteAllText((Join-Path $root 'source-mutated'), 'Owned tracked source changed after compilation')
+    }
     if($scenario -ceq 'health-linker-warning' -and $role -ceq 'health-probe'){
         [Console]::Out.WriteLine('ILC : AOT analysis warning IL3050: ConduitLLM.HealthProbe.OwnedFixture.Unsupported() [fixture.csproj]')
     }
@@ -333,7 +467,9 @@ catch{[Console]::Error.WriteLine('Owned image dotnet failed; type='+$_.Exception
 
     . (Join-Path $PSScriptRoot 'native-image-publish-evidence.ps1')
     $names = @('CONDUIT_IMAGE_TEST_ROOT','CONDUIT_IMAGE_TEST_SCENARIO','CONDUIT_IMAGE_TEST_PUBLISHER',
-        'CONDUIT_IMAGE_TEST_DOTNET','CONDUIT_IMAGE_TEST_DRIVER','CONDUIT_IMAGE_TEST_TOOLROOT')
+        'CONDUIT_IMAGE_TEST_DOTNET','CONDUIT_IMAGE_TEST_DRIVER','CONDUIT_IMAGE_TEST_TOOLROOT',
+        'CONDUIT_IMAGE_TEST_SOURCE_ROOT','CONDUIT_IMAGE_TEST_TRACKED_FILE','GIT_CONFIG_NOSYSTEM','GIT_CONFIG_GLOBAL',
+        'GIT_DIR','GIT_WORK_TREE','GIT_INDEX_FILE','GIT_COMMON_DIR','GIT_OBJECT_DIRECTORY','GIT_ALTERNATE_OBJECT_DIRECTORIES','GIT_CONFIG','GIT_CONFIG_COUNT','GIT_CONFIG_PARAMETERS')
     $parentEnvironment = @{}
     foreach ($name in $names) { $parentEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
 
@@ -361,8 +497,17 @@ catch{[Console]::Error.WriteLine('Owned image dotnet failed; type='+$_.Exception
         @{Scenario='linked-output';Count=0}, @{Scenario='nonempty-output';Count=0}
     )) { Invoke-ImageCase 'gateway' $case.Scenario $false $case.Count | Out-Null }
     $application = Read-Json (Join-Path $gateway.Artifact 'evidence/application.json')
-    if ($application.source.status -ceq 'git') { Invoke-ImageCase 'gateway' 'commit-mismatch' $false 0 | Out-Null }
-    else { $skipped.Add('Git unavailable; prepublish declared-commit mismatch rejection not claimed.') }
+    Invoke-ImageCase 'gateway' 'commit-mismatch' $false 0 | Out-Null
+    Invoke-ImageCase 'admin' 'strict-clean' $true 2 | Out-Null
+    Invoke-ImageCase 'gateway' 'strict-clean' $true 2 | Out-Null
+    Invoke-ImageCase 'gateway' 'strict-ignored-obj' $true 2 | Out-Null
+    Invoke-ImageCase 'admin' 'local-git-dev' $true 2 | Out-Null
+    foreach ($scenario in @('strict-unavailable', 'strict-missing-commit', 'strict-dev', 'strict-blank-commit',
+        'strict-abbreviated-commit', 'strict-uppercase-commit', 'strict-mismatch', 'strict-tracked', 'strict-untracked',
+        'strict-uppercase-selector')) {
+        Invoke-ImageCase 'gateway' $scenario $false 0 | Out-Null
+    }
+    Invoke-ImageCase 'gateway' 'strict-mutated-during-publish' $false 2 | Out-Null
 
     $evidenceHashes = @{}
     foreach ($file in Get-ChildItem -LiteralPath (Join-Path $gateway.Artifact 'evidence') -File -Filter '*.json') { $evidenceHashes[$file.FullName] = Get-FileDigest $file.FullName }

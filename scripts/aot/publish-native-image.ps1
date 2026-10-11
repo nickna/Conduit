@@ -7,7 +7,8 @@ param(
     [string]$Version = "3.0.0",
     [string]$CommitSha = "dev",
     [string]$BuildTimestamp = "unknown",
-    [string]$WarningBaselinePath
+    [string]$WarningBaselinePath,
+    [ValidateSet("local", "require-clean-git")][string]$SourcePolicy = "local"
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,6 +17,13 @@ $ErrorActionPreference = "Stop"
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 foreach ($value in @($Version, $CommitSha, $BuildTimestamp)) { Assert-NativeEvidenceText $value }
 $source = Get-NativePublishSource -RepositoryRoot $repositoryRoot
+if ($SourcePolicy -eq "require-clean-git") {
+    if ($CommitSha -cnotmatch '\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z' -or
+        $source.status -cne "git" -or $source.dirty -isnot [bool] -or $source.dirty -or
+        $source.revision -cne $CommitSha) {
+        throw "Native image publish requires clean Git source matching the explicit full commit metadata."
+    }
+}
 if ($source.status -ceq "git") {
     if ($CommitSha -ceq "dev") { $CommitSha = $source.revision }
     if ($CommitSha -cne $source.revision) { throw "Native image publish commit metadata differs from actual Git source." }
@@ -147,6 +155,13 @@ $owner = if ($Service -ceq "admin") { "Admin" } else { "Gateway" }
 & (Join-Path $PSScriptRoot "evaluate-native-linker-warnings.ps1") -ReportDirectory $linkerReports `
     -BaselinePath $WarningBaselinePath -Runtime $Runtime -Services @($owner)
 
+if ($SourcePolicy -eq "require-clean-git") {
+    $completedSource = Get-NativePublishSource -RepositoryRoot $repositoryRoot
+    if ($completedSource.status -cne "git" -or $completedSource.dirty -isnot [bool] -or
+        $completedSource.dirty -or $completedSource.revision -cne $CommitSha) {
+        throw "Native image Git source changed before completed publish evidence was written."
+    }
+}
 $references = @{}
 foreach ($role in @("application", "healthProbe")) {
     $publication = if ($role -ceq "application") { $publications.application } else { $publications['health-probe'] }

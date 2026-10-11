@@ -240,7 +240,7 @@ jobs:
         id: native-build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: .
+          context: https://github.com/${{ github.repository }}.git?ref=${{ needs.metadata.outputs.commit_sha }}&checksum=${{ needs.metadata.outputs.commit_sha }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           push: true
@@ -250,6 +250,8 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}-native
           cache-to: type=gha,scope=${{ matrix.service }}-native,mode=max
           build-args: |
+            BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
+            NATIVE_SOURCE_POLICY=require-clean-git
             VERSION=${{ needs.metadata.outputs.version }}
             COMMIT_SHA=${{ needs.metadata.outputs.commit_sha }}
             BUILD_TIMESTAMP=${{ needs.metadata.outputs.build_timestamp }}
@@ -292,13 +294,15 @@ jobs:
       - name: Export native symbols
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: .
+          context: https://github.com/${{ github.repository }}.git?ref=${{ needs.metadata.outputs.commit_sha }}&checksum=${{ needs.metadata.outputs.commit_sha }}
           file: ${{ matrix.dockerfile }}
           target: symbols
           platforms: linux/amd64
           outputs: type=local,dest=artifacts/native-symbols
           cache-from: type=gha,scope=${{ matrix.service }}-native
           build-args: |
+            BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
+            NATIVE_SOURCE_POLICY=require-clean-git
             VERSION=${{ needs.metadata.outputs.version }}
             COMMIT_SHA=${{ needs.metadata.outputs.commit_sha }}
             BUILD_TIMESTAMP=${{ needs.metadata.outputs.build_timestamp }}

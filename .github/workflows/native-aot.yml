@@ -299,7 +299,7 @@ jobs:
       - name: Build linux-x64 native image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: .
+          context: https://github.com/${{ github.repository }}.git?ref=${{ github.sha }}&checksum=${{ github.sha }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           load: true
@@ -307,6 +307,8 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}-native
           cache-to: type=gha,scope=${{ matrix.service }}-native,mode=max
           build-args: |
+            BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
+            NATIVE_SOURCE_POLICY=require-clean-git
             VERSION=0.0.0-ci
             COMMIT_SHA=${{ github.sha }}
             BUILD_TIMESTAMP=1970-01-01T00:00:00Z

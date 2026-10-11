@@ -228,3 +228,24 @@ smoke checks can still run in that state; they do not qualify an image digest.
 Both versions keep `registryDigestQualification=false`. Baseline consumers must
 also establish source, build, payload, and candidate digest identity before
 promotion qualification, as tracked in #1582.
+
+## Native build source
+
+Native CI, release candidates, and symbol exports use a Git context whose `ref`
+and `checksum` both name the declared full commit. They retain `.git` with
+`BUILDKIT_CONTEXT_KEEP_GIT_DIR=1` and pass
+`NATIVE_SOURCE_POLICY=require-clean-git`. The native Dockerfiles select
+Dockerfile frontend 1.18.0; checksum query contexts require Buildx 0.28 or later,
+as documented by [Docker](https://docs.docker.com/build/concepts/context/#url-queries).
+
+The image publisher's `-SourcePolicy require-clean-git` requires an explicit full
+commit matching actual clean Git source before claiming output or publishing.
+It checks the source again after both native components have been published,
+before writing their manifests and the image summary. Missing Git metadata,
+tracked or untracked changes, and mismatched revisions fail that policy.
+
+Local publishing defaults to `-SourcePolicy local`. A filtered local Docker
+context can therefore retain unavailable source provenance for local checks;
+the declared commit metadata does not supply a missing Git identity. Historical
+packages keep their original source records. Clean source is one prerequisite
+for image/build association, and does not establish promotion qualification.

@@ -1,9 +1,11 @@
+# syntax=docker/dockerfile:1.18.0
 # Parallel NativeAOT image. The framework-dependent Dockerfile remains the release default.
 FROM mcr.microsoft.com/dotnet/sdk:10.0.401-noble AS build
 ARG TARGETARCH
 ARG VERSION=3.0.0
 ARG COMMIT_SHA=dev
 ARG BUILD_TIMESTAMP=unknown
+ARG NATIVE_SOURCE_POLICY=local
 WORKDIR /src
 
 RUN test "$TARGETARCH" = "amd64" && \
@@ -16,7 +18,8 @@ RUN dotnet restore Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj --runti
       -p:PublishAot=true
 RUN pwsh -NoProfile -File scripts/aot/publish-native-image.ps1 \
       -Service gateway -ArtifactDirectory /app/native-publish -Runtime linux-x64 -NoRestore \
-      -Version "$VERSION" -CommitSha "$COMMIT_SHA" -BuildTimestamp "$BUILD_TIMESTAMP"
+      -Version "$VERSION" -CommitSha "$COMMIT_SHA" -BuildTimestamp "$BUILD_TIMESTAMP" \
+      -SourcePolicy "$NATIVE_SOURCE_POLICY"
 
 FROM scratch AS symbols
 COPY --from=build /app/native-publish/symbols/ /
