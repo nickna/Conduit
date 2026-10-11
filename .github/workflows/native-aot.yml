@@ -96,6 +96,10 @@ jobs:
         shell: pwsh
         run: ./scripts/aot/test-native-benchmark-collector.ps1
 
+      - name: Verify native publish manifest contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-publish-evidence.ps1
+
       - name: Verify Gateway fixture process ownership
         shell: pwsh
         run: ./scripts/aot/test-gateway-fixture-process.ps1

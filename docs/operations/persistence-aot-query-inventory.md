@@ -209,9 +209,11 @@ pagination with cache acknowledgements; it does not prove cross-host cache
 propagation. [Linux run 38149774358](https://github.com/nickna/Conduit/actions/runs/38149774358)
 passes typed billing-audit timers and graceful final drains on both Gateways.
 Admin selects that writer without a controlled HTTP enqueue claim. Admin's IP
-CRUD/source-socket proof passes locally with published Linux executables; its
-public [unit 76 run](https://github.com/nickna/Conduit/actions/runs/38152552344)
-is pending. The new [Admin matrix](native-aot-admin-feature-matrix.md) lists its
+CRUD/source-socket proof passes locally and in the public
+[unit 76 run](https://github.com/nickna/Conduit/actions/runs/38152552344).
+That run passes all three jobs, including 219 persistence tests with no skips,
+zero first-party linker diagnostics and both packaged native image checks.
+The new [Admin matrix](native-aot-admin-feature-matrix.md) lists its
 exact included/excluded labels and retained unsupported management services.
 
 ## Exit criteria

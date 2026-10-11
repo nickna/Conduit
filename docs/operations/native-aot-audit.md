@@ -209,6 +209,12 @@ merges to `master`, on a weekly schedule, and on manual dispatch. The workflow:
 5. Retains publish time, executable and runtime size, OpenAPI readiness time, peak
    working set, generated OpenAPI documents, and process logs.
 
+The publisher also records immutable per-directory file and resolved-toolchain
+manifests, with shallow references in the mutable baseline summary. Every invocation
+requires fresh output. See [native-publish-evidence.md](native-publish-evidence.md)
+for the file-set definition and ownership/failure contract. These manifests do not
+associate separately rebuilt Docker images or clear production promotion.
+
 Native smoke failures fail the job. Diagnostics and measurements are retained even
 on failure. The supported Gateway gate includes PostgreSQL, Redis, MinIO, provider
 HTTP/SSE, request accounting, task state, and real JSON SignalR connections. JIT
