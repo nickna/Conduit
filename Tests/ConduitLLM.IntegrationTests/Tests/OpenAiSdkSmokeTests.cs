@@ -176,9 +176,9 @@ public sealed class OpenAiSdkSmokeTests
         Assert.EndsWith("data: [DONE]\n\n", standardStream);
         var chunkLines = standardStream.Split('\n').Where(line => line.StartsWith("data: {")).ToArray();
         Assert.NotEmpty(chunkLines);
-        foreach (var line in chunkLines)
+        foreach (var chunkJson in chunkLines.Select(line => line[6..]))
         {
-            using var chunk = JsonDocument.Parse(line[6..]);
+            using var chunk = JsonDocument.Parse(chunkJson);
             Assert.Equal("chat.completion.chunk", chunk.RootElement.GetProperty("object").GetString());
             Assert.False(chunk.RootElement.TryGetProperty("usage", out _));
         }
