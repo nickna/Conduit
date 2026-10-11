@@ -165,6 +165,20 @@ its absence, it saves `packaging-evidence.json` alongside the archive and extrac
 evidence, then runs the packaged entrypoint smoke using the same local image ID.
 Failed inspections retain their files without a successful packaging report.
 
+The entrypoint driver uses an owned container with no external network access to
+export the native OpenAPI document. It checks the real process exit status and
+validates the bounded JSON document before removing the container. A running
+owned container is stopped within the cleanup budget; removal verifies ownership
+and confirms absence before `runtime/evidence.json` records success. The evidence
+binds the execution to the original packaging report and OpenAPI bytes. Failed
+execution leaves its diagnostic files without successful execution evidence.
+
+Each invocation retains a fresh parent directory with `packaging` and `runtime`
+children. The Node command `native-container-smoke.mjs IMAGE SERVICE` calls this
+same PowerShell driver; an optional third argument selects the fresh parent
+directory. The PowerShell command accepts the corresponding `-ArtifactDirectory`
+argument. Both entry points require `pwsh`.
+
 The report records the observed local image ID, which can identify an OCI index
 in Docker's containerd image store. It preserves unavailable source provenance
 and records registry digest qualification as false. Registry descriptor association

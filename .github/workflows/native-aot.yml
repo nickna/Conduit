@@ -113,6 +113,10 @@ jobs:
         shell: pwsh
         run: ./scripts/aot/test-native-image-verification.ps1
 
+      - name: Verify native image entrypoint contracts
+        shell: pwsh
+        run: ./scripts/aot/test-native-image-runtime-evidence.ps1
+
       - name: Verify Gateway fixture process ownership
         shell: pwsh
         run: ./scripts/aot/test-gateway-fixture-process.ps1
