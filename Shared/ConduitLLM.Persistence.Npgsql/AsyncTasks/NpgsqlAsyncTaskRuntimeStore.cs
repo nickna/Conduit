@@ -343,7 +343,7 @@ public sealed class NpgsqlAsyncTaskRuntimeStore : IAsyncTaskRuntimeStore
                 "LeasedBy" = NULL, "LeaseExpiryTime" = NULL,
                 "UpdatedAt" = @now, "CompletedAt" = @now,
                 "Version" = "Version" + 1
-            WHERE "Id" = @taskId AND "State" = 6
+            WHERE "Id" = @taskId AND "State" = 6 AND ("LeasedBy" IS NULL OR "LeasedBy" NOT LIKE 'reconcile:%')
             """;
         command.Parameters.AddWithValue("taskId", NpgsqlDbType.Varchar, taskId);
         command.Parameters.AddWithValue("reason", NpgsqlDbType.Text, reason);
@@ -378,7 +378,7 @@ public sealed class NpgsqlAsyncTaskRuntimeStore : IAsyncTaskRuntimeStore
                 "ProviderInvocationCompletedAt" = NULL, "ProviderOperationId" = NULL,
                 "CompletedAt" = NULL, "NextRetryAt" = NULL, "UpdatedAt" = @now,
                 "RetryCount" = "RetryCount" + 1, "Version" = "Version" + 1
-            WHERE "Id" = @taskId AND "State" = 6
+            WHERE "Id" = @taskId AND "State" = 6 AND ("LeasedBy" IS NULL OR "LeasedBy" NOT LIKE 'reconcile:%')
                 AND "Type" IN ('image_generation', 'video_generation')
                 AND "RetryCount" < "MaxRetries"
             RETURNING {Columns}
@@ -424,7 +424,7 @@ public sealed class NpgsqlAsyncTaskRuntimeStore : IAsyncTaskRuntimeStore
         command.CommandText = completed
             ? """
                 UPDATE "AsyncTasks" SET "ProviderInvocationCompletedAt" = @now,
-                    "ProviderOperationId" = @providerOperationId, "UpdatedAt" = @now
+                    "ProviderOperationId" = COALESCE(@providerOperationId, "ProviderOperationId"), "UpdatedAt" = @now
                 WHERE "Id" = @taskId AND "State" = 1 AND "LeasedBy" = @workerId
                 """
             : """

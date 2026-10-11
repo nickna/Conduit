@@ -258,7 +258,13 @@ namespace ConduitLLM.Core.Interfaces
         int MaxRetries,
         DateTime? ProviderInvocationStartedAt,
         DateTime? ProviderInvocationCompletedAt,
-        string? ProviderOperationId);
+        string? ProviderOperationId,
+        int? ProviderId = null,
+        string? ProviderModelId = null,
+        string? ReconciliationDispatchId = null,
+        string? ReconciliationOutcome = null,
+        string? BillingDisposition = null,
+        decimal? ProviderCost = null);
 
     public sealed record AsyncTaskSummaryPage(
         IReadOnlyList<AsyncTaskSummary> Tasks,
