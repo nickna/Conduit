@@ -11,15 +11,22 @@ namespace ConduitLLM.Security.Options
         public VirtualKeyOptions VirtualKey { get; set; } = new();
 
         /// <summary>
-        /// Gateway-specific rate limiting with discovery options
+        /// Gateway-specific rate limiting with discovery options, backed by the same
+        /// instance used by shared security services through SecurityOptionsBase.
         /// </summary>
-        public new GatewayRateLimitingOptions RateLimiting { get; set; } = new();
+        public new GatewayRateLimitingOptions RateLimiting
+        {
+            get => (GatewayRateLimitingOptions)base.RateLimiting;
+            set => base.RateLimiting = value;
+        }
 
         /// <summary>
         /// Initializes a new instance with Gateway-specific defaults
         /// </summary>
         public GatewaySecurityOptions()
         {
+            RateLimiting = new GatewayRateLimitingOptions();
+
             // Gateway API defaults - different from Admin
             IpFiltering.Enabled = true; // Gateway exposed to external traffic
             IpFiltering.ExcludedPaths = new List<string> { "/health", "/metrics" };
