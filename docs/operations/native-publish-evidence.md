@@ -149,3 +149,23 @@ are never materialized. Archive size, selected file sizes, entry counts and read
 time are bounded. The returned payload and evidence paths can be passed to
 `Assert-NativeImagePublishEvidenceMatchesPayload`; extraction alone does not
 establish source provenance or an image digest association.
+
+## Packaged image verification
+
+`verify-native-image.ps1 -Image IMAGE -Service admin|gateway` resolves the image
+once and inspects a stopped container created from its immutable local image ID.
+The existing `http` service argument selects Gateway. Each invocation uses a fresh
+artifact directory; `-ArtifactDirectory` can select an empty destination.
+
+The verifier checks the runtime configuration, exported file ownership and modes,
+both complete payload manifests, and all three embedded evidence documents. It
+also compares the embedded service, RID and declared build metadata with the image
+configuration and OCI labels. After removing its owned container and confirming
+its absence, it saves `packaging-evidence.json` alongside the archive and extracted
+evidence, then runs the packaged entrypoint smoke using the same local image ID.
+Failed inspections retain their files without a successful packaging report.
+
+The report records the observed local image ID, which can identify an OCI index
+in Docker's containerd image store. It preserves unavailable source provenance
+and records registry digest qualification as false. Registry descriptor association
+and promotion qualification remain tracked in #1582.
