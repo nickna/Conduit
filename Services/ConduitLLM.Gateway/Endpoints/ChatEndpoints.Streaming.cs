@@ -292,12 +292,16 @@ namespace ConduitLLM.Gateway.Endpoints
             {
                 if (toolEvent.Status == "completed" || toolEvent.Status == "failed")
                 {
-                    state.FunctionExecutionResults.Add(toolEvent);
-                    state.TotalFunctionCost += toolEvent.Cost ?? 0m;
+                    if (state.RetainFunctionExecution(toolEvent))
+                    {
+                        // The function has already incurred its charge. Publish that evidence before
+                        // client I/O, which can fail or observe a cancelled request token.
+                        HttpContext.GetOrCreateRequestAccountingContext().RecordFunctionExecutions(
+                            state.FunctionExecutionResults,
+                            state.TotalFunctionCost);
+                    }
                 }
 
-                // A completed invocation is billable independently of notification delivery.
-                // Retain its evidence before client I/O can throw or observe cancellation.
                 await sseWriter.WriteToolExecutingEventAsync(toolEvent, ct);
                 state.Outcome = StreamTransportOutcome.Emitting;
             };
@@ -681,6 +685,21 @@ namespace ConduitLLM.Gateway.Endpoints
             public int MaximumToolCalls { get; }
             public bool ToolEvidenceLimitExceeded { get; set; }
             public bool EvidenceLimitExceeded => ContentAccumulator.LimitExceeded || ToolEvidenceLimitExceeded;
+
+            public bool RetainFunctionExecution(ToolExecutionEvent toolEvent)
+            {
+                if (FunctionExecutionResults.Any(existing =>
+                    ReferenceEquals(existing, toolEvent) ||
+                    (toolEvent.FunctionExecutionId is { } id && id != Guid.Empty &&
+                     existing.FunctionExecutionId == id)))
+                {
+                    return false;
+                }
+
+                FunctionExecutionResults.Add(toolEvent);
+                TotalFunctionCost += toolEvent.Cost ?? 0m;
+                return true;
+            }
 
             public string RetainToolFragment(string? fragment)
             {
