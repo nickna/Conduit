@@ -275,9 +275,10 @@ The WebAdmin displays the current version and can check for updates automaticall
 
 ## Contributing
 
-Contributions are welcome! Development happens on the `dev` branch — please target pull requests
-there. See [CLAUDE.md](CLAUDE.md) for development environment setup, build verification, and code
-style conventions.
+Contributions are welcome! Create feature branches from `master` and target pull requests to
+`master`, the default and active development branch. Never push directly to protected `master`;
+`dev` is retired. See [CLAUDE.md](CLAUDE.md) for development environment setup, build verification,
+and code style conventions.
 
 ## License
 
