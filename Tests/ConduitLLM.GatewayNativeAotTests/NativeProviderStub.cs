@@ -51,7 +51,9 @@ internal static class NativeProviderStub
         using (client)
         await using (var stream = client.GetStream())
         {
-            var request = await ReadRequestAsync(stream);
+            NativeProviderHttpRequest? request;
+            using (var requestDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
+                request = await NativeProviderHttpRequestReader.ReadAsync(stream, requestDeadline.Token);
             if (request is null)
             {
                 return;
@@ -219,68 +221,4 @@ internal static class NativeProviderStub
         await stream.FlushAsync();
     }
 
-    private static async Task<ProviderHttpRequest?> ReadRequestAsync(NetworkStream stream)
-    {
-        var headerBytes = new List<byte>(1024);
-        var singleByte = new byte[1];
-        while (headerBytes.Count < 64 * 1024)
-        {
-            var bytesRead = await stream.ReadAsync(singleByte);
-            if (bytesRead == 0)
-            {
-                return null;
-            }
-
-            headerBytes.Add(singleByte[0]);
-            var count = headerBytes.Count;
-            if (count >= 4 &&
-                headerBytes[count - 4] == '\r' &&
-                headerBytes[count - 3] == '\n' &&
-                headerBytes[count - 2] == '\r' &&
-                headerBytes[count - 1] == '\n')
-            {
-                break;
-            }
-        }
-
-        if (headerBytes.Count >= 64 * 1024)
-        {
-            throw new InvalidOperationException("Native provider request headers exceeded 64 KiB.");
-        }
-
-        var headerText = Encoding.ASCII.GetString(headerBytes.ToArray());
-        var lines = headerText.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
-        var requestLine = lines[0].Split(' ', 3);
-        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var line in lines.Skip(1))
-        {
-            var separator = line.IndexOf(':');
-            if (separator > 0)
-            {
-                headers[line[..separator]] = line[(separator + 1)..].Trim();
-            }
-        }
-
-        var contentLength = headers.TryGetValue("Content-Length", out var lengthValue)
-            ? int.Parse(lengthValue, System.Globalization.CultureInfo.InvariantCulture)
-            : 0;
-        if (contentLength > 1024 * 1024)
-        {
-            throw new InvalidOperationException("Native provider request body exceeded 1 MiB.");
-        }
-
-        var body = new byte[contentLength];
-        await stream.ReadExactlyAsync(body);
-        return new ProviderHttpRequest(
-            requestLine[0],
-            requestLine[1].Split('?', 2)[0],
-            headers,
-            Encoding.UTF8.GetString(body));
-    }
-
-    private sealed record ProviderHttpRequest(
-        string Method,
-        string Path,
-        IReadOnlyDictionary<string, string> Headers,
-        string Body);
 }

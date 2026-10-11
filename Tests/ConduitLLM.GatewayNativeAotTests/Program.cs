@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -133,6 +134,7 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
                 control, settings.DependencyControlToken).RunAsync();
         await AssertAsyncTaskPersistenceAsync();
         await AssertProviderTransportAsync();
+        await AssertChunkedProviderRequestAsync();
         await AssertS3MediaWorkflowAsync();
         await AssertSignalRAndRedisAsync();
         Console.WriteLine("Gateway NativeAOT supported protocol/infrastructure probe: PASS");
@@ -635,6 +637,32 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         True(providerState.ErrorRequests == 1, "mock provider observed translated error request");
         True(providerState.AuthorizationFailures == 0, "provider credential was supplied correctly");
         True(providerState.CancellationsObserved >= 1, "provider observed upstream cancellation");
+    }
+
+    private async Task AssertChunkedProviderRequestAsync()
+    {
+        // Run after the Gateway transport counters have been checked. This direct
+        // fixture request adds an error request without generating Gateway usage.
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var payload = JsonDocument.Parse("""
+            {"model":"native-aot-provider-model","messages":[{"role":"user","content":"native-error chunked fixture"}],"stream":false}
+            """);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = JsonContent.Create(payload.RootElement, NativeProbeJsonContext.Default.JsonElement)
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", NativeProviderStub.ApiKey);
+        request.Headers.TransferEncodingChunked = true;
+        using var response = await _provider.SendAsync(request, deadline.Token);
+        await ExpectAsync(response, HttpStatusCode.BadRequest, "native provider fixture reads chunked HTTP/1.1 JSON");
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync(deadline.Token));
+        var error = GetProperty(result.RootElement, "error");
+        Equal("native upstream private diagnostic", GetString(error, "message"),
+            "chunked provider fixture preserves the request body");
+        Equal("native_bad_prompt", GetString(error, "code"),
+            "chunked provider fixture selects the expected error branch");
     }
 
     private async Task AssertProviderStreamAsync(bool includeUsage, bool enhancedStream)
