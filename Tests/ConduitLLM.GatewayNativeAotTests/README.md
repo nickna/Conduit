@@ -36,6 +36,14 @@ balances. Billing verification must compare each persisted value at its actual
 column precision.
 
 `NativeFunctionExecutionProbe` runs after the existing protocol checks. It sends
+guarded chat requests through both aliases on both Gateways before any execution,
+using the separate owned key. Authentication and missing/disabled IDs precede
+iteration validation. The complete provider counter snapshot and owned accounting
+stay unchanged through several spend flush windows, and the full host's correlation
+header remains the caller's value before billing setup. This checks preflight only;
+it does not prove a successful agentic conversation.
+
+The probe then sends
 one successful search and one real provider rejection through each Gateway, reads
 all four executions through the opposite host, and compares the HTTP contracts
 against an independent 24-column SQL oracle. A separate key/group isolates the

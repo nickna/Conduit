@@ -245,9 +245,10 @@ post-provider billable failure behavior. Paired tests exercise both construction
 read and list results retain the existing public return types. Complete host
 composition verifies exact port/calculator/client identities and empty legacy
 repository fields on native, while JIT/Admin retain their scoped repositories.
-Native HTTP provider execution, status/list ownership and accounting remain
-separate process-level work; the capability endpoint continues to exclude those
-workloads until that proof passes.
+Published Linux run 38133326127 proves the bounded inline Exa path on two native
+Gateways: successful and failed execution, opposite-host status retrieval,
+ownership denial and settled accounting. Execution-list HTTP, MCP, successful
+agentic conversations and function audit/retention remain separate workload proofs.
 The inherited ignored concurrency-update result remains tracked separately in
 [#1572](https://github.com/nickna/Conduit/issues/1572).
 
@@ -272,8 +273,8 @@ validation, generated schemas and MCP expansion. Routing maps retain their origi
 ID input and existing validation/error behavior. Paired tests cover both service
 constructions, while complete host composition verifies the exact scoped service
 and shared store identity. This removes Core discovery's configuration-query
-boundary; ChatEndpoints' separate preflight read and published agentic workflows
-remain separate work.
+boundary. ChatEndpoints' separate preflight is selected below; published agentic
+workflows remain separate work.
 
 `ChatEndpoints.CreateWithRuntimePersistence` prepares the separate chat preflight
 over that same scalar configuration store. The sole public 14-parameter repository
@@ -281,9 +282,14 @@ constructor, its guards and optional defaults remain unchanged. The prepared pat
 forwards the original configuration-ID list and cancellation token without sorting
 or deduplication. Validation retains missing IDs before disabled configurations,
 then explicit iteration limits, and preserves the existing error/cancellation
-contract and accounting order. Empty IDs retain the caller's fast path. This
-factory remains unselected until the next native composition and HTTP checkpoint;
-preparing it does not establish an agentic workload.
+contract and accounting order. Empty IDs retain the caller's fast path.
+Native Gateway selects the named scoped factory over the proven configuration
+singleton; JIT retains the repository constructor. Host composition verifies both
+scope identities and all optional billing, usage and error-translation dependencies.
+The native HTTP gate checks both chat aliases on both Gateways using an owned key,
+including authentication, missing/disabled IDs before iteration limits, unchanged
+provider counters and pristine accounting through several spend flush windows.
+Guarded preflight does not establish a successful agentic workload.
 Paired HTTP tests preserve explicit-null global defaults and the inherited omitted
 flag initializers; the latter bypass the documented global defaults and are tracked
 in [#1576](https://github.com/nickna/Conduit/issues/1576).

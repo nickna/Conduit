@@ -40,6 +40,7 @@ internal static class NativeFunctionExecutionProbe
         var started = DateTime.UtcNow;
         Require(await CountExecutionsAsync(source, fixture, token) == 0, "pristine owned executions");
         Require(await ReadAccountingAsync(source, fixture, token) == Accounting.Pristine, "pristine separate function accounting");
+        await AssertChatConfigurationPreflightAsync(gateways, upstream, source, fixture, token);
         var baseline = await ReadProviderStateAsync(upstream, token);
         var executions = new List<ObservedExecution>();
 
@@ -105,6 +106,112 @@ internal static class NativeFunctionExecutionProbe
             finalState.ChunkedRequests - baseline.ChunkedRequests == 4,
             "two successful/two failed authenticated real chunked Exa requests");
         Console.WriteLine("Native function HTTP execution: PASS (both Gateways, four persisted 24-field executions, cross-host reads, configured pricing and settled accounting).");
+    }
+
+    private static async Task AssertChatConfigurationPreflightAsync(HttpClient[] gateways, HttpClient provider,
+        NpgsqlDataSource source, NativeFunctionFixtureSnapshot fixture, CancellationToken token)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(30));
+        var ct = deadline.Token;
+        var providerBefore = await ReadCompleteProviderStateAsync(provider, ct);
+        // Earlier stream cancellation increments its observed counter before the
+        // provider finally decrements the active count. Snapshot only after both.
+        while (providerBefore.GetProperty("active_cancellation_requests").GetInt32() != 0)
+        {
+            await Task.Delay(100, ct);
+            providerBefore = await ReadCompleteProviderStateAsync(provider, ct);
+        }
+        foreach (var gateway in gateways)
+        foreach (var path in new[] { "v1/chat/completions", "v1/conduit/chat/completions" })
+        {
+            using (var anonymous = new HttpRequestMessage(HttpMethod.Post, path))
+            {
+                anonymous.Content = JsonContent.Create(ChatPreflightBody([fixture.ConfigurationId]),
+                    NativeProbeJsonContext.Default.JsonElement);
+                using var response = await gateway.SendAsync(anonymous, ct);
+                Require(response.StatusCode == HttpStatusCode.Unauthorized, "unauthenticated chat preflight challenge");
+            }
+
+            foreach (var (ids, code, expectedMessage) in new (int[], string, string?)[]
+                     {
+                         ([int.MinValue, NativeParityFixture.DisabledFunctionId, int.MinValue],
+                             "invalid_function_configuration_ids", $"Function configuration IDs not found: {int.MinValue}"),
+                         ([fixture.ConfigurationId, NativeParityFixture.DisabledFunctionId, fixture.ConfigurationId],
+                             "disabled_function_configurations", $"Function configurations are disabled: {NativeParityFixture.DisabledFunctionId}"),
+                         ([fixture.ConfigurationId, fixture.ConfigurationId], "invalid_max_agentic_iterations", null)
+                     })
+            {
+                var correlationId = Guid.NewGuid().ToString("N");
+                using var request = new HttpRequestMessage(HttpMethod.Post, path);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", fixture.VirtualKey);
+                request.Headers.Add("x-request-id", correlationId);
+                request.Content = JsonContent.Create(ChatPreflightBody(ids), NativeProbeJsonContext.Default.JsonElement);
+                using var response = await gateway.SendAsync(request, ct);
+                Require(response.StatusCode == HttpStatusCode.BadRequest, "native chat configuration rejection on both routes and hosts");
+                Require(response.Headers.TryGetValues("x-request-id", out var responseIds) &&
+                    responseIds.SequenceEqual([correlationId]), "chat preflight retains middleware correlation ID before billing setup");
+                var root = await JsonAsync(response, ct);
+                Properties(root, "error");
+                var error = root.GetProperty("error");
+                Properties(error, "message", "type", "code");
+                Require(error.GetProperty("code").GetString() == code &&
+                    error.GetProperty("type").GetString() == "invalid_request_error", "chat preflight error classification");
+                var message = error.GetProperty("message").GetString();
+                if (expectedMessage is not null)
+                    Require(message == expectedMessage, "missing IDs precede disabled rows, then iteration limits");
+                else
+                {
+                    var parts = message?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    Require(parts is { Length: 7 } && parts[0] == "MaxAgenticIterations" && parts[1] == "must" &&
+                        parts[2] == "be" && parts[3] == "between" && parts[5] == "and" &&
+                        int.TryParse(parts[4], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var minimum) &&
+                        int.TryParse(parts[6], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var maximum) &&
+                        minimum is >= 1 and <= 100 && maximum is >= 1 and <= 100,
+                        "explicit zero iterations use the clamped configured limits after enabled configuration reads");
+                }
+            }
+        }
+
+        // The full host has one-second spend flushes. Rejections must stay unbilled
+        // through multiple flush windows, as well as avoiding provider dispatch.
+        var stableUntil = DateTime.UtcNow.AddSeconds(3);
+        do
+        {
+            Require(await CountExecutionsAsync(source, fixture, ct) == 0 &&
+                await ReadAccountingAsync(source, fixture, ct) == Accounting.Pristine,
+                "chat preflight creates no executions, logs, ledger changes or spend");
+            Require(JsonElement.DeepEquals(providerBefore, await ReadCompleteProviderStateAsync(provider, ct)),
+                "chat preflight leaves all provider counters unchanged");
+            await Task.Delay(100, ct);
+        } while (DateTime.UtcNow < stableUntil);
+        Console.WriteLine("Native chat function configuration preflight: PASS (both routes and Gateways, validation order, authentication, no provider dispatch or accounting).");
+    }
+
+    private static JsonElement ChatPreflightBody(int[] ids) => Element(writer =>
+    {
+        writer.WriteStartObject();
+        writer.WriteString("model", NativeParityFixture.ModelAlias);
+        writer.WriteStartArray("messages");
+        writer.WriteStartObject();
+        writer.WriteString("role", "user");
+        writer.WriteString("content", "Native chat preflight café 雪 🔎");
+        writer.WriteEndObject();
+        writer.WriteEndArray();
+        writer.WriteStartArray("function_configuration_ids");
+        foreach (var id in ids) writer.WriteNumberValue(id);
+        writer.WriteEndArray();
+        writer.WriteNumber("max_agentic_iterations", 0);
+        writer.WriteBoolean("enable_agentic_mode", false);
+        writer.WriteBoolean("stream", false);
+        writer.WriteEndObject();
+    });
+
+    private static async Task<JsonElement> ReadCompleteProviderStateAsync(HttpClient provider, CancellationToken token)
+    {
+        using var response = await provider.GetAsync("probe/state", token);
+        Require(response.StatusCode == HttpStatusCode.OK, "complete provider counters available");
+        return await JsonAsync(response, token);
     }
 
     private static HttpClient Client(Uri address) => new(new SocketsHttpHandler

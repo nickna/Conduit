@@ -13,9 +13,15 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services.Strategies;
 using ConduitLLM.Gateway.RateLimiting;
 #if CONDUIT_NATIVE_AOT
+using System.Text.Json;
+using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Core;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Functions.Interfaces;
+using ConduitLLM.Gateway.Billing;
+using ConduitLLM.Gateway.Options;
 using ConduitLLM.Persistence.Interfaces;
+using Microsoft.Extensions.Options;
 #endif
 
 namespace ConduitLLM.Gateway.Endpoints;
@@ -50,7 +56,25 @@ public static class GatewayApiEndpoints
         services.AddScoped<Base64MediaProcessor>();
         services.AddScoped<UrlMediaProcessor>();
         services.AddScoped<VideosEndpoints>();
+#if CONDUIT_NATIVE_AOT
+        services.AddScoped(provider => ChatEndpoints.CreateWithRuntimePersistence(
+            provider.GetRequiredService<Conduit>(),
+            provider.GetRequiredService<ILogger<ChatEndpoints>>(),
+            provider.GetRequiredService<IModelProviderMappingService>(),
+            provider.GetRequiredService<JsonSerializerOptions>(),
+            provider.GetRequiredService<IEventPublisher>(),
+            provider.GetRequiredService<IGlobalSettingsCacheService>(),
+            provider.GetRequiredService<IUsageEstimationService>(),
+            provider.GetRequiredService<IFunctionExecutionConfigurationStore>(),
+            provider.GetService<IOptions<UsageTrackingOptions>>(),
+            provider.GetService<IChatSpendEstimator>(),
+            provider.GetService<ISpendReservationService>(),
+            provider.GetService<IOptions<BillingAdmissionOptions>>(),
+            provider.GetService<IHttpContextAccessor>(),
+            provider.GetService<IProviderErrorTranslator>()));
+#else
         services.AddScoped<ChatEndpoints>();
+#endif
         services.AddScoped<IResponsesChatExecutor, ResponsesChatExecutor>();
         services.AddScoped<ResponsesEndpoints>();
         return services;

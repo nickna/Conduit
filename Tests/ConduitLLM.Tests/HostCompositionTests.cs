@@ -1,24 +1,33 @@
+using System.Text.Json;
+
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Interceptors;
+using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Core;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Services;
 using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Enums;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Services;
+using ConduitLLM.Gateway.Billing;
 using ConduitLLM.Gateway.Endpoints;
 using ConduitLLM.Gateway.Interfaces;
 using ConduitLLM.Gateway.Metrics;
+using ConduitLLM.Gateway.Options;
 using ConduitLLM.Gateway.RateLimiting;
 using ConduitLLM.Persistence.Interfaces;
 using ConduitLLM.Persistence.Npgsql;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -81,6 +90,7 @@ public sealed class HostCompositionTests
         AssertFunctionDiscoveryComposition(builder.Services, app.Services, false);
         AssertFunctionExecutionComposition(builder.Services, app.Services, false);
         AssertFunctionsEndpointComposition(builder.Services, app.Services, false);
+        AssertChatEndpointComposition(builder.Services, app.Services, false);
         await AssertFunctionCostCompositionAsync(builder.Services, app.Services, false);
         Assert.Null(app.Services.GetService<IRedisErrorStore>());
         Assert.Null(app.Services.GetService<IProviderErrorTrackingService>());
@@ -108,6 +118,7 @@ public sealed class HostCompositionTests
         AssertFunctionDiscoveryComposition(builder.Services, app.Services, gateway);
         AssertFunctionExecutionComposition(builder.Services, app.Services, gateway);
         AssertFunctionsEndpointComposition(builder.Services, app.Services, gateway);
+        AssertChatEndpointComposition(builder.Services, app.Services, gateway);
         await AssertFunctionCostCompositionAsync(builder.Services, app.Services, gateway);
         Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(StackExchange.Redis.IConnectionMultiplexer));
         if (gateway)
@@ -407,6 +418,83 @@ public sealed class HostCompositionTests
         Assert.Same(first.ServiceProvider.GetRequiredService<IFunctionConfigurationRepository>(), repositoryField.GetValue(handler));
         Assert.Same(second.ServiceProvider.GetRequiredService<IFunctionConfigurationRepository>(), repositoryField.GetValue(other));
 #endif
+    }
+
+    private static void AssertChatEndpointComposition(IServiceCollection descriptors, IServiceProvider provider, bool gateway)
+    {
+        if (!gateway)
+        {
+            Assert.DoesNotContain(descriptors, value => value.ServiceType == typeof(ChatEndpoints));
+            return;
+        }
+
+        var descriptor = Assert.Single(descriptors, value => value.ServiceType == typeof(ChatEndpoints));
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var handler = Assert.IsType<ChatEndpoints>(first.ServiceProvider.GetRequiredService<ChatEndpoints>());
+        var other = Assert.IsType<ChatEndpoints>(second.ServiceProvider.GetRequiredService<ChatEndpoints>());
+        Assert.Same(handler, first.ServiceProvider.GetRequiredService<ChatEndpoints>());
+        Assert.NotSame(handler, other);
+#if CONDUIT_NATIVE_AOT
+        Assert.NotNull(descriptor.ImplementationFactory);
+        Assert.Null(descriptor.ImplementationType);
+        var store = Assert.Single(descriptors, value => value.ServiceType == typeof(IFunctionExecutionConfigurationStore));
+        Assert.Equal(ServiceLifetime.Singleton, store.Lifetime);
+        Assert.Equal(typeof(NpgsqlFunctionExecutionConfigurationStore), store.ImplementationType);
+        var resolvedStore = first.ServiceProvider.GetRequiredService<IFunctionExecutionConfigurationStore>();
+        Assert.Same(resolvedStore, second.ServiceProvider.GetRequiredService<IFunctionExecutionConfigurationStore>());
+        Assert.Same(resolvedStore, Field(typeof(ChatEndpoints), "_runtimeConfigurationStore", handler));
+        Assert.Same(resolvedStore, Field(typeof(ChatEndpoints), "_runtimeConfigurationStore", other));
+        Assert.Null(Field(typeof(ChatEndpoints), "_functionConfigRepository", handler));
+        Assert.Null(Field(typeof(ChatEndpoints), "_functionConfigRepository", other));
+#else
+        Assert.Equal(typeof(ChatEndpoints), descriptor.ImplementationType);
+        Assert.Null(descriptor.ImplementationFactory);
+        Assert.Null(Field(typeof(ChatEndpoints), "_runtimeConfigurationStore", handler));
+        Assert.Null(Field(typeof(ChatEndpoints), "_runtimeConfigurationStore", other));
+        Assert.Same(first.ServiceProvider.GetRequiredService<IFunctionConfigurationRepository>(),
+            Field(typeof(ChatEndpoints), "_functionConfigRepository", handler));
+        Assert.Same(second.ServiceProvider.GetRequiredService<IFunctionConfigurationRepository>(),
+            Field(typeof(ChatEndpoints), "_functionConfigRepository", other));
+#endif
+        AssertDependencies(first.ServiceProvider, handler);
+        AssertDependencies(second.ServiceProvider, other);
+
+        static void AssertDependencies(IServiceProvider scope, ChatEndpoints endpoint)
+        {
+            Assert.Same(scope.GetRequiredService<Conduit>(), Field(typeof(ChatEndpoints), "_conduit", endpoint));
+            Assert.Same(scope.GetRequiredService<ILogger<ChatEndpoints>>(), Field(typeof(ChatEndpoints), "_logger", endpoint));
+            Assert.Same(scope.GetRequiredService<IModelProviderMappingService>(),
+                Field(typeof(ChatEndpoints), "_modelMappingService", endpoint));
+            Assert.Same(scope.GetRequiredService<JsonSerializerOptions>(),
+                Field(typeof(ChatEndpoints), "_jsonSerializerOptions", endpoint));
+            Assert.Same(scope.GetRequiredService<IGlobalSettingsCacheService>(),
+                Field(typeof(ChatEndpoints), "_globalSettingsCacheService", endpoint));
+            Assert.Same(scope.GetRequiredService<IUsageEstimationService>(),
+                Field(typeof(ChatEndpoints), "_usageEstimationService", endpoint));
+            Assert.Same(scope.GetRequiredService<IOptions<UsageTrackingOptions>>().Value,
+                Field(typeof(ChatEndpoints), "_usageTrackingOptions", endpoint));
+            Assert.Same(scope.GetRequiredService<IChatSpendEstimator>(),
+                Field(typeof(ChatEndpoints), "_chatSpendEstimator", endpoint));
+            Assert.Same(scope.GetRequiredService<ISpendReservationService>(),
+                Field(typeof(ChatEndpoints), "_spendReservationService", endpoint));
+            Assert.Same(scope.GetRequiredService<IOptions<BillingAdmissionOptions>>().Value,
+                Field(typeof(ChatEndpoints), "_billingAdmissionOptions", endpoint));
+            Assert.Same(scope.GetRequiredService<IProviderErrorTranslator>(),
+                Field(typeof(ChatEndpoints), "_providerErrorTranslator", endpoint));
+            Assert.Same(scope.GetRequiredService<IHttpContextAccessor>(),
+                Field(typeof(GatewayEndpointHandlerBase), "_httpContextAccessor", endpoint));
+            Assert.Same(scope.GetRequiredService<IEventPublisher>(),
+                Field(typeof(GatewayEndpointHandlerBase), "_eventPublisher", endpoint));
+        }
+
+        static object? Field(Type owner, string name, ChatEndpoints endpoint)
+        {
+            var field = owner.GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(field);
+            return field.GetValue(endpoint);
+        }
     }
 
     private static void AssertDatabaseComposition(IServiceCollection descriptors, IServiceProvider provider)

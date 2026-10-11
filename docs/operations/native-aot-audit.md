@@ -346,15 +346,35 @@ Commit `f6fd3100` passes 99 JIT and 100 native-profile managed cases without ski
 including paired Core discovery behavior and exact host composition. Its Gateway
 analyzer build emits zero first-party IL diagnostics; its 14 known warnings comprise
 12 cached NuGet vulnerability-metadata warnings and two nullable compiler warnings.
-Published Core LLM tool discovery, ChatEndpoints' separate configuration preflight,
-inline execution and broader agentic workflows remain unproved.
+Published Core LLM tool discovery and broader agentic workflows remain unproved;
+the selected chat preflight and bounded inline execution proofs follow below.
 
-Chat's separate function-configuration preflight now has a prepared scalar-store
+Chat's separate function-configuration preflight now selects a scalar-store
 factory. It retains the sole public 14-parameter constructor and the original ID
 input, validation/error ordering, cancellation behavior and accounting boundary.
-The current chat registration still uses the repository constructor. Paired
-managed preflight tests and subsequent native composition/HTTP proof are separate
-checkpoints; this preparation does not advertise agentic support.
+JIT retains the repository registration. Commit `56d660d8` passed 90 JIT and 91
+native-profile managed cases without skips, including 47 paired preflight/default
+and constructor cases; its full enabled Gateway analyzer build emitted zero IL
+warnings. The subsequent native composition and HTTP gate exercises missing IDs,
+disabled rows and invalid iteration limits on both chat routes and both Gateways.
+It checks unchanged provider counters and owned SQL accounting, and preserves the
+middleware correlation ID before the handler creates a billing identity. These
+guarded requests do not advertise successful agentic execution support; published
+verification of this selection remains required.
+
+[Linux run 38133326127](https://github.com/nickna/Conduit/actions/runs/38133326127)
+at `5396be8a` passed its complete native publish/process job with zero first-party
+linker diagnostics and 96 real persistence/credential/transport parity cases without
+skips. The published two-Gateway probe executes two successful Exa searches and two
+provider rejections with a production-protected scoped credential. It independently
+checks all 24 execution fields, opposite-host retrieval and ownership denial,
+configured prices, success-only logs and settled ledger/group balances. Its bounded
+process and owned Redis/SQL cleanup gate passes too. This proves that selected inline
+Exa path; MCP, successful agentic chat and the excluded workers remain separate work.
+Both native image jobs also passed their packaged-entrypoint checks. The inherited
+financial precision and External-mode provider diagnostics are tracked in
+[#1574](https://github.com/nickna/Conduit/issues/1574) and
+[#1575](https://github.com/nickna/Conduit/issues/1575).
 
 The native capability endpoint explicitly names `inline-function-execution`,
 `agentic-tool-and-function-workflows`, `function-audit-and-retention`, and

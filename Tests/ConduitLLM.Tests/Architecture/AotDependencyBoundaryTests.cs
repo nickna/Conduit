@@ -316,6 +316,11 @@ public sealed class AotDependencyBoundaryTests
         Assert.Equal(ServiceLifetime.Scoped, functionsEndpoint.Lifetime);
         Assert.NotNull(functionsEndpoint.ImplementationFactory);
         Assert.Null(functionsEndpoint.ImplementationType);
+        var chatEndpoint = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(ChatEndpoints));
+        Assert.Equal(ServiceLifetime.Scoped, chatEndpoint.Lifetime);
+        Assert.NotNull(chatEndpoint.ImplementationFactory);
+        Assert.Null(chatEndpoint.ImplementationType);
         var modelCost = Assert.Single(
             services,
             candidate => candidate.ServiceType == typeof(IModelCostService));
