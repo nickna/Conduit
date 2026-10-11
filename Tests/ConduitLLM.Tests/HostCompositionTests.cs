@@ -6,6 +6,7 @@ using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Interceptors;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Repositories;
+using ConduitLLM.Configuration.Services;
 using ConduitLLM.Core;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services;
@@ -89,6 +90,7 @@ public sealed class HostCompositionTests
         await using var app = builder.Build();
 
         ResolveRuntimeServices(builder.Services, app.Services);
+        AssertBillingAuditComposition(builder.Services, app.Services);
         AssertAdminGlobalSettingComposition(builder.Services, app.Services);
         AssertFunctionClientComposition(builder.Services, app.Services, false);
         AssertFunctionDiscoveryComposition(builder.Services, app.Services, false);
@@ -118,6 +120,7 @@ public sealed class HostCompositionTests
         await using var app = builder.Build();
 
         ResolveRuntimeServices(builder.Services, app.Services);
+        AssertBillingAuditComposition(builder.Services, app.Services);
         AssertFunctionClientComposition(builder.Services, app.Services, gateway);
         AssertFunctionDiscoveryComposition(builder.Services, app.Services, gateway);
         AssertFunctionExecutionComposition(builder.Services, app.Services, gateway);
@@ -544,6 +547,40 @@ public sealed class HostCompositionTests
         Assert.NotNull(repositoryField);
         Assert.Same(firstRepository, repositoryField.GetValue(firstService));
         Assert.Same(secondRepository, repositoryField.GetValue(secondService));
+    }
+
+    private static void AssertBillingAuditComposition(IServiceCollection descriptors, IServiceProvider provider)
+    {
+        var registration = Assert.Single(descriptors, descriptor => descriptor.ServiceType == typeof(IBillingAuditService));
+        Assert.Equal(ServiceLifetime.Singleton, registration.Lifetime);
+        var audit = Assert.IsType<BillingAuditService>(provider.GetRequiredService<IBillingAuditService>());
+        using var scope = provider.CreateScope();
+        Assert.Same(audit, scope.ServiceProvider.GetRequiredService<IBillingAuditService>());
+        var hosted = provider.GetServices<IHostedService>().ToArray();
+        var runtimeField = typeof(BillingAuditService).GetField("_runtimeWriter",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(runtimeField);
+        var innerField = typeof(LeaderElectedServiceWrapper).GetField("_innerService",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(innerField);
+#if CONDUIT_NATIVE_AOT
+        var writerRegistration = Assert.Single(descriptors,
+            descriptor => descriptor.ServiceType == typeof(IBillingAuditRuntimeWriter));
+        Assert.Equal(ServiceLifetime.Singleton, writerRegistration.Lifetime);
+        Assert.Equal(typeof(NpgsqlBillingAuditRuntimeWriter), writerRegistration.ImplementationType);
+        var writer = Assert.IsType<NpgsqlBillingAuditRuntimeWriter>(provider.GetRequiredService<IBillingAuditRuntimeWriter>());
+        Assert.Same(writer, scope.ServiceProvider.GetRequiredService<IBillingAuditRuntimeWriter>());
+        Assert.Same(writer, runtimeField.GetValue(audit));
+        Assert.Same(audit, Assert.Single(hosted.OfType<BillingAuditService>()));
+        Assert.DoesNotContain(hosted.OfType<LeaderElectedServiceWrapper>(),
+            wrapper => ReferenceEquals(innerField.GetValue(wrapper), audit));
+#else
+        Assert.Null(runtimeField.GetValue(audit));
+        Assert.DoesNotContain(descriptors, descriptor => descriptor.ServiceType == typeof(IBillingAuditRuntimeWriter));
+        Assert.DoesNotContain(hosted, service => ReferenceEquals(service, audit));
+        Assert.Single(hosted.OfType<LeaderElectedServiceWrapper>(),
+            wrapper => ReferenceEquals(innerField.GetValue(wrapper), audit));
+#endif
     }
 
     private static void AssertDatabaseComposition(IServiceCollection descriptors, IServiceProvider provider)

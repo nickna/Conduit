@@ -7,6 +7,8 @@ using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Gateway.Billing;
 using ConduitLLM.Gateway.UsageTracking;
+using ConduitLLM.Persistence.Interfaces;
+using ConduitLLM.Persistence.Npgsql;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConduitLLM.Gateway.Extensions;
@@ -48,11 +50,20 @@ public static class BillingServicesExtensions
         // Ephemeral key service for direct browser-to-API authentication (used for all direct access including SignalR)
         services.AddScoped<IEphemeralKeyService, EphemeralKeyService>();
 
-        // Billing audit service for comprehensive billing event tracking - with leader election
+        // Each native host flushes its own in-memory billing audit queue.
+#if CONDUIT_NATIVE_AOT
+        services.AddSingleton<IBillingAuditRuntimeWriter, NpgsqlBillingAuditRuntimeWriter>();
+        services.AddSingleton<IBillingAuditService>(provider => BillingAuditService.CreateWithRuntimePersistence(
+            provider,
+            provider.GetRequiredService<IBillingAuditRuntimeWriter>(),
+            provider.GetRequiredService<ILogger<BillingAuditService>>()));
+        services.AddSingleton<IHostedService>(provider => (BillingAuditService)provider.GetRequiredService<IBillingAuditService>());
+#else
         services.AddSingleton<IBillingAuditService, BillingAuditService>();
         services.AddLeaderElectedHostedService<BillingAuditService>(
             provider => (BillingAuditService)provider.GetRequiredService<IBillingAuditService>(),
             "BillingAuditService");
+#endif
 
         services.AddOptions<ConduitLLM.Configuration.Options.BillingReconciliationOptions>()
             .BindConfiguration(ConduitLLM.Configuration.Options.BillingReconciliationOptions.SectionName)

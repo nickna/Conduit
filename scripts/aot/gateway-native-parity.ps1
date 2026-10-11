@@ -52,6 +52,7 @@ if (-not $S3Endpoint) { throw 'S3Endpoint not set.' }
 if (-not $S3AccessKeyId) { throw 'S3AccessKeyId not set.' }
 if (-not $S3SecretAccessKey) { throw 'S3SecretAccessKey not set.' }
 if (-not $S3BucketName) { throw 'S3BucketName not set.' }
+if (-not $IsLinux) { throw 'The native BillingAudit process lifecycle proof requires Linux SIGTERM.' }
 
 function Get-NativeExecutable([string]$service) {
     $name = "ConduitLLM.$service"
@@ -184,6 +185,97 @@ function Stop-OwnedParityProcesses([Collections.Generic.List[Diagnostics.Process
     if ($failures.Count) { throw [AggregateException]::new('Owned parity hosts could not all be stopped.', $failures) }
 }
 
+function Get-OwnedLinuxStartToken([Diagnostics.Process]$process) {
+    if (-not $IsLinux -or $process.HasExited) { throw 'An owned live Linux host is required.' }
+    $stat = [IO.File]::ReadAllText("/proc/$($process.Id)/stat")
+    $boundary = $stat.LastIndexOf(') ', [StringComparison]::Ordinal)
+    if ($boundary -lt 0) { throw 'Owned host identity is unavailable.' }
+    $fields = $stat.Substring($boundary + 2).Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+    [ulong]$start = 0
+    if ($fields.Length -le 19 -or -not [ulong]::TryParse($fields[19], [Globalization.NumberStyles]::None,
+            [Globalization.CultureInfo]::InvariantCulture, [ref]$start) -or $start -eq 0) {
+        throw 'Owned host identity is invalid.'
+    }
+    return "linux:$start"
+}
+
+function Send-OwnedLinuxSigTerm([Diagnostics.Process]$process, [string]$identity) {
+    if ((Get-OwnedLinuxStartToken $process) -cne $identity) { throw 'Owned host identity changed before graceful shutdown.' }
+    $startInfo = [Diagnostics.ProcessStartInfo]::new('/bin/kill')
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.ArgumentList.Add('-TERM')
+    $startInfo.ArgumentList.Add('--')
+    $startInfo.ArgumentList.Add([string]$process.Id)
+    $signal = [Diagnostics.Process]::new()
+    $signal.StartInfo = $startInfo
+    $started = $false
+    try {
+        $started = $signal.Start()
+        if (-not $started) { throw 'Owned host graceful signal could not start.' }
+        # Retain the original handle through the outer cleanup even if a signal
+        # helper cannot be reaped within its local bound.
+        $processes.Add($signal)
+        $stdout = $signal.StandardOutput.ReadToEndAsync()
+        $stderr = $signal.StandardError.ReadToEndAsync()
+        if (-not $signal.WaitForExit(5000)) {
+            $signal.Kill($true)
+            if (-not $signal.WaitForExit(5000)) { throw 'Owned host graceful signal could not be reaped.' }
+            throw 'Owned host graceful signal timed out.'
+        }
+        if (-not [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($stdout, $stderr), 5000) -or $signal.ExitCode -ne 0) {
+            throw 'Owned host graceful signal failed.'
+        }
+    } finally { if (-not $started) { $signal.Dispose() } }
+}
+
+function Read-LogTail([string]$path, [long]$offset) {
+    $stream = [IO.File]::Open($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    try {
+        if ($stream.Length -lt $offset) { throw 'Owned host lifecycle log was truncated.' }
+        [void]$stream.Seek($offset, [IO.SeekOrigin]::Begin)
+        $reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8, $true, 4096, $true)
+        try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
+    } finally { $stream.Dispose() }
+}
+
+function Invoke-BillingAuditLifecycle([string]$argument, [string]$expected, [string]$hostName = '', [switch]$timerWitness) {
+    $arguments = @($argument)
+    if ($hostName) { $arguments += $hostName }
+    if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
+        $output = Invoke-PrivateFixtureProcess $nativeProbe $arguments @{} 'Native BillingAudit lifecycle'
+    } else {
+        $output = Invoke-PrivateFixtureProcess (Get-Command dotnet).Source (@($probeDll) + $arguments) @{} 'Native BillingAudit lifecycle'
+    }
+    if ($timerWitness) {
+        $witness = [regex]::Match($output, '\A' + [regex]::Escape($expected) + ' ([1-9][0-9]*) ([1-9][0-9]*)(?:\r?\n)?\z')
+        [long]$timestamp = 0
+        [long]$frequency = 0
+        if (-not $witness.Success -or -not [long]::TryParse($witness.Groups[1].Value, [Globalization.NumberStyles]::None,
+                [Globalization.CultureInfo]::InvariantCulture, [ref]$timestamp) -or
+            -not [long]::TryParse($witness.Groups[2].Value, [Globalization.NumberStyles]::None,
+                [Globalization.CultureInfo]::InvariantCulture, [ref]$frequency) -or
+            $frequency -ne [Diagnostics.Stopwatch]::Frequency) {
+            throw 'Native BillingAudit timer clock witness is invalid.'
+        }
+        Write-Host "  PASS  $expected"
+        return $timestamp
+    }
+    if ($output -cnotmatch ('\A' + [regex]::Escape($expected) + '(?:\r?\n)?\z')) {
+        throw 'Native BillingAudit lifecycle returned an invalid result.'
+    }
+    Write-Host "  PASS  $expected"
+}
+
+function Assert-LifecycleTimerWindow([long]$timestamp) {
+    $elapsed = [Diagnostics.Stopwatch]::GetElapsedTime($timestamp).TotalMilliseconds
+    if ($timestamp -le 0 -or $elapsed -lt 0 -or $elapsed -ge 3000) {
+        throw 'Owned native Gateway missed the fresh timer shutdown window.'
+    }
+}
+
 function Wait-ForHttp([string]$url, [string]$name) {
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     while ([DateTime]::UtcNow -lt $deadline) {
@@ -219,6 +311,7 @@ $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 $functionSeedAttempted = $false
 $mcpSeedAttempted = $false
 $adminSettingsAttempted = $false
+$billingAuditAttempted = $false
 $parityFailure = $null
 try {
     Set-GateEnvironment 'DATABASE_URL' $DatabaseUrl
@@ -243,6 +336,8 @@ try {
     Set-GateEnvironment 'BatchSpending__FlushIntervalSeconds' '1'
     Set-GateEnvironment 'SignalR__ConnectionLimits__MaxConnectionsPerVirtualKey' '2'
     Set-GateEnvironment 'ASPNETCORE_ENVIRONMENT' 'Production'
+    # The final-flush witness distinguishes StopAsync from a racing timer flush.
+    Set-GateEnvironment 'Logging__LogLevel__ConduitLLM.Configuration.Services.BillingAuditService' 'Debug'
     Set-GateEnvironment 'CONDUIT_ENABLE_HTTPS_REDIRECTION' 'false'
     Set-GateEnvironment 'CONDUIT_TRUSTED_PROXY_ENABLED' 'true'
     Set-GateEnvironment 'Telemetry__TracingEnabled' 'true'
@@ -288,6 +383,7 @@ try {
     Set-GateEnvironment 'CONDUIT_NATIVE_FUNCTION_FIXTURE_OWNER' ([Guid]::NewGuid().ToString('N'))
     Set-GateEnvironment 'CONDUIT_NATIVE_MCP_FIXTURE_OWNER' ([Guid]::NewGuid().ToString('N'))
     Set-GateEnvironment 'CONDUIT_NATIVE_ADMIN_SETTINGS_OWNER' ([Guid]::NewGuid().ToString('N'))
+    Set-GateEnvironment 'CONDUIT_NATIVE_BILLING_AUDIT_FIXTURE_OWNER' ([Guid]::NewGuid().ToString('N'))
     Set-GateEnvironment 'CONDUIT_API_TO_API_BACKEND_AUTH_KEY' $MasterKey
 
     Write-Host 'Seeding typed-store authentication and IP-filter fixtures...'
@@ -335,11 +431,13 @@ try {
     $gatewayExecutable = Get-NativeExecutable 'Gateway'
     $gateway = Start-LoggedProcess 'gateway-primary' $gatewayExecutable @() (Split-Path $gatewayExecutable) "http://127.0.0.1:$GatewayPort"
     $processes.Add($gateway)
+    $gatewayIdentity = Get-OwnedLinuxStartToken $gateway
     Wait-ForHttp "http://127.0.0.1:$GatewayPort/health/runtime-capabilities" 'primary native Gateway'
     Wait-ForHttp "http://127.0.0.1:$GatewayPort/health/ready" 'primary native Gateway readiness'
 
     $secondary = Start-LoggedProcess 'gateway-secondary' $gatewayExecutable @() (Split-Path $gatewayExecutable) "http://127.0.0.1:$SecondaryGatewayPort"
     $processes.Add($secondary)
+    $secondaryIdentity = Get-OwnedLinuxStartToken $secondary
     Wait-ForHttp "http://127.0.0.1:$SecondaryGatewayPort/health/runtime-capabilities" 'secondary native Gateway'
     Wait-ForHttp "http://127.0.0.1:$SecondaryGatewayPort/health/ready" 'secondary native Gateway readiness'
 
@@ -351,6 +449,10 @@ try {
     Set-GateEnvironment 'CONDUIT_NATIVE_ADMIN_URL' "http://127.0.0.1:$AdminPort"
     Set-GateEnvironment 'CONDUIT_NATIVE_GATEWAY_URL' "http://127.0.0.1:$GatewayPort"
     Set-GateEnvironment 'CONDUIT_NATIVE_GATEWAY_SECONDARY_URL' "http://127.0.0.1:$SecondaryGatewayPort"
+    # This quiet phase must precede every protocol/provider/benchmark request.
+    # Mark the owner before creation to cover an unknown committed outcome.
+    $billingAuditAttempted = $true
+    Invoke-BillingAuditLifecycle '--billing-audit-timer' 'Native BillingAudit quiet timer: PASS'
     # The in-process MCP server binds port zero and its fixture is created by the
     # probe. Track the attempt before invocation even if its acknowledgement is lost.
     $mcpSeedAttempted = $true
@@ -414,6 +516,71 @@ try {
     foreach ($hostProcess in @($admin, $gateway, $secondary)) {
         if ($hostProcess.HasExited) { throw "Native host $($hostProcess.Id) exited during dependency recovery." }
     }
+    Invoke-BillingAuditLifecycle '--billing-audit-drain' 'Native BillingAudit completed timer wave: PASS'
+    # Each host gets a fresh observed timer cycle before its own tail is armed.
+    # The unchanged ten-second timer remains active during other hosted-service
+    # shutdown, so a normal flush of the tail must still make the proof fail.
+    $lifecycleLogs = @(
+        [pscustomobject]@{ Name = 'gateway-primary'; HostName = 'primary'; Process = $gateway; Identity = $gatewayIdentity },
+        [pscustomobject]@{ Name = 'gateway-secondary'; HostName = 'secondary'; Process = $secondary; Identity = $secondaryIdentity }
+    )
+    foreach ($hostEntry in $lifecycleLogs) {
+        $prepareOffsets = @{}
+        foreach ($stream in @('stdout', 'stderr')) {
+            $path = Join-Path $logRoot "$($hostEntry.Name).$stream.log"
+            $prepareOffsets[$path] = (Get-Item -LiteralPath $path).Length
+        }
+        $timerTimestamp = Invoke-BillingAuditLifecycle '--billing-audit-prepare' `
+            "Native BillingAudit prepared shutdown timer $($hostEntry.HostName): PASS" $hostEntry.HostName -timerWitness
+        # Observe copying of the prepare marker's normal flush before capturing
+        # the exclusive shutdown range. All waiting consumes the same 3s bound.
+        while ($true) {
+            Assert-LifecycleTimerWindow $timerTimestamp
+            $prepareText = ''
+            foreach ($stream in @('stdout', 'stderr')) {
+                $path = Join-Path $logRoot "$($hostEntry.Name).$stream.log"
+                $prepareText += Read-LogTail $path $prepareOffsets[$path]
+            }
+            $prepareCount = [regex]::Matches($prepareText, '\bFlushed 1 Billing audit events to database').Count
+            if ($prepareCount -gt 1) { throw 'Owned native Gateway has ambiguous prepare timer witnesses.' }
+            if ($prepareCount -eq 1) { break }
+            Start-Sleep -Milliseconds 25
+        }
+        $offsets = @{}
+        foreach ($stream in @('stdout', 'stderr')) {
+            $path = Join-Path $logRoot "$($hostEntry.Name).$stream.log"
+            $offsets[$path] = (Get-Item -LiteralPath $path).Length
+        }
+        Invoke-BillingAuditLifecycle '--billing-audit-tail' `
+            "Native BillingAudit pending shutdown tail $($hostEntry.HostName): PASS" $hostEntry.HostName
+        Assert-LifecycleTimerWindow $timerTimestamp
+        Send-OwnedLinuxSigTerm $hostEntry.Process $hostEntry.Identity
+        Assert-LifecycleTimerWindow $timerTimestamp
+        if (-not $hostEntry.Process.WaitForExit(30000) -or $hostEntry.Process.ExitCode -ne 0) {
+            throw 'Owned native Gateway did not exit gracefully.'
+        }
+        # A timed process wait can precede completion of redirected log copying.
+        # Poll only the owned files under a fresh monotonic five-second bound.
+        $logDrain = [Diagnostics.Stopwatch]::StartNew()
+        while ($true) {
+            $text = ''
+            foreach ($stream in @('stdout', 'stderr')) {
+                $path = Join-Path $logRoot "$($hostEntry.Name).$stream.log"
+                $text += Read-LogTail $path $offsets[$path]
+            }
+            $finalCount = [regex]::Matches($text, 'Final flush of 1 Billing audit events to database').Count
+            if ($finalCount -gt 1 -or [regex]::IsMatch($text, '\bFlushed [1-9][0-9]* Billing audit events to database')) {
+                throw 'Owned native Gateway lacks an exclusive one-event shutdown-flush witness.'
+            }
+            if ($finalCount -eq 1) { break }
+            $remaining = 5000 - [int]$logDrain.ElapsedMilliseconds
+            if ($remaining -le 0) { throw 'Owned native Gateway shutdown-flush log did not drain within five seconds.' }
+            Start-Sleep -Milliseconds ([Math]::Min(50, $remaining))
+        }
+        Invoke-BillingAuditLifecycle '--billing-audit-verify-host' `
+            "Native BillingAudit graceful shutdown tail $($hostEntry.HostName): PASS" $hostEntry.HostName
+    }
+    Invoke-BillingAuditLifecycle '--billing-audit-verify' 'Native BillingAudit graceful shutdown tails: PASS'
 }
 catch {
     $parityFailure = $_
@@ -430,6 +597,7 @@ finally {
         Stop-OwnedParityProcesses $processes
         $fixtureCleanupFailures = [Collections.Generic.List[Exception]]::new()
         foreach ($cleanup in @(
+            [pscustomobject]@{ Attempted = $billingAuditAttempted; Argument = '--cleanup-billing-audit-fixture'; Label = 'Owned BillingAudit lifecycle fixture cleanup' },
             [pscustomobject]@{ Attempted = $adminSettingsAttempted; Argument = '--cleanup-admin-global-settings'; Label = 'Owned Admin global-setting fixture cleanup' },
             [pscustomobject]@{ Attempted = $mcpSeedAttempted; Argument = '--cleanup-mcp-function-fixture'; Label = 'Owned MCP function fixture cleanup' },
             [pscustomobject]@{ Attempted = $functionSeedAttempted; Argument = '--cleanup-function-fixture'; Label = 'Owned function fixture cleanup' }

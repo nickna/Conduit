@@ -75,10 +75,12 @@ helpers, so an interface guard alone is not sufficient native evidence.
 ## Extracted slices and actual evidence
 
 Contracts live in `Shared/ConduitLLM.Persistence.Abstractions`; typed implementations
-live in `Shared/ConduitLLM.Persistence.Npgsql`. Native Gateway selection is centralized
+live in `Shared/ConduitLLM.Persistence.Npgsql`. Core native Gateway store selection is centralized
 in `Services/ConduitLLM.Gateway/Extensions/NativeRuntimePersistenceExtensions.cs`.
 JIT Gateway and JIT Admin retain EF-backed implementations. Native Admin also selects
-its typed global-setting repository; other Admin management paths remain EF-backed. The shared contract tests are
+its typed global-setting repository. Both native hosts select the typed billing-audit
+batch writer through their billing-service registrations, with a per-host timer and
+shutdown drain; other Admin management paths remain EF-backed. The shared contract tests are
 under `Tests/ConduitLLM.IntegrationTests/Tests`; they run against real PostgreSQL in
 the NativeAOT workflow.
 
@@ -90,7 +92,7 @@ the NativeAOT workflow.
 | Virtual-key runtime / `IVirtualKeyRuntimeStore` | `VirtualKeyRuntimePersistenceParityTests` | Persistence probe covers hydrated snapshots, concurrent/idempotent ledger debits; Gateway probe checks exact settled request costs, balances, and lifetime spend. Management CRUD remains EF. |
 | Model routing / `IModelProviderMappingRuntimeStore` | `ModelProviderMappingRuntimePersistenceParityTests` | Persistence probe covers route graphs/policy; Gateway probe exercises `/v1/models`, model retrieval/metadata, and provider pricing. This does not cover the separate `/v1/conduit/discovery/models` EF projection or its warmer. |
 | Request-log writes / `IRequestLogRuntimeStore` | `RequestLogRuntimePersistenceParityTests` | Persistence probe checks persisted accounting mappings; Gateway probe checks exact token/cost rows. Request-log reporting and retention remain EF. |
-| Billing-audit batch writes / `IBillingAuditRuntimeWriter` | `BillingAuditPersistenceParityTests` | Published standalone probe checks all 17 scalars, generated defaults, ordered immutable results, 129-row atomic rollback/retry, database constraints and SQL/pool cancellation with reuse. Native host timer/shutdown selection, audit reads, retention and billing reconciliation remain separate. |
+| Billing-audit batch writes / `IBillingAuditRuntimeWriter` | `BillingAuditPersistenceParityTests`, `BillingAuditServicePersistenceTests` | Published standalone probe checks all 17 scalars, generated defaults, ordered immutable results, 129-row atomic rollback/retry, database constraints and SQL/pool cancellation with reuse. The Linux host gate checks independent subthreshold timers on two quiet Gateways, then a fresh timer marker and pending shutdown tail on each host in turn, owned graceful exits, exclusive final-flush witnesses and all 17 stored fields. Real PostgreSQL service cases also cover failed-write requeue/retry and shutdown cancellation/reuse. Native Admin uses the same hosted writer; no controlled Admin HTTP enqueue is claimed. Scheduled native retention is disabled; audit reads, retention and billing reconciliation remain separate. |
 | Async tasks / `IAsyncTaskRuntimeStore` | `AsyncTaskRuntimePersistenceParityTests` | Persistence probe exercises CRUD, claim/provider phases and archival; Gateway probe reads and cancels a durable task across hosts. Native lease recovery/retry and video/provider workloads require additional process tests. |
 | Media ownership/quota / `IMediaRuntimeStore` | `MediaRuntimePersistenceParityTests` | Persistence probe covers ownership, tombstones, aggregates, and quota reads; Gateway probe generates, stores, reads, and downloads an identical PNG through S3-compatible storage. Assigned/unlimited-policy cases have shared-contract evidence. Admin cleanup/reconciliation remains EF. |
 | Gateway operational aggregates / `IGatewayMetricsStore` | `GatewayMetricsPersistenceParityTests` | Gateway process gate checks seeded $0.40/min cost rate, 0.20s mean latency and one active mapping on an elected metrics host, plus two pending notification tasks on each Gateway. [Linux run 38121134709](https://github.com/nickna/Conduit/actions/runs/38121134709) passes these assertions. Broader Admin reporting remains separate. |

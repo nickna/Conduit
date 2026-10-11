@@ -33,6 +33,29 @@ available for retry. Shared key rings, catalog keys, streams, and unrelated owne
 state are preserved. Cleanup failure fails the gate and parent environment values
 are restored in all cases.
 
+The BillingAudit lifecycle phase owns a third, independent fixture. Before any
+protocol or provider workload, one authenticated configuration rejection on each
+quiet Gateway queues exactly one local audit event. The gate requires both
+10-second timers to persist these queues while each stays below the 100-event
+batch threshold, then checks all 17 audit columns and unchanged provider,
+execution and financial state. After the other workloads, it checks each Gateway
+in turn: one fresh marker must pass through that host's periodic timer before a
+single pending tail is armed. SIGTERM must follow the observed timer flush within
+three seconds. Captured Linux process start identities protect the signal, both
+hosts must exit successfully, and each log must contain an exclusive one-event
+final flush. A racing normal timer flush fails the proof. SQL checks the exact
+six owned events across the timer, marker and shutdown phases, and independent
+owner-checked cleanup runs after all remaining producers stop. This establishes
+the Gateway lifecycle boundary; Admin uses the same native hosted writer but
+has no controlled billing-enqueue HTTP case in this gate.
+
+Native billing queues run on every host with typed atomic batch persistence;
+scheduled EF retention is disabled. JIT keeps its original constructor and
+leader-elected lifecycle. The inherited JIT follower queue issue is tracked in
+[#1581](https://github.com/nickna/Conduit/issues/1581), and shutdown metric accounting
+is tracked in [#1584](https://github.com/nickna/Conduit/issues/1584). Audit reads,
+retention, reconciliation and abrupt-termination durability are separate work.
+
 The provider's `/search` route validates `x-api-key`, accepts generated chunked
 JSON from the production Exa client, returns a structured Unicode result, and
 has separate function counters. It omits `costDollars` so the execution proof must

@@ -5,6 +5,8 @@ using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Options;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Persistence.Interfaces;
+using ConduitLLM.Persistence.Npgsql;
 using ConduitLLM.Security.Authorization;
 using ConduitLLM.Security.Options;
 
@@ -145,12 +147,22 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ConduitLLM.Functions.Interfaces.IFunctionClientFactory, ConduitLLM.Functions.Services.FunctionClientFactory>();
         services.AddScoped<ConduitLLM.Functions.Interfaces.IFunctionExecutionService, ConduitLLM.Functions.Services.FunctionExecutionService>();
 
-        // Register billing audit service for comprehensive billing event tracking - with leader election
+        // Each native host flushes its own in-memory billing audit queue.
+#if CONDUIT_NATIVE_AOT
+        services.AddSingleton<IBillingAuditRuntimeWriter, NpgsqlBillingAuditRuntimeWriter>();
+        services.AddSingleton<IBillingAuditService>(provider => ConduitLLM.Configuration.Services.BillingAuditService.CreateWithRuntimePersistence(
+            provider,
+            provider.GetRequiredService<IBillingAuditRuntimeWriter>(),
+            provider.GetRequiredService<ILogger<ConduitLLM.Configuration.Services.BillingAuditService>>()));
+        services.AddSingleton<IHostedService>(provider =>
+            (ConduitLLM.Configuration.Services.BillingAuditService)provider.GetRequiredService<IBillingAuditService>());
+#else
         services.AddSingleton<ConduitLLM.Configuration.Interfaces.IBillingAuditService, ConduitLLM.Configuration.Services.BillingAuditService>();
         services.AddLeaderElectedHostedService<ConduitLLM.Configuration.Services.BillingAuditService>(
             provider => provider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IBillingAuditService>() as ConduitLLM.Configuration.Services.BillingAuditService
             ?? throw new InvalidOperationException("BillingAuditService must implement IHostedService"),
             "BillingAuditService");
+#endif
         services.AddHostedService<ConduitLLM.Admin.Services.PricingConfigurationAuditHostedService>();
 
         // Register pricing rules engine services

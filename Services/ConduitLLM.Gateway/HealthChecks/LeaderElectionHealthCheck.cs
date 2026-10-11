@@ -28,7 +28,9 @@ namespace ConduitLLM.Gateway.HealthChecks
             // Define critical services that must have a leader
             _criticalServices = new[]
             {
+#if !CONDUIT_NATIVE_AOT
                 "BillingAuditService",
+#endif
                 "SpendNotificationService",
                 "BatchSpendUpdateService",
                 "WebhookDeliveryNotificationService"

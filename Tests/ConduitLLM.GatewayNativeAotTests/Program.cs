@@ -143,6 +143,57 @@ if (args is ["--mock-provider"])
     return;
 }
 
+if (args.Length > 0 && args[0] is "--billing-audit-timer" or "--billing-audit-drain" or "--billing-audit-prepare" or
+    "--billing-audit-tail" or "--billing-audit-verify-host" or "--billing-audit-verify" or "--cleanup-billing-audit-fixture")
+{
+    try
+    {
+        var perHost = args[0] is "--billing-audit-prepare" or "--billing-audit-tail" or "--billing-audit-verify-host";
+        if (perHost ? args is not [_, "primary" or "secondary"] : args.Length != 1)
+            throw new ArgumentException("Invalid native BillingAudit lifecycle arguments.");
+        var host = perHost ? args[1] : null;
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        var owner = ProbeSettings.BillingAuditOwnerFromEnvironment();
+        switch (args[0])
+        {
+            case "--billing-audit-timer":
+                await NativeBillingAuditLifecycleProbe.TimerAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_URL"),
+                    ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"), ProbeSettings.ProviderUriFromEnvironment(),
+                    source, owner, ProbeSettings.ProtectedFunctionKeyFromEnvironment());
+                break;
+            case "--billing-audit-prepare":
+                await NativeBillingAuditLifecycleProbe.PrepareAsync(ProbeSettings.RequiredUri(host == "primary"
+                    ? "CONDUIT_NATIVE_GATEWAY_URL" : "CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"),
+                    ProbeSettings.ProviderUriFromEnvironment(), source, owner, host!);
+                break;
+            case "--billing-audit-tail":
+                await NativeBillingAuditLifecycleProbe.ArmTailAsync(ProbeSettings.RequiredUri(host == "primary"
+                    ? "CONDUIT_NATIVE_GATEWAY_URL" : "CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"),
+                    ProbeSettings.ProviderUriFromEnvironment(), source, owner, host!);
+                break;
+            case "--billing-audit-verify-host":
+                await NativeBillingAuditLifecycleProbe.VerifyHostAsync(source, owner, host!);
+                break;
+            case "--billing-audit-drain":
+                await NativeBillingAuditLifecycleProbe.DrainAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_URL"),
+                    ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"));
+                break;
+            case "--billing-audit-verify":
+                await NativeBillingAuditLifecycleProbe.VerifyTailAsync(source, owner);
+                break;
+            case "--cleanup-billing-audit-fixture":
+                await NativeBillingAuditLifecycleProbe.CleanupAsync(source, owner, ProbeSettings.RedisConnectionStringFromEnvironment());
+                break;
+        }
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Native BillingAudit lifecycle operation failed.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
 if (args is ["--function-execution"])
 {
     try
@@ -197,6 +248,8 @@ internal sealed record ProbeSettings(
     public static Guid McpFixtureOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_MCP_FIXTURE_OWNER");
 
     public static Guid AdminSettingsOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_ADMIN_SETTINGS_OWNER");
+
+    public static Guid BillingAuditOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_BILLING_AUDIT_FIXTURE_OWNER");
 
     public static string AdminMasterKeyFromEnvironment() => Required("CONDUIT_API_TO_API_BACKEND_AUTH_KEY");
 
