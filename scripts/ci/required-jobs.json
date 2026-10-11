@@ -1,4 +1,5 @@
 [
+  "select",
   "source-ignore-guard",
   "media-dispatch-integration",
   "billing-fault-injection",
