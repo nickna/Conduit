@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Models;
@@ -85,11 +86,14 @@ public sealed class ChatContentValidationFilter : IEndpointFilter
                     var video = RequiredObject(part, "video_url", partPath);
                     RequiredUri(video, "url", $"{partPath}.video_url");
                     OptionalEnum(video, "detail", $"{partPath}.video_url", "auto", "low", "high");
-                    foreach (var field in new[] { "max_frames", "sample_rate", "start_time", "end_time" })
-                        if (video.TryGetProperty(field, out var number))
-                            Require(number.ValueKind == JsonValueKind.Number &&
-                                (field != "max_frames" || number.TryGetInt32(out _)),
-                                $"{partPath}.video_url.{field}", "Expected a numeric processing option.");
+                    foreach (var field in new[] { "max_frames", "sample_rate", "start_time", "end_time" }
+                        .Where(field => video.TryGetProperty(field, out _)))
+                    {
+                        var number = video.GetProperty(field);
+                        Require(number.ValueKind == JsonValueKind.Number &&
+                            (field != "max_frames" || number.TryGetInt32(out _)),
+                            $"{partPath}.video_url.{field}", "Expected a numeric processing option.");
+                    }
                     break;
             }
             if (type is "text" or "image_url" or "input_audio" or "file" &&
