@@ -409,15 +409,23 @@ then the complete inline/agentic proof and repeated owned cleanup. The options
 divergence is tracked in [#1580](https://github.com/nickna/Conduit/issues/1580);
 the corrected complete published process gate passed in the run linked above.
 
-The native capability endpoint now includes `inline-exa-search` and
+The native Gateway capability endpoint includes `inline-exa-search`,
+`inline-stateless-mcp-tools`, `billing-audit-batch-writes` and
 `nonstreaming-configured-exa-agentic-chat`. It explicitly names
-`inline-functions-beyond-exa-search`,
+`inline-functions-beyond-exa-search-and-stateless-mcp`,
 `agentic-workflows-beyond-nonstreaming-configured-exa-chat`,
 `function-execution-list-http`, `function-audit-and-retention`, and
 `billing-reconciliation` alongside the existing EF, authentication-cache and
-MessagePack exclusions. These declarations identify unsupported workloads; their
-registrations still exist in the candidate. Full Admin management, unextracted
-workers, representative digest-pinned benchmarks, rollback and ordered actual
+MessagePack exclusions. The native worker profile now omits five Gateway and
+seven Admin EF hosted workers, and removes optional pricing-audit injection and
+the Admin pricing-tools routes. JIT retains these workers and routes. Other EF
+management services remain registered for their existing JIT contracts and are
+unsupported native operations. Admin now exposes its own generated capability
+response; both native hosts report `typed-npgsql-selected-runtime-slices`.
+See the [Admin profile](native-aot-admin-feature-matrix.md) and
+[Gateway profile](gateway-native-aot-feature-matrix.md) for retained workers,
+exact exclusions and bounded evidence. Full Admin management, representative
+digest-pinned benchmarks, rollback and ordered actual
 soaks remain required before production promotion or epic completion. The current
 lexical query inventory is 72 candidate files and 1,355 sites; it includes retained
 JIT reference adapters and is not a count of unsupported native operations.

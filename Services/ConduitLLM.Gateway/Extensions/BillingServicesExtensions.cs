@@ -75,10 +75,12 @@ public static class BillingServicesExtensions
                     options.MaxCatchUpWindowsPerRun is >= 1 and <= 168,
                 "BillingReconciliation settings are outside their supported ranges.")
             .ValidateOnStart();
+#if !CONDUIT_NATIVE_AOT
         services.AddSingleton<BillingReconciliationService>();
         services.AddLeaderElectedHostedService<BillingReconciliationService>(
             provider => provider.GetRequiredService<BillingReconciliationService>(),
             "BillingReconciliationService");
+#endif
 
         // Pricing rules engine services for flexible rules-based pricing
         services.AddScoped<IPricingRulesEvaluator, PricingRulesEvaluator>();
@@ -87,11 +89,13 @@ public static class BillingServicesExtensions
         // Cached pricing rules service for parsed configuration caching (uses the shared application FusionCache)
         services.AddPricingRulesCache();
 
+#if !CONDUIT_NATIVE_AOT
         // Pricing audit service for rules-based pricing evaluation tracking - with leader election
         services.AddSingleton<IPricingAuditService, PricingAuditService>();
         services.AddLeaderElectedHostedService<PricingAuditService>(
             provider => (PricingAuditService)provider.GetRequiredService<IPricingAuditService>(),
             "PricingAuditService");
+#endif
 
         return services;
     }

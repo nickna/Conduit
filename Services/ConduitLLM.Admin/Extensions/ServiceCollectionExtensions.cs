@@ -100,7 +100,9 @@ public static class ServiceCollectionExtensions
             .Validate(options => options.IntervalMinutes is >= 1 and <= 1440,
                 "IntervalMinutes must be between 1 and 1440.")
             .ValidateOnStart();
+#if !CONDUIT_NATIVE_AOT
         services.AddLeaderElectedHostedService<ModelCostCanaryHostedService>("ModelCostCanaryHostedService");
+#endif
 
         // Register refund service
         services.AddScoped<ConduitLLM.Admin.Interfaces.IRefundService, ConduitLLM.Admin.Services.RefundService>();
@@ -163,7 +165,9 @@ public static class ServiceCollectionExtensions
             ?? throw new InvalidOperationException("BillingAuditService must implement IHostedService"),
             "BillingAuditService");
 #endif
+#if !CONDUIT_NATIVE_AOT
         services.AddHostedService<ConduitLLM.Admin.Services.PricingConfigurationAuditHostedService>();
+#endif
 
         // Register pricing rules engine services
         services.AddScoped<ConduitLLM.Core.Services.IPricingRulesEvaluator, ConduitLLM.Core.Services.PricingRulesEvaluator>();
@@ -173,11 +177,15 @@ public static class ServiceCollectionExtensions
         services.AddPricingRulesCache();
 
         // Register pricing audit service for rules-based pricing event tracking - with leader election
+#if !CONDUIT_NATIVE_AOT
+        // The optional evaluator dependency can flush at the batch threshold even
+        // without hosted startup, so native hosts omit the audit service itself.
         services.AddSingleton<ConduitLLM.Configuration.Interfaces.IPricingAuditService, ConduitLLM.Configuration.Services.PricingAuditService>();
         services.AddLeaderElectedHostedService<ConduitLLM.Configuration.Services.PricingAuditService>(
             provider => provider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IPricingAuditService>() as ConduitLLM.Configuration.Services.PricingAuditService
             ?? throw new InvalidOperationException("PricingAuditService must implement IHostedService"),
             "PricingAuditService");
+#endif
 
         services.AddAdminRedisServices(!string.IsNullOrEmpty(
             ConduitLLM.Configuration.Utilities.RedisUrlParser.ResolveConnectionString()));

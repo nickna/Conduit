@@ -21,6 +21,8 @@ using ConduitLLM.Gateway.Interfaces;
 using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Gateway.Options;
 using ConduitLLM.Gateway.RateLimiting;
+using ConduitLLM.Gateway.Services;
+using ConduitLLM.Gateway.Services.SpendNotification;
 using ConduitLLM.Persistence.Interfaces;
 using ConduitLLM.Persistence.Npgsql;
 using Microsoft.AspNetCore.Builder;
@@ -90,6 +92,7 @@ public sealed class HostCompositionTests
         await using var app = builder.Build();
 
         ResolveRuntimeServices(builder.Services, app.Services);
+        AssertWorkerProfile(builder.Services, app.Services, false);
         AssertBillingAuditComposition(builder.Services, app.Services);
         AssertAdminGlobalSettingComposition(builder.Services, app.Services);
         AssertAdminIpFilterComposition(builder.Services, app.Services);
@@ -121,6 +124,7 @@ public sealed class HostCompositionTests
         await using var app = builder.Build();
 
         ResolveRuntimeServices(builder.Services, app.Services);
+        AssertWorkerProfile(builder.Services, app.Services, gateway);
         AssertBillingAuditComposition(builder.Services, app.Services);
         AssertFunctionClientComposition(builder.Services, app.Services, gateway);
         AssertFunctionDiscoveryComposition(builder.Services, app.Services, gateway);
@@ -588,6 +592,112 @@ public sealed class HostCompositionTests
         Assert.NotNull(repositoryField);
         Assert.Same(firstRepository, repositoryField.GetValue(firstService));
         Assert.Same(secondRepository, repositoryField.GetValue(secondService));
+    }
+
+    private static void AssertWorkerProfile(IServiceCollection descriptors, IServiceProvider provider, bool gateway)
+    {
+        var hosted = provider.GetServices<IHostedService>().ToArray();
+        var innerField = typeof(LeaderElectedServiceWrapper).GetField("_innerService",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(innerField);
+        var workers = hosted.Select(service => service is LeaderElectedServiceWrapper
+            ? Assert.IsAssignableFrom<IHostedService>(innerField.GetValue(service))
+            : service).ToArray();
+        Type[] unsupportedWorkers = gateway
+            ? [typeof(RequestLogService), typeof(FunctionCallAuditService), typeof(BillingReconciliationService),
+                typeof(PricingAuditService), typeof(DiscoveryCacheWarmingService)]
+            : [typeof(ModelCostCanaryHostedService), typeof(PricingConfigurationAuditHostedService),
+                typeof(PricingAuditService), typeof(AdminOperationsMetricsService),
+                typeof(OpenRouterMetadataSyncService), typeof(MediaStorageConfigurationGuard), typeof(MediaCleanupService)];
+        using var scope = provider.CreateScope();
+        var evaluator = Assert.IsType<PricingRulesEvaluator>(
+            scope.ServiceProvider.GetRequiredService<IPricingRulesEvaluator>());
+        var auditField = typeof(PricingRulesEvaluator).GetField("_auditService",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(auditField);
+#if CONDUIT_NATIVE_AOT
+        foreach (var type in unsupportedWorkers)
+        {
+            Assert.DoesNotContain(workers, worker => worker.GetType() == type);
+            // Media endpoints retain safe construction of their manual helpers.
+            if (type != typeof(MediaStorageConfigurationGuard) && type != typeof(MediaCleanupService))
+                Assert.DoesNotContain(descriptors, descriptor => descriptor.ServiceType == type);
+        }
+        Assert.DoesNotContain(descriptors, descriptor => descriptor.ServiceType == typeof(IPricingAuditService));
+        Assert.Null(auditField.GetValue(evaluator));
+        if (gateway)
+        {
+            Assert.DoesNotContain(descriptors, descriptor => descriptor.ServiceType == typeof(IRequestLogService));
+            Assert.DoesNotContain(descriptors, descriptor => descriptor.ServiceType == typeof(IFunctionCallAuditService));
+            var writer = Assert.IsType<StoreBackedRequestLogRuntimeWriter>(
+                provider.GetRequiredService<IRequestLogRuntimeWriter>());
+            Assert.Equal(ServiceLifetime.Singleton, Assert.Single(descriptors,
+                descriptor => descriptor.ServiceType == typeof(IRequestLogRuntimeWriter)).Lifetime);
+            Assert.Same(writer, scope.ServiceProvider.GetRequiredService<IRequestLogRuntimeWriter>());
+            var store = Assert.IsType<NpgsqlRequestLogRuntimeStore>(provider.GetRequiredService<IRequestLogRuntimeStore>());
+            var storeField = typeof(StoreBackedRequestLogRuntimeWriter).GetField("_store",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(storeField);
+            Assert.Same(store, storeField.GetValue(writer));
+            Assert.Same(store, scope.ServiceProvider.GetRequiredService<IRequestLogRuntimeStore>());
+        }
+        else
+        {
+            Assert.DoesNotContain(descriptors,
+                descriptor => descriptor.ServiceType == typeof(ConduitLLM.Admin.Endpoints.PricingEndpoints));
+            Assert.Empty(hosted.OfType<LeaderElectedServiceWrapper>());
+        }
+#else
+        foreach (var type in unsupportedWorkers)
+            Assert.Single(workers, worker => worker.GetType() == type);
+        var audit = Assert.IsType<PricingAuditService>(provider.GetRequiredService<IPricingAuditService>());
+        Assert.Same(audit, auditField.GetValue(evaluator));
+        Assert.Same(audit, Assert.Single(workers.OfType<PricingAuditService>()));
+        if (gateway)
+        {
+            var requestLog = Assert.IsType<RequestLogService>(provider.GetRequiredService<IRequestLogService>());
+            Assert.Same(requestLog, provider.GetRequiredService<IRequestLogRuntimeWriter>());
+            Assert.Same(requestLog, Assert.Single(workers.OfType<RequestLogService>()));
+            Assert.Same(provider.GetRequiredService<IFunctionCallAuditService>(),
+                Assert.Single(workers.OfType<FunctionCallAuditService>()));
+            Assert.Same(provider.GetRequiredService<BillingReconciliationService>(),
+                Assert.Single(workers.OfType<BillingReconciliationService>()));
+        }
+        else
+        {
+            Assert.Single(descriptors,
+                descriptor => descriptor.ServiceType == typeof(ConduitLLM.Admin.Endpoints.PricingEndpoints));
+        }
+#endif
+        // These workers serve the supported native slices and must survive profile selection.
+        var cache = Assert.IsType<GlobalSettingsCacheService>(provider.GetRequiredService<IGlobalSettingsCacheService>());
+        Assert.Same(cache, Assert.Single(workers.OfType<GlobalSettingsCacheService>()));
+        Assert.Single(workers.OfType<ConduitLLM.Configuration.Data.MigrationWaitService>());
+        Assert.Single(workers.OfType<CoordinatedConnectionPoolWarmer>());
+        if (gateway)
+        {
+            Assert.Single(workers.OfType<BusinessMetricsService>());
+            Assert.Single(workers.OfType<GatewayOperationsMetricsService>());
+            Assert.Single(workers.OfType<TaskProcessingMetricsService>());
+            Assert.Single(workers.OfType<AsyncTaskRetentionService>());
+            Assert.Single(workers.OfType<MediaTaskLeaseRecoveryService>());
+            Assert.Single(workers.OfType<ProviderKeyReprobeService>());
+            Assert.Single(workers.OfType<GatewayHeartbeatPublisher>());
+            Assert.Single(workers.OfType<BatchSpendUpdateService>());
+            Assert.Single(workers.OfType<DistributedSpendNotificationService>());
+            Assert.Single(workers.OfType<WebhookDeliveryNotificationService>());
+        }
+        else
+        {
+            Assert.Single(workers.OfType<AdminHeartbeatPublisher>());
+            var guard = Assert.IsType<MediaStorageConfigurationGuard>(provider.GetRequiredService<IMediaStorageConfigurationGuard>());
+            Assert.Same(guard, provider.GetRequiredService<MediaStorageConfigurationGuard>());
+            var cleanup = provider.GetRequiredService<MediaCleanupService>();
+#if !CONDUIT_NATIVE_AOT
+            Assert.Same(guard, Assert.Single(workers.OfType<MediaStorageConfigurationGuard>()));
+            Assert.Same(cleanup, Assert.Single(workers.OfType<MediaCleanupService>()));
+#endif
+        }
     }
 
     private static void AssertBillingAuditComposition(IServiceCollection descriptors, IServiceProvider provider)

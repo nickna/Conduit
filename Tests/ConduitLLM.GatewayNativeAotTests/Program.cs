@@ -525,81 +525,90 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
 
     private async Task AssertRuntimeAndOperationsAsync()
     {
-        using var capabilitiesResponse = await _gateway.GetAsync("health/runtime-capabilities");
-        await ExpectAsync(capabilitiesResponse, HttpStatusCode.OK, "runtime capabilities");
-        using var capabilities = JsonDocument.Parse(await capabilitiesResponse.Content.ReadAsStringAsync());
-
-        Equal("native-aot", GetString(capabilities.RootElement, "runtime_mode"), "native runtime mode");
-        var protocols = GetProperty(capabilities.RootElement, "signal_r_protocols")
-            .EnumerateArray().Select(value => value.GetString()).ToArray();
-        True(protocols.SequenceEqual(["json"]), "native SignalR protocol is JSON-only");
-
-        var supported = GetProperty(capabilities.RootElement, "included_features")
-            .EnumerateArray().Select(value => value.GetString()).ToHashSet();
-        True(supported.Contains("authenticated-model-discovery"),
-            "authenticated model discovery is advertised");
-        foreach (var feature in new[]
-                 {
-                     "function-metadata-discovery",
-                     "inline-exa-search",
-                     "nonstreaming-configured-exa-agentic-chat",
-                     "provider-http",
-                     "sse-streaming",
-                     "provider-error-translation",
-                     "provider-cancellation",
-                     "request-accounting-and-spend-settlement",
-                     "async-task-persistence",
-                     "s3-media-api-workflows",
-                     "authenticated-signalr-json-connections",
-                     "redis-signalr-backplane-and-rate-limits",
-                     "readiness-and-database-health",
-                     "redis-ephemeral-key-cache"
-                 })
+        string[] gatewayIncluded =
+        [
+            "postgresql-wolverine-persistence",
+            "redis-signalr-backplane-and-rate-limits",
+            "redis-data-protection",
+            "json-signalr-negotiate-routing",
+            "authenticated-signalr-json-connections",
+            "redis-ephemeral-key-cache",
+            "unauthenticated-request-rejection",
+            "authenticated-model-discovery",
+            "function-metadata-discovery",
+            "inline-exa-search",
+            "inline-stateless-mcp-tools",
+            "nonstreaming-configured-exa-agentic-chat",
+            "provider-http",
+            "sse-streaming",
+            "provider-error-translation",
+            "provider-cancellation",
+            "request-accounting-and-spend-settlement",
+            "billing-audit-batch-writes",
+            "async-task-persistence",
+            "s3-media-api-workflows",
+            "forwarded-headers",
+            "readiness-and-database-health",
+            "liveness-metrics-opentelemetry"
+        ];
+        string[] gatewayExcluded =
+        [
+            "signalr-messagepack",
+            "ef-core-query-data-plane",
+            "redis-virtual-key-authentication-cache",
+            "inline-functions-beyond-exa-search-and-stateless-mcp",
+            "agentic-workflows-beyond-nonstreaming-configured-exa-chat",
+            "function-execution-list-http",
+            "function-audit-and-retention",
+            "billing-reconciliation",
+            "request-log-reporting-and-retention",
+            "pricing-rule-audit-and-retention",
+            "model-discovery-catalog-and-warming",
+            "billing-audit-reads-and-retention",
+            "provider-hosted-tool-pricing"
+        ];
+        using var capabilityDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        foreach (var (client, name) in new[]
+                 { (_gateway, "primary Gateway"), (_secondaryGateway, "secondary Gateway") })
         {
-            True(supported.Contains(feature), $"{feature} is advertised");
+            using var response = await client.GetAsync("health/runtime-capabilities", capabilityDeadline.Token);
+            await ExpectAsync(response, HttpStatusCode.OK, $"{name} runtime capabilities");
+            True(response.Content.Headers.ContentType?.MediaType == "application/json", $"{name} capability JSON content type");
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(capabilityDeadline.Token));
+            AssertCapabilityMetadata(body.RootElement, name, ["json"], gatewayIncluded, gatewayExcluded);
         }
-
-        var exclusions = GetProperty(capabilities.RootElement, "excluded_features")
-            .EnumerateArray().Select(value => value.GetString()).ToHashSet();
-        True(exclusions.Contains("signalr-messagepack"), "MessagePack exclusion is observable");
-        True(exclusions.Contains("ef-core-query-data-plane"), "EF query data-plane exclusion is observable");
-        True(exclusions.Contains("redis-virtual-key-authentication-cache"),
-            "Redis virtual-key authentication cache exclusion is observable");
-        foreach (var feature in new[]
-                 {
-                     "inline-functions-beyond-exa-search",
-                     "agentic-workflows-beyond-nonstreaming-configured-exa-chat",
-                     "function-execution-list-http",
-                     "function-audit-and-retention",
-                     "billing-reconciliation"
-                 })
+        using (var response = await _admin.GetAsync("health/runtime-capabilities", capabilityDeadline.Token))
         {
-            True(exclusions.Contains(feature), $"{feature} exclusion is observable");
-            True(!supported.Contains(feature), $"{feature} is not advertised without process proof");
+            await ExpectAsync(response, HttpStatusCode.OK, "Admin runtime capabilities");
+            True(response.Content.Headers.ContentType?.MediaType == "application/json", "Admin capability JSON content type");
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(capabilityDeadline.Token));
+            AssertCapabilityMetadata(body.RootElement, "Admin", [],
+            [
+                "postgresql-wolverine-persistence",
+                "master-key-and-bearer-fallback-authentication",
+                "typed-global-settings-http",
+                "typed-ip-filter-http-and-enforcement",
+                "typed-global-settings-cache",
+                "typed-billing-audit-host",
+                "release-owned-schema-wait",
+                "readiness-and-database-health",
+                "liveness-metrics-opentelemetry"
+            ],
+            [
+                "ef-backed-admin-management",
+                "pricing-tools-and-audit",
+                "model-cost-canary",
+                "startup-pricing-configuration-audit",
+                "media-cleanup-and-reconciliation",
+                "media-storage-startup-guard",
+                "openrouter-metadata-sync",
+                "database-count-operations-metrics",
+                "billing-audit-reads-and-retention"
+            ]);
         }
-        True(!exclusions.Contains("authenticated-signalr-connections"),
-            "process-tested authenticated SignalR is no longer excluded");
-        True(!exclusions.Contains("authenticated-http-data-plane"),
-            "authenticated HTTP is no longer excluded as one undifferentiated boundary");
-        True(!exclusions.Contains("provider-routing-and-streaming"),
-            "process-tested provider routing and streaming are no longer excluded");
-        True(!exclusions.Contains("s3-media-api-workflows"),
-            "process-tested S3 media workflows are no longer excluded");
-        True(!exclusions.Contains("readiness-and-database-health"),
-            "process-tested schema/dependency readiness is no longer excluded");
-        foreach (var feature in new[] { "inline-exa-search", "nonstreaming-configured-exa-agentic-chat" })
-        {
-            True(!exclusions.Contains(feature), $"{feature} is supported after published process proof");
-        }
-        True(!exclusions.Contains("inline-function-execution"),
-            "inline functions are no longer excluded as one undifferentiated boundary");
-        True(!exclusions.Contains("agentic-tool-and-function-workflows"),
-            "agentic functions are no longer excluded as one undifferentiated boundary");
 
         await ExpectAsync(await _admin.GetAsync("health/live"), HttpStatusCode.OK, "Admin liveness");
         await ExpectAsync(await _gateway.GetAsync("health/live"), HttpStatusCode.OK, "Gateway liveness");
-        await ExpectAsync(await _secondaryGateway.GetAsync("health/runtime-capabilities"),
-            HttpStatusCode.OK, "secondary native Gateway");
 
         using var metrics = await _gateway.GetAsync("metrics");
         await ExpectAsync(metrics, HttpStatusCode.OK, "Prometheus metrics");
@@ -636,6 +645,37 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         var capabilitiesGraph = GetProperty(metadata, "capabilities");
         True(GetProperty(capabilitiesGraph, "chat").GetBoolean(),
             "model metadata contains effective chat capability");
+    }
+
+    private static void AssertCapabilityMetadata(JsonElement body, string host, string[] expectedProtocols,
+        string[] expectedIncluded, string[] expectedExcluded)
+    {
+        True(body.ValueKind == JsonValueKind.Object, $"{host} capability object");
+        True(body.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal).SequenceEqual(
+                new[] { "excluded_features", "included_features", "persistence_status", "runtime_mode", "signal_r_protocols" }),
+            $"{host} exact five snake_case capability fields");
+        Equal("native-aot", body.GetProperty("runtime_mode").GetString()!, $"{host} native runtime mode");
+        Equal("typed-npgsql-selected-runtime-slices", body.GetProperty("persistence_status").GetString()!,
+            $"{host} selected typed persistence status");
+        var protocols = CapabilityStrings(body, "signal_r_protocols", host);
+        True(protocols.SequenceEqual(expectedProtocols), $"{host} exact SignalR protocols");
+        var included = CapabilityStrings(body, "included_features", host).ToHashSet(StringComparer.Ordinal);
+        var excluded = CapabilityStrings(body, "excluded_features", host).ToHashSet(StringComparer.Ordinal);
+        True(included.SetEquals(expectedIncluded), $"{host} complete included capability set");
+        True(excluded.SetEquals(expectedExcluded), $"{host} complete excluded capability set");
+        True(!included.Overlaps(excluded), $"{host} capability sets do not overlap");
+    }
+
+    private static string[] CapabilityStrings(JsonElement body, string property, string host)
+    {
+        var values = body.GetProperty(property);
+        True(values.ValueKind == JsonValueKind.Array, $"{host} {property} array");
+        var entries = values.EnumerateArray().ToArray();
+        True(entries.All(value => value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString())),
+            $"{host} {property} contains only nonempty strings");
+        var result = entries.Select(value => value.GetString()!).ToArray();
+        True(result.Distinct(StringComparer.Ordinal).Count() == result.Length, $"{host} {property} contains no duplicates");
+        return result;
     }
 
     private async Task AssertFunctionDiscoveryAsync()

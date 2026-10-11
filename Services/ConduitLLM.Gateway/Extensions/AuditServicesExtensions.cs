@@ -15,6 +15,7 @@ public static class AuditServicesExtensions
     /// </summary>
     public static IServiceCollection AddAuditServices(this IServiceCollection services)
     {
+#if !CONDUIT_NATIVE_AOT
         // Request Log Service - uses batch processing like other audit services
         services.AddSingleton<IRequestLogService, RequestLogService>();
         services.AddSingleton<IRequestLogRuntimeWriter>(provider =>
@@ -28,6 +29,7 @@ public static class AuditServicesExtensions
         services.AddLeaderElectedHostedService<FunctionCallAuditService>(
             provider => (FunctionCallAuditService)provider.GetRequiredService<IFunctionCallAuditService>(),
             "FunctionCallAuditService");
+#endif
 
         return services;
     }

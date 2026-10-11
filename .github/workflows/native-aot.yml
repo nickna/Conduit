@@ -14,6 +14,7 @@ on:
       - 'Services/**/*.csproj'
       - 'Services/**/Dockerfile.native'
       - 'Tests/ConduitLLM.GatewayNativeAotTests/**'
+      - 'Tests/ConduitLLM.SerializationTests/**'
       - 'Tests/ConduitLLM.Tests/Admin/Filters/**'
       - 'Tests/ConduitLLM.Tests/HostCompositionTests.cs'
       - 'Tests/ConduitLLM.IntegrationTests/**'
@@ -127,6 +128,14 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $testExit -ne 0) { throw 'Native host composition validation failed.' }
         env:
           CONDUIT_CACHE_TEST_REDIS: 127.0.0.1:6379
+
+      - name: Reflection-disabled Admin capability contract
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.SerializationTests
+          suite: admin-runtime-capabilities-json
+          filter: FullyQualifiedName~AdminRuntimeCapabilitySerializationTests
+          minimum: '2'
 
       - name: Retain native-profile composition diagnostics
         if: always()

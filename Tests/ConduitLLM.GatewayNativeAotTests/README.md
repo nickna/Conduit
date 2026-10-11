@@ -92,6 +92,18 @@ environment setting is restored during cleanup.
 The inherited base/derived option mismatch is tracked in
 [#1580](https://github.com/nickna/Conduit/issues/1580).
 
+The full process gate reads `/health/runtime-capabilities` from Admin and both
+Gateways. It checks exactly five snake_case fields, native mode, the selected
+typed-Npgsql persistence status, each complete included/excluded feature set,
+and protocol arrays (empty for Admin, JSON for Gateway). Duplicate labels,
+overlapping sets and unexpected fields fail. Native hosts omit the unsupported
+EF background workers described in the
+[Admin profile](../../docs/operations/native-aot-admin-feature-matrix.md) and
+[Gateway profile](../../docs/operations/gateway-native-aot-feature-matrix.md).
+Composition tests separately verify the retained native workers and the full JIT
+worker graph. The Admin capability DTO also has reflection-disabled generated
+serialization tests; this health response does not qualify other Admin routes.
+
 `NativeFunctionExecutionProbe` runs after the existing protocol checks. It sends
 guarded chat requests through both aliases on both Gateways before any execution,
 using the separate owned key. Authentication and missing/disabled IDs precede

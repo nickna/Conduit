@@ -187,7 +187,9 @@ public partial class Program
         ProviderErrorsEndpoints.MapProviderErrorsEndpoints(app);
         MediaRetentionEndpoints.MapMediaRetentionEndpoints(app);
         ProviderToolsEndpoints.MapProviderToolsEndpoints(app);
+#if !CONDUIT_NATIVE_AOT
         PricingEndpoints.MapPricingEndpoints(app);
+#endif
         ModelProviderMappingEndpoints.MapModelProviderMappingEndpoints(app);
         ModelCostsEndpoints.MapModelCostsEndpoints(app);
 

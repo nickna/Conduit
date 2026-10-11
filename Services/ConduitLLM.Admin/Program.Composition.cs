@@ -38,7 +38,9 @@ public partial class Program
         builder.Services.AddScoped<ProviderErrorsEndpoints>();
         builder.Services.AddScoped<MediaRetentionEndpoints>();
         builder.Services.AddScoped<ProviderToolsEndpoints>();
+#if !CONDUIT_NATIVE_AOT
         builder.Services.AddScoped<PricingEndpoints>();
+#endif
         builder.Services.AddScoped<ModelProviderMappingEndpoints>();
         builder.Services.AddScoped<ModelCostsEndpoints>();
         builder.Services.AddScoped<ProviderCredentialsEndpoints>();
