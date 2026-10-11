@@ -116,6 +116,28 @@ public sealed class SignalRGeneratedResolverTests
     }
 
     [Fact]
+    public void WebhookDeliveryDto_BindsCaseInsensitivelyAndPreservesEveryField()
+    {
+        var protocol = CreateProtocol(SignalRTestOptions.Create());
+        var invocation = Parse(protocol,
+            "{\"type\":1,\"target\":\"BroadcastDeliveryAttempt\",\"arguments\":[\"https://native.invalid/hook\",{\"WEBHOOKID\":\"native-webhook\",\"DELIVERYID\":\"native-delivery\",\"URL\":\"https://native.invalid/hook\",\"EVENTTYPE\":\"fixture\",\"ATTEMPTNUMBER\":0,\"TIMESTAMP\":\"2026-10-10T01:02:03Z\",\"TASKID\":\"task\",\"TASKTYPE\":\"native-probe\"}]}\u001e",
+            typeof(string), typeof(WebhookDeliveryAttempt));
+        var attempt = Assert.IsType<WebhookDeliveryAttempt>(invocation.Arguments[1]);
+        using var document = JsonDocument.Parse(Write(protocol, "DeliveryAttempted", attempt).AsMemory()[..^1]);
+        var payload = document.RootElement.GetProperty("arguments")[0];
+        Assert.Equal(new[] { "attemptNumber", "deliveryId", "eventType", "taskId", "taskType", "timestamp", "url", "webhookId" },
+            payload.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+        Assert.Equal("native-webhook", payload.GetProperty("webhookId").GetString());
+        Assert.Equal("native-delivery", payload.GetProperty("deliveryId").GetString());
+        Assert.Equal("https://native.invalid/hook", payload.GetProperty("url").GetString());
+        Assert.Equal("fixture", payload.GetProperty("eventType").GetString());
+        Assert.Equal(0, payload.GetProperty("attemptNumber").GetInt32());
+        Assert.Equal(new DateTime(2026, 10, 10, 1, 2, 3, DateTimeKind.Utc), payload.GetProperty("timestamp").GetDateTime());
+        Assert.Equal("task", payload.GetProperty("taskId").GetString());
+        Assert.Equal("native-probe", payload.GetProperty("taskType").GetString());
+    }
+
+    [Fact]
     public void SharedNotificationTimeSpan_PreservesStandardSignalRWireFormat()
     {
         var protocol = CreateProtocol(SignalRTestOptions.Create(false));

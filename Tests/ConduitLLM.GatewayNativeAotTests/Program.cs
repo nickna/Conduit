@@ -621,8 +621,15 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             var notification = await secondary.WaitForTargetAsync(
                 "Onsystem_announcement",
                 timeout.Token);
-            True(notification.Contains("native cross-host notification", StringComparison.Ordinal),
+            var announcement = GetHubArguments(notification, "Onsystem_announcement", 1)[0];
+            AssertJsonFields(announcement, "id", "timestamp", "type", "priority", "message", "category");
+            Equal("native cross-host notification", announcement.GetProperty("message").GetString()!,
                 "Redis backplane delivers a JSON hub message across native Gateways");
+            True(announcement.GetProperty("priority").ValueKind == JsonValueKind.Number &&
+                 announcement.GetProperty("priority").GetInt32() == 1,
+                "native SignalR priority preserves its numeric enum contract");
+            Equal("system_announcement", announcement.GetProperty("type").GetString()!, "native announcement type");
+            Equal("general", announcement.GetProperty("category").GetString()!, "native announcement category");
         }
 
         await using (var video = await NativeSignalRClient.ConnectAsync(
@@ -654,6 +661,24 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             await tasks.InvokeAsync("SubscribeToTaskType", """["native-probe"]""", timeout.Token);
             await tasks.InvokeAsync("UnsubscribeFromTaskType", """["native-probe"]""", timeout.Token);
             True(true, "authenticated TaskHub JSON group invocations");
+            await tasks.InvokeAsync("SubscribeToTask", $$"""["{{NativeParityFixture.TaskId}}"]""", timeout.Token);
+            await tasks.InvokeAsync("TaskCompleted",
+                $$$"""["{{{NativeParityFixture.TaskId}}}",{"Mixed_KEY":null,"zero":0,"done":false,"values":["fixture",0,null,false],"nested":{"UPPER_key":"preserved"}}]""",
+                timeout.Token);
+            var completion = GetHubArguments(await tasks.WaitForTargetAsync("TaskCompleted", timeout.Token), "TaskCompleted", 2);
+            Equal(NativeParityFixture.TaskId, completion[0].GetString()!, "native dynamic task completion ID");
+            var result = completion[1];
+            AssertJsonFields(result, "Mixed_KEY", "zero", "done", "values", "nested");
+            True(result.GetProperty("Mixed_KEY").ValueKind == JsonValueKind.Null,
+                "native dynamic task result retains null and exact property casing");
+            True(result.GetProperty("zero").GetInt32() == 0 && !result.GetProperty("done").GetBoolean(),
+                "native dynamic task result retains default scalar values");
+            var values = result.GetProperty("values");
+            True(values.GetArrayLength() == 4 && values[0].GetString() == "fixture" &&
+                 values[1].GetInt32() == 0 && values[2].ValueKind == JsonValueKind.Null && !values[3].GetBoolean(),
+                "native dynamic task result retains nested array values");
+            Equal("preserved", result.GetProperty("nested").GetProperty("UPPER_key").GetString()!,
+                "native dynamic task result retains nested property casing");
         }
 
         await using (await NativeSignalRClient.ConnectAsync(
@@ -673,6 +698,20 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         {
             const string webhookArguments = """[["https://native.invalid/hook"]]""";
             await webhooks.InvokeAsync("SubscribeToWebhooks", webhookArguments, timeout.Token);
+            await webhooks.InvokeAsync("BroadcastDeliveryAttempt",
+                $$"""["https://native.invalid/hook",{"WEBHOOKID":"native-webhook","DELIVERYID":"native-delivery","URL":"https://native.invalid/hook","EVENTTYPE":"fixture","ATTEMPTNUMBER":0,"TIMESTAMP":"2026-10-10T01:02:03Z","TASKID":"{{NativeParityFixture.TaskId}}","TASKTYPE":"native-probe"}]""",
+                timeout.Token);
+            var attempt = GetHubArguments(await webhooks.WaitForTargetAsync("DeliveryAttempted", timeout.Token), "DeliveryAttempted", 1)[0];
+            AssertJsonFields(attempt, "webhookId", "deliveryId", "url", "eventType", "attemptNumber", "timestamp", "taskId", "taskType");
+            Equal("native-webhook", attempt.GetProperty("webhookId").GetString()!, "native webhook DTO case-insensitive binding");
+            Equal("native-delivery", attempt.GetProperty("deliveryId").GetString()!, "native webhook delivery ID");
+            Equal("https://native.invalid/hook", attempt.GetProperty("url").GetString()!, "native webhook URL");
+            Equal("fixture", attempt.GetProperty("eventType").GetString()!, "native webhook event type");
+            True(attempt.GetProperty("attemptNumber").GetInt32() == 0, "native webhook DTO retains zero attempt count");
+            True(attempt.GetProperty("timestamp").GetDateTime() == new DateTime(2026, 10, 10, 1, 2, 3, DateTimeKind.Utc),
+                "native webhook DTO retains supplied UTC timestamp");
+            Equal(NativeParityFixture.TaskId, attempt.GetProperty("taskId").GetString()!, "native webhook task ID");
+            Equal("native-probe", attempt.GetProperty("taskType").GetString()!, "native webhook task type");
             await webhooks.InvokeAsync("UnsubscribeFromWebhooks", webhookArguments, timeout.Token);
             True(true, "authenticated WebhookDeliveryHub Redis-backed invocations");
         }
@@ -738,6 +777,22 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             """["native-public-video-task"]""",
             timeout.Token);
     }
+
+    private static JsonElement GetHubArguments(string frame, string target, int count)
+    {
+        using var document = JsonDocument.Parse(frame);
+        var root = document.RootElement;
+        True(root.GetProperty("type").GetInt32() == 1, $"native {target} invocation frame");
+        Equal(target, root.GetProperty("target").GetString()!, $"native {target} target");
+        var arguments = root.GetProperty("arguments");
+        True(arguments.GetArrayLength() == count, $"native {target} argument count");
+        return arguments.Clone();
+    }
+
+    private static void AssertJsonFields(JsonElement payload, params string[] fields) =>
+        True(fields.Order(StringComparer.Ordinal).SequenceEqual(
+                payload.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal)),
+            "native SignalR payload preserves exact field set and casing");
 
     private static async Task WaitForSignalRConnectionCountAsync(
         IDatabase database,
