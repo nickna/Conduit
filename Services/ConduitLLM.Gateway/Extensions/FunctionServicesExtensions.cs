@@ -4,6 +4,9 @@ using ConduitLLM.Core.Services;
 using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Functions.Security;
 using ConduitLLM.Functions.Services;
+#if CONDUIT_NATIVE_AOT
+using ConduitLLM.Persistence.Interfaces;
+#endif
 
 namespace ConduitLLM.Gateway.Extensions;
 
@@ -24,7 +27,17 @@ public static class FunctionServicesExtensions
         services.AddScoped<IFunctionCostService, FunctionCostService>();
         services.AddScoped<IFunctionCostCalculationService, FunctionCostCalculationService>();
         services.AddSingleton<IFunctionCredentialProtector, FunctionCredentialProtector>();
+#if CONDUIT_NATIVE_AOT
+        // Explicit construction preserves the legacy constructor without permitting
+        // DI to choose its longer repository-backed signature for native requests.
+        services.AddScoped<IFunctionClientFactory>(provider => new FunctionClientFactory(
+            provider.GetRequiredService<IFunctionExecutionConfigurationStore>(),
+            provider.GetRequiredService<IFunctionCredentialProtector>(),
+            provider.GetRequiredService<ILoggerFactory>(),
+            provider.GetService<IHttpClientFactory>()));
+#else
         services.AddScoped<IFunctionClientFactory, FunctionClientFactory>();
+#endif
         services.AddScoped<IFunctionExecutionService, FunctionExecutionService>();
         services.AddScoped<FunctionParameterValidationService>();
 

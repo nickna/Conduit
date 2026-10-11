@@ -172,6 +172,18 @@ the only connection slot is occupied. The published persistence probe includes t
 boundary before runtime service wiring or native selection. Pricing and execution
 record writes remain separate slices.
 
+`FunctionClientFactory` now uses this proven store in native Gateway, selected by an
+explicit scoped factory registration. Its original public repository constructor is
+preserved for JIT Gateway and Admin. Tests compare both paths through actual Exa and
+Tavily clients with fake HTTP handlers: credential scope, selected-secret decryption,
+URLs, headers, timeouts and fresh reads are unchanged. Credential lookup still uses
+the stored provider, while client selection uses the caller's provider; disabled
+configurations retain their existing factory behavior. MCP allowlist rejection occurs
+before transport creation. Host composition tests run in both JIT and native build
+profiles and assert the native factory holds the exact singleton typed store. This
+selects only client construction; inline execution, execution reads and broader
+function workflows retain separate persistence boundaries.
+
 `IFunctionPricingRuntimeStore` adds uncached scalar pricing selection at a supplied
 UTC instant. Active mappings use the canonical `FunctionCostId`; cost eligibility
 is applied before priority/effective-date ordering. Provider, purpose and configuration

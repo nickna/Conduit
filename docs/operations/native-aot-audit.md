@@ -314,4 +314,9 @@ Function entities and persistence interfaces now compile in the neutral persiste
 leaf with binary forwarding from Functions, so Configuration no longer references
 the function provider implementation assembly. Function discovery and execution
 configuration/credential read ports have EF/Npgsql parity suites and standalone
-persistence probes; their native service selection remains a separate checkpoint.
+persistence probes. Published Linux run 38122760993 proves both typed read ports;
+run 38124571584 also passes the authenticated two-host function catalog and parameter
+workload, typed pricing reads and cleanup fault contracts. Native Gateway now selects
+the discovery store and constructs provider clients through the configuration/credential
+store. Inline execution, execution reads, broader function workflows and Admin
+management still require separate persistence and process-level proof.

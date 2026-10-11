@@ -13,6 +13,7 @@ using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Gateway.Authentication;
 using ConduitLLM.Gateway.Endpoints;
 using ConduitLLM.Gateway.EventHandlers;
@@ -270,6 +271,7 @@ public sealed class AotDependencyBoundaryTests
 
         services.AddBillingAndPricingServices();
         services.UseNativeRuntimePersistence();
+        services.AddFunctionServices();
 
         AssertNativeSingleton<IGlobalSettingRepository, NpgsqlGlobalSettingRepository>(services);
         AssertNativeSingleton<IIpFilterRepository, NpgsqlIpFilterRepository>(services);
@@ -283,6 +285,12 @@ public sealed class AotDependencyBoundaryTests
         AssertNativeSingleton<IRequestLogRuntimeWriter, StoreBackedRequestLogRuntimeWriter>(services);
         AssertNativeSingleton<IModelProviderMappingRuntimeStore, NpgsqlModelProviderMappingRuntimeStore>(services);
         AssertNativeSingleton<IModelProviderMappingRepository, StoreBackedModelProviderMappingRepository>(services);
+        AssertNativeSingleton<IFunctionDiscoveryRuntimeStore, NpgsqlFunctionDiscoveryRuntimeStore>(services);
+        AssertNativeSingleton<IFunctionExecutionConfigurationStore, NpgsqlFunctionExecutionConfigurationStore>(services);
+        var functionClient = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(IFunctionClientFactory));
+        Assert.Equal(ServiceLifetime.Scoped, functionClient.Lifetime);
+        Assert.NotNull(functionClient.ImplementationFactory);
         var modelCost = Assert.Single(
             services,
             candidate => candidate.ServiceType == typeof(IModelCostService));

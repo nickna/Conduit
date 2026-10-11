@@ -19,6 +19,8 @@ public sealed class MetricsCollectorsTests : IDisposable
 {
     private readonly List<SqliteTestDatabase> _databases = [];
 
+#if !CONDUIT_NATIVE_AOT
+    // These SQLite collector contracts exercise the JIT-only EF reference adapter.
     [Fact]
     public async Task TaskMetrics_GroupActiveTasksAndRemoveStaleLabels()
     {
@@ -151,6 +153,8 @@ public sealed class MetricsCollectorsTests : IDisposable
         Assert.DoesNotContain($"conduit_models_active_count{{provider=\"{enabledProviderId}\"}}", exposition);
     }
 
+#endif
+
     [Fact]
     public async Task CollectorFailures_AreExported()
     {
@@ -192,6 +196,7 @@ public sealed class MetricsCollectorsTests : IDisposable
         });
     }
 
+#if !CONDUIT_NATIVE_AOT
     private static ServiceCollection CreateServices(DbContextOptions<ConduitDbContext> options)
     {
         var services = new ServiceCollection();
@@ -199,6 +204,7 @@ public sealed class MetricsCollectorsTests : IDisposable
         services.AddScoped<IGatewayMetricsStore, EfGatewayMetricsStore>();
         return services;
     }
+#endif
 
     private static ConduitLLM.Configuration.Entities.AsyncTask CreateTask(
         string id,

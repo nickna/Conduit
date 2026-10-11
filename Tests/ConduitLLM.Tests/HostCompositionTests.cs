@@ -1,6 +1,8 @@
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Interceptors;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Functions.Interfaces;
+using ConduitLLM.Functions.Services;
 using ConduitLLM.Gateway.Interfaces;
 using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Gateway.RateLimiting;
@@ -70,6 +72,7 @@ public sealed class HostCompositionTests
         await using var app = builder.Build();
 
         ResolveRuntimeServices(builder.Services, app.Services);
+        AssertFunctionClientComposition(builder.Services, app.Services, false);
         Assert.Null(app.Services.GetService<IRedisErrorStore>());
         Assert.Null(app.Services.GetService<IProviderErrorTrackingService>());
         Assert.Null(app.Services.GetService<ConduitLLM.Core.Services.IVirtualKeyRateLimitService>());
@@ -92,6 +95,7 @@ public sealed class HostCompositionTests
         await using var app = builder.Build();
 
         ResolveRuntimeServices(builder.Services, app.Services);
+        AssertFunctionClientComposition(builder.Services, app.Services, gateway);
         Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(StackExchange.Redis.IConnectionMultiplexer));
         if (gateway)
         {
@@ -160,6 +164,33 @@ public sealed class HostCompositionTests
             var services = descriptor.Lifetime == ServiceLifetime.Singleton ? provider : scope.ServiceProvider;
             Assert.NotNull(services.GetRequiredService(descriptor.ServiceType));
         }
+    }
+
+    private static void AssertFunctionClientComposition(IServiceCollection descriptors, IServiceProvider provider, bool gateway)
+    {
+        var descriptor = Assert.Single(descriptors, value => value.ServiceType == typeof(IFunctionClientFactory));
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var factory = Assert.IsType<FunctionClientFactory>(first.ServiceProvider.GetRequiredService<IFunctionClientFactory>());
+        Assert.Same(factory, first.ServiceProvider.GetRequiredService<IFunctionClientFactory>());
+        Assert.NotSame(factory, second.ServiceProvider.GetRequiredService<IFunctionClientFactory>());
+#if CONDUIT_NATIVE_AOT
+        if (gateway)
+        {
+            Assert.NotNull(descriptor.ImplementationFactory);
+            var store = Assert.Single(descriptors, value => value.ServiceType == typeof(IFunctionExecutionConfigurationStore));
+            Assert.Equal(ServiceLifetime.Singleton, store.Lifetime);
+            Assert.Equal(typeof(NpgsqlFunctionExecutionConfigurationStore), store.ImplementationType);
+            var resolvedStore = first.ServiceProvider.GetRequiredService<IFunctionExecutionConfigurationStore>();
+            Assert.Same(resolvedStore,
+                second.ServiceProvider.GetRequiredService<IFunctionExecutionConfigurationStore>());
+            Assert.Same(resolvedStore, typeof(FunctionClientFactory).GetField("_runtimeStore",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(factory));
+            return;
+        }
+#endif
+        Assert.Equal(typeof(FunctionClientFactory), descriptor.ImplementationType);
     }
 
     private static void AssertDatabaseComposition(IServiceCollection descriptors, IServiceProvider provider)

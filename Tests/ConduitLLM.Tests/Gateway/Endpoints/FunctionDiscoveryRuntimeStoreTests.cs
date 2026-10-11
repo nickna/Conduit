@@ -148,9 +148,11 @@ public sealed class FunctionDiscoveryRuntimeStoreTests
             var services = new ServiceCollection();
             services.AddLogging();
             services.AddRepositories();
+#if !CONDUIT_NATIVE_AOT
             var reference = services.Last(service => service.ServiceType == typeof(IFunctionDiscoveryRuntimeStore));
             Assert.Equal(typeof(EfFunctionDiscoveryRuntimeStore), reference.ImplementationType);
             Assert.Equal(ServiceLifetime.Scoped, reference.Lifetime);
+#endif
             services.Replace(ServiceDescriptor.Singleton<IFunctionDiscoveryRuntimeStore>(Store));
             services.AddSingleton(Factory.Object);
             services.AddSingleton(Auth.Object);
