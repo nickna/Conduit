@@ -157,6 +157,18 @@ persistence probe includes these operations. Gateway endpoint wiring and native
 selection follow the published native check; function CRUD, credential resolution,
 cost selection and execution workers still require their own operation boundaries.
 
+Execution configuration and credential reads follow as a separate boundary.
+`IFunctionExecutionConfigurationStore` reads scalar configurations by ID or ID set,
+including disabled rows, and returns every credential for a provider in the existing
+primary/key-name database order. Null/empty ID sets retain their immediate-return
+behavior even when cancelled. Credential scope selection and secret protection stay
+with the current services; the persistence adapters preserve stored secrets unchanged.
+The EF/Npgsql PostgreSQL contract compares legacy credential ordering, disabled and
+unknown enum values, scoped/global selection, detached reads and cancellation while
+the only connection slot is occupied. The published persistence probe includes this
+boundary before runtime service wiring or native selection. Pricing and execution
+record writes remain separate slices.
+
 ## Options considered
 
 1. **Wait for production-supported EF NativeAOT.** Rejected as the only plan: it

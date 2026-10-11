@@ -440,6 +440,7 @@ try
             await ExerciseSchemaVersionProbeAsync(schemaDataSource, storeConnectionString);
             await ExerciseConnectionPoolWarmupAsync(schemaDataSource);
             await FunctionDiscoveryPersistenceProbe.RunAsync(schemaDataSource);
+            await FunctionExecutionConfigurationPersistenceProbe.RunAsync(schemaDataSource);
         }
         await ExerciseGlobalSettingRepositoryAsync(new NpgsqlGlobalSettingRepository(dataSource));
         await ExerciseIpFilterRepositoryAsync(new NpgsqlIpFilterRepository(dataSource));
@@ -457,7 +458,7 @@ try
             new NpgsqlRequestLogRuntimeStore(dataSource));
     }
 
-    Console.WriteLine("Native persistence probe passed: schema readiness, pool warming/cancellation/reuse, reads, writes, rollback, concurrency, retry, PostgreSQL mappings, and the global-settings, IP-filter, provider/credential, model-routing, virtual-key, media, async-task, function-discovery, and request-log runtime stores.");
+    Console.WriteLine("Native persistence probe passed: schema readiness, pool warming/cancellation/reuse, reads, writes, rollback, concurrency, retry, PostgreSQL mappings, and the global-settings, IP-filter, provider/credential, model-routing, virtual-key, media, async-task, function-discovery, function-execution configuration, and request-log runtime stores.");
     return 0;
 }
 finally
