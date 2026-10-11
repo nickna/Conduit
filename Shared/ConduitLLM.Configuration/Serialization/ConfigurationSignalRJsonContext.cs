@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using ConduitLLM.Configuration.DTOs.SignalR;
@@ -13,6 +14,7 @@ namespace ConduitLLM.Configuration.Serialization;
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(object))]
+[JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(ImageGenerationStartedNotification))]
 [JsonSerializable(typeof(ImageGenerationProgressNotification))]

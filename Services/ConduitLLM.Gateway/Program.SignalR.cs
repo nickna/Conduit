@@ -5,6 +5,7 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Gateway.Interfaces;
+using ConduitLLM.Gateway.Serialization;
 using Microsoft.AspNetCore.SignalR;
 
 public partial class Program
@@ -50,7 +51,8 @@ public partial class Program
                 options.AddFilter<ConduitLLM.Gateway.Filters.SignalRErrorHandlingFilter>();
                 options.AddFilter<ConduitLLM.Gateway.Authentication.VirtualKeyHubFilter>();
                 options.AddFilter<ConduitLLM.Gateway.Authentication.VirtualKeySignalRRateLimitFilter>();
-            });
+            },
+            additionalPayloadResolver: GatewaySignalRJsonContext.Default);
 
         // Register settings refresh service for runtime configuration updates
         builder.Services.AddSingleton<ISettingsRefreshService, SettingsRefreshService>();

@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Text;
 using System.Text.Json;
-using ConduitLLM.Configuration.Serialization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Protocol;
 using Microsoft.Extensions.Options;
@@ -16,7 +15,7 @@ internal sealed class SignalRProtocolCapture<THub> : IHubContext<THub>, IHubClie
     {
         _protocol = new JsonHubProtocol(Options.Create(new JsonHubProtocolOptions
         {
-            PayloadSerializerOptions = options ?? new JsonSerializerOptions(ConfigurationSignalRJsonContext.Default.Options)
+            PayloadSerializerOptions = options ?? SignalRTestOptions.Create()
         }));
     }
 
