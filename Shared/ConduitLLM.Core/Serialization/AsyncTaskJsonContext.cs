@@ -17,6 +17,8 @@ namespace ConduitLLM.Core.Serialization;
 [JsonSerializable(typeof(VideoGenerationRequest))]
 [JsonSerializable(typeof(VideoGenerationResponse))]
 [JsonSerializable(typeof(MediaGenerationTaskResult))]
+[JsonSerializable(typeof(ImageGenerationFailureResult))]
+[JsonSerializable(typeof(VideoGenerationFailureResult))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(JsonObject))]
 [JsonSerializable(typeof(Dictionary<string, object>))]
