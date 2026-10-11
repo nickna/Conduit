@@ -48,6 +48,11 @@ architecture. It does not assume that whichever clang appears on PATH compiled
 the program. Windows records the selected linker; the NativeAOT application
 compile/link steps do not invoke `cl.exe`.
 
+The build-time capture reader, native-output verifier and toolchain resolver live
+in `scripts/aot/native-publish-build.ps1`. Producers pass the requested RID directly
+to those checks. Dot-sourcing the helper defines functions without writing files;
+published hosts do not import it.
+
 The captured object and binary paths must match the invocation's selected native
 output paths. The publisher requires both new regular outputs and verifies that
 the linked binary's bytes match the executable copied into the runtime directory.
