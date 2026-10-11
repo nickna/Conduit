@@ -53,22 +53,44 @@ public sealed class MediaTaskTerminalWriter(IWolverineRuntime runtime, IDistribu
             providerStarted = reader.IsDBNull(7) ? null : reader.GetDateTime(7);
             providerCompleted = reader.IsDBNull(8) ? null : reader.GetDateTime(8);
         }
-        if (oldState >= (int)TaskState.Completed) return false;
-        if (transition.ExpectedWorkerId != null &&
+        TaskMetadata? recoveredMetadata = null;
+        var recovery = transition.ReconciliationDispatchId != null;
+        if (recovery)
+        {
+            recoveredMetadata = JsonSerializer.Deserialize(metadataJson ?? "null", AsyncTaskJsonContext.Default.TaskMetadata);
+            var decision = recoveredMetadata?.Reconciliation;
+            if (oldState != 6 || worker != MediaTaskReconciliationStore.Worker(transition.ReconciliationDispatchId!) ||
+                decision == null || decision.DispatchId != transition.ReconciliationDispatchId || decision.Outcome != "accepted") return false;
+            var result = JsonSerializer.Deserialize(transition.ResultJson ?? "null", AsyncTaskJsonContext.Default.MediaGenerationTaskResult);
+            if (transition.State != TaskState.Completed || recoveredMetadata!.VirtualKeyId != owner || decision.VirtualKeyId != owner ||
+                result == null || result.Model != decision.Model || result.Data.Count != decision.ResultUrls.Count ||
+                result.Data.Any(x => string.IsNullOrWhiteSpace(x.Url)))
+                throw new InvalidOperationException("A verified recovery requires usable media belonging to the original task.");
+            if (transition.RecoveredMedia == null || transition.RecoveredMedia.Count != result.Data.Count ||
+                transition.RecoveredMedia.Where((media, i) => media.VirtualKeyId != owner ||
+                    media.MediaUrl != result.Data[i].Url || string.IsNullOrWhiteSpace(media.StorageKey) ||
+                    media.FileSizeBytes <= 0 || string.IsNullOrWhiteSpace(media.ContentType) ||
+                    media.GeneratedByModel != decision.ProviderModelId ||
+                    media.MediaType != (type == "image_generation" ? MediaType.Image : MediaType.Video)).Any())
+                throw new InvalidOperationException("Recovered media requires matching lifecycle tracking intent.");
+            recoveredMetadata.Reconciliation = decision with { Outcome = "completed" };
+        }
+        else if (oldState >= (int)TaskState.Completed) return false;
+        if (!recovery && transition.ExpectedWorkerId != null &&
             (oldState != (int)TaskState.Processing || worker != transition.ExpectedWorkerId || lease <= now || lease == null))
             return false;
 
         var state = transition.State;
         var error = transition.Error;
         var webhook = transition.Webhook;
-        if (providerStarted.HasValue && !providerCompleted.HasValue &&
+        if (!recovery && providerStarted.HasValue && !providerCompleted.HasValue &&
             state is TaskState.Cancelled or TaskState.Failed or TaskState.TimedOut)
         {
             state = TaskState.Indeterminate;
             error = "Provider outcome is unknown; automatic retry is disabled.";
             webhook = null;
         }
-        if (state == TaskState.Completed && providerStarted.HasValue && !providerCompleted.HasValue)
+        if (!recovery && state == TaskState.Completed && providerStarted.HasValue && !providerCompleted.HasValue)
             throw new InvalidOperationException("Provider completion must be recorded before completing a media task.");
 
         // API/event cancellation can win the race with the running orchestrator. It
@@ -94,7 +116,11 @@ public sealed class MediaTaskTerminalWriter(IWolverineRuntime runtime, IDistribu
                 UPDATE "AsyncTasks" SET "State" = @state, "Progress" = COALESCE(@progress, "Progress"),
                     "Result" = COALESCE(@result, "Result"), "Error" = @error, "CompletedAt" = @now, "UpdatedAt" = @now,
                     "Version" = "Version" + 1, "LeasedBy" = NULL, "LeaseExpiryTime" = NULL,
-                    "IsRetryable" = CASE WHEN @state = 6 THEN false ELSE "IsRetryable" END
+                    "IsRetryable" = CASE WHEN @state = 6 OR @recovery THEN false ELSE "IsRetryable" END,
+                    "Metadata" = COALESCE(@metadata, "Metadata"),
+                    "ProviderOperationId" = COALESCE(@operation, "ProviderOperationId"),
+                    "ProviderInvocationCompletedAt" = CASE WHEN @recovery THEN COALESCE("ProviderInvocationCompletedAt", @now)
+                        ELSE "ProviderInvocationCompletedAt" END
                 WHERE "Id" = @id AND "Version" = @version
                 """;
             update.Parameters.Add(new NpgsqlParameter<string>("id", transition.TaskId));
@@ -104,17 +130,27 @@ public sealed class MediaTaskTerminalWriter(IWolverineRuntime runtime, IDistribu
             update.Parameters.Add(new NpgsqlParameter("progress", NpgsqlDbType.Integer) { Value = (object?)transition.Progress ?? DBNull.Value });
             update.Parameters.Add(new NpgsqlParameter("result", NpgsqlDbType.Text) { Value = (object?)transition.ResultJson ?? DBNull.Value });
             update.Parameters.Add(new NpgsqlParameter("error", NpgsqlDbType.Text) { Value = (object?)error ?? DBNull.Value });
+            update.Parameters.Add(new NpgsqlParameter<bool>("recovery", recovery));
+            update.Parameters.Add(new NpgsqlParameter("metadata", NpgsqlDbType.Text) { Value = recoveredMetadata == null ? DBNull.Value :
+                JsonSerializer.Serialize(recoveredMetadata, AsyncTaskJsonContext.Default.TaskMetadata) });
+            update.Parameters.Add(new NpgsqlParameter("operation", NpgsqlDbType.Text) { Value =
+                (object?)recoveredMetadata?.Reconciliation?.ProviderOperationId ?? DBNull.Value });
             if (await update.ExecuteNonQueryAsync(cancellationToken) != 1) return false;
         }
         if (webhook != null) await outbox.PublishAsync(webhook);
+        if (recovery) foreach (var media in transition.RecoveredMedia!) await outbox.PublishAsync(media);
+        if (recovery) await outbox.PublishAsync(new AsyncTaskUpdated { TaskId = transition.TaskId,
+            State = state.ToString(), Progress = transition.Progress ?? 100, IsCompleted = true });
         await transaction.CommitAsync(cancellationToken);
         try { await outbox.FlushOutgoingMessagesAsync(); }
         catch (Exception) { logger.LogWarning("Terminal callback dispatch deferred; the committed envelope remains recoverable"); }
         try { await cache.RemoveAsync($"{RedisKeys.AsyncTask.Prefix}{transition.TaskId}", CancellationToken.None); }
         catch (Exception) { logger.LogWarning("Terminal task cache invalidation failed for {TaskId}", transition.TaskId); }
+        if (recovery)
+            ConduitLLM.Core.Metrics.MediaTaskIdempotencyMetrics.RecordReconciliation(type, "completed", recoveredMetadata!.Reconciliation!.ProviderCost);
         try
         {
-            await bus.PublishAsync(new AsyncTaskUpdated { TaskId = transition.TaskId, State = state.ToString(),
+            if (!recovery) await bus.PublishAsync(new AsyncTaskUpdated { TaskId = transition.TaskId, State = state.ToString(),
                 Progress = transition.Progress ?? 0, IsCompleted = true }, CancellationToken.None);
         }
         catch (Exception) { logger.LogWarning("Terminal task notification failed for {TaskId}", transition.TaskId); }

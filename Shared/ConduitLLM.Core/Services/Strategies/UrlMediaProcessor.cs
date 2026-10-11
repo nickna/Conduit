@@ -48,14 +48,18 @@ namespace ConduitLLM.Core.Services.Strategies
                 throw new InvalidOperationException($"Invalid or missing URL in media data");
             }
 
-            _logger.LogInformation("Downloading {MediaType} from {Url} for task {RequestId}",
-                context.MediaType, url, context.RequestId);
+            if (context.RequireStoredMedia && !MediaRecoveryDestination.IsValidUrl(url))
+                throw new InvalidOperationException("Invalid recovery media destination.");
+            if (!context.RequireStoredMedia)
+                _logger.LogInformation("Downloading {MediaType} from {Url} for task {RequestId}",
+                    context.MediaType, url, context.RequestId);
 
             var downloadStopwatch = Stopwatch.StartNew();
 
             try
             {
-                using var httpClient = CreateHttpClient(context.MediaType);
+                using var httpClient = context.RequireStoredMedia
+                    ? _httpClientFactory.CreateClient(MediaRecoveryDestination.ClientName) : CreateHttpClient(context.MediaType);
 
                 // Use ResponseHeadersRead for streaming
                 using var response = await httpClient.GetAsync(
@@ -67,6 +71,8 @@ namespace ConduitLLM.Core.Services.Strategies
 
                 if (!response.IsSuccessStatusCode)
                 {
+                    if (context.RequireStoredMedia)
+                        throw new InvalidOperationException("Recovered media is unavailable; no result was committed.");
                     _logger.LogWarning("Failed to download {MediaType} from {Url}: {StatusCode}",
                         context.MediaType, url, response.StatusCode);
 
@@ -87,11 +93,17 @@ namespace ConduitLLM.Core.Services.Strategies
                 var contentLength = response.Content.Headers.ContentLength ?? 0;
                 var contentType = DetermineContentType(response, url, context.MediaType);
 
-                // Create media metadata
-                var metadata = CreateMediaMetadata(context, contentType, contentLength, url);
-
                 // Stream directly to storage
                 using var mediaStream = await response.Content.ReadAsStreamAsync();
+                var verified = context.RequireStoredMedia
+                    ? await RecoveryMediaValidation.BufferAsync(mediaStream, context.MediaType, cancellationToken) : default;
+                using var verifiedStream = verified.Stream;
+                if (verifiedStream != null)
+                {
+                    contentLength = verifiedStream.Length;
+                    contentType = verified.ContentType;
+                }
+                var metadata = CreateMediaMetadata(context, contentType, contentLength, url);
 
                 var storageStopwatch = Stopwatch.StartNew();
 
@@ -112,33 +124,41 @@ namespace ConduitLLM.Core.Services.Strategies
 
                 // Store the media
                 var storageResult = context.MediaType == MediaType.Video
-                    ? await _storageService.StoreVideoAsync(mediaStream, metadata as VideoMediaMetadata ?? new VideoMediaMetadata(), progressCallback)
-                    : await _storageService.StoreAsync(mediaStream, metadata);
+                    ? await _storageService.StoreVideoAsync(verifiedStream ?? mediaStream, metadata as VideoMediaMetadata ?? new VideoMediaMetadata(), progressCallback)
+                    : await _storageService.StoreAsync(verifiedStream ?? mediaStream, metadata);
+                if (context.RequireStoredMedia && (string.IsNullOrWhiteSpace(storageResult.StorageKey) ||
+                    !Uri.TryCreate(storageResult.Url, UriKind.Absolute, out var storedUri) ||
+                    storedUri.Scheme is not ("https" or "http")))
+                    throw new InvalidOperationException("Recovery storage did not return a usable result.");
 
                 storageStopwatch.Stop();
 
-                _logger.LogInformation("Downloaded and stored {MediaType} from {OriginalUrl} to {StorageUrl} (Download: {DownloadMs}ms, Storage: {StorageMs}ms)",
+                if (!context.RequireStoredMedia) _logger.LogInformation("Downloaded and stored {MediaType} from {OriginalUrl} to {StorageUrl} (Download: {DownloadMs}ms, Storage: {StorageMs}ms)",
                     context.MediaType, url, storageResult.Url,
                     downloadStopwatch.ElapsedMilliseconds,
                     storageStopwatch.ElapsedMilliseconds);
 
                 // Publish media generation completed event
-                await PublishMediaCompletedEvent(storageResult, context, metadata, contentLength);
+                if (!context.RequireStoredMedia)
+                    await PublishMediaCompletedEvent(storageResult, context, metadata, contentLength);
 
+                var processedMetadata = new Dictionary<string, object>
+                {
+                    ["provider"] = context.ModelInfo?.ProviderName ?? "unknown",
+                    ["model"] = context.ModelInfo?.ModelId ?? "unknown",
+                    ["index"] = context.Index,
+                    ["downloadMs"] = downloadStopwatch.ElapsedMilliseconds,
+                    ["storageMs"] = storageStopwatch.ElapsedMilliseconds,
+                    ["contentType"] = contentType,
+                    ["fileSizeBytes"] = contentLength
+                };
+                if (!context.RequireStoredMedia) processedMetadata["originalUrl"] = url;
                 return new ProcessedMediaItem
                 {
                     Url = storageResult.Url,
                     StorageKey = storageResult.StorageKey,
                     Index = context.Index,
-                    Metadata = new Dictionary<string, object>
-                    {
-                        ["provider"] = context.ModelInfo?.ProviderName ?? "unknown",
-                        ["model"] = context.ModelInfo?.ModelId ?? "unknown",
-                        ["index"] = context.Index,
-                        ["originalUrl"] = url,
-                        ["downloadMs"] = downloadStopwatch.ElapsedMilliseconds,
-                        ["storageMs"] = storageStopwatch.ElapsedMilliseconds
-                    }
+                    Metadata = processedMetadata
                 };
             }
 
@@ -151,7 +171,7 @@ namespace ConduitLLM.Core.Services.Strategies
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!context.RequireStoredMedia)
             {
                 _logger.LogError(ex, "Failed to download and store {MediaType} from URL: {Url}",
                     context.MediaType, url);
@@ -233,10 +253,10 @@ namespace ConduitLLM.Core.Services.Strategies
                 {
                     ["prompt"] = context.Prompt,
                     ["model"] = context.ModelInfo?.ModelId ?? "",
-                    ["provider"] = context.ModelInfo?.ProviderName ?? "",
-                    ["originalUrl"] = originalUrl
+                    ["provider"] = context.ModelInfo?.ProviderName ?? ""
                 }
             };
+            if (!context.RequireStoredMedia) metadata.CustomMetadata["originalUrl"] = originalUrl;
 
             // Add CreatedBy if we have virtual key info
             metadata.CreatedBy = context.CreatedBy ??

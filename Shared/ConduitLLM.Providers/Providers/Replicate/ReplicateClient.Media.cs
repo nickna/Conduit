@@ -21,6 +21,7 @@ namespace ConduitLLM.Providers.Replicate
             {
                 var predictionRequest = MapToImageGenerationRequest(request);
                 var predictionResponse = await StartPredictionAsync(predictionRequest, apiKey, cancellationToken);
+                await RecordMediaOperationAsync(predictionResponse.Id, cancellationToken);
 
                 using var pollScope = BeginPollingScope("CreateImage");
                 var finalPrediction = await PollPredictionUntilCompletedAsync(
@@ -54,6 +55,7 @@ namespace ConduitLLM.Providers.Replicate
                 Logger.LogDebug("Video generation request mapped. Input parameters: {@InputParams}", predictionRequest.Input);
 
                 var predictionResponse = await StartPredictionAsync(predictionRequest, apiKey, cancellationToken);
+                await RecordMediaOperationAsync(predictionResponse.Id, cancellationToken);
 
                 Logger.LogInformation("Video generation prediction started with ID: {PredictionId}, Status: {Status}",
                     predictionResponse.Id, predictionResponse.Status);

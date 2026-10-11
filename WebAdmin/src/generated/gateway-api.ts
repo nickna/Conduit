@@ -1142,6 +1142,35 @@ export interface components {
         [key: string]: string;
       };
     };
+    MediaProviderOperation: {
+      /** Format: int32 */
+      provider_id: number | string;
+      /** Format: int32 */
+      credential_id: number | string;
+      provider_model_id: string;
+      provider_name: string;
+      operation_id?: null | string;
+    };
+    MediaTaskReconciliation: {
+      dispatch_id?: string;
+      /** Format: int32 */
+      virtual_key_id?: number | string;
+      /** Format: int32 */
+      provider_id?: number | string;
+      provider_model_id?: string;
+      model?: string;
+      provider_operation_id?: string;
+      evidence?: string;
+      reason?: string;
+      result_urls?: string[];
+      /** Format: double */
+      provider_cost?: null | number | string;
+      requested_by?: string;
+      /** Format: date-time */
+      requested_at?: unknown;
+      outcome?: string;
+      billing_disposition?: string;
+    };
     /** @enum {unknown} */
     MediaType: "image" | "video" | "audio" | "other";
     /** @description Media upload response. */
@@ -1358,6 +1387,11 @@ export interface components {
       task_id: string;
     };
     TaskMetadata: {
+      media_provider?: null | components["schemas"]["MediaProviderOperation"];
+      provider_invocation_worker_id?: null | string;
+      reconciliation?: null | components["schemas"]["MediaTaskReconciliation"];
+      reconciliation_history?:
+        null | components["schemas"]["MediaTaskReconciliation"][];
       /** Format: int32 */
       virtual_key_id?: number | string;
       model?: null | string;

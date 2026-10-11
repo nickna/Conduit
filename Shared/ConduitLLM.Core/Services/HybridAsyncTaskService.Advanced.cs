@@ -103,7 +103,13 @@ namespace ConduitLLM.Core.Services
                     task.MaxRetries,
                     task.ProviderInvocationStartedAt,
                     task.ProviderInvocationCompletedAt,
-                    task.ProviderOperationId));
+                    task.ProviderOperationId,
+                    metadata?.MediaProvider?.ProviderId,
+                    metadata?.MediaProvider?.ProviderModelId,
+                    metadata?.Reconciliation?.DispatchId,
+                    metadata?.Reconciliation?.Outcome,
+                    metadata?.Reconciliation?.BillingDisposition,
+                    metadata?.Reconciliation?.ProviderCost));
             }
             return new AsyncTaskSummaryPage(summaries, page, pageSize, totalCount);
         }
