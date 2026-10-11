@@ -29,6 +29,19 @@ namespace ConduitLLM.SerializationTests;
 public sealed class SourceGeneratedJsonCompatibilityTests
 {
     [Fact]
+    public void Named_tool_choice_round_trips_without_reflection()
+    {
+        const string json = """{"model":"test","messages":[],"tool_choice":{"type":"function","function":{"name":"weather"}}}""";
+        var request = JsonSerializer.Deserialize(json, CoreHttpJsonContext.Default.ChatCompletionRequest)!;
+        Assert.True(request.ToolChoice!.TryGetFunctionName(out var name));
+        Assert.Equal("weather", name);
+        var result = JsonSerializer.Serialize(request, CoreHttpJsonContext.Default.ChatCompletionRequest);
+        using var document = JsonDocument.Parse(result);
+        Assert.Equal("function", document.RootElement.GetProperty("tool_choice").GetProperty("type").GetString());
+        Assert.Equal("weather", document.RootElement.GetProperty("tool_choice").GetProperty("function").GetProperty("name").GetString());
+    }
+
+    [Fact]
     public void Admin_collection_wrapper_resolves_runtime_dto_items_without_reflection()
     {
         var page = new PagedResult<object>

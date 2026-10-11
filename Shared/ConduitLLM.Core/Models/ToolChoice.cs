@@ -117,12 +117,18 @@ public class ToolChoiceConverter : JsonConverter<ToolChoice>
             // Read the object as JsonDocument
             using JsonDocument doc = JsonDocument.ParseValue(ref reader);
 
-            // Extract function name
-            if (doc.RootElement.TryGetProperty("function", out JsonElement functionElement) &&
-                functionElement.TryGetProperty("name", out JsonElement nameElement))
+            // Validate the discriminator and every level before reading primitive values.
+            // GetString/TryGetProperty on the wrong JSON kind throw non-binding exceptions.
+            if (doc.RootElement.TryGetProperty("type", out var discriminator) &&
+                discriminator.ValueKind == JsonValueKind.String &&
+                discriminator.GetString() == "function" &&
+                doc.RootElement.TryGetProperty("function", out JsonElement functionElement) &&
+                functionElement.ValueKind == JsonValueKind.Object &&
+                functionElement.TryGetProperty("name", out JsonElement nameElement) &&
+                nameElement.ValueKind == JsonValueKind.String)
             {
                 string? functionName = nameElement.GetString();
-                if (functionName != null)
+                if (!string.IsNullOrEmpty(functionName))
                 {
                     return ToolChoice.Function(functionName);
                 }
@@ -142,6 +148,16 @@ public class ToolChoiceConverter : JsonConverter<ToolChoice>
         if (serializedValue is string stringValue)
         {
             writer.WriteStringValue(stringValue);
+        }
+        else if (value.TryGetFunctionName(out var functionName))
+        {
+            // Avoid reflection over the anonymous object on NativeAOT paths.
+            writer.WriteStartObject();
+            writer.WriteString("type", "function");
+            writer.WriteStartObject("function");
+            writer.WriteString("name", functionName);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
         }
         else
         {

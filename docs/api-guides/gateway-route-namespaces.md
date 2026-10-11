@@ -22,7 +22,7 @@ for examples and validation instructions.
 |---|---|
 | `/v1/auth/...` | `/v1/conduit/auth/...` |
 | `/v1/batch/...` | `/v1/conduit/batch/...` |
-| Chat with Conduit SSE events | `/v1/conduit/chat/completions` |
+| Chat with provider content and Conduit SSE events | `/v1/conduit/chat/completions` |
 | `/v1/discovery/...` | `/v1/conduit/discovery/...` |
 | `/v1/downloads/...` | `/v1/conduit/downloads/...` |
 | `/v1/functions/...` | `/v1/conduit/functions/...` |

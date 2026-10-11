@@ -143,7 +143,7 @@ export interface paths {
     put?: never;
     /**
      * Creates a chat completion with Conduit streaming events.
-     * @description Uses the same chat execution and accounting as /v1/chat/completions. Set stream=true for chat chunks plus named Conduit metrics, reasoning, and tool progress events, followed by [DONE].
+     * @description Uses the same chat execution and accounting as /v1/chat/completions. Supports video_url, additional input_audio formats, and provider-specific content parts with a nonempty type discriminator; the configured provider determines support. Known content parts retain their required fields and documented value restrictions. Set stream=true for chat chunks plus named Conduit metrics, reasoning, and tool progress events, followed by [DONE].
      */
     post: operations["Chat_CreateEnhancedCompletion"];
     delete?: never;
@@ -741,6 +741,22 @@ export interface components {
       /** Format: double */
       end?: number;
     };
+    ChatAudioContentPart: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "input_audio";
+      input_audio: {
+        data: string;
+        /** @enum {string} */
+        format: "wav" | "mp3";
+      };
+      prompt_cache_breakpoint?: {
+        /** @enum {string} */
+        mode: "explicit";
+      };
+    };
     ChatAudioOptions: {
       voice: string;
       format: string;
@@ -809,9 +825,65 @@ export interface components {
       service_tier?: null | string;
       moderation?: unknown;
     };
+    ChatFileContentPart: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "file";
+      file: {
+        filename?: string;
+        file_data?: string;
+        file_id?: string;
+      };
+      prompt_cache_breakpoint?: {
+        /** @enum {string} */
+        mode: "explicit";
+      };
+    };
+    ChatImageContentPart: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "image_url";
+      image_url: {
+        /** Format: uri */
+        url: string;
+        /**
+         * @default auto
+         * @enum {string}
+         */
+        detail: "auto" | "low" | "high";
+      };
+      prompt_cache_breakpoint?: {
+        /** @enum {string} */
+        mode: "explicit";
+      };
+    };
     ChatPrediction: {
       type?: string;
       content: components["schemas"]["JsonElement"];
+    };
+    ChatRefusalContentPart: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "refusal";
+      refusal: string;
+    };
+    ChatTextContentPart: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "text";
+      text: string;
+      prompt_cache_breakpoint?: {
+        /** @enum {string} */
+        mode: "explicit";
+      };
     };
     Choice: {
       finish_reason: string;
@@ -1207,7 +1279,15 @@ export interface components {
     };
     Message: {
       role: string;
-      content?: string | Record<string, never>[];
+      content?:
+        | (null | string)
+        | (
+            | components["schemas"]["ChatTextContentPart"]
+            | components["schemas"]["ChatImageContentPart"]
+            | components["schemas"]["ChatAudioContentPart"]
+            | components["schemas"]["ChatFileContentPart"]
+            | components["schemas"]["ChatRefusalContentPart"]
+          )[];
       name?: null | string;
       tool_calls?: null | components["schemas"]["ToolCall"][];
       tool_call_id?: null | string;
@@ -1275,6 +1355,126 @@ export interface components {
     };
     PromptCacheOptions: {
       retention?: null | string;
+    };
+    ProviderChatAudioContentPart: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "input_audio";
+      input_audio: {
+        data: string;
+        /** @enum {string} */
+        format:
+          | "wav"
+          | "mp3"
+          | "aiff"
+          | "aac"
+          | "ogg"
+          | "flac"
+          | "m4a"
+          | "pcm16"
+          | "pcm24";
+      };
+      prompt_cache_breakpoint?: {
+        /** @enum {string} */
+        mode: "explicit";
+      };
+    };
+    ProviderChatCompletionRequest: {
+      model: string;
+      messages: components["schemas"]["ProviderChatMessage"][];
+      /** Format: double */
+      temperature?: null | number;
+      /** Format: int32 */
+      max_tokens?: null | number;
+      /** Format: int32 */
+      max_completion_tokens?: null | number;
+      /** Format: double */
+      top_p?: null | number;
+      /** Format: int32 */
+      n?: null | number;
+      stream?: null | boolean;
+      stream_options?: null | components["schemas"]["StreamOptions"];
+      stop?: string | string[];
+      user?: null | string;
+      tools?: null | components["schemas"]["Tool"][];
+      tool_choice?: null | components["schemas"]["ToolChoice"];
+      functions?: null | components["schemas"]["FunctionDefinition"][];
+      function_call?: null | components["schemas"]["LegacyFunctionChoice"];
+      response_format?: null | components["schemas"]["ResponseFormat"];
+      reasoning_effort?: null | string;
+      parallel_tool_calls?: null | boolean;
+      modalities?: null | string[];
+      audio?: null | components["schemas"]["ChatAudioOptions"];
+      prediction?: null | components["schemas"]["ChatPrediction"];
+      logprobs?: null | boolean;
+      /** Format: int32 */
+      top_logprobs?: null | number;
+      service_tier?: null | string;
+      store?: null | boolean;
+      metadata?: null | {
+        [key: string]: string;
+      };
+      safety_identifier?: null | string;
+      verbosity?: null | string;
+      moderation?: null | string;
+      prompt_cache_key?: null | string;
+      prompt_cache_options?: null | components["schemas"]["PromptCacheOptions"];
+      prompt_cache_retention?: null | string;
+      web_search_options?: null | components["schemas"]["WebSearchOptions"];
+      /** Format: int32 */
+      seed?: null | number;
+      /** Format: double */
+      presence_penalty?: null | number;
+      /** Format: double */
+      frequency_penalty?: null | number;
+      logit_bias?: null | {
+        [key: string]: number;
+      };
+    };
+    ProviderChatMessage: {
+      role: string;
+      content?:
+        | (null | string)
+        | (
+            | (
+                | components["schemas"]["ChatTextContentPart"]
+                | components["schemas"]["ChatImageContentPart"]
+                | components["schemas"]["ProviderChatAudioContentPart"]
+                | components["schemas"]["ChatFileContentPart"]
+                | components["schemas"]["ChatRefusalContentPart"]
+                | components["schemas"]["ProviderChatVideoContentPart"]
+              )
+            | {
+                type: string;
+              }
+          )[];
+      name?: null | string;
+      tool_calls?: null | components["schemas"]["ToolCall"][];
+      tool_call_id?: null | string;
+      annotations?: null | unknown[];
+      audio?: null | components["schemas"]["JsonElement"];
+      images?: null | components["schemas"]["JsonElement"];
+      reasoning_details?: null | components["schemas"]["JsonElement"];
+      reasoning?: null | string;
+    };
+    ProviderChatVideoContentPart: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "video_url";
+      video_url: {
+        /** Format: uri */
+        url: string;
+        /** @enum {string} */
+        detail?: "auto" | "low" | "high";
+        max_frames?: number;
+        sample_rate?: number;
+        start_time?: number;
+        end_time?: number;
+      };
     };
     RerankRequest: {
       model: string;
@@ -1454,7 +1654,15 @@ export interface components {
       type?: string;
       function: components["schemas"]["FunctionCall"];
     };
-    ToolChoice: string | Record<string, never>;
+    ToolChoice:
+      | ("none" | "auto" | "required")
+      | {
+          /** @enum {string} */
+          type: "function";
+          function: {
+            name: string;
+          };
+        };
     Usage: {
       /** Format: int32 */
       prompt_tokens?: null | number;
@@ -2562,7 +2770,7 @@ export interface operations {
          *       "stream": false
          *     }
          */
-        "application/json": components["schemas"]["ChatCompletionRequest"];
+        "application/json": components["schemas"]["ProviderChatCompletionRequest"];
       };
     };
     responses: {

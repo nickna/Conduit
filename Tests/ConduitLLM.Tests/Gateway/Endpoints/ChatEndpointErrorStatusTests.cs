@@ -162,6 +162,139 @@ public sealed class ChatEndpointErrorStatusTests
         error.Message.Should().NotContain("ConduitLLM.Core.Models");
     }
 
+    [Theory]
+    [InlineData("\"wrong\"")]
+    [InlineData("42")]
+    [InlineData("{}")]
+    [InlineData("""{"function":{"name":"x"}}""")]
+    [InlineData("""{"type":"wrong","function":{"name":"x"}}""")]
+    [InlineData("""{"type":"custom","custom":{"name":"x"}}""")]
+    [InlineData("""{"type":"allowed_tools","allowed_tools":{"mode":"auto","tools":[]}}""")]
+    [InlineData("""{"type":1,"function":{"name":"x"}}""")]
+    [InlineData("""{"type":"function","function":null}""")]
+    [InlineData("""{"type":"function","function":"x"}""")]
+    [InlineData("""{"type":"function","function":{}}""")]
+    [InlineData("""{"type":"function","function":{"name":1}}""")]
+    [InlineData("""{"type":"function","function":{"name":""}}""")]
+    public async Task MalformedToolChoice_ReturnsOpenAI400(string choice)
+    {
+        await using var host = await StartHostAsync(new ModelNotFoundException("unused"));
+        using var content = new StringContent(
+            $$"""{"model":"test-model","messages":[{"role":"user","content":"Hello"}],"tool_choice":{{choice}}}""",
+            Encoding.UTF8, "application/json");
+        using var response = await host.Client.PostAsync("/v1/chat/completions", content);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var error = await ReadErrorAsync(response);
+        error.Type.Should().Be("invalid_request_error");
+        error.Code.Should().Be("invalid_request_body");
+    }
+
+    [Theory]
+    [InlineData("42")]
+    [InlineData("{}")]
+    [InlineData("[]")]
+    [InlineData("[null]")]
+    [InlineData("[\"text\"]")]
+    [InlineData("[{}]")]
+    [InlineData("""[{"type":1}]""")]
+    [InlineData("""[{"type":"wrong","text":"x"}]""")]
+    [InlineData("""[{"type":"text"}]""")]
+    [InlineData("""[{"type":"text","text":null}]""")]
+    [InlineData("""[{"type":"text","text":42}]""")]
+    [InlineData("""[{"type":"image_url","image_url":"https://example.com/a.png"}]""")]
+    [InlineData("""[{"type":"image_url","image_url":{}}]""")]
+    [InlineData("""[{"type":"image_url","image_url":{"url":"invalid-uri"}}]""")]
+    [InlineData("""[{"type":"image_url","image_url":{"url":"https://example.com/a.png","detail":"wrong"}}]""")]
+    [InlineData("""[{"type":"input_audio","input_audio":{"format":"wav"}}]""")]
+    [InlineData("""[{"type":"input_audio","input_audio":{"data":"AAAA","format":"flac"}}]""")]
+    [InlineData("""[{"type":"file","file":null}]""")]
+    [InlineData("""[{"type":"file","file":{"file_id":42}}]""")]
+    [InlineData("""[{"type":"refusal","refusal":"no"}]""")]
+    [InlineData("""[{"type":"text","text":"hi","prompt_cache_breakpoint":{"mode":"wrong"}}]""")]
+    public async Task MalformedContent_ReturnsOpenAI400BeforeProviderInvocation(string parts)
+    {
+        await using var host = await StartHostAsync(new ModelNotFoundException("unused"));
+        using var content = new StringContent(
+            $$"""{"model":"test-model","messages":[{"role":"user","content":{{parts}}}]}""",
+            Encoding.UTF8, "application/json");
+        using var response = await host.Client.PostAsync("/v1/chat/completions", content);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var error = await ReadErrorAsync(response);
+        error.Type.Should().Be("invalid_request_error");
+        error.Code.Should().Be("invalid_chat_content");
+        error.Param.Should().StartWith("messages[0].content");
+    }
+
+    [Theory]
+    [InlineData("user", "\"Hello\"")]
+    [InlineData("assistant", "null")]
+    [InlineData("assistant", """[{"type":"refusal","refusal":"no"}]""")]
+    [InlineData("user", """[{"type":"text","text":"Hi"},{"type":"image_url","image_url":{"url":"https://example.com/a.png","detail":"auto"}},{"type":"input_audio","input_audio":{"data":"AAAA","format":"wav"}},{"type":"file","file":{"file_id":"file-1"}}]""")]
+    public async Task SupportedContentAndNamedFunction_ReachProvider(string role, string parts)
+    {
+        await using var host = await StartHostAsync(new ModelNotFoundException("provider-invoked"));
+        using var content = new StringContent(
+            $$$$"""{"model":"test-model","messages":[{"role":"{{{{role}}}}","content":{{{{parts}}}}}],"tool_choice":{"type":"function","function":{"name":"x"}}}""",
+            Encoding.UTF8, "application/json");
+        using var response = await host.Client.PostAsync("/v1/chat/completions", content);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await ReadErrorAsync(response)).Code.Should().Be("model_not_found");
+    }
+
+    [Theory]
+    [InlineData("/v1/chat/completions", HttpStatusCode.BadRequest, """[{"type":"future_part","provider_value":42}]""")]
+    [InlineData("/v1/conduit/chat/completions", HttpStatusCode.NotFound, """[{"type":"future_part","provider_value":42}]""")]
+    [InlineData("/v1/conduit/chat/completions/", HttpStatusCode.NotFound, """[{"type":"future_part","provider_value":42}]""")]
+    [InlineData("/V1/Conduit/Chat/Completions", HttpStatusCode.NotFound, """[{"type":"future_part","provider_value":42}]""")]
+    [InlineData("/v1/chat/completions", HttpStatusCode.BadRequest, """[{"type":"video_url","video_url":{"url":"https://example.com/a.mp4"}}]""")]
+    [InlineData("/v1/conduit/chat/completions", HttpStatusCode.NotFound, """[{"type":"video_url","video_url":{"url":"https://example.com/a.mp4"}}]""")]
+    [InlineData("/v1/chat/completions", HttpStatusCode.BadRequest, """[{"type":"input_audio","input_audio":{"data":"AAAA","format":"flac"}}]""")]
+    [InlineData("/v1/conduit/chat/completions", HttpStatusCode.NotFound, """[{"type":"input_audio","input_audio":{"data":"AAAA","format":"flac"}}]""")]
+    public async Task ProviderContent_IsExplicitlyLimitedToConduitRoute(string route, HttpStatusCode status, string parts)
+    {
+        await using var host = await StartHostAsync(new ModelNotFoundException("provider-invoked"));
+        using var content = new StringContent(
+            $$"""{"model":"test-model","messages":[{"role":"user","content":{{parts}}}]}""",
+            Encoding.UTF8, "application/json");
+        using var response = await host.Client.PostAsync(route, content);
+        response.StatusCode.Should().Be(status);
+    }
+
+    [Theory]
+    [InlineData("""[{"type":""}]""")]
+    [InlineData("""[{"type":"text","text":42}]""")]
+    [InlineData("""[{"type":"input_audio","input_audio":{"format":"flac"}}]""")]
+    [InlineData("""[{"type":"video_url","video_url":{}}]""")]
+    [InlineData("""[{"type":"video_url","video_url":{"url":"https://example.com/a.mp4","max_frames":"two"}}]""")]
+    public async Task ConduitRoute_CannotBypassKnownPartValidation(string parts)
+    {
+        await using var host = await StartHostAsync(new ModelNotFoundException("unused"));
+        using var content = new StringContent(
+            $$"""{"model":"test-model","messages":[{"role":"user","content":{{parts}}}]}""",
+            Encoding.UTF8, "application/json");
+        using var response = await host.Client.PostAsync("/v1/conduit/chat/completions", content);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ReadErrorAsync(response)).Code.Should().Be("invalid_chat_content");
+    }
+
+    [Fact]
+    public async Task ProviderContent_PreservesOrderAndUnknownFieldsWhenForwarding()
+    {
+        ChatCompletionRequest captured = null;
+        await using var host = await StartHostAsync(new ModelNotFoundException("provider-invoked"), request => captured = request);
+        const string parts = """[{"type":"text","text":"first"},{"type":"input_audio","input_audio":{"data":"AAAA","format":"flac"}},{"type":"video_url","video_url":{"url":"https://example.com/a.mp4"}},{"type":"future_part","provider_value":42}]""";
+        using var content = new StringContent(
+            $$"""{"model":"test-model","messages":[{"role":"user","content":{{parts}}}]}""",
+            Encoding.UTF8, "application/json");
+        using var response = await host.Client.PostAsync("/v1/conduit/chat/completions", content);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        captured.Should().NotBeNull();
+        var forwarded = (JsonElement)captured.Messages[0].Content;
+        forwarded.EnumerateArray().Select(part => part.GetProperty("type").GetString())
+            .Should().Equal("text", "input_audio", "video_url", "future_part");
+        forwarded[3].GetProperty("provider_value").GetInt32().Should().Be(42);
+    }
+
     // -----------------------------------------------------------------------------------------
 
     private static async Task<HttpResponseMessage> PostChatAsync(Exception routingFailure)
@@ -179,12 +312,13 @@ public sealed class ChatEndpointErrorStatusTests
     /// Boots the Gateway endpoint pipeline with a client factory that fails model resolution,
     /// which is where every condition in #1191 originates.
     /// </summary>
-    private static Task<GatewayEndpointTestHost> StartHostAsync(Exception routingFailure)
+    private static Task<GatewayEndpointTestHost> StartHostAsync(Exception routingFailure, Action<ChatCompletionRequest> onRequest = null)
     {
         var clientFactory = new Mock<ILLMClientFactory>();
         clientFactory
             .Setup(factory => factory.GetClientForChatAsync(
                 It.IsAny<ChatCompletionRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<ChatCompletionRequest, CancellationToken>((request, _) => onRequest?.Invoke(request))
             .ThrowsAsync(routingFailure);
         clientFactory
             .Setup(factory => factory.GetClientAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -208,6 +342,7 @@ public sealed class ChatEndpointErrorStatusTests
 
         return GatewayEndpointTestHost.StartAsync(services =>
         {
+            services.ConfigureHttpJsonOptions(options => GatewayJsonOptions.Configure(options.SerializerOptions));
             services.AddSingleton(clientFactory.Object);
             services.AddSingleton(mappingService.Object);
             services.AddSingleton(GatewayJsonOptions.Create());

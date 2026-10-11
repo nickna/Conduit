@@ -278,6 +278,7 @@ public static class GatewayApiEndpoints
 
         app.MapPost("/v1/chat/completions", ([FromServices] ChatEndpoints endpoints, ChatCompletionRequest request, CancellationToken cancellationToken) => endpoints.CreateChatCompletion(request, cancellationToken))
             .RequireAuthorization("VirtualKeyAuthentication")
+            .AddEndpointFilter<ChatContentValidationFilter>()
             .AddEndpointFilter<RequireBalanceEndpointFilter>()
             .AddEndpointFilter<TokenRateLimitFilter>()
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
@@ -292,12 +293,13 @@ public static class GatewayApiEndpoints
 
         app.MapPost("/v1/conduit/chat/completions", ([FromServices] ChatEndpoints endpoints, ChatCompletionRequest request, CancellationToken cancellationToken) => endpoints.CreateChatCompletion(request, cancellationToken))
             .RequireAuthorization("VirtualKeyAuthentication")
+            .AddEndpointFilter<ChatContentValidationFilter>()
             .AddEndpointFilter<RequireBalanceEndpointFilter>()
             .AddEndpointFilter<TokenRateLimitFilter>()
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Chat").WithName("Chat_CreateEnhancedCompletion")
             .WithSummary("Creates a chat completion with Conduit streaming events.")
-            .WithDescription("Uses the same chat execution and accounting as /v1/chat/completions. Set stream=true for chat chunks plus named Conduit metrics, reasoning, and tool progress events, followed by [DONE].")
+            .WithDescription("Uses the same chat execution and accounting as /v1/chat/completions. Supports video_url, additional input_audio formats, and provider-specific content parts with a nonempty type discriminator; the configured provider determines support. Known content parts retain their required fields and documented value restrictions. Set stream=true for chat chunks plus named Conduit metrics, reasoning, and tool progress events, followed by [DONE].")
             .Produces<ChatCompletionResponse>(200, "application/json")
             .Produces<OpenAIErrorResponse>(400)
             .Produces<OpenAIErrorResponse>(404)
