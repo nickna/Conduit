@@ -30,6 +30,14 @@ has separate function counters. It omits `costDollars` so the execution proof mu
 use configured pricing. A query containing `native-function-error` returns a real
 provider 400 for failure-path verification.
 
+The provider also has a stateless, non-streaming agentic fixture selected by a
+GUID-marked prompt. Its first reply derives the function name from the actual
+advertised query schema and requests one search. A final reply requires the
+matching assistant tool call, exact arguments and the complete rich Exa result.
+Separate phase and rejection counters leave ordinary chat and SSE counters
+unchanged. Real HTTP tests exercise production OpenAI-compatible and Exa clients;
+this provider fixture alone does not prove the Gateway agentic workflow.
+
 The PostgreSQL precision test records the existing six-decimal request-log,
 spend-history, and ledger columns alongside eight-decimal function costs and group
 balances. Billing verification must compare each persisted value at its actual

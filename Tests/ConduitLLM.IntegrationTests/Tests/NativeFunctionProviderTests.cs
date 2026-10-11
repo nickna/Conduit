@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ConduitLLM.IntegrationTests.Tests;
 
+[Collection("NativeProviderStub")]
 public sealed class NativeFunctionProviderTests
 {
     [Fact]
@@ -124,7 +125,8 @@ public sealed class NativeFunctionProviderTests
         Assert.Equal("native provider response", body.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString());
         var after = await fixture.ReadStateAsync();
         Assert.Equal(1, Delta(before, after, "non_stream_requests"));
-        foreach (var name in new[] { "function_requests", "function_error_requests", "function_authorization_failures", "function_chunked_requests" })
+        foreach (var name in new[] { "function_requests", "function_error_requests", "function_authorization_failures", "function_chunked_requests",
+                     "agentic_tool_call_requests", "agentic_final_requests", "agentic_contract_failures" })
             Assert.Equal(0, Delta(before, after, name));
     }
 
@@ -133,7 +135,8 @@ public sealed class NativeFunctionProviderTests
 
     private static void AssertExistingCountersUnchanged(JsonElement before, JsonElement after)
     {
-        foreach (var name in new[] { "non_stream_requests", "stream_requests", "image_requests", "error_requests", "authorization_failures" })
+        foreach (var name in new[] { "non_stream_requests", "stream_requests", "image_requests", "error_requests", "authorization_failures",
+                     "agentic_tool_call_requests", "agentic_final_requests", "agentic_contract_failures" })
             Assert.Equal(0, Delta(before, after, name));
     }
 
