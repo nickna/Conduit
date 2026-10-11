@@ -53,6 +53,13 @@ A single `SecurityMiddleware` handles all security checks in one pass:
 - Strict-Transport-Security (HTTPS only)
 - Removes server identification headers
 
+`CONDUIT_ADMIN_SECURITY_HEADERS_ENABLED` defaults to `true`. Setting it to `false`
+disables all header additions and removals by the security headers middleware,
+including custom headers and the `X-Content-Type` / `X-API-Version` headers. Existing
+headers and headers supplied by other middleware, endpoints, or the hosting server
+are preserved. The aggregate switch takes precedence over individual switches;
+when enabled, those switches still control their respective headers.
+
 ### 7. Ephemeral Master Key (EMK)
 
 Provides one-time, short-lived authentication for Admin API operations and secure WebAdmin flows.
@@ -119,6 +126,7 @@ CONDUIT_ADMIN_AUTH_BAN_DURATION_MINUTES=30
 CONDUIT_SECURITY_USE_DISTRIBUTED_TRACKING=true
 
 # Security Headers
+CONDUIT_ADMIN_SECURITY_HEADERS_ENABLED=true
 CONDUIT_ADMIN_SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS_ENABLED=true
 CONDUIT_ADMIN_SECURITY_HEADERS_X_XSS_PROTECTION_ENABLED=true
 CONDUIT_ADMIN_SECURITY_HEADERS_HSTS_ENABLED=true
