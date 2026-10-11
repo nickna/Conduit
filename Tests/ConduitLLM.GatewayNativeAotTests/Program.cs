@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -314,9 +315,8 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             $"SSE completion sentinel is last ({mode})");
 
         var chunks = new List<JsonElement>();
-        foreach (var line in body.Split('\n'))
+        foreach (var line in body.Split('\n').Where(line => line.StartsWith("data: {", StringComparison.Ordinal)))
         {
-            if (!line.StartsWith("data: {", StringComparison.Ordinal)) continue;
             using var document = JsonDocument.Parse(line[6..]);
             var payload = document.RootElement;
             var isChunk = payload.TryGetProperty("object", out var discriminator) &&
