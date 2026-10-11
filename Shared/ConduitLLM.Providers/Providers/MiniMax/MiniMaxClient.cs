@@ -37,6 +37,17 @@ namespace ConduitLLM.Providers.MiniMax
                 ConduitLLM.Core.Serialization.AsyncTaskJsonContext.Default)
         };
 
+        private static readonly JsonSerializerOptions MediaJsonOptions = CreateMiniMaxJsonOptions(DefaultJsonOptions);
+
+        private static JsonSerializerOptions CreateMiniMaxJsonOptions(JsonSerializerOptions policy) => new(policy)
+        {
+            TypeInfoResolver = JsonTypeInfoResolver.Combine(
+                MiniMaxStreamJsonContext.Default,
+                ProvidersJsonContext.Default,
+                ConduitLLM.Core.Serialization.CoreHttpJsonContext.Default,
+                ConduitLLM.Core.Serialization.AsyncTaskJsonContext.Default)
+        };
+
         /// <summary>
         /// Initializes a new instance of the <see cref="MiniMaxClient"/> class.
         /// </summary>
