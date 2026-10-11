@@ -304,8 +304,8 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
                 using var scope = _serviceProvider.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<ConduitDbContext>();
 
-                await GetDbSet(context).AddRangeAsync(events);
-                await context.SaveChangesAsync();
+                await GetDbSet(context).AddRangeAsync(events, cancellationToken);
+                await context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogDebug("Final flush of {Count} {EntityName} audit events to database", events.Count, EntityName);
                 AuditEventsFlushed.WithLabels(EntityName, "success").Inc(events.Count);

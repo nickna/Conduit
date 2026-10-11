@@ -90,6 +90,60 @@ public sealed class BatchAuditShutdownMetricsTests
         }
     }
 
+    [Fact]
+    public async Task StopAsync_CancellationBeforeAcquisitionPreservesQueuedEvents()
+    {
+        await using var fixture = new AuditFixture();
+        var ids = await fixture.QueueAsync(3);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            fixture.Service.StopAsync(cancellation.Token).WaitAsync(TestTimeout));
+
+        await fixture.AssertPersistedAsync(Array.Empty<Guid>());
+        Assert.Equal(new AuditMetrics(3, 0, 0, 3), await fixture.ReadMetricsAsync());
+        await fixture.Service.StopAsync(CancellationToken.None).WaitAsync(TestTimeout);
+        await fixture.AssertPersistedAsync(ids);
+        Assert.Equal(new AuditMetrics(3, 3, 0, 0), await fixture.ReadMetricsAsync());
+    }
+
+    [Fact]
+    public async Task StopAsync_CancellationDuringSaveRequeuesEventsForRetry()
+    {
+        var gate = new GatedSaveChangesInterceptor();
+        await using var fixture = new AuditFixture(gate);
+        using var cancellation = new CancellationTokenSource();
+        var ids = await fixture.QueueAsync(3);
+        Task? stopping = null;
+        try
+        {
+            gate.Arm();
+            stopping = fixture.Service.StopAsync(cancellation.Token);
+            await gate.Entered.WaitAsync(TestTimeout);
+            Assert.Equal(cancellation.Token, gate.SaveCancellationToken);
+            cancellation.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stopping.WaitAsync(TestTimeout));
+
+            await fixture.AssertPersistedAsync(Array.Empty<Guid>());
+            Assert.Equal(new AuditMetrics(3, 0, 0, 3), await fixture.ReadMetricsAsync());
+            gate.Release();
+            await fixture.Service.StopAsync(CancellationToken.None).WaitAsync(TestTimeout);
+            await fixture.AssertPersistedAsync(ids);
+            Assert.Equal(new AuditMetrics(3, 3, 0, 0), await fixture.ReadMetricsAsync());
+        }
+        finally
+        {
+            gate.Release();
+            if (stopping is not null)
+            {
+                try { await stopping.WaitAsync(TestTimeout); }
+                catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            }
+        }
+    }
+
     private sealed record AuditMetrics(double Queued, double Flushed, double Failed, double Depth);
 
     private sealed class AuditFixture : IAsyncDisposable
@@ -192,6 +246,7 @@ public sealed class BatchAuditShutdownMetricsTests
         private int _armed;
 
         public Task Entered => _entered.Task;
+        public CancellationToken SaveCancellationToken { get; private set; }
         public void Arm() => Volatile.Write(ref _armed, 1);
         public void Release() => _released.TrySetResult();
 
@@ -202,6 +257,7 @@ public sealed class BatchAuditShutdownMetricsTests
         {
             if (Interlocked.Exchange(ref _armed, 0) == 1)
             {
+                SaveCancellationToken = cancellationToken;
                 _entered.TrySetResult();
                 await _released.Task.WaitAsync(cancellationToken);
             }
