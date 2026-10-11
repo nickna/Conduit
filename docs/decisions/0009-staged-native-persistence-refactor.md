@@ -234,6 +234,18 @@ SQL waits, and successful reuse. Included graphs retain the scalar writer's reje
 before caller mutation. The standalone native probe exercises this reader before
 runtime selection; no broader lease, audit, worker or Admin support is implied.
 
+`FunctionExecutionService.CreateWithRuntimePersistence` prepares the inline service
+to consume the configuration/credential store, scalar writer and included-snapshot
+reader together. Its original public repository constructor and host registrations
+remain unchanged. The new path preserves provider invocation, credential selection,
+generated request/cost JSON, optional MCP pricing/tool arguments, cancellation and
+post-provider billable failure behavior. Paired tests exercise both constructions;
+read and list results retain the existing public return types. This service path
+remains unwired until the reader's published-native proof, followed by separate
+endpoint/tool-discovery selection and native HTTP workflow coverage.
+The inherited ignored concurrency-update result remains tracked separately in
+[#1572](https://github.com/nickna/Conduit/issues/1572).
+
 ## Options considered
 
 1. **Wait for production-supported EF NativeAOT.** Rejected as the only plan: it
