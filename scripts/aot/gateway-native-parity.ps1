@@ -40,6 +40,8 @@ $runtimeRoot = Join-Path $artifactRoot 'runtime'
 $migratorProject = Join-Path $repoRoot 'tools/ConduitLLM.Migrator'
 $probeProject = Join-Path $repoRoot 'Tests/ConduitLLM.GatewayNativeAotTests'
 $publisherProject = Join-Path $repoRoot 'tools/WolverineSmokePublisher'
+$startupFixtureProject = Join-Path $repoRoot 'Tests/ConduitLLM.SchemaStartupFixtures'
+$startupFixtureDll = Join-Path $startupFixtureProject 'bin/Release/net10.0/ConduitLLM.SchemaStartupFixtures.dll'
 $publisherDll = Join-Path $publisherProject 'bin/Release/net10.0/WolverineSmokePublisher.dll'
 $logRoot = Join-Path $artifactRoot "reports/gateway-parity-$PID"
 New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
@@ -117,10 +119,13 @@ if (-not $NoBuild) {
     if ($LASTEXITCODE -ne 0) { throw 'Native parity probe build failed.' }
     dotnet build $publisherProject -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Wolverine media publisher build failed.' }
+    dotnet build $startupFixtureProject -c Release
+    if ($LASTEXITCODE -ne 0) { throw 'Schema startup fixture build failed.' }
 }
 if (-not (Test-Path -LiteralPath $publisherDll -PathType Leaf)) {
     throw "Wolverine media publisher not found: $publisherDll"
 }
+if (-not (Test-Path -LiteralPath $startupFixtureDll -PathType Leaf)) { throw "Schema startup fixture tool not found: $startupFixtureDll" }
 
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
 try {
@@ -157,13 +162,31 @@ try {
 
     Wait-ForHttp "$($S3Endpoint.TrimEnd('/'))/$($S3HealthPath.TrimStart('/'))" 'S3-compatible media storage'
 
+    $probeName = if ($IsWindows) { 'ConduitLLM.GatewayNativeAotTests.exe' } else { 'ConduitLLM.GatewayNativeAotTests' }
+    $nativeProbe = Join-Path $runtimeRoot 'probe' $probeName
+    $probeDll = Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll'
+    Set-GateEnvironment 'CONDUIT_NATIVE_PROXY_TOKEN' ([Guid]::NewGuid().ToString('N'))
+    Set-GateEnvironment 'CONDUIT_NATIVE_PROXY_CONTROL_URL' "http://127.0.0.1:$DependencyControlPort"
+    Set-GateEnvironment 'CONDUIT_NATIVE_PROXY_POSTGRES_PORT' ([string]$PostgresProxyPort)
+    Set-GateEnvironment 'CONDUIT_NATIVE_PROXY_REDIS_PORT' ([string]$RedisProxyPort)
+    # Validate/capture direct routes before any owned startup database is made.
+    if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
+        $routesJson = & $nativeProbe --proxy-routes
+    } else {
+        $routesJson = dotnet $probeDll --proxy-routes
+    }
+    if ($LASTEXITCODE -ne 0) { throw 'Dependency proxy routing configuration failed.' }
+    $routes = $routesJson | ConvertFrom-Json
+    & (Join-Path $PSScriptRoot 'schema-startup-native-parity.ps1') -RuntimeRoot $runtimeRoot `
+        -FixtureDll $startupFixtureDll -MigratorDll (Join-Path $migratorProject 'bin/Release/net10.0/ConduitLLM.Migrator.dll') `
+        -DatabaseUrl $DatabaseUrl -ManagementConnectionString $routes.directDatabase -LogRoot $logRoot `
+        -GatewayPort $GatewayPort -SecondaryGatewayPort $SecondaryGatewayPort -AdminPort $AdminPort -TimeoutSeconds $TimeoutSeconds
+
     Write-Host 'Applying migrations before native process startup...'
     dotnet (Join-Path $migratorProject 'bin/Release/net10.0/ConduitLLM.Migrator.dll')
     if ($LASTEXITCODE -ne 0) { throw 'Standalone migrator failed.' }
 
     Write-Host 'Seeding typed-store authentication and IP-filter fixtures...'
-    $probeName = if ($IsWindows) { 'ConduitLLM.GatewayNativeAotTests.exe' } else { 'ConduitLLM.GatewayNativeAotTests' }
-    $nativeProbe = Join-Path $runtimeRoot 'probe' $probeName
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
         & $nativeProbe --seed
     } else {
@@ -171,24 +194,14 @@ try {
     }
     if ($LASTEXITCODE -ne 0) { throw 'Native Gateway parity fixture seed failed.' }
 
-    Set-GateEnvironment 'CONDUIT_NATIVE_PROXY_TOKEN' ([Guid]::NewGuid().ToString('N'))
-    Set-GateEnvironment 'CONDUIT_NATIVE_PROXY_CONTROL_URL' "http://127.0.0.1:$DependencyControlPort"
-    Set-GateEnvironment 'CONDUIT_NATIVE_PROXY_POSTGRES_PORT' ([string]$PostgresProxyPort)
-    Set-GateEnvironment 'CONDUIT_NATIVE_PROXY_REDIS_PORT' ([string]$RedisProxyPort)
-    $probeDll = Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll'
     $dotnet = (Get-Command dotnet).Source
     # Capture credential-bearing configuration privately, never into report logs.
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
-        $routesJson = & $nativeProbe --proxy-routes
-        if ($LASTEXITCODE -ne 0) { throw 'Dependency proxy routing configuration failed.' }
         $proxies = Start-LoggedProcess 'dependency-proxies' $nativeProbe @('--dependency-proxies') (Split-Path $nativeProbe) $null
     } else {
-        $routesJson = dotnet $probeDll --proxy-routes
-        if ($LASTEXITCODE -ne 0) { throw 'Dependency proxy routing configuration failed.' }
         $proxies = Start-LoggedProcess 'dependency-proxies' $dotnet @($probeDll, '--dependency-proxies') $probeProject $null
     }
     $processes.Add($proxies)
-    $routes = $routesJson | ConvertFrom-Json
     Wait-ForHttp "http://127.0.0.1:$DependencyControlPort/health" 'owned dependency proxies'
     Set-GateEnvironment 'DATABASE_URL' $routes.database
     Set-GateEnvironment 'REDIS_URL' $null

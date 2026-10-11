@@ -9,7 +9,8 @@ internal static class StartupFixtureProgram
     {
         var management = Environment.GetEnvironmentVariable("CONDUIT_NATIVE_STARTUP_MANAGEMENT_CONNECTION_STRING")
                          ?? throw new InvalidOperationException("CONDUIT_NATIVE_STARTUP_MANAGEMENT_CONNECTION_STRING is required.");
-        using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var deadline = new CancellationTokenSource(args is ["drop", _]
+            ? TimeSpan.FromSeconds(15) : TimeSpan.FromMinutes(3));
         if (args is ["create", "missing" or "stale"])
         {
             var fixture = await SchemaStartupDatabase.CreateAsync(management, args[1] == "stale", deadline.Token);

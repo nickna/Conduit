@@ -15,6 +15,7 @@ on:
       - 'Services/**/Dockerfile.native'
       - 'Tests/ConduitLLM.GatewayNativeAotTests/**'
       - 'Tests/ConduitLLM.PersistenceAotTests/**'
+      - 'Tests/ConduitLLM.SchemaStartupFixtures/**'
       - 'tools/ConduitLLM.Migrator/**'
       - 'tools/WolverineSmokePublisher/**'
       - 'scripts/aot/**'
@@ -121,6 +122,7 @@ jobs:
         run: |
           dotnet build tools/ConduitLLM.Migrator --configuration Release
           dotnet build tools/WolverineSmokePublisher --configuration Release
+          dotnet build Tests/ConduitLLM.SchemaStartupFixtures --configuration Release
 
       - name: Native two-host PostgreSQL and Wolverine proof
         shell: pwsh

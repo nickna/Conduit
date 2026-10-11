@@ -129,6 +129,17 @@ CI runs `scripts/aot/gateway-native-parity.ps1` after native publishing. It requ
 
 The separate `scripts/test/wolverine-two-host-smoke.ps1 -NativeArtifactDirectory <artifact>` gate exercises cross-host Wolverine delivery with native Admin/Gateway processes.
 
+Before normal fixture seeding, the parity script creates two marked disposable
+databases: one empty, one with the real penultimate EF migration. It starts native
+Admin and two Gateways using PostgreSQL Wolverine with provisioning disabled,
+requires live200/ready503, runs the standalone release migrator, and requires
+ready200 on the same processes. The read-only startup barrier checks the release
+lock, exact schema version and mandatory bus tables/columns before starting
+Wolverine once. It does not claim full catalog equivalence. Owned processes and
+databases are removed on failure as well as success; temporary environment fields
+are restored before the normal parity workload. The provider-key reprobe worker
+is disabled only inside these isolated startup scenarios.
+
 The metrics gate inserts two uniquely labeled request rows after startup, with
 costs $1.25/$0.75 and response times 100/300ms. It polls both Gateways for up to 150
 seconds to accommodate leader election and the one-minute collection interval.
