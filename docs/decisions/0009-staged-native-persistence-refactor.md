@@ -67,7 +67,8 @@ primary survives the transaction rollback.
 
 Native Gateway builds now select the typed-Npgsql global-setting, IP-filter, provider,
 and provider-credential repositories after the normal service graph is assembled. JIT
-Gateway and all Admin builds retain EF. Replacing the descriptors as one host-level set
+Gateway and JIT Admin builds retain EF; native Admin now selects the proven settings
+and IP-filter slices described below. Replacing the descriptors as one host-level set
 ensures request authentication, security policy, and provider credential resolution do
 not silently fall back to an earlier EF registration.
 
@@ -248,8 +249,8 @@ repository fields on native, while JIT/Admin retain their scoped repositories.
 Published Linux run 38133326127 proves the bounded inline Exa path on two native
 Gateways: successful and failed execution, opposite-host status retrieval,
 ownership denial and settled accounting. Configured non-streaming Exa agentic chat
-is qualified below. Execution-list HTTP, MCP and function audit/retention remain
-separate workload proofs.
+is qualified below. Execution-list HTTP, stateful/agentic MCP and function
+audit/retention remain separate workload proofs.
 The inherited ignored concurrency-update result remains tracked separately in
 [#1572](https://github.com/nickna/Conduit/issues/1572).
 
@@ -305,8 +306,17 @@ verification passes; the
 [published Linux process job at d13e7deb](https://github.com/nickna/Conduit/actions/runs/38137532017/job/114465334583)
 also passed this mandatory probe with zero first-party linker diagnostics.
 Cost-summary, iteration and chat-log attribution quirks remain unchanged and are
-tracked in #1577, #1578 and #1579. Provider-hosted tool pricing, MCP, agentic SSE,
-parallel/dependent calls and audit/retention require separate workload proofs.
+tracked in #1577, #1578 and #1579. Provider-hosted tool pricing, stateful/agentic
+MCP, agentic SSE, parallel/dependent calls and audit/retention require separate
+workload proofs.
+
+Stateless inline MCP has a separate published proof in
+[Linux run 38147134135](https://github.com/nickna/Conduit/actions/runs/38147134135).
+Both native Gateways execute configured tools with production-protected scoped
+credentials, modern request metadata, generated structured/Unicode results,
+all 24 persisted fields, opposite-host ownership and exact configured accounting.
+That proof does not qualify stateful sessions, agentic MCP or broader server
+interoperability.
 
 ## Options considered
 
@@ -337,8 +347,17 @@ Each slice must provide:
 
 The extracted global-settings, IP-filter, provider/credential, virtual-key runtime,
 model-routing, request-accounting, async-task, media, and Gateway-metrics slices are
-selected by a native Gateway build. Native Admin also selects the typed global-setting
-repository; its HTTP proof awaits published Linux verification. Model routing is
+selected by a native Gateway build. Native Admin selects typed global-setting and
+IP-filter repositories, with typed version reads for the IP branch. Authenticated
+settings CRUD/validation is proven in
+[Linux run 38147134135](https://github.com/nickna/Conduit/actions/runs/38147134135),
+and IP CRUD/ETags/source-socket enforcement in
+[Linux run 38152552344](https://github.com/nickna/Conduit/actions/runs/38152552344).
+Native Admin and Gateway also select the typed billing-audit writer/host; Gateway
+timers and graceful drains are proven, while controlled Admin HTTP billing enqueue
+remains outside that proof. The later local unit 96 process gate proves healthy
+ordinary setting-change propagation to both Gateway caches, with explicit source
+and generation limits in the feature matrices. Model routing is
 selected behind a read-only
 compatibility adapter, while request-log writes use a narrow runtime writer and
 authenticated hubs share the virtual-key runtime snapshot. JIT Gateway and JIT
@@ -346,6 +365,26 @@ Admin registrations retain their existing EF-backed services, as do the remainin
 unextracted Admin management registrations.
 Rollback is therefore the JIT artifact, whose request-time and management contracts
 continue to resolve to the legacy services.
+
+The selected native profile omits five Gateway and seven Admin EF-backed hosted
+workers and advertises their exclusions through runtime capabilities. JIT retains
+those workers. Their removal from startup is not proof of native reporting,
+retention, reconciliation or broad management execution. The
+[Gateway](../operations/gateway-native-aot-feature-matrix.md) and
+[Admin](../operations/native-aot-admin-feature-matrix.md) matrices define the
+supported operations and the evidence required before restoring excluded workloads.
+
+Dependency extraction follows required consumers. Configuration no longer references
+the Functions implementation; function entities and ports live in the neutral
+persistence leaf with compatibility forwarding. Admin still requires Functions for
+its credential-test client factory and AWS through the media adapter for storage
+and cleanup consumers. Keeping these explicit dependencies does not qualify those
+remaining EF management APIs. Package ownership and architecture checks keep unused
+SignalR, MessagePack, tokenizer and build tooling out of Admin and unused AWS
+Bedrock SDKs out of Providers. Resolved dependency guards keep MCP implementation
+packages out of Configuration, EF/Npgsql/build tooling out of Functions, and the
+optional MessagePack client protocol out of the native SignalR adapter. No wholesale
+removal of a required consumer is authorized by this ADR.
 
 ## Consequences
 

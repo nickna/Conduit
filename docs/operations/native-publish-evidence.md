@@ -3,10 +3,11 @@
 `scripts/aot/publish-native.ps1` produces immutable manifests for the exact loose
 Admin, Gateway and protocol-probe publish directories. These identify a publish;
 they do not associate it with an independently rebuilt Docker image or establish
-production qualification. Image association is tracked in
-[#1582](https://github.com/nickna/Conduit/issues/1582). Collection attempts and
-qualification windows are tracked in
-[#1583](https://github.com/nickna/Conduit/issues/1583).
+production qualification. The completed image-association machinery is described
+below and tracked in [#1582](https://github.com/nickna/Conduit/issues/1582).
+Collection attempts and accepted qualification windows are implemented under
+[#1583](https://github.com/nickna/Conduit/issues/1583); the
+[canary runbook](native-aot-canary.md) defines their operational use.
 
 ## Fresh output and ownership
 
@@ -81,9 +82,10 @@ publishing must also verify the resolved toolchain capture.
 
 The native Dockerfiles use the assembled image producer described below. These
 separate image builds do not establish that their payloads match the loose publish
-directories above, even when their declared source revisions agree. Associating
-embedded image evidence with a digest-pinned image remains subsequent work under
-#1582. Existing historical schema-1 baselines have no manifest identity. Production
+directories above, even when their declared source revisions agree. Each assembled
+image now carries its own complete sealed publish manifests and OCI association;
+the benchmark reader requires a digest-pinned candidate and replays that binding.
+Existing historical schema-1 baselines have no manifest identity. Production
 promotion remains blocked by the [canary policy](native-aot-canary.md).
 
 ## Assembled image payloads
@@ -127,12 +129,13 @@ outside the runtime file manifest. The separate scratch `symbols` stage preserve
 the application and health-probe symbol directories, including nested paths. Build
 tools, compiler captures and publish logs stay in the builder stage.
 
-The filtered local Docker context excludes `.git`, so these builds record source
+Historical filtered local Docker contexts excluded `.git`, so those builds record source
 status `unavailable` with null revision and dirty state. The declared commit argument
 and OCI revision label remain metadata, without establishing actual Git provenance.
-Embedded evidence from this snapshot supports historical payload inspection;
-registry digest qualification and benchmark association remain subsequent work
-under #1582.
+Embedded evidence from those snapshots supports historical payload inspection.
+It cannot satisfy the clean-Git benchmark association requirement. Current native
+CI uses the checksum-pinned Git context described below; registry qualification
+still requires the separate operational evidence.
 
 ## Runtime archive inspection
 
@@ -181,9 +184,10 @@ directory. The PowerShell command accepts the corresponding `-ArtifactDirectory`
 argument. Both entry points require `pwsh`.
 
 The report records the observed local image ID, which can identify an OCI index
-in Docker's containerd image store. It preserves unavailable source provenance
-and records registry digest qualification as false. Registry descriptor association
-and promotion qualification remain tracked in #1582.
+in Docker's containerd image store. It preserves the actual available or unavailable
+source record and records registry digest qualification as false. The completed
+package association below verifies local descriptor roles; production qualification
+still requires the canary policy.
 
 ## Offline OCI archive association
 
@@ -229,7 +233,7 @@ Both versions keep `registryDigestQualification=false`. The benchmark collector
 and promotion evaluator establish their own candidate binding through
 `native-benchmark-image-evidence.ps1`. They require the exact digest-pinned
 requested image reference, a verified original OCI association, and clean Git
-source matching the declared commit and OCI revision. Schema-3 benchmarks retain
+source matching the declared commit and OCI revision. Current schema-4 benchmarks retain
 the packaging report hash, build ID, both executable/toolchain records, runtime
 inventory hash and three publish manifest hashes. Every native sample, its
 median and publish metrics carry the same sealed binding. The evaluator replays
@@ -237,6 +241,39 @@ an explicitly supplied retained packaging directory, including after its
 calculations. Changed files, source, build, digest roles or metrics produce HOLD.
 This binding leaves the operational promotion policy and its provenance,
 benchmark, soak and rollback requirements in force.
+
+Schema 4 also seals collection attempts and atomic report publication. The evaluator
+requires the latest successful attempt, or an explicitly approved historical
+selection inside an accepted qualification window. It rechecks original report,
+archive, attempt and window hashes after evaluation. Failed or running reruns,
+expired windows and changed evidence produce HOLD. Historical schema-3 reports
+retain their original meaning; they do not acquire schema-4 lifecycle evidence.
+
+## Hosted CI descriptor gate
+
+The native image jobs configure the runner's Docker daemon with the containerd
+image store before Buildx starts. The source-pinned Docker setup action is scoped
+to these fresh hosted image jobs, which have no service containers. The ordinary
+verifier continues to report a truthful HOLD on classic stores.
+
+After the packaged entrypoint smoke, a required CI step replays
+`Get-NativeImageRuntimePackaging` and requires exactly one schema-2 package for the
+requested service, image and clean `GITHUB_SHA`. It requires a verified local OCI
+descriptor chain, a selected manifest and no hold reasons, while preserving
+`registryDigestQualification=false`. Artifact retention runs even on failure.
+The exact YAML step passes ten offline policy cases on each of Windows and Linux,
+including tagged-image acceptance and HOLD/source/service/image/cardinality
+rejection; all 26 workflow policy tests also pass. Those synthetic cases do not
+establish live hosted containerd integration.
+
+The earlier successful
+[Linux run 38175668349](https://github.com/nickna/Conduit/actions/runs/38175668349)
+at `e0f9f9904df187460ab338bd86619d912f653d60` retains clean-Git payloads and
+successful Admin/Gateway packaged OpenAPI documents (191/35 paths). Both packages
+honestly report missing image/container descriptors and OCI association HOLD from
+the classic image store. A new run of the required descriptor gate must supply
+verified association before that evidence gap can be closed; the final PR records
+the exact tested commit and run rather than altering historical reports.
 
 ## Native build source
 

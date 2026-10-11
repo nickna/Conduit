@@ -1,11 +1,13 @@
 # NativeAOT persistence query inventory
 
-Lexical scan: 2026-10-11 after commit `f6fd3100` on the #1368 implementation branch.
-Runtime selections below include the unit 77 native profile. It passes 71 JIT and
-10 actual native-profile composition/conditional cases without skips, two strict
-generated-JSON cases, and a fresh local Linux publish/OpenAPI/full-host gate with
-zero first-party linker diagnostics and confirmed owned cleanup. Public CI for
-this revision remains separate evidence.
+Lexical scan: 2026-10-11, rechecked after unit 98 on the #1368 implementation branch.
+The 72-file/1,355-site inventory below is unchanged. The selected native profile
+passes all three jobs in
+[Linux run 38175668349](https://github.com/nickna/Conduit/actions/runs/38175668349)
+at `e0f9f9904df187460ab338bd86619d912f653d60`: 219 selected persistence and integration
+cases without skips, native publish/OpenAPI, the complete host gate and both
+packaged entrypoints, with zero first-party linker diagnostics and owned cleanup.
+That run predates the separately identified local cache convergence proof.
 Owner: database/runtime maintainers. Related: #1368, #1373, #1374,
 [ADR 0006](../decisions/0006-native-aot-persistence.md), and
 [ADR 0009](../decisions/0009-staged-native-persistence-refactor.md).
@@ -96,8 +98,8 @@ the NativeAOT workflow.
 
 | Slice / contract | Shared EF/Npgsql contract test | Published native evidence and limit |
 |---|---|---|
-| Global settings / `IGlobalSettingRepository` | `GlobalSettingRepositoryParityTests` | Persistence probe exercises ordered reads, key/id lookup, writes, upsert, and delete. [Linux run 38147134135](https://github.com/nickna/Conduit/actions/runs/38147134135) also passes authenticated Admin six-field CRUD, merge-patch/upsert semantics, pagination, protected validation and cache acknowledgements. It does not establish cross-host cache convergence. |
-| IP-filter policy / `IIpFilterRepository` | `IpFilterRepositoryParityTests`, `IpFilterVersionEndpointFilterTests` | Persistence probe exercises scoped CRUD and UTC/null columns; Gateway probe authenticates under global/per-key default-deny policy. The unit 76 local published Linux Admin HTTP gate passes all 12 SQL/11 DTO fields, paginated global/enabled/per-key reads, merge patches, strong ETags, 428/412, no-op/deletion/missing-resource behavior and database-rule enforcement using a real `127.0.0.2` source socket. Three GUID-owned names are cleaned again after producers stop; every unrelated IP/global-setting scalar remains unchanged. The public unit 76 run is pending. Optimistic concurrency/FK cases have shared-contract evidence. Other resource-version paths retain EF. |
+| Global settings / `IGlobalSettingRepository` | `GlobalSettingRepositoryParityTests` | Persistence probe exercises ordered reads, key/id lookup, writes, upsert, and delete. [Linux run 38147134135](https://github.com/nickna/Conduit/actions/runs/38147134135) also passes authenticated Admin six-field CRUD, merge-patch/upsert semantics, pagination, protected validation and cache acknowledgements. Those acknowledgements alone do not establish propagation. The later unit 96 local native proof verifies ordinary changes reach both Gateway caches before manual reload, direct SQL remains stale, explicit reload consumes it, and deletion/reload restores defaults, with full gate and owned cleanup. Separate generations and unavailable Git provenance remain explicit in the feature matrices. |
+| IP-filter policy / `IIpFilterRepository` | `IpFilterRepositoryParityTests`, `IpFilterVersionEndpointFilterTests` | Persistence probe exercises scoped CRUD and UTC/null columns; Gateway probe authenticates under global/per-key default-deny policy. The unit 76 local published Linux Admin HTTP gate and successful [Linux run 38152552344](https://github.com/nickna/Conduit/actions/runs/38152552344) pass all 12 SQL/11 DTO fields, paginated global/enabled/per-key reads, merge patches, strong ETags, 428/412, no-op/deletion/missing-resource behavior and database-rule enforcement using a real `127.0.0.2` source socket. Three GUID-owned names are cleaned again after producers stop; every unrelated IP/global-setting scalar remains unchanged. Optimistic concurrency/FK cases have shared-contract evidence. Other resource-version paths retain EF. |
 | Providers and credentials / `IProviderRepository`, `IProviderKeyCredentialRepository` | `ProviderPersistenceParityTests` | Persistence probe exercises JSONB, credential graphs, primary rotation, and cascade; Gateway provider process checks resolved credentials. Failed-rotation rollback has shared-contract evidence. Admin credential validation remains a separate EF consumer. |
 | Virtual-key runtime / `IVirtualKeyRuntimeStore` | `VirtualKeyRuntimePersistenceParityTests` | Persistence probe covers hydrated snapshots, concurrent/idempotent ledger debits; Gateway probe checks exact settled request costs, balances, and lifetime spend. Management CRUD remains EF. |
 | Model routing / `IModelProviderMappingRuntimeStore` | `ModelProviderMappingRuntimePersistenceParityTests` | Persistence probe covers route graphs/policy; Gateway probe exercises `/v1/models`, model retrieval/metadata, and provider pricing. This does not cover the separate `/v1/conduit/discovery/models` EF projection or its warmer. |
@@ -205,8 +207,11 @@ subset, video/audio, stateful/agentic MCP, agentic SSE, provider-hosted tool pri
 and parallel/dependent calls remain distinct work.
 [Linux run 38147134135](https://github.com/nickna/Conduit/actions/runs/38147134135)
 passes stateless inline MCP and authenticated Admin settings CRUD/validation/
-pagination with cache acknowledgements; it does not prove cross-host cache
-propagation. [Linux run 38149774358](https://github.com/nickna/Conduit/actions/runs/38149774358)
+pagination with cache acknowledgements. The later unit 96 local native process
+proof separately checks healthy cross-host cache consumption through authenticated
+Gateway validation, stale direct-SQL values, explicit reload and default restoration;
+see the feature matrices for its source/generation limits and remaining retry/retention
+quirks. [Linux run 38149774358](https://github.com/nickna/Conduit/actions/runs/38149774358)
 passes typed billing-audit timers and graceful final drains on both Gateways.
 Admin selects that writer without a controlled HTTP enqueue claim. Admin's IP
 CRUD/source-socket proof passes locally and in the public

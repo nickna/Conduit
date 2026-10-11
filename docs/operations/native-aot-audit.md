@@ -38,6 +38,55 @@ inventory, regenerate it with:
 Do not update the baseline to hide a regression. The later NativeAOT phases should
 normally only reduce it.
 
+## Implementation closeout checkpoint: 2026-10-11
+
+The dated assessments below preserve their original evidence. The selected native
+support contract has since advanced through typed Admin settings/IP HTTP,
+stateless inline MCP, billing-audit timers and shutdown drains, and explicit
+omission of five Gateway/seven Admin EF-backed hosted workers. The
+[Gateway matrix](gateway-native-aot-feature-matrix.md),
+[Admin matrix](native-aot-admin-feature-matrix.md) and
+[current persistence inventory](persistence-aot-query-inventory.md) define those
+operations and exclusions; the reproducible inventory remains 72 files/1,355 sites.
+No supported-profile serialization root or mandatory additional boundary extraction
+was found in the final contract/dependency review. Unextracted management, reporting,
+retention and reconciliation remain explicit separate workloads.
+
+[Linux run 38175668349](https://github.com/nickna/Conduit/actions/runs/38175668349)
+at `e0f9f9904df187460ab338bd86619d912f653d60` passes all three jobs, 219 selected
+persistence and integration cases with no skips, zero first-party linker diagnostics,
+the complete native process gate and both packaged entrypoints. Original retained
+manifests identify clean Git source and the actual SDK/compiler/runtime inventory.
+Both image packages pass payload/non-root/OpenAPI checks but retain classic-store
+OCI descriptor HOLD. The newer required hosted containerd gate and exact-step
+offline policy cases are described in [native publish evidence](native-publish-evidence.md).
+Its actual hosted integration must pass on the final committed source.
+
+The later unit 96 local Linux proof separately reproduces and fixes ordinary
+Admin setting-change propagation: both fresh native Gateways consume 5→7 before
+manual reload, hold 7 after direct SQL becomes 9, consume 9 after reload, and
+restore 5 after deletion/reload. Twelve authenticated validation requests make no
+provider dispatch or accounting changes; the complete host gate and owned cleanup
+pass. Its retained Admin and fresh Gateway/probe generations and unavailable Git
+provenance remain explicit. Failed-reload retry and completed-ID retention are
+tracked in [#1623](https://github.com/nickna/Conduit/issues/1623) and
+[#1627](https://github.com/nickna/Conduit/issues/1627).
+
+Configuration's function contracts are neutral and its resolved graph excludes the
+MCP implementation. Admin's retained Functions credential-test factory and AWS
+media/storage consumers are explicit required dependencies. Package ownership and
+architecture checks exclude unused Admin protocols, tokenizer and build tooling;
+resolved guards separately protect Configuration, Functions and native SignalR
+adapter boundaries. See
+[ADR 0009](../decisions/0009-staged-native-persistence-refactor.md) for the incremental
+boundary decision and evidence limits.
+
+Implementation closeout does not complete #1368/#1375. Production remains JIT under
+ADR 0006; digest-pinned authenticated comparative benchmarks, release security/
+SBOM/provenance, dashboards/alerts, real rollback and an accepted 168-hour Admin
+soak followed by a separate 168-hour Gateway soak remain required. A successor
+promotion ADR and the policy gate must be approved before production-native use.
+
 ## Epic #1368 assessment: 2026-10-09
 
 Reviewed [#1368](https://github.com/nickna/Conduit/issues/1368), all seven child

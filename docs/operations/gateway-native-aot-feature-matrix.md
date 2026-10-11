@@ -8,13 +8,14 @@ Native metadata reports `persistence_status: typed-npgsql-selected-runtime-slice
 This describes the selected runtime stores, not general EF query support. The
 Admin contract is documented separately in
 [native-aot-admin-feature-matrix.md](native-aot-admin-feature-matrix.md).
-The unit 77 profile passes 71 JIT and 10 native-profile composition/conditional
-cases without skips, two reflection-disabled Admin metadata cases, and a fresh
-local Linux publish/OpenAPI/full-host gate with zero first-party linker warnings.
-The host gate checks exact capability fields and feature sets from Admin and both
-Gateways, all existing workloads and owned cleanup. Public CI for this revision
-remains separate evidence. Previously passed workloads below
-retain their individually cited evidence. Production promotion remains deferred
+[Linux run 38175668349](https://github.com/nickna/Conduit/actions/runs/38175668349)
+at `e0f9f9904df187460ab338bd86619d912f653d60` passes all three jobs, including 219
+selected persistence and integration cases without skips, native publish/OpenAPI,
+the complete host gate and both packaged entrypoints, with zero first-party linker
+diagnostics. The host gate checks exact capability fields and feature sets from
+Admin and both Gateways, the selected workloads and owned cleanup. Its clean-Git
+image packages still report classic-store OCI association HOLD. Later local cache
+convergence evidence is identified separately below. Production promotion remains deferred
 under [ADR 0006](../decisions/0006-native-aot-persistence.md) and the
 [canary runbook](native-aot-canary.md).
 
@@ -29,7 +30,7 @@ under [ADR 0006](../decisions/0006-native-aot-persistence.md) and the
 | SignalR protocol surface | JSON is the only protocol. All eight Gateway hub routes accept real native clients; the public video hub authenticates each subscription with an ephemeral key. | The probe connects and invokes every hub, receives typed virtual-key status, and carries a notification between two native Gateway hosts through the Redis backplane. |
 | Authentication boundary | Requests without a virtual key are rejected before the EF-backed data plane. | `GET /v1/models` returns 401 without credentials. |
 | Typed request persistence | Virtual-key lookup plus global and per-key IP policy use typed Npgsql repositories in the native Gateway. | With default-deny IP filtering enabled, a seeded virtual key negotiates all eight hub routes on both native Gateway processes. |
-| Admin IP-filter management and enforcement | Native Admin selects typed Npgsql for IP CRUD and conditional-request version reads. JIT retains EF. | The unit 76 local published Linux gate passes all 12 stored and 11 DTO fields, paginated global/enabled/per-key lists, merge patches, strong ETags, 428/412 and missing/deleted resources. An actual socket bound to `127.0.0.2` changes from denied to allowed and back as owned database rules change; the private-IP bypass is disabled only for the owned Admin child. Unrelated IP and setting rows remain unchanged, and owned cleanup repeats after producer shutdown. The corresponding public run is pending; see the [Admin matrix](native-aot-admin-feature-matrix.md). |
+| Admin IP-filter management and enforcement | Native Admin selects typed Npgsql for IP CRUD and conditional-request version reads. JIT retains EF. | The unit 76 local published Linux gate and successful public [Linux run 38152552344](https://github.com/nickna/Conduit/actions/runs/38152552344) pass all 12 stored and 11 DTO fields, paginated global/enabled/per-key lists, merge patches, strong ETags, 428/412 and missing/deleted resources. An actual socket bound to `127.0.0.2` changes from denied to allowed and back as owned database rules change; the private-IP bypass is disabled only for the owned Admin child. Unrelated IP and setting rows remain unchanged, and owned cleanup repeats after producer shutdown. See the [Admin matrix](native-aot-admin-feature-matrix.md). |
 | Authenticated model discovery | Model list, retrieval, and effective capability metadata use the fixed-query typed Npgsql model-routing graph. | A seeded alias is listed and retrieved on both native Gateways, and its canonical/provider capability graph is returned by the metadata endpoint. |
 | Authenticated function metadata discovery | `GET /v1/conduit/discovery/functions` and `GET /v1/conduit/discovery/functions/{id}/parameters` use the typed configuration catalog store. The runtime advertises `function-metadata-discovery`. | [Linux process gate 38124571584](https://github.com/nickna/Conduit/actions/runs/38124571584) checks both native Gateways: authentication, enabled configurations, named/numeric filters, structured schemas/examples, unknown enum strings, private-field omission, repeated JSON shape, and missing/disabled parameter resources. These reads do not execute functions. |
 | Inline Exa search | The runtime advertises `inline-exa-search` for configured search execution and owned execution-by-ID reads. | [Published Linux process job 114465334583](https://github.com/nickna/Conduit/actions/runs/38137532017/job/114465334583) checks both Gateways, successful searches and provider rejections, all 24 persisted execution fields, opposite-host ownership, configured pricing and settled success-only charges. |
