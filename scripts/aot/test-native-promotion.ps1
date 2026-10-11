@@ -6,6 +6,7 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '../..')
 $evaluator = Join-Path $PSScriptRoot 'evaluate-native-promotion.ps1'
 . (Join-Path $PSScriptRoot 'native-benchmark-test-fixtures.ps1')
 . (Join-Path $PSScriptRoot 'native-benchmark-image-evidence.ps1')
+. (Join-Path $PSScriptRoot 'native-benchmark-attempt-evidence.ps1')
 $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) "conduit-native-promotion-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Path $temporaryRoot | Out-Null
 $checks = 0
@@ -17,11 +18,36 @@ function Write-Fixture([string] $Name, $Value) {
     return $path
 }
 function Invoke-Gate([string] $Service, $Policy, $Benchmark, $Evidence, $AdminEvidence = $null,
-    [string]$PackagingDirectory = '', [switch]$WithoutPackaging, [string]$RawBenchmarkJson = '') {
+    [string]$PackagingDirectory = '', [switch]$WithoutPackaging, [string]$RawBenchmarkJson = '',
+    [string]$ExistingBenchmarkPath = '', [switch]$WithoutAttempt,
+    [scriptblock]$DuringFinalOciRead = $null, $MutationState = $null) {
+    $benchmarkPath = if ([string]::IsNullOrEmpty($ExistingBenchmarkPath)) {
+        Join-Path $temporaryRoot "benchmark-$([guid]::NewGuid().ToString('N')).json"
+    } else { $ExistingBenchmarkPath }
+    if ([string]::IsNullOrEmpty($ExistingBenchmarkPath)) {
+        $canonicalService = $Service.ToLowerInvariant()
+        $schema = $Benchmark.schemaVersion
+        $integerTypes = @([sbyte], [byte], [int16], [uint16], [int32], [uint32], [int64], [uint64])
+        $bindAttempt = -not $WithoutAttempt -and $null -ne $schema -and $schema.GetType() -in $integerTypes -and
+            $schema -eq 4 -and $Benchmark.service -is [string] -and $Benchmark.service -ceq $canonicalService
+        if ($bindAttempt) {
+            $context = $null
+            try {
+                $context = Start-NativeBenchmarkAttempt -OutputPath $benchmarkPath -Service $canonicalService
+                Complete-NativeBenchmarkAttempt -Context $context -Report (Copy-Value $Benchmark)
+            }
+            finally { if ($null -ne $context) { Close-NativeBenchmarkAttempt -Context $context } }
+        }
+        else {
+            # Deliberate old schemas, wrong types and mismatched services retain
+            # their original fixture bytes; publication must not repair them.
+            $Benchmark | ConvertTo-Json -Depth 64 | Set-Content -LiteralPath $benchmarkPath
+        }
+    }
     $arguments = @{
         Service = $Service
         PolicyPath = Write-Fixture "policy-$([guid]::NewGuid().ToString('N'))" $Policy
-        BenchmarkPath = Write-Fixture "benchmark-$([guid]::NewGuid().ToString('N'))" $Benchmark
+        BenchmarkPath = $benchmarkPath
         CanaryEvidencePath = Write-Fixture "evidence-$([guid]::NewGuid().ToString('N'))" $Evidence
         ReportOnly = $true
     }
@@ -34,7 +60,23 @@ function Invoke-Gate([string] $Service, $Policy, $Benchmark, $Evidence, $AdminEv
         [IO.File]::WriteAllText($arguments.BenchmarkPath, $RawBenchmarkJson, [Text.UTF8Encoding]::new($false))
     }
     if ($null -ne $AdminEvidence) { $arguments.AdminCanaryEvidencePath = Write-Fixture "admin-$([guid]::NewGuid().ToString('N'))" $AdminEvidence }
-    return ((& $evaluator @arguments) -join [Environment]::NewLine) | ConvertFrom-Json -DateKind String
+    $breakpoint = $null
+    try {
+        if ($null -ne $DuringFinalOciRead) {
+            $callback = $DuringFinalOciRead
+            $state = $MutationState
+            $action = {
+                $state.readCalls++
+                if ($state.readCalls -eq 2) {
+                    & $callback $state
+                    $state.mutated = $true
+                }
+            }.GetNewClosure()
+            $breakpoint = Set-PSBreakpoint -Command 'Read-NativeBenchmarkImageEvidence' -Action $action
+        }
+        return ((& $evaluator @arguments) -join [Environment]::NewLine) | ConvertFrom-Json -DateKind String
+    }
+    finally { if ($null -ne $breakpoint) { Remove-PSBreakpoint -Id $breakpoint.Id } }
 }
 function Assert-Decision($Result, [string] $Expected, [string] $Description) {
     $script:checks++
@@ -115,7 +157,7 @@ function Set-Comparisons($Benchmark) {
 }
 function New-Benchmark([string] $Service, [char] $NativeDigest, [char] $JitDigest, [int] $Runs = 5) {
     $result = [ordered]@{
-        schemaVersion = 3; generatedAt = '2020-01-01T00:00:00Z'; service = $Service; platform = 'linux-x64'
+        schemaVersion = 4; generatedAt = '2020-01-01T00:00:00Z'; service = $Service; platform = 'linux-x64'
         pairedRuns = $Runs; methodology = 'Synthetic authenticated paired benchmark contract fixture.'
         environment = [ordered]@{
             schemaVersion = 1; environmentId = 'owned-test-environment'
@@ -151,6 +193,163 @@ function Assert-BenchmarkHold([string] $Description, [string] $Pattern, [scriptb
     $result = Invoke-Gate 'gateway' $openPolicy $candidate $gatewayEvidence $adminEvidence
     Assert-Decision $result 'hold' $Description
     Assert-Failure $result $Pattern $Description
+}
+
+function Read-PromotionAttemptJson([string] $Path) {
+    return ,([IO.File]::ReadAllText($Path) | ConvertFrom-Json -AsHashtable -DateKind String)
+}
+function Write-PromotionAttemptJson([string] $Path, $Value) {
+    [IO.File]::WriteAllText($Path, (ConvertTo-Json -InputObject $Value -Depth 64 -Compress), [Text.UTF8Encoding]::new($false))
+}
+function Get-PromotionAttemptHash([string] $Path) {
+    return [Convert]::ToHexStringLower([Security.Cryptography.SHA256]::HashData([IO.File]::ReadAllBytes($Path)))
+}
+function Publish-PromotionAttempt([string] $Path, $Benchmark) {
+    $context = $null
+    try {
+        $context = Start-NativeBenchmarkAttempt -OutputPath $Path -Service 'gateway'
+        Complete-NativeBenchmarkAttempt -Context $context -Report (Copy-Value $Benchmark)
+    }
+    finally { if ($null -ne $context) { Close-NativeBenchmarkAttempt -Context $context } }
+    return ,(Read-NativeBenchmarkAttemptEvidence -OutputPath $Path -Service 'gateway')
+}
+
+function Invoke-PromotionAttemptContracts {
+    Assert-BenchmarkHold 'Historical schema three cannot qualify' 'schema version 4' { param($b) $b.schemaVersion = 3 }
+    $withoutJournal = Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -WithoutAttempt
+    Assert-Decision $withoutJournal 'hold' 'Schema four without collection journal'
+    Assert-Failure $withoutJournal 'latest.*attempt|collection attempt' 'Schema four without collection journal'
+    $wrongService = Copy-Value $gatewayBenchmark
+    $wrongService.service = 'admin'
+    $result = Invoke-Gate 'gateway' $openPolicy $wrongService $gatewayEvidence $adminEvidence
+    Assert-Decision $result 'hold' 'Mismatched benchmark service remains unbound'
+    Assert-Failure $result 'service does not match' 'Mismatched benchmark service remains unbound'
+
+    $lineagePath = Join-Path $temporaryRoot ('attempt-lineage-' + [Guid]::NewGuid().ToString('N') + '.json')
+    $first = Publish-PromotionAttempt $lineagePath $gatewayBenchmark
+    $firstArchive = Join-Path (Join-Path ($lineagePath + '.attempts') $first.latest.attemptId) 'benchmark.json'
+    $firstHash = Get-PromotionAttemptHash $lineagePath
+    Assert-Decision (Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -ExistingBenchmarkPath $lineagePath) 'promote' 'Latest succeeded A qualifies with valid canary and OCI'
+    $failed = $null
+    try {
+        $failed = Start-NativeBenchmarkAttempt -OutputPath $lineagePath -Service 'gateway'
+        Set-NativeBenchmarkAttemptFailed -Context $failed -FailureCode 'collection-failed'
+    }
+    finally { if ($null -ne $failed) { Close-NativeBenchmarkAttempt -Context $failed } }
+    if ((Get-PromotionAttemptHash $lineagePath) -cne $firstHash -or
+        (Get-PromotionAttemptHash $firstArchive) -cne $firstHash) { throw 'Failed B changed successful A retained bytes.' }
+    $result = Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -ExistingBenchmarkPath $lineagePath
+    Assert-Decision $result 'hold' 'Failed B disqualifies unchanged successful A alias'
+    Assert-Failure $result 'latest.*attempt|collection attempt' 'Failed B disqualifies unchanged successful A alias'
+
+    $running = $null
+    try {
+        $running = Start-NativeBenchmarkAttempt -OutputPath $lineagePath -Service 'gateway'
+        $result = Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -ExistingBenchmarkPath $lineagePath
+        Assert-Decision $result 'hold' 'Held running attempt disqualifies previous success'
+        Assert-Failure $result 'latest.*attempt|collection attempt' 'Held running attempt disqualifies previous success'
+    }
+    finally { if ($null -ne $running) { Close-NativeBenchmarkAttempt -Context $running } }
+    $result = Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -ExistingBenchmarkPath $lineagePath
+    Assert-Decision $result 'hold' 'Closed crashed-running attempt remains disqualified'
+    Assert-Failure $result 'latest.*attempt|collection attempt' 'Closed crashed-running attempt remains disqualified'
+    $second = Publish-PromotionAttempt $lineagePath $gatewayBenchmark
+    if ($second.latest.attemptId -ceq $first.latest.attemptId -or
+        (Get-PromotionAttemptHash $firstArchive) -cne $firstHash -or
+        $second.reportSha256 -ceq $first.reportSha256) { throw 'Successful rerun reused A identity or changed its immutable archive.' }
+    Assert-Decision (Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -ExistingBenchmarkPath $lineagePath) 'promote' 'Current successful B replaces older failures'
+
+    $latestPath = Join-Path ($lineagePath + '.attempts') 'latest.json'
+    $attemptPath = Join-Path (Join-Path ($lineagePath + '.attempts') $second.latest.attemptId) 'attempt.json'
+    $archivePath = Join-Path (Join-Path ($lineagePath + '.attempts') $second.latest.attemptId) 'benchmark.json'
+    $originalBytes = @{}
+    foreach ($path in @($lineagePath, $latestPath, $attemptPath, $archivePath)) { $originalBytes[$path] = [IO.File]::ReadAllBytes($path) }
+    foreach ($mutation in @('alias-bytes', 'archive-bytes', 'attempt-hash', 'attempt-id', 'latest-id', 'generated-at', 'collection-id', 'collection-time')) {
+        try {
+            switch ($mutation) {
+                'alias-bytes' { [IO.File]::AppendAllText($lineagePath, "`n", [Text.UTF8Encoding]::new($false)) }
+                'archive-bytes' { [IO.File]::AppendAllText($archivePath, "`n", [Text.UTF8Encoding]::new($false)) }
+                'attempt-hash' {
+                    $record = Read-PromotionAttemptJson $attemptPath
+                    $record.reportSha256 = 'f' * 64
+                    Write-PromotionAttemptJson $attemptPath $record
+                }
+                'attempt-id' {
+                    $record = Read-PromotionAttemptJson $attemptPath
+                    $record.attemptId = [Guid]::NewGuid().ToString('N')
+                    Write-PromotionAttemptJson $attemptPath $record
+                }
+                'latest-id' {
+                    $record = Read-PromotionAttemptJson $latestPath
+                    $record.attemptId = $first.latest.attemptId
+                    Write-PromotionAttemptJson $latestPath $record
+                }
+                { $_ -cin @('generated-at', 'collection-id', 'collection-time') } {
+                    $report = Read-PromotionAttemptJson $lineagePath
+                    switch ($mutation) {
+                        'generated-at' { $report.generatedAt = '1999-01-01T00:00:00Z' }
+                        'collection-id' { $report.collection.attemptId = [Guid]::NewGuid().ToString('N') }
+                        'collection-time' { $report.collection.completedAt = '1999-01-01T00:00:00Z' }
+                    }
+                    # Keep both report hashes coherent so the ID/time join, rather
+                    # than a trivial byte mismatch, must reject this corruption.
+                    Write-PromotionAttemptJson $lineagePath $report
+                    [IO.File]::WriteAllBytes($archivePath, [IO.File]::ReadAllBytes($lineagePath))
+                    $record = Read-PromotionAttemptJson $attemptPath
+                    $record.reportSha256 = Get-PromotionAttemptHash $lineagePath
+                    Write-PromotionAttemptJson $attemptPath $record
+                }
+            }
+            $result = Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -ExistingBenchmarkPath $lineagePath
+            Assert-Decision $result 'hold' "Post-publication $mutation disqualifies latest collection"
+            Assert-Failure $result 'latest.*attempt|collection attempt' "Post-publication $mutation disqualifies latest collection"
+        }
+        finally { foreach ($path in $originalBytes.Keys) { [IO.File]::WriteAllBytes($path, $originalBytes[$path]) } }
+    }
+
+    foreach ($mutation in @('latest-bytes', 'attempt-bytes', 'report-rehashed', 'new-failed', 'new-running')) {
+        $latePath = Join-Path $temporaryRoot ('attempt-late-' + [Guid]::NewGuid().ToString('N') + '.json')
+        $lateEvidence = Publish-PromotionAttempt $latePath $gatewayBenchmark
+        $lateDirectory = Join-Path ($latePath + '.attempts') $lateEvidence.latest.attemptId
+        $state = [ordered]@{
+            readCalls = 0; mutated = $false; mutation = $mutation; outputPath = $latePath
+            latestPath = Join-Path ($latePath + '.attempts') 'latest.json'
+            attemptPath = Join-Path $lateDirectory 'attempt.json'; archivePath = Join-Path $lateDirectory 'benchmark.json'
+            activeContext = $null
+        }
+        $mutate = {
+            param($State)
+            switch ($State.mutation) {
+                'latest-bytes' { [IO.File]::AppendAllText($State.latestPath, "`n", [Text.UTF8Encoding]::new($false)) }
+                'attempt-bytes' { [IO.File]::AppendAllText($State.attemptPath, "`n", [Text.UTF8Encoding]::new($false)) }
+                'report-rehashed' {
+                    $report = [IO.File]::ReadAllText($State.outputPath) | ConvertFrom-Json -AsHashtable -DateKind String
+                    $report.methodology += ' Changed during final OCI replay.'
+                    $json = ConvertTo-Json -InputObject $report -Depth 64 -Compress
+                    [IO.File]::WriteAllText($State.outputPath, $json, [Text.UTF8Encoding]::new($false))
+                    [IO.File]::WriteAllText($State.archivePath, $json, [Text.UTF8Encoding]::new($false))
+                    $record = [IO.File]::ReadAllText($State.attemptPath) | ConvertFrom-Json -AsHashtable -DateKind String
+                    $record.reportSha256 = [Convert]::ToHexStringLower([Security.Cryptography.SHA256]::HashData([IO.File]::ReadAllBytes($State.outputPath)))
+                    [IO.File]::WriteAllText($State.attemptPath, (ConvertTo-Json -InputObject $record -Depth 8 -Compress), [Text.UTF8Encoding]::new($false))
+                }
+                { $_ -cin @('new-failed', 'new-running') } {
+                    $context = Start-NativeBenchmarkAttempt -OutputPath $State.outputPath -Service 'gateway'
+                    if ($State.mutation -ceq 'new-running') { $State.activeContext = $context }
+                    else {
+                        try { Set-NativeBenchmarkAttemptFailed -Context $context -FailureCode 'collection-failed' }
+                        finally { Close-NativeBenchmarkAttempt -Context $context }
+                    }
+                }
+            }
+        }
+        try {
+            $result = Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -ExistingBenchmarkPath $latePath -DuringFinalOciRead $mutate -MutationState $state
+            if ($state.readCalls -ne 2 -or -not $state.mutated) { throw "Late $mutation did not occur during the real evaluator's second OCI read." }
+            Assert-Decision $result 'hold' "Late $mutation changes current collection identity"
+            Assert-Failure $result '^benchmark latest successful collection attempt changed or could not be reverified after evaluation$' "Late $mutation changes current collection identity"
+        }
+        finally { if ($null -ne $state.activeContext) { Close-NativeBenchmarkAttempt -Context $state.activeContext } }
+    }
 }
 
 try {
@@ -195,7 +394,7 @@ try {
     }
     Assert-Decision (Invoke-Gate 'gateway' $openPolicy $alternate $gatewayEvidence $adminEvidence) 'promote' 'Comparable alternative load in every pair'
 
-    Assert-BenchmarkHold 'Health-only schema one' 'schema version 2' { param($b) $b.schemaVersion = 1; $b | Add-Member -NotePropertyName endpoint -NotePropertyValue '/health/ready' }
+    Assert-BenchmarkHold 'Health-only schema one' 'schema version 4' { param($b) $b.schemaVersion = 1; $b | Add-Member -NotePropertyName endpoint -NotePropertyValue '/health/ready' }
     Assert-BenchmarkHold 'Health-only schema two' 'unexpected workload' { param($b) foreach ($v in (Get-AllVariants $b)) { foreach ($r in $v.workloads) { $r.id = 'health-ready' } } }
     Assert-BenchmarkHold 'Missing SSE median' "missing 'gateway-chat-sse'" { param($b) $b.native.workloads = @($b.native.workloads[0]) }
     Assert-BenchmarkHold 'Missing SSE raw pair' "missing 'gateway-chat-sse'" { param($b) $b.samples[2].jit.workloads = @($b.samples[2].jit.workloads[0]) }
@@ -334,7 +533,7 @@ try {
     Assert-Decision (Invoke-Gate 'Gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence) 'promote' 'Case-insensitive service retains canonical image identity'
     $upperHelper = @(Read-NativeBenchmarkImageEvidence -Directory $script:packages.admin.artifact -Service 'ADMIN' -NativeImage $script:packages.admin.requestedImage)
     if ($upperHelper.Count -ne 1 -or $upperHelper[0].identity.service -cne 'admin') { throw 'Uppercase helper did not return one canonical identity.' }
-    Assert-BenchmarkHold 'Historical schema two cannot qualify' 'schema version 3' { param($b) $b.schemaVersion = 2 }
+    Assert-BenchmarkHold 'Historical schema two cannot qualify' 'schema version 4' { param($b) $b.schemaVersion = 2 }
     $result = Invoke-Gate 'gateway' $openPolicy $gatewayBenchmark $gatewayEvidence $adminEvidence -WithoutPackaging
     Assert-Decision $result 'hold' 'Packaging directory is required'
     Assert-Failure $result 'requires retained packaging evidence' 'Packaging directory is required'
@@ -464,6 +663,8 @@ try {
         Assert-Decision (Invoke-Gate 'gateway' $openPolicy $selectedBenchmark $selectedCanary $adminEvidence) 'promote' 'Selected manifest candidate binds to distinct observed local index'
     }
     finally { $script:packages.gateway = $originalFixture; $script:packageEvidence.gateway = $originalEvidence }
+
+    Invoke-PromotionAttemptContracts
 
     Write-Host "Native promotion gate contract tests passed ($checks cases)."
 }

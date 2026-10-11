@@ -22,9 +22,12 @@ param(
 $Service = $Service.ToLowerInvariant()
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'native-benchmark-image-evidence.ps1')
+. (Join-Path $PSScriptRoot 'native-benchmark-attempt-evidence.ps1')
 $policy = Get-Content -LiteralPath $PolicyPath -Raw | ConvertFrom-Json
 $evidence = Get-Content -LiteralPath $CanaryEvidencePath -Raw | ConvertFrom-Json
 $failures = [System.Collections.Generic.List[string]]::new()
+$benchmarkDocument = $null
+$benchmarkAttemptEvidence = $null
 try {
     # Preserve integer and finite fractional metrics, while rejecting duplicate
     # JSON keys before PowerShell object conversion can discard them.
@@ -35,6 +38,18 @@ try {
 catch {
     $benchmark = [pscustomobject]@{}
     $failures.Add('benchmark document is malformed or exceeds its bounded JSON contract')
+}
+if ($null -ne $benchmarkDocument) {
+    try {
+        $benchmarkAttemptEvidence = Read-NativeBenchmarkAttemptEvidence -OutputPath $BenchmarkPath -Service $Service
+        if ($benchmarkAttemptEvidence['reportSha256'] -cne $benchmarkDocument['sha256']) {
+            throw 'Benchmark original report changed before its attempt was read.'
+        }
+    }
+    catch {
+        $benchmarkAttemptEvidence = $null
+        $failures.Add('benchmark latest successful collection attempt could not be verified against the original report')
+    }
 }
 
 function Test-FiniteNumber($Value) {
@@ -196,10 +211,10 @@ if (@($policy.sequence).Count -ne 2 -or $policy.sequence[0] -ne 'admin' -or $pol
     $failures.Add('promotion policy sequence must be Admin followed by Gateway')
 }
 $benchmarkSchema = Get-RequiredPositiveInteger $benchmark 'schemaVersion' 'benchmark schema version'
-if ($benchmarkSchema -notin @(2, 3)) { $failures.Add('benchmark schema version 2 with authenticated workload samples is required') }
-if ($benchmarkSchema -ne 3) { $failures.Add('benchmark schema version 3 with retained native image binding is required') }
+if ($benchmarkSchema -notin @(2, 3, 4)) { $failures.Add('benchmark schema version 4 with authenticated workload samples is required') }
+if ($benchmarkSchema -ne 4) { $failures.Add('benchmark schema version 4 with retained native image binding and collection attempt is required') }
 elseif ($benchmark.schemaVersion.GetType() -notin @([sbyte], [byte], [int16], [uint16], [int32], [uint32], [int64], [uint64])) {
-    $failures.Add('benchmark schema version 3 must be an integer')
+    $failures.Add('benchmark schema version 4 must be an integer')
 }
 if ($benchmark.service -ne $Service) { $failures.Add('benchmark service does not match the requested promotion') }
 if ($benchmark.platform -ne 'linux-x64') { $failures.Add('benchmark platform is not linux-x64') }
@@ -209,7 +224,7 @@ elseif ($generatedAt -gt [DateTimeOffset]::UtcNow.AddMinutes(5)) { $failures.Add
 
 $nativeImageEvidence = $null
 $boundNativeImage = $null
-if ($benchmarkSchema -eq 3) {
+if ($benchmarkSchema -eq 4) {
     if ([string]::IsNullOrWhiteSpace($NativePackagingDirectory)) {
         $failures.Add('native image binding requires retained packaging evidence')
     }
@@ -339,7 +354,7 @@ function Get-Variant($Variant, [string] $Name, [string] $Description, [bool] $Ra
         $metrics[$metric] = if ($metric -eq 'coldReadinessMilliseconds') { Get-RequiredPositiveNumber $Variant $metric "$Description $metric" }
             else { Get-RequiredPositiveInteger $Variant $metric "$Description $metric" }
     }
-    if ($Name -eq 'native' -and $benchmarkSchema -eq 3) {
+    if ($Name -eq 'native' -and $benchmarkSchema -eq 4) {
         if ($RawSample -and ($Variant.nativeContainerId -isnot [string] -or $Variant.nativeContainerId -cnotmatch '\A[0-9a-f]{64}\z')) {
             $failures.Add("$Description native container binding is missing or invalid")
         }
@@ -373,7 +388,7 @@ foreach ($sample in @($benchmark.samples | Select-Object -First 21)) {
     if ($sample.order -isnot [array] -or @($sample.order).Count -ne 2 -or (@($sample.order) -join '|') -cne ($order -join '|')) { $failures.Add("sample $index runtime order must alternate across recorded pairs") }
     foreach ($name in 'jit', 'native') {
         $raw = Get-Variant $sample.$name $name "sample $index $name" $true
-        if ($name -eq 'native' -and $benchmarkSchema -eq 3 -and $sample.native.nativeContainerId -is [string] -and
+        if ($name -eq 'native' -and $benchmarkSchema -eq 4 -and $sample.native.nativeContainerId -is [string] -and
             $sample.native.nativeContainerId -cmatch '\A[0-9a-f]{64}\z' -and
             -not $nativeContainerIds.Add($sample.native.nativeContainerId)) {
             $failures.Add("sample $index native container binding repeats a recorded cold-start container")
@@ -429,7 +444,7 @@ else {
     Get-RequiredPositiveNumber $nativePublish 'executableBytes' 'native executable size' | Out-Null
     Get-RequiredPositiveNumber $nativePublish 'runtimeArtifactBytes' 'native runtime artifact size' | Out-Null
 }
-if ($benchmarkSchema -eq 3 -and $null -ne $nativeImageEvidence) {
+if ($benchmarkSchema -eq 4 -and $null -ne $nativeImageEvidence) {
     try { Assert-NativeBenchmarkImageEvidenceEqual -Expected $nativeImageEvidence['nativePublish'] -Actual $nativePublish }
     catch { $failures.Add('native publish binding differs from retained image packaging evidence') }
 }
@@ -477,7 +492,7 @@ foreach ($id in $requiredIds) {
     if ($null -ne $throughput -and $null -ne $minimumThroughput -and $throughput -lt $minimumThroughput) { $failures.Add("$id throughput improvement is below threshold") }
 }
 
-if ($benchmarkSchema -eq 3 -and $null -ne $nativeImageEvidence) {
+if ($benchmarkSchema -eq 4 -and $null -ne $nativeImageEvidence) {
     try {
         $finalNativeImageEvidence = Read-NativeBenchmarkImageEvidence -Directory $NativePackagingDirectory -Service $Service -NativeImage $boundNativeImage
         foreach ($field in 'identity', 'binding', 'nativePublish', 'pullBytes') {
@@ -485,6 +500,22 @@ if ($benchmarkSchema -eq 3 -and $null -ne $nativeImageEvidence) {
         }
     }
     catch { $failures.Add('native image binding changed or could not be reverified after evaluation') }
+}
+if ($null -ne $benchmarkAttemptEvidence) {
+    try {
+        $finalBenchmarkAttemptEvidence = Read-NativeBenchmarkAttemptEvidence -OutputPath $BenchmarkPath -Service $Service
+        foreach ($field in 'latestSha256', 'attemptSha256', 'reportSha256', 'reportPath') {
+            if ($finalBenchmarkAttemptEvidence[$field] -cne $benchmarkAttemptEvidence[$field]) {
+                throw 'Benchmark attempt evidence changed during evaluation.'
+            }
+        }
+        foreach ($field in 'attemptId', 'service') {
+            if ($finalBenchmarkAttemptEvidence['attempt'][$field] -cne $benchmarkAttemptEvidence['attempt'][$field]) {
+                throw 'Benchmark attempt identity changed during evaluation.'
+            }
+        }
+    }
+    catch { $failures.Add('benchmark latest successful collection attempt changed or could not be reverified after evaluation') }
 }
 
 $decision = if ($failures.Count -eq 0) { 'promote' } else { 'hold' }

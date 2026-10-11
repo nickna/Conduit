@@ -148,7 +148,7 @@ request bodies, expected private content or backing-service connection strings.
 
 The collector runs one unrecorded warm-up pair, then an odd number of recorded
 pairs from five through 21. It alternates JIT/native order, retains every raw
-sample and computes each metric's median. Schema 3 separates common image,
+sample and computes each metric's median. Schema 4 separates common image,
 compressed pull, cold-readiness and idle/steady/peak memory metrics from each
 workload's throughput and full-response p50/p95/p99 latency. Native publish time
 and artifact sizes come from the completed schema-2 packaging bundle for the
@@ -164,12 +164,21 @@ The native median and publish metrics retain the same sealed image binding.
 Retain the entire packaging directory with the benchmark. The evaluator accepts
 its relocated directory explicitly and replays it independently. Requested
 repository/index digests, selected manifests, image configs and Docker local IDs
-retain their distinct roles. Historical schema-1/2 benchmarks and packaging
+retain their distinct roles. Historical schema-1/2/3 benchmarks and packaging
 bundles without a verified OCI association or clean source remain HOLD evidence.
 This association does not establish production provenance or complete a canary.
-Use a distinct output path for each collection attempt and retain its exit status.
-A failed rerun leaves an existing report untouched; automated collection-attempt
-and freshness validation is tracked in
+Every collection starts a versioned attempt before preflight validation. The
+collector holds an exclusive writer lock in `<OutputPath>.attempts`, records
+`latest.json` and retains each GUID attempt's `attempt.json` and successful
+`benchmark.json`. Successful reports are flushed and published atomically before
+the attempt records success. A failed rerun preserves the previous report while
+the new failed or running attempt disqualifies it as the latest result. Reports
+created before attempt tracking are retained by their original hash for inspection.
+Retain the entire attempt directory with the public report. The evaluator requires
+schema 4, exact original report/archive hashes and matching successful latest
+attempt identity and timestamps. It rechecks the attempt after image and metric
+evaluation; an active writer or changed attempt holds promotion. The accepted
+qualification window and explicit historical-evidence policy remain tracked in
 [#1583](https://github.com/nickna/Conduit/issues/1583).
 
 The evaluator independently recomputes the medians and comparisons, validates

@@ -1,6 +1,11 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "generatedAt": null,
+  "collection": {
+    "attemptId": null,
+    "startedAt": null,
+    "completedAt": null
+  },
   "service": "admin",
   "platform": "linux-x64",
   "pairedRuns": 5,
@@ -64,5 +69,5 @@
     },
     "workloads": []
   },
-  "notes": "Unfilled schema example; it must fail promotion. Use measure-native-container.ps1 schema-3 output with all raw paired samples, authenticated workload results and sealed native image evidence. Retain its complete packaging bundle."
+  "notes": "Unfilled schema example; it must fail promotion. Use measure-native-container.ps1 schema-4 output with all raw paired samples, authenticated workload results, sealed native image evidence and a successful latest collection attempt. Retain its complete packaging bundle and attempt directory."
 }
