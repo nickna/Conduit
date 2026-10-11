@@ -30,6 +30,7 @@ public partial class Program
         builder.Services.AddWolverineEventBus();
         builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IWebhookRecovery, ConduitLLM.Messaging.Wolverine.WebhookDeliveryStore>();
         builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IMediaTaskTerminalWriter, ConduitLLM.Messaging.Wolverine.MediaTaskTerminalWriter>();
+        builder.Services.AddScoped<ConduitLLM.Core.Interfaces.IMediaTaskReconciliationStore, ConduitLLM.Messaging.Wolverine.MediaTaskReconciliationStore>();
         builder.Services.AddOptions<ConduitLLM.Core.Configuration.WebhookDeliveryOptions>()
             .Bind(builder.Configuration.GetSection(ConduitLLM.Core.Configuration.WebhookDeliveryOptions.SectionName))
             .Validate(o => o.IsValid(), "Invalid webhook delivery options.").ValidateOnStart();

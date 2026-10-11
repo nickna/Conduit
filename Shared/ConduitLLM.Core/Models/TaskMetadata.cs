@@ -6,6 +6,14 @@ namespace ConduitLLM.Core.Models
     /// </summary>
     public class TaskMetadata
     {
+        /// <summary>Original provider context, including its accepted operation ID when available.</summary>
+        public MediaProviderOperation? MediaProvider { get; set; }
+        /// <summary>Worker that recorded the original provider invocation.</summary>
+        public string? ProviderInvocationWorkerId { get; set; }
+        /// <summary>Current operator recovery decision; payloads are excluded from operator listings.</summary>
+        public MediaTaskReconciliation? Reconciliation { get; set; }
+        /// <summary>Earlier recovery decisions retained for audit after an explicitly blocked attempt.</summary>
+        public List<MediaTaskReconciliation>? ReconciliationHistory { get; set; }
         /// <summary>
         /// The ID of the virtual key that owns this task.
         /// Required for authorization checks.
