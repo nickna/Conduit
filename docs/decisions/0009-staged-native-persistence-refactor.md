@@ -182,6 +182,17 @@ detached reads, and cancellation of both pool and observed SQL lock waits. The n
 persistence probe exercises the same bounded read before runtime selection. Caching,
 Admin management/invalidation and execution writes remain with their existing services.
 
+`StoreBackedFunctionCostService` preserves the configuration-pricing cache cascade
+over the scalar pricing port: the existing `FunctionCost:Config:{id}` key, generated
+JSON payload, 15-minute memory/one-hour distributed TTLs, uncached nulls, Redis-failure
+fallback and caller cancellation behavior. Cached payloads retain the existing direct
+return semantics. Tests consume payloads emitted by the legacy service and prove
+Admin update invalidation against the shared key. The adapter remains unwired until
+published-native pricing-store proof; the legacy service and calculator constructors
+are unchanged. Cost management methods are outside this adapter. Both implementations
+retain the inherited list-only explicit cache clear, tracked separately in
+[#1570](https://github.com/nickna/Conduit/issues/1570).
+
 `IFunctionExecutionRuntimeWriter` adds scalar execution inserts and full snapshot
 updates guarded by ID and the caller's original version. It preserves all 24 fields,
 empty-ID generation, unchecked integer version increments and caller mutations before
