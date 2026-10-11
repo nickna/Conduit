@@ -180,7 +180,10 @@ function Invoke-RuntimeCase([string] $Service, [string] $Scenario, [bool] $Succe
     $watch = [Diagnostics.Stopwatch]::StartNew(); $caught = $null; $results = @()
     try { $results = @(Get-NativeImageRuntimeEvidence @parameters) }
     catch { $caught = $_ }
-    finally { if ($null -ne $held) { $held.Dispose() } }
+    finally {
+        $watch.Stop()
+        if ($null -ne $held) { $held.Dispose() }
+    }
     $records = Get-RuntimeRecords $root
     $created = @($records | Where-Object { $_.arguments[0] -ceq 'container' -and $_.arguments[1] -ceq 'create' })
     $stopped = @($records | Where-Object { $_.arguments[0] -ceq 'container' -and $_.arguments[1] -ceq 'stop' })
@@ -252,10 +255,72 @@ function Invoke-RuntimeCase([string] $Service, [string] $Scenario, [bool] $Succe
             Assert-RuntimeContract (@($records | Where-Object { $_.arguments[1] -ceq 'inspect' -and $_.arguments[-1] -ceq $name }).Count -gt 0) 'Unknown runtime create was not recovered by exact owned name.'
         }
         if ($Scenario -cin @('create-timeout', 'cp-timeout', 'logs-overflow')) {
-            Assert-RuntimeContract ([IO.File]::Exists((Join-Path $root 'paused-process.json')) -and $watch.Elapsed.TotalSeconds -lt 30) 'Runtime command fixture did not reach its bounded latched failure.'
+            $expectedStage = switch ($Scenario) {
+                'create-timeout' { 'runtime-create' }
+                'cp-timeout' { 'runtime-openapi-copy' }
+                'logs-overflow' { 'runtime-logs' }
+            }
+            $targetRecords = switch ($Scenario) {
+                'create-timeout' {
+                    @($records | Where-Object {
+                        $_.arguments[0] -ceq 'container' -and $_.arguments[1] -ceq 'create' -and
+                        $_.arguments[-1] -ceq $localImageId -and
+                        [regex]::IsMatch($_.arguments[[Array]::IndexOf([object[]]$_.arguments, '--name') + 1], '\Aconduit-native-image-entrypoint-admin-[0-9a-f]{32}\z')
+                    })
+                }
+                'cp-timeout' {
+                    @($records | Where-Object {
+                        $_.arguments.Count -eq 4 -and ($_.arguments[0..1] -join '|') -ceq 'container|cp' -and
+                        $_.arguments[2] -ceq ($containerId + ':/tmp/packaged-openapi.json') -and
+                        $_.arguments[3] -ceq (Join-Path $artifact 'openapi.json')
+                    })
+                }
+                'logs-overflow' {
+                    @($records | Where-Object {
+                        $_.arguments.Count -eq 3 -and ($_.arguments -join '|') -ceq ('container|logs|' + $containerId)
+                    })
+                }
+            }
+            $targetRecords = @($targetRecords)
+            $stageMatch = [regex]::Match($caught.Exception.Message,
+                '\ANative image execution failed; stage=(?<stage>[a-z-]+); type=[A-Za-z0-9_.+`]+; line=[0-9]+\.\z')
+            $controlledStage = if ($stageMatch.Success) { $stageMatch.Groups['stage'].Value } else { 'unclassified' }
+            $latched = [IO.File]::Exists((Join-Path $root 'paused-process.json'))
+            # Include the bounded OCI preflight replay, each reached command's
+            # work and fresh reap budget, the shared execution deadline, and
+            # independent owned cleanup. Assertion bookkeeping is not timed.
+            $sourceReplaySeconds = 90
+            $freshReapSeconds = 5
+            $commandCount = if ($Scenario -ceq 'create-timeout') { 1 } else { 5 }
+            $executionSeconds = if ($Scenario -ceq 'create-timeout') { 0 } else { $parameters.ExecutionTimeoutSeconds }
+            $invocationBound = $sourceReplaySeconds +
+                $commandCount * ($parameters.DockerCommandTimeoutSeconds + $freshReapSeconds) +
+                $executionSeconds + $parameters.CleanupTimeoutSeconds
+            $diagnostic = 'Runtime command fixture mismatch; scenario=' + $Scenario +
+                '; elapsedSeconds=' + $watch.Elapsed.TotalSeconds.ToString('F3', [Globalization.CultureInfo]::InvariantCulture) +
+                '; maximumSeconds=' + $invocationBound + '; latch=' + $latched +
+                '; targetCommandCount=' + $targetRecords.Count + '; expectedStage=' + $expectedStage +
+                '; controlledFailureStage=' + $controlledStage + '.'
+            Assert-RuntimeContract ($latched -and $targetRecords.Count -eq 1 -and $controlledStage -ceq $expectedStage -and
+                $watch.Elapsed.TotalSeconds -lt $invocationBound) $diagnostic
             Assert-RuntimeCommandReaped $root
         }
-        if ($Scenario -ceq 'wait-timeout') { Assert-RuntimeContract ($watch.Elapsed.TotalSeconds -ge 4 -and $watch.Elapsed.TotalSeconds -lt 30) 'Runtime execution deadline did not bound the running container.' }
+        if ($Scenario -ceq 'wait-timeout') {
+            $stageMatch = [regex]::Match($caught.Exception.Message,
+                '\ANative image execution failed; stage=(?<stage>[a-z-]+); type=[A-Za-z0-9_.+`]+; line=[0-9]+\.\z')
+            $controlledStage = if ($stageMatch.Success) { $stageMatch.Groups['stage'].Value } else { 'unclassified' }
+            # OCI replay, create/inspect/start, the explicit five-second
+            # execution deadline, logs and independent cleanup are additive.
+            $invocationBound = 90 + 3 * ($parameters.DockerCommandTimeoutSeconds + 5) +
+                $parameters.ExecutionTimeoutSeconds + ($parameters.DockerCommandTimeoutSeconds + 5) +
+                $parameters.CleanupTimeoutSeconds
+            $diagnostic = 'Runtime execution deadline mismatch; scenario=' + $Scenario +
+                '; elapsedSeconds=' + $watch.Elapsed.TotalSeconds.ToString('F3', [Globalization.CultureInfo]::InvariantCulture) +
+                '; maximumSeconds=' + $invocationBound + '; expectedStage=runtime-execution' +
+                '; controlledFailureStage=' + $controlledStage + '.'
+            Assert-RuntimeContract ($watch.Elapsed.TotalSeconds -ge 4 -and $watch.Elapsed.TotalSeconds -lt $invocationBound -and
+                $controlledStage -ceq 'runtime-execution') $diagnostic
+        }
     }
     $script:cases++
 }
