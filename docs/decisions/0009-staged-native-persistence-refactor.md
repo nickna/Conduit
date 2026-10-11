@@ -147,6 +147,16 @@ fixed typed-Npgsql queries. Both implementations pass the same real-PostgreSQL
 aggregate contract. Broader Admin reporting and retention queries remain on EF and
 outside ADR 0006's supported NativeAOT data plane.
 
+Function discovery is the next read-only boundary.
+`IFunctionDiscoveryRuntimeStore` lists enabled configurations with exact optional
+purpose/provider filters and reads an enabled configuration by ID. It materializes
+scalar configurations without cost/execution navigation graphs. EF and typed Npgsql
+share a real-PostgreSQL contract covering nulls, JSONB, unknown numeric enum values,
+detached reads and cancellation with a single connection slot. The standalone
+persistence probe includes these operations. Gateway endpoint wiring and native
+selection follow the published native check; function CRUD, credential resolution,
+cost selection and execution workers still require their own operation boundaries.
+
 ## Options considered
 
 1. **Wait for production-supported EF NativeAOT.** Rejected as the only plan: it
