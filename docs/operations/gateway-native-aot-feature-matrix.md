@@ -15,6 +15,7 @@ The running Gateway exposes the same information at `GET /health/runtime-capabil
 | Authentication boundary | Requests without a virtual key are rejected before the EF-backed data plane. | `GET /v1/models` returns 401 without credentials. |
 | Typed request persistence | Virtual-key lookup plus global and per-key IP policy use typed Npgsql repositories in the native Gateway. | With default-deny IP filtering enabled, a seeded virtual key negotiates all eight hub routes on both native Gateway processes. |
 | Authenticated model discovery | Model list, retrieval, and effective capability metadata use the fixed-query typed Npgsql model-routing graph. | A seeded alias is listed and retrieved on both native Gateways, and its canonical/provider capability graph is returned by the metadata endpoint. |
+| Authenticated function metadata discovery | `GET /v1/conduit/discovery/functions` and `GET /v1/conduit/discovery/functions/{id}/parameters` use the typed configuration catalog store. The runtime advertises `function-metadata-discovery`. | [Linux process gate 38124571584](https://github.com/nickna/Conduit/actions/runs/38124571584) checks both native Gateways: authentication, enabled configurations, named/numeric filters, structured schemas/examples, unknown enum strings, private-field omission, repeated JSON shape, and missing/disabled parameter resources. These reads do not execute functions. |
 | Provider chat transport | OpenAI-compatible non-stream HTTP, SSE streaming, customer-safe provider error translation, and downstream cancellation propagation are supported. | A separate native provider process validates the credential, returns JSON/SSE responses, emits a private 400 diagnostic that must be sanitized, and observes the upstream connection close after the probe disconnects. |
 | Request accounting | Provider usage is priced through the fixed-shape model-cost lookup, persisted by the typed request-log writer, and settled by the typed virtual-key store. | Four successful chat requests (one non-streamed and three SSE variants) persist exact token/cost rows totaling $0.0003; the batch worker updates balance and lifetime spend and creates the matching debit ledger entry in real PostgreSQL. |
 | Async-task persistence | Task status, cancellation, claims, provider phases, recovery, retry preparation, and retention use a fixed-shape runtime store. | A seeded task is read on one native Gateway, cancelled on the second, observed through the shared cache on the first, and verified durable in PostgreSQL. EF and typed Npgsql also pass the same real-PostgreSQL lifecycle contract. |
@@ -33,11 +34,21 @@ normal JIT build enables MessagePack by default and still honors
 
 ## Explicit exclusions
 
-The following features are excluded from the first native image and appear in `excluded_features`:
+The following features are outside the native support contract and appear in `excluded_features`:
 
 - `signalr-messagepack`
 - `ef-core-query-data-plane`
 - `redis-virtual-key-authentication-cache`
+- `inline-function-execution`
+- `agentic-tool-and-function-workflows`
+- `function-audit-and-retention`
+- `billing-reconciliation`
+
+The function and worker labels identify unsupported workloads whose registrations
+still exist in the candidate while extraction continues. The MessagePack client
+protocol is omitted at build time. These labels preserve the existing JIT support
+contract; advertising function metadata or settled request spend does not establish
+native function execution or reconciliation.
 
 The native gate uses `CONDUIT_MIGRATION_MODE=Wait` after the standalone migrator
 and requires `/health/ready` to return 200 from Admin and both Gateways. In its
@@ -52,15 +63,25 @@ The same gate also starts the three published native processes against empty and
 prior-release databases, requires two live200/ready503 observations, runs the
 standalone migrator and requires ready200 without restarting them. This proves the
 schema/dependency health contract; it does not establish support for unextracted
-background workers or full Admin management workloads. The
-authenticated model-discovery proof covers `/v1/models`, model retrieval, and
-model metadata. It does not cover the newer `/v1/conduit/discovery/models` or
-`/v1/conduit/discovery/functions` query paths. Likewise, connecting a video hub or cancelling
-a seeded task does not prove provider video/audio generation or durable worker
-recovery. See the [current query inventory](persistence-aot-query-inventory.md) and
-[epic assessment](native-aot-audit.md#epic-1368-assessment-2026-10-09) for those gaps.
+background workers or full Admin management workloads. Authenticated model
+discovery covers `/v1/models`, model retrieval, and model metadata. The separate
+`/v1/conduit/discovery/models` projection and its cache warmer remain unproved.
+Authenticated function catalog and parameter metadata are supported through the
+two routes listed above. Core's LLM tool/route discovery now has paired managed
+tests and explicit native composition through scalar configuration reads; its
+published LLM workflow and ChatEndpoints' separate configuration preflight remain
+distinct work. [Linux process gate 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143)
+also passes the execution endpoint's authentication, missing/disabled configuration
+and missing-required-parameter preflight on both Gateways. Those cases return before
+provider execution. Inline execution, execution status/list reads, agentic tool/function
+workflows, function audit/retention, and billing reconciliation remain outside the
+native support contract. Connecting a video hub or cancelling a seeded task also
+does not prove provider video/audio generation or durable worker recovery. See the
+[current query inventory](persistence-aot-query-inventory.md) and
+[integration checkpoint](native-aot-audit.md#integration-checkpoint-2026-10-11) for
+the current evidence and limits.
 
-EF Core 10 can generate the compiled `ConduitDbContext` model, but its NativeAOT query precompiler rejects Conduit's repository abstractions as dynamic LINQ. Extracted request-time operations now bypass those queries for global settings, IP filters, provider/credential reads, virtual keys, model discovery/routing metadata, model-cost reads, request-log writes, virtual-key spend settlement, async tasks, media ownership/quota reads and writes, and the bounded aggregates used by Gateway operational metrics. Broad Admin request-log reporting and retention remain unextracted. OpenAI-compatible provider chat HTTP/SSE, translated errors, cancellation, request accounting, async-task persistence, S3-compatible image workflows, authenticated JSON SignalR, Redis backplane/rate limiting, and public ephemeral-key subscriptions are process-tested and supported. All excluded features remain available in the JIT image.
+EF Core 10 can generate the compiled `ConduitDbContext` model, but its NativeAOT query precompiler rejects Conduit's repository abstractions as dynamic LINQ. Extracted request-time operations now bypass those queries for global settings, IP filters, provider/credential reads, virtual keys, model discovery/routing metadata, function metadata and scalar configuration/credential/pricing reads, model-cost reads, request-log writes, virtual-key spend settlement, async tasks, media ownership/quota reads and writes, and the bounded aggregates used by Gateway operational metrics. Broad Admin request-log reporting and retention remain unextracted. OpenAI-compatible provider chat HTTP/SSE, translated errors, cancellation, request accounting, function metadata discovery, async-task persistence, S3-compatible image workflows, authenticated JSON SignalR, Redis backplane/rate limiting, and public ephemeral-key subscriptions are process-tested and supported. All excluded features remain available in the JIT image.
 
 Gateway request-time consumers now depend on `IVirtualKeyRuntimeService`, while
 Admin-style key management remains behind the broader `IVirtualKeyService`. Both
@@ -128,7 +149,7 @@ drop or broaden the reviewed set.
 
 ## Native process gate
 
-CI runs `scripts/aot/gateway-native-parity.ps1` after native publishing. It requires PostgreSQL, Redis, S3-compatible storage (digest-pinned S3Mock in Linux CI, MinIO locally), the standalone migrator, and the published native artifacts. The gate provisions a default-deny global IP policy, a rate-limited virtual key with its own allowlist and media quota, a complete model-routing/cost graph, a durable async task, and a provider credential targeting a separate native OpenAI-compatible stub. It negotiates every hub; opens authenticated JSON connections to all hub families; verifies distributed admission, method counters, cross-host delivery, webhook tracking, typed management status, and public ephemeral-key subscription; exercises authenticated model discovery and cross-host task read/cancellation; verifies non-stream chat, SSE chat, error translation, cancellation propagation, request-log persistence, and batch spend settlement; and stores a provider-generated PNG before reading its durable media row and downloading identical bytes through the second Gateway.
+CI runs `scripts/aot/gateway-native-parity.ps1` after native publishing. It requires PostgreSQL, Redis, S3-compatible storage (digest-pinned S3Mock in Linux CI, MinIO locally), the standalone migrator, and the published native artifacts. The gate provisions a default-deny global IP policy, a rate-limited virtual key with its own allowlist and media quota, a complete model-routing/cost graph, a durable async task, and a provider credential targeting a separate native OpenAI-compatible stub. It negotiates every hub; opens authenticated JSON connections to all hub families; verifies distributed admission, method counters, cross-host delivery, webhook tracking, typed management status, and public ephemeral-key subscription; exercises authenticated model and function metadata discovery and cross-host task read/cancellation; verifies non-stream chat, SSE chat, error translation, cancellation propagation, request-log persistence, and batch spend settlement; and stores a provider-generated PNG before reading its durable media row and downloading identical bytes through the second Gateway.
 
 The separate `scripts/test/wolverine-two-host-smoke.ps1 -NativeArtifactDirectory <artifact>` gate exercises cross-host Wolverine delivery with native Admin/Gateway processes.
 

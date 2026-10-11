@@ -324,6 +324,7 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             "authenticated model discovery is advertised");
         foreach (var feature in new[]
                  {
+                     "function-metadata-discovery",
                      "provider-http",
                      "sse-streaming",
                      "provider-error-translation",
@@ -346,6 +347,17 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         True(exclusions.Contains("ef-core-query-data-plane"), "EF query data-plane exclusion is observable");
         True(exclusions.Contains("redis-virtual-key-authentication-cache"),
             "Redis virtual-key authentication cache exclusion is observable");
+        foreach (var feature in new[]
+                 {
+                     "inline-function-execution",
+                     "agentic-tool-and-function-workflows",
+                     "function-audit-and-retention",
+                     "billing-reconciliation"
+                 })
+        {
+            True(exclusions.Contains(feature), $"{feature} exclusion is observable");
+            True(!supported.Contains(feature), $"{feature} is not advertised without process proof");
+        }
         True(!exclusions.Contains("authenticated-signalr-connections"),
             "process-tested authenticated SignalR is no longer excluded");
         True(!exclusions.Contains("authenticated-http-data-plane"),

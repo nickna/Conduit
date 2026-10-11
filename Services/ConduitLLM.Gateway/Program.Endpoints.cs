@@ -25,6 +25,7 @@ public partial class Program
                     "redis-ephemeral-key-cache",
                     "unauthenticated-request-rejection",
                     "authenticated-model-discovery",
+                    "function-metadata-discovery",
                     "provider-http",
                     "sse-streaming",
                     "provider-error-translation",
@@ -54,7 +55,11 @@ public partial class Program
                 ? [
                     "signalr-messagepack",
                     "ef-core-query-data-plane",
-                    "redis-virtual-key-authentication-cache"
+                    "redis-virtual-key-authentication-cache",
+                    "inline-function-execution",
+                    "agentic-tool-and-function-workflows",
+                    "function-audit-and-retention",
+                    "billing-reconciliation"
                 ]
                 : []);
 

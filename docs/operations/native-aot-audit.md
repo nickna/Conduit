@@ -278,8 +278,9 @@ The parent epic remains open. Remaining work is:
   audit/retention and billing reconciliation still execute unextracted EF queries;
   native host startup logs expose those failures even when the bounded protocol
   probe passes. They require typed stores and process tests before production use.
-- **Runtime parity (#1374):** prove database readiness, authentication-cache
-  invalidation, tool/function providers, and provider/video/audio flows beyond the
+- **Runtime parity (#1374):** retain the now-proven database/dependency readiness
+  gates, then prove authentication-cache invalidation, tool/function providers,
+  and provider/video/audio flows beyond the
   documented OpenAI-compatible chat/image matrix. JSON-only SignalR remains an
   explicit first-image limitation. Full native Admin management coverage remains
   outstanding. A passing bounded probe is insufficient for these workloads.
@@ -314,9 +315,43 @@ Function entities and persistence interfaces now compile in the neutral persiste
 leaf with binary forwarding from Functions, so Configuration no longer references
 the function provider implementation assembly. Function discovery and execution
 configuration/credential read ports have EF/Npgsql parity suites and standalone
-persistence probes. Published Linux run 38122760993 proves both typed read ports;
-run 38124571584 also passes the authenticated two-host function catalog and parameter
-workload, typed pricing reads and cleanup fault contracts. Native Gateway now selects
-the discovery store and constructs provider clients through the configuration/credential
-store. Inline execution, execution reads, broader function workflows and Admin
-management still require separate persistence and process-level proof.
+persistence probes. [Linux run 38122760993](https://github.com/nickna/Conduit/actions/runs/38122760993)
+proves both typed read ports. [Linux run 38124571584](https://github.com/nickna/Conduit/actions/runs/38124571584)
+also passes authenticated function catalog and parameter HTTP on both Gateways,
+typed pricing reads and cleanup fault contracts. The metadata proof includes
+enabled rows, named/numeric filters, structured/non-object/null schemas, unknown
+enum strings, private-field omission, repeated JSON shape and missing/disabled
+parameter resources. The runtime now advertises `function-metadata-discovery` for
+these reads.
+
+[Linux run 38126684370](https://github.com/nickna/Conduit/actions/runs/38126684370)
+passes the standalone scalar execution writer proof. Run
+[38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143) at commit
+`09365e16` has also passed the complete publish/process job: both native service
+publishes, native PostgreSQL contracts, shared EF/Npgsql parity, two-host Wolverine
+and Gateway protocol gates. This includes the execution reader's 39 scalar fields,
+included configuration/inverse graph and 105-row list, plus native HTTP execution
+preflight on both Gateways for authentication, missing/disabled configurations and
+missing required parameters. Both image jobs were still running at this checkpoint.
+Reader and writer persistence proof and early-return HTTP preflight do not establish
+Gateway provider execution, execution status/list selection or their HTTP behavior.
+
+Native Gateway selects the catalog, scalar configuration/credential and pricing
+stores. Core's `FunctionDiscoveryService` now selects scalar reads through an
+explicit factory while retaining the sole public repository constructor for JIT.
+Commit `f6fd3100` passes 99 JIT and 100 native-profile managed cases without skips,
+including paired Core discovery behavior and exact host composition. Its Gateway
+analyzer build emits zero first-party IL diagnostics; its 14 known warnings comprise
+12 cached NuGet vulnerability-metadata warnings and two nullable compiler warnings.
+Published Core LLM tool discovery, ChatEndpoints' separate configuration preflight,
+inline execution and broader agentic workflows remain unproved.
+
+The native capability endpoint explicitly names `inline-function-execution`,
+`agentic-tool-and-function-workflows`, `function-audit-and-retention`, and
+`billing-reconciliation` alongside the existing EF, authentication-cache and
+MessagePack exclusions. These declarations identify unsupported workloads; their
+registrations still exist in the candidate. Full Admin management, unextracted
+workers, representative digest-pinned benchmarks, rollback and ordered actual
+soaks remain required before production promotion or epic completion. The current
+lexical query inventory is 72 candidate files and 1,355 sites; it includes retained
+JIT reference adapters and is not a count of unsupported native operations.

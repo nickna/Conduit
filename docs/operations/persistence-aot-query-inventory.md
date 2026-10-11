@@ -1,12 +1,12 @@
 # NativeAOT persistence query inventory
 
-Revalidated: 2026-10-11 after commit `afead83e` on the #1368 implementation branch.
+Revalidated: 2026-10-11 after commit `f6fd3100` on the #1368 implementation branch.
 Owner: database/runtime maintainers. Related: #1368, #1373, #1374,
 [ADR 0006](../decisions/0006-native-aot-persistence.md), and
 [ADR 0009](../decisions/0009-staged-native-persistence-refactor.md).
 
 Production Gateway and Admin remain JIT. The native Gateway selects typed Npgsql
-for nine extracted persistence slices; unextracted EF operations still exist in
+for extracted persistence slices; unextracted EF operations still exist in
 both service graphs. Publishing successfully or emitting zero first-party warnings
 does not establish that those operations execute natively.
 
@@ -53,11 +53,11 @@ At the audited commit:
 | Project | Candidate source files | Lexical query-call sites |
 |---|---:|---:|
 | ConduitLLM.Admin | 26 | 352 |
-| ConduitLLM.Gateway | 4 | 47 |
-| ConduitLLM.Configuration | 38 | 929 |
+| ConduitLLM.Gateway | 4 | 39 |
+| ConduitLLM.Configuration | 40 | 943 |
 | ConduitLLM.Core | 1 | 9 |
 | ConduitLLM.Providers | 1 | 12 |
-| Total | 70 | 1,349 |
+| Total | 72 | 1,355 |
 
 This is a review aid, not a count of unsupported SQL queries. It includes in-memory
 LINQ in EF-importing files, EF reference adapters retained for JIT, and the
@@ -77,7 +77,7 @@ helpers, so an interface guard alone is not sufficient native evidence.
 Contracts live in `Shared/ConduitLLM.Persistence.Abstractions`; typed implementations
 live in `Shared/ConduitLLM.Persistence.Npgsql`. Native Gateway selection is centralized
 in `Services/ConduitLLM.Gateway/Extensions/NativeRuntimePersistenceExtensions.cs`.
-JIT Gateway and Admin retain EF-backed implementations. The nine shared tests are
+JIT Gateway and Admin retain EF-backed implementations. The shared contract tests are
 under `Tests/ConduitLLM.IntegrationTests/Tests`; they run against real PostgreSQL in
 the NativeAOT workflow.
 
@@ -87,11 +87,16 @@ the NativeAOT workflow.
 | IP-filter policy / `IIpFilterRepository` | `IpFilterRepositoryParityTests` | Persistence probe exercises scoped CRUD and UTC/null columns; Gateway probe authenticates under global/per-key default-deny policy. Optimistic concurrency/FK cases have shared-contract evidence. |
 | Providers and credentials / `IProviderRepository`, `IProviderKeyCredentialRepository` | `ProviderPersistenceParityTests` | Persistence probe exercises JSONB, credential graphs, primary rotation, and cascade; Gateway provider process checks resolved credentials. Failed-rotation rollback has shared-contract evidence. Admin credential validation remains a separate EF consumer. |
 | Virtual-key runtime / `IVirtualKeyRuntimeStore` | `VirtualKeyRuntimePersistenceParityTests` | Persistence probe covers hydrated snapshots, concurrent/idempotent ledger debits; Gateway probe checks exact settled request costs, balances, and lifetime spend. Management CRUD remains EF. |
-| Model routing / `IModelProviderMappingRuntimeStore` | `ModelProviderMappingRuntimePersistenceParityTests` | Persistence probe covers route graphs/policy; Gateway probe exercises `/v1/models`, model retrieval/metadata, and provider pricing. This does not cover the separate `/v1/discovery` EF projections. |
+| Model routing / `IModelProviderMappingRuntimeStore` | `ModelProviderMappingRuntimePersistenceParityTests` | Persistence probe covers route graphs/policy; Gateway probe exercises `/v1/models`, model retrieval/metadata, and provider pricing. This does not cover the separate `/v1/conduit/discovery/models` EF projection or its warmer. |
 | Request-log writes / `IRequestLogRuntimeStore` | `RequestLogRuntimePersistenceParityTests` | Persistence probe checks persisted accounting mappings; Gateway probe checks exact token/cost rows. Request-log reporting and retention remain EF. |
 | Async tasks / `IAsyncTaskRuntimeStore` | `AsyncTaskRuntimePersistenceParityTests` | Persistence probe exercises CRUD, claim/provider phases and archival; Gateway probe reads and cancels a durable task across hosts. Native lease recovery/retry and video/provider workloads require additional process tests. |
 | Media ownership/quota / `IMediaRuntimeStore` | `MediaRuntimePersistenceParityTests` | Persistence probe covers ownership, tombstones, aggregates, and quota reads; Gateway probe generates, stores, reads, and downloads an identical PNG through S3-compatible storage. Assigned/unlimited-policy cases have shared-contract evidence. Admin cleanup/reconciliation remains EF. |
-| Gateway operational aggregates / `IGatewayMetricsStore` | `GatewayMetricsPersistenceParityTests` | Native Gateway registers the Npgsql store, but the persistence probe does not exercise it. The Gateway probe only checks `/metrics` succeeds and contains `# HELP`; add assertions on seeded business/task aggregate values before claiming complete native aggregate proof. |
+| Gateway operational aggregates / `IGatewayMetricsStore` | `GatewayMetricsPersistenceParityTests` | Gateway process gate checks seeded $0.40/min cost rate, 0.20s mean latency and one active mapping on an elected metrics host, plus two pending notification tasks on each Gateway. [Linux run 38121134709](https://github.com/nickna/Conduit/actions/runs/38121134709) passes these assertions. Broader Admin reporting remains separate. |
+| Function catalog / `IFunctionDiscoveryRuntimeStore` | `FunctionDiscoveryPersistenceParityTests` | Published persistence probe verifies scalar enabled-row/filter/schema reads. [Linux run 38124571584](https://github.com/nickna/Conduit/actions/runs/38124571584) also proves authenticated function catalog/parameter HTTP on both Gateways, including filters, private-field omission and error contracts. This is metadata discovery, not LLM tool discovery or execution. |
+| Function execution configuration / `IFunctionExecutionConfigurationStore` | `FunctionExecutionConfigurationPersistenceParityTests` | [Linux run 38122760993](https://github.com/nickna/Conduit/actions/runs/38122760993) proves scalar configuration and opaque credential reads, ordering and pool cancellation/reuse. Native Gateway selects the store for client construction, HTTP preflight and Core tool/route configuration reads; paired managed tests and host composition cover those selections. [Linux run 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143) also passes native execution authentication/configuration/required-parameter preflight on both Gateways. Published provider execution and Core LLM tool workflows remain separate. |
+| Function pricing / `IFunctionPricingRuntimeStore` | `FunctionPricingPersistenceParityTests` | [Linux run 38124571584](https://github.com/nickna/Conduit/actions/runs/38124571584) proves canonical mapping/cost eligibility reads. Native Gateway selects the cached configuration-pricing adapter; JIT/Admin retain cost management. This does not prove complete function accounting or Admin CRUD. |
+| Scalar function execution writes / `IFunctionExecutionRuntimeWriter` | `FunctionExecutionPersistenceParityTests` | [Linux run 38126684370](https://github.com/nickna/Conduit/actions/runs/38126684370) proves native scalar create/update, persisted mappings and optimistic concurrency in the standalone probe. The writer remains unwired to Gateway execution; leases, audits and workers are outside this port. |
+| Function execution reads / `IFunctionExecutionRuntimeReader` | `FunctionExecutionPersistenceParityTests` | The successful publish/process job in [Linux run 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143) includes the native persistence probe's 39 scalar fields, included configuration/inverse graph and 105-row virtual-key list, plus the shared PostgreSQL parity suite. Gateway execution/status/list selection and published HTTP proof remain separate; both image jobs were still running at this checkpoint. |
 
 The published persistence probe is `Tests/ConduitLLM.PersistenceAotTests/Program.cs`,
 launched by `scripts/aot/persistence-native-smoke.ps1`. Its isolated schema also
@@ -114,8 +119,8 @@ All rows remain open unless their selected operations are explicitly covered abo
 |---|---|---|
 | Gateway audit writes and retention | Configuration `Services/BatchAuditServiceBase.cs`, `FunctionCallAuditService.cs`, `PricingAuditService.cs`, `RequestLogService.cs`; Gateway `Extensions/AuditServicesExtensions.cs` | Extract complete append/read/retention operations, prove JSONB mapping and bulk deletion parity, then assert native background jobs complete without EF query failures. The native request-log writer does not replace these jobs. |
 | Gateway billing reconciliation | Gateway `Services/BillingReconciliationService.cs` | Typed window/checkpoint operations; parity for finalized charges, ledger/provider evidence, thresholds and replay; native checkpoint and metric assertions. Settled chat spend does not prove reconciliation. |
-| Discovery model/function catalog and warming | Gateway `Endpoints/DiscoveryEndpoints.cs`, `Services/DiscoveryCacheLoader.cs`, `DiscoveryCacheWarmingService.cs`; Core `Services/DiscoveryModelProjector.cs` | Extract discovery-specific filtered projections and pricing/function metadata; prove authenticated `/v1/discovery` responses and cache warming from native processes. Existing `/v1/models` proof is a different surface. |
-| Provider tool/function workload | Gateway `Services/ToolCostCalculationService.cs`; Configuration `Repositories/FunctionConfigurationRepository.cs`, `FunctionCredentialRepository.cs`, `FunctionExecutionRepository.cs`, `FunctionCostRepository.cs`, `FunctionCostMappingRepository.cs` | Typed tool-cost lookup and fixed function operations; native tool/function dispatch, credentials, audit, accounting, retries and error contracts. Ordinary provider chat/image fixtures do not call these branches. |
+| Discovery model catalog and warming | Gateway `Endpoints/DiscoveryEndpoints.cs`, `Services/DiscoveryCacheLoader.cs`, `DiscoveryCacheWarmingService.cs`; Core `Services/DiscoveryModelProjector.cs` | Extract the `/v1/conduit/discovery/models` filtered/pricing projection and prove its cache warmer from native processes. `/v1/models` and the separately proven function catalog are different surfaces. |
+| Provider tool/function workload | Core `Services/FunctionDiscoveryService.cs`; Gateway `Endpoints/ChatEndpoints.Validation.cs`, `Services/ToolCostCalculationService.cs`; Configuration function repositories | Configuration, credential, pricing and scalar execution ports are proven above; Core discovery selection has paired managed/composition tests. Wire the execution ports, replace Chat preflight and tool-cost reads, then prove native provider dispatch, status/list ownership, audit, accounting, retries and error contracts. Function catalog metadata and ordinary chat/image fixtures do not call these full workflows. |
 | Admin provider/configuration management | Admin `Services/AdminProviderSyncService.cs`, `OpenRouterDriftDetectionService.cs`; `Endpoints/ConfigurationEndpoints.cs`, `ProviderToolsEndpoints.cs`; Configuration `ProviderService.cs`, `Services/ProviderKeyCredentialValidator.cs`, `ModelCatalogs/BundledModelCatalogImporter.cs` | Fixed management/drift/import operations and native API/background fixtures, including transactions and credential business rules. Extracted provider repositories do not automatically migrate their direct DbContext callers. |
 | Admin models and costs | Admin `Endpoints/ModelEndpoints.cs`, `ModelCostsEndpoints.cs`; `Services/AdminModelCostService.cs`, `ModelCostCanaryHostedService.cs`, `PricingConfigurationAuditHostedService.cs`; Configuration `Repositories/ModelRepository.cs`, `ModelCostRepository.cs`, `ModelAuthorRepository.cs`, `ModelSeriesRepository.cs`, `ModelProviderMappingRepository.cs` | Native CRUD, dynamic filter/include graphs, pricing promotion/canary, and model-catalog behavior; use complete named operations with persisted-contract parity. |
 | Admin virtual keys, refunds and access policy | Admin `Services/AdminVirtualKeyService.cs`, `.Usage.cs`, `.ModelRateLimits.cs`, `RefundService.cs`; `Endpoints/VirtualKeyGroupsEndpoints.cs`; `Filters/VersionedResourceEndpointFilter.cs`; Configuration virtual-key/group/transaction/spend-history repositories | Native management, maintenance, refund/idempotency, conditional update/version handling and cross-host cache invalidation. Runtime authentication/debits do not cover the broad management graph. |
@@ -145,13 +150,17 @@ PostgreSQL/Redis outages and same-process readiness recovery with liveness200.
 The runtime capability contract therefore includes `readiness-and-database-health`.
 This does not prove the remaining EF-backed background-worker or Admin workload.
 
-The current Gateway capability endpoint explicitly excludes
+The current Gateway capability endpoint includes `function-metadata-discovery`
+for the authenticated catalog and parameter routes. It explicitly excludes
 `signalr-messagepack`, `ef-core-query-data-plane`,
-and `redis-virtual-key-authentication-cache`.
-All eight JSON hubs, Redis admission/method limits/backplane, and ephemeral keys
-are covered by the native process probe; virtual-key authentication-cache
-invalidation, full Admin management, provider families beyond the mock-compatible
-chat/image subset, and video/audio/tool/function flows remain distinct work.
+`redis-virtual-key-authentication-cache`, `inline-function-execution`,
+`agentic-tool-and-function-workflows`, `function-audit-and-retention`, and
+`billing-reconciliation`. The function/worker labels identify unsupported
+workloads whose registrations still exist in the candidate. All eight JSON hubs,
+Redis admission/method limits/backplane, ephemeral keys and function metadata
+are covered by the native process probe; authentication-cache invalidation,
+full Admin management, provider families beyond the mock-compatible chat/image
+subset, video/audio and complete tool/function workflows remain distinct work.
 
 ## Exit criteria
 
