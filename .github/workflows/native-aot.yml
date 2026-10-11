@@ -21,6 +21,7 @@ on:
       - 'Tests/ConduitLLM.PersistenceAotTests/**'
       - 'Tests/ConduitLLM.SchemaStartupFixtures/**'
       - 'tools/ConduitLLM.Migrator/**'
+      - 'tools/ConduitLLM.HealthProbe/**'
       - 'tools/WolverineSmokePublisher/**'
       - 'scripts/aot/**'
       - 'deploy/native-canary/**'
@@ -99,6 +100,10 @@ jobs:
       - name: Verify native publish manifest contract
         shell: pwsh
         run: ./scripts/aot/test-native-publish-evidence.ps1
+
+      - name: Verify assembled native image publish contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-image-publish.ps1
 
       - name: Verify Gateway fixture process ownership
         shell: pwsh

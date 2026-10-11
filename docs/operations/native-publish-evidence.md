@@ -85,3 +85,42 @@ publish directories. Until image extraction and digest association are verified,
 the manifests support inspection of these exact directories only. Existing
 historical schema-1 baselines have no manifest identity. Production promotion
 remains blocked by the [canary policy](native-aot-canary.md).
+
+## Assembled image payloads
+
+`scripts/aot/publish-native-image.ps1` prepares a complete application payload for
+one service, including a separately compiled native health probe. It requires a
+fresh empty `ArtifactDirectory` and retains an exclusive invocation claim after
+success or failure. Application and health-probe compilation use distinct fresh
+native object and binary directories. Both captures must match the actual
+invocation's version, commit and timestamp properties.
+
+```powershell
+./scripts/aot/publish-native-image.ps1 -Service admin -ArtifactDirectory artifacts/admin-image-review-1
+```
+
+The `payload` directory contains every application runtime file, including hidden
+and nested files, plus the health executable renamed to `conduit-health-probe`.
+All debug symbols move to component-specific symbol directories, preserving their
+relative paths. The health component must need only its native executable; extra
+runtime dependencies fail publication. A collision with the health executable's
+packaged name also fails. Both real publish logs feed the owning service's linker
+ratchet, so the health probe cannot bypass warning checks. Updating the shared
+warning baseline still requires both services.
+
+The `evidence` directory contains exactly three immutable documents.
+`application.json` and `health-probe.json` each manifest the entire assembled
+payload. Their selected executables and toolchains identify the respective native
+compilations; the health manifest uses the `probe` role. `image-publish.json` binds
+their hashes to one build ID, service and RID, records declared assembly metadata,
+and reports both measured publish durations and the final executable/payload sizes.
+The verifier recomputes both full file manifests and checks roles, source identity,
+metrics and reference hashes without accessing foreign compiler paths.
+
+Actual Git metadata, when available, must agree with the assembly commit property.
+A snapshot without Git metadata retains an unavailable source identity. A supplied
+commit argument alone does not establish a clean checkout or promotion evidence.
+
+This producer currently prepares loose payloads. The native Dockerfiles still use
+their existing independent publishes. Packaging these exact payloads and associating
+their manifests with a digest-pinned image remain subsequent work under #1582.

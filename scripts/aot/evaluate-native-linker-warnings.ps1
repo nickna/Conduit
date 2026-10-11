@@ -4,6 +4,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$BaselinePath,
     [string]$Runtime = "linux-x64",
+    [ValidateSet("Admin", "Gateway")]
+    [string[]]$Services = @("Admin", "Gateway"),
     [switch]$UpdateBaseline
 )
 
@@ -12,6 +14,12 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "../..")
 $reportsRoot = [IO.Path]::GetFullPath($ReportDirectory)
 $warningBaselineFile = [IO.Path]::GetFullPath($BaselinePath)
+if ($Services.Count -eq 0 -or @($Services | Sort-Object -Unique).Count -ne $Services.Count) {
+    throw "Native-link warning checks require distinct service names."
+}
+if ($UpdateBaseline -and $Services.Count -ne 2) {
+    throw "Updating the native-link warning baseline requires both services."
+}
 
 # Analyzer builds are intentionally fast, but the native linker can discover
 # additional closed-generic and expression-tree warnings. Inventory those real
@@ -21,7 +29,7 @@ $sourceWarningPattern =
     '^(?<file>.+?)\((?<line>\d+)(?:,\d+)?\): (?:Trim|AOT) analysis warning (?<code>IL(?:2026|3050|207\d|209\d)): (?<message>.+?) \[(?<project>.+?\.csproj)\]$'
 $ilcWarningPattern =
     '^ILC : (?:Trim|AOT) analysis warning (?<code>IL(?:2026|3050|207\d|209\d)): (?<message>ConduitLLM\..+?) \[(?<project>.+?\.csproj)\]$'
-$diagnostics = foreach ($service in @("Admin", "Gateway")) {
+$diagnostics = foreach ($service in $Services) {
     $serviceSlug = $service.ToLowerInvariant()
     $logPath = Join-Path $reportsRoot "$serviceSlug-publish.log"
     if (!(Test-Path -LiteralPath $logPath -PathType Leaf)) {
