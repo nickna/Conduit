@@ -38,6 +38,7 @@ namespace ConduitLLM.Providers.MiniMax
         };
 
         private static readonly JsonSerializerOptions MediaJsonOptions = CreateMiniMaxJsonOptions(DefaultJsonOptions);
+        private static readonly JsonSerializerOptions StreamingJsonOptions = CreateMiniMaxJsonOptions(MiniMaxStreamJsonContext.Default.Options);
 
         private static JsonSerializerOptions CreateMiniMaxJsonOptions(JsonSerializerOptions policy) => new(policy)
         {
