@@ -124,6 +124,7 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
     public async Task RunAsync()
     {
         await AssertRuntimeAndOperationsAsync();
+        await AssertFunctionDiscoveryAsync();
         await AssertSchemaReadinessAsync();
         await AssertMetricAggregatesAsync();
         using (var control = CreateClient(settings.DependencyControl))
@@ -393,6 +394,106 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         var capabilitiesGraph = GetProperty(metadata, "capabilities");
         True(GetProperty(capabilitiesGraph, "chat").GetBoolean(),
             "model metadata contains effective chat capability");
+    }
+
+    private async Task AssertFunctionDiscoveryAsync()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        int[]? primaryIds = null;
+        const string catalogPath = "v1/conduit/discovery/functions";
+        foreach (var client in new[] { _gateway, _secondaryGateway })
+        {
+            using (var unauthenticated = await client.GetAsync(catalogPath, deadline.Token))
+                await ExpectAsync(unauthenticated, HttpStatusCode.Unauthorized, "unauthenticated function catalog");
+            using (var unauthenticated = await client.GetAsync(
+                       $"{catalogPath}/{NativeParityFixture.SearchFunctionId}/parameters", deadline.Token))
+                await ExpectAsync(unauthenticated, HttpStatusCode.Unauthorized, "unauthenticated function parameters");
+            var (raw, catalog) = await ReadFunctionDiscoveryAsync(client, catalogPath, deadline.Token);
+            var (repeated, _) = await ReadFunctionDiscoveryAsync(client, catalogPath, deadline.Token);
+            Equal(raw, repeated, "function catalog repeated wire shape");
+            var functions = catalog.GetProperty("functions").EnumerateArray().ToArray();
+            True(catalog.GetProperty("count").GetInt32() == functions.Length, "function catalog count");
+            var ids = functions.Select(function => function.GetProperty("id").GetInt32()).Order().ToArray();
+            True(new[] { NativeParityFixture.SearchFunctionId, NativeParityFixture.AnswerFunctionId,
+                NativeParityFixture.UnknownFunctionId }.All(ids.Contains), "enabled seeded functions discovered");
+            True(!ids.Contains(NativeParityFixture.DisabledFunctionId) &&
+                functions.All(function => function.GetProperty("is_enabled").GetBoolean()), "disabled functions omitted");
+            True(!raw.Contains("native-private-settings", StringComparison.Ordinal) &&
+                !raw.Contains("https://private.example.test", StringComparison.Ordinal), "private function fields omitted");
+            var search = functions.Single(function => function.GetProperty("id").GetInt32() == NativeParityFixture.SearchFunctionId);
+            True(search.GetProperty("configuration_name").GetString() == "Native Search 雪" &&
+                search.GetProperty("provider_type").GetString() == "Exa" && search.GetProperty("purpose").GetString() == "Search" &&
+                search.GetProperty("default_execution_mode").GetString() == "Synchronous" &&
+                search.GetProperty("timeout_seconds").GetInt32() == 41 && search.GetProperty("description").GetString() == "" &&
+                search.GetProperty("parameter_schema").GetProperty("example").GetProperty("query").GetString() == "雪",
+                "catalog scalar and structured-schema wire contract");
+            True(functions.Single(function => function.GetProperty("id").GetInt32() == NativeParityFixture.UnknownFunctionId)
+                .GetProperty("default_execution_mode").GetString() == "123", "unknown execution-mode wire string");
+            if (primaryIds is null) primaryIds = ids;
+            else True(primaryIds.SequenceEqual(ids), "cross-host function catalog set");
+            foreach (var filter in new[]
+                     {
+                         ("?purpose=search&providerType=exa", "Search", "Exa"),
+                         ("?purpose=1&providerType=1", "Search", "Exa"),
+                         ("?purpose=-9&providerType=197", "-9", "197"),
+                         ("?purpose=999&providerType=999", "999", "999")
+                     })
+            {
+                var (_, filtered) = await ReadFunctionDiscoveryAsync(client, catalogPath + filter.Item1, deadline.Token);
+                var filteredFunctions = filtered.GetProperty("functions").EnumerateArray().ToArray();
+                var expected = functions.Where(function => function.GetProperty("purpose").GetString() == filter.Item2 &&
+                        function.GetProperty("provider_type").GetString() == filter.Item3)
+                    .Select(function => function.GetProperty("id").GetInt32()).Order();
+                True(expected.SequenceEqual(filteredFunctions.Select(function => function.GetProperty("id").GetInt32()).Order()),
+                    "named/numeric function filters");
+                True(filtered.GetProperty("count").GetInt32() == filteredFunctions.Length, "filtered catalog count");
+            }
+            var (_, ignored) = await ReadFunctionDiscoveryAsync(client,
+                catalogPath + "?purpose=not-a-purpose&providerType=not-a-provider", deadline.Token);
+            True(ids.SequenceEqual(ignored.GetProperty("functions").EnumerateArray()
+                .Select(function => function.GetProperty("id").GetInt32()).Order()), "invalid textual filters ignored");
+            var parameterPath = $"{catalogPath}/{NativeParityFixture.SearchFunctionId}/parameters";
+            var (parameterRaw, parameters) = await ReadFunctionDiscoveryAsync(client, parameterPath, deadline.Token);
+            var (parameterHit, _) = await ReadFunctionDiscoveryAsync(client, parameterPath, deadline.Token);
+            Equal(parameterRaw, parameterHit, "function parameters repeated wire shape");
+            True(parameters.GetProperty("function_id").GetInt32() == NativeParityFixture.SearchFunctionId &&
+                parameters.GetProperty("parameter_schema").ValueKind == JsonValueKind.Object &&
+                parameters.GetProperty("parameter_schema").GetProperty("properties").GetProperty("query")
+                    .GetProperty("type").GetString() == "string" &&
+                parameters.GetProperty("example_request").GetProperty("query").GetString() == "雪",
+                "structured schema and example");
+            var (_, arraySchema) = await ReadFunctionDiscoveryAsync(client,
+                $"{catalogPath}/{NativeParityFixture.AnswerFunctionId}/parameters", deadline.Token);
+            var value = arraySchema.GetProperty("parameter_schema").GetProperty("value");
+            True(value.ValueKind == JsonValueKind.Array && value[0].GetInt32() == 0 &&
+                !value[1].GetBoolean() && value[2].GetProperty("snow").GetString() == "雪", "non-object schema wrapping");
+            var (_, unknown) = await ReadFunctionDiscoveryAsync(client,
+                $"{catalogPath}/{NativeParityFixture.UnknownFunctionId}/parameters", deadline.Token);
+            True(unknown.GetProperty("provider_type").GetString() == "197" &&
+                unknown.GetProperty("purpose").GetString() == "-9" &&
+                !unknown.GetProperty("parameter_schema").EnumerateObject().Any(), "unknown enum strings and null schema");
+            foreach (var missing in new[] { NativeParityFixture.DisabledFunctionId, int.MinValue })
+            {
+                using var request = AuthorizedRequest(HttpMethod.Get, $"{catalogPath}/{missing}/parameters");
+                using var response = await client.SendAsync(request, deadline.Token);
+                await ExpectAsync(response, HttpStatusCode.NotFound, "disabled/missing function parameters");
+                using var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync(deadline.Token));
+                Equal("not_found", error.RootElement.GetProperty("error").GetProperty("code").GetString()!,
+                    "function parameter error contract");
+            }
+        }
+        Console.WriteLine("Native authenticated function discovery: PASS");
+    }
+
+    private static async Task<(string Raw, JsonElement Payload)> ReadFunctionDiscoveryAsync(
+        HttpClient client, string path, CancellationToken token)
+    {
+        using var request = AuthorizedRequest(HttpMethod.Get, path);
+        using var response = await client.SendAsync(request, token);
+        await ExpectAsync(response, HttpStatusCode.OK, "authenticated function discovery");
+        var raw = await response.Content.ReadAsStringAsync(token);
+        using var document = JsonDocument.Parse(raw);
+        return (raw, document.RootElement.Clone());
     }
 
     private async Task AssertAsyncTaskPersistenceAsync()
@@ -1290,6 +1391,10 @@ internal static class NativeParityFixture
     public const string MediaPrompt = "native-s3-media-persistence";
     public const string FixtureOwner = "native-aot-parity";
     private const int MediaPolicyId = -9010;
+    public const int SearchFunctionId = -9020;
+    public const int AnswerFunctionId = -9021;
+    public const int DisabledFunctionId = -9022;
+    public const int UnknownFunctionId = -9023;
     public static string VirtualKeyHash => Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(VirtualKey)))
         .ToLowerInvariant();
@@ -1319,11 +1424,49 @@ internal static class NativeParityFixture
         await UpsertAsyncTaskAsync(connection, transaction, keyId, now);
         await UpsertAsyncTaskAsync(connection, transaction, keyId, now, ImageNotificationTaskId, "native_signalr_probe");
         await UpsertAsyncTaskAsync(connection, transaction, keyId, now, VideoNotificationTaskId, "native_signalr_probe");
+        await UpsertFunctionDiscoveryAsync(connection, transaction, now);
 
         await transaction.CommitAsync();
         await ResetRedisAsync(redisConnectionString, groupId);
         Console.WriteLine(
-            "Seeded native Gateway virtual-key, IP-filter, model-routing, provider, accounting, async-task, and media parity fixture.");
+            "Seeded native Gateway virtual-key, IP-filter, model-routing, function-discovery, provider, accounting, async-task, and media parity fixture.");
+    }
+
+    private static async Task UpsertFunctionDiscoveryAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, DateTime now)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            INSERT INTO "FunctionConfigurations" (
+                "Id", "ProviderType", "ConfigurationName", "Purpose", "DefaultExecutionMode",
+                "BaseUrl", "IsEnabled", "TimeoutSeconds", "CacheTtlMinutes", "MaxRetries",
+                "ProviderSettings", "ParameterSchema", "Description", "CreatedAt", "UpdatedAt")
+            VALUES
+                (@searchId, 1, 'Native Search 雪', 1, 1, 'https://private.example.test', TRUE, 41, 7, 0,
+                    '{"private":"native-private-settings"}', @schema, '', @now, @now),
+                (@answerId, 4, 'Native Array Schema', 2, 2, NULL, TRUE, NULL, NULL, NULL,
+                    NULL, '[0,false,{"snow":"雪"}]', NULL, @now, @now),
+                (@disabledId, 1, 'Native Disabled', 1, 1, NULL, FALSE, NULL, NULL, NULL,
+                    NULL, NULL, NULL, @now, @now),
+                (@unknownId, 197, 'Native Unknown Enums', -9, 123, NULL, TRUE, NULL, NULL, NULL,
+                    NULL, NULL, NULL, @now, @now)
+            ON CONFLICT ("Id") DO UPDATE SET
+                "ProviderType" = EXCLUDED."ProviderType", "ConfigurationName" = EXCLUDED."ConfigurationName",
+                "Purpose" = EXCLUDED."Purpose", "DefaultExecutionMode" = EXCLUDED."DefaultExecutionMode",
+                "BaseUrl" = EXCLUDED."BaseUrl", "IsEnabled" = EXCLUDED."IsEnabled",
+                "TimeoutSeconds" = EXCLUDED."TimeoutSeconds", "CacheTtlMinutes" = EXCLUDED."CacheTtlMinutes",
+                "MaxRetries" = EXCLUDED."MaxRetries", "ProviderSettings" = EXCLUDED."ProviderSettings",
+                "ParameterSchema" = EXCLUDED."ParameterSchema", "Description" = EXCLUDED."Description",
+                "UpdatedAt" = EXCLUDED."UpdatedAt";
+            """;
+        command.Parameters.AddWithValue("searchId", NpgsqlDbType.Integer, SearchFunctionId);
+        command.Parameters.AddWithValue("answerId", NpgsqlDbType.Integer, AnswerFunctionId);
+        command.Parameters.AddWithValue("disabledId", NpgsqlDbType.Integer, DisabledFunctionId);
+        command.Parameters.AddWithValue("unknownId", NpgsqlDbType.Integer, UnknownFunctionId);
+        command.Parameters.AddWithValue("schema", NpgsqlDbType.Jsonb,
+            """{"properties":{"query":{"type":"string"}},"required":["query"],"example":{"query":"雪"}}""");
+        command.Parameters.AddWithValue("now", NpgsqlDbType.TimestampTz, now);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task UpsertModelRoutingAsync(

@@ -153,8 +153,11 @@ purpose/provider filters and reads an enabled configuration by ID. It materializ
 scalar configurations without cost/execution navigation graphs. EF and typed Npgsql
 share a real-PostgreSQL contract covering nulls, JSONB, unknown numeric enum values,
 detached reads and cancellation with a single connection slot. The standalone
-persistence probe includes these operations. Gateway endpoint wiring and native
-selection follow the published native check; function CRUD, credential resolution,
+persistence probe includes these operations. The published native persistence check
+passed in run 38122760993 before Gateway runtime selection. Gateway's function
+catalog and parameter loaders now use this store; their two-host process gate checks
+authentication, filters and structured cached payloads. Model discovery retains its
+existing EF boundary. Function CRUD, credential resolution,
 cost selection and execution workers still require their own operation boundaries.
 
 Execution configuration and credential reads follow as a separate boundary.
