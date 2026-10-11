@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net;
 
 using ConduitLLM.Configuration.Options;
 
@@ -18,7 +19,7 @@ namespace ConduitLLM.Configuration.Services
     /// </remarks>
     public class RedisConnectionFactory : IDisposable
     {
-        private readonly ConcurrentDictionary<string, Lazy<Task<ConnectionMultiplexer>>> _connections = new();
+        private readonly ConcurrentDictionary<string, Lazy<Task<IConnectionMultiplexer>>> _connections = new();
         private readonly ILogger<RedisConnectionFactory> _logger;
         private readonly CacheOptions _options;
 
@@ -65,53 +66,81 @@ namespace ConduitLLM.Configuration.Services
             return GetConnectionAsync(_options.RedisConnectionString);
         }
 
-        private Lazy<Task<ConnectionMultiplexer>> CreateConnection(string connectionString)
+        /// <summary>
+        /// Connects to Redis using the parsed configuration.
+        /// </summary>
+        protected virtual async Task<IConnectionMultiplexer> ConnectAsync(ConfigurationOptions options)
         {
-            return new Lazy<Task<ConnectionMultiplexer>>(async () =>
+            return await ConnectionMultiplexer.ConnectAsync(options);
+        }
+
+        private Lazy<Task<IConnectionMultiplexer>> CreateConnection(string connectionString)
+        {
+            return new Lazy<Task<IConnectionMultiplexer>>(async () =>
             {
-                _logger.LogInformation("Attempting to connect to Redis: {ConnectionString}",
-                    connectionString.Contains("password=") ? connectionString.Replace("password=", "password=******") : connectionString);
-
-                var configOptions = ConfigurationOptions.Parse(connectionString);
-                configOptions.AbortOnConnectFail = false;
-                configOptions.ConnectTimeout = 5000; // 5 second timeout
-                configOptions.SyncTimeout = 5000; // 5 second sync timeout
-
-                // Enable admin mode for Redis INFO command used by metrics collection
-                configOptions.AllowAdmin = true;
-
-                // Add any additional configuration based on _options
-                if (!string.IsNullOrEmpty(_options.RedisInstanceName))
+                try
                 {
-                    // StackExchange.Redis doesn't have a direct instance name setting like
-                    // Microsoft.Extensions.Caching.Redis, but we could use it in key prefixing
+                    var configOptions = ConfigurationOptions.Parse(connectionString);
+                    configOptions.AbortOnConnectFail = false;
+                    configOptions.ConnectTimeout = 5000; // 5 second timeout
+                    configOptions.SyncTimeout = 5000; // 5 second sync timeout
+
+                    // Enable admin mode for Redis INFO command used by metrics collection
+                    configOptions.AllowAdmin = true;
+
+                    // Log only validated endpoints, never credentials or other connection options.
+                    var endpoints = string.Join(", ", configOptions.EndPoints.Select(FormatEndpointForLogging));
+                    _logger.LogInformation("Attempting to connect to Redis: {Endpoints}", endpoints);
+
+                    var connection = await ConnectAsync(configOptions);
+
+                    // Exception and server message text can contain credentials echoed by Redis.
+                    // Retain endpoint and failure metadata without forwarding arbitrary text.
+                    connection.ConnectionFailed += (sender, args) =>
+                    {
+                        _logger.LogError(
+                            "Redis connection failed. Endpoint: {Endpoint}, Failure: {FailureType}, Exception type: {ExceptionType}",
+                            FormatEndpointForLogging(args.EndPoint), args.FailureType,
+                            args.Exception?.GetType().Name ?? "Unknown");
+                    };
+
+                    connection.ConnectionRestored += (sender, args) =>
+                    {
+                        _logger.LogInformation("Redis connection restored. Endpoint: {Endpoint}",
+                            FormatEndpointForLogging(args.EndPoint));
+                    };
+
+                    connection.ErrorMessage += (sender, args) =>
+                    {
+                        _logger.LogWarning("Redis reported an error. Endpoint: {Endpoint}",
+                            FormatEndpointForLogging(args.EndPoint));
+                    };
+
+                    _logger.LogInformation("Successfully connected to Redis at {Endpoints}", endpoints);
+
+                    return connection;
                 }
-
-                var connection = await ConnectionMultiplexer.ConnectAsync(configOptions);
-
-                // Subscribe to connection events for logging and diagnostics
-                connection.ConnectionFailed += (sender, args) =>
+                catch (Exception ex)
                 {
-                    _logger.LogError("Redis connection failed. Endpoint: {Endpoint}, Exception: {Exception}",
-                        args.EndPoint, args.Exception?.Message ?? "Unknown error");
-                };
-
-                connection.ConnectionRestored += (sender, args) =>
-                {
-                    _logger.LogInformation("Redis connection restored. Endpoint: {Endpoint}", args.EndPoint);
-                };
-
-                connection.ErrorMessage += (sender, args) =>
-                {
-                    _logger.LogWarning("Redis error message: {Message}", args.Message);
-                };
-
-                // lgtm [cs/cleartext-storage-of-sensitive-information]
-                _logger.LogInformation("Successfully connected to Redis at {ConnectionString}",
-                    connectionString.Replace("password=", "password=******"));
-
-                return connection;
+                    // Parsing and connection errors may include the original configuration.
+                    _logger.LogError("Failed to create Redis connection. Exception type: {ExceptionType}",
+                        ex.GetType().Name);
+                    throw;
+                }
             });
+        }
+
+        private static string FormatEndpointForLogging(EndPoint? endpoint)
+        {
+            return endpoint switch
+            {
+                IPEndPoint ipEndpoint => ipEndpoint.ToString(),
+                DnsEndPoint dnsEndpoint when Uri.CheckHostName(dnsEndpoint.Host) != UriHostNameType.Unknown
+                    => $"{dnsEndpoint.Host}:{dnsEndpoint.Port}",
+                // Malformed configurations can put URI user-info in a DNS endpoint.
+                // Do not fall back to EndPoint.ToString() for unrecognized values.
+                _ => "(unavailable)"
+            };
         }
 
         /// <summary>
@@ -129,7 +158,8 @@ namespace ConduitLLM.Configuration.Services
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Error disposing Redis connection");
+                        _logger.LogWarning("Error disposing Redis connection. Exception type: {ExceptionType}",
+                            ex.GetType().Name);
                     }
                 }
             }
