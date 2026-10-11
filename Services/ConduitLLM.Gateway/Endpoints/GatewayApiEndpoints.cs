@@ -12,6 +12,11 @@ using ConduitLLM.Gateway.DTOs;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services.Strategies;
 using ConduitLLM.Gateway.RateLimiting;
+#if CONDUIT_NATIVE_AOT
+using ConduitLLM.Core.Services;
+using ConduitLLM.Functions.Interfaces;
+using ConduitLLM.Persistence.Interfaces;
+#endif
 
 namespace ConduitLLM.Gateway.Endpoints;
 
@@ -25,7 +30,17 @@ public static class GatewayApiEndpoints
         services.AddScoped<CompletionsEndpoints>();
         services.AddScoped<DiscoveryEndpoints>();
         services.AddScoped<TasksEndpoints>();
+#if CONDUIT_NATIVE_AOT
+        services.AddScoped(provider => FunctionsEndpoints.CreateWithRuntimePersistence(
+            provider.GetRequiredService<IFunctionExecutionService>(),
+            provider.GetRequiredService<IFunctionExecutionConfigurationStore>(),
+            provider.GetRequiredService<ConduitLLM.Functions.Services.FunctionParameterValidationService>(),
+            provider.GetRequiredService<IEventPublisher>(),
+            provider.GetRequiredService<IHttpContextAccessor>(),
+            provider.GetRequiredService<ILogger<FunctionsEndpoints>>()));
+#else
         services.AddScoped<FunctionsEndpoints>();
+#endif
         services.AddScoped<RerankEndpoints>();
         services.AddScoped<EmbeddingsEndpoints>();
         services.AddScoped<AudioEndpoints>();

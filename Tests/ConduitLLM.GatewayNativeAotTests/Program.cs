@@ -125,6 +125,7 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
     {
         await AssertRuntimeAndOperationsAsync();
         await AssertFunctionDiscoveryAsync();
+        await AssertFunctionExecutionPreflightAsync();
         await AssertSchemaReadinessAsync();
         await AssertMetricAggregatesAsync();
         using (var control = CreateClient(settings.DependencyControl))
@@ -483,6 +484,47 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             }
         }
         Console.WriteLine("Native authenticated function discovery: PASS");
+    }
+
+    private async Task AssertFunctionExecutionPreflightAsync()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        const string path = "v1/conduit/functions/execute";
+        foreach (var client in new[] { _gateway, _secondaryGateway })
+        {
+            using (var request = new HttpRequestMessage(HttpMethod.Post, path))
+            {
+                request.Content = new StringContent(
+                    $$$"""{"function_configuration_id":{{{NativeParityFixture.SearchFunctionId}}},"parameters":{}}""",
+                    Encoding.UTF8, "application/json");
+                using var response = await client.SendAsync(request, deadline.Token);
+                await ExpectAsync(response, HttpStatusCode.Unauthorized, "unauthenticated function execution");
+            }
+
+            foreach (var (id, status, code, type, message) in new[]
+                     {
+                         (int.MinValue, HttpStatusCode.NotFound, "not_found", "not_found_error",
+                             $"Function configuration {int.MinValue} not found"),
+                         (NativeParityFixture.DisabledFunctionId, HttpStatusCode.BadRequest, "invalid_request",
+                             "invalid_request_error", $"Function configuration {NativeParityFixture.DisabledFunctionId} is disabled"),
+                         (NativeParityFixture.SearchFunctionId, HttpStatusCode.BadRequest, "invalid_request",
+                             "invalid_request_error", "Parameter validation failed: Missing required parameter: 'query'")
+                     })
+            {
+                using var request = AuthorizedRequest(HttpMethod.Post, path);
+                request.Content = new StringContent(
+                    $$$"""{"function_configuration_id":{{{id}}},"parameters":{}}""",
+                    Encoding.UTF8, "application/json");
+                using var response = await client.SendAsync(request, deadline.Token);
+                await ExpectAsync(response, status, $"native function execution preflight ({id})");
+                using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(deadline.Token));
+                var error = document.RootElement.GetProperty("error");
+                Equal(code, error.GetProperty("code").GetString()!, "function execution preflight error code");
+                Equal(type, error.GetProperty("type").GetString()!, "function execution preflight error type");
+                Equal(message, error.GetProperty("message").GetString()!, "function execution preflight error message");
+            }
+        }
+        Console.WriteLine("Native function execution preflight on both Gateways: PASS");
     }
 
     private static async Task<(string Raw, JsonElement Payload)> ReadFunctionDiscoveryAsync(

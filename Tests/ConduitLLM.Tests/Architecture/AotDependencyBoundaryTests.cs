@@ -272,6 +272,7 @@ public sealed class AotDependencyBoundaryTests
         services.AddBillingAndPricingServices();
         services.UseNativeRuntimePersistence();
         services.AddFunctionServices();
+        services.AddGatewayEndpointHandlers();
 
         AssertNativeSingleton<IGlobalSettingRepository, NpgsqlGlobalSettingRepository>(services);
         AssertNativeSingleton<IIpFilterRepository, NpgsqlIpFilterRepository>(services);
@@ -296,6 +297,11 @@ public sealed class AotDependencyBoundaryTests
             candidate => candidate.ServiceType == typeof(IFunctionClientFactory));
         Assert.Equal(ServiceLifetime.Scoped, functionClient.Lifetime);
         Assert.NotNull(functionClient.ImplementationFactory);
+        var functionsEndpoint = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(FunctionsEndpoints));
+        Assert.Equal(ServiceLifetime.Scoped, functionsEndpoint.Lifetime);
+        Assert.NotNull(functionsEndpoint.ImplementationFactory);
+        Assert.Null(functionsEndpoint.ImplementationType);
         var modelCost = Assert.Single(
             services,
             candidate => candidate.ServiceType == typeof(IModelCostService));

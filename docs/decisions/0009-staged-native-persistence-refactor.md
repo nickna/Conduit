@@ -246,6 +246,18 @@ endpoint/tool-discovery selection and native HTTP workflow coverage.
 The inherited ignored concurrency-update result remains tracked separately in
 [#1572](https://github.com/nickna/Conduit/issues/1572).
 
+`FunctionsEndpoints.CreateWithRuntimePersistence` follows with the HTTP handler's
+single configuration preflight read. Native Gateway constructs it explicitly over
+the already-proven configuration singleton; the original public constructor and JIT
+registration remain unchanged. Missing/disabled configuration, authentication,
+parameter validation, execution forwarding, direct-cost evidence and response/error
+contracts retain their existing behavior. Paired handler tests use production JSON
+metadata, and the native two-host probe exercises requests rejected before provider
+invocation. This preflight selection does not establish native execution, status
+reads, agentic tool discovery or chat workflow support.
+Inherited validation of JSON-bound primitive parameters is preserved and tracked in
+[#1573](https://github.com/nickna/Conduit/issues/1573).
+
 ## Options considered
 
 1. **Wait for production-supported EF NativeAOT.** Rejected as the only plan: it
