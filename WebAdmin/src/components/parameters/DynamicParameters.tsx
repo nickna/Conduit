@@ -191,7 +191,7 @@ export function DynamicParameters({
     <Paper p="md" className={className} withBorder>
       {header}
       {collapsible ? (
-        <Collapse in={expanded}>
+        <Collapse expanded={expanded}>
           {content}
         </Collapse>
       ) : (

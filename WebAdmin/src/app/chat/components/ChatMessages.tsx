@@ -275,7 +275,7 @@ export function ChatMessages({ messages, isLoading, streamingContent, streamingC
                   {isReasoningExpanded(message.id) ? 'Click to collapse' : 'Click to expand'}
                 </Text>
               </Group>
-              <Collapse in={isReasoningExpanded(message.id)}>
+              <Collapse expanded={isReasoningExpanded(message.id)}>
                 <div className="reasoning-content markdown-content" style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{reasoningText}</ReactMarkdown>
                 </div>

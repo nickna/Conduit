@@ -1,4 +1,4 @@
-import { useForm } from '@mantine/form';
+import { useForm, type UseFormReturnType } from '@mantine/form';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { notify } from '@/lib/notifications';
@@ -31,7 +31,7 @@ export interface ProviderFormOption {
 }
 
 export interface ProviderFormLogicResult {
-  form: ReturnType<typeof useForm<ProviderFormData>>;
+  form: UseFormReturnType<ProviderFormData>;
   isSubmitting: boolean;
   setIsSubmitting: (value: boolean) => void;
   isTesting: boolean;

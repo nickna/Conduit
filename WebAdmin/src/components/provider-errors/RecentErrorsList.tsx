@@ -170,7 +170,7 @@ export function RecentErrorsList({ errors }: RecentErrorsListProps) {
                   </Table.Tr>
                   <Table.Tr>
                     <Table.Td colSpan={7} p={0}>
-                      <Collapse in={expandedError === index}>
+                      <Collapse expanded={expandedError === index}>
                         <Card p="md" radius={0}>
                           <Text size="sm" fw={500} mb="xs">
                             Error Details:
