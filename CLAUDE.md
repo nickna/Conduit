@@ -499,14 +499,19 @@ The documentation starts at **[docs/README.md](docs/README.md)**. Current entry 
 ## Git Branching Rules
 
 - **Protected branch**: `master` - Never push directly
-- **Development branch**: `dev` - All development work goes here
-- **Feature branches**: Create from `dev`
-- **Pull requests**: Target the `dev` branch
-- **Release process**: `dev` merged to `master` through controlled releases
+- **Development branch**: `master` - All development work is based on and merged into this branch
+- **Feature branches**: Create from `master`
+- **Pull requests**: Target the `master` branch
+- **Release process**: Cut releases from `master` using SemVer `v*` tags after that commit's
+  master-push `CI required` check succeeds; merging alone does not publish
 
 ### Current Branch Status
-- Main branch: `master`
-- Active development: `dev`
+- Default branch: `master`
+- Active development: `master`
+- Retired branch: `dev` - Do not base work on it, target it with PRs, or synchronize it
+
+See the [branch retirement policy](docs/operations/dependency-updates.md#activation-and-first-batch-triage)
+and [Versioning Guide](docs/Versioning.md#release-channels) for the current development and release workflow.
 
 ## Collaboration Guidelines
 

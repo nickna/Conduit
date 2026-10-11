@@ -1,6 +1,15 @@
-# .NET Auto-Versioning Setup Guide
+# Historical .NET Auto-Versioning Setup Guide
 
-This guide explains how to set up fully automated versioning and publishing for Conduit .NET NuGet packages.
+> **Historical reference:** This guide describes the
+> [archived .NET package workflow](workflows/archive-2024-08/dotnet-version-and-publish.yml),
+> which is inactive. The setup steps and branch-based publishing examples below no longer apply.
+> Development now uses feature branches from `master` and pull requests targeting protected
+> `master`; never push directly to `master`. `dev` is retired.
+> Current releases use SemVer `v*` tags from `master` after that commit's master-push `CI required` check
+> succeeds; merging alone does not publish. Follow the
+> [branching rules](../CLAUDE.md#git-branching-rules),
+> [Versioning Guide](../docs/Versioning.md#release-channels), and
+> [release validation policy](../docs/operations/ci-validation.md) for current instructions.
 
 ## 🚀 Quick Setup
 
