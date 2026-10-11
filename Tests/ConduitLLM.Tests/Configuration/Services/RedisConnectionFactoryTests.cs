@@ -52,7 +52,7 @@ public class RedisConnectionFactoryTests
     {
         var logger = new RecordingLogger();
         var error = new RedisConnectionException(ConnectionFailureType.AuthenticationFailure, input);
-        var factory = new StubRedisConnectionFactory(logger,
+        using var factory = new StubRedisConnectionFactory(logger,
             _ => Task.FromException<IConnectionMultiplexer>(error));
 
         var thrown = await Assert.ThrowsAsync<RedisConnectionException>(
@@ -74,6 +74,7 @@ public class RedisConnectionFactoryTests
 
         await Assert.ThrowsAsync<ArgumentException>(() => factory.GetConnectionAsync(
             $"localhost:6379,password={Password},user={User},invalid-{Password}={User}"));
+        factory.Dispose();
 
         Assert.Null(factory.Configuration);
         AssertLogsExcludeCredentials(logger);
