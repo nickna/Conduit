@@ -87,12 +87,14 @@ internal static class NativeFunctionFixtureRedisCleanup
     private static void Validate(NativeFunctionFixtureSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        if (snapshot.Profile is not (NativeFunctionFixtureProfile.Exa or NativeFunctionFixtureProfile.Mcp))
+            throw new ArgumentException("Redis cleanup requires a supported native function fixture profile.", nameof(snapshot));
         var key = $"condt_native_function_{snapshot.Owner:N}";
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key))).ToLowerInvariant();
         if (snapshot.Owner == Guid.Empty || snapshot.GroupId <= 0 || snapshot.KeyId <= 0 ||
             snapshot.ConfigurationId <= 0 || snapshot.CostId <= 0 || snapshot.CredentialId <= 0 || snapshot.MappingId <= 0 ||
             snapshot.VirtualKey != key || snapshot.VirtualKeyHash != hash ||
-            snapshot.ConfigurationName != $"native_function_{snapshot.Owner:N}:exa")
+            snapshot.ConfigurationName != $"native_function_{snapshot.Owner:N}:{(snapshot.Profile == NativeFunctionFixtureProfile.Exa ? "exa" : "mcp")}")
             throw new ArgumentException("Redis cleanup requires a complete GUID-owned fixture snapshot.", nameof(snapshot));
     }
 

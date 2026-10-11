@@ -11,15 +11,20 @@ internal static class NativeFunctionFixture
 {
     internal const string ApiKey = "native-aot-function-key-32-bytes";
 
+    internal static Task<NativeFunctionFixtureSnapshot> CreateAsync(
+        NpgsqlDataSource source, Guid owner, Uri providerUri, string protectedKey, CancellationToken ct) =>
+        CreateAsync(source, owner, providerUri, protectedKey, NativeFunctionFixtureProfile.Exa, ct);
+
     internal static async Task<NativeFunctionFixtureSnapshot> CreateAsync(
-        NpgsqlDataSource source, Guid owner, Uri providerUri, string protectedKey, CancellationToken ct)
+        NpgsqlDataSource source, Guid owner, Uri providerUri, string protectedKey,
+        NativeFunctionFixtureProfile profile, CancellationToken ct)
     {
-        var names = RequireOwner(source, owner);
+        var names = RequireOwner(source, owner, profile);
         ArgumentNullException.ThrowIfNull(providerUri);
-        if (!providerUri.IsAbsoluteUri || providerUri.Scheme != Uri.UriSchemeHttp || !providerUri.IsLoopback ||
-            providerUri.AbsolutePath != "/" || providerUri.UserInfo.Length != 0 ||
-            providerUri.Query.Length != 0 || providerUri.Fragment.Length != 0)
-            throw new ArgumentException("The function provider must use a loopback HTTP base address.", nameof(providerUri));
+        if (!IsValidProviderUri(providerUri, profile))
+            throw new ArgumentException(profile == NativeFunctionFixtureProfile.Exa
+                ? "The function provider must use a loopback HTTP base address."
+                : "The MCP function provider must use a loopback HTTP /mcp address.", nameof(providerUri));
         if (string.IsNullOrWhiteSpace(protectedKey) || !protectedKey.StartsWith("enc:v1:", StringComparison.Ordinal) ||
             protectedKey.Length <= 7 || protectedKey.Length > 2000 || protectedKey.Contains('\r') || protectedKey.Contains('\n'))
             throw new ArgumentException("A protected, storable function credential is required.", nameof(protectedKey));
@@ -33,7 +38,7 @@ internal static class NativeFunctionFixture
         await using (var command = Command(connection, transaction, names, CreateSql))
         {
             command.Parameters.AddWithValue("providerUrl", NpgsqlDbType.Varchar,
-                providerUri.GetLeftPart(UriPartial.Authority));
+                profile == NativeFunctionFixtureProfile.Exa ? providerUri.GetLeftPart(UriPartial.Authority) : providerUri.AbsoluteUri);
             command.Parameters.AddWithValue("protectedKey", NpgsqlDbType.Varchar, protectedKey);
             await using var reader = await command.ExecuteReaderAsync(ct);
             if (!await reader.ReadAsync(ct))
@@ -51,10 +56,14 @@ internal static class NativeFunctionFixture
         return state.Snapshot;
     }
 
+    internal static Task<NativeFunctionFixtureSnapshot?> ReadAsync(
+        NpgsqlDataSource source, Guid owner, CancellationToken ct) =>
+        ReadAsync(source, owner, NativeFunctionFixtureProfile.Exa, ct);
+
     internal static async Task<NativeFunctionFixtureSnapshot?> ReadAsync(
-        NpgsqlDataSource source, Guid owner, CancellationToken ct)
+        NpgsqlDataSource source, Guid owner, NativeFunctionFixtureProfile profile, CancellationToken ct)
     {
-        var names = RequireOwner(source, owner);
+        var names = RequireOwner(source, owner, profile);
         await using var connection = await source.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         await LockOwnerAsync(connection, transaction, names, ct);
@@ -64,10 +73,14 @@ internal static class NativeFunctionFixture
     }
 
     /// <summary>Called after the fixture's hosts stop; deletes only a complete, verified owned graph.</summary>
+    internal static Task<NativeFunctionFixtureSnapshot?> DeleteAsync(
+        NpgsqlDataSource source, Guid owner, CancellationToken ct) =>
+        DeleteAsync(source, owner, NativeFunctionFixtureProfile.Exa, ct);
+
     internal static async Task<NativeFunctionFixtureSnapshot?> DeleteAsync(
-        NpgsqlDataSource source, Guid owner, CancellationToken ct)
+        NpgsqlDataSource source, Guid owner, NativeFunctionFixtureProfile profile, CancellationToken ct)
     {
-        var names = RequireOwner(source, owner);
+        var names = RequireOwner(source, owner, profile);
         await using var connection = await source.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         await LockOwnerAsync(connection, transaction, names, ct);
@@ -96,12 +109,19 @@ internal static class NativeFunctionFixture
         return state.Snapshot;
     }
 
-    private static Names RequireOwner(NpgsqlDataSource source, Guid owner)
+    private static Names RequireOwner(NpgsqlDataSource source, Guid owner, NativeFunctionFixtureProfile profile)
     {
         ArgumentNullException.ThrowIfNull(source);
         if (owner == Guid.Empty) throw new ArgumentException("A nonempty fixture owner GUID is required.", nameof(owner));
-        return new Names(owner);
+        if (profile is not (NativeFunctionFixtureProfile.Exa or NativeFunctionFixtureProfile.Mcp))
+            throw new ArgumentOutOfRangeException(nameof(profile), "A supported native function fixture profile is required.");
+        return new Names(owner, profile);
     }
+
+    private static bool IsValidProviderUri(Uri uri, NativeFunctionFixtureProfile profile) =>
+        uri.IsAbsoluteUri && uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback &&
+        uri.AbsolutePath == (profile == NativeFunctionFixtureProfile.Exa ? "/" : "/mcp") &&
+        uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0;
 
     private static async Task LockOwnerAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, Names names, CancellationToken ct)
     {
@@ -128,6 +148,9 @@ internal static class NativeFunctionFixture
         command.Parameters.AddWithValue("credentialName", NpgsqlDbType.Varchar, names.CredentialName);
         command.Parameters.AddWithValue("ipName", NpgsqlDbType.Varchar, names.IpName);
         command.Parameters.AddWithValue("description", NpgsqlDbType.Varchar, names.Description);
+        command.Parameters.AddWithValue("providerType", NpgsqlDbType.Integer, (int)names.Profile);
+        command.Parameters.AddWithValue("providerSettings", NpgsqlDbType.Jsonb,
+            names.Profile == NativeFunctionFixtureProfile.Exa ? DBNull.Value : McpProviderSettings);
         command.Parameters.AddWithValue("now", NpgsqlDbType.TimestampTz, DateTime.UtcNow);
         return command;
     }
@@ -154,7 +177,7 @@ internal static class NativeFunctionFixture
             {
                 var kind = reader.GetString(0);
                 var row = new OwnedRow(reader.GetInt32(1), reader.IsDBNull(2) ? null : reader.GetInt32(2),
-                    reader.IsDBNull(3) ? null : reader.GetInt32(3));
+                    reader.IsDBNull(3) ? null : reader.GetInt32(3), reader.IsDBNull(5) ? null : reader.GetString(5));
                 if (row.Id <= 0 || !reader.GetBoolean(4) || !rows.TryAdd(kind, row))
                     throw new InvalidOperationException("Native function fixture ownership is invalid or ambiguous.");
             }
@@ -172,8 +195,12 @@ internal static class NativeFunctionFixture
         if (key.FirstLink != group.Id || credential.FirstLink != configuration.Id ||
             mapping.FirstLink != configuration.Id || mapping.SecondLink != cost.Id || ip.FirstLink != key.Id)
             throw new InvalidOperationException("Native function fixture ownership links are invalid.");
+        if (names.Profile == NativeFunctionFixtureProfile.Mcp &&
+            (!Uri.TryCreate(configuration.ProviderUrl, UriKind.Absolute, out var providerUri) ||
+                !IsValidProviderUri(providerUri, names.Profile) || configuration.ProviderUrl != providerUri.AbsoluteUri))
+            throw new InvalidOperationException("Native MCP function fixture endpoint ownership is invalid.");
         var state = new OwnedState(new NativeFunctionFixtureSnapshot(names.Owner, group.Id, key.Id, configuration.Id,
-            cost.Id, credential.Id, mapping.Id, names.VirtualKey, names.VirtualKeyHash, names.ConfigurationName), ip.Id);
+            cost.Id, credential.Id, mapping.Id, names.VirtualKey, names.VirtualKeyHash, names.ConfigurationName, names.Profile), ip.Id);
         await using (var command = Command(connection, transaction, names, ForeignReferencesSql))
         {
             AddIdentifiers(command, state);
@@ -183,14 +210,14 @@ internal static class NativeFunctionFixture
         return state;
     }
 
-    private sealed record OwnedRow(int Id, int? FirstLink, int? SecondLink);
+    private sealed record OwnedRow(int Id, int? FirstLink, int? SecondLink, string? ProviderUrl);
     private sealed record OwnedState(NativeFunctionFixtureSnapshot Snapshot, int IpId);
-    private sealed record Names(Guid Owner)
+    private sealed record Names(Guid Owner, NativeFunctionFixtureProfile Profile)
     {
         internal string Stem => $"native_function_{Owner:N}";
         internal string GroupName => $"Native function {Owner:N}";
         internal string KeyName => Stem + ":key";
-        internal string ConfigurationName => Stem + ":exa";
+        internal string ConfigurationName => Stem + (Profile == NativeFunctionFixtureProfile.Exa ? ":exa" : ":mcp");
         internal string CostName => Stem + ":cost";
         internal string CredentialName => Stem + ":credential";
         internal string IpName => Stem + ":ip";
@@ -198,6 +225,8 @@ internal static class NativeFunctionFixture
         internal string VirtualKey => $"condt_native_function_{Owner:N}";
         internal string VirtualKeyHash => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(VirtualKey))).ToLowerInvariant();
     }
+
+    private const string McpProviderSettings = """{"allowedTools":["native_search"],"allowPrivateNetwork":true}""";
 
     private const string CreateSql = """
         WITH created_group AS (
@@ -212,19 +241,19 @@ internal static class NativeFunctionFixture
             INSERT INTO "FunctionConfigurations" ("ProviderType", "ConfigurationName", "Purpose", "DefaultExecutionMode",
                 "BaseUrl", "IsEnabled", "TimeoutSeconds", "CacheTtlMinutes", "MaxRetries", "ProviderSettings",
                 "ParameterSchema", "Description", "CreatedAt", "UpdatedAt")
-            VALUES (1, @configurationName, 1, 1, @providerUrl, TRUE, 30, NULL, 0, NULL,
+            VALUES (@providerType, @configurationName, 1, 1, @providerUrl, TRUE, 30, NULL, 0, @providerSettings,
                 '{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}'::jsonb,
                 @description, @now, @now) RETURNING "Id"
         ), created_credential AS (
             INSERT INTO "FunctionCredentials" ("ProviderType", "FunctionConfigurationId", "ApiKey", "BaseUrl",
                 "Organization", "FunctionAccountGroup", "IsPrimary", "IsEnabled", "KeyName", "CreatedAt", "UpdatedAt")
-            SELECT 1, "Id", @protectedKey, @providerUrl, NULL, 0, TRUE, TRUE, @credentialName, @now, @now
+            SELECT @providerType, "Id", @protectedKey, @providerUrl, NULL, 0, TRUE, TRUE, @credentialName, @now, @now
             FROM created_configuration RETURNING "Id"
         ), created_cost AS (
             INSERT INTO "FunctionCosts" ("CostName", "ProviderType", "Purpose", "Description", "BaseCost", "PricingModel",
                 "CostPerExecution", "CostPerResult", "CostPerToken", "CostPerMinute", "TieredPricing", "PricingConfiguration",
                 "IsActive", "EffectiveDate", "ExpiryDate", "Priority", "CreatedAt", "UpdatedAt")
-            VALUES (@costName, 1, 1, @description, NULL, 1, 0.12500001, NULL, NULL, NULL, NULL, NULL,
+            VALUES (@costName, @providerType, 1, @description, NULL, 1, 0.12500001, NULL, NULL, NULL, NULL, NULL,
                 TRUE, @now - interval '1 day', NULL, 1, @now, @now) RETURNING "Id"
         ), created_mapping AS (
             INSERT INTO "FunctionCostMappings" ("FunctionConfigurationId", "FunctionCostId", "FunctionCostId1", "IsActive", "CreatedAt")
@@ -263,34 +292,35 @@ internal static class NativeFunctionFixture
                 OR "VirtualKeyId" IN (SELECT "Id" FROM owned_keys) FOR UPDATE
         )
         SELECT 'group', "Id", NULL::integer, NULL::integer,
-            COALESCE("ExternalGroupId" = @stem AND "GroupName" = @groupName, FALSE) FROM owned_groups
+            COALESCE("ExternalGroupId" = @stem AND "GroupName" = @groupName, FALSE), NULL::varchar FROM owned_groups
         UNION ALL SELECT 'key', "Id", "VirtualKeyGroupId", NULL,
             COALESCE("KeyHash" = @keyHash AND "KeyName" = @keyName AND "Description" = @description AND "IsEnabled"
-                AND "RateLimitRpm" = 100 AND "RateLimitRpd" = 1000 AND "ExpiresAt" IS NULL, FALSE) FROM owned_keys
+                AND "RateLimitRpm" = 100 AND "RateLimitRpd" = 1000 AND "ExpiresAt" IS NULL, FALSE), NULL::varchar FROM owned_keys
         UNION ALL SELECT 'configuration', "Id", NULL, NULL,
-            COALESCE("ConfigurationName" = @configurationName AND "Description" = @description AND "ProviderType" = 1
+            COALESCE("ConfigurationName" = @configurationName AND "Description" = @description AND "ProviderType" = @providerType
                 AND "Purpose" = 1 AND "DefaultExecutionMode" = 1 AND "IsEnabled" AND "TimeoutSeconds" = 30
-                AND "BaseUrl" IS NOT NULL AND "MaxRetries" = 0 AND "CacheTtlMinutes" IS NULL AND "ProviderSettings" IS NULL
+                AND "BaseUrl" IS NOT NULL AND "MaxRetries" = 0 AND "CacheTtlMinutes" IS NULL
+                AND "ProviderSettings" IS NOT DISTINCT FROM @providerSettings
                 AND "ParameterSchema" = '{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}'::jsonb,
-                FALSE) FROM owned_configurations
+                FALSE), "BaseUrl" FROM owned_configurations
         UNION ALL SELECT 'cost', "Id", NULL, NULL,
-            COALESCE("CostName" = @costName AND "Description" = @description AND "ProviderType" = 1 AND "Purpose" = 1
+            COALESCE("CostName" = @costName AND "Description" = @description AND "ProviderType" = @providerType AND "Purpose" = 1
                 AND "PricingModel" = 1 AND "CostPerExecution" = 0.12500001 AND "IsActive" AND "EffectiveDate" <= @now
                 AND "ExpiryDate" IS NULL AND "Priority" = 1 AND "BaseCost" IS NULL AND "CostPerResult" IS NULL
                 AND "CostPerToken" IS NULL AND "CostPerMinute" IS NULL AND "TieredPricing" IS NULL
-                AND "PricingConfiguration" IS NULL, FALSE) FROM owned_costs
+                AND "PricingConfiguration" IS NULL, FALSE), NULL::varchar FROM owned_costs
         UNION ALL SELECT 'credential', "Id", "FunctionConfigurationId", NULL,
-            COALESCE("KeyName" = @credentialName AND "ProviderType" = 1 AND "IsPrimary" AND "IsEnabled"
+            COALESCE("KeyName" = @credentialName AND "ProviderType" = @providerType AND "IsPrimary" AND "IsEnabled"
                 AND "ApiKey" LIKE 'enc:v1:%' AND length("ApiKey") BETWEEN 8 AND 2000 AND "Organization" IS NULL
                 AND "FunctionAccountGroup" = 0 AND "BaseUrl" =
                     (SELECT configuration."BaseUrl" FROM owned_configurations configuration
-                        WHERE configuration."Id" = credential."FunctionConfigurationId"), FALSE)
+                        WHERE configuration."Id" = credential."FunctionConfigurationId"), FALSE), NULL::varchar
             FROM owned_credentials credential
         UNION ALL SELECT 'mapping', "Id", "FunctionConfigurationId", "FunctionCostId",
-            "IsActive" AND "FunctionCostId1" IS NULL FROM owned_mappings
+            "IsActive" AND "FunctionCostId1" IS NULL, NULL::varchar FROM owned_mappings
         UNION ALL SELECT 'ip', "Id", "VirtualKeyId", NULL,
             COALESCE("CreatedBy" = @stem AND "UpdatedBy" = @stem AND "Name" = @ipName AND "Description" = @description
-                AND "FilterType" = 'whitelist' AND "IpAddressOrCidr" = '127.0.0.1' AND "IsEnabled", FALSE) FROM owned_ip
+                AND "FilterType" = 'whitelist' AND "IpAddressOrCidr" = '127.0.0.1' AND "IsEnabled", FALSE), NULL::varchar FROM owned_ip
         """;
 
     private const string ForeignReferencesSql = """
@@ -352,4 +382,7 @@ internal static class NativeFunctionFixture
 
 internal sealed record NativeFunctionFixtureSnapshot(
     Guid Owner, int GroupId, int KeyId, int ConfigurationId, int CostId, int CredentialId, int MappingId,
-    string VirtualKey, string VirtualKeyHash, string ConfigurationName);
+    string VirtualKey, string VirtualKeyHash, string ConfigurationName,
+    NativeFunctionFixtureProfile Profile = NativeFunctionFixtureProfile.Exa);
+
+internal enum NativeFunctionFixtureProfile { Exa = 1, Mcp = 5 }

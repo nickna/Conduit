@@ -11,6 +11,15 @@ canonical cost mapping and leaves the existing shadow mapping null. Real
 PostgreSQL tests use the production EF schema in an isolated namespace to verify
 the stored values, rollback, cancellation, and independent-owner preservation.
 
+The closed MCP fixture profile uses the same owned graph and generated positive
+IDs with provider type `Mcp`, an exact loopback HTTP `/mcp` endpoint, and explicit
+settings allowing only `native_search` and the fixture's private network. Exa
+keeps its original null settings and authority-only endpoint. Reads and cleanup
+reject the wrong profile, altered settings, invalid MCP endpoints and cross-owner
+references before deleting rows. Real PostgreSQL and Redis tests cover both
+profiles, transactional rollback, cancellation and preservation of unrelated
+state. This fixture profile prepares data for a subsequent Gateway proof.
+
 Stop the fixture's hosts before deleting its rows. Cleanup verifies the complete
 owned graph and rejects unrelated references through canonical or shadow foreign
 keys, including unsupported virtual-key cascade children. It deletes only that

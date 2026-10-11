@@ -15,10 +15,14 @@ public sealed class NativeFunctionFixtureRedisCleanupTests(FunctionCredentialRed
     : IClassFixture<FunctionCredentialRedisFixture>
 {
     [Theory]
-    [InlineData(0)]
-    [InlineData(5)]
-    public async Task CleanupRemovesOwnedStateOnlyFromTheSelectedDatabaseAndClosesItsConnection(int databaseNumber)
+    [InlineData(0, (int)NativeFunctionFixtureProfile.Exa)]
+    [InlineData(5, (int)NativeFunctionFixtureProfile.Exa)]
+    [InlineData(0, (int)NativeFunctionFixtureProfile.Mcp)]
+    [InlineData(5, (int)NativeFunctionFixtureProfile.Mcp)]
+    public async Task CleanupRemovesOwnedStateOnlyFromTheSelectedDatabaseAndClosesItsConnection(
+        int databaseNumber, int profileValue)
     {
+        var profile = (NativeFunctionFixtureProfile)profileValue;
         var options = ConfigurationOptions.Parse(await fixture.GetConnectionStringAsync());
         options.DefaultDatabase = databaseNumber;
         options.ConnectTimeout = options.SyncTimeout = options.AsyncTimeout = 5000;
@@ -27,7 +31,7 @@ public sealed class NativeFunctionFixtureRedisCleanupTests(FunctionCredentialRed
         using var redis = ConnectionMultiplexer.Connect(options);
         var database = redis.GetDatabase();
         var otherDatabase = redis.GetDatabase(databaseNumber == 0 ? 5 : 0);
-        var snapshot = Snapshot();
+        var snapshot = Snapshot(profile);
         var marker = $"owned-cleanup-test:{snapshot.Owner:N}";
         var owned = OwnedKeys(snapshot).ToArray();
         var sentinels = SentinelKeys(snapshot).ToArray();
@@ -80,6 +84,8 @@ public sealed class NativeFunctionFixtureRedisCleanupTests(FunctionCredentialRed
     [InlineData("foreign-key")]
     [InlineData("foreign-hash")]
     [InlineData("foreign-name")]
+    [InlineData("wrong-profile")]
+    [InlineData("undefined-profile")]
     public async Task UnverifiedSnapshotsAreRejectedBeforeRedisConnectionOrDeletion(string corruption)
     {
         var snapshot = Snapshot();
@@ -90,6 +96,8 @@ public sealed class NativeFunctionFixtureRedisCleanupTests(FunctionCredentialRed
             "foreign-key" => snapshot with { VirtualKey = "condt_unrelated_key" },
             "foreign-hash" => snapshot with { VirtualKeyHash = new string('0', 64) },
             "foreign-name" => snapshot with { ConfigurationName = "unrelated configuration" },
+            "wrong-profile" => snapshot with { Profile = NativeFunctionFixtureProfile.Mcp },
+            "undefined-profile" => snapshot with { Profile = (NativeFunctionFixtureProfile)999 },
             _ => throw new ArgumentOutOfRangeException(nameof(corruption))
         };
         var error = await Assert.ThrowsAsync<ArgumentException>(() => NativeFunctionFixtureRedisCleanup.DeleteAsync(
@@ -115,14 +123,14 @@ public sealed class NativeFunctionFixtureRedisCleanupTests(FunctionCredentialRed
             "unreachable.invalid:1", Snapshot(), cancelled.Token));
     }
 
-    private static NativeFunctionFixtureSnapshot Snapshot()
+    private static NativeFunctionFixtureSnapshot Snapshot(NativeFunctionFixtureProfile profile = NativeFunctionFixtureProfile.Exa)
     {
         var owner = Guid.NewGuid();
         var id = RandomNumberGenerator.GetInt32(1_000_000, 99_000_000);
         var key = $"condt_native_function_{owner:N}";
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key))).ToLowerInvariant();
         return new NativeFunctionFixtureSnapshot(owner, id, id + 1, id + 2, id + 3, id + 4, id + 5,
-            key, hash, $"native_function_{owner:N}:exa");
+            key, hash, $"native_function_{owner:N}:{(profile == NativeFunctionFixtureProfile.Mcp ? "mcp" : "exa")}", profile);
     }
 
     private static IEnumerable<string> OwnedKeys(NativeFunctionFixtureSnapshot snapshot)

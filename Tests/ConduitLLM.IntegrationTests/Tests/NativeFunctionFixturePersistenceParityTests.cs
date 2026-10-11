@@ -23,6 +23,7 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
     private const string OpaqueProtectedKey = "enc:v1:fixture-only-opaque-ciphertext";
     private const decimal Price = 0.12500001m;
     private static readonly Uri Provider = new("http://127.0.0.1:15103/");
+    private static readonly Uri McpProvider = new("http://127.0.0.1:15103/mcp");
 
     [Fact]
     public async Task CreateAndReadPreserveGeneratedIdsOwnedLinksAndExactPersistedScalars()
@@ -245,6 +246,349 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
             """, ("execution", execution), ("group", owned.GroupId), ("key", owned.KeyId), ("cost", owned.CostId));
         Assert.Equal(new object[] { Price, Price, Price, 99.87499999m,
             0.125000m, 99.875000m, 0.125000m, 0.125000m }, values);
+    }
+
+    [Fact]
+    public async Task McpProfilePersistsExactIndependentEfScalarsJsonbAndScopedCredentialWithGeneratedPositiveIds()
+    {
+        await using var database = await OwnedDatabase.CreateAsync(fixture.ConnectionString);
+        var owner = Guid.NewGuid();
+        var snapshot = await CreateMcpAsync(database, owner);
+
+        Assert.Equal(owner, snapshot.Owner);
+        Assert.Equal(NativeFunctionFixtureProfile.Mcp, snapshot.Profile);
+        Assert.Equal($"native_function_{owner:N}:mcp", snapshot.ConfigurationName);
+        Assert.Equal($"condt_native_function_{owner:N}", snapshot.VirtualKey);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(snapshot.VirtualKey)))
+            .ToLowerInvariant(), snapshot.VirtualKeyHash);
+        Assert.All(new[] { snapshot.GroupId, snapshot.KeyId, snapshot.ConfigurationId,
+            snapshot.CostId, snapshot.CredentialId, snapshot.MappingId }, id => Assert.True(id > 0));
+        await AssertMcpFixtureRowsAsync(database, snapshot);
+        Assert.Equal(snapshot, await NativeFunctionFixture.ReadAsync(database.Source, owner,
+            NativeFunctionFixtureProfile.Mcp, database.Token));
+        Assert.Equal(new long[] { 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0 }, await database.CountsAsync());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task MixedProfileCleanupPreservesTheOtherOwnerItsDependentsAndUnrelatedGlobalRows(bool deleteMcp)
+    {
+        await using var database = await OwnedDatabase.CreateAsync(fixture.ConnectionString);
+        var exa = await CreateAsync(database, Guid.NewGuid());
+        var mcp = await CreateMcpAsync(database, Guid.NewGuid());
+        await AddDependentsAsync(database, exa);
+        await AddDependentsAsync(database, mcp);
+        int sentinelCost;
+        int sentinelCredential;
+        int sentinelIp;
+        await using (var context = database.CreateContext())
+        {
+            var cost = new FunctionCost
+            {
+                CostName = "unrelated MCP sentinel price", ProviderType = FunctionProviderType.Mcp,
+                PricingModel = FunctionPricingModel.FlatRate, CostPerExecution = 0.77777777m
+            };
+            var credential = new FunctionCredential
+            {
+                ProviderType = FunctionProviderType.Mcp, KeyName = "unrelated MCP global credential",
+                ApiKey = "unrelated-mcp-global-key", IsPrimary = true
+            };
+            var ip = new IpFilterEntity
+            {
+                Name = "unrelated mixed-profile global IP", FilterType = "whitelist", IpAddressOrCidr = "127.0.0.1"
+            };
+            context.AddRange(cost, credential, ip);
+            await context.SaveChangesAsync(database.Token);
+            sentinelCost = cost.Id;
+            sentinelCredential = credential.Id;
+            sentinelIp = ip.Id;
+        }
+        var removed = deleteMcp ? mcp : exa;
+        var survivor = deleteMcp ? exa : mcp;
+
+        Assert.Equal(removed, await NativeFunctionFixture.DeleteAsync(database.Source, removed.Owner,
+            removed.Profile, database.Token));
+        Assert.Null(await NativeFunctionFixture.ReadAsync(database.Source, removed.Owner, removed.Profile, database.Token));
+        Assert.Null(await NativeFunctionFixture.DeleteAsync(database.Source, removed.Owner, removed.Profile, database.Token));
+        Assert.Equal(survivor, await NativeFunctionFixture.ReadAsync(database.Source, survivor.Owner,
+            survivor.Profile, database.Token));
+        if (deleteMcp) await AssertFixtureRowsAsync(database, survivor);
+        else await AssertMcpFixtureRowsAsync(database, survivor);
+        Assert.Equal(new long[] { 1, 1, 2, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1 }, await database.CountsAsync());
+        Assert.Equal(new object[] { (int)FunctionProviderType.Mcp, 0.77777777m, "unrelated MCP sentinel price" },
+            await database.RowAsync("""
+                SELECT "ProviderType", "CostPerExecution", "CostName" FROM "FunctionCosts" WHERE "Id" = @id
+                """, ("id", sentinelCost)));
+        Assert.Equal(new object[] { (int)FunctionProviderType.Mcp, DBNull.Value, "unrelated-mcp-global-key", true, true },
+            await database.RowAsync("""
+                SELECT "ProviderType", "FunctionConfigurationId", "ApiKey", "IsPrimary", "IsEnabled"
+                FROM "FunctionCredentials" WHERE "Id" = @id
+                """, ("id", sentinelCredential)));
+        Assert.Equal(new object[] { DBNull.Value, "unrelated mixed-profile global IP", "127.0.0.1" },
+            await database.RowAsync("""
+                SELECT "VirtualKeyId", "Name", "IpAddressOrCidr" FROM "IpFilters" WHERE "Id" = @id
+                """, ("id", sentinelIp)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WrongProfileCannotReadOrDeleteAnOwnedGraphAndCorrectProfileRemainsReusable(bool ownedMcp)
+    {
+        await using var database = await OwnedDatabase.CreateAsync(fixture.ConnectionString);
+        var owned = ownedMcp ? await CreateMcpAsync(database, Guid.NewGuid()) : await CreateAsync(database, Guid.NewGuid());
+        await AddDependentsAsync(database, owned);
+        var wrongProfile = ownedMcp ? NativeFunctionFixtureProfile.Exa : NativeFunctionFixtureProfile.Mcp;
+        var before = await database.FingerprintAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => NativeFunctionFixture.ReadAsync(
+            database.Source, owned.Owner, wrongProfile, database.Token));
+        Assert.Equal(before, await database.FingerprintAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => NativeFunctionFixture.DeleteAsync(
+            database.Source, owned.Owner, wrongProfile, database.Token));
+        Assert.Equal(before, await database.FingerprintAsync());
+        Assert.Equal(owned, await NativeFunctionFixture.ReadAsync(database.Source, owned.Owner, owned.Profile, database.Token));
+    }
+
+    [Fact]
+    public async Task McpLateMappingFailureRollsBackTheEntireGraphAndReleasesTheSingleConnectionSlot()
+    {
+        await using var database = await OwnedDatabase.CreateAsync(fixture.ConnectionString);
+        await database.ExecuteAsync("""
+            ALTER TABLE "FunctionCostMappings" ADD CONSTRAINT fixture_reject_mcp_mapping
+                CHECK ("FunctionConfigurationId" < 0)
+            """);
+        var owner = Guid.NewGuid();
+
+        var error = await Assert.ThrowsAsync<PostgresException>(() => CreateMcpAsync(database, owner));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
+        Assert.All(await database.CountsAsync(), count => Assert.Equal(0, count));
+        Assert.Null(await NativeFunctionFixture.ReadAsync(database.Source, owner, NativeFunctionFixtureProfile.Mcp, database.Token));
+        await database.ExecuteAsync("ALTER TABLE \"FunctionCostMappings\" DROP CONSTRAINT fixture_reject_mcp_mapping");
+        var recovered = await CreateMcpAsync(database, owner);
+        await AssertMcpFixtureRowsAsync(database, recovered);
+    }
+
+    [Fact]
+    public async Task McpProfileRejectsAnExaOwnersExecutionReferencingItsConfigurationWithoutChangingAnyScalar()
+    {
+        await using var database = await OwnedDatabase.CreateAsync(fixture.ConnectionString);
+        var mcp = await CreateMcpAsync(database, Guid.NewGuid());
+        var exa = await CreateAsync(database, Guid.NewGuid());
+        await AddDependentsAsync(database, mcp);
+        var foreignExecution = await AddDependentsAsync(database, exa);
+        await database.ExecuteAsync("""
+            UPDATE "FunctionExecutions" SET "FunctionConfigurationId" = @owned WHERE "Id" = @foreign
+            """, ("owned", mcp.ConfigurationId), ("foreign", foreignExecution));
+        var before = await database.FingerprintAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => NativeFunctionFixture.ReadAsync(
+            database.Source, mcp.Owner, NativeFunctionFixtureProfile.Mcp, database.Token));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => NativeFunctionFixture.DeleteAsync(
+            database.Source, mcp.Owner, NativeFunctionFixtureProfile.Mcp, database.Token));
+
+        Assert.Equal(before, await database.FingerprintAsync());
+    }
+
+    [Fact]
+    public async Task McpConfigurationAndCredentialCannotBothBeRetargetedToAnUnownedEndpointBeforeReadOrDeletion()
+    {
+        await using var database = await OwnedDatabase.CreateAsync(fixture.ConnectionString);
+        var mcp = await CreateMcpAsync(database, Guid.NewGuid());
+        await AddDependentsAsync(database, mcp);
+        await database.ExecuteAsync("""
+            UPDATE "FunctionConfigurations" SET "BaseUrl" = @url WHERE "Id" = @configuration;
+            UPDATE "FunctionCredentials" SET "BaseUrl" = @url WHERE "Id" = @credential;
+            """, ("url", "http://203.0.113.8/mcp"), ("configuration", mcp.ConfigurationId), ("credential", mcp.CredentialId));
+        var before = await database.FingerprintAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => NativeFunctionFixture.ReadAsync(
+            database.Source, mcp.Owner, NativeFunctionFixtureProfile.Mcp, database.Token));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => NativeFunctionFixture.DeleteAsync(
+            database.Source, mcp.Owner, NativeFunctionFixtureProfile.Mcp, database.Token));
+
+        Assert.Equal(before, await database.FingerprintAsync());
+    }
+
+    [Theory]
+    [InlineData("create")]
+    [InlineData("read")]
+    [InlineData("delete")]
+    public async Task McpPreCancelledOperationsPreserveBothProfilesAndTheSingleSlotCanBeReused(string operation)
+    {
+        await using var database = await OwnedDatabase.CreateAsync(fixture.ConnectionString);
+        var mcp = await CreateMcpAsync(database, Guid.NewGuid());
+        var exa = await CreateAsync(database, Guid.NewGuid());
+        var before = await database.FingerprintAsync();
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            switch (operation)
+            {
+                case "create":
+                    await NativeFunctionFixture.CreateAsync(database.Source, Guid.NewGuid(), McpProvider,
+                        OpaqueProtectedKey, NativeFunctionFixtureProfile.Mcp, cancelled.Token);
+                    break;
+                case "read":
+                    await NativeFunctionFixture.ReadAsync(database.Source, mcp.Owner, NativeFunctionFixtureProfile.Mcp, cancelled.Token);
+                    break;
+                case "delete":
+                    await NativeFunctionFixture.DeleteAsync(database.Source, mcp.Owner, NativeFunctionFixtureProfile.Mcp, cancelled.Token);
+                    break;
+            }
+        });
+
+        Assert.Equal(before, await database.FingerprintAsync());
+        Assert.Equal(mcp, await NativeFunctionFixture.ReadAsync(database.Source, mcp.Owner, NativeFunctionFixtureProfile.Mcp, database.Token));
+        Assert.Equal(exa, await NativeFunctionFixture.ReadAsync(database.Source, exa.Owner, database.Token));
+    }
+
+    [Theory]
+    [InlineData("create")]
+    [InlineData("read")]
+    [InlineData("delete")]
+    public async Task UndefinedProfileIsRejectedBeforeOpeningEvenADisposedDataSource(string operation)
+    {
+        await using var source = NpgsqlDataSource.Create(fixture.ConnectionString);
+        await source.DisposeAsync();
+        var owner = Guid.NewGuid();
+        var undefined = (NativeFunctionFixtureProfile)999;
+
+        var error = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+        {
+            switch (operation)
+            {
+                case "create":
+                    await NativeFunctionFixture.CreateAsync(source, owner, McpProvider, OpaqueProtectedKey, undefined, CancellationToken.None);
+                    break;
+                case "read":
+                    await NativeFunctionFixture.ReadAsync(source, owner, undefined, CancellationToken.None);
+                    break;
+                case "delete":
+                    await NativeFunctionFixture.DeleteAsync(source, owner, undefined, CancellationToken.None);
+                    break;
+            }
+        });
+
+        Assert.Equal("profile", error.ParamName);
+    }
+
+    [Fact]
+    public async Task ClosedProfilesRejectEachOthersEndpointPathBeforeOpeningTheDataSource()
+    {
+        await using var source = NpgsqlDataSource.Create(fixture.ConnectionString);
+        await source.DisposeAsync();
+        var mcpError = await Assert.ThrowsAsync<ArgumentException>(() => NativeFunctionFixture.CreateAsync(
+            source, Guid.NewGuid(), Provider, OpaqueProtectedKey, NativeFunctionFixtureProfile.Mcp, CancellationToken.None));
+        var exaError = await Assert.ThrowsAsync<ArgumentException>(() => NativeFunctionFixture.CreateAsync(
+            source, Guid.NewGuid(), McpProvider, OpaqueProtectedKey, NativeFunctionFixtureProfile.Exa, CancellationToken.None));
+        Assert.Equal("providerUri", mcpError.ParamName);
+        Assert.Equal("providerUri", exaError.ParamName);
+    }
+
+    private static Task<NativeFunctionFixtureSnapshot> CreateMcpAsync(OwnedDatabase database, Guid owner) =>
+        NativeFunctionFixture.CreateAsync(database.Source, owner, McpProvider, OpaqueProtectedKey,
+            NativeFunctionFixtureProfile.Mcp, database.Token);
+
+    private static async Task AssertMcpFixtureRowsAsync(OwnedDatabase database, NativeFunctionFixtureSnapshot snapshot)
+    {
+        var stem = $"native_function_{snapshot.Owner:N}";
+        var description = $"Native function fixture {snapshot.Owner:N}";
+        await using var context = database.CreateContext();
+        var group = await context.VirtualKeyGroups.AsNoTracking().SingleAsync(value => value.Id == snapshot.GroupId, database.Token);
+        Assert.Equal(stem, group.ExternalGroupId);
+        Assert.Equal($"Native function {snapshot.Owner:N}", group.GroupName);
+        Assert.Equal(100m, group.Balance);
+        Assert.Equal(100m, group.LifetimeCreditsAdded);
+        Assert.Equal(0m, group.LifetimeSpent);
+        Assert.Null(group.MediaRetentionPolicyId);
+        var key = await context.VirtualKeys.AsNoTracking().SingleAsync(value => value.Id == snapshot.KeyId, database.Token);
+        Assert.Equal(stem + ":key", key.KeyName);
+        Assert.Equal(snapshot.VirtualKeyHash, key.KeyHash);
+        Assert.Equal(description, key.Description);
+        Assert.True(key.IsEnabled);
+        Assert.Equal(snapshot.GroupId, key.VirtualKeyGroupId);
+        Assert.Equal(100, key.RateLimitRpm);
+        Assert.Equal(1000, key.RateLimitRpd);
+        Assert.Null(key.ExpiresAt);
+        var configuration = await context.Set<FunctionConfiguration>().AsNoTracking()
+            .SingleAsync(value => value.Id == snapshot.ConfigurationId, database.Token);
+        Assert.Equal(stem + ":mcp", configuration.ConfigurationName);
+        Assert.Equal(FunctionProviderType.Mcp, configuration.ProviderType);
+        Assert.Equal(FunctionPurpose.Search, configuration.Purpose);
+        Assert.Equal(ExecutionMode.Synchronous, configuration.DefaultExecutionMode);
+        Assert.Equal(McpProvider.AbsoluteUri, configuration.BaseUrl);
+        Assert.True(configuration.IsEnabled);
+        Assert.Equal(30, configuration.TimeoutSeconds);
+        Assert.Equal(0, configuration.MaxRetries);
+        Assert.Null(configuration.CacheTtlMinutes);
+        Assert.Equal(description, configuration.Description);
+        AssertJson("""{"allowedTools":["native_search"],"allowPrivateNetwork":true}""", configuration.ProviderSettings);
+        AssertJson("""{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}""", configuration.ParameterSchema);
+        var credential = await context.Set<FunctionCredential>().AsNoTracking()
+            .SingleAsync(value => value.Id == snapshot.CredentialId, database.Token);
+        Assert.Equal(FunctionProviderType.Mcp, credential.ProviderType);
+        Assert.Equal(snapshot.ConfigurationId, credential.FunctionConfigurationId);
+        Assert.Equal(OpaqueProtectedKey, credential.ApiKey);
+        Assert.Equal(McpProvider.AbsoluteUri, credential.BaseUrl);
+        Assert.Null(credential.Organization);
+        Assert.Equal((short)0, credential.FunctionAccountGroup);
+        Assert.True(credential.IsPrimary);
+        Assert.True(credential.IsEnabled);
+        Assert.Equal(stem + ":credential", credential.KeyName);
+        var cost = await context.Set<FunctionCost>().AsNoTracking().SingleAsync(value => value.Id == snapshot.CostId, database.Token);
+        Assert.Equal(stem + ":cost", cost.CostName);
+        Assert.Equal(FunctionProviderType.Mcp, cost.ProviderType);
+        Assert.Equal(FunctionPurpose.Search, cost.Purpose);
+        Assert.Equal(description, cost.Description);
+        Assert.Equal(FunctionPricingModel.FlatRate, cost.PricingModel);
+        Assert.Equal(Price, cost.CostPerExecution);
+        Assert.Null(cost.BaseCost);
+        Assert.Null(cost.CostPerResult);
+        Assert.Null(cost.CostPerToken);
+        Assert.Null(cost.CostPerMinute);
+        Assert.Null(cost.TieredPricing);
+        Assert.Null(cost.PricingConfiguration);
+        Assert.True(cost.IsActive);
+        Assert.Equal(1, cost.Priority);
+        Assert.Null(cost.ExpiryDate);
+        Assert.Equal(cost.CreatedAt.AddDays(-1), cost.EffectiveDate);
+        var mapping = await context.Set<FunctionCostMapping>().AsNoTracking()
+            .SingleAsync(value => value.Id == snapshot.MappingId, database.Token);
+        Assert.Equal(snapshot.ConfigurationId, mapping.FunctionConfigurationId);
+        Assert.Equal(snapshot.CostId, mapping.FunctionCostId);
+        Assert.True(mapping.IsActive);
+        Assert.Equal(new object[] { DBNull.Value }, await database.RowAsync(
+            "SELECT \"FunctionCostId1\" FROM \"FunctionCostMappings\" WHERE \"Id\" = @id", ("id", snapshot.MappingId)));
+        var ip = await context.Set<IpFilterEntity>().AsNoTracking().SingleAsync(value => value.VirtualKeyId == snapshot.KeyId, database.Token);
+        Assert.True(ip.Id > 0);
+        Assert.Equal("whitelist", ip.FilterType);
+        Assert.Equal("127.0.0.1", ip.IpAddressOrCidr);
+        Assert.Equal(stem + ":ip", ip.Name);
+        Assert.Equal(description, ip.Description);
+        Assert.True(ip.IsEnabled);
+        Assert.Equal(stem, ip.CreatedBy);
+        Assert.Equal(stem, ip.UpdatedBy);
+        Assert.All(new[] { group.CreatedAt, key.CreatedAt, configuration.CreatedAt, credential.CreatedAt,
+            cost.CreatedAt, mapping.CreatedAt, ip.CreatedAt }, value =>
+        {
+            Assert.Equal(DateTimeKind.Utc, value.Kind);
+            Assert.Equal(group.CreatedAt, value);
+            Assert.True(value <= DateTime.UtcNow);
+        });
+        Assert.All(new[] { group.UpdatedAt, key.UpdatedAt, configuration.UpdatedAt, credential.UpdatedAt,
+            cost.UpdatedAt, ip.UpdatedAt }, value => Assert.Equal(group.CreatedAt, value));
+    }
+
+    private static void AssertJson(string expectedJson, string? actualJson)
+    {
+        using var expected = JsonDocument.Parse(expectedJson);
+        using var actual = JsonDocument.Parse(Assert.IsType<string>(actualJson));
+        Assert.True(JsonElement.DeepEquals(expected.RootElement, actual.RootElement), "Persisted JSONB differs from the independent profile contract.");
     }
 
     private static Task<NativeFunctionFixtureSnapshot> CreateAsync(OwnedDatabase database, Guid owner) =>
