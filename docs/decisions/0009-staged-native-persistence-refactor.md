@@ -169,6 +169,16 @@ the only connection slot is occupied. The published persistence probe includes t
 boundary before runtime service wiring or native selection. Pricing and execution
 record writes remain separate slices.
 
+`IFunctionPricingRuntimeStore` adds uncached scalar pricing selection at a supplied
+UTC instant. Active mappings use the canonical `FunctionCostId`; cost eligibility
+is applied before priority/effective-date ordering. Provider, purpose and configuration
+enabled state do not filter billing selection. The PostgreSQL contract compares the
+existing pricing service and both adapters, including invalid high-priority fallback,
+canonical/shadow relationship isolation, exact date boundaries, all pricing fields,
+detached reads, and cancellation of both pool and observed SQL lock waits. The native
+persistence probe exercises the same bounded read before runtime selection. Caching,
+Admin management/invalidation and execution writes remain with their existing services.
+
 ## Options considered
 
 1. **Wait for production-supported EF NativeAOT.** Rejected as the only plan: it
