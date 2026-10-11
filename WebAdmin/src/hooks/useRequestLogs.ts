@@ -57,12 +57,14 @@ export interface ChatToolCallItem {
  * Function execution result with rich metadata (for agentic chat completions)
  */
 export interface FunctionCallResult {
+  [key: string]: unknown;
   toolCallId?: string;
   functionName?: string;
   status?: 'completed' | 'failed';
   cost?: number;
   errorMessage?: string;
   functionExecutionId?: string;
+  iteration?: number;
 }
 
 /**
@@ -162,6 +164,37 @@ export function requestLogFiltersToApiParams(
   };
 }
 
+function isMetadataObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function metadataString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+/** Normalize Gateway execution fields once, retaining legacy and optional metadata. */
+function normalizeRequestLogMetadata(metadata: LogRequestDto['metadata']): RequestLogMetadata | null {
+  if (!metadata) return null;
+  if (metadata.type !== 'chat_with_functions' || !Array.isArray(metadata.functionCalls)) {
+    return metadata;
+  }
+
+  const calls: unknown[] = metadata.functionCalls;
+  return {
+    ...metadata,
+    functionCalls: calls.filter(isMetadataObject).map((call) => ({
+      ...call,
+      toolCallId: metadataString(call.tool_call_id) ?? metadataString(call.toolCallId),
+      functionName: metadataString(call.function_name) ?? metadataString(call.functionName),
+      functionExecutionId: metadataString(call.function_execution_id) ?? metadataString(call.functionExecutionId),
+      errorMessage: metadataString(call.error_message) ?? metadataString(call.errorMessage),
+      status: call.status === 'completed' || call.status === 'failed' ? call.status : undefined,
+      cost: typeof call.cost === 'number' ? call.cost : undefined,
+      iteration: typeof call.iteration === 'number' ? call.iteration : undefined,
+    })),
+  };
+}
+
 function toRequestLogEntry(item: LogRequestDto): RequestLogEntry {
   return {
     id: item.id ?? 0,
@@ -193,7 +226,7 @@ function toRequestLogEntry(item: LogRequestDto): RequestLogEntry {
     requestPath: item.requestPath ?? null,
     statusCode: item.statusCode ?? null,
     timestamp: item.timestamp ?? '',
-    metadata: item.metadata ?? null,
+    metadata: normalizeRequestLogMetadata(item.metadata),
   };
 }
 
