@@ -48,6 +48,7 @@ public sealed class MediaTaskReconciliationTests(MediaDispatchFixture fixture)
             using var admin = new AdminFactory(fixture);
             using var client = admin.CreateClient();
             var request = Dto(Decision());
+            request.ResultUrls = ["https://media.provider.example/original?signature=private-token"];
             var path = $"/v1/admin/tasks/{id}/resolve";
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(path, request)).StatusCode);
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AdminFactory.MasterKey);
@@ -71,6 +72,13 @@ public sealed class MediaTaskReconciliationTests(MediaDispatchFixture fixture)
             var task = await db.AsyncTasks.SingleAsync(t => t.Id == id);
             var result = JsonSerializer.Deserialize(task.Result!, AsyncTaskJsonContext.Default.MediaGenerationTaskResult)!;
             Assert.Equal("test-model", result.Model); Assert.Equal("https://stored.example/recovered", Assert.Single(result.Data).Url);
+            Assert.DoesNotContain("private-token", task.Result);
+            if (type == "image")
+                fixture.RecoveryStorage.Verify(x => x.StoreAsync(It.IsAny<Stream>(),
+                    It.Is<MediaMetadata>(m => !m.CustomMetadata.ContainsKey("originalUrl")), It.IsAny<IProgress<long>>()), Times.Once);
+            else
+                fixture.RecoveryStorage.Verify(x => x.StoreVideoAsync(It.IsAny<Stream>(),
+                    It.Is<VideoMediaMetadata>(m => !m.CustomMetadata.ContainsKey("originalUrl")), It.IsAny<Action<long>>()), Times.Once);
             Assert.Equal(0, result.InternalMetadata.Cost); Assert.Equal("original-operation", task.ProviderOperationId);
             var audit = JsonSerializer.Deserialize(task.Metadata!, AsyncTaskJsonContext.Default.TaskMetadata)!.Reconciliation!;
             Assert.Equal("completed", audit.Outcome); Assert.Equal("no_customer_charge", audit.BillingDisposition);
@@ -83,6 +91,7 @@ public sealed class MediaTaskReconciliationTests(MediaDispatchFixture fixture)
             Assert.Equal(type == "image" ? "image/png" : "video/mp4", media.ContentType);
             Assert.Equal(type == "image" ? Png.Length : Video.Length, media.SizeBytes);
             Assert.Contains("https://stored.example/recovered", Assert.Single(receiver.Posts).Json);
+            Assert.DoesNotContain("private-token", Assert.Single(receiver.Posts).Json);
         }
         finally { await worker.StopAsync(); }
     }

@@ -142,22 +142,23 @@ namespace ConduitLLM.Core.Services.Strategies
                 if (!context.RequireStoredMedia)
                     await PublishMediaCompletedEvent(storageResult, context, metadata, contentLength);
 
+                var processedMetadata = new Dictionary<string, object>
+                {
+                    ["provider"] = context.ModelInfo?.ProviderName ?? "unknown",
+                    ["model"] = context.ModelInfo?.ModelId ?? "unknown",
+                    ["index"] = context.Index,
+                    ["downloadMs"] = downloadStopwatch.ElapsedMilliseconds,
+                    ["storageMs"] = storageStopwatch.ElapsedMilliseconds,
+                    ["contentType"] = contentType,
+                    ["fileSizeBytes"] = contentLength
+                };
+                if (!context.RequireStoredMedia) processedMetadata["originalUrl"] = url;
                 return new ProcessedMediaItem
                 {
                     Url = storageResult.Url,
                     StorageKey = storageResult.StorageKey,
                     Index = context.Index,
-                    Metadata = new Dictionary<string, object>
-                    {
-                        ["provider"] = context.ModelInfo?.ProviderName ?? "unknown",
-                        ["model"] = context.ModelInfo?.ModelId ?? "unknown",
-                        ["index"] = context.Index,
-                        ["originalUrl"] = url,
-                        ["downloadMs"] = downloadStopwatch.ElapsedMilliseconds,
-                        ["storageMs"] = storageStopwatch.ElapsedMilliseconds,
-                        ["contentType"] = contentType,
-                        ["fileSizeBytes"] = contentLength
-                    }
+                    Metadata = processedMetadata
                 };
             }
 
@@ -252,10 +253,10 @@ namespace ConduitLLM.Core.Services.Strategies
                 {
                     ["prompt"] = context.Prompt,
                     ["model"] = context.ModelInfo?.ModelId ?? "",
-                    ["provider"] = context.ModelInfo?.ProviderName ?? "",
-                    ["originalUrl"] = originalUrl
+                    ["provider"] = context.ModelInfo?.ProviderName ?? ""
                 }
             };
+            if (!context.RequireStoredMedia) metadata.CustomMetadata["originalUrl"] = originalUrl;
 
             // Add CreatedBy if we have virtual key info
             metadata.CreatedBy = context.CreatedBy ??

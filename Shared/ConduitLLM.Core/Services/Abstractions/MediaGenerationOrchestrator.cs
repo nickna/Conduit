@@ -240,6 +240,9 @@ namespace ConduitLLM.Core.Services.Abstractions
                 LogGenerationDetails(request, modelInfo, generationRequest);
 
                 // 8. Execute the actual generation
+                if (_reconciliationStore != null)
+                    await _reconciliationStore.RecordInvocationAsync(GetRequestId(request), workerId,
+                        new MediaProviderOperation(modelInfo.ProviderId, 0, modelInfo.ModelId, modelInfo.ProviderName), taskCts.Token);
                 if (!await _taskService.MarkProviderInvocationStartedAsync(
                         GetRequestId(request), workerId, taskCts.Token))
                 {
@@ -251,9 +254,6 @@ namespace ConduitLLM.Core.Services.Abstractions
                     return;
                 }
                 providerInvocationStarted = true;
-                if (_reconciliationStore != null)
-                    await _reconciliationStore.RecordInvocationAsync(GetRequestId(request), workerId,
-                        new MediaProviderOperation(modelInfo.ProviderId, 0, modelInfo.ModelId, modelInfo.ProviderName), taskCts.Token);
                 using var operationScope = _reconciliationStore == null ? null : new Utilities.MediaProviderOperationScope(
                     (operation, token) => _reconciliationStore.RecordOperationAsync(GetRequestId(request), workerId, operation, token));
                 var response = await ExecuteGenerationAsync(generationRequest, modelInfo, virtualKey, taskCts.Token);
