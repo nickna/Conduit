@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- Direct framework-package references are intentional; see the central security-pin rationales. -->
@@ -6,17 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Condition="'$(ConduitEfTooling)' == 'true'">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.Build.Tasks.Core" PrivateAssets="all" Condition="'$(ConduitEfTooling)' == 'true'" />
-    <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="all" Condition="'$(ConduitEfTooling)' == 'true'" />
     <PackageReference Include="System.Security.Cryptography.Xml" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Polly" />
     <PackageReference Include="Polly.Extensions.Http" />
     <!-- MCP (Model Context Protocol) client for the Mcp function provider -->
@@ -26,5 +17,16 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
+
+  <!-- Guard the resolved transitive graph: unused package references do not show
+       up in emitted assembly-reference tests, but still contaminate restores. -->
+  <Target Name="VerifyFunctionDependencyBoundary" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <_ForbiddenFunctionPackage Include="@(PackageDependencies)"
+        Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(PackageDependencies.Identity)', '^(Microsoft\.EntityFrameworkCore|Npgsql|Microsoft\.Build)(\.|$)'))" />
+    </ItemGroup>
+    <Error Condition="'@(_ForbiddenFunctionPackage)' != ''"
+      Text="Functions must remain independent of persistence and build tooling. Resolved forbidden packages: @(_ForbiddenFunctionPackage)." />
+  </Target>
 
 </Project>

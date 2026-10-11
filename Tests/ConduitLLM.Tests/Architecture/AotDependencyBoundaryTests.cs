@@ -126,6 +126,17 @@ public sealed class AotDependencyBoundaryTests
     }
 
     [Fact]
+    public void FunctionsDoNotOwnPersistenceOrBuildTooling()
+    {
+        AssertDoesNotReference(
+            typeof(ConduitLLM.Functions.Security.FunctionCredentialProtector).Assembly,
+            "ConduitLLM.Configuration",
+            "Microsoft.EntityFrameworkCore",
+            "Npgsql",
+            "Microsoft.Build");
+    }
+
+    [Fact]
     public void CoreDoesNotOwnOptionalRuntimeAdapters()
     {
         AssertDoesNotReference(
