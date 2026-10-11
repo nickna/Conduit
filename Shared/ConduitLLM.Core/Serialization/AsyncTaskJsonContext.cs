@@ -13,6 +13,7 @@ namespace ConduitLLM.Core.Serialization;
 [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(AsyncTaskStatus))]
 [JsonSerializable(typeof(TaskMetadata))]
+[JsonSerializable(typeof(MediaTaskReconciliation))]
 [JsonSerializable(typeof(ImageGenerationRequest))]
 [JsonSerializable(typeof(VideoGenerationRequest))]
 [JsonSerializable(typeof(VideoGenerationResponse))]

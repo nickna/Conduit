@@ -73,6 +73,15 @@ public static class HttpClientServicesExtensions
                 client.Timeout = TimeSpan.FromSeconds(60);
             });
 
+        services.AddHttpClient(ConduitLLM.Core.Utilities.MediaRecoveryDestination.ClientName,
+            client => client.Timeout = TimeSpan.FromMinutes(15))
+            .RemoveAllLoggers() // Signed provider references belong only in private recovery metadata.
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false, UseProxy = false, UseCookies = false,
+                ConnectTimeout = TimeSpan.FromSeconds(30),
+                ConnectCallback = ConduitLLM.Core.Utilities.MediaRecoveryDestination.ConnectAsync
+            });
         return services;
     }
 }

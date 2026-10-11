@@ -106,6 +106,7 @@ namespace ConduitLLM.Core.Messaging
         public static readonly IReadOnlyList<Type> MediaGenerationDefaultEvents = new[]
         {
             typeof(IndeterminateMediaTaskRetryRequested),
+            typeof(IndeterminateMediaTaskRecoveryRequested),
             typeof(ImageGenerationProgress),
             typeof(ImageGenerationCompleted),
             typeof(ImageGenerationFailed),

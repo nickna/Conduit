@@ -10706,6 +10706,111 @@
           }
         }
       },
+      "MediaProviderOperation": {
+        "required": [
+          "provider_id",
+          "credential_id",
+          "provider_model_id",
+          "provider_name"
+        ],
+        "type": "object",
+        "properties": {
+          "provider_id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "credential_id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "provider_model_id": {
+            "type": "string"
+          },
+          "provider_name": {
+            "type": "string"
+          },
+          "operation_id": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "MediaTaskReconciliation": {
+        "type": "object",
+        "properties": {
+          "dispatch_id": {
+            "type": "string"
+          },
+          "virtual_key_id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "provider_id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "provider_model_id": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "provider_operation_id": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "result_urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "provider_cost": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "billing_disposition": {
+            "type": "string"
+          }
+        }
+      },
       "MediaType": {
         "enum": [
           "image",
@@ -11622,6 +11727,41 @@
       "TaskMetadata": {
         "type": "object",
         "properties": {
+          "media_provider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MediaProviderOperation"
+              }
+            ]
+          },
+          "provider_invocation_worker_id": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reconciliation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MediaTaskReconciliation"
+              }
+            ]
+          },
+          "reconciliation_history": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/MediaTaskReconciliation"
+            }
+          },
           "virtual_key_id": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
