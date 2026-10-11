@@ -19,7 +19,7 @@ namespace ConduitLLM.Configuration.Services
     /// Background service that batches Virtual Key spend updates to reduce database writes
     /// Provides events for cache invalidation integration
     /// </summary>
-    public class BatchSpendUpdateService : BackgroundService, IBatchSpendUpdateService, IAsyncDisposable
+    public partial class BatchSpendUpdateService : BackgroundService, IBatchSpendUpdateService, IAsyncDisposable
     {
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly ILogger<BatchSpendUpdateService> _logger;
@@ -400,6 +400,12 @@ namespace ConduitLLM.Configuration.Services
                     return -1
                 end
 
+                -- Partial known spend is already queued. Only audited reconciliation may
+                -- charge the unresolved provider portion and release its remaining hold.
+                if redis.call('HEXISTS', KEYS[9], ARGV[1]) == 1 then
+                    return -1
+                end
+
                 local reservedAmount = redis.call('HGET', KEYS[3], ARGV[1])
                 if not reservedAmount then
                     reservedAmount = redis.call('HGET', KEYS[1], ARGV[1])
@@ -437,7 +443,8 @@ namespace ConduitLLM.Configuration.Services
                     $"{_reservedSpendPrefix}{groupId.Value}",
                     $"{_windowedSpendUnitsPrefix}{groupId.Value}:window:{windowToken}",
                     $"{_windowedPendingTotalUnitsPrefix}{groupId.Value}",
-                    $"{_windowedKeyUsageUnitsPrefix}{groupId.Value}:window:{windowToken}:key:{virtualKeyId}"
+                    $"{_windowedKeyUsageUnitsPrefix}{groupId.Value}:window:{windowToken}:key:{virtualKeyId}",
+                    $"{_indeterminateReservationPrefix}{groupId.Value}"
                 },
                 new RedisValue[]
                 {

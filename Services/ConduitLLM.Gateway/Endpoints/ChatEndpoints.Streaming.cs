@@ -290,14 +290,16 @@ namespace ConduitLLM.Gateway.Endpoints
         {
             return async (toolEvent, ct) =>
             {
-                await sseWriter.WriteToolExecutingEventAsync(toolEvent, ct);
-                state.Outcome = StreamTransportOutcome.Emitting;
-
                 if (toolEvent.Status == "completed" || toolEvent.Status == "failed")
                 {
                     state.FunctionExecutionResults.Add(toolEvent);
                     state.TotalFunctionCost += toolEvent.Cost ?? 0m;
                 }
+
+                // A completed invocation is billable independently of notification delivery.
+                // Retain its evidence before client I/O can throw or observe cancellation.
+                await sseWriter.WriteToolExecutingEventAsync(toolEvent, ct);
+                state.Outcome = StreamTransportOutcome.Emitting;
             };
         }
 
@@ -608,7 +610,7 @@ namespace ConduitLLM.Gateway.Endpoints
                     request.Messages,
                     completionOutput,
                     request.Tools,
-                    cancellationToken);
+                    cancellationToken).WaitAsync(cancellationToken);
 
                 HttpContext.GetOrCreateRequestAccountingContext().RecordProviderUsage(
                     estimatedUsage,
@@ -622,6 +624,12 @@ namespace ConduitLLM.Gateway.Endpoints
             catch (Exception estEx)
             {
                 _logger.LogError(estEx, "Failed to estimate usage for streaming response");
+                var accountingContext = HttpContext.GetOrCreateRequestAccountingContext();
+                accountingContext.MarkIndeterminate(
+                    "Provider usage is missing and streaming usage estimation failed or timed out");
+                state.Outcome = StreamTransportOutcome.AccountingIndeterminate;
+                if (accountingContext.Snapshot().Transport is { } transport)
+                    accountingContext.RecordTransport(transport with { Outcome = state.Outcome });
             }
         }
 
