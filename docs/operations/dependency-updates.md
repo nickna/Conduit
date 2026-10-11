@@ -1,20 +1,36 @@
 # Dependency update automation
 
-`.github/dependabot.yml` schedules grouped weekly version updates on Mondays,
-with every update PR targeting `master`, the active development branch. NuGet
-scans the repository root and updates the central versions in
-`Directory.Packages.props`. Related EF Core/Npgsql,
-OpenTelemetry, ASP.NET Core/Extensions, tokenizer, Wolverine, FusionCache and test
-packages travel together. The EF health-check integration belongs to the EF group;
-Dependabot uses the first matching group. Other NuGet packages get individual PRs,
-with at most ten version-update PRs open for this ecosystem.
+`.github/dependabot.yml` schedules weekly version updates on Mondays, with every
+update PR targeting `master`, the active development branch. Each of the four
+update jobs batches all minor and patch updates into one PR, covering both runtime
+and development dependencies. When all jobs have eligible updates, this produces
+four routine batches: NuGet, WebAdmin, OpenAPI tooling and CI tooling. Each job
+permits at most two open version-update PRs (eight across the configured jobs),
+so additional major upgrades wait until capacity becomes available. Security
+update PRs have a separate policy and are not subject to this version-update limit.
+
+NuGet scans the repository root and updates the central versions in
+`Directory.Packages.props`. Major upgrades stay outside the minor/patch batch.
+Related EF Core/Npgsql, OpenTelemetry, ASP.NET Core/Extensions, tokenizer,
+Wolverine, FusionCache and test packages still travel together for major upgrades;
+other NuGet majors get individual PRs. The EF health-check integration belongs to
+the EF group. Dependabot uses the first matching group; the minor/patch batch
+appears first and every family group explicitly allows only major updates.
 
 npm monitors the active `/WebAdmin`, `/tools/openapi` and `/tools/ci` roots and their
-lockfiles. WebAdmin groups Mantine, Next/React, SignalR and remaining development
-dependencies, with at most five open PRs. Each tooling root groups its dependencies
-and permits at most two open PRs. Retired SDK packages are not monitored. Major
-updates are offered for review as well; grouping does not establish compatibility.
-No updates are automatically merged or exempted from required validation.
+lockfiles. WebAdmin batches minor/patch updates together, retains Mantine,
+Next/React and SignalR family groups for major upgrades, and offers other majors
+individually. Each tooling root batches minor/patch updates and offers majors
+individually. Retired SDK packages are not monitored. Grouping does not establish
+compatibility. No updates are automatically merged or exempted from required
+validation. See [GitHub's grouping options](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference#groups)
+and [version-update PR limits](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference#open-pull-requests-limit).
+
+NuGet currently defers `Microsoft.OpenApi` 3 and later because
+`Microsoft.AspNetCore.OpenApi` 10.x requires OpenAPI.NET 2.x. The central version
+keeps the compatible 2.x patch updates and the existing security override.
+Revisit the NuGet Dependabot ignore when upgrading the ASP.NET Core OpenAPI
+framework package, following [Microsoft's compatibility guidance](https://github.com/microsoft/OpenAPI.NET/blob/main/docs/upgrade-guide-3.md).
 
 WebAdmin currently defers ESLint 10 (`eslint` and `@eslint/js`) because
 `eslint-plugin-react` 7.37.5 supports ESLint only through major 9. TypeScript 7

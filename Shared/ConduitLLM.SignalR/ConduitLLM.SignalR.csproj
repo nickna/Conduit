@@ -4,6 +4,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="MessagePack" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack"
       Condition="'$(PublishAot)' != 'true' and '$(ConduitAotAudit)' != 'true'" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" />

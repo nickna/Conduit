@@ -1464,7 +1464,7 @@
           "Chat"
         ],
         "summary": "Creates a chat completion.",
-        "description": "Returns a chat completion as application/json. Set stream=true to receive text/event-stream chunks. Models and capabilities depend on the virtual key and configured provider.",
+        "description": "Returns a chat completion as application/json. Set stream=true to receive OpenAI text/event-stream chunks and a [DONE] sentinel. Set stream_options.include_usage=true for a final usage chunk when the provider reports usage. Conduit progress and metrics events are available at /v1/conduit/chat/completions. Models and capabilities depend on the virtual key and configured provider.",
         "operationId": "Chat_CreateCompletion",
         "requestBody": {
           "content": {
@@ -1740,6 +1740,312 @@
           },
           "413": {
             "description": "The request payload is too large.",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "VirtualKey": [ ]
+          }
+        ]
+      }
+    },
+    "/v1/conduit/chat/completions": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Creates a chat completion with Conduit streaming events.",
+        "description": "Uses the same chat execution and accounting as /v1/chat/completions. Set stream=true for chat chunks plus named Conduit metrics, reasoning, and tool progress events, followed by [DONE].",
+        "operationId": "Chat_CreateEnhancedCompletion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionRequest"
+              },
+              "example": {
+                "model": "your-model-alias",
+                "messages": [
+                  {
+                    "role": "user",
+                    "content": "Hello"
+                  }
+                ],
+                "stream": false
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletionResponse"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body.",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/OpenAIErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SecurityErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The request exceeded an applicable request, token, or concurrency limit.",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Delay in seconds before retrying the request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Limit": {
+                "description": "Maximum requests or tokens in the applicable window.",
+                "schema": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests or tokens remaining in the applicable window.",
+                "schema": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "UTC Unix timestamp in seconds when the window resets.",
+                "schema": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "X-RateLimit-Scope": {
+                "description": "Scope of the exceeded limit (key, group, model, token, concurrency, or IP).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required infrastructure is temporarily unavailable.",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Delay in seconds before retrying the request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The request Content-Type is not supported.",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body.",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -2879,11 +3185,7 @@
             "description": "The function configuration ID",
             "required": true,
             "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
+              "type": "integer",
               "format": "int32"
             }
           }
@@ -3543,11 +3845,7 @@
             "in": "query",
             "description": "Maximum time to wait in seconds (default: 300, max: 600).",
             "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
+              "type": "integer",
               "format": "int32",
               "default": 300
             }
@@ -3557,11 +3855,7 @@
             "in": "query",
             "description": "Polling interval in seconds (default: 2, min: 1).",
             "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
+              "type": "integer",
               "format": "int32",
               "default": 2
             }
@@ -4313,11 +4607,7 @@
                     "type": "string"
                   },
                   "temperature": {
-                    "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-                    "type": [
-                      "number",
-                      "string"
-                    ],
+                    "type": "number",
                     "format": "double"
                   },
                   "chunking_strategy": {
@@ -8608,11 +8898,7 @@
             ]
           },
           "progress": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "progress_message": {
@@ -8622,19 +8908,11 @@
             ]
           },
           "retry_count": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "max_retries": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "is_retryable": {
@@ -8659,11 +8937,9 @@
             "type": "string"
           },
           "progress": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -8692,11 +8968,7 @@
             "type": "string"
           },
           "logprob": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "bytes": {
@@ -8705,11 +8977,7 @@
               "array"
             ],
             "items": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
+              "type": "integer",
               "format": "int32"
             }
           }
@@ -8732,11 +9000,7 @@
             "type": "string"
           },
           "duration": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "task": {
@@ -8782,35 +9046,19 @@
         "type": "object",
         "properties": {
           "id": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "seek": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "start": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "end": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "text": {
@@ -8819,44 +9067,24 @@
           "tokens": {
             "type": "array",
             "items": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
+              "type": "integer",
               "format": "int32"
             }
           },
           "temperature": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "avg_logprob": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "compression_ratio": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "no_speech_prob": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           }
         }
@@ -8868,19 +9096,11 @@
             "type": "string"
           },
           "start": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "end": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           }
         }
@@ -8917,47 +9137,37 @@
             }
           },
           "temperature": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
           "max_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "max_completion_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "top_p": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
           "n": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -9092,11 +9302,9 @@
             ]
           },
           "top_logprobs": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -9172,29 +9380,23 @@
             ]
           },
           "seed": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "presence_penalty": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
           "frequency_penalty": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
@@ -9204,11 +9406,7 @@
               "object"
             ],
             "additionalProperties": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
+              "type": "integer",
               "format": "int32"
             }
           }
@@ -9234,11 +9432,7 @@
             }
           },
           "created": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int64"
           },
           "model": {
@@ -9298,11 +9492,7 @@
             "type": "string"
           },
           "index": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "message": {
@@ -9375,11 +9565,9 @@
             ]
           },
           "max_output_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -9531,11 +9719,9 @@
             ]
           },
           "temperature": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
@@ -9580,11 +9766,9 @@
             ]
           },
           "top_p": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
@@ -9645,27 +9829,15 @@
             "type": "string"
           },
           "max_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "max_input_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "max_output_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "tokenizer_type": {
@@ -9800,20 +9972,16 @@
             ]
           },
           "max_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "max_output_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -9838,36 +10006,24 @@
             "type": "string"
           },
           "input_cost_per_million_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "output_cost_per_million_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "cached_input_cost_per_million_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
           "embedding_cost_per_million_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
@@ -9890,11 +10046,7 @@
             }
           },
           "count": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           }
         }
@@ -9914,11 +10066,7 @@
             "format": "date-time"
           },
           "expiration_minutes": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           }
         },
@@ -9937,20 +10085,12 @@
           "embedding": {
             "type": "array",
             "items": {
-              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-              "type": [
-                "number",
-                "string"
-              ],
+              "type": "number",
               "format": "float"
             }
           },
           "index": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           }
         }
@@ -10000,11 +10140,9 @@
             ]
           },
           "dimensions": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -10088,11 +10226,7 @@
             "format": "date-time"
           },
           "expires_in_seconds": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           }
         },
@@ -10132,11 +10266,7 @@
             "type": "string"
           },
           "size_bytes": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int64"
           },
           "created_at": {
@@ -10218,11 +10348,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "configuration_name": {
@@ -10247,11 +10373,9 @@
             "type": "boolean"
           },
           "timeout_seconds": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -10271,11 +10395,7 @@
             }
           },
           "count": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           }
         }
@@ -10284,20 +10404,16 @@
         "type": "object",
         "properties": {
           "estimated": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
           "actual": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
@@ -10318,11 +10434,7 @@
             "format": "uuid"
           },
           "function_id": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "status": {
@@ -10352,11 +10464,9 @@
             "format": "date-time"
           },
           "duration_ms": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int64"
           },
@@ -10369,11 +10479,7 @@
         "type": "object",
         "properties": {
           "function_configuration_id": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "description": "The function configuration ID to execute.",
             "format": "int32"
           },
@@ -10398,11 +10504,7 @@
         "type": "object",
         "properties": {
           "function_id": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "configuration_name": {
@@ -10452,11 +10554,9 @@
             "description": "The file identifier."
           },
           "expiration_minutes": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "description": "How many minutes the URL should be valid (1-10080).",
             "format": "int32"
@@ -10519,11 +10619,9 @@
             ]
           },
           "output_compression": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -10534,11 +10632,9 @@
             ]
           },
           "partial_images": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -10549,11 +10645,7 @@
             ]
           },
           "n": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "quality": {
@@ -10595,11 +10687,7 @@
         "type": "object",
         "properties": {
           "created": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int64"
           },
           "data": {
@@ -10676,11 +10764,7 @@
             "type": "string"
           },
           "size_bytes": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int64"
           },
           "file_name": {
@@ -10703,6 +10787,93 @@
             "additionalProperties": {
               "type": "string"
             }
+          }
+        }
+      },
+      "MediaProviderOperation": {
+        "required": [
+          "provider_id",
+          "credential_id",
+          "provider_model_id",
+          "provider_name"
+        ],
+        "type": "object",
+        "properties": {
+          "provider_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "credential_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provider_model_id": {
+            "type": "string"
+          },
+          "provider_name": {
+            "type": "string"
+          },
+          "operation_id": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "MediaTaskReconciliation": {
+        "type": "object",
+        "properties": {
+          "dispatch_id": {
+            "type": "string"
+          },
+          "virtual_key_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provider_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provider_model_id": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "provider_operation_id": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "result_urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "provider_cost": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "billing_disposition": {
+            "type": "string"
           }
         }
       },
@@ -10749,11 +10920,7 @@
             "type": "string"
           },
           "size_bytes": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int64"
           }
         },
@@ -10862,11 +11029,7 @@
             "type": "string"
           },
           "created": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int64"
           },
           "owned_by": {
@@ -10917,11 +11080,7 @@
             "type": "string"
           },
           "canonical_model_id": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "canonical_name": {
@@ -10970,20 +11129,16 @@
             "$ref": "#/components/schemas/DiscoveryModelCapabilitiesDto"
           },
           "max_input_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "max_output_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           }
@@ -11016,11 +11171,7 @@
         "type": "object",
         "properties": {
           "model_id": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "model_alias": {
@@ -11103,11 +11254,9 @@
             }
           },
           "top_n": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -11157,19 +11306,11 @@
         "type": "object",
         "properties": {
           "index": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "relevance_score": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "document": {
@@ -11209,19 +11350,11 @@
         "type": "object",
         "properties": {
           "cached_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "cache_write_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           }
         }
@@ -11247,21 +11380,15 @@
         "properties": {
           "background": { },
           "completed_at": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int64"
           },
           "conversation": { },
           "created_at": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int64"
           },
           "error": { },
@@ -11271,20 +11398,16 @@
           "incomplete_details": { },
           "instructions": { },
           "max_output_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "max_tool_calls": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -11356,11 +11479,9 @@
             ]
           },
           "temperature": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
@@ -11379,20 +11500,16 @@
             "type": "array"
           },
           "top_logprobs": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "top_p": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
@@ -11475,11 +11592,7 @@
         "type": "object",
         "properties": {
           "reasoning_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           }
         }
@@ -11511,33 +11624,21 @@
         "type": "object",
         "properties": {
           "input_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "input_tokens_details": {
             "$ref": "#/components/schemas/ResponseInputTokenDetails"
           },
           "output_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "output_tokens_details": {
             "$ref": "#/components/schemas/ResponseOutputTokenDetails"
           },
           "total_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           }
         }
@@ -11546,27 +11647,15 @@
         "type": "object",
         "properties": {
           "query_count": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "document_count": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "chunked_document_count": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           }
         }
@@ -11585,11 +11674,9 @@
             ]
           },
           "code": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           }
@@ -11622,12 +11709,43 @@
       "TaskMetadata": {
         "type": "object",
         "properties": {
-          "virtual_key_id": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
+          "media_provider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MediaProviderOperation"
+              }
+            ]
+          },
+          "provider_invocation_worker_id": {
             "type": [
-              "integer",
+              "null",
               "string"
+            ]
+          },
+          "reconciliation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MediaTaskReconciliation"
+              }
+            ]
+          },
+          "reconciliation_history": {
+            "type": [
+              "null",
+              "array"
             ],
+            "items": {
+              "$ref": "#/components/schemas/MediaTaskReconciliation"
+            }
+          },
+          "virtual_key_id": {
+            "type": "integer",
             "format": "int32"
           },
           "model": {
@@ -11676,11 +11794,7 @@
             }
           },
           "priority": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           }
         }
@@ -11720,11 +11834,9 @@
             ]
           },
           "speed": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
@@ -11788,47 +11900,37 @@
         "type": "object",
         "properties": {
           "prompt_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "completion_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "total_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "image_count": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "video_duration_seconds": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
@@ -11857,29 +11959,23 @@
             ]
           },
           "cached_input_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "cached_write_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "search_units": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -11894,38 +11990,30 @@
             ]
           },
           "inference_steps": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "reasoning_tokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "audio_duration_seconds": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           },
           "tts_characters": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -11990,11 +12078,9 @@
             "type": "string"
           },
           "duration": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -12005,11 +12091,9 @@
             ]
           },
           "fps": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -12032,20 +12116,14 @@
             ]
           },
           "seed": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
           "n": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "webhook_url": {
@@ -12069,11 +12147,7 @@
         "type": "object",
         "properties": {
           "created": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int64"
           },
           "data": {
@@ -12120,11 +12194,9 @@
             "type": "string"
           },
           "progress": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int32"
           },
@@ -12160,27 +12232,17 @@
         "type": "object",
         "properties": {
           "videos_generated": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "total_duration_seconds": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "estimated_cost": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
             "type": [
               "null",
-              "number",
-              "string"
+              "number"
             ],
             "format": "double"
           }
@@ -12190,35 +12252,19 @@
         "type": "object",
         "properties": {
           "width": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "height": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int32"
           },
           "duration": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "fps": {
-            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
-            "type": [
-              "number",
-              "string"
-            ],
+            "type": "number",
             "format": "double"
           },
           "codec": {
@@ -12234,19 +12280,13 @@
             ]
           },
           "file_size_bytes": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
+            "type": "integer",
             "format": "int64"
           },
           "bitrate": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
-              "integer",
-              "string"
+              "integer"
             ],
             "format": "int64"
           },

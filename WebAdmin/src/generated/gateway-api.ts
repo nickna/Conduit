@@ -123,9 +123,29 @@ export interface paths {
     put?: never;
     /**
      * Creates a chat completion.
-     * @description Returns a chat completion as application/json. Set stream=true to receive text/event-stream chunks. Models and capabilities depend on the virtual key and configured provider.
+     * @description Returns a chat completion as application/json. Set stream=true to receive OpenAI text/event-stream chunks and a [DONE] sentinel. Set stream_options.include_usage=true for a final usage chunk when the provider reports usage. Conduit progress and metrics events are available at /v1/conduit/chat/completions. Models and capabilities depend on the virtual key and configured provider.
      */
     post: operations["Chat_CreateCompletion"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/conduit/chat/completions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Creates a chat completion with Conduit streaming events.
+     * @description Uses the same chat execution and accounting as /v1/chat/completions. Set stream=true for chat chunks plus named Conduit metrics, reasoning, and tool progress events, followed by [DONE].
+     */
+    post: operations["Chat_CreateEnhancedCompletion"];
     delete?: never;
     options?: never;
     head?: never;
@@ -653,12 +673,12 @@ export interface components {
       error?: null | string;
       metadata?: null | components["schemas"]["TaskMetadata"];
       /** Format: int32 */
-      progress?: number | string;
+      progress?: number;
       progress_message?: null | string;
       /** Format: int32 */
-      retry_count?: number | string;
+      retry_count?: number;
       /** Format: int32 */
-      max_retries?: number | string;
+      max_retries?: number;
       is_retryable?: boolean;
       /** Format: date-time */
       next_retry_at?: unknown;
@@ -667,7 +687,7 @@ export interface components {
       task_id: string;
       status: string;
       /** Format: int32 */
-      progress?: null | number | string;
+      progress?: null | number;
       /** Format: date-time */
       created_at?: unknown;
       /** Format: date-time */
@@ -680,14 +700,14 @@ export interface components {
     AudioTranscriptionLogprob: {
       token?: string;
       /** Format: double */
-      logprob?: number | string;
-      bytes?: null | (number | string)[];
+      logprob?: number;
+      bytes?: null | number[];
     };
     AudioTranscriptionResponse: {
       text: string;
       language: string;
       /** Format: double */
-      duration: number | string;
+      duration: number;
       task: string;
       segments: components["schemas"]["AudioTranscriptionSegment"][];
       words?: null | components["schemas"]["AudioTranscriptionWord"][];
@@ -696,30 +716,30 @@ export interface components {
     };
     AudioTranscriptionSegment: {
       /** Format: int32 */
-      id?: number | string;
+      id?: number;
       /** Format: int32 */
-      seek?: number | string;
+      seek?: number;
       /** Format: double */
-      start?: number | string;
+      start?: number;
       /** Format: double */
-      end?: number | string;
+      end?: number;
       text?: string;
-      tokens?: (number | string)[];
+      tokens?: number[];
       /** Format: double */
-      temperature?: number | string;
+      temperature?: number;
       /** Format: double */
-      avg_logprob?: number | string;
+      avg_logprob?: number;
       /** Format: double */
-      compression_ratio?: number | string;
+      compression_ratio?: number;
       /** Format: double */
-      no_speech_prob?: number | string;
+      no_speech_prob?: number;
     };
     AudioTranscriptionWord: {
       word?: string;
       /** Format: double */
-      start?: number | string;
+      start?: number;
       /** Format: double */
-      end?: number | string;
+      end?: number;
     };
     ChatAudioOptions: {
       voice: string;
@@ -729,15 +749,15 @@ export interface components {
       model: string;
       messages: components["schemas"]["Message"][];
       /** Format: double */
-      temperature?: null | number | string;
+      temperature?: null | number;
       /** Format: int32 */
-      max_tokens?: null | number | string;
+      max_tokens?: null | number;
       /** Format: int32 */
-      max_completion_tokens?: null | number | string;
+      max_completion_tokens?: null | number;
       /** Format: double */
-      top_p?: null | number | string;
+      top_p?: null | number;
       /** Format: int32 */
-      n?: null | number | string;
+      n?: null | number;
       stream?: null | boolean;
       stream_options?: null | components["schemas"]["StreamOptions"];
       stop?: string | string[];
@@ -754,7 +774,7 @@ export interface components {
       prediction?: null | components["schemas"]["ChatPrediction"];
       logprobs?: null | boolean;
       /** Format: int32 */
-      top_logprobs?: null | number | string;
+      top_logprobs?: null | number;
       service_tier?: null | string;
       store?: null | boolean;
       metadata?: null | {
@@ -768,20 +788,20 @@ export interface components {
       prompt_cache_retention?: null | string;
       web_search_options?: null | components["schemas"]["WebSearchOptions"];
       /** Format: int32 */
-      seed?: null | number | string;
+      seed?: null | number;
       /** Format: double */
-      presence_penalty?: null | number | string;
+      presence_penalty?: null | number;
       /** Format: double */
-      frequency_penalty?: null | number | string;
+      frequency_penalty?: null | number;
       logit_bias?: null | {
-        [key: string]: number | string;
+        [key: string]: number;
       };
     };
     ChatCompletionResponse: {
       id: string;
       choices: components["schemas"]["Choice"][];
       /** Format: int64 */
-      created: number | string;
+      created: number;
       model: string;
       system_fingerprint?: null | string;
       object: string;
@@ -796,7 +816,7 @@ export interface components {
     Choice: {
       finish_reason: string;
       /** Format: int32 */
-      index: number | string;
+      index: number;
       message: components["schemas"]["Message"];
       logprobs?: unknown;
     };
@@ -808,7 +828,7 @@ export interface components {
       input?: null | components["schemas"]["JsonElement"];
       instructions?: null | components["schemas"]["JsonElement"];
       /** Format: int32 */
-      max_output_tokens?: null | number | string;
+      max_output_tokens?: null | number;
       max_tool_calls?: null | components["schemas"]["JsonElement"];
       metadata?: null | {
         [key: string]: string;
@@ -828,13 +848,13 @@ export interface components {
       stream?: null | boolean;
       stream_options?: null | components["schemas"]["JsonElement"];
       /** Format: double */
-      temperature?: null | number | string;
+      temperature?: null | number;
       text?: null | components["schemas"]["JsonElement"];
       tool_choice?: null | components["schemas"]["JsonElement"];
       tools?: null | components["schemas"]["JsonElement"];
       top_logprobs?: null | components["schemas"]["JsonElement"];
       /** Format: double */
-      top_p?: null | number | string;
+      top_p?: null | number;
       truncation?: null | components["schemas"]["JsonElement"];
       user?: null | string;
     };
@@ -845,11 +865,11 @@ export interface components {
       description: string;
       model_card_url: string;
       /** Format: int32 */
-      max_tokens: number | string;
+      max_tokens: number;
       /** Format: int32 */
-      max_input_tokens: number | string;
+      max_input_tokens: number;
       /** Format: int32 */
-      max_output_tokens: number | string;
+      max_output_tokens: number;
       tokenizer_type: string;
       input_modalities: string[];
       output_modalities: string[];
@@ -883,28 +903,28 @@ export interface components {
       tool_use?: null | boolean;
       json_mode?: null | boolean;
       /** Format: int32 */
-      max_tokens?: null | number | string;
+      max_tokens?: null | number;
       /** Format: int32 */
-      max_output_tokens?: null | number | string;
+      max_output_tokens?: null | number;
       /** @default false */
       pdf_input: boolean;
     };
     DiscoveryModelPricingDto: {
       pricing_model: string;
       /** Format: double */
-      input_cost_per_million_tokens: number | string;
+      input_cost_per_million_tokens: number;
       /** Format: double */
-      output_cost_per_million_tokens: number | string;
+      output_cost_per_million_tokens: number;
       /** Format: double */
-      cached_input_cost_per_million_tokens: null | number | string;
+      cached_input_cost_per_million_tokens: null | number;
       /** Format: double */
-      embedding_cost_per_million_tokens: null | number | string;
+      embedding_cost_per_million_tokens: null | number;
       currency: string;
     };
     DiscoveryModelsResponse: {
       data: components["schemas"]["DiscoveredModelDto"][];
       /** Format: int32 */
-      count: number | string;
+      count: number;
     };
     /** @description Temporary download URL response. */
     DownloadUrlResponse: {
@@ -912,20 +932,20 @@ export interface components {
       /** Format: date-time */
       expires_at: unknown;
       /** Format: int32 */
-      expiration_minutes: number | string;
+      expiration_minutes: number;
     };
     EmbeddingData: {
       object: string;
-      embedding: (number | string)[];
+      embedding: number[];
       /** Format: int32 */
-      index?: number | string;
+      index?: number;
     };
     EmbeddingRequest: {
       input: string | string[] | number[] | number[][];
       model: string;
       encoding_format?: null | string;
       /** Format: int32 */
-      dimensions?: null | number | string;
+      dimensions?: null | number;
       user?: null | string;
     };
     EmbeddingResponse: {
@@ -952,7 +972,7 @@ export interface components {
       /** Format: date-time */
       expires_at?: string;
       /** Format: int32 */
-      expires_in_seconds?: number | string;
+      expires_in_seconds?: number;
     };
     /** @enum {unknown} */
     ExecutionState:
@@ -970,7 +990,7 @@ export interface components {
       file_name: null | string;
       content_type: string;
       /** Format: int64 */
-      size_bytes: number | string;
+      size_bytes: number;
       /** Format: date-time */
       created_at: unknown;
       /** Format: date-time */
@@ -993,7 +1013,7 @@ export interface components {
     };
     FunctionDiscoveryDto: {
       /** Format: int32 */
-      id?: number | string;
+      id?: number;
       configuration_name?: string;
       provider_type?: string;
       purpose?: string;
@@ -1001,7 +1021,7 @@ export interface components {
       default_execution_mode?: string;
       is_enabled?: boolean;
       /** Format: int32 */
-      timeout_seconds?: null | number | string;
+      timeout_seconds?: null | number;
       parameter_schema?: {
         [key: string]: unknown;
       };
@@ -1009,13 +1029,13 @@ export interface components {
     FunctionDiscoveryResponse: {
       functions?: components["schemas"]["FunctionDiscoveryDto"][];
       /** Format: int32 */
-      count?: number | string;
+      count?: number;
     };
     FunctionExecutionCostDto: {
       /** Format: double */
-      estimated?: null | number | string;
+      estimated?: null | number;
       /** Format: double */
-      actual?: null | number | string;
+      actual?: null | number;
       currency?: string;
       breakdown?: {
         [key: string]: unknown;
@@ -1025,7 +1045,7 @@ export interface components {
       /** Format: uuid */
       id?: string;
       /** Format: int32 */
-      function_id?: number | string;
+      function_id?: number;
       status?: components["schemas"]["ExecutionState"];
       input?: {
         [key: string]: unknown;
@@ -1041,7 +1061,7 @@ export interface components {
       /** Format: date-time */
       completed_at?: unknown;
       /** Format: int64 */
-      duration_ms?: null | number | string;
+      duration_ms?: null | number;
       cost?: components["schemas"]["FunctionExecutionCostDto"];
     };
     /** @description Request model for function execution. */
@@ -1050,7 +1070,7 @@ export interface components {
        * Format: int32
        * @description The function configuration ID to execute.
        */
-      function_configuration_id?: number | string;
+      function_configuration_id?: number;
       /** @description Parameters to pass to the function. */
       parameters?: null | Record<string, never>;
       /** @description Optional metadata to associate with the execution. */
@@ -1058,7 +1078,7 @@ export interface components {
     };
     FunctionParametersResponseDto: {
       /** Format: int32 */
-      function_id?: number | string;
+      function_id?: number;
       configuration_name?: string;
       provider_type?: string;
       purpose?: string;
@@ -1081,7 +1101,7 @@ export interface components {
        * Format: int32
        * @description How many minutes the URL should be valid (1-10080).
        */
-      expiration_minutes?: null | number | string;
+      expiration_minutes?: null | number;
     };
     /** Format: binary */
     IFormFile: string;
@@ -1096,13 +1116,13 @@ export interface components {
       background?: null | string;
       moderation?: null | string;
       /** Format: int32 */
-      output_compression?: null | number | string;
+      output_compression?: null | number;
       output_format?: null | string;
       /** Format: int32 */
-      partial_images?: null | number | string;
+      partial_images?: null | number;
       stream?: null | boolean;
       /** Format: int32 */
-      n?: number | string;
+      n?: number;
       quality?: null | string;
       response_format?: null | string;
       size?: null | string;
@@ -1111,7 +1131,7 @@ export interface components {
     };
     ImageGenerationResponse: {
       /** Format: int64 */
-      created: number | string;
+      created: number;
       data?: components["schemas"]["ImageData"][];
       usage?: null | components["schemas"]["Usage"];
       background?: null | string;
@@ -1131,7 +1151,7 @@ export interface components {
       storage_key?: string;
       content_type?: string;
       /** Format: int64 */
-      size_bytes?: number | string;
+      size_bytes?: number;
       file_name?: null | string;
       media_type?: components["schemas"]["MediaType"];
       /** Format: date-time */
@@ -1141,6 +1161,35 @@ export interface components {
       custom_metadata?: {
         [key: string]: string;
       };
+    };
+    MediaProviderOperation: {
+      /** Format: int32 */
+      provider_id: number;
+      /** Format: int32 */
+      credential_id: number;
+      provider_model_id: string;
+      provider_name: string;
+      operation_id?: null | string;
+    };
+    MediaTaskReconciliation: {
+      dispatch_id?: string;
+      /** Format: int32 */
+      virtual_key_id?: number;
+      /** Format: int32 */
+      provider_id?: number;
+      provider_model_id?: string;
+      model?: string;
+      provider_operation_id?: string;
+      evidence?: string;
+      reason?: string;
+      result_urls?: string[];
+      /** Format: double */
+      provider_cost?: null | number;
+      requested_by?: string;
+      /** Format: date-time */
+      requested_at?: unknown;
+      outcome?: string;
+      billing_disposition?: string;
     };
     /** @enum {unknown} */
     MediaType: "image" | "video" | "audio" | "other";
@@ -1154,7 +1203,7 @@ export interface components {
       media_type: string;
       file_name: string;
       /** Format: int64 */
-      size_bytes: number | string;
+      size_bytes: number;
     };
     Message: {
       role: string;
@@ -1173,7 +1222,7 @@ export interface components {
       id: string;
       object: string;
       /** Format: int64 */
-      created: number | string;
+      created: number;
       owned_by: string;
     };
     /** @description An OpenAI-compatible model list. */
@@ -1185,7 +1234,7 @@ export interface components {
     ModelMetadataDto: {
       id: string;
       /** Format: int32 */
-      canonical_model_id: number | string;
+      canonical_model_id: number;
       canonical_name: string;
       provider: null | string;
       provider_model_id: string;
@@ -1198,9 +1247,9 @@ export interface components {
       capabilities_last_verified_at: unknown;
       capabilities: components["schemas"]["DiscoveryModelCapabilitiesDto"];
       /** Format: int32 */
-      max_input_tokens: null | number | string;
+      max_input_tokens: null | number;
       /** Format: int32 */
-      max_output_tokens: null | number | string;
+      max_output_tokens: null | number;
     };
     /** @description Model metadata response envelope. */
     ModelMetadataResponse: {
@@ -1210,7 +1259,7 @@ export interface components {
     /** @description UI parameter metadata for a model. */
     ModelParametersResponse: {
       /** Format: int32 */
-      model_id: number | string;
+      model_id: number;
       model_alias: string;
       series_name: string;
       parameters: components["schemas"]["JsonElement"];
@@ -1232,7 +1281,7 @@ export interface components {
       query: string;
       documents: string[];
       /** Format: int32 */
-      top_n?: null | number | string;
+      top_n?: null | number;
       return_documents?: null | boolean;
     };
     RerankResponse: {
@@ -1242,9 +1291,9 @@ export interface components {
     };
     RerankResult: {
       /** Format: int32 */
-      index: number | string;
+      index: number;
       /** Format: double */
-      relevance_score: number | string;
+      relevance_score: number;
       document?: null | string;
     };
     ResponseFormat: {
@@ -1253,25 +1302,25 @@ export interface components {
     };
     ResponseInputTokenDetails: {
       /** Format: int32 */
-      cached_tokens: number | string;
+      cached_tokens: number;
       /** Format: int32 */
-      cache_write_tokens: number | string;
+      cache_write_tokens: number;
     };
     ResponseObject: {
       background?: unknown;
       /** Format: int64 */
-      completed_at?: null | number | string;
+      completed_at?: null | number;
       conversation?: unknown;
       /** Format: int64 */
-      created_at: number | string;
+      created_at: number;
       error: unknown;
       id: string;
       incomplete_details: unknown;
       instructions: unknown;
       /** Format: int32 */
-      max_output_tokens?: null | number | string;
+      max_output_tokens?: null | number;
       /** Format: int32 */
-      max_tool_calls?: null | number | string;
+      max_tool_calls?: null | number;
       metadata: {
         [key: string]: string;
       };
@@ -1291,14 +1340,14 @@ export interface components {
       service_tier?: null | string;
       status?: null | string;
       /** Format: double */
-      temperature: null | number | string;
+      temperature: null | number;
       text?: null | components["schemas"]["ResponseTextConfiguration"];
       tool_choice: unknown;
       tools: unknown[];
       /** Format: int32 */
-      top_logprobs?: null | number | string;
+      top_logprobs?: null | number;
       /** Format: double */
-      top_p: null | number | string;
+      top_p: null | number;
       truncation?: null | string;
       usage?: null | components["schemas"]["ResponseUsage"];
       user?: null | string;
@@ -1318,7 +1367,7 @@ export interface components {
     };
     ResponseOutputTokenDetails: {
       /** Format: int32 */
-      reasoning_tokens: number | string;
+      reasoning_tokens: number;
     };
     ResponseTextConfiguration: {
       format?: components["schemas"]["ResponseTextFormat"];
@@ -1328,26 +1377,26 @@ export interface components {
     };
     ResponseUsage: {
       /** Format: int32 */
-      input_tokens: number | string;
+      input_tokens: number;
       input_tokens_details: components["schemas"]["ResponseInputTokenDetails"];
       /** Format: int32 */
-      output_tokens: number | string;
+      output_tokens: number;
       output_tokens_details: components["schemas"]["ResponseOutputTokenDetails"];
       /** Format: int32 */
-      total_tokens: number | string;
+      total_tokens: number;
     };
     SearchUsageMetadata: {
       /** Format: int32 */
-      query_count?: number | string;
+      query_count?: number;
       /** Format: int32 */
-      document_count?: number | string;
+      document_count?: number;
       /** Format: int32 */
-      chunked_document_count?: number | string;
+      chunked_document_count?: number;
     };
     SecurityErrorResponse: {
       error: null | string;
       /** Format: int32 */
-      code: null | number | string;
+      code: null | number;
     };
     StreamOptions: {
       include_usage?: boolean;
@@ -1358,8 +1407,13 @@ export interface components {
       task_id: string;
     };
     TaskMetadata: {
+      media_provider?: null | components["schemas"]["MediaProviderOperation"];
+      provider_invocation_worker_id?: null | string;
+      reconciliation?: null | components["schemas"]["MediaTaskReconciliation"];
+      reconciliation_history?:
+        null | components["schemas"]["MediaTaskReconciliation"][];
       /** Format: int32 */
-      virtual_key_id?: number | string;
+      virtual_key_id?: number;
       model?: null | string;
       prompt?: null | string;
       correlation_id?: null | string;
@@ -1370,7 +1424,7 @@ export interface components {
         [key: string]: string;
       };
       /** Format: int32 */
-      priority?: number | string;
+      priority?: number;
     };
     /** @enum {unknown} */
     TaskState:
@@ -1387,7 +1441,7 @@ export interface components {
       voice: string;
       response_format?: null | string;
       /** Format: double */
-      speed?: null | number | string;
+      speed?: null | number;
       instructions?: null | string;
       stream_format?: null | string;
     };
@@ -1403,34 +1457,34 @@ export interface components {
     ToolChoice: string | Record<string, never>;
     Usage: {
       /** Format: int32 */
-      prompt_tokens?: null | number | string;
+      prompt_tokens?: null | number;
       /** Format: int32 */
-      completion_tokens?: null | number | string;
+      completion_tokens?: null | number;
       /** Format: int32 */
-      total_tokens?: null | number | string;
+      total_tokens?: null | number;
       /** Format: int32 */
-      image_count?: null | number | string;
+      image_count?: null | number;
       /** Format: double */
-      video_duration_seconds?: null | number | string;
+      video_duration_seconds?: null | number;
       video_resolution?: null | string;
       is_batch?: null | boolean;
       image_quality?: null | string;
       image_resolution?: null | string;
       /** Format: int32 */
-      cached_input_tokens?: null | number | string;
+      cached_input_tokens?: null | number;
       /** Format: int32 */
-      cached_write_tokens?: null | number | string;
+      cached_write_tokens?: null | number;
       /** Format: int32 */
-      search_units?: null | number | string;
+      search_units?: null | number;
       search_metadata?: null | components["schemas"]["SearchUsageMetadata"];
       /** Format: int32 */
-      inference_steps?: null | number | string;
+      inference_steps?: null | number;
       /** Format: int32 */
-      reasoning_tokens?: null | number | string;
+      reasoning_tokens?: null | number;
       /** Format: double */
-      audio_duration_seconds?: null | number | string;
+      audio_duration_seconds?: null | number;
       /** Format: int32 */
-      tts_characters?: null | number | string;
+      tts_characters?: null | number;
       metadata?: null | Record<string, never>;
       pricing_parameters?: null | Record<string, never>;
     };
@@ -1444,17 +1498,17 @@ export interface components {
       prompt: string;
       model: string;
       /** Format: int32 */
-      duration?: null | number | string;
+      duration?: null | number;
       size?: null | string;
       /** Format: int32 */
-      fps?: null | number | string;
+      fps?: null | number;
       style?: null | string;
       response_format?: null | string;
       user?: null | string;
       /** Format: int32 */
-      seed?: null | number | string;
+      seed?: null | number;
       /** Format: int32 */
-      n?: number | string;
+      n?: number;
       webhook_url?: null | string;
       webhook_headers?: null | {
         [key: string]: string;
@@ -1462,7 +1516,7 @@ export interface components {
     };
     VideoGenerationResponse: {
       /** Format: int64 */
-      created?: number | string;
+      created?: number;
       data?: components["schemas"]["VideoData"][];
       model?: null | string;
       usage?: null | components["schemas"]["VideoGenerationUsage"];
@@ -1473,7 +1527,7 @@ export interface components {
       task_id: string;
       status: string;
       /** Format: int32 */
-      progress?: null | number | string;
+      progress?: null | number;
       /** Format: date-time */
       created_at?: unknown;
       /** Format: date-time */
@@ -1485,27 +1539,27 @@ export interface components {
     };
     VideoGenerationUsage: {
       /** Format: int32 */
-      videos_generated?: number | string;
+      videos_generated?: number;
       /** Format: double */
-      total_duration_seconds?: number | string;
+      total_duration_seconds?: number;
       /** Format: double */
-      estimated_cost?: null | number | string;
+      estimated_cost?: null | number;
     };
     VideoMetadata: {
       /** Format: int32 */
-      width?: number | string;
+      width?: number;
       /** Format: int32 */
-      height?: number | string;
+      height?: number;
       /** Format: double */
-      duration?: number | string;
+      duration?: number;
       /** Format: double */
-      fps?: number | string;
+      fps?: number;
       codec?: null | string;
       audio_codec?: null | string;
       /** Format: int64 */
-      file_size_bytes?: number | string;
+      file_size_bytes?: number;
       /** Format: int64 */
-      bitrate?: null | number | string;
+      bitrate?: null | number;
       mime_type?: null | string;
       format?: null | string;
     };
@@ -2487,6 +2541,180 @@ export interface operations {
       };
     };
   };
+  Chat_CreateEnhancedCompletion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        /**
+         * @example {
+         *       "model": "your-model-alias",
+         *       "messages": [
+         *         {
+         *           "role": "user",
+         *           "content": "Hello"
+         *         }
+         *       ],
+         *       "stream": false
+         *     }
+         */
+        "application/json": components["schemas"]["ChatCompletionRequest"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatCompletionResponse"];
+          "text/event-stream": string;
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The virtual key is missing, invalid, disabled, or expired. Authentication may return an empty body. */
+      401: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Payment Required */
+      402: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Access was denied by an applicable virtual-key or IP access policy. Authorization may return an empty body. */
+      403: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["OpenAIErrorResponse"]
+            | components["schemas"]["SecurityErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request Content-Type is not supported. */
+      415: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description The request exceeded an applicable request, token, or concurrency limit. */
+      429: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          /** @description Maximum requests or tokens in the applicable window. */
+          "X-RateLimit-Limit"?: number;
+          /** @description Requests or tokens remaining in the applicable window. */
+          "X-RateLimit-Remaining"?: number;
+          /** @description UTC Unix timestamp in seconds when the window resets. */
+          "X-RateLimit-Reset"?: number;
+          /** @description Scope of the exceeded limit (key, group, model, token, concurrency, or IP). */
+          "X-RateLimit-Scope"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+      /** @description Required infrastructure is temporarily unavailable. */
+      503: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          /** @description Delay in seconds before retrying the request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
+    };
+  };
   Responses_Create: {
     parameters: {
       query?: never;
@@ -3081,7 +3309,7 @@ export interface operations {
       header?: never;
       path: {
         /** @description The function configuration ID */
-        functionConfigurationId: number | string;
+        functionConfigurationId: number;
       };
       cookie?: never;
     };
@@ -3425,9 +3653,9 @@ export interface operations {
     parameters: {
       query?: {
         /** @description Maximum time to wait in seconds (default: 300, max: 600). */
-        timeout?: number | string;
+        timeout?: number;
         /** @description Polling interval in seconds (default: 2, min: 1). */
-        interval?: number | string;
+        interval?: number;
       };
       header?: never;
       path: {
@@ -3835,7 +4063,7 @@ export interface operations {
           file: components["schemas"]["IFormFile"];
           response_format?: string;
           /** Format: double */
-          temperature?: number | string;
+          temperature?: number;
           chunking_strategy?: string;
           stream?: boolean;
           model: string;

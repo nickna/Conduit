@@ -79,7 +79,7 @@ namespace ConduitLLM.Providers.MiniMax
                     httpClient,
                     endpoint,
                     miniMaxRequest,
-                    MediaJsonOptions,
+                    CaseInsensitiveJsonOptions,
                     cancellationToken);
                 
                 // Check for MiniMax error response
@@ -96,6 +96,7 @@ namespace ConduitLLM.Providers.MiniMax
                     throw new LLMCommunicationException("MiniMax video generation did not return a task ID");
                 }
 
+                await RecordMediaOperationAsync(response.TaskId, cancellationToken);
                 Logger.LogInformation("MiniMax video generation task created: {TaskId}", response.TaskId);
 
                 var pollingTimeoutSeconds = ProviderTimeouts.VideoPollingSeconds();

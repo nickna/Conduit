@@ -132,6 +132,23 @@ required infrastructure policy. It creates and disposes an isolated Redis testco
 local runs can set `TEST_REDIS_CONNECTION` to use an existing Redis connection instead. OpenAPI
 metadata export remains infrastructure-free.
 
+For #1156, both SDKs assert complete model objects and list/retrieve consistency,
+OpenAI SDK error handling for missing models and invalid keys, typed modern chat
+options arriving at the provider, chat stream content/finish/usage, completed
+Responses streams, and embedding/image/speech payloads. Operation counters require
+both model routes and both streaming and non-streaming chat/Responses paths to run.
+The embedding fixture explicitly uses `float`; default SDK base64-provider
+compatibility is tracked in #1545, and complete content/tool-choice schema unions
+are tracked in #1547. Additional modern moderation/custom-voice variants are tracked
+in #1549. Standard chat SSE contains OpenAI chunks only; WebAdmin uses
+`/v1/conduit/chat/completions` for enhanced metrics, reasoning, and tool progress.
+
+Gateway numeric fields require JSON numbers; quoted numbers are rejected with 400.
+The pinned OpenAI gate checks root fields plus selected primitive types and nested
+model fields, including retrieval. Missing or malformed baseline files fail the
+gate. These checks are bounded regression coverage; they do not prove recursive
+equivalence of every OpenAI union, enum, or numeric constraint.
+
 `coverage-baseline.json` records component minima measured October 6, 2026 from
 the complete core and Jest suites. .NET uses executable-line coverage; Jest uses
 statement coverage. Minima round measured values down to whole percentage points;

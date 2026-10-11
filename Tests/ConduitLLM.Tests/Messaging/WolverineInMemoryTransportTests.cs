@@ -12,6 +12,7 @@ using JasperFx.CodeGeneration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 using Wolverine;
 
@@ -98,6 +99,7 @@ namespace ConduitLLM.Tests.Messaging
             // The connection string is deliberately unusable: in-memory mode must never
             // touch it (Postgres persistence, transport, and outbox are all skipped).
             using var host = await Host.CreateDefaultBuilder()
+                .ConfigureLogging(logging => logging.ClearProviders().AddConsole())
                 .AddConduitWolverine(configuration, "Host=unreachable;Database=none", "conduit-test", opts =>
                 {
                     // This isolated test declares a test-only bridge that is not part of

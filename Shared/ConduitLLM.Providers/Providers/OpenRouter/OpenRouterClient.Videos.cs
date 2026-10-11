@@ -69,6 +69,7 @@ namespace ConduitLLM.Providers.OpenRouter
                 var jobId = submit.Id;
                 if (string.IsNullOrEmpty(jobId))
                     throw new LLMCommunicationException("OpenRouter video generation did not return a job id.");
+                await RecordMediaOperationAsync(jobId, cancellationToken);
 
                 var options = new PollingOptions(
                     InitialDelay: TimeSpan.FromSeconds(2),

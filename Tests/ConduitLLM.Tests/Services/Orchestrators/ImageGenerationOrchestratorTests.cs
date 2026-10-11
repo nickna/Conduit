@@ -24,6 +24,7 @@ namespace ConduitLLM.Tests.Services.Orchestrators
         ImageGenerationRequested>
     {
         private Mock<ILLMClient>? _imageClientMock;
+        private Mock<IMediaTaskReconciliationStore>? _reconciliationStoreMock;
 
         protected override string GetRequestId(ImageGenerationRequested request) => request.TaskId;
         protected override string? GetWebhookUrl(ImageGenerationRequested request) => request.WebhookUrl;
@@ -48,7 +49,8 @@ namespace ConduitLLM.Tests.Services.Orchestrators
                 ParameterValidatorMock.Object,
                 Metrics,
                 ErrorTrackingServiceMock.Object,
-                LoggerMock.Object as ILogger<ImageGenerationOrchestrator> ?? new Mock<ILogger<ImageGenerationOrchestrator>>().Object);
+                LoggerMock.Object as ILogger<ImageGenerationOrchestrator> ?? new Mock<ILogger<ImageGenerationOrchestrator>>().Object,
+                reconciliationStore: _reconciliationStoreMock?.Object);
         }
 
         protected override ImageGenerationRequested CreateTestEventRequest()
@@ -115,6 +117,28 @@ namespace ConduitLLM.Tests.Services.Orchestrators
                     Url = "https://storage.example.com/image.png",
                     SizeBytes = 1024
                 });
+        }
+
+        [Fact]
+        public async Task HandleAsync_ContextRecordingFailureCannotMarkAnUninvokedProviderIndeterminate()
+        {
+            var request = CreateTestEventRequest();
+            SetupSuccessfulGeneration(CreateTestResponse());
+            _reconciliationStoreMock = new Mock<IMediaTaskReconciliationStore>();
+            _reconciliationStoreMock.Setup(x => x.RecordInvocationAsync(
+                request.TaskId, It.IsAny<string>(), It.IsAny<MediaProviderOperation>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("Context persistence failed"));
+
+            await Orchestrator.HandleAsync(request, CreateEventContext());
+
+            TaskServiceMock.Verify(x => x.MarkProviderInvocationStartedAsync(
+                request.TaskId, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+            _imageClientMock!.Verify(x => x.CreateImageAsync(It.IsAny<ImageGenerationRequest>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            TaskServiceMock.Verify(x => x.UpdateTaskStatusAsync(request.TaskId, TaskState.Failed,
+                It.IsAny<int?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            TaskServiceMock.Verify(x => x.UpdateTaskStatusAsync(request.TaskId, TaskState.Indeterminate,
+                It.IsAny<int?>(), It.IsAny<object?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Fact]

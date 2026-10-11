@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -270,21 +271,9 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
                 "non-stream provider usage is preserved");
         }
 
-        using (var request = AuthorizedChatRequest("native-stream", stream: true))
-        using (var response = await _gateway.SendAsync(
-                       request,
-                       HttpCompletionOption.ResponseHeadersRead))
-        {
-            await ExpectAsync(response, HttpStatusCode.OK, "native provider SSE chat completion");
-            var body = await response.Content.ReadAsStringAsync();
-            True(body.Contains("native ", StringComparison.Ordinal) &&
-                 body.Contains("stream response", StringComparison.Ordinal),
-                "SSE chunks are forwarded progressively");
-            True(body.Contains("\"prompt_tokens\":10", StringComparison.Ordinal),
-                "stream usage chunk is forwarded");
-            True(body.Contains("data: [DONE]", StringComparison.Ordinal),
-                "SSE completion sentinel is forwarded");
-        }
+        await AssertProviderStreamAsync(includeUsage: true, enhancedStream: false);
+        await AssertProviderStreamAsync(includeUsage: false, enhancedStream: false);
+        await AssertProviderStreamAsync(includeUsage: false, enhancedStream: true);
 
         await AssertDurableAccountingAsync();
 
@@ -304,10 +293,71 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
 
         var providerState = await GetProviderStateAsync();
         True(providerState.NonStreamingRequests == 1, "mock provider observed non-stream HTTP");
-        True(providerState.StreamingRequests == 1, "mock provider observed SSE HTTP");
+        True(providerState.StreamingRequests == 3, "mock provider observed all three SSE dialect/usage requests");
         True(providerState.ErrorRequests == 1, "mock provider observed translated error request");
         True(providerState.AuthorizationFailures == 0, "provider credential was supplied correctly");
         True(providerState.CancellationsObserved >= 1, "provider observed upstream cancellation");
+    }
+
+    private async Task AssertProviderStreamAsync(bool includeUsage, bool enhancedStream)
+    {
+        var mode = enhancedStream ? "enhanced" : includeUsage ? "standard with usage" : "standard without usage";
+        using var request = AuthorizedChatRequest(
+            "native-stream", stream: true, includeUsage, enhancedStream);
+        using var response = await _gateway.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        await ExpectAsync(response, HttpStatusCode.OK, $"native provider SSE chat completion ({mode})");
+        Equal("text/event-stream", response.Content.Headers.ContentType?.MediaType ?? string.Empty,
+            $"SSE content type ({mode})");
+        var body = await response.Content.ReadAsStringAsync();
+        True(body.Contains("native ", StringComparison.Ordinal) &&
+             body.Contains("stream response", StringComparison.Ordinal),
+            $"SSE content chunks are forwarded ({mode})");
+        True(body.TrimEnd().EndsWith("data: [DONE]", StringComparison.Ordinal),
+            $"SSE completion sentinel is last ({mode})");
+
+        var chunks = new List<JsonElement>();
+        foreach (var payload in body.Split('\n')
+            .Where(line => line.StartsWith("data: {", StringComparison.Ordinal))
+            .Select(line =>
+            {
+                using var document = JsonDocument.Parse(line[6..]);
+                return document.RootElement.Clone();
+            }))
+        {
+            var isChunk = payload.TryGetProperty("object", out var discriminator) &&
+                discriminator.GetString() == "chat.completion.chunk";
+            if (!enhancedStream)
+                True(isChunk, $"standard SSE payload is an OpenAI chat chunk ({mode})");
+            if (isChunk) chunks.Add(payload);
+        }
+
+        var usageChunks = chunks.Where(chunk =>
+            chunk.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object).ToArray();
+        if (includeUsage || enhancedStream)
+        {
+            True(usageChunks.Length == 1, $"provider usage appears in exactly one chat chunk ({mode})");
+            var usageChunk = usageChunks.Single();
+            var usage = GetProperty(usageChunk, "usage");
+            True(GetProperty(usage, "prompt_tokens").GetInt32() == 10 &&
+                 GetProperty(usage, "completion_tokens").GetInt32() == 5 &&
+                 GetProperty(usage, "total_tokens").GetInt32() == 15,
+                $"stream provider usage is preserved ({mode})");
+            True(GetProperty(usageChunk, "choices").GetArrayLength() == 0,
+                $"stream usage chunk has empty choices ({mode})");
+            True(GetProperty(chunks[^1], "usage").ValueKind == JsonValueKind.Object,
+                $"usage is the final chat chunk ({mode})");
+        }
+        else
+        {
+            True(usageChunks.Length == 0, "standard SSE omits usage when not requested");
+        }
+
+        if (enhancedStream)
+            True(body.Contains("event: metrics-final", StringComparison.Ordinal),
+                "Conduit SSE retains final metrics");
+        else
+            True(!body.Contains("event:", StringComparison.Ordinal),
+                $"standard SSE excludes Conduit named events ({mode})");
     }
 
     private async Task AssertProviderCancellationAsync()
@@ -433,14 +483,15 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
     private async Task AssertDurableAccountingAsync()
     {
         const decimal singleRequestCost = 0.000075m;
-        var expectedCost = singleRequestCost * 2;
+        const int completedRequests = 4; // One non-stream completion and all three streaming modes.
+        var expectedCost = singleRequestCost * completedRequests;
         var deadline = DateTime.UtcNow.AddSeconds(60);
         AccountingSnapshot? latest = null;
 
         while (DateTime.UtcNow < deadline)
         {
             latest = await ReadAccountingSnapshotAsync();
-            if (latest.MatchingRequestLogs == 2 &&
+            if (latest.MatchingRequestLogs == completedRequests &&
                 latest.RequestLogCost == expectedCost &&
                 latest.LifetimeSpent == expectedCost &&
                 latest.LedgerDebits == expectedCost &&
@@ -956,12 +1007,15 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         return request;
     }
 
-    private static HttpRequestMessage AuthorizedChatRequest(string prompt, bool stream)
+    private static HttpRequestMessage AuthorizedChatRequest(
+        string prompt, bool stream, bool includeUsage = false, bool enhancedStream = false)
     {
-        var request = AuthorizedRequest(HttpMethod.Post, "v1/chat/completions");
+        var request = AuthorizedRequest(HttpMethod.Post,
+            enhancedStream ? "v1/conduit/chat/completions" : "v1/chat/completions");
+        var streamOptions = includeUsage ? ",\"stream_options\":{\"include_usage\":true}" : string.Empty;
         request.Content = new StringContent(
             $$"""
-              {"model":"{{NativeParityFixture.ModelAlias}}","messages":[{"role":"user","content":"{{prompt}}"}],"stream":{{(stream ? "true" : "false")}}}
+              {"model":"{{NativeParityFixture.ModelAlias}}","messages":[{"role":"user","content":"{{prompt}}"}],"stream":{{(stream ? "true" : "false")}}{{streamOptions}}}
               """,
             Encoding.UTF8,
             "application/json");

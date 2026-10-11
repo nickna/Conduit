@@ -43,7 +43,7 @@ namespace ConduitLLM.Gateway.Endpoints
                     LogOwnershipFailure(taskId, virtualKeyId, status);
                     return TaskNotFound();
                 }
-                return Ok(status);
+                return Ok(CustomerStatus(status!));
             }
             catch (InvalidOperationException ex)
             {
@@ -117,7 +117,7 @@ namespace ConduitLLM.Gateway.Endpoints
                     TimeSpan.FromSeconds(interval),
                     TimeSpan.FromSeconds(timeout));
 
-                return Ok(status);
+                return Ok(CustomerStatus(status));
             }
             catch (InvalidOperationException ex)
             {
@@ -128,6 +128,22 @@ namespace ConduitLLM.Gateway.Endpoints
                 return OpenAIError(408, "Task polling timed out", "timeout", "timeout");
             }
         }
+
+        // Keep operator evidence, provider credential identity and signed recovery
+        // references private without mutating the task service's cached status.
+        private static AsyncTaskStatus CustomerStatus(AsyncTaskStatus status) => new()
+        {
+            TaskId = status.TaskId, TaskType = status.TaskType, State = status.State,
+            CreatedAt = status.CreatedAt, UpdatedAt = status.UpdatedAt, CompletedAt = status.CompletedAt,
+            Result = status.Result, Error = status.Error, Progress = status.Progress, ProgressMessage = status.ProgressMessage,
+            RetryCount = status.RetryCount, MaxRetries = status.MaxRetries, IsRetryable = status.IsRetryable, NextRetryAt = status.NextRetryAt,
+            Metadata = status.Metadata is { } metadata ? new TaskMetadata(metadata.VirtualKeyId)
+            {
+                Model = metadata.Model, Prompt = metadata.Prompt, CorrelationId = metadata.CorrelationId,
+                Payload = metadata.Payload, VideoId = metadata.VideoId, WebhookUrl = metadata.WebhookUrl,
+                WebhookHeaders = metadata.WebhookHeaders, Priority = metadata.Priority, ExtensionData = metadata.ExtensionData
+            } : null
+        };
 
         private IResult TaskNotFound() =>
             OpenAIError(404, "The requested task was not found", "not_found", "not_found_error");
