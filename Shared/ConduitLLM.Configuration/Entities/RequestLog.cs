@@ -88,7 +88,7 @@ public class RequestLog : IEntity<int>, IAuditEvent
     /// <summary>
     /// Cost of the request
     /// </summary>
-    [Column(TypeName = "decimal(10, 6)")]
+    [Column(TypeName = "decimal(12, 8)")]
     public decimal Cost { get; set; }
 
     /// <summary>

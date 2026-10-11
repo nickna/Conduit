@@ -136,11 +136,11 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                     int (decimal v) => ((object)v).GetHashCode(),
                     decimal (decimal v) => v),
                 mappingInfo: new RelationalTypeMappingInfo(
-                    storeTypeName: "numeric(18,6)",
-                    precision: 18,
-                    scale: 6));
+                    storeTypeName: "numeric(20,8)",
+                    precision: 20,
+                    scale: 8));
             amount.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
-            amount.AddAnnotation("Relational:ColumnType", "decimal(18, 6)");
+            amount.AddAnnotation("Relational:ColumnType", "decimal(20, 8)");
 
             var balanceAfter = runtimeEntityType.AddProperty(
                 "BalanceAfter",
@@ -188,11 +188,11 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                     int (decimal v) => ((object)v).GetHashCode(),
                     decimal (decimal v) => v),
                 mappingInfo: new RelationalTypeMappingInfo(
-                    storeTypeName: "numeric(18,6)",
-                    precision: 18,
-                    scale: 6));
+                    storeTypeName: "numeric(20,8)",
+                    precision: 20,
+                    scale: 8));
             balanceAfter.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
-            balanceAfter.AddAnnotation("Relational:ColumnType", "decimal(18, 6)");
+            balanceAfter.AddAnnotation("Relational:ColumnType", "decimal(20, 8)");
 
             var billingWindowStartUtc = runtimeEntityType.AddProperty(
                 "BillingWindowStartUtc",

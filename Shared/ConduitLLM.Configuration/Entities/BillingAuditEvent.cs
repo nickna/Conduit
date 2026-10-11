@@ -56,7 +56,7 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Calculated cost for the request (null if not calculated)
         /// </summary>
-        [Column(TypeName = "decimal(10, 6)")]
+        [Column(TypeName = "decimal(12, 8)")]
         public decimal? CalculatedCost { get; set; }
 
         /// <summary>
@@ -102,7 +102,7 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Total cost from tool usage (separate from token costs)
         /// </summary>
-        [Column(TypeName = "decimal(10, 6)")]
+        [Column(TypeName = "decimal(12, 8)")]
         public decimal? ToolUsageCost { get; set; }
 
         /// <summary>
