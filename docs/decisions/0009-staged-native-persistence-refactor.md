@@ -275,6 +275,19 @@ and shared store identity. This removes Core discovery's configuration-query
 boundary; ChatEndpoints' separate preflight read and published agentic workflows
 remain separate work.
 
+`ChatEndpoints.CreateWithRuntimePersistence` prepares the separate chat preflight
+over that same scalar configuration store. The sole public 14-parameter repository
+constructor, its guards and optional defaults remain unchanged. The prepared path
+forwards the original configuration-ID list and cancellation token without sorting
+or deduplication. Validation retains missing IDs before disabled configurations,
+then explicit iteration limits, and preserves the existing error/cancellation
+contract and accounting order. Empty IDs retain the caller's fast path. This
+factory remains unselected until the next native composition and HTTP checkpoint;
+preparing it does not establish an agentic workload.
+Paired HTTP tests preserve explicit-null global defaults and the inherited omitted
+flag initializers; the latter bypass the documented global defaults and are tracked
+in [#1576](https://github.com/nickna/Conduit/issues/1576).
+
 ## Options considered
 
 1. **Wait for production-supported EF NativeAOT.** Rejected as the only plan: it

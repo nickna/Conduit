@@ -349,6 +349,13 @@ analyzer build emits zero first-party IL diagnostics; its 14 known warnings comp
 Published Core LLM tool discovery, ChatEndpoints' separate configuration preflight,
 inline execution and broader agentic workflows remain unproved.
 
+Chat's separate function-configuration preflight now has a prepared scalar-store
+factory. It retains the sole public 14-parameter constructor and the original ID
+input, validation/error ordering, cancellation behavior and accounting boundary.
+The current chat registration still uses the repository constructor. Paired
+managed preflight tests and subsequent native composition/HTTP proof are separate
+checkpoints; this preparation does not advertise agentic support.
+
 The native capability endpoint explicitly names `inline-function-execution`,
 `agentic-tool-and-function-workflows`, `function-audit-and-retention`, and
 `billing-reconciliation` alongside the existing EF, authentication-cache and

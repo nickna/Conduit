@@ -14,7 +14,7 @@ namespace ConduitLLM.Gateway.Endpoints
             ChatCompletionRequest request,
             CancellationToken cancellationToken)
         {
-            if (_functionConfigRepository == null)
+            if (_runtimeConfigurationStore is null && _functionConfigRepository is null)
             {
                 _logger.LogError("Function calling requested but IFunctionConfigurationRepository is not available");
                 return OpenAIError(500, "Function calling is not configured on this server", "function_calling_unavailable", "server_error");
@@ -22,9 +22,11 @@ namespace ConduitLLM.Gateway.Endpoints
 
             try
             {
-                var functionConfigs = await _functionConfigRepository.GetByIdsAsync(
-                    request.FunctionConfigurationIds!,
-                    cancellationToken);
+                var functionConfigs = _runtimeConfigurationStore is not null
+                    ? await _runtimeConfigurationStore.GetConfigurationsAsync(
+                        request.FunctionConfigurationIds!, cancellationToken)
+                    : await _functionConfigRepository!.GetByIdsAsync(
+                        request.FunctionConfigurationIds!, cancellationToken);
 
                 var missingIds = request.FunctionConfigurationIds!
                     .Except(functionConfigs.Select(fc => fc.Id))
