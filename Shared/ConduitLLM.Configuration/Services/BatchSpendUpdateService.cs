@@ -574,7 +574,7 @@ namespace ConduitLLM.Configuration.Services
         /// <summary>
         /// Force flush all pending updates immediately
         /// </summary>
-        /// <returns>Number of groups updated</returns>
+        /// <returns>Number of finalized Redis claims plus successfully persisted fallback updates</returns>
         public async Task<int> FlushPendingUpdatesAsync()
         {
             var redis = await _redisConnectionFactory.GetConnectionAsync();
@@ -588,7 +588,7 @@ namespace ConduitLLM.Configuration.Services
             var claims = await GetProcessingClaimsAsync(server, db);
             claims.AddRange(await ClaimPendingSpendAsync(server, db));
 
-            if (claims.Count == 0)
+            if (claims.Count == 0 && _fallbackQueue.IsEmpty)
             {
                 _logger.LogDebug("No pending spend updates to flush");
                 return 0;
@@ -685,7 +685,7 @@ namespace ConduitLLM.Configuration.Services
                 }
             }
 
-            return processedCount;
+            return processedCount + fallbackCount;
         }
 
         private async Task<VirtualKeyBalanceAdjustmentResult> ApplyClaimAsync(
@@ -1331,6 +1331,9 @@ namespace ConduitLLM.Configuration.Services
         /// <returns>Dictionary with service statistics</returns>
         public async Task<Dictionary<string, object>> GetStatisticsAsync()
         {
+            // Snapshot the process-local recovery backlog even when Redis is unavailable.
+            var fallbackUpdates = _fallbackQueue.ToArray();
+            var fallbackPendingCost = fallbackUpdates.Sum(update => update.Cost);
             try
             {
                 var redis = await _redisConnectionFactory.GetConnectionAsync();
@@ -1352,6 +1355,8 @@ namespace ConduitLLM.Configuration.Services
                     ["FlushIntervalSeconds"] = _flushInterval.TotalSeconds,
                     ["PendingSpendKeysExpire"] = false,
                     ["RedisTtlHours"] = _reservationTtl.TotalHours,
+                    ["FallbackPendingUpdates"] = fallbackUpdates.Length,
+                    ["FallbackPendingCost"] = fallbackPendingCost,
                     ["ConfiguredFlushInterval"] = _options.FlushIntervalSeconds,
                     ["MinimumInterval"] = _options.MinimumIntervalSeconds,
                     ["MaximumInterval"] = _options.MaximumIntervalSeconds
@@ -1364,6 +1369,8 @@ namespace ConduitLLM.Configuration.Services
                 {
                     ["Error"] = ex.Message,
                     ["FlushIntervalSeconds"] = _flushInterval.TotalSeconds,
+                    ["FallbackPendingUpdates"] = fallbackUpdates.Length,
+                    ["FallbackPendingCost"] = fallbackPendingCost,
                     ["ConfiguredFlushInterval"] = _options.FlushIntervalSeconds
                 };
             }
