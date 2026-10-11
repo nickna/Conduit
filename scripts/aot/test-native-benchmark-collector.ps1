@@ -850,7 +850,12 @@ if ($env:CONDUIT_COLLECTOR_HELPER_VALUE -eq 'timeout') {
     'Start-Sleep -Seconds 60' | Set-Content -LiteralPath $sleeper -Encoding utf8NoBOM
     $helperEnvironment = @{ CONDUIT_COLLECTOR_HELPER_VALUE = 'child-only' }
     $argumentValue = 'literal space café 雪 "$()'
-    $result = Invoke-BoundedProcess $helperChild @($argumentValue) 5 $helperEnvironment
+    $results = @(Invoke-BoundedProcess $helperChild @($argumentValue) 5 $helperEnvironment)
+    Assert-Contract ($results.Count -eq 1 -and $results[0] -is [pscustomobject]) 'Private helper success must return exactly one result object.'
+    $result = $results[0]
+    $resultProperties = @($result.PSObject.Properties.Name | Sort-Object)
+    Assert-Contract ($resultProperties.Count -eq 3 -and ($resultProperties -join '|') -ceq 'ExitCode|Stderr|Stdout' -and
+        $result.ExitCode -is [int] -and $result.Stdout -is [string] -and $result.Stderr -is [string]) 'Private helper success result shape differs.'
     Assert-Contract ($result.ExitCode -eq 0) ('Private helper exit code was ' + $result.ExitCode + '.')
     $stdoutLines = @($result.Stdout -split '\r?\n')
     Assert-Contract ($stdoutLines.Count -ge 3) ('Private helper returned ' + $stdoutLines.Count + ' stdout lines.')
@@ -861,7 +866,12 @@ if ($env:CONDUIT_COLLECTOR_HELPER_VALUE -eq 'timeout') {
     Assert-Contract ([Environment]::GetEnvironmentVariable('CONDUIT_COLLECTOR_HELPER_VALUE') -ceq $oldEnvironment.CONDUIT_COLLECTOR_HELPER_VALUE) 'Private helper changed parent environment.'
     $cases++
     $helperEnvironment.CONDUIT_COLLECTOR_HELPER_VALUE = 'nonzero'
-    $result = Invoke-BoundedProcess $helperChild @($argumentValue) 5 $helperEnvironment
+    $results = @(Invoke-BoundedProcess $helperChild @($argumentValue) 5 $helperEnvironment)
+    Assert-Contract ($results.Count -eq 1 -and $results[0] -is [pscustomobject]) 'Private helper nonzero exit must return exactly one result object.'
+    $result = $results[0]
+    $resultProperties = @($result.PSObject.Properties.Name | Sort-Object)
+    Assert-Contract ($resultProperties.Count -eq 3 -and ($resultProperties -join '|') -ceq 'ExitCode|Stderr|Stdout' -and
+        $result.ExitCode -is [int] -and $result.Stdout -is [string] -and $result.Stderr -is [string]) 'Private helper nonzero result shape differs.'
     Assert-Contract ($result.ExitCode -eq 17 -and $result.Stderr.Trim() -ceq 'private-child-diagnostic') 'Private helper lost nonzero exit/captured output.'
     $cases++
     $helperIdentity = Join-Path $temporaryRoot 'helper-descendant.identity'

@@ -121,7 +121,7 @@ function Invoke-BoundedProcess(
         try {
             if ($started) {
                 if (-not $process.HasExited) { $process.Kill($true) }
-                $process.WaitForExitAsync($reap.Token).GetAwaiter().GetResult()
+                $process.WaitForExitAsync($reap.Token).GetAwaiter().GetResult() | Out-Null
             }
         }
         catch { $cleanupFailed = $true }
