@@ -90,14 +90,7 @@ public partial class ExaClient
         if (exaResponse.CostDollars != null)
         {
             usage.ProviderReportedCost = exaResponse.CostDollars.Total;
-            usage.Metadata["exaCostBreakdown"] = new
-            {
-                search = exaResponse.CostDollars.Search,
-                getText = exaResponse.CostDollars.GetText,
-                getHighlights = exaResponse.CostDollars.GetHighlights,
-                getSummary = exaResponse.CostDollars.GetSummary,
-                total = exaResponse.CostDollars.Total
-            };
+            usage.Metadata["exaCostBreakdown"] = exaResponse.CostDollars;
         }
 
         _logger.LogDebug("Calculated Exa search usage: SearchType={SearchType}, Results={ResultCount}, Text={TextPages}, Highlights={HighlightPages}, Summary={SummaryPages}",
@@ -151,12 +144,12 @@ public partial class ExaClient
         if (exaResponse.CostDollars != null)
         {
             usage.ProviderReportedCost = exaResponse.CostDollars.Total;
-            usage.Metadata["exaCostBreakdown"] = new
+            usage.Metadata["exaCostBreakdown"] = new ExaCostBreakdown
             {
-                getText = exaResponse.CostDollars.GetText,
-                getHighlights = exaResponse.CostDollars.GetHighlights,
-                getSummary = exaResponse.CostDollars.GetSummary,
-                total = exaResponse.CostDollars.Total
+                GetText = exaResponse.CostDollars.GetText,
+                GetHighlights = exaResponse.CostDollars.GetHighlights,
+                GetSummary = exaResponse.CostDollars.GetSummary,
+                Total = exaResponse.CostDollars.Total
             };
         }
 
