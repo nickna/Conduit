@@ -30,7 +30,7 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// The amount spent during this period
         /// </summary>
-        [Column(TypeName = "decimal(10, 6)")]
+        [Column(TypeName = "decimal(12, 8)")]
         public decimal Amount { get; set; }
 
         /// <summary>

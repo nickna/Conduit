@@ -219,6 +219,8 @@ namespace ConduitLLM.Security.Options
             IConfiguration configuration,
             string envPrefix)
         {
+            headers.Enabled = GetConfigValue(configuration, $"{envPrefix}SECURITY_HEADERS_ENABLED", headers.Enabled);
+
             var xContentTypeOptions = configuration[$"{envPrefix}SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS_ENABLED"]
                 ?? configuration[$"{envPrefix}SECURITY_HEADERS_CONTENT_TYPE"];
             if (!string.IsNullOrEmpty(xContentTypeOptions))

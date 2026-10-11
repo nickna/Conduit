@@ -497,6 +497,7 @@ namespace ConduitLLM.Core
                         {
                             await onToolExecutingEvent(new ToolExecutionEvent
                             {
+                                Iteration = iteration,
                                 ToolCallId = toolCall.Id,
                                 FunctionName = toolCall.Function.Name,
                                 Status = "started"
@@ -529,6 +530,7 @@ namespace ConduitLLM.Core
                         {
                             await onToolExecutingEvent(new ToolExecutionEvent
                             {
+                                Iteration = summary.Iteration,
                                 ToolCallId = summary.ToolCallId,
                                 FunctionName = summary.FunctionName,
                                 Status = summary.Success ? "completed" : "failed",

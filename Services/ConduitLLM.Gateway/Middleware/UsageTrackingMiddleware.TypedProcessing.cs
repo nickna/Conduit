@@ -7,6 +7,7 @@ using ConduitLLM.Core.Models;
 using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Gateway.UsageTracking;
+using ConduitLLM.Gateway.Utilities;
 using ConduitLLM.Core.Serialization;
 using ConduitLLM.Gateway.Serialization;
 using IVirtualKeyRuntimeService = ConduitLLM.Core.Interfaces.IVirtualKeyRuntimeService;
@@ -149,7 +150,18 @@ public partial class UsageTrackingMiddleware
         }
 
         var totalCost = pricingResult.Cost + (providerToolCost ?? 0m) + snapshot.FunctionExecutionCost;
-        var toolCallMetadata = snapshot.StreamingToolCalls.Count > 0
+        var toolCallMetadata = snapshot.FunctionExecutions.Count > 0
+            ? FunctionExecutionSerializer.SerializeFunctionExecutionResults(
+                snapshot.FunctionExecutions,
+                snapshot.BillingRequestId,
+                context.TraceIdentifier,
+                new FunctionExecutionCostBreakdown(
+                    pricingResult.Cost,
+                    snapshot.FunctionExecutionCost,
+                    providerToolCost ?? 0m,
+                    totalCost),
+                providerToolUsage)
+            : snapshot.StreamingToolCalls.Count > 0
             ? JsonSerializer.Serialize(
                 snapshot.StreamingToolCalls.ToList(),
                 CoreHttpJsonContext.Default.ListToolCall)
