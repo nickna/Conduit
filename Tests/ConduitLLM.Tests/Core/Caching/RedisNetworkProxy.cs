@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using StackExchange.Redis;
@@ -62,7 +63,10 @@ internal sealed class RedisNetworkProxy : IAsyncDisposable
         }
         // Stopping the listener can race the canceled accept and surface a socket/disposal error.
         catch (Exception exception) when (_lifetime.IsCancellationRequested
-            && exception is OperationCanceledException or SocketException or ObjectDisposedException) { }
+            && exception is OperationCanceledException or SocketException or ObjectDisposedException)
+        {
+            Trace.WriteLine($"RedisNetworkProxy.AcceptAsync suppressed shutdown exception: {exception.GetType().Name}: {exception.Message}");
+        }
     }
 
     private async Task ForwardAsync(TcpClient client)
