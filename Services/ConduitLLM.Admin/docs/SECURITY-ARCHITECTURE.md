@@ -129,9 +129,19 @@ CONDUIT_ADMIN_API_KEY_HEADER=X-API-Key
 CONDUIT_ADMIN_API_KEY_ALT_HEADERS=X-Master-Key
 ```
 
+The canonical limit names above take precedence over the aliases from earlier
+`.env.example` templates. Existing deployments may continue to use
+`CONDUIT_ADMIN_RATE_LIMITING_MAX_REQUESTS`, `CONDUIT_ADMIN_RATE_LIMITING_WINDOW_SECONDS`,
+`CONDUIT_ADMIN_FAILED_AUTH_MAX_ATTEMPTS`, and `CONDUIT_ADMIN_FAILED_AUTH_BAN_DURATION_MINUTES`.
+
 ## Shared Security Tracking
 
 The Admin API shares security tracking data with WebAdmin through Redis:
+
+When `CONDUIT_SECURITY_USE_DISTRIBUTED_TRACKING=true` and a Redis connection is configured,
+Admin IP rate limits use atomic Redis counters shared across Admin instances. Without Redis,
+the service logs a warning and counts requests per instance in memory. Setting distributed
+tracking to `false` also uses per-instance memory counters, even when Redis is configured.
 
 ### Redis Key Structure
 
