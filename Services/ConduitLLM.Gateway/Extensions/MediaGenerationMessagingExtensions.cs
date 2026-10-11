@@ -41,6 +41,8 @@ namespace ConduitLLM.Gateway.Extensions
             services.AddEventHandler<VideoGenerationFailed, Gateway.EventHandlers.VideoGenerationFailedHandler>();
             services.AddEventHandler<IndeterminateMediaTaskRetryRequested,
                 Gateway.EventHandlers.IndeterminateMediaTaskRetryRequestedHandler>();
+            services.AddEventHandler<IndeterminateMediaTaskRecoveryRequested,
+                Gateway.EventHandlers.IndeterminateMediaTaskRecoveryRequestedHandler>();
 
             return services;
         }
@@ -68,6 +70,7 @@ namespace ConduitLLM.Gateway.Extensions
             options.AddEventBridge<VideoGenerationRequested>();
             options.AddEventBridge<VideoGenerationCancelled>();
             options.AddEventBridge<IndeterminateMediaTaskRetryRequested>();
+            options.AddEventBridge<IndeterminateMediaTaskRecoveryRequested>();
             options.AddEventBridge<ImageGenerationProgress>();
             options.AddEventBridge<ImageGenerationCompleted>();
             options.AddEventBridge<ImageGenerationFailed>();

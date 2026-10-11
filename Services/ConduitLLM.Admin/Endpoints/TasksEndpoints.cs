@@ -6,6 +6,7 @@ using ConduitLLM.Configuration.Messaging;
 using ConduitLLM.Core.Constants;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ConduitLLM.Admin.Endpoints;
@@ -36,12 +37,13 @@ public static class TasksEndpoints
             .Produces<AdminProblemDetails>(StatusCodes.Status429TooManyRequests, "application/problem+json");
         group.MapPost("/{taskId}/resolve", Resolve).WithName("Tasks_ResolveIndeterminate")
             .WithSummary("Resolve an indeterminate asynchronous task")
-            .WithDescription("Records an operator decision for an indeterminate task. Returns 202 when resolution is accepted or 204 when no further work is required.")
+            .WithDescription("Records retry, failed_no_charge, or completed_no_charge. Recovery requires verified original provider output and a stable dispatch ID; it imports media without repeating generation or charging the customer. Returns 202 for durable dispatch, 204 for failure resolution, or 409 for a competing decision.")
             .WithParameterDescription("taskId", "Identifier returned when the asynchronous task was accepted.")
             .Produces<TaskResolutionAcceptedDto>(StatusCodes.Status202Accepted)
             .Produces(StatusCodes.Status204NoContent)
             .Produces<AdminProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")
-            .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json");
+            .Produces<AdminProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")
+            .Produces<AdminProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json");
         return app;
     }
 
@@ -76,7 +78,8 @@ public static class TasksEndpoints
                 task.MaxRetries,
                 task.ProviderInvocationStartedAt,
                 task.ProviderInvocationCompletedAt,
-                task.ProviderOperationId)).ToList(),
+                task.ProviderOperationId, task.ProviderId, task.ProviderModelId,
+                task.ReconciliationDispatchId, task.ReconciliationOutcome, task.BillingDisposition, task.ProviderCost)).ToList(),
             Pagination = PaginationMetadata.Create(page, pageSize, result.TotalCount)
         });
     }
@@ -108,15 +111,40 @@ public static class TasksEndpoints
         ResolveIndeterminateTaskDto request,
         [FromServices] IAsyncTaskService taskService,
         [FromServices] IEventBus eventBus,
+        [FromServices] IMediaTaskReconciliationStore reconciliations,
         HttpContext context,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
-        var resolution = request.Resolution.Trim().ToLowerInvariant();
-        if (resolution is not ("retry" or "failed_no_charge"))
+        var resolution = (request.Resolution ?? "").Trim().ToLowerInvariant();
+        if (resolution is not ("retry" or "failed_no_charge" or "completed_no_charge"))
         {
-            return AdminResults.BadRequest("Resolution must be retry or failed_no_charge");
+            return AdminResults.BadRequest("Resolution must be retry, failed_no_charge, or completed_no_charge");
         }
+        if (string.IsNullOrWhiteSpace(request.Reason)) return AdminResults.BadRequest("A reason is required");
+        var logger = Logger(loggerFactory);
+        if (resolution == "completed_no_charge")
+        {
+            var decision = new MediaTaskReconciliation
+            {
+                DispatchId = request.DispatchId?.ToString("N") ?? "", VirtualKeyId = request.VirtualKeyId ?? 0,
+                ProviderId = request.ProviderId ?? 0, Model = request.Model ?? "", ProviderModelId = request.ProviderModelId ?? "",
+                ProviderOperationId = request.ProviderOperationId ?? "", Evidence = request.Evidence ?? "",
+                Reason = request.Reason, ResultUrls = request.ResultUrls ?? [], ProviderCost = request.ProviderCost,
+                RequestedBy = context.User.Identity?.Name ?? "Admin"
+            };
+            if (decision.ValidationError() is { } error) return AdminResults.BadRequest(error);
+            var acceptance = await reconciliations.AcceptAsync(taskId, decision, cancellationToken);
+            if (acceptance == MediaReconciliationAcceptance.Missing) return AdminResults.NotFound("Task was not found");
+            if (acceptance == MediaReconciliationAcceptance.Invalid) return AdminResults.BadRequest("Recovery evidence does not match the original task or its requested output count");
+            if (acceptance == MediaReconciliationAcceptance.Conflict) return AdminResults.Conflict("A competing resolution exists or the task is no longer indeterminate");
+            AdminAudit.Log(context, logger, "RecoveryRequested", "AsyncTask", taskId,
+                $"DispatchId: {decision.DispatchId}; BillingDisposition: no_customer_charge; Reason: {request.Reason}");
+            return Results.Accepted(value: new TaskResolutionAcceptedDto(taskId, resolution, decision.DispatchId, decision.RequestedAt));
+        }
+        if (request.DispatchId != null || request.ResultUrls != null || request.Evidence != null || request.ProviderCost != null ||
+            request.VirtualKeyId != null || request.ProviderId != null || request.ProviderModelId != null || request.Model != null)
+            return AdminResults.BadRequest("Recovery evidence fields are only accepted with completed_no_charge");
 
         var current = await taskService.GetTaskStatusAsync(taskId, cancellationToken);
         if (current?.State != TaskState.Indeterminate)
@@ -124,7 +152,8 @@ public static class TasksEndpoints
             return AdminResults.NotFound("Indeterminate task was not found", "not_found");
         }
 
-        var logger = Logger(loggerFactory);
+        if (current.Metadata?.Reconciliation?.Outcome == "accepted")
+            return AdminResults.Conflict("An accepted media recovery is already in progress");
         if (resolution == "failed_no_charge")
         {
             var updated = await taskService.FailIndeterminateTaskWithoutChargeAsync(
@@ -146,7 +175,7 @@ public static class TasksEndpoints
         if (!string.IsNullOrWhiteSpace(request.ProviderOperationId))
         {
             return AdminResults.BadRequest(
-                "providerOperationId is only accepted with failed_no_charge");
+                "providerOperationId is only accepted with failed_no_charge or completed_no_charge");
         }
 
         var dispatchId = Guid.NewGuid().ToString("N");

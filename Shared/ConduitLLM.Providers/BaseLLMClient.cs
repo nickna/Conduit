@@ -59,6 +59,11 @@ namespace ConduitLLM.Providers
         protected readonly string ProviderName;
         protected readonly IHttpClientFactory? HttpClientFactory;
 
+        /// <summary>Persist acceptance before polling; failure stops this invocation rather than resubmitting.</summary>
+        protected Task RecordMediaOperationAsync(string operationId, CancellationToken cancellationToken) =>
+            MediaProviderOperationScope.RecordAsync(new MediaProviderOperation(Provider.Id, PrimaryKeyCredential.Id,
+                ProviderModelId, ProviderName, operationId), cancellationToken);
+
         protected static readonly JsonSerializerOptions DefaultJsonOptions = CreateDefaultJsonOptions();
 
         private static JsonSerializerOptions CreateDefaultJsonOptions()

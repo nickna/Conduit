@@ -64,11 +64,12 @@ namespace ConduitLLM.Core.Services
             ILogger<VideoGenerationOrchestrator> logger,
             ConduitLLM.Configuration.Interfaces.IBatchSpendUpdateService? batchSpendService = null,
             IProviderErrorTranslator? providerErrorTranslator = null,
-            IMediaTaskTerminalWriter? terminalWriter = null)
+            IMediaTaskTerminalWriter? terminalWriter = null,
+            IMediaTaskReconciliationStore? reconciliationStore = null)
             : base(clientFactory, taskService, storageService, eventBus,
                    modelMappingService, virtualKeyService, costService, taskRegistry,
                    webhookService, httpClientFactory, parameterValidator, metrics,
-                   errorTrackingService, logger, batchSpendService, providerErrorTranslator, terminalWriter)
+                   errorTrackingService, logger, batchSpendService, providerErrorTranslator, terminalWriter, reconciliationStore)
         {
             _retryConfiguration = retryConfiguration?.Value ?? new VideoGenerationRetryConfiguration();
 

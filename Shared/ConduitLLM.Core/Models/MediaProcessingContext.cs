@@ -8,6 +8,8 @@ namespace ConduitLLM.Core.Models
     /// </summary>
     public class MediaProcessingContext
     {
+        /// <summary>Recovery must validate and store output; provider-URL fallback is forbidden.</summary>
+        public bool RequireStoredMedia { get; set; }
         /// <summary>
         /// Gets or sets the type of media being processed.
         /// </summary>
