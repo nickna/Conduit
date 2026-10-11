@@ -170,6 +170,31 @@ The probe uses bounded cleanup, and the parent repeats
 cannot escape fixture cleanup. Published Linux execution is required before this
 Admin path qualifies for native promotion.
 
+`NativeGlobalSettingsCacheConvergenceProbe` separately observes both Gateway
+caches through authenticated chat validation before the settings CRUD probe can
+issue a reload. Its disposable database must initially lack both fixed iteration
+settings. It warms the default maximum 5, creates an exactly owned
+`Agentic.MaxIterations=7` through ordinary Admin HTTP, and requires both Gateways
+to consume 7 without a manual reload. A conditional SQL update to 9 must leave
+both caches at 7; an explicit cluster reload must make both consume 9. Owned SQL
+deletion followed by another reload must restore the default 5 on both hosts.
+Every Gateway request must reach the exact iteration-range error, with no provider
+dispatch, executions, logs, spend or ledger changes. All unrelated setting fields
+remain unchanged. The phase allows at most 46 authenticated Gateway requests under
+a hard aggregate 50-request cap and a 90-second deadline; authentication and
+rate-limit errors fail immediately. It exercises `v1/chat/completions`; the existing function preflight
+continues to cover both chat aliases.
+
+The optional `--global-settings-cache-convergence` CLI runs that phase alone.
+`--cleanup-global-settings-cache-convergence` conditionally removes only the
+fixed key with its exact GUID description and current positive ID. The shared
+`--cleanup-admin-global-settings` CLI attempts this cleanup and the two settings
+CRUD keys independently. Parent cleanup repeats both after stopping all producers
+to handle an unknown or late Admin write outcome. Healthy reload consumption does
+not prove failed-reload retry or bounded completed-ID retention; those remain
+[#1623](https://github.com/nickna/Conduit/issues/1623) and
+[#1627](https://github.com/nickna/Conduit/issues/1627).
+
 `--admin-ip-filters` exercises native Admin's typed IP repository and its
 conditional-request filter. Three exact GUID-owned names cover global allow/deny
 rules and an enabled per-key deny rule. The probe independently reads all 12 SQL

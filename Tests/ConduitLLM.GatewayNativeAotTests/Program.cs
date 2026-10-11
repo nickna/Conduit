@@ -101,13 +101,58 @@ if (args is ["--admin-ip-filters"] or ["--cleanup-admin-ip-filters"])
     return;
 }
 
+if (args is ["--global-settings-cache-convergence"] or ["--cleanup-global-settings-cache-convergence"])
+{
+    try
+    {
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        if (args[0] == "--global-settings-cache-convergence")
+            await NativeGlobalSettingsCacheConvergenceProbe.RunAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_ADMIN_URL"),
+                ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_URL"), ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"),
+                ProbeSettings.ProviderUriFromEnvironment(), source, ProbeSettings.AdminSettingsOwnerFromEnvironment(),
+                ProbeSettings.FunctionFixtureOwnerFromEnvironment(), ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
+        else
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            await NativeGlobalSettingsCacheConvergenceProbe.CleanupAsync(source,
+                ProbeSettings.AdminSettingsOwnerFromEnvironment(), deadline.Token);
+            Console.WriteLine("Owned global settings cache-convergence fixture cleanup: PASS");
+        }
+    }
+    catch (InvalidOperationException error) when (error.Message.StartsWith(
+        "Native global settings cache convergence failed at ", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine(error.Message);
+        Environment.ExitCode = 1;
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Native global settings cache-convergence operation failed.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
 if (args is ["--cleanup-admin-global-settings"])
 {
     try
     {
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
-        await NativeAdminGlobalSettingProbe.CleanupAsync(source, ProbeSettings.AdminSettingsOwnerFromEnvironment(), deadline.Token);
+        var owner = ProbeSettings.AdminSettingsOwnerFromEnvironment();
+        var failures = new List<Exception>();
+        try
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await NativeGlobalSettingsCacheConvergenceProbe.CleanupAsync(source, owner, deadline.Token);
+        }
+        catch (Exception error) { failures.Add(error); }
+        try
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await NativeAdminGlobalSettingProbe.CleanupAsync(source, owner, deadline.Token);
+        }
+        catch (Exception error) { failures.Add(error); }
+        if (failures.Count != 0) throw new AggregateException("Owned Admin setting cleanup failed.", failures);
         Console.WriteLine("Owned Admin global-setting fixture cleanup: PASS");
     }
     catch (Exception)
@@ -344,6 +389,9 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         await AssertSignalRAndRedisAsync();
         await using (var source = NpgsqlDataSource.Create(settings.DatabaseConnectionString))
         {
+            await NativeGlobalSettingsCacheConvergenceProbe.RunAsync(settings.Admin, settings.Gateway, settings.SecondaryGateway,
+                settings.Provider, source, ProbeSettings.AdminSettingsOwnerFromEnvironment(),
+                ProbeSettings.FunctionFixtureOwnerFromEnvironment(), ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
             await NativeAdminGlobalSettingProbe.RunAsync(settings.Admin, source,
                 ProbeSettings.AdminSettingsOwnerFromEnvironment(), ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
             await NativeFunctionExecutionProbe.RunAsync(settings.Gateway, settings.SecondaryGateway,

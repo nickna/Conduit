@@ -16,6 +16,9 @@ on:
       - 'Tests/ConduitLLM.GatewayNativeAotTests/**'
       - 'Tests/ConduitLLM.SerializationTests/**'
       - 'Tests/ConduitLLM.Tests/Admin/Filters/**'
+      - 'Tests/ConduitLLM.Tests/Core/Consumers/GlobalSetting*Tests.cs'
+      - 'Tests/ConduitLLM.Tests/Configuration/Services/GlobalSettingsCacheServiceTests.cs'
+      - 'Tests/ConduitLLM.Tests/Core/Caching/FusionFunctionDiscoveryCacheTests.cs'
       - 'Tests/ConduitLLM.Tests/HostCompositionTests.cs'
       - 'Tests/ConduitLLM.IntegrationTests/**'
       - 'Tests/ConduitLLM.PersistenceAotTests/**'
@@ -130,13 +133,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes clang zlib1g-dev
 
-      - name: Admin conditional requests and JIT composition
+      - name: Admin conditional requests, JIT composition and settings cache contracts
         uses: ./.github/actions/run-tests
         with:
           project: Tests/ConduitLLM.Tests
           suite: admin-conditional-requests-jit
-          filter: FullyQualifiedName~AdminContractEndpointFilterTests|FullyQualifiedName~IpFilterVersionEndpointFilterTests|FullyQualifiedName~IpFilterConditionalRequestHttpTests|FullyQualifiedName~HostCompositionTests
-          minimum: '71'
+          filter: FullyQualifiedName~AdminContractEndpointFilterTests|FullyQualifiedName~IpFilterVersionEndpointFilterTests|FullyQualifiedName~IpFilterConditionalRequestHttpTests|FullyQualifiedName~HostCompositionTests|FullyQualifiedName~GlobalSettingCacheInvalidationHandlerTests|FullyQualifiedName~GlobalSettingsReloadHandlerTests|FullyQualifiedName~GlobalSettingsCacheServiceTests|FullyQualifiedName~FusionFunctionDiscoveryCacheTests.DisabledReadsBypassAndReenableEventRejectsOldCombinations
+          minimum: '138'
         env:
           CONDUIT_CACHE_TEST_REDIS: 127.0.0.1:6379
 
