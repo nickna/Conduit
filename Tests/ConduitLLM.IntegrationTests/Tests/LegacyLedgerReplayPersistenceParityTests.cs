@@ -203,6 +203,7 @@ public sealed class LegacyLedgerReplayPersistenceParityTests(PostgresLockTestCon
             ("transaction_type", "1"),
             ("reference_type", "2"),
             ("reference_id", "different-claim"),
+            ("reference_id", "\t\r\n"),
             ("billing_window_start_utc", BillingWindow.AddHours(1).ToString("O")),
             ("created_at_utc", CreatedAt.AddSeconds(1).ToString("O")),
             ("balance_after", "99"),
@@ -214,8 +215,10 @@ public sealed class LegacyLedgerReplayPersistenceParityTests(PostgresLockTestCon
             ("original_amount", "0"),
             ("original_amount", "1000000000000"),
             ("verified_by", " "),
+            ("verified_by", "\t\r\n"),
             ("verified_by", new string('x', 101)),
             ("evidence_reference", " "),
+            ("evidence_reference", "\t\r\n"),
             ("evidence_reference", new string('x', 501))
         ];
         foreach (var invalid in invalidApprovals)
