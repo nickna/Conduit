@@ -373,7 +373,7 @@ namespace ConduitLLM.Gateway.Endpoints
             {
                 // Usage remains in the provider chunk for accounting. The standard stream sends
                 // it once, in a final empty-choices chunk, only when the caller requests it.
-                if (chunk.Usage is not null && chunk.Choices.Count == 0)
+                if (chunk.Usage is not null && chunk.Choices is not { Count: > 0 })
                 {
                     return;
                 }

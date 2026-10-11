@@ -92,10 +92,9 @@ describe("GatewayClient", () => {
     const events = [];
     for await (const event of stream) events.push(event);
 
-    expect(fetchMock.mock.calls[0][0]).toBe("https://gateway.test/v1/conduit/chat/completions");
-    expect(fetchMock.mock.calls[0][1]).toEqual(expect.objectContaining({
-      headers: expect.objectContaining({ Authorization: "Bearer vk_test" }),
-    }));
+    const [request, init] = fetchMock.mock.calls[0];
+    expect(request).toBe("https://gateway.test/v1/conduit/chat/completions");
+    expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer vk_test");
     expect(events).toEqual([{ content: "thinking" }, { total_tokens: 2 }]);
   });
 

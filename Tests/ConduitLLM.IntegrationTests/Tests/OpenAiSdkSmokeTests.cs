@@ -555,6 +555,16 @@ internal sealed class SmokeProviderClient(
             ],
             Usage = new Usage { PromptTokens = 1, CompletionTokens = 1, TotalTokens = 2 }
         };
+        // Providers can send a separate usage-only frame with null choices. It must
+        // be retained for accounting without interrupting the standard SDK stream.
+        yield return new ChatCompletionChunk
+        {
+            Id = "chatcmpl_smoke",
+            Created = 1,
+            Model = request.Model,
+            Choices = null!,
+            Usage = new Usage { PromptTokens = 1, CompletionTokens = 1, TotalTokens = 2 }
+        };
     }
 
     public Task<List<string>> ListModelsAsync(string? apiKey = null, CancellationToken cancellationToken = default) =>
