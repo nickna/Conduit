@@ -21,7 +21,7 @@
     "check:admin-boundary": "npm run check:api-boundary"
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.37.1",
+    "@clerk/nextjs": "^7.9.12",
     "@mantine/charts": "^9.7.1",
     "@mantine/code-highlight": "^9.7.1",
     "@mantine/core": "^9.7.1",
