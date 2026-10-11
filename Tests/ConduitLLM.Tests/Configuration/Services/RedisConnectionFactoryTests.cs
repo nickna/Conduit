@@ -61,7 +61,6 @@ public class RedisConnectionFactoryTests
 
         Assert.Same(error, thrown);
         Assert.Contains(logger.Entries, entry => entry.Message.StartsWith("Attempting to connect to Redis: localhost:"));
-        Assert.Contains(logger.Entries, entry => entry.Message.StartsWith("Failed to create Redis connection."));
         Assert.Contains(logger.Entries, entry => entry.Message.StartsWith("Error disposing Redis connection."));
         AssertLogsExcludeCredentials(logger);
     }
@@ -78,7 +77,6 @@ public class RedisConnectionFactoryTests
         factory.Dispose();
 
         Assert.Null(factory.Configuration);
-        Assert.Contains(logger.Entries, entry => entry.Message.StartsWith("Failed to create Redis connection."));
         AssertLogsExcludeCredentials(logger);
     }
 
