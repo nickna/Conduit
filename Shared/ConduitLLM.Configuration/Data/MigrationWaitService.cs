@@ -1,71 +1,10 @@
 using System.Diagnostics;
 
-using System.Data;
-
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace ConduitLLM.Configuration.Data
 {
-    /// <summary>
-    /// Schema version compiled into this release. Update this value whenever a migration is added.
-    /// </summary>
-    public static class ConduitSchemaVersion
-    {
-        public const string Current = "20261006232832_AddWebhookReplayAudit";
-    }
-
-    public sealed record SchemaVersionStatus(string? AppliedVersion, string ExpectedVersion)
-    {
-        public bool IsCurrent => string.Equals(
-            AppliedVersion,
-            ExpectedVersion,
-            StringComparison.Ordinal);
-    }
-
-    /// <summary>Reads only the latest row from EF's stable migration-history table.</summary>
-    public interface ISchemaVersionProbe
-    {
-        Task<SchemaVersionStatus> GetStatusAsync(CancellationToken cancellationToken = default);
-    }
-
-    /// <summary>
-    /// Probes the schema version through the pooled context factory without loading EF migration metadata.
-    /// </summary>
-    public sealed class SchemaVersionProbe : ISchemaVersionProbe
-    {
-        private readonly IDbContextFactory<ConduitDbContext> _contextFactory;
-
-        public SchemaVersionProbe(IDbContextFactory<ConduitDbContext> contextFactory)
-        {
-            _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
-        }
-
-        public async Task<SchemaVersionStatus> GetStatusAsync(CancellationToken cancellationToken = default)
-        {
-            await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
-            var connection = context.Database.GetDbConnection();
-            if (connection.State != ConnectionState.Open)
-            {
-                await connection.OpenAsync(cancellationToken);
-            }
-
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                """
-                SELECT CASE
-                    WHEN to_regclass('"__EFMigrationsHistory"') IS NULL THEN NULL
-                    ELSE (SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId" DESC LIMIT 1)
-                END
-                """;
-            var value = await command.ExecuteScalarAsync(cancellationToken);
-            return new SchemaVersionStatus(
-                value is null or DBNull ? null : Convert.ToString(value),
-                ConduitSchemaVersion.Current);
-        }
-    }
-
     /// <summary>
     /// In Wait mode, polls until the database schema version matches this binary
     /// (the standalone migrator applies it), then flips

@@ -7,6 +7,8 @@ using ConduitLLM.Core.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
+using Npgsql;
+
 namespace ConduitLLM.Admin.Extensions
 {
     /// <summary>
@@ -48,6 +50,8 @@ namespace ConduitLLM.Admin.Extensions
             {
                 throw new InvalidOperationException($"Only PostgreSQL is supported. Invalid provider: {dbProvider}");
             }
+
+            services.AddSingleton(_ => NpgsqlDataSource.Create(dbConnectionString));
 
             // Configure query monitoring for performance tracking
             services.Configure<ConduitLLM.Configuration.Interceptors.QueryMonitoringOptions>(

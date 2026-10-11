@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using ConduitLLM.Configuration;
+using ConduitLLM.Configuration.Data;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Persistence;
@@ -429,6 +430,15 @@ try
     }.ConnectionString;
     await using (var dataSource = NpgsqlDataSource.Create(storeConnectionString))
     {
+        await using (var schemaDataSource = NpgsqlDataSource.Create(
+                         new NpgsqlConnectionStringBuilder(storeConnectionString)
+                         {
+                             MaxPoolSize = 1,
+                             MinPoolSize = 0
+                         }.ConnectionString))
+        {
+            await ExerciseSchemaVersionProbeAsync(schemaDataSource);
+        }
         await ExerciseGlobalSettingRepositoryAsync(new NpgsqlGlobalSettingRepository(dataSource));
         await ExerciseIpFilterRepositoryAsync(new NpgsqlIpFilterRepository(dataSource));
         await ExerciseProviderPersistenceAsync(
@@ -445,7 +455,7 @@ try
             new NpgsqlRequestLogRuntimeStore(dataSource));
     }
 
-    Console.WriteLine("Native persistence probe passed: reads, writes, rollback, concurrency, retry, PostgreSQL mappings, and the global-settings, IP-filter, provider/credential, model-routing, virtual-key, media, async-task, and request-log runtime stores.");
+    Console.WriteLine("Native persistence probe passed: schema readiness, reads, writes, rollback, concurrency, retry, PostgreSQL mappings, and the global-settings, IP-filter, provider/credential, model-routing, virtual-key, media, async-task, and request-log runtime stores.");
     return 0;
 }
 finally
@@ -459,6 +469,52 @@ finally
     catch (Exception exception)
     {
         Console.Error.WriteLine($"Cleanup failed: {exception.Message}");
+    }
+}
+
+static async Task ExerciseSchemaVersionProbeAsync(NpgsqlDataSource dataSource)
+{
+    var probe = new SchemaVersionProbe(dataSource);
+    Ensure((await probe.GetStatusAsync()).AppliedVersion is null, "missing migration history must be unapplied");
+    await ExecuteHistoryAsync("""
+        CREATE TABLE "__EFMigrationsHistory" ("MigrationId" varchar(150) PRIMARY KEY, "ProductVersion" varchar(32) NOT NULL)
+        """);
+    Ensure((await probe.GetStatusAsync()).AppliedVersion is null, "empty migration history must be unapplied");
+    foreach (var version in new[] { "20200101000000_Old", ConduitSchemaVersion.Current, "20210101000000_Older", "99999999999999_Future" })
+    {
+        await InsertHistoryAsync(version);
+        var status = await probe.GetStatusAsync();
+        Ensure(status.ExpectedVersion == ConduitSchemaVersion.Current, "schema probe expected release version");
+        Ensure(status.IsCurrent == (version is not "20200101000000_Old" and not "99999999999999_Future"),
+            "schema probe must accept only the exact latest release version");
+        if (version is "20200101000000_Old" or "99999999999999_Future")
+        {
+            Ensure(status.AppliedVersion == version, "schema probe must report the latest applied migration");
+        }
+    }
+    await ExecuteHistoryAsync("""DROP TABLE "__EFMigrationsHistory" """);
+    Ensure((await probe.GetStatusAsync()).AppliedVersion is null, "removed history must become unapplied");
+    await ExecuteHistoryAsync("""
+        CREATE TABLE "__EFMigrationsHistory" ("MigrationId" varchar(150) PRIMARY KEY, "ProductVersion" varchar(32) NOT NULL)
+        """);
+    await InsertHistoryAsync(ConduitSchemaVersion.Current);
+    Ensure((await probe.GetStatusAsync()).IsCurrent, "schema probe must recover using the same pool");
+
+    async Task ExecuteHistoryAsync(string sql)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync();
+        await ExecuteAsync(connection, sql);
+    }
+
+    async Task InsertHistoryAsync(string version)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES (@version, '10.0.3')
+            """;
+        command.Parameters.AddWithValue("version", version);
+        await command.ExecuteNonQueryAsync();
     }
 }
 
