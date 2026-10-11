@@ -2,6 +2,11 @@ name: "CodeQL"
 
 on:
   workflow_call:
+    inputs:
+      languages:
+        description: 'JSON language inventory selected by CI; standalone scans retain both languages'
+        type: string
+        default: '["csharp","javascript"]'
   schedule:
     - cron: '30 5 * * 1'  # Weekly on Monday at 5:30 AM UTC
   workflow_dispatch: # Allow manual runs
@@ -45,12 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'csharp', 'javascript' ]
-        include:
-          - language: 'csharp'
-            build-mode: 'manual'
-          - language: 'javascript'
-            build-mode: 'none'
+        language: ${{ fromJSON(inputs.languages || '["csharp","javascript"]') }}
 
     steps:
     - name: Validate branch input
@@ -75,6 +75,7 @@ jobs:
       uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
       with:
         languages: ${{ matrix.language }}
+        build-mode: ${{ matrix.language == 'csharp' && 'manual' || 'none' }}
         queries: security-and-quality
         # Force use of latest CodeQL CLI bundle for .NET 9 compatibility
         tools: latest
