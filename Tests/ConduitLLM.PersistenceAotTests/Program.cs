@@ -438,6 +438,7 @@ try
                          }.ConnectionString))
         {
             await ExerciseSchemaVersionProbeAsync(schemaDataSource);
+            await ExerciseConnectionPoolWarmupAsync(schemaDataSource);
         }
         await ExerciseGlobalSettingRepositoryAsync(new NpgsqlGlobalSettingRepository(dataSource));
         await ExerciseIpFilterRepositoryAsync(new NpgsqlIpFilterRepository(dataSource));
@@ -455,7 +456,7 @@ try
             new NpgsqlRequestLogRuntimeStore(dataSource));
     }
 
-    Console.WriteLine("Native persistence probe passed: schema readiness, reads, writes, rollback, concurrency, retry, PostgreSQL mappings, and the global-settings, IP-filter, provider/credential, model-routing, virtual-key, media, async-task, and request-log runtime stores.");
+    Console.WriteLine("Native persistence probe passed: schema readiness, pool warming/cancellation/reuse, reads, writes, rollback, concurrency, retry, PostgreSQL mappings, and the global-settings, IP-filter, provider/credential, model-routing, virtual-key, media, async-task, and request-log runtime stores.");
     return 0;
 }
 finally
@@ -470,6 +471,32 @@ finally
     {
         Console.Error.WriteLine($"Cleanup failed: {exception.Message}");
     }
+}
+
+static async Task ExerciseConnectionPoolWarmupAsync(NpgsqlDataSource dataSource)
+{
+    var warmup = new NpgsqlConnectionPoolWarmup(dataSource);
+    using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+    // The caller deliberately supplies MaxPoolSize=1. More operations than slots
+    // prove each operation returns its connection, rather than retaining a lease.
+    await Task.WhenAll(Enumerable.Range(0, 32).Select(_ => warmup.WarmConnectionAsync(deadline.Token)));
+    await using (var holder = await dataSource.OpenConnectionAsync(deadline.Token))
+    {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token);
+        var waiting = warmup.WarmConnectionAsync(cancellation.Token);
+        Ensure(!waiting.IsCompleted, "warmup waits for the occupied single-connection pool");
+        cancellation.Cancel();
+        var cancelled = false;
+        try { await waiting; }
+        catch (OperationCanceledException) { cancelled = true; }
+        Ensure(cancelled, "waiting warmup propagates cancellation");
+    }
+    await warmup.WarmConnectionAsync(deadline.Token);
+    await using var connection = await dataSource.OpenConnectionAsync(deadline.Token);
+    await using var command = connection.CreateCommand();
+    command.CommandText = "SELECT 1";
+    Ensure((int)(await command.ExecuteScalarAsync(deadline.Token))! == 1,
+        "warmup leaves the host data source usable after cancellation");
 }
 
 static async Task ExerciseSchemaVersionProbeAsync(NpgsqlDataSource dataSource)
