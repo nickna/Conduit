@@ -60,9 +60,68 @@ image-content, protocol, and canary coverage.
 
 ## Reproducible comparison
 
-The database must already be migrated by the release-owned migrator. Run the JIT and
-native images on an otherwise idle Linux Docker host, pinned by digest and backed by
-the same PostgreSQL and Redis instances:
+The release-owned migrator must prepare the database before either application
+starts. Run digest-pinned JIT and native images with the same OCI source revision,
+configuration, PostgreSQL, Redis, Wolverine and deterministic provider fixture on
+an otherwise idle Linux x64 Docker host. Pull both exact digests before measurement;
+the collector inspects locally available images and does not pull them. It uses
+`CONDUIT_MIGRATION_MODE=Wait`; `/health/ready` measures cold readiness only.
+
+Build the workload probe separately and pass its published native executable or
+managed DLL through `-WorkloadProbePath`. The collector never builds the probe or
+seeds a database. Use existing benchmark credentials, settings and model mappings
+from an isolated staging fixture. Gateway runs incur ordinary request accounting;
+provide sufficient budgets and rate limits for the warm-up and all measured runs.
+A passing driver proves its bounded HTTP contract, not every background-worker path.
+
+Store a private JSON workload configuration for each required workload. Common
+fields are `workload`, `baseUrl`, `requests`, `concurrency`, `warmupRequests` and
+`timeoutSeconds`. Admin adds `settingKey` and `expectedValue`. Each Gateway file
+adds `model`, `prompt`, `expectedContent`, `expectedPromptTokens` and
+`expectedCompletionTokens`. Use exactly one `admin-setting-read` file for Admin,
+and one `gateway-chat-nonstream` plus one `gateway-chat-sse` file for Gateway.
+The collector replaces only `baseUrl` with its owned container's loopback origin.
+The driver checks exact Admin values or provider content and usage through full
+response completion, including SSE's terminal event and EOF.
+
+Supply authentication only through `CONDUIT_NATIVE_BENCHMARK_API_KEY`: the Admin
+master key for Admin or an existing virtual key for Gateway. Do not put credentials
+in workload JSON. The collector gives the key to its private child process and
+uses an owned temporary Docker environment file for container secrets. For Admin,
+it also installs that key as the container backend master key. A Gateway virtual
+key is never installed as a backend master key.
+
+Use optional `-ContainerEnvironmentPath` for an existing private Docker environment
+file with application configuration and backend credentials. Use UTF-8 NAME=value
+entries without quotes or duplicate names, up to 64 KiB. Both variants receive
+identical settings. The collector owns the PostgreSQL/Redis URLs, Wait-mode startup,
+Wolverine provisioning setting and its container port; those mandatory values
+override file entries. Never include `CONDUIT_NATIVE_BENCHMARK_API_KEY` in this file.
+
+Provide `-EnvironmentEvidencePath` containing this credential-free metadata:
+
+```json
+{
+  "schemaVersion": 1,
+  "environmentId": "<staging-host-and-run-identifier>",
+  "host": {
+    "os": "linux",
+    "architecture": "x64",
+    "cpu": "<CPU model>",
+    "logicalProcessors": 8,
+    "memoryBytes": 17179869184,
+    "dockerVersion": "<measured version>",
+    "kernelVersion": "<measured version>"
+  },
+  "backingServices": {
+    "postgresqlVersion": "<measured version>",
+    "redisVersion": "<measured version>",
+    "wolverineVersion": "<application package version>",
+    "configurationId": "<configuration identifier without secrets>",
+    "providerFixtureId": "<Gateway deterministic provider identifier or not-applicable for Admin>"
+  }
+}
+```
 
 ```powershell
 ./scripts/aot/measure-native-container.ps1 `
@@ -71,31 +130,45 @@ the same PostgreSQL and Redis instances:
   -NativeImage ghcr.io/nickna/conduit-admin-native@sha256:<native-digest> `
   -DatabaseUrl $env:DATABASE_URL `
   -RedisUrl $env:REDIS_URL `
+  -WorkloadProbePath /opt/conduit/probe/ConduitLLM.GatewayNativeAotTests `
+  -WorkloadConfigurationPaths /secure/benchmark/admin-setting-read.json `
+  -EnvironmentEvidencePath /secure/benchmark/environment.json `
+  -ContainerEnvironmentPath /secure/benchmark/runtime.env `
+  -PairedRuns 5 `
   -NativeBaselinePath artifacts/native-aot/reports/native-baselines.json `
   -OutputPath artifacts/native-benchmark/admin.json
 ```
 
-The report records image and compressed pull sizes, cold readiness, idle,
-steady-state, and peak working set, throughput, p50/p95/p99 latency, failures, and
-the native publish time/artifact size from the Phase 0 baseline. Run at least five
-times after one unrecorded warm-up and retain the median report plus host CPU, RAM,
-Docker, kernel, PostgreSQL, and Redis versions with the canary evidence. Do not
-compare runs from unlike hosts. `-NativeBaselinePath` is required for a promotion
-decision even though the measurement script permits a benchmark-only run without it.
+For Gateway, use `-Service gateway`, the corresponding Gateway image digests and
+both workload configuration paths. Request counts, concurrency, warm-up counts
+and deadlines come from those files; the old `-Requests` and `-Concurrency`
+collector arguments are rejected. The same workload inputs run against both
+images. Each report retains input fingerprints without publishing credentials,
+request bodies, expected private content or backing-service connection strings.
 
-The current script sends load only to `/health/ready` and starts containers with
-`CONDUIT_MIGRATION_MODE=Skip`. Its throughput and latency describe that endpoint,
-not authenticated Admin operations, provider requests, durable workers, or normal
-schema-wait startup. Add representative workload drivers and record their identical
-inputs, backing services, host environment, request counts, and concurrency before
-using measurements to justify a production decision. The evaluator requires equal
-positive integer request counts and concurrency for JIT and native reports; that
-comparability check alone does not establish representative workload coverage.
+The collector runs one unrecorded warm-up pair, then an odd number of recorded
+pairs from five through 21. It alternates JIT/native order, retains every raw
+sample and computes each metric's median. Schema 2 separates common image,
+compressed pull, cold-readiness and idle/steady/peak memory metrics from each
+workload's throughput and full-response p50/p95/p99 latency. Native publish time
+and artifact sizes come from the matching linux-x64 baseline; omitting that
+baseline produces evidence that cannot pass promotion. Supply the baseline from
+the same image build: automated binding of baseline artifacts to image-build
+identity is tracked in [#1582](https://github.com/nickna/Conduit/issues/1582).
+Use a distinct output path for each collection attempt and retain its exit status.
+A failed rerun leaves an existing report untouched; automated collection-attempt
+and freshness validation is tracked in
+[#1583](https://github.com/nickna/Conduit/issues/1583).
 
-No production comparison is accepted yet. The existing ~102–103 MiB native
-executable baseline did not exercise the production database workload, so it cannot
-justify promotion. Promotion is deferred because of that missing workload parity and
-ADR 0006, not because an unmeasured benefit is assumed.
+The evaluator independently recomputes the medians and comparisons, validates
+complete zero-failure workloads and identical load parameters and fingerprints
+across every pair, and applies throughput and p99 thresholds separately to each
+workload. Health-only schema 1 reports, missing or changed samples, different
+source revisions, incomplete metadata and the unfilled benchmark template fail.
+
+No production comparison has been accepted yet. Published native smoke and
+workload-driver correctness tests do not supply operational improvement,
+background-worker parity, ordered soak or rollback evidence.
 
 ## Promotion gate
 
@@ -124,13 +197,14 @@ rate at or below 0.1%, 24 consecutive healthy monitoring windows, full feature
 coverage, and tested automatic and manual rollback. Admin must complete its seven-day
 soak before a Gateway canary starts. Gateway then completes its own seven-day soak
 with every row declared supported in `gateway-native-aot-feature-matrix.md` passing.
-The evaluator also requires digest-pinned zero-failure benchmark inputs; every raw
-size, readiness, memory, throughput, and latency measurement; a matching linux-x64
-native publish baseline; matching JIT and backing-service evidence; dashboard and
-alert links; critical-vulnerability review; and verified SBOM/provenance attestations.
-It independently recalculates every comparison percentage and rejects inconsistent or
-incomplete reports, including mismatched request counts or concurrency. Claimed soak
-hours cannot exceed the recorded timestamps.
+The evaluator also requires at least five digest-pinned zero-failure benchmark pairs,
+matching source revisions, host and backing-service metadata, every raw common and
+workload measurement, and a linux-x64 native publish baseline from the measured image
+build. Dashboard and alert links, critical-vulnerability review and verified
+SBOM/provenance attestations remain mandatory. It independently recalculates medians
+and comparison percentages and rejects incomplete reports or changed request counts,
+concurrency, warm-ups, deadlines and input fingerprints. Throughput and p99 thresholds
+apply to each workload separately. Claimed soak hours cannot exceed recorded timestamps.
 
 ## Canary procedure
 

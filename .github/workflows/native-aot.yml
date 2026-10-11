@@ -20,6 +20,7 @@ on:
       - 'tools/ConduitLLM.Migrator/**'
       - 'tools/WolverineSmokePublisher/**'
       - 'scripts/aot/**'
+      - 'deploy/native-canary/**'
       - 'scripts/test/wolverine-two-host-smoke.ps1'
       - '.github/workflows/native-aot.yml'
   schedule:
@@ -87,6 +88,10 @@ jobs:
       - name: Verify native promotion gate contract
         shell: pwsh
         run: ./scripts/aot/test-native-promotion.ps1
+
+      - name: Verify native benchmark collector contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-benchmark-collector.ps1
 
       - name: Verify Gateway fixture process ownership
         shell: pwsh

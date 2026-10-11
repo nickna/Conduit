@@ -4,10 +4,15 @@
   "blockedBy": [
     "ADR 0006 keeps the EF-backed Admin production path on JIT while EF Core NativeAOT query execution is experimental.",
     "Admin management/reporting EF queries remain unsupported; bounded warning exceptions do not establish native workload parity.",
-    "Gateway function audit/retention, billing reconciliation, readiness, and the full provider workload remain unproven natively.",
+    "Gateway function audit/retention, billing reconciliation, and provider paths outside the declared native feature matrix remain unproven natively.",
     "Digest-pinned production benchmark, ordered Admin and Gateway soak, and rollback evidence have not been collected."
   ],
   "sequence": ["admin", "gateway"],
+  "minimumBenchmarkRuns": 5,
+  "requiredWorkloads": {
+    "admin": ["admin-setting-read"],
+    "gateway": ["gateway-chat-nonstream", "gateway-chat-sse"]
+  },
   "minimumSoakHours": {
     "admin": 168,
     "gateway": 168
