@@ -1,4 +1,5 @@
 using System.Net;
+using System.Linq;
 
 using ConduitLLM.Admin.Extensions;
 using ConduitLLM.Admin.Interfaces;
@@ -79,9 +80,9 @@ public sealed class AdminSecurityRateLimitTests : IDisposable
         using var secondProvider = CreateProvider(useDistributedTracking: true);
         var ipAddress = IPAddress.Parse("203.0.113.91");
 
-        foreach (var provider in new[] { firstProvider, secondProvider })
+        foreach (var service in new[] { firstProvider, secondProvider }
+            .Select(provider => provider.GetRequiredService<SecurityService>()))
         {
-            var service = provider.GetRequiredService<SecurityService>();
             Assert.True((await service.IsRequestAllowedAsync(CreateRequest(ipAddress))).IsAllowed);
             Assert.True((await service.IsRequestAllowedAsync(CreateRequest(ipAddress))).IsAllowed);
             Assert.Equal(StatusCodes.Status429TooManyRequests,
@@ -109,9 +110,9 @@ public sealed class AdminSecurityRateLimitTests : IDisposable
             redisFactory: UnexpectedRedisResolution);
         var ipAddress = IPAddress.Parse("203.0.113.92");
 
-        foreach (var provider in new[] { firstProvider, secondProvider })
+        foreach (var service in new[] { firstProvider, secondProvider }
+            .Select(provider => provider.GetRequiredService<SecurityService>()))
         {
-            var service = provider.GetRequiredService<SecurityService>();
             Assert.True((await service.IsRequestAllowedAsync(CreateRequest(ipAddress))).IsAllowed);
             Assert.True((await service.IsRequestAllowedAsync(CreateRequest(ipAddress))).IsAllowed);
             Assert.Equal(StatusCodes.Status429TooManyRequests,
