@@ -117,6 +117,10 @@ jobs:
         shell: pwsh
         run: ./scripts/aot/test-native-image-runtime-evidence.ps1
 
+      - name: Verify native OCI archive association contracts
+        shell: pwsh
+        run: ./scripts/aot/test-native-image-oci-association.ps1
+
       - name: Verify Gateway fixture process ownership
         shell: pwsh
         run: ./scripts/aot/test-gateway-fixture-process.ps1

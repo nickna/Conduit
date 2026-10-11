@@ -183,3 +183,25 @@ The report records the observed local image ID, which can identify an OCI index
 in Docker's containerd image store. It preserves unavailable source provenance
 and records registry digest qualification as false. Registry descriptor association
 and promotion qualification remain tracked in #1582.
+
+## Offline OCI archive association
+
+`native-image-oci-association.ps1` verifies a saved OCI archive against separately
+observed image and container descriptors. `Get-NativeImageOciArchiveAssociation`
+accepts `-ArchivePath`, `-RequestedImage`, `-ImageObservation` with `id` and
+`descriptor`, and `-ContainerObservation` with `id`, `image`, and
+`imageManifestDescriptor`. Save the observed immutable local image ID without a
+`--platform` filter to retain its original index target.
+
+The verifier hashes the original root index or manifest, the unique Linux/amd64
+manifest selected by the container, its config, and every selected layer. It
+records these digest roles separately from the archive's `index.json` wrapper
+hash. The [OCI image layout](https://github.com/opencontainers/image-spec/blob/v1.1.1/image-layout.md)
+allows that wrapper to reference another index or manifest.
+
+Callers must require `associationStatus` to equal `verified` and
+`descriptorChainVerified` to equal true. Classic archives, unavailable inspection
+descriptors, or missing required content produce an explicit hold result. A
+verified archive chain retains `registryDigestQualification=false`; source,
+completed-package association, and benchmark qualification remain separate
+requirements. Existing unavailable source provenance remains unavailable.
