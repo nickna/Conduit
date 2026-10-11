@@ -222,12 +222,8 @@ namespace ConduitLLM.Configuration.Services
             }
         }
 
-        private static DateTime GetBillingWindow(DateTime? billedAtUtc)
-        {
-            var value = billedAtUtc ?? DateTime.UtcNow;
-            value = value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime();
-            return new DateTime(value.Year, value.Month, value.Day, value.Hour, 0, 0, DateTimeKind.Utc);
-        }
+        private static DateTime GetBillingWindow(DateTime? billedAtUtc) =>
+            Utilities.BillingTimeUtilities.GetBillingWindowStartUtc(billedAtUtc);
 
         /// <inheritdoc />
         public async Task<bool> TryReserveSpendAsync(int virtualKeyId, decimal amount, string reservationId)

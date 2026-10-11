@@ -91,7 +91,11 @@ namespace ConduitLLM.Gateway.Services
         }
 
         /// <inheritdoc />
-        public async Task<bool> UpdateSpendAsync(int keyId, decimal cost)
+        public Task<bool> UpdateSpendAsync(int keyId, decimal cost) =>
+            UpdateSpendAsync(keyId, cost, billedAtUtc: null);
+
+        /// <inheritdoc />
+        public async Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc)
         {
             if (cost <= 0)
             {
@@ -101,6 +105,7 @@ namespace ConduitLLM.Gateway.Services
 
             try
             {
+                var billingTimestamp = ConduitLLM.Configuration.Utilities.BillingTimeUtilities.NormalizeUtc(billedAtUtc);
                 if (IsEventPublishingEnabled)
                 {
                     // Event-driven approach - publish SpendUpdateRequested event
@@ -111,6 +116,7 @@ namespace ConduitLLM.Gateway.Services
                         {
                             KeyId = keyId,
                             Amount = cost,
+                            BilledAtUtc = billingTimestamp,
                             RequestId = requestId,
                             CorrelationId = Guid.NewGuid().ToString()
                         },
@@ -132,14 +138,14 @@ namespace ConduitLLM.Gateway.Services
                         "Spend update event for key {KeyId} (requestId {RequestId}) could not be published - falling back to direct balance adjustment",
                         keyId, requestId);
 
-                    return await UpdateSpendDirectAsync(keyId, cost, SpendIdempotency.KeyFor(requestId));
+                    return await UpdateSpendDirectAsync(keyId, cost, SpendIdempotency.KeyFor(requestId), billingTimestamp);
                 }
                 else
                 {
                     // FALLBACK: Direct database update approach when event bus not configured
                     _logger.LogDebug("Event publishing not configured - using direct database update for key {KeyId}", keyId);
 
-                    return await UpdateSpendDirectAsync(keyId, cost, idempotencyKey: null);
+                    return await UpdateSpendDirectAsync(keyId, cost, idempotencyKey: null, billingTimestamp);
                 }
             }
             catch (Exception ex)
@@ -155,7 +161,8 @@ namespace ConduitLLM.Gateway.Services
         /// spend publish fails (#927) — in the latter case with the RequestId-derived
         /// idempotency key so the adjustment applies at most once across both paths.
         /// </summary>
-        private async Task<bool> UpdateSpendDirectAsync(int keyId, decimal cost, string? idempotencyKey)
+        private async Task<bool> UpdateSpendDirectAsync(
+            int keyId, decimal cost, string? idempotencyKey, DateTime billedAtUtc)
         {
             var virtualKey = await VirtualKeyRepository.GetByIdAsync(keyId);
             if (virtualKey == null)
@@ -173,9 +180,9 @@ namespace ConduitLLM.Gateway.Services
             }
 
             decimal newBalance;
+            var billingWindow = ConduitLLM.Configuration.Utilities.BillingTimeUtilities.GetBillingWindowStartUtc(billedAtUtc);
             if (idempotencyKey != null)
             {
-                var billingTimestamp = DateTime.UtcNow;
                 var result = await GroupRepository.AdjustBalanceIdempotentAsync(
                     group.Id,
                     -cost,
@@ -184,12 +191,19 @@ namespace ConduitLLM.Gateway.Services
                     "System",
                     ReferenceType.VirtualKey,
                     keyId.ToString(),
-                    billingTimestamp.Date.AddHours(billingTimestamp.Hour));
+                    billingWindow);
                 newBalance = result.NewBalance;
             }
             else
             {
-                newBalance = await GroupRepository.AdjustBalanceAsync(group.Id, -cost);
+                newBalance = await GroupRepository.AdjustBalanceAsync(
+                    group.Id,
+                    -cost,
+                    $"API usage by virtual key #{keyId}",
+                    "System",
+                    ReferenceType.VirtualKey,
+                    keyId.ToString(),
+                    billingWindow);
             }
 
             // Invalidate cache after spend update

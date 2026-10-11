@@ -398,7 +398,7 @@ namespace ConduitLLM.Tests.Http.Middleware
                 .Setup(x => x.QueueSpendUpdateAsync(988, 0.0001m, It.IsAny<DateTime?>()))
                 .ThrowsAsync(new InvalidOperationException("Redis unavailable"));
             Fixture.VirtualKeyService
-                .Setup(x => x.UpdateSpendAsync(988, 0.0001m))
+                .Setup(x => x.UpdateSpendAsync(988, 0.0001m, It.IsAny<DateTime?>()))
                 .ReturnsAsync(false);
 
             // Act

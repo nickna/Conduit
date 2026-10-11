@@ -130,7 +130,8 @@ namespace ConduitLLM.Gateway.EventHandlers
             // Debit the group exactly once per RequestId (#927): the idempotency key
             // rides the ledger row inside the same atomic save as the balance change,
             // so an at-least-once redelivery cannot double-charge.
-            var billingWindow = new DateTime(request.Timestamp.Year, request.Timestamp.Month, request.Timestamp.Day, request.Timestamp.Hour, 0, 0, DateTimeKind.Utc);
+            var billingWindow = ConduitLLM.Configuration.Utilities.BillingTimeUtilities.GetBillingWindowStartUtc(
+                request.BilledAtUtc ?? request.Timestamp);
             VirtualKeyBalanceAdjustmentResult result;
             if (runtimeStore is not null)
             {

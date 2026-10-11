@@ -361,7 +361,8 @@ namespace ConduitLLM.Tests.Http.Services
                 .Setup(g => g.GetByKeyIdAsync(1))
                 .ReturnsAsync(CreateGroupWithBalance(100m));
             _groupRepositoryMock
-                .Setup(g => g.AdjustBalanceAsync(1, -5m))
+                .Setup(g => g.AdjustBalanceAsync(1, -5m, "API usage by virtual key #1", "System",
+                    ConduitLLM.Configuration.Enums.ReferenceType.VirtualKey, "1", It.IsAny<DateTime>()))
                 .ReturnsAsync(95m);
 
             // Act
@@ -369,7 +370,8 @@ namespace ConduitLLM.Tests.Http.Services
 
             // Assert
             Assert.True(result);
-            _groupRepositoryMock.Verify(g => g.AdjustBalanceAsync(1, -5m), Times.Once);
+            _groupRepositoryMock.Verify(g => g.AdjustBalanceAsync(1, -5m, "API usage by virtual key #1", "System",
+                ConduitLLM.Configuration.Enums.ReferenceType.VirtualKey, "1", It.IsAny<DateTime>()), Times.Once);
             _cacheMock.Verify(c => c.InvalidateVirtualKeyAsync(virtualKey.KeyHash), Times.Once);
         }
 

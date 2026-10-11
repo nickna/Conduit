@@ -273,8 +273,11 @@ namespace ConduitLLM.Tests.Configuration.Services
             Assert.Contains("2 virtual keys", transaction.Description);
         }
 
-        [Fact]
-        public async Task QueueSpendUpdateAsync_ShouldAccumulateSpendWithoutExpiration()
+        [Theory]
+        [InlineData(DateTimeKind.Utc)]
+        [InlineData(DateTimeKind.Local)]
+        [InlineData(DateTimeKind.Unspecified)]
+        public async Task QueueSpendUpdateAsync_ShouldAccumulateSpendWithoutExpiration(DateTimeKind kind)
         {
             // Arrange
             var virtualKeyId = 1;
@@ -311,12 +314,14 @@ namespace ConduitLLM.Tests.Configuration.Services
                 .ReturnsAsync(RedisResult.Create((RedisValue)1));
             
             // Act
-            await _service.QueueSpendUpdateAsync(virtualKeyId, cost, billedAt);
+            await _service.QueueSpendUpdateAsync(virtualKeyId, cost, WithTimestampKind(billedAt, kind));
             
             // Assert
             _mockRedisDb.Verify(x => x.ScriptEvaluateAsync(
                 It.IsAny<string>(),
-                It.IsAny<RedisKey[]>(),
+                It.Is<RedisKey[]>(keys =>
+                    keys[0] == $"pending_spend_window_units:group:{groupId}:window:2026071922" &&
+                    keys[2] == $"key_usage_window_units:group:{groupId}:window:2026071922:key:{virtualKeyId}"),
                 It.IsAny<RedisValue[]>(),
                 It.IsAny<CommandFlags>()), Times.Once);
 
@@ -328,8 +333,11 @@ namespace ConduitLLM.Tests.Configuration.Services
             
         }
 
-        [Fact]
-        public async Task QueueSpendUpdateAsync_WithRuntimeStore_DoesNotResolveEfServices()
+        [Theory]
+        [InlineData(DateTimeKind.Utc)]
+        [InlineData(DateTimeKind.Local)]
+        [InlineData(DateTimeKind.Unspecified)]
+        public async Task QueueSpendUpdateAsync_WithRuntimeStore_DoesNotResolveEfServices(DateTimeKind kind)
         {
             const int virtualKeyId = 41;
             const int groupId = 13;
@@ -364,10 +372,16 @@ namespace ConduitLLM.Tests.Configuration.Services
                 _mockAlertingService.Object,
                 runtimeStore: runtimeStore.Object);
 
-            await service.QueueSpendUpdateAsync(virtualKeyId, cost, billedAt);
+            await service.QueueSpendUpdateAsync(virtualKeyId, cost, WithTimestampKind(billedAt, kind));
 
             runtimeStore.VerifyAll();
             _mockScopeFactory.Verify(factory => factory.CreateScope(), Times.Never);
+            _mockRedisDb.Verify(database => database.ScriptEvaluateAsync(
+                It.IsAny<string>(),
+                It.Is<RedisKey[]>(keys =>
+                    keys[0] == $"pending_spend_window_units:group:{groupId}:window:2026082722" &&
+                    keys[2] == $"key_usage_window_units:group:{groupId}:window:2026082722:key:{virtualKeyId}"),
+                It.IsAny<RedisValue[]>(), It.IsAny<CommandFlags>()), Times.Once);
         }
 
         [Fact]
@@ -726,6 +740,80 @@ namespace ConduitLLM.Tests.Configuration.Services
             runtimeStore.VerifyAll();
             _mockScopeFactory.Verify(factory => factory.CreateScope(), Times.Never);
         }
+
+        [Theory]
+        [InlineData(true, DateTimeKind.Utc)]
+        [InlineData(true, DateTimeKind.Local)]
+        [InlineData(true, DateTimeKind.Unspecified)]
+        [InlineData(false, DateTimeKind.Utc)]
+        [InlineData(false, DateTimeKind.Local)]
+        [InlineData(false, DateTimeKind.Unspecified)]
+        public async Task FlushPendingUpdates_FallbackRecovery_PreservesOriginalUtcHour(
+            bool runtimeStore, DateTimeKind kind)
+        {
+            const int groupId = 13;
+            const int virtualKeyId = 41;
+            const decimal fallbackCost = 2.75m;
+            var usageUtc = new DateTime(2000, 1, 1, 2, 37, 49, DateTimeKind.Utc);
+            var expectedWindow = new DateTime(2000, 1, 1, 2, 0, 0, DateTimeKind.Utc);
+            DateTime? recoveredWindow = null;
+            _dbContext.VirtualKeyGroups.Add(new VirtualKeyGroup { Id = groupId, GroupName = "Recovery" });
+            _dbContext.VirtualKeys.Add(new VirtualKey
+                { Id = virtualKeyId, VirtualKeyGroupId = groupId, KeyHash = "recovered-key" });
+            await _dbContext.SaveChangesAsync();
+
+            // A Redis claim allows recovery to run despite the separately tracked
+            // fallback-only drain issue (#1603).
+            SetupPendingSpendClaim(groupId, 0.125m, new Dictionary<int, decimal>());
+            _mockGroupRepository.Setup(repository => repository.AdjustBalanceIdempotentAsync(
+                    groupId, -0.125m, It.IsAny<string>(), It.IsAny<string>(),
+                    "System", ReferenceType.System, It.IsAny<string>()))
+                .ReturnsAsync(new BalanceAdjustmentResult(49.875m, 0.125m, true));
+            _mockGroupRepository.Setup(repository => repository.AdjustBalanceAsync(
+                    groupId, -fallbackCost, It.IsAny<string>(), "System",
+                    ReferenceType.System, "41", It.IsAny<DateTime>()))
+                .Callback<int, decimal, string, string, ReferenceType, string, DateTime>(
+                    (_, _, _, _, _, _, window) => recoveredWindow = window)
+                .ReturnsAsync(47.125m);
+            var store = new Mock<IVirtualKeyRuntimeStore>();
+            store.Setup(value => value.GetByIdAsync(virtualKeyId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new VirtualKeyRuntimeRecord
+                {
+                    Id = virtualKeyId, VirtualKeyGroupId = groupId, KeyHash = "recovered-key",
+                    Group = new VirtualKeyGroupRuntimeRecord { Id = groupId, Balance = 50m }
+                });
+            store.Setup(value => value.GetKeyHashesByGroupIdAsync(groupId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Array.Empty<string>());
+            store.Setup(value => value.AdjustBalanceAsync(
+                    It.IsAny<VirtualKeyBalanceAdjustment>(), It.IsAny<CancellationToken>()))
+                .Callback<VirtualKeyBalanceAdjustment, CancellationToken>((adjustment, _) =>
+                {
+                    if (adjustment.ReferenceId == "41")
+                    {
+                        recoveredWindow = adjustment.BillingWindowStartUtc;
+                    }
+                })
+                .ReturnsAsync(new VirtualKeyBalanceAdjustmentResult(47.125m, 2.875m, true));
+            using var nativeService = runtimeStore
+                ? new BatchSpendUpdateService(_mockScopeFactory.Object, _testRedisFactory,
+                    Microsoft.Extensions.Options.Options.Create(new BatchSpendingOptions()),
+                    _mockLogger.Object, _mockAlertingService.Object, runtimeStore: store.Object)
+                : null;
+            var service = nativeService ?? _service;
+
+            service.QueueFallbackUpdate(virtualKeyId, fallbackCost, WithTimestampKind(usageUtc, kind));
+            await service.FlushPendingUpdatesAsync();
+
+            Assert.Equal(expectedWindow, recoveredWindow);
+            Assert.Equal(DateTimeKind.Utc, recoveredWindow.Value.Kind);
+        }
+
+        private static DateTime WithTimestampKind(DateTime utc, DateTimeKind kind) => kind switch
+        {
+            DateTimeKind.Utc => utc,
+            DateTimeKind.Local => utc.ToLocalTime(),
+            _ => DateTime.SpecifyKind(utc.ToLocalTime(), DateTimeKind.Unspecified)
+        };
 
         private void SetupPendingSpendClaim(
             int groupId,

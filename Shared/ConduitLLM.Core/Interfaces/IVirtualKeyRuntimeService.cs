@@ -33,6 +33,12 @@ public interface IVirtualKeyRuntimeService
     Task<bool> UpdateSpendAsync(int keyId, decimal cost);
 
     /// <summary>
+    /// Applies request spend to the UTC hour containing the original usage timestamp.
+    /// A null timestamp uses the current UTC time.
+    /// </summary>
+    Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc);
+
+    /// <summary>
     /// Gets virtual-key information needed by request validation and orchestration.
     /// </summary>
     Task<VirtualKey?> GetVirtualKeyInfoForValidationAsync(
