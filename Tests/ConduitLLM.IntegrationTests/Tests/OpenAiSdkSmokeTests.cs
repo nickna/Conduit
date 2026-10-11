@@ -165,6 +165,10 @@ public sealed class OpenAiSdkSmokeTests
         }
     }
 
+    /// <summary>
+    /// Verifies raw SSE framing and usage omission for both chat routes, including
+    /// the smoke provider's usage-only frame with null choices.
+    /// </summary>
     private static async Task AssertStreamDialectsAsync(HttpClient client)
     {
         const string body = """{"model":"chat-model","messages":[{"role":"user","content":"SDK smoke test"}],"stream":true}""";
@@ -176,17 +180,20 @@ public sealed class OpenAiSdkSmokeTests
         Assert.EndsWith("data: [DONE]\n\n", standardStream);
         var chunkLines = standardStream.Split('\n').Where(line => line.StartsWith("data: {")).ToArray();
         Assert.NotEmpty(chunkLines);
-        foreach (var chunkJson in chunkLines.Select(line => line[6..]))
+        foreach (var chunk in chunkLines.Select(line => JsonDocument.Parse(line[6..])))
         {
-            using var chunk = JsonDocument.Parse(chunkJson);
-            Assert.Equal("chat.completion.chunk", chunk.RootElement.GetProperty("object").GetString());
-            Assert.False(chunk.RootElement.TryGetProperty("usage", out _));
+            using (chunk)
+            {
+                Assert.Equal("chat.completion.chunk", chunk.RootElement.GetProperty("object").GetString());
+                Assert.False(chunk.RootElement.TryGetProperty("usage", out _));
+            }
         }
 
         using var enhancedBody = new StringContent(body, Encoding.UTF8, "application/json");
         using var enhanced = await client.PostAsync("/v1/conduit/chat/completions", enhancedBody);
         enhanced.EnsureSuccessStatusCode();
         var enhancedStream = await enhanced.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("event: error", enhancedStream);
         Assert.Contains("event: metrics-final", enhancedStream);
         Assert.Contains("\"object\":\"chat.completion.chunk\"", enhancedStream);
         Assert.EndsWith("data: [DONE]\n\n", enhancedStream);
