@@ -40,7 +40,7 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-markdown": "^10.1.0",
-    "react-syntax-highlighter": "^16.1.0",
+    "react-syntax-highlighter": "^16.1.1",
     "remark-gfm": "^4.0.1",
     "typescript": "^5.9.3",
     "uuid": "^14.0.2",
