@@ -2,6 +2,9 @@ using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Interceptors;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Functions.Interfaces;
+using ConduitLLM.Functions.Entities;
+using ConduitLLM.Functions.Enums;
+using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Services;
 using ConduitLLM.Gateway.Interfaces;
 using ConduitLLM.Gateway.Metrics;
@@ -11,6 +14,7 @@ using ConduitLLM.Persistence.Npgsql;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
@@ -73,6 +77,7 @@ public sealed class HostCompositionTests
 
         ResolveRuntimeServices(builder.Services, app.Services);
         AssertFunctionClientComposition(builder.Services, app.Services, false);
+        await AssertFunctionCostCompositionAsync(builder.Services, app.Services, false);
         Assert.Null(app.Services.GetService<IRedisErrorStore>());
         Assert.Null(app.Services.GetService<IProviderErrorTrackingService>());
         Assert.Null(app.Services.GetService<ConduitLLM.Core.Services.IVirtualKeyRateLimitService>());
@@ -96,6 +101,7 @@ public sealed class HostCompositionTests
 
         ResolveRuntimeServices(builder.Services, app.Services);
         AssertFunctionClientComposition(builder.Services, app.Services, gateway);
+        await AssertFunctionCostCompositionAsync(builder.Services, app.Services, gateway);
         Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(StackExchange.Redis.IConnectionMultiplexer));
         if (gateway)
         {
@@ -191,6 +197,51 @@ public sealed class HostCompositionTests
         }
 #endif
         Assert.Equal(typeof(FunctionClientFactory), descriptor.ImplementationType);
+    }
+
+    private static async Task AssertFunctionCostCompositionAsync(IServiceCollection descriptors, IServiceProvider provider, bool gateway)
+    {
+        var descriptor = Assert.Single(descriptors, value => value.ServiceType == typeof(IFunctionCostService));
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var service = first.ServiceProvider.GetRequiredService<IFunctionCostService>();
+        Assert.Same(service, first.ServiceProvider.GetRequiredService<IFunctionCostService>());
+        Assert.NotSame(service, second.ServiceProvider.GetRequiredService<IFunctionCostService>());
+        var expectedType = typeof(FunctionCostService);
+#if CONDUIT_NATIVE_AOT
+        if (gateway)
+        {
+            expectedType = typeof(StoreBackedFunctionCostService);
+            var store = Assert.Single(descriptors, value => value.ServiceType == typeof(IFunctionPricingRuntimeStore));
+            Assert.Equal(ServiceLifetime.Singleton, store.Lifetime);
+            Assert.Equal(typeof(NpgsqlFunctionPricingRuntimeStore), store.ImplementationType);
+            Assert.Same(first.ServiceProvider.GetRequiredService<IFunctionPricingRuntimeStore>(),
+                second.ServiceProvider.GetRequiredService<IFunctionPricingRuntimeStore>());
+        }
+#endif
+        Assert.Equal(expectedType, descriptor.ImplementationType);
+        Assert.IsType(expectedType, service);
+        var calculator = Assert.IsType<FunctionCostCalculationService>(
+            first.ServiceProvider.GetRequiredService<IFunctionCostCalculationService>());
+        var configurationId = Random.Shared.Next(1, int.MaxValue);
+        var key = $"FunctionCost:Config:{configurationId}";
+        var memory = provider.GetRequiredService<IMemoryCache>();
+        memory.Set(key, new FunctionCost
+        {
+            Id = 91, CostName = "Composition pricing", PricingModel = FunctionPricingModel.FlatRate,
+            CostPerExecution = 0.12500001m, BaseCost = 0.12500001m
+        });
+        try
+        {
+            Assert.Equal(0.12500001m, await calculator.EstimateCostAsync(configurationId,
+                new Dictionary<string, object> { ["query"] = "snow" }));
+            Assert.Equal(0.12500001m, await calculator.CalculateCostAsync(configurationId, new FunctionExecutionUsage()));
+        }
+        finally
+        {
+            memory.Remove(key);
+        }
     }
 
     private static void AssertDatabaseComposition(IServiceCollection descriptors, IServiceProvider provider)

@@ -357,30 +357,11 @@ namespace ConduitLLM.Tests.Http.Middleware
 
         private static string CreateGroqResponseWithoutToolUsage()
         {
-            var response = new
-            {
-                id = "chatcmpl-789",
-                model = "llama-3.1-70b-versatile",
-                usage = new
-                {
-                    prompt_tokens = 100,
-                    completion_tokens = 50,
-                    total_tokens = 150
-                },
-                choices = new[]
-                {
-                    new
-                    {
-                        message = new
-                        {
-                            role = "assistant",
-                            content = "Regular response without tools"
-                        }
-                    }
-                }
-            };
-
-            return JsonSerializer.Serialize(response);
+            return """
+                {"id":"chatcmpl-789","model":"llama-3.1-70b-versatile",
+                 "usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150},
+                 "choices":[{"message":{"role":"assistant","content":"Regular response without tools"}}]}
+                """;
         }
 
         #endregion

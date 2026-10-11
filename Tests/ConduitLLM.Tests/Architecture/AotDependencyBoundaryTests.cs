@@ -287,6 +287,11 @@ public sealed class AotDependencyBoundaryTests
         AssertNativeSingleton<IModelProviderMappingRepository, StoreBackedModelProviderMappingRepository>(services);
         AssertNativeSingleton<IFunctionDiscoveryRuntimeStore, NpgsqlFunctionDiscoveryRuntimeStore>(services);
         AssertNativeSingleton<IFunctionExecutionConfigurationStore, NpgsqlFunctionExecutionConfigurationStore>(services);
+        AssertNativeSingleton<IFunctionPricingRuntimeStore, NpgsqlFunctionPricingRuntimeStore>(services);
+        var functionCost = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(IFunctionCostService));
+        Assert.Equal(ServiceLifetime.Scoped, functionCost.Lifetime);
+        Assert.Equal(typeof(ConduitLLM.Functions.Services.StoreBackedFunctionCostService), functionCost.ImplementationType);
         var functionClient = Assert.Single(services,
             candidate => candidate.ServiceType == typeof(IFunctionClientFactory));
         Assert.Equal(ServiceLifetime.Scoped, functionClient.Lifetime);

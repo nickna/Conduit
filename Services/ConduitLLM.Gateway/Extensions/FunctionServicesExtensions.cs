@@ -24,7 +24,11 @@ public static class FunctionServicesExtensions
         services.AddScoped<IFunctionConfigurationRepository, FunctionConfigurationRepository>();
 
         // Register Function services
+#if CONDUIT_NATIVE_AOT
+        services.AddScoped<IFunctionCostService, StoreBackedFunctionCostService>();
+#else
         services.AddScoped<IFunctionCostService, FunctionCostService>();
+#endif
         services.AddScoped<IFunctionCostCalculationService, FunctionCostCalculationService>();
         services.AddSingleton<IFunctionCredentialProtector, FunctionCredentialProtector>();
 #if CONDUIT_NATIVE_AOT

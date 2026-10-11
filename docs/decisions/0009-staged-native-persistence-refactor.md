@@ -199,8 +199,11 @@ over the scalar pricing port: the existing `FunctionCost:Config:{id}` key, gener
 JSON payload, 15-minute memory/one-hour distributed TTLs, uncached nulls, Redis-failure
 fallback and caller cancellation behavior. Cached payloads retain the existing direct
 return semantics. Tests consume payloads emitted by the legacy service and prove
-Admin update invalidation against the shared key. The adapter remains unwired until
-published-native pricing-store proof; the legacy service and calculator constructors
+Admin update invalidation against the shared key. Published Linux run 38124571584
+passes the typed pricing-store probe before runtime selection. Native Gateway now
+selects this scoped adapter over the singleton typed pricing store; host composition
+tests run both build profiles and exercise estimate/actual billing through the resolved
+calculator. JIT Gateway and Admin retain the legacy service, and calculator constructors
 are unchanged. Cost management methods are outside this adapter. Both implementations
 retain the inherited list-only explicit cache clear, tracked separately in
 [#1570](https://github.com/nickna/Conduit/issues/1570).
