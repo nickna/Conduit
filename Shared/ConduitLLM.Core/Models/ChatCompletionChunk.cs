@@ -17,6 +17,13 @@ public class ChatCompletionChunk
     public ProviderCallUsage? ProviderCallUsage { get; set; }
 
     /// <summary>
+    /// Server-only provider iteration for every agentic chunk, including chunks without usage.
+    /// Tool-call indices are scoped to this iteration and the completion choice.
+    /// </summary>
+    [JsonIgnore]
+    public int? ProviderIteration { get; set; }
+
+    /// <summary>
     /// A unique identifier for the chat completion chunk.
     /// </summary>
     [JsonPropertyName("id")]
