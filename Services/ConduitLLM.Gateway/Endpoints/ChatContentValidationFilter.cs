@@ -78,9 +78,11 @@ public sealed class ChatContentValidationFilter : IEndpointFilter
                     break;
                 case "file":
                     var file = RequiredObject(part, "file", partPath);
-                    foreach (var field in new[] { "filename", "file_data", "file_id" })
-                        if (file.TryGetProperty(field, out _))
-                            RequiredString(file, field, $"{partPath}.file");
+                    foreach (var field in new[] { "filename", "file_data", "file_id" }
+                        .Where(field => file.TryGetProperty(field, out _)))
+                    {
+                        RequiredString(file, field, $"{partPath}.file");
+                    }
                     break;
                 case "video_url":
                     var video = RequiredObject(part, "video_url", partPath);
