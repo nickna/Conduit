@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 
 using ConduitLLM.Configuration.DTOs.SignalR;
+using ConduitLLM.Contracts.SignalR;
 
 namespace ConduitLLM.Configuration.Serialization;
 
@@ -11,7 +12,13 @@ namespace ConduitLLM.Configuration.Serialization;
     GenerationMode = JsonSourceGenerationMode.Metadata,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(object))]
 [JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(ImageGenerationStartedNotification))]
+[JsonSerializable(typeof(ImageGenerationProgressNotification))]
+[JsonSerializable(typeof(ImageGenerationCompletedNotification))]
+[JsonSerializable(typeof(ImageGenerationFailedNotification))]
+[JsonSerializable(typeof(ImageGenerationCancelledNotification))]
 [JsonSerializable(typeof(TaskSubscriptionNotification))]
 [JsonSerializable(typeof(HubErrorNotification))]
 [JsonSerializable(typeof(WebhookDeliveryAttempt))]
