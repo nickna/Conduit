@@ -38,6 +38,16 @@ Separate phase and rejection counters leave ordinary chat and SSE counters
 unchanged. Real HTTP tests exercise production OpenAI-compatible and Exa clients;
 this provider fixture alone does not prove the Gateway agentic workflow.
 
+`NativeMcpProviderStub` is an instance-owned loopback TCP fixture for the pinned
+MCP client's stateless `2026-07-28` discovery, listing and tool-call transport. It
+checks actual authentication, protocol headers and request metadata, and returns
+Unicode schema/text with structured results. Received-request latches make
+cancellation checks independent of timing; disposal stops the listener, closes
+owned sockets and joins its handlers within a fresh deadline. Production-client
+tests also cover filtering, routing arguments, endpoint selection and bounded
+large responses. This fixture does not establish the Gateway's native MCP
+workflow, legacy session negotiation or streaming transport support.
+
 The PostgreSQL precision test records the existing six-decimal request-log,
 spend-history, and ledger columns alongside eight-decimal function costs and group
 balances. Billing verification must compare each persisted value at its actual
