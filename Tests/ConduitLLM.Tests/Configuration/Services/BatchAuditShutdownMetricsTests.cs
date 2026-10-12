@@ -139,7 +139,10 @@ public sealed class BatchAuditShutdownMetricsTests
             if (stopping is not null)
             {
                 try { await stopping.WaitAsync(TestTimeout); }
-                catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+                catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                {
+                    Assert.True(cancellation.IsCancellationRequested);
+                }
             }
         }
     }
