@@ -28,27 +28,37 @@ namespace ConduitLLM.Gateway.Middleware
 
             try
             {
-                var providerCalls = context.GetRequestAccountingSnapshot()?.ProviderCalls.ToList();
+                var providerCalls = context.GetRequestAccountingSnapshot()?.ProviderCalls
+                    .OrderBy(call => call.Iteration).ToList();
+                var hasProviderCalls = providerCalls is { Count: > 0 };
+                var fallbackReasons = new List<string>();
+                var pricedCallCount = 0;
 
                 async Task<decimal> CalculateCallAsync(Usage callUsage)
                 {
-                    ApplyProviderBillingPolicy(context, callUsage);
-                    return context.Items.TryGetValue(HttpContextKeys.ModelCostId, out var callCostIdObj) &&
+                    var billingUsage = callUsage.CopyForBilling();
+                    // The response side channel contains the request's aggregate cost. It
+                    // cannot stand in for an individual call that reported no own cost.
+                    ApplyProviderBillingPolicy(context, billingUsage,
+                        includeAggregateReportedCost: !hasProviderCalls);
+                    var callCost = context.Items.TryGetValue(HttpContextKeys.ModelCostId, out var callCostIdObj) &&
                         callCostIdObj is int callCostId
-                            ? await costCalculationService.CalculateCostByIdAsync(callCostId, callUsage)
-                            : await costCalculationService.CalculateCostAsync(model, callUsage);
+                            ? await costCalculationService.CalculateCostByIdAsync(callCostId, billingUsage)
+                            : await costCalculationService.CalculateCostAsync(model, billingUsage);
+                    if (!string.IsNullOrEmpty(billingUsage.PricingFallbackReason))
+                    {
+                        fallbackReasons.Add(hasProviderCalls
+                            ? $"iteration {providerCalls![pricedCallCount].Iteration}: {billingUsage.PricingFallbackReason}"
+                            : billingUsage.PricingFallbackReason);
+                    }
+                    pricedCallCount++;
+                    return callCost;
                 }
 
                 var cost = await BillingCostComposition.CalculateProviderCostAsync(
                     providerCalls, usage, CalculateCallAsync);
 
-                var fallbackReason = usage.PricingFallbackReason;
-                if (string.IsNullOrEmpty(fallbackReason) && providerCalls is { Count: > 0 })
-                {
-                    fallbackReason = string.Join("; ", providerCalls
-                        .Where(call => !string.IsNullOrEmpty(call.Usage.PricingFallbackReason))
-                        .Select(call => $"iteration {call.Iteration}: {call.Usage.PricingFallbackReason}"));
-                }
+                var fallbackReason = string.Join("; ", fallbackReasons);
 
                 if (!string.IsNullOrEmpty(fallbackReason))
                 {

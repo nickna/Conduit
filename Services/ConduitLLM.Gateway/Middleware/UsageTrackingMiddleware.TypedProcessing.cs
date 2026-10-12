@@ -113,7 +113,7 @@ public partial class UsageTrackingMiddleware
         }
 
         var model = evidence.Model;
-        var usage = evidence.Usage;
+        var usage = evidence.Usage.CopyForBilling();
         ApplyProviderBillingPolicy(context, usage);
         var providerType = context.Items.TryGetValue("ProviderType", out var providerTypeValue)
             ? providerTypeValue?.ToString() ?? "unknown"
@@ -301,12 +301,13 @@ public partial class UsageTrackingMiddleware
             },
             GatewayInternalJsonContext.Default.MediaUsageMetadata);
 
-        ApplyProviderBillingPolicy(context, evidence.Usage);
+        var billingUsage = evidence.Usage.CopyForBilling();
+        ApplyProviderBillingPolicy(context, billingUsage);
         await ProcessMediaResponseAsync(context, new MediaProcessingContext
         {
             MediaType = mediaType,
             Model = evidence.Model,
-            Usage = evidence.Usage,
+            Usage = billingUsage,
             MetadataJson = metadata,
             ProviderType = providerType,
             VirtualKeyId = virtualKeyId,

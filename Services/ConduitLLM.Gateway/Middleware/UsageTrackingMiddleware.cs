@@ -135,7 +135,10 @@ public partial class UsageTrackingMiddleware
                path.Contains("/functions/execute");
     }
 
-    private static void ApplyProviderBillingPolicy(HttpContext context, ConduitLLM.Core.Models.Usage usage)
+    private static void ApplyProviderBillingPolicy(
+        HttpContext context,
+        ConduitLLM.Core.Models.Usage usage,
+        bool includeAggregateReportedCost = true)
     {
         if (context.Items.TryGetValue(HttpContextKeys.ProviderBillingPolicy, out var policyValue) &&
             policyValue is ConduitLLM.Core.Models.ProviderCostBillingPolicy policy)
@@ -143,7 +146,7 @@ public partial class UsageTrackingMiddleware
             usage.ProviderCostPolicy = policy;
         }
 
-        if (usage.ProviderReportedCostUsd is null &&
+        if (includeAggregateReportedCost && usage.ProviderReportedCostUsd is null &&
             context.Items.TryGetValue(HttpContextKeys.ProviderReportedCost, out var costValue) &&
             costValue is decimal reportedCost)
         {

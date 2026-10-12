@@ -107,6 +107,7 @@ namespace ConduitLLM.Gateway.Middleware
 
             // Stamp the provider billing policy onto the streaming usage (which already carries the
             // provider-reported cost captured from the final SSE chunk) before cost calculation.
+            usage = usage.CopyForBilling();
             ApplyProviderBillingPolicy(context, usage);
 
             var virtualKeyId = (int)context.Items["VirtualKeyId"]!;
