@@ -121,3 +121,37 @@ for each required operation, then execute the complete native PostgreSQL suite
 and measure its workload. Existing compiled-model soft-delete omissions remain
 an explicit parity gap. Production remains JIT under ADR 0006; published native
 suite execution and full persistence qualification remain unproven.
+
+## Representative static discovery rewrite
+
+`EfFunctionDiscoveryRuntimeStore.ListEnabledAsync` now uses four complete query
+expressions for both optional filters, purpose only, provider only, or neither.
+The rewrite preserves enabled filtering, unknown enum values, detached reads,
+cancellation, and awaited context disposal without adding an ordering promise.
+The existing three-row PostgreSQL parity suite passed without failures or skips,
+including all 36 filter combinations and cancellation recovery. The fresh
+PostgreSQL 16.15 and Redis fixtures were removed; no test schemas remained.
+
+An isolated Configuration-only comparison pins EF runtime/Design/Tasks/CLI
+10.0.12 and Npgsql provider 10.0.3. It uses the `cea2377ad` source plus the
+single-method working-tree rewrite; production profile selection is unchanged.
+Both managed startup builds passed, while
+both query-precompiler commands exited 1. Error renderings changed from 520 to
+526: the ambiguous generic `query.ToListAsync` rejection rendered eight times
+before and six after, while each of the four new complete expressions produced
+two `ParameterSymbol` translation-error renderings. The old token matches other
+owners, so its count change alone does not establish a unique source attribution.
+No generated binding or native execution was established. Static query shape and
+passing managed PostgreSQL parity do not resolve the remaining EF compiler limits.
+The similar `ParameterSymbol` failure family is already reported in
+[EF #35494](https://github.com/dotnet/efcore/issues/35494); a shared root cause
+has not been established for this Conduit occurrence.
+
+The managed parity receipt is
+`d6448bf091b1a66de11ddd02f470609edb704400934746307e6a45e6c6df1e2f`;
+the before/after comparison receipt is
+`65237eaf7dacaed5cbc3ce35a58f90438d5c57f3f933151af37b7b9478c8f2c1`.
+The exact-token comparison review is
+`25f544a4c975c548365eedc01b6d20faee30273c94c2b9bd5ddc02ffdc66bdc2`.
+Independent managed test-identity, source and captured-cleanup verification is
+`a11f962da33cdf1e13aa673d4fc16a88c5e838f024418d86c7d9781be435d874`.
