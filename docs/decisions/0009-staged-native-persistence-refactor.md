@@ -386,6 +386,22 @@ packages out of Configuration, EF/Npgsql/build tooling out of Functions, and the
 optional MessagePack client protocol out of the native SignalR adapter. No wholesale
 removal of a required consumer is authorized by this ADR.
 
+## Controlled performance checkpoint
+
+The controlled [Admin](../operations/native-aot-admin-controlled-benchmark.md) and
+[Gateway](../operations/native-aot-gateway-controlled-benchmark.md) comparisons
+record mixed results. Native Admin setting-read median throughput is 53.53% lower.
+Native Gateway JSON throughput is 9.08% higher, while complete-SSE throughput is
+4.18% lower and median per-run SSE p99 latency is 7.70% higher. Startup and sampled
+memory improve in both comparisons.
+
+These are whole-profile measurements with explicit source and fixture roles, not
+causal persistence microbenchmarks. Selected typed-Npgsql slices and the remaining
+EF implementations continue to coexist under this accepted decision. Production
+remains on JIT and native promotion is deferred; the existing parity, canary,
+rollback and approval gates remain unchanged. Remaining persistence engineering
+stays in #1373 and operational acceptance stays in #1375.
+
 ## Consequences
 
 - Persistence migration becomes a sequence of reviewable vertical slices rather than

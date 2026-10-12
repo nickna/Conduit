@@ -225,6 +225,13 @@ improved, while median throughput fell 53.53% and every recorded pair had lower
 native throughput. This mixed engineering baseline leaves promotion deferred and
 does not replace a representative production comparison or the ordered canaries.
 
+The [2026-10-12 controlled Gateway comparison](native-aot-gateway-controlled-benchmark.md)
+retains five authenticated JSON/SSE pairs and exact provider/financial settlement.
+Native JSON throughput rose 9.08%, while complete-SSE throughput fell 4.18% and its
+median per-run p99 increased 7.70%. Image size, startup and sampled memory improved.
+The streaming results leave both the no-throughput-loss and 5% p99 criteria unmet;
+production promotion remains deferred.
+
 ## Promotion gate
 
 The machine-readable policy is

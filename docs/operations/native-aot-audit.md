@@ -325,7 +325,14 @@ also pass. Offline OpenAPI and client types match the checked-in contracts acros
 two isolated generations; committed Wolverine adapters have no drift. The
 `linux-x64` workflow remains the platform-specific release gate.
 
-The parent epic remains open. Remaining work is:
+The remaining-work list below records the **2026-10-07 historical checkpoint**.
+Current selected native support and exclusions are defined by the
+[Admin matrix](native-aot-admin-feature-matrix.md),
+[Gateway matrix](gateway-native-aot-feature-matrix.md) and
+[ADR 0009](../decisions/0009-staged-native-persistence-refactor.md).
+Later cache-convergence, selected function and billing-audit proofs do not qualify
+the broader EF management, reporting, retention or reconciliation workloads.
+The parent epic and #1373/#1375 remain open; production promotion remains blocked.
 
 - **Persistence (#1373):** replace or independently prove the 25 excepted Admin
   query methods and the remaining management/reporting/retention workload. Refresh
