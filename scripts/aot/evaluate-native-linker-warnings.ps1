@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$BaselinePath,
     [string]$Runtime = "linux-x64",
-    [ValidateSet("Admin", "Gateway")]
+    [ValidateSet("Admin", "Gateway", "PersistenceConverters")]
     [string[]]$Services = @("Admin", "Gateway"),
     [switch]$UpdateBaseline
 )
@@ -17,7 +17,8 @@ $warningBaselineFile = [IO.Path]::GetFullPath($BaselinePath)
 if ($Services.Count -eq 0 -or @($Services | Sort-Object -Unique).Count -ne $Services.Count) {
     throw "Native-link warning checks require distinct service names."
 }
-if ($UpdateBaseline -and $Services.Count -ne 2) {
+if ($UpdateBaseline -and ($Services.Count -ne 2 -or
+    "Admin" -notin $Services -or "Gateway" -notin $Services)) {
     throw "Updating the native-link warning baseline requires both services."
 }
 

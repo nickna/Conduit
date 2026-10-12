@@ -286,6 +286,35 @@ methods carry exact `IL3050` exceptions with an owner, upstream issue, and remov
 condition. `scripts/aot/normalize-compiled-model.ps1` reapplies and verifies that
 bounded generated-file set after regeneration.
 
+The separate [persisted-converter contract](../../Tests/ConduitLLM.PersistenceConverterAotTests/PersistedValueConverterContract.cs)
+checks all 31 converted properties in the current model, spanning 20 enum types:
+27 integer-enum mappings, two string-enum mappings and two dictionary/JSONB
+mappings. Independent expectations cover CLR/provider types, relational names,
+store types and nullability. Tests invoke each actual model property's converter
+delegates and dictionary tracking comparer.
+
+The [34 conventional-model integration cases](../../Tests/ConduitLLM.IntegrationTests/Tests/PersistedValueConverterParityTests.cs)
+passed against real PostgreSQL. Coverage includes unknown enum values, invalid
+inputs, nullable CLR enums with required database columns, SQL NULL versus JSON
+null, Unicode/case-distinct dictionary keys, tracked mutation, persisted readback
+and detached changes. JSONB readback compares contents independently of member
+order. Comparer tests preserve existing insertion-order-sensitive equality while
+checking cloned snapshots and mutation detection.
+Order-independent comparer equality is tracked in
+[#1648](https://github.com/nickna/Conduit/issues/1648).
+
+The [isolated native probe](../../Tests/ConduitLLM.PersistenceConverterAotTests/ConduitLLM.PersistenceConverterAotTests.csproj)
+and [smoke script](../../scripts/aot/persistence-converter-native-smoke.ps1) passed
+on Linux with the checked-in compiled model: 31 converted properties, 126
+PostgreSQL checks, two dictionary comparers, dynamic code disabled and zero
+first-party linker diagnostics. The original TRX, publish/runtime manifests,
+executable hashes and logs were retained; independent SQL readback found no
+leftover test schemas and exact owned fixture cleanup passed. This local proof
+used a frozen uncommitted source snapshot. Final committed-source CI remains a
+separate requirement. Native EF query/update execution, complete persistence
+support and production qualification remain outside this proof under
+[ADR 0009](../decisions/0009-staged-native-persistence-refactor.md).
+
 The 2026-08-28 `win-x64` native publish contains **0** first-party linker diagnostics.
 The checked-in linker baseline is therefore empty: any new first-party `IL2026`,
 `IL3050`, `IL207x`, or `IL209x` diagnostic now fails the native publish lane.

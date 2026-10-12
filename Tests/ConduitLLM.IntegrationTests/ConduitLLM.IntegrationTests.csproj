@@ -47,6 +47,7 @@
 
   <ItemGroup>
     <Compile Include="../ConduitLLM.PersistenceAotTests/PersistenceProbeLifecycle.cs" Link="Infrastructure/PersistenceProbeLifecycle.cs" />
+    <Compile Include="../ConduitLLM.PersistenceConverterAotTests/PersistedValueConverterContract.cs" Link="Infrastructure/PersistedValueConverterContract.cs" />
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeFunctionFixture.cs" Link="Infrastructure/NativeFunctionFixture.cs" />
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeFunctionFixtureRedisCleanup.cs" Link="Infrastructure/NativeFunctionFixtureRedisCleanup.cs" />
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeProviderStub.cs" Link="Infrastructure/NativeProviderStub.cs" />

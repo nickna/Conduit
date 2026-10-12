@@ -26,6 +26,7 @@ on:
       - 'Tests/ConduitLLM.Tests/HostCompositionTests.cs'
       - 'Tests/ConduitLLM.IntegrationTests/**'
       - 'Tests/ConduitLLM.PersistenceAotTests/**'
+      - 'Tests/ConduitLLM.PersistenceConverterAotTests/**'
       - 'Tests/ConduitLLM.SchemaStartupFixtures/**'
       - 'tools/ConduitLLM.MediaDispatchProbe/**'
       - 'tools/ConduitLLM.Migrator/**'
@@ -199,13 +200,27 @@ jobs:
         env:
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
 
+      - name: Native persisted converters PostgreSQL proof
+        shell: pwsh
+        run: ./scripts/aot/persistence-converter-native-smoke.ps1
+        env:
+          DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
+
+      - name: Upload native converter probe
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: conduit-persistence-converters-linux-x64-native
+          path: artifacts/native-aot/runtime/persistence-converters
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Shared EF and Npgsql persistence parity
         uses: ./.github/actions/run-tests
         with:
           project: Tests/ConduitLLM.IntegrationTests
           suite: native-persistence-parity
-          filter: FullyQualifiedName~PersistenceParityTests|FullyQualifiedName~BillingAuditServicePersistenceTests|FullyQualifiedName~NativePersistenceCleanupParityTests|FullyQualifiedName~GlobalSettingRepositoryParityTests|FullyQualifiedName~IpFilterRepositoryParityTests|FullyQualifiedName~ProviderPersistenceParityTests|FullyQualifiedName~SchemaVersionProbeTests|FullyQualifiedName~NpgsqlConnectionPoolWarmupTests|FullyQualifiedName~FunctionCredentialFixtureTests|FullyQualifiedName~NativeFunctionProviderTests|FullyQualifiedName~NativeAgenticProviderTests|FullyQualifiedName~NativeMcpFunctionProviderTests|FullyQualifiedName~NativeFunctionFixtureRedisCleanupTests|FullyQualifiedName~NativeBenchmarkWorkloadProbeTests
-          minimum: '233'
+          filter: FullyQualifiedName~PersistenceParityTests|FullyQualifiedName~BillingAuditServicePersistenceTests|FullyQualifiedName~NativePersistenceCleanupParityTests|FullyQualifiedName~GlobalSettingRepositoryParityTests|FullyQualifiedName~IpFilterRepositoryParityTests|FullyQualifiedName~ProviderPersistenceParityTests|FullyQualifiedName~SchemaVersionProbeTests|FullyQualifiedName~NpgsqlConnectionPoolWarmupTests|FullyQualifiedName~FunctionCredentialFixtureTests|FullyQualifiedName~NativeFunctionProviderTests|FullyQualifiedName~NativeAgenticProviderTests|FullyQualifiedName~NativeMcpFunctionProviderTests|FullyQualifiedName~NativeFunctionFixtureRedisCleanupTests|FullyQualifiedName~NativeBenchmarkWorkloadProbeTests|FullyQualifiedName~PersistedValueConverterParityTests
+          minimum: '267'
         env:
           CONDUIT_LOCK_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
           CONDUIT_LOCK_TEST_REDIS: 127.0.0.1:6379
