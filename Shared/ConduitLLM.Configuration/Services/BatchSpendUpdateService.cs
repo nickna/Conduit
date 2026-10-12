@@ -50,6 +50,7 @@ namespace ConduitLLM.Configuration.Services
         private readonly string _startedReservationPrefix = "spend_reservations_started:group:";
         private readonly string _settledReservationPrefix = "spend_reservations_settled:group:";
         private readonly string _reservationOwnerPrefix = "spend_reservation_owners:group:";
+        private readonly string _reservationBoundPrefix = "spend_reservation_bounds:group:";
         private readonly ConcurrentQueue<(int VirtualKeyId, decimal Cost, DateTime BillingWindowStartUtc)> _fallbackQueue = new();
         private const decimal SpendUnitScale = 100_000_000m;
 
@@ -267,12 +268,14 @@ namespace ConduitLLM.Configuration.Services
                     end
                     redis.call('HDEL', KEYS[3], id)
                     redis.call('HDEL', KEYS[9], id)
+                    redis.call('HDEL', KEYS[10], id)
                     redis.call('ZREM', KEYS[4], id)
                 end
                 if redis.call('HEXISTS', KEYS[3], ARGV[3]) == 1
                     or redis.call('HEXISTS', KEYS[7], ARGV[3]) == 1
                     or redis.call('HEXISTS', KEYS[8], ARGV[3]) == 1 then
-                    if redis.call('HGET', KEYS[9], ARGV[3]) == ARGV[8] then return 1 end
+                    if redis.call('HGET', KEYS[9], ARGV[3]) == ARGV[8]
+                        and redis.call('HGET', KEYS[10], ARGV[3]) == ARGV[2] then return 1 end
                     return 0
                 end
                 local pending = tonumber(redis.call('GET', KEYS[1]) or '0')
@@ -293,6 +296,7 @@ namespace ConduitLLM.Configuration.Services
                 end
                 redis.call('HSET', KEYS[3], ARGV[3], amount)
                 redis.call('HSET', KEYS[9], ARGV[3], ARGV[8])
+                redis.call('HSET', KEYS[10], ARGV[3], ARGV[2])
                 redis.call('ZADD', KEYS[4], ARGV[5], ARGV[3])
                 return 1
                 """;
@@ -312,12 +316,15 @@ namespace ConduitLLM.Configuration.Services
                     windowedPendingTotalUnitsKey,
                     startedReservationsKey,
                     settledReservationsKey,
-                    $"{_reservationOwnerPrefix}{account.GroupId}"
+                    $"{_reservationOwnerPrefix}{account.GroupId}",
+                    $"{_reservationBoundPrefix}{account.GroupId}"
                 },
                 new RedisValue[]
                 {
                     account.Balance.ToString(CultureInfo.InvariantCulture),
-                    amount.ToString(CultureInfo.InvariantCulture),
+                    // Exact canonical decimals preserve numeric-equivalent replays without
+                    // comparing the original estimate to an indeterminate request's reduced hold.
+                    amount.ToString("G29", CultureInfo.InvariantCulture),
                     reservationId,
                     now,
                     now + ttlMilliseconds,
@@ -514,6 +521,7 @@ namespace ConduitLLM.Configuration.Services
                 local amount = tonumber(rawAmount)
                 redis.call('HDEL', KEYS[1], ARGV[1])
                 redis.call('HDEL', KEYS[4], ARGV[1])
+                redis.call('HDEL', KEYS[5], ARGV[1])
                 redis.call('ZREM', KEYS[2], ARGV[1])
                 if amount > 0 then
                     local remaining = tonumber(redis.call('INCRBYFLOAT', KEYS[3], -amount))
@@ -527,7 +535,7 @@ namespace ConduitLLM.Configuration.Services
             await db.ScriptEvaluateAsync(
                 script,
                 new RedisKey[] { reservationsKey, reservationExpiryKey, reservedTotalKey,
-                    $"{_reservationOwnerPrefix}{groupId.Value}" },
+                    $"{_reservationOwnerPrefix}{groupId.Value}", $"{_reservationBoundPrefix}{groupId.Value}" },
                 new RedisValue[] { reservationId, virtualKeyId });
         }
 

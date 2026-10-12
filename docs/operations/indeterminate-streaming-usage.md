@@ -35,6 +35,13 @@ verify that identity. Ownership survives started, indeterminate, and settled sta
 including zero-cost holds. Ordinary pre-invocation release or expiry removes the
 owner; settled owners remain for the same replay horizon as their settlement records.
 
+The immutable original maximum is stored separately in
+`spend_reservation_bounds:group:{groupId}`. Reserve replay requires both the same
+owner and the same original maximum, even when known spend has reduced the held
+amount or the request has settled. Decimal values with equivalent numeric values
+match. A changed maximum is rejected without changing the hold or accepting a new
+invocation bound. Bound metadata follows owner retention and pre-invocation cleanup.
+
 Legacy numeric holds and settled hashes remain readable without a data-format
 migration, but ordinary lifecycle operations reject records with no owner. They
 never infer ownership from a supplied sibling key in the same group. Before recovering
@@ -53,9 +60,14 @@ evidence returns `Conflict` without changes. A normally owned reservation cannot
 relabelled through recovery. The same immutable recovery evidence can explicitly
 restore a missing owner, returning `Recovered` while retaining the original audit
 timestamp; conflicting ownership or evidence still fails closed.
+Legacy records with no original-bound metadata continue to reject reserve replay
+after ownership recovery. Start, settlement, and audited reconciliation remain
+available to complete their existing accounting. Do not infer the original maximum
+from a reduced hold, add a fabricated bound, or replay the provider invocation.
 The immutable recovery hash `spend_reservation_owner_recovery:group:{groupId}` retains
 the owner, actor, evidence note, and observation time. Back up ownership and recovery
-hashes with reservation state and retain recovery evidence for the replay/audit horizon.
+hashes and original-bound metadata with reservation state and retain recovery evidence
+for the replay/audit horizon.
 
 Drain older processes before enabling owner-enforcing lifecycle operations: old
 writers do not maintain ownership metadata and old code does not reject sibling

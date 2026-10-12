@@ -68,7 +68,9 @@ namespace ConduitLLM.Configuration.Interfaces
         Task<decimal> GetPendingSpendAsync(int virtualKeyId);
 
         /// <summary>
-        /// Atomically reserves part of a virtual key group's available balance.
+        /// Atomically reserves part of a virtual key group's available balance. Replays require
+        /// the same owner and original maximum amount, including after a hold is reduced or settled.
+        /// Legacy records whose original maximum is unknown reject reservation replays.
         /// </summary>
         Task<bool> TryReserveSpendAsync(int virtualKeyId, decimal amount, string reservationId);
 
