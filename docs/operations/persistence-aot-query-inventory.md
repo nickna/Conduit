@@ -82,6 +82,13 @@ Repository interfaces return materialized values rather than `IQueryable`.
 Dynamic `IQueryable` composition remains inside implementations and reporting
 helpers, so an interface guard alone is not sufficient native evidence.
 
+The [2026-10-12 isolated EF query-precompilation spike](ef-native-query-spike.md)
+attempted all five owners with aligned EF 10.0.12 tooling. All five passes failed;
+two repository-dispatcher native publishes failed before execution. Its 224
+planned cases are explicitly unexecuted and do not complete #1373's full native
+repository-suite scope. See that report for failure stages, source identity,
+repeat steps, and the compiled-model soft-delete limitations.
+
 ## Extracted slices and actual evidence
 
 Contracts live in `Shared/ConduitLLM.Persistence.Abstractions`; typed implementations
@@ -129,9 +136,10 @@ MinIO-specific or vendor-wide compatibility from the CI storage result.
 ## Remaining query owners and required work
 
 The listed domains are an inventory of excluded JIT workloads and future native
-expansion work. They do not require an all-domain rewrite to accept the staged
-#1373 spike described in [ADR 0009](../decisions/0009-staged-native-persistence-refactor.md).
-Each newly selected operation still requires the parity and published-process
+expansion work. [ADR 0009](../decisions/0009-staged-native-persistence-refactor.md)
+permits proving selected operations incrementally without an immediate all-domain
+rewrite. That staged evidence does not complete #1373's full native repository-suite
+scope. Each newly selected operation still requires the parity and published-process
 evidence below; excluded domains retain their JIT behavior and cannot be advertised
 as native support. Final committed-source CI, acceptance reconciliation and all
 promotion criteria remain required.
