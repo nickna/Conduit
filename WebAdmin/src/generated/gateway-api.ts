@@ -3407,7 +3407,7 @@ export interface operations {
   Discovery_GetFunctions: {
     parameters: {
       query?: {
-        /** @description Optional purpose filter (e.g., "Search", "Answer", "RAG_Search") */
+        /** @description Optional purpose filter (e.g., "Search", "Answer", "RAG") */
         purpose?: string;
         /** @description Optional provider type filter (e.g., "Exa", "Perplexity") */
         providerType?: string;

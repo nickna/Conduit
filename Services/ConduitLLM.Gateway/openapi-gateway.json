@@ -2973,7 +2973,7 @@
           {
             "name": "purpose",
             "in": "query",
-            "description": "Optional purpose filter (e.g., \"Search\", \"Answer\", \"RAG_Search\")",
+            "description": "Optional purpose filter (e.g., \"Search\", \"Answer\", \"RAG\")",
             "schema": {
               "type": "string"
             }

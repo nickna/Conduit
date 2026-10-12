@@ -28272,7 +28272,7 @@ export interface operations {
       };
       header?: never;
       path: {
-        /** @description The purpose (e.g., "Search", "Answer", "Enrich") */
+        /** @description The purpose (e.g., "Search", "Answer", "ContentRetrieval", "RAG") */
         purpose: string;
       };
       cookie?: never;
