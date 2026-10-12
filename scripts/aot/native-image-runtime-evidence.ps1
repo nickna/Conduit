@@ -265,7 +265,7 @@ function Remove-NativeImageRuntimeContainer {
         if ($container['State']['Running']) {
             $budget = Get-NativeImageRuntimeBudget $watch $CleanupTimeoutSeconds $DockerCommandTimeoutSeconds
             $grace = [int][Math]::Max(0, [Math]::Min(3, [Math]::Floor($budget['work'] / 2)))
-            $stopped = Invoke-NativeImageVerificationDocker -Command $Command -Arguments @('container', 'stop', '--time', $grace.ToString([Globalization.CultureInfo]::InvariantCulture), $Record['containerId']) -TimeoutSeconds $budget['work'] -ReapTimeoutSeconds $budget['reap']
+            $stopped = Invoke-NativeImageVerificationDocker -Command $Command -Arguments @('container', 'stop', '--timeout', $grace.ToString([Globalization.CultureInfo]::InvariantCulture), $Record['containerId']) -TimeoutSeconds $budget['work'] -ReapTimeoutSeconds $budget['reap']
             if ($stopped['exitCode'] -ne 0 -or $stopped['stdout'].Trim() -cne $Record['containerId']) {
                 throw 'Native image owned runtime container stop failed.'
             }

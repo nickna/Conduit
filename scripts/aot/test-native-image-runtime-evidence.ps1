@@ -479,7 +479,7 @@ switch ($DockerArguments[1]) {
         [Console]::Out.WriteLine('Owned native runtime completed.'); exit 0
     }
     'stop' {
-        if ($DockerArguments.Count -ne 5 -or $DockerArguments[2] -cne '--time' -or $DockerArguments[-1] -cne $id -or [int]$DockerArguments[3] -lt 0 -or [int]$DockerArguments[3] -gt 3) { throw 'Invalid bounded runtime stop identity.' }
+        if ($DockerArguments.Count -ne 5 -or $DockerArguments[2] -cne '--timeout' -or $DockerArguments[-1] -cne $id -or [int]$DockerArguments[3] -lt 0 -or [int]$DockerArguments[3] -gt 3) { throw 'Invalid bounded runtime stop identity.' }
         if ($scenario -ceq 'stop-failure') { [Console]::Error.WriteLine($diagnostic); exit 17 }
         $state = Read-Json $active
         if ($scenario -cne 'stop-still-running') { $state.container.State.Running = $false; $state.container.State.Status = 'exited'; $state.container.State.ExitCode = 137; Write-Json $active $state }
