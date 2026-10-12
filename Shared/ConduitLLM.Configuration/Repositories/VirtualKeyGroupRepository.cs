@@ -85,11 +85,21 @@ public class VirtualKeyGroupRepository : RepositoryBase<VirtualKeyGroup, int>, I
     }
 
     /// <summary>
-    /// Overrides UpdateAsync to provide logging.
+    /// Updates only the group's scalar values and logs the completed update.
     /// </summary>
     public override async Task<bool> UpdateAsync(VirtualKeyGroup entity, CancellationToken cancellationToken = default)
     {
-        var result = await base.UpdateAsync(entity, cancellationToken);
+        ArgumentNullException.ThrowIfNull(entity);
+
+        var result = await ExecuteWriteAsync(async context =>
+        {
+            OnBeforeUpdate(entity);
+
+            // Reads include member keys. Marking the whole detached graph modified would
+            // overwrite changes to those keys when only the group was edited.
+            context.Entry(entity).State = EntityState.Modified;
+            return await context.SaveChangesAsync(cancellationToken) > 0;
+        }, $"updating ID {entity.Id}", cancellationToken);
 
         if (result)
         {
