@@ -128,6 +128,14 @@ MinIO-specific or vendor-wide compatibility from the CI storage result.
 
 ## Remaining query owners and required work
 
+The listed domains are an inventory of excluded JIT workloads and future native
+expansion work. They do not require an all-domain rewrite to accept the staged
+#1373 spike described in [ADR 0009](../decisions/0009-staged-native-persistence-refactor.md).
+Each newly selected operation still requires the parity and published-process
+evidence below; excluded domains retain their JIT behavior and cannot be advertised
+as native support. Final committed-source CI, acceptance reconciliation and all
+promotion criteria remain required.
+
 The owner paths below are relative to the repository root. Database/runtime owns
 the persistence contracts; the named feature maintainers own their process fixtures.
 All rows remain open unless their selected operations are explicitly covered above.

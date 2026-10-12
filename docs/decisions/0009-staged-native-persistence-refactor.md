@@ -406,8 +406,12 @@ These are whole-profile measurements with explicit source and fixture roles, not
 causal persistence microbenchmarks. Selected typed-Npgsql slices and the remaining
 EF implementations continue to coexist under this accepted decision. Production
 remains on JIT and native promotion is deferred; the existing parity, canary,
-rollback and approval gates remain unchanged. Remaining persistence engineering
-stays in #1373 and operational acceptance stays in #1375.
+rollback and approval gates remain unchanged. Phase #1373 assesses the staged
+representative persistence contract, including the complete persisted-converter
+inventory; it does not require native enablement of every excluded JIT domain.
+The query inventory records the evidence required before any later expansion.
+Final committed-source CI and acceptance reconciliation remain required;
+operational acceptance remains in #1375.
 
 ## Consequences
 

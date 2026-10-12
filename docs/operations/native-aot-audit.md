@@ -2,6 +2,40 @@
 
 Gateway runtime feature support, exclusions, process gates, and the third-party risk ledger are defined in [gateway-native-aot-feature-matrix.md](gateway-native-aot-feature-matrix.md). A successful publish alone is not a claim that the full JIT data plane is supported.
 
+## Current selected-profile disposition: 2026-10-12
+
+The dated assessments and tables below retain their original source and evidence
+scope. Current support is defined by the [Gateway matrix](gateway-native-aot-feature-matrix.md),
+[Admin matrix](native-aot-admin-feature-matrix.md) and
+[ADR 0009](../decisions/0009-staged-native-persistence-refactor.md). Their selected
+operations, rather than every JIT management/reporting workload, define the staged
+native implementation contract. The separate converter proof executes all 31 mapped
+properties through the actual compiled-model converters and property comparers;
+it does not establish native EF query/update support.
+
+The local unit 118 proof passed the published two-Gateway catalog boundary:
+the excluded enriched catalog and parameter routes return authenticated generated
+501 before handler DI, while selected model metadata and JIT behavior remain
+unchanged. Its frozen uncommitted source snapshot was later committed as
+[99a3488e](https://github.com/nickna/Conduit/commit/99a3488e3146806bbe4e3144258852582f287ae0).
+The local unit 119 proof passed the Admin matched-route boundary before
+body/filter/handler binding, preserving the 23 selected operation triples,
+security ordering and sequential ephemeral authentication. Its frozen uncommitted
+source snapshot was later committed as
+[37ab6431](https://github.com/nickna/Conduit/commit/37ab6431abf304102978227dd7d204b0b3600f33).
+Unit 119 passed 189 JIT and 44 native-profile managed cases without skips,
+three fresh native publications with zero first-party linker diagnostics, the
+full gate including eight Gateway and ten Admin boundary requests, and exact
+owned cleanup. These local snapshot proofs do not provide clean committed-source
+CI provenance.
+
+At this documentation commit, final exact committed-source Main and Native CI is
+still **PENDING**. Its later original run/artifact readback must qualify the final
+pushed source. Local proofs and controlled benchmarks do not replace that
+readback or the release-candidate/security evidence, approved qualification window,
+rollback rehearsals and ordered Admin/Gateway soaks. JIT remains the production
+default; the blocked promotion policy is unchanged. #1375 and #1368 remain open.
+
 NativeAOT readiness is measured separately from the normal JIT developer loop. The
 production services remain framework-dependent until the persistence and runtime
 parity phases are complete.
