@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.CodeAnalysis">
+      <HintPath>$(MSBuildBinPath)\Roslyn\bincore\Microsoft.CodeAnalysis.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp">
+      <HintPath>$(MSBuildBinPath)\Roslyn\bincore\Microsoft.CodeAnalysis.CSharp.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <ProjectReference Include="..\..\tools\ConduitLLM.EfQueryInventory\ConduitLLM.EfQueryInventory.csproj" />
+    <Compile Remove="Fixtures\**\*.cs" />
+    <None Include="Fixtures\**\*.cs" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

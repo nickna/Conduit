@@ -1,0 +1,55 @@
+<Project>
+  <!-- Imported only by collect-ef-query-inventory.ps1, never by a service. -->
+  <PropertyGroup Condition="'$(ConduitEfQueryInventoryDirectory)' != ''">
+    <_ConduitEfQueryCapture>$(ConduitEfQueryInventoryDirectory)/$(MSBuildProjectName)/$(TargetFramework)/$(RuntimeIdentifier)</_ConduitEfQueryCapture>
+    <ErrorLog>$(_ConduitEfQueryCapture)/diagnostics.sarif,version=2.1</ErrorLog>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(ConduitEfQueryInventoryDirectory)' != ''">
+    <Analyzer Include="$(ConduitEfQueryInventoryAnalyzer)" />
+    <CompilerVisibleProperty Include="MSBuildProjectFullPath" />
+    <CompilerVisibleProperty Include="RootNamespace" />
+  </ItemGroup>
+  <UsingTask TaskName="ConduitEncodeEfQueryInputs" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Entries ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <Lines ParameterType="System.String[]" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.Text" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        Lines = new string[Entries.Length];
+        for (int i = 0; i < Entries.Length; i++)
+        {
+            var kind = Entries[i].GetMetadata("Kind");
+            var value = Entries[i].GetMetadata("Value");
+            if (kind == "Compile" || kind == "Reference" || kind == "ProjectReference")
+                value = Entries[i].GetMetadata("FullPath");
+            Lines[i] = kind + "=" + Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+  <Target Name="ConduitCaptureEfQueryInputs" BeforeTargets="CoreCompile"
+          Condition="'$(ConduitEfQueryInventoryDirectory)' != '' and '$(IsCrossTargetingBuild)' != 'true'">
+    <Error Condition="!Exists('$(ConduitEfQueryInventoryAnalyzer)')" Text="EF inventory analyzer is missing." />
+    <MakeDir Directories="$(_ConduitEfQueryCapture)" />
+    <ItemGroup>
+      <_ConduitEfQueryInput Include="Project"><Kind>Project</Kind><Value>$(MSBuildProjectFullPath)</Value></_ConduitEfQueryInput>
+      <_ConduitEfQueryInput Include="Assembly"><Kind>Assembly</Kind><Value>$(AssemblyName)</Value></_ConduitEfQueryInput>
+      <_ConduitEfQueryInput Include="Sdk"><Kind>Sdk</Kind><Value>$(NETCoreSdkVersion)</Value></_ConduitEfQueryInput>
+      <_ConduitEfQueryInput Include="Configuration"><Kind>Configuration</Kind><Value>$(Configuration)</Value></_ConduitEfQueryInput>
+      <_ConduitEfQueryInput Include="PublishAot"><Kind>PublishAot</Kind><Value>$(PublishAot)</Value></_ConduitEfQueryInput>
+      <_ConduitEfQueryInput Include="RuntimeIdentifier"><Kind>RuntimeIdentifier</Kind><Value>$(RuntimeIdentifier)</Value></_ConduitEfQueryInput>
+      <_ConduitEfQueryInput Include="Defines"><Kind>Defines</Kind><Value>$(DefineConstants)</Value></_ConduitEfQueryInput>
+      <_ConduitEfQueryInput Include="@(Compile)"><Kind>Compile</Kind></_ConduitEfQueryInput>
+      <_ConduitEfQueryInput Include="@(ReferencePathWithRefAssemblies)"><Kind>Reference</Kind></_ConduitEfQueryInput>
+      <_ConduitEfQueryInput Include="@(ProjectReference)" Condition="'%(ProjectReference.BuildReference)' != 'false' and '%(ProjectReference.ReferenceOutputAssembly)' != 'false'"><Kind>ProjectReference</Kind></_ConduitEfQueryInput>
+    </ItemGroup>
+    <ConduitEncodeEfQueryInputs Entries="@(_ConduitEfQueryInput)">
+      <Output TaskParameter="Lines" ItemName="_ConduitEfQueryInputLines" />
+    </ConduitEncodeEfQueryInputs>
+    <WriteLinesToFile File="$(_ConduitEfQueryCapture)/compiler-inputs.b64" Lines="@(_ConduitEfQueryInputLines)" Encoding="UTF-8" Overwrite="true" />
+  </Target>
+</Project>
