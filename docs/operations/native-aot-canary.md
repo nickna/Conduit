@@ -192,6 +192,12 @@ No production comparison has been accepted yet. Published native smoke and
 workload-driver correctness tests do not supply operational improvement,
 background-worker parity, ordered soak or rollback evidence.
 
+The [2026-10-12 controlled Admin comparison](native-aot-admin-controlled-benchmark.md)
+retains an actual five-pair measurement and its original report. Startup and memory
+improved, while median throughput fell 53.53% and every recorded pair had lower
+native throughput. This mixed engineering baseline leaves promotion deferred and
+does not replace a representative production comparison or the ordered canaries.
+
 ## Promotion gate
 
 The machine-readable policy is
