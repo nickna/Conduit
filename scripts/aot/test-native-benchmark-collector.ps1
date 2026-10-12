@@ -1060,7 +1060,17 @@ if ($Mode -eq 'docker') {
     if ($CommandArguments[0] -eq 'inspect') {
         $identity = $CommandArguments[-1]
         $matches = @(Read-Active | Where-Object { $_.id -ceq $identity -or $_.name -ceq $identity })
-        if ($matches.Count -eq 0) { [Console]::Error.WriteLine('Error: No such object: ' + $identity); exit 1 }
+        if ($matches.Count -eq 0) {
+            $missingMessage = switch ($scenario) {
+                'lowercase-missing-object' { 'error: no such object: ' + $identity }
+                'lowercase-missing-container' { 'error: no such container: ' + $identity }
+                'foreign-missing-identity' { 'error: no such object: foreign-container' }
+                default { 'Error: No such object: ' + $identity }
+            }
+            if ($scenario -ceq 'missing-with-payload') { [Console]::Out.WriteLine('{"Id":"foreign-container"}') }
+            [Console]::Error.WriteLine($missingMessage)
+            exit 1
+        }
         if ($matches.Count -ne 1) { throw 'Ambiguous fake identity.' }
         $record = $matches[0]
         $labels = $record.labels
@@ -1372,6 +1382,10 @@ if ($env:CONDUIT_COLLECTOR_HELPER_VALUE -eq 'timeout') {
     $cases++
 
     $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult
+    Invoke-CollectorCase 'admin' 'lowercase-missing-object' $null
+    Invoke-CollectorCase 'admin' 'lowercase-missing-container' $null
+    Invoke-CollectorCase 'admin' 'foreign-missing-identity' 'cleanup failed'
+    Invoke-CollectorCase 'admin' 'missing-with-payload' 'cleanup failed'
     Invoke-CollectorCase 'gateway' 'success' $null
     Invoke-CollectorCase 'admin' 'jit-index' $null
     foreach ($scenario in @('jit-index-ambiguous', 'jit-index-missing', 'jit-index-malformed')) {

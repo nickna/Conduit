@@ -421,7 +421,9 @@ function Get-OwnedContainer($Record, [switch] $AllowMissing, [switch] $ValidateN
     $result = Invoke-Docker @('inspect', '--format', '{{json .}}', $identity) $CleanupTimeoutSeconds
     if ($result.ExitCode -ne 0) {
         $message = $result.Stderr.Trim()
-        if ($AllowMissing -and $message -cin @("Error: No such object: $identity", "Error: No such container: $identity")) {
+        if ($AllowMissing -and [string]::IsNullOrWhiteSpace($result.Stdout) -and $message -cin @(
+            "Error: No such object: $identity", "Error: No such container: $identity",
+            "error: no such object: $identity", "error: no such container: $identity")) {
             return $null
         }
         throw 'Owned container inspection failed.'
