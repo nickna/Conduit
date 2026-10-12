@@ -370,6 +370,7 @@ jobs:
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
           CONDUIT_CACHE_TEST_REDIS: localhost:6379
           CONDUIT_CACHE_TEST_POSTGRES: Host=localhost;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
+          CONDUIT_LOCK_TEST_POSTGRES: Host=localhost;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
 
       - name: Reflection-disabled serialization suite
         uses: ./.github/actions/run-tests
