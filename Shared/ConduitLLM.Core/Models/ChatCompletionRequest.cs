@@ -312,11 +312,12 @@ public class ChatCompletionRequest
     /// 3. Append tool result messages to the conversation
     /// 4. Make a new LLM request with the updated conversation
     /// 5. Repeat until the LLM provides a final answer or max iterations reached
-    /// Default: Configurable via GlobalSetting 'Agentic.DefaultEnabled' (fallback: true)
+    /// Omitted or null: resolved by the Gateway from GlobalSetting 'Agentic.DefaultEnabled'
+    /// (fallback: true). Direct Conduit callers use the fallback when unspecified.
     /// </remarks>
     [JsonPropertyName("enable_agentic_mode")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? EnableAgenticMode { get; set; } = true;
+    public bool? EnableAgenticMode { get; set; }
 
     /// <summary>
     /// Maximum number of agentic iterations (function call loops) allowed.
@@ -324,13 +325,14 @@ public class ChatCompletionRequest
     /// </summary>
     /// <remarks>
     /// Each iteration consists of: LLM response → function execution → LLM response.
-    /// Default: Configurable via GlobalSetting 'Agentic.MaxIterations' (fallback: 5)
+    /// Omitted or null: resolved by the Gateway from GlobalSetting 'Agentic.MaxIterations'
+    /// (fallback: 5). Direct Conduit callers use the fallback when unspecified.
     /// Valid Range: Configurable via GlobalSettings 'Agentic.MinIterations' and 'Agentic.MaxIterations' (fallback: 1-100)
     /// If the limit is reached, the system will return the conversation state with an error message.
     /// </remarks>
     [JsonPropertyName("max_agentic_iterations")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? MaxAgenticIterations { get; set; } = 5;
+    public int? MaxAgenticIterations { get; set; }
 
     /// <summary>
     /// Additional model-specific parameters that are passed through to the provider API.
