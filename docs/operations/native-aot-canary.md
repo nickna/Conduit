@@ -339,7 +339,9 @@ the repository's synthetic contract tests.
 2. Start the corresponding JIT image and native candidate digest side-by-side with
    the same configuration and backing services. `deploy/native-canary/compose.yml`
    is a local/staging harness; use the production orchestrator's equivalent security
-   and availability controls for the actual canary.
+   and availability controls for the actual canary. All four harness cohorts use
+   `CONDUIT_MIGRATION_MODE=Wait` so readiness verifies the schema version without
+   applying migrations; the standalone migrator remains release-owned.
 3. Exercise contracts against JIT first, then shadow safe/read-only traffic to native.
    Do not mirror writes unless the workload supplies idempotency and isolates effects.
 4. Route 1% of eligible traffic to Admin native. Advance through 5%, 25%, 50%, and
