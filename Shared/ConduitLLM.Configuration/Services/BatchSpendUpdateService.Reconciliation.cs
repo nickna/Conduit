@@ -169,9 +169,11 @@ public partial class BatchSpendUpdateService
             -- The read used to select window keys and calculate exact total units may
             -- precede another cumulative known-spend update. Reject that stale snapshot.
             if record.knownUnits ~= ARGV[9] or record.window ~= ARGV[10] then return -1 end
-            redis.call('INCRBY', KEYS[5], ARGV[2])
-            redis.call('INCRBY', KEYS[6], ARGV[2])
-            redis.call('INCRBY', KEYS[7], ARGV[2])
+            if ARGV[2] ~= '0' then
+                redis.call('INCRBY', KEYS[5], ARGV[2])
+                redis.call('INCRBY', KEYS[6], ARGV[2])
+                redis.call('INCRBY', KEYS[7], ARGV[2])
+            end
             redis.call('HDEL', KEYS[2], ARGV[1])
             local remaining = tonumber(redis.call('INCRBYFLOAT', KEYS[3], '-' .. record.heldAmount))
             if remaining <= 0 then redis.call('DEL', KEYS[3]) end

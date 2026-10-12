@@ -228,9 +228,9 @@ namespace ConduitLLM.Configuration.Services
         /// <inheritdoc />
         public async Task<bool> TryReserveSpendAsync(int virtualKeyId, decimal amount, string reservationId)
         {
-            if (amount <= 0)
+            if (amount < 0)
             {
-                return true;
+                throw new ArgumentOutOfRangeException(nameof(amount), "A reservation amount cannot be negative");
             }
 
             if (string.IsNullOrWhiteSpace(reservationId))
@@ -286,7 +286,9 @@ namespace ConduitLLM.Configuration.Services
                 if pending + reserved + amount > balance then
                     return 0
                 end
-                redis.call('INCRBYFLOAT', KEYS[2], amount)
+                if amount > 0 then
+                    redis.call('INCRBYFLOAT', KEYS[2], amount)
+                end
                 redis.call('HSET', KEYS[3], ARGV[3], amount)
                 redis.call('ZADD', KEYS[4], ARGV[5], ARGV[3])
                 return 1
@@ -417,9 +419,11 @@ namespace ConduitLLM.Configuration.Services
                 redis.call('HDEL', KEYS[1], ARGV[1])
                 redis.call('HDEL', KEYS[3], ARGV[1])
                 redis.call('ZREM', KEYS[2], ARGV[1])
-                redis.call('INCRBY', KEYS[6], ARGV[2])
-                redis.call('INCRBY', KEYS[7], ARGV[2])
-                redis.call('INCRBY', KEYS[8], ARGV[2])
+                if ARGV[2] ~= '0' then
+                    redis.call('INCRBY', KEYS[6], ARGV[2])
+                    redis.call('INCRBY', KEYS[7], ARGV[2])
+                    redis.call('INCRBY', KEYS[8], ARGV[2])
+                end
                 redis.call('HSET', KEYS[4], ARGV[1], ARGV[2])
 
                 local remaining = tonumber(redis.call('INCRBYFLOAT', KEYS[5], -tonumber(reservedAmount)))
@@ -485,15 +489,18 @@ namespace ConduitLLM.Configuration.Services
             var reservedTotalKey = $"{_reservedSpendPrefix}{groupId.Value}";
 
             const string script = """
-                local amount = tonumber(redis.call('HGET', KEYS[1], ARGV[1]) or '0')
-                if amount == 0 then
+                local rawAmount = redis.call('HGET', KEYS[1], ARGV[1])
+                if not rawAmount then
                     return 0
                 end
+                local amount = tonumber(rawAmount)
                 redis.call('HDEL', KEYS[1], ARGV[1])
                 redis.call('ZREM', KEYS[2], ARGV[1])
-                local remaining = tonumber(redis.call('INCRBYFLOAT', KEYS[3], -amount))
-                if remaining <= 0 then
-                    redis.call('DEL', KEYS[3])
+                if amount > 0 then
+                    local remaining = tonumber(redis.call('INCRBYFLOAT', KEYS[3], -amount))
+                    if remaining <= 0 then
+                        redis.call('DEL', KEYS[3])
+                    end
                 end
                 return amount
                 """;
