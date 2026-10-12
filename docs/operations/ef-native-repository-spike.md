@@ -155,3 +155,50 @@ The exact-token comparison review is
 `25f544a4c975c548365eedc01b6d20faee30273c94c2b9bd5ddc02ffdc66bdc2`.
 Independent managed test-identity, source and captured-cleanup verification is
 `a11f962da33cdf1e13aa673d4fc16a88c5e838f024418d86c7d9781be435d874`.
+
+## Representative static media ownership rewrite
+
+`MediaRecordRepository.GetByVirtualKeyIdAsync` now has two complete expressions
+rooted directly at `context.MediaRecords`. The default branch explicitly checks
+`DeletedAt == null`; the other uses `IgnoreQueryFilters`. Both preserve owner
+filtering, descending creation time, detached reads, cancellation, awaited context
+disposal, and the existing slow-operation logging. The explicit predicate also
+protects this read when the experimental model omits its global media filter.
+
+Five SQLite rows and the real PostgreSQL 16.15 media parity fact passed without
+failures or skips. They cover both deletion branches, two owners, ordering, empty
+results, detached reads, and cancellation recovery. A separate SQLite context
+removes the media filter without changing process-wide generation settings;
+this is a filterless-model contract test, not published native execution. The
+PostgreSQL fact also preserves the EF/typed-Npgsql runtime contract. Independent
+replay closed 98 retained originals, exact TRX identities and counters, zero
+remaining test schemas, both owned fixture removals, and unchanged base images.
+
+The isolated Configuration-owner comparison uses `5702b54bb` source plus this
+single-method rewrite, EF runtime/Design/Tasks/CLI 10.0.12 and Npgsql 10.0.3.
+Both managed startup builds passed. Actual compiler records bind the old terminal
+to an unknown local query root and both new terminals to the `MediaRecords`
+DbSet property. Both EF precompiler commands still exited 1, taking 16.54 and
+16.27 seconds. The old complete query token produced two dynamic-query error
+renderings; each new branch produced two `ParameterSymbol: virtualKeyId`
+translation-error renderings. Total error renderings changed from 526 to 528,
+across 245 and 246 token/exception/message signatures. No generated binding,
+native executable, database query execution, or native repository-suite
+qualification was established by this compiler experiment. This remains the
+failure family covered by [EF #35494](https://github.com/dotnet/efcore/issues/35494),
+without assuming a common root cause.
+
+The managed PostgreSQL receipt is
+`66f55e80862298226e409f07d7a103244fff789c4234ea91253fb1f2447bf05e`;
+independent managed replay is
+`cd76bff7bc3de46d7974798ae5ebbba03e51b3a9acd75961f947bddfae341eb5`;
+the focused compiler comparison is
+`2ff2e4f0dbc0271347ed94aa77fde357230824d390568b5e0d3297f940529980`.
+Independent compiler replay closed 69 originals, including source-token and
+actual SARIF bindings, the exact three-signature delta, and the before Git blob;
+its receipt is
+`9d5891fd4205f47e2b9b4b91b573c587b04fa5327fae0f0991c61ecb828d574f`.
+Setup-only and restricted-environment deadline attempts remain retained and
+unqualified; the final isolated commands were joined. Docker's successful stop
+output exposed a deprecated cleanup flag, tracked separately in
+[#1664](https://github.com/nickna/Conduit/issues/1664).

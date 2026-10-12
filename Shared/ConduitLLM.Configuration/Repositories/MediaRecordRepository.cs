@@ -106,19 +106,36 @@ public class MediaRecordRepository : RepositoryBase<MediaRecord, Guid>, IMediaRe
         bool includeDeleted = false,
         CancellationToken cancellationToken = default)
     {
-        return await ExecuteAsync(async context =>
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        await using var context = await DbContextFactory.CreateDbContextAsync(cancellationToken);
+        List<MediaRecord> records;
+        if (includeDeleted)
         {
-            var query = GetDbSet(context).AsNoTracking();
-            if (includeDeleted)
-            {
-                query = query.IgnoreQueryFilters();
-            }
-
-            return await query
+            records = await context.MediaRecords
+                .IgnoreQueryFilters()
+                .AsNoTracking()
                 .Where(m => m.VirtualKeyId == virtualKeyId)
                 .OrderByDescending(m => m.CreatedAt)
                 .ToListAsync(cancellationToken);
-        }, cancellationToken, $"getting by virtual key ID {virtualKeyId}");
+        }
+        else
+        {
+            // The experimental compiled model omits global query filters.
+            records = await context.MediaRecords
+                .AsNoTracking()
+                .Where(m => m.VirtualKeyId == virtualKeyId && m.DeletedAt == null)
+                .OrderByDescending(m => m.CreatedAt)
+                .ToListAsync(cancellationToken);
+        }
+
+        stopwatch.Stop();
+        if (stopwatch.ElapsedMilliseconds > SlowQueryThresholdMs)
+        {
+            Logger.LogWarning("Slow repository operation: {OperationName} {EntityType} took {ElapsedMs}ms",
+                $"getting by virtual key ID {virtualKeyId}", EntityTypeName, stopwatch.ElapsedMilliseconds);
+        }
+
+        return records;
     }
 
     /// <inheritdoc/>

@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 
 using ConduitLLM.Configuration;
+using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Repositories;
 using ConduitLLM.IntegrationTests.Infrastructure;
 using ConduitLLM.Persistence;
@@ -47,6 +48,7 @@ public sealed class MediaRuntimePersistenceParityTests
                     factory,
                     NullLogger<MediaRecordRepository>.Instance);
                 await ExerciseContractAsync(new EfMediaRuntimeStore(repository, context));
+                await VerifyRepositoryOwnedReadsAsync(repository, factory);
             }
 
             await using var dataSource = NpgsqlDataSource.Create(WithSearchPath(npgsqlSchema));
@@ -80,10 +82,12 @@ public sealed class MediaRuntimePersistenceParityTests
             .WithMessage("*different virtual key*");
 
         var deleted = NewMedia("deleted", 1, "image", 200, "provider-a");
+        deleted.CreatedAt = active.CreatedAt.AddMinutes(5);
         deleted.DeletedAt = DateTime.UtcNow;
         await store.CreateAsync(deleted);
 
         var otherGroup = NewMedia("other-group", 2, "video", 300, "provider-b");
+        otherGroup.CreatedAt = active.CreatedAt.AddMinutes(15);
         await store.CreateAsync(otherGroup);
 
         var read = await store.GetByStorageKeyAsync("active");
@@ -152,6 +156,53 @@ public sealed class MediaRuntimePersistenceParityTests
         allUsage.Should().HaveCount(2);
         allUsage.Single(row => row.VirtualKeyGroupId == 2)
             .MaxStorageSizeBytes.Should().BeNull();
+
+        var newer = NewMedia("newer-active", 1, "image", 50, "provider-a");
+        newer.CreatedAt = active.CreatedAt.AddMinutes(10);
+        await store.CreateAsync(newer);
+        var otherDeleted = NewMedia("other-deleted", 2, "video", 400, "provider-b");
+        otherDeleted.CreatedAt = active.CreatedAt.AddMinutes(20);
+        otherDeleted.DeletedAt = DateTime.UtcNow;
+        await store.CreateAsync(otherDeleted);
+
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        Func<Task> cancelledRead = async () =>
+            await store.GetByVirtualKeyIdAsync(1, cancellation.Token);
+        await cancelledRead.Should().ThrowAsync<OperationCanceledException>();
+
+        (await store.GetByVirtualKeyIdAsync(1)).Select(record => record.Id)
+            .Should().Equal(newer.Id, active.Id);
+        (await store.GetByVirtualKeyIdAsync(2)).Select(record => record.Id)
+            .Should().Equal(otherGroup.Id);
+        (await store.GetByVirtualKeyIdAsync(999)).Should().BeEmpty();
+    }
+
+    private static async Task VerifyRepositoryOwnedReadsAsync(
+        MediaRecordRepository repository,
+        TestDbContextFactory factory)
+    {
+        factory.TrackedMedia.Clear();
+        foreach (var includeDeleted in new[] { false, true })
+        {
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+            Func<Task> cancelledRead = async () => await repository.GetByVirtualKeyIdAsync(
+                1, includeDeleted, cancellation.Token);
+            await cancelledRead.Should().ThrowAsync<OperationCanceledException>();
+
+            var owned = await repository.GetByVirtualKeyIdAsync(1, includeDeleted);
+            owned.Select(record => record.StorageKey).Should().Equal(includeDeleted
+                ? new[] { "newer-active", "deleted", "active" }
+                : new[] { "newer-active", "active" });
+            var otherOwned = await repository.GetByVirtualKeyIdAsync(2, includeDeleted);
+            otherOwned.Select(record => record.StorageKey).Should().Equal(includeDeleted
+                ? new[] { "other-deleted", "other-group" }
+                : new[] { "other-group" });
+            (await repository.GetByVirtualKeyIdAsync(999, includeDeleted)).Should().BeEmpty();
+        }
+        factory.TrackedMedia.Should().BeEmpty(
+            "owned-media reads must not attach returned entities");
     }
 
     private static MediaRuntimeRecord NewMedia(
@@ -281,7 +332,18 @@ public sealed class MediaRuntimePersistenceParityTests
                 .UseNpgsql(connectionString)
                 .Options;
 
-        public ConduitDbContext CreateDbContext() => new(_options);
+        public List<MediaRecord> TrackedMedia { get; } = [];
+
+        public ConduitDbContext CreateDbContext()
+        {
+            var context = new ConduitDbContext(_options);
+            context.ChangeTracker.Tracked += (_, args) =>
+            {
+                if (args.Entry.Entity is MediaRecord media)
+                    TrackedMedia.Add(media);
+            };
+            return context;
+        }
 
         public Task<ConduitDbContext> CreateDbContextAsync(
             CancellationToken cancellationToken = default)
