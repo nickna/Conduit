@@ -160,6 +160,14 @@ It rejects the old service-only `-NativeBaselinePath` argument. Both container
 variants run by their observed immutable local image IDs on Linux/amd64. Every
 native sample records its actual container ID and verifies the packaged selected
 manifest before and after workloads; cleanup still uses verified ownership.
+After collecting metrics, the collector stops each owned host with a bounded
+deadline (30 seconds by default, configurable with `-ShutdownTimeoutSeconds`).
+It requires a stopped host with exit code zero before ordinary removal. A failed
+or forced shutdown is reaped by its verified identity and fails the attempt.
+For accounting workloads, retain independent database and Redis settlement
+checks: a successful shutdown alone does not prove that every request log or
+charge was persisted. Preflight requests must reach their persistence oracle
+while their host is still running.
 The native median and publish metrics retain the same sealed image binding.
 Retain the entire packaging directory with the benchmark. The evaluator accepts
 its relocated directory explicitly and replays it independently. Requested

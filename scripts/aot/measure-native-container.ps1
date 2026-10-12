@@ -21,6 +21,7 @@ param(
     [ValidateRange(1, 60)][int] $DockerCommandTimeoutSeconds = 30,
     [ValidateRange(1, 900)][int] $WorkloadTimeoutSeconds = 900,
     [ValidateRange(1, 300)][int] $ReadinessTimeoutSeconds = 120,
+    [ValidateRange(1, 120)][int] $ShutdownTimeoutSeconds = 30,
     [ValidateRange(1, 30)][int] $CleanupTimeoutSeconds = 15
 )
 
@@ -463,10 +464,34 @@ function Get-OwnedContainer($Record, [switch] $AllowMissing, [switch] $ValidateN
 }
 
 function Remove-OwnedContainer($Record) {
-    if ($null -eq (Get-OwnedContainer $Record -AllowMissing)) { return }
-    $result = Invoke-Docker @('rm', '--force', $Record.Id) $CleanupTimeoutSeconds
-    if ($result.ExitCode -ne 0) { throw 'Owned container cleanup failed.' }
-    if ($null -ne (Get-OwnedContainer $Record -AllowMissing)) { throw 'Owned container still exists after cleanup.' }
+    $container = Get-OwnedContainer $Record -AllowMissing
+    if ($null -eq $container) { return }
+    $shutdownFailed = $false
+    try {
+        if ($container.State.Running -isnot [bool]) { throw 'Owned container state is invalid.' }
+        if ($container.State.Running) {
+            # Timing and memory collection have already ended. Let hosted services
+            # flush process-local queues before removing the measured host.
+            $result = Invoke-Docker @('stop', '--timeout', [string]$ShutdownTimeoutSeconds, $Record.Id) ($ShutdownTimeoutSeconds + 5)
+            if ($result.ExitCode -ne 0) { throw 'Owned container shutdown failed.' }
+            $container = Get-OwnedContainer $Record
+        }
+        if ($container.State.Running -isnot [bool] -or $container.State.Running -or
+            $container.State.ExitCode -isnot [long] -or $container.State.ExitCode -ne 0) {
+            throw 'Owned container did not exit successfully.'
+        }
+    }
+    catch { $shutdownFailed = $true }
+    # Recheck exact ownership before either removal. A failed or forced shutdown
+    # may be reaped, but it must never produce a successful benchmark report.
+    $container = Get-OwnedContainer $Record -AllowMissing
+    if ($null -ne $container) {
+        $arguments = if ($shutdownFailed) { @('rm', '--force', $Record.Id) } else { @('rm', $Record.Id) }
+        $result = Invoke-Docker $arguments $CleanupTimeoutSeconds
+        if ($result.ExitCode -ne 0) { throw 'Owned container cleanup failed.' }
+        if ($null -ne (Get-OwnedContainer $Record -AllowMissing)) { throw 'Owned container still exists after cleanup.' }
+    }
+    if ($shutdownFailed) { throw 'Owned container shutdown failed.' }
 }
 
 function Get-ContainerMemory([string] $Id, [int] $RemainingSeconds = 5) {

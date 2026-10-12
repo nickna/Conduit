@@ -304,6 +304,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         DockerCommandTimeoutSeconds = 5
         WorkloadTimeoutSeconds = 10
         ReadinessTimeoutSeconds = 10
+        ShutdownTimeoutSeconds = 1
         CleanupTimeoutSeconds = 5
     }
     if ($Scenario -eq 'package-absent') { $parameters.Remove('NativePackagingDirectory') }
@@ -415,8 +416,11 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         if ($Scenario -in @('even-pairs', 'case-duplicate-environment')) {
             Assert-Contract ($commands.Count -eq 0 -and $drivers.Count -eq 0) 'Even paired runs reached external commands.'
         }
-        elseif ($Scenario -eq 'foreign-label') {
+        elseif ($Scenario -cin @('foreign-label', 'shutdown-foreign-label')) {
             Assert-Contract (@($commands | Where-Object { $_.arguments[0] -ceq 'rm' }).Count -eq 0) 'Collector removed a container with a foreign label.'
+            if ($Scenario -ceq 'foreign-label') {
+                Assert-Contract (@($commands | Where-Object { $_.arguments[0] -ceq 'stop' }).Count -eq 0) 'Collector stopped a container with a foreign label.'
+            }
             Assert-Contract ((Read-Records (Join-Path $caseRoot 'active')).Count -eq 1) 'Foreign-label rejection did not leave the fake container intact.'
         }
         elseif ($Scenario -eq 'cleanup-failure') {
@@ -424,6 +428,14 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         }
         else {
             Assert-Contract ((Read-Records (Join-Path $caseRoot 'active')).Count -eq 0) 'Failed collector left an owned fake container.'
+        }
+        if ($Scenario -cin @('shutdown-command-failure', 'shutdown-forced-exit', 'shutdown-still-running', 'shutdown-invalid-exit')) {
+            $stops = @($commands | Where-Object { $_.arguments[0] -ceq 'stop' })
+            $removals = @($commands | Where-Object { $_.arguments[0] -ceq 'rm' })
+            Assert-Contract ($stops.Count -eq 1 -and $removals.Count -eq 1 -and
+                $removals[0].arguments.Count -eq 3 -and $removals[0].arguments[1] -ceq '--force' -and
+                $stops[0].ordinal -lt $removals[0].ordinal -and
+                $stops[0].arguments[-1] -ceq $removals[0].arguments[-1]) 'Failed shutdown was not rejected and reaped by its verified exact ID.'
         }
         if ($Scenario -eq 'child-string-schema') {
             Assert-Contract ($created.Count -eq 1 -and $drivers.Count -eq 1 -and
@@ -491,11 +503,18 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     Assert-Contract ($drivers.Count -eq $expectedDriverCount) 'Collector omitted an authenticated workload from a variant.'
     Assert-Contract (@($drivers | Where-Object dotnetRoute).Count -eq $(if ($Service -eq 'gateway') { 24 } else { 0 })) 'DLL and direct native workload command routing differ.'
     $removals = @($commands | Where-Object { $_.arguments[0] -ceq 'rm' })
+    $stops = @($commands | Where-Object { $_.arguments[0] -ceq 'stop' })
     Assert-Contract ($removals.Count -eq 12) 'Collector did not issue one verified removal per container.'
+    Assert-Contract ($stops.Count -eq 12) 'Collector did not stop each warm and measured host.'
     foreach ($removal in $removals) {
-        Assert-Contract ($removal.arguments.Count -eq 3 -and $removal.arguments[1] -ceq '--force' -and
-            $removal.arguments[2] -cmatch '^[0-9a-f]{64}$' -and
-            @($created | Where-Object id -CEQ $removal.arguments[2]).Count -eq 1) 'Collector cleanup used an unverified container identity.'
+        $identity = $removal.arguments[-1]
+        $stop = @($stops | Where-Object { $_.arguments[-1] -ceq $identity })
+        Assert-Contract ($removal.arguments.Count -eq 2 -and
+            $identity -cmatch '^[0-9a-f]{64}$' -and
+            @($created | Where-Object id -CEQ $identity).Count -eq 1 -and
+            $stop.Count -eq 1 -and $stop[0].ordinal -lt $removal.ordinal -and
+            $stop[0].arguments.Count -eq 4 -and $stop[0].arguments[1] -ceq '--timeout' -and
+            $stop[0].arguments[2] -ceq '1') 'Collector did not gracefully stop and remove one verified exact container.'
     }
     Assert-Contract ($report.environment.environmentId -ceq 'collector-contract-host' -and
         $report.environment.backingServices.configurationId -ceq 'owned-fixture-settings' -and
@@ -1044,7 +1063,8 @@ if ($Mode -eq 'docker') {
         Write-RunTrace 'environment-validated'
         $record = @{ id = $identity; name = $name; labels = $labels; port = $port; ordinal = $ordinal;
             runtime = $labels['conduit.native-benchmark.runtime']; processIdentity = $identityPath;
-            canonicalEnvironment = $true; backendCredentialCorrect = $true; image = $expectedImage }
+            canonicalEnvironment = $true; backendCredentialCorrect = $true; image = $expectedImage;
+            running = $true; exitCode = 0 }
         if ($native) {
             $record['selectedDescriptor'] = [IO.File]::ReadAllText((Join-Path $root 'native-selected.json')) | ConvertFrom-Json -AsHashtable
             if ($scenario -ceq 'native-selected-mismatch') { $record.selectedDescriptor.digest = 'sha256:' + ('d' * 64) }
@@ -1082,8 +1102,11 @@ if ($Mode -eq 'docker') {
         if ($scenario -eq 'foreign-label' -and @(Get-ChildItem -LiteralPath (Join-Path $root 'drivers') -File).Count -gt 0) {
             $labels['conduit.native-benchmark.owner'] = 'foreign-owner'
         }
+        if ($scenario -ceq 'shutdown-foreign-label' -and -not $record.running) {
+            $labels['conduit.native-benchmark.owner'] = 'foreign-owner'
+        }
         @{ Id = $record.id; Name = '/' + $record.name; Image = $record.image; ImageManifestDescriptor = $record.selectedDescriptor;
-            Config = @{ Labels = $labels }; State = @{ Running = $true } } |
+            Config = @{ Labels = $labels }; State = @{ Running = $record.running; ExitCode = $record.exitCode } } |
             ConvertTo-Json -Depth 8 -Compress
         exit 0
     }
@@ -1093,10 +1116,24 @@ if ($Mode -eq 'docker') {
         [Console]::Out.WriteLine($memory + ' / 128 GiB')
         exit 0
     }
+    if ($CommandArguments[0] -eq 'stop') {
+        if ($CommandArguments.Count -ne 4 -or $CommandArguments[1] -cne '--timeout' -or
+            $CommandArguments[2] -cne '1') { throw 'Shutdown deadline was not explicit.' }
+        $matches = @(Read-Active | Where-Object id -CEQ $CommandArguments[-1])
+        if ($matches.Count -ne 1 -or -not $matches[0].running) { throw 'Shutdown did not use one running exact fake ID.' }
+        if ($scenario -ceq 'shutdown-command-failure') { [Console]::Error.WriteLine('private-child-diagnostic'); exit 18 }
+        $record = $matches[0]
+        $record.running = $scenario -ceq 'shutdown-still-running'
+        $record.exitCode = if ($scenario -ceq 'shutdown-forced-exit') { 137 }
+            elseif ($scenario -ceq 'shutdown-invalid-exit') { '0' } else { 0 }
+        [IO.File]::WriteAllText((Join-Path $root ('active/' + $record.id + '.json')), ($record | ConvertTo-Json -Depth 8))
+        exit 0
+    }
     if ($CommandArguments[0] -eq 'rm') {
         if ($scenario -eq 'cleanup-failure') { [Console]::Error.WriteLine('private-child-diagnostic'); exit 18 }
         $matches = @(Read-Active | Where-Object id -CEQ $CommandArguments[-1])
         if ($matches.Count -ne 1) { throw 'Cleanup did not use one exact fake ID.' }
+        if ($CommandArguments.Count -eq 2 -and $matches[0].running) { throw 'Non-force removal reached a running fake container.' }
         # Containers are synthetic records. The parent owns both reusable
         # readiness listeners and joins them after this complete case.
         Remove-Item -LiteralPath (Join-Path $root ('active/' + $matches[0].id + '.json')) -Force
@@ -1441,6 +1478,10 @@ if ($env:CONDUIT_COLLECTOR_HELPER_VALUE -eq 'timeout') {
     Invoke-CollectorCase 'admin' 'unknown-create' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'foreign-label' 'cleanup failed'
     Invoke-CollectorCase 'admin' 'cleanup-failure' 'cleanup failed'
+    foreach ($scenario in @('shutdown-command-failure', 'shutdown-forced-exit', 'shutdown-still-running',
+        'shutdown-invalid-exit', 'shutdown-foreign-label')) {
+        Invoke-CollectorCase 'gateway' $scenario 'cleanup failed'
+    }
     Invoke-CollectorCase 'admin' 'incomplete-report' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'child-string-schema' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'fingerprint-mismatch' 'No qualification was recorded.'
