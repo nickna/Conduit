@@ -411,6 +411,60 @@ complete native repository-suite qualification, or production readiness.
 Remaining owner failures still require fixes or verified replacements, and
 production remains JIT under ADR 0006.
 
+## Local copies for execution readers
+
+Both methods in `EfFunctionExecutionRuntimeReader` copy the execution ID/key and
+query cancellation token to locals after context creation, which still receives
+the original token. Both configuration includes, no tracking, unbounded key
+filtering, requested-time ordering, awaited disposal, public signatures, and the
+native guard are unchanged.
+
+The fresh Configuration-owner comparison starts from `13f1a6cd8` with EF
+runtime/Design/Tasks/CLI 10.0.12 and Npgsql provider 10.0.3. Both managed build
+controls pass. Both precompiler commands still exit 1, but the reader's exact
+`id` and `virtualKeyId` parameter-error signatures disappear: four renderings
+before, zero after, with no replacements. Totals change from 506 renderings
+across 235 signatures to 502 across 233; every unrelated signature and rendering
+count is unchanged. Actual compiler records bind both terminals and all eight
+callsites in both phases to the direct `FunctionExecutions` root. Both EF
+`Include` calls retain their `FunctionConfiguration` navigation and type binding.
+These compiler callsite counts do not describe executed SQL statements.
+
+The comparison seals 302 retained references. Its receipt is
+`cad1ada89df52429d080854b0b897b1603c16c78491b77bf79abc63d22c0a3a4`.
+Independent original-log/source/token/SARIF/compiler-input replay is
+`91b85cf2350914304facadfe4f5ed041106499469bf01d0c322275a1c5c11d21`.
+An intermediate scope receipt was overwritten while adding explicit include
+checks; its earlier bytes were not retained. This loss is recorded explicitly;
+the immutable final scope copy, frozen source, and fresh actual compiler evidence
+establish the result. The old preparation receipt is not treated as replayable
+evidence. The compiler comparison produced no generated files or native process
+and executed no database queries.
+
+The exact applied variant passes the complete fourteen-case real PostgreSQL
+16.15 execution persistence class without failures or skips: six reader cases
+and eight coupled writer cases. Reader cases cover all scalars, JSON/null/unknown
+enum/UTC fidelity, included graphs and inverse identity, 105 unbounded ordered
+rows, key isolation, detached mutation, pre-cancellation, and observed SQL/pool
+cancellation with single-slot recovery. The writer cases retain graph rejection,
+read-to-write mutation isolation, and existing writer contracts. All 33 frozen
+inputs and byte copies are unchanged at four stages. Both owned fixtures were
+removed and verified absent by ID and name, no execution schemas remained, and
+protected image references were unchanged.
+
+The managed PostgreSQL receipt is
+`58f92be0149371d39c8790216f082c7edcb1fb87cbc1ecd72a20912c05a8a239`;
+the original fourteen-row TRX is
+`c2ebbe8329752b64f0165e22657c406caeaee0967772fc500ebd372cc5320c12`.
+Independent source, TRX-identity, raw-command, ownership, and cleanup replay is
+`741588958fd29cbc9ed57f1c0918f3316954ce975775c0552e4b9f86076d8e97`;
+it verifies all 34 joined commands and their 68 captured output streams.
+
+Removing these translation errors does not establish generated-query execution,
+complete native repository-suite qualification, or production readiness.
+Remaining owner failures still require fixes or verified replacements, and
+production remains JIT under ADR 0006.
+
 ## Local copies for function pricing selection
 
 `EfFunctionPricingRuntimeStore.FindEligibleCostAsync` copies the configuration ID,

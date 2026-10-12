@@ -19,17 +19,21 @@ public sealed class EfFunctionExecutionRuntimeReader : IFunctionExecutionRuntime
     public async Task<FunctionExecution?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var executionId = id;
+        var queryCancellationToken = cancellationToken;
         return await context.FunctionExecutions.AsNoTracking().Include(row => row.FunctionConfiguration)
-            .FirstOrDefaultAsync(row => row.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(row => row.Id == executionId, queryCancellationToken);
     }
 
     public async Task<IReadOnlyList<FunctionExecution>> ListByVirtualKeyAsync(
         int virtualKeyId, CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var executionVirtualKeyId = virtualKeyId;
+        var queryCancellationToken = cancellationToken;
         return await context.FunctionExecutions.AsNoTracking().Include(row => row.FunctionConfiguration)
-            .Where(row => row.VirtualKeyId == virtualKeyId).OrderByDescending(row => row.RequestedAt)
-            .ToListAsync(cancellationToken);
+            .Where(row => row.VirtualKeyId == executionVirtualKeyId).OrderByDescending(row => row.RequestedAt)
+            .ToListAsync(queryCancellationToken);
     }
 }
 #endif
