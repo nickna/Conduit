@@ -102,14 +102,28 @@ public static class GatewayApiEndpoints
             .RequireAuthorization("VirtualKeyAuthentication")
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Discovery");
+#if CONDUIT_NATIVE_AOT
+        discovery.MapGet("/models", (string? capability) => GatewayResults.OpenAIError(
+                StatusCodes.Status501NotImplemented,
+                "Model catalog discovery is not supported by the native-aot runtime profile.",
+                "not_implemented"))
+#else
         discovery.MapGet("/models", ([FromServices] DiscoveryEndpoints endpoints, string? capability) => endpoints.GetModels(capability))
+#endif
             .WithName("Discovery_GetModels")
             .WithSummary("Gets all discovered models and their capabilities for authenticated virtual keys.")
             .WithParameterDescription("capability", "Optional capability filter (e.g., \"video_generation\", \"vision\")").Produces<DiscoveryModelsResponse>();
         discovery.MapGet("/capabilities", ([FromServices] DiscoveryEndpoints endpoints) => endpoints.GetCapabilities())
             .WithName("Discovery_GetCapabilities")
             .WithSummary("Gets all available capabilities in the system.").Produces<DiscoveryCapabilitiesResponse>();
+#if CONDUIT_NATIVE_AOT
+        discovery.MapGet("/models/{model}/parameters", (string model) => GatewayResults.OpenAIError(
+                StatusCodes.Status501NotImplemented,
+                "Model catalog discovery is not supported by the native-aot runtime profile.",
+                "not_implemented"))
+#else
         discovery.MapGet("/models/{model}/parameters", ([FromServices] DiscoveryEndpoints endpoints, string model) => endpoints.GetModelParameters(model))
+#endif
             .WithName("Discovery_GetModelParameters")
             .WithSummary("Gets UI parameters for a specific model to enable dynamic UI generation.")
             .WithParameterDescription("model", "The model alias or identifier to get parameters for").Produces<ModelParametersResponse>()

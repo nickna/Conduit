@@ -90,8 +90,14 @@ first lands independently of host selection. Native Gateway then selects a read-
 compatibility adapter over the runtime store and resolves persisted route policy through
 the same boundary. Native request billing also resolves model costs by fixed ID or
 provider identifier through this store. JIT and Admin retain the full EF repository and
-model-cost management service. Authenticated model discovery and provider pricing are
-covered by the native process gate.
+model-cost management service. The native process gate covers authenticated alias
+listing at `GET /v1/models`, retrieval at `GET /v1/models/{model}`, effective
+capability metadata at `GET /v1/conduit/models/{modelId}/metadata`, and request-time
+provider model pricing through the typed routing graph. The enriched model catalog
+at `GET /v1/conduit/discovery/models` and UI parameters at
+`GET /v1/conduit/discovery/models/{model}/parameters` retain their EF/JIT boundary.
+Native requests to those two resources return an explicit 501 before resolving the
+EF-backed discovery handler; authentication remains required.
 
 Request accounting is the next downstream boundary. Request-time middleware now
 depends on `IRequestLogRuntimeWriter`, which maps the existing DTO onto a complete,
@@ -157,8 +163,9 @@ detached reads and cancellation with a single connection slot. The standalone
 persistence probe includes these operations. The published native persistence check
 passed in run 38122760993 before Gateway runtime selection. Gateway's function
 catalog and parameter loaders now use this store; their two-host process gate checks
-authentication, filters and structured cached payloads. Model discovery retains its
-existing EF boundary. Function CRUD, credential resolution,
+authentication, filters and structured cached payloads. The enriched model catalog
+and UI parameters retain their EF/JIT boundary and return 501 in the native profile.
+Function CRUD, credential resolution,
 cost selection and execution workers still require their own operation boundaries.
 
 Execution configuration and credential reads follow as a separate boundary.

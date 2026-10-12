@@ -375,6 +375,7 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
     public async Task RunAsync()
     {
         await AssertRuntimeAndOperationsAsync();
+        await AssertModelDiscoveryBoundaryAsync();
         await AssertFunctionDiscoveryAsync();
         await AssertFunctionExecutionPreflightAsync();
         await AssertSchemaReadinessAsync();
@@ -693,6 +694,63 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         var capabilitiesGraph = GetProperty(metadata, "capabilities");
         True(GetProperty(capabilitiesGraph, "chat").GetBoolean(),
             "model metadata contains effective chat capability");
+    }
+
+    private async Task AssertModelDiscoveryBoundaryAsync()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var paths = new[]
+        {
+            "v1/conduit/discovery/models",
+            $"v1/conduit/discovery/models/{Uri.EscapeDataString(NativeParityFixture.ModelAlias)}/parameters"
+        };
+        const string expectedBody = """
+            {"error":{"message":"Model catalog discovery is not supported by the native-aot runtime profile.","type":"invalid_request_error","code":"not_implemented"}}
+            """;
+        var expectedBytes = Encoding.UTF8.GetBytes(expectedBody);
+        var requests = 0;
+        foreach (var gateway in new[] { _gateway, _secondaryGateway })
+        {
+            foreach (var path in paths)
+            {
+                using (var unauthenticated = new HttpRequestMessage(HttpMethod.Get, path))
+                using (var response = await gateway.SendAsync(unauthenticated, deadline.Token))
+                {
+                    requests++;
+                    await ExpectAsync(response, HttpStatusCode.Unauthorized,
+                        "native model catalog rejects unauthenticated requests");
+                }
+
+                using var request = AuthorizedRequest(HttpMethod.Get, path);
+                using var result = await gateway.SendAsync(request, deadline.Token);
+                requests++;
+                await ExpectAsync(result, HttpStatusCode.NotImplemented,
+                    "native model catalog rejects the excluded EF resource");
+                Equal("application/json", result.Content.Headers.ContentType?.MediaType ?? string.Empty,
+                    "native model catalog generated error media type");
+                Equal("utf-8", result.Content.Headers.ContentType?.CharSet ?? string.Empty,
+                    "native model catalog generated error encoding");
+                var bytes = await result.Content.ReadAsByteArrayAsync(deadline.Token);
+                True(bytes.AsSpan().SequenceEqual(expectedBytes),
+                    "native model catalog exact generated error bytes on both hosts and routes");
+                using var document = JsonDocument.Parse(bytes);
+                var body = document.RootElement;
+                True(body.EnumerateObject().Select(property => property.Name).SequenceEqual(new[] { "error" }),
+                    "native model catalog exact error root fields");
+                var error = body.GetProperty("error");
+                True(error.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal)
+                        .SequenceEqual(new[] { "code", "message", "type" }),
+                    "native model catalog exact generated error fields");
+                Equal("not_implemented", error.GetProperty("code").GetString()!,
+                    "native model catalog error code");
+                Equal("invalid_request_error", error.GetProperty("type").GetString()!,
+                    "native model catalog error type");
+                Equal("Model catalog discovery is not supported by the native-aot runtime profile.",
+                    error.GetProperty("message").GetString()!, "native model catalog error message");
+            }
+        }
+        True(requests == 8, "native model catalog exact eight-request boundary proof");
+        Console.WriteLine("Native model catalog boundary on both Gateways: PASS");
     }
 
     private static void AssertCapabilityMetadata(JsonElement body, string host, string[] expectedProtocols,
