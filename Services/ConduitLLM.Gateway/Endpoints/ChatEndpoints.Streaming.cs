@@ -26,83 +26,170 @@ namespace ConduitLLM.Gateway.Endpoints
             CancellationToken cancellationToken)
         {
             _logger.LogInformation("Handling non-streaming request.");
-            var response = await _conduit.CreateChatCompletionAsync(request, null, virtualKeyId, cancellationToken);
-            await CaptureSelectedRouteAsync(request);
+            var accounting = HttpContext.GetOrCreateRequestAccountingContext();
+            var previousStarting = request.ProviderInvocationStarting;
+            var previousCompleted = request.ProviderInvocationCompleted;
+            var previousFunctions = request.FunctionExecutionCompleted;
+            request.ProviderInvocationStarting = async (invocation, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                if (previousStarting is not null)
+                    await previousStarting(invocation, token);
+                token.ThrowIfCancellationRequested();
+                var admissionError = await MarkChatInvocationStartedAsync(virtualKeyId, accounting);
+                if (admissionError is not null)
+                    throw new ChatInvocationAdmissionException(admissionError);
+                token.ThrowIfCancellationRequested();
+                accounting.RecordProviderInvocation(invocation);
+            };
+            request.ProviderInvocationCompleted = (invocation, completed, aggregate) =>
+            {
+                if (completed.Usage is { } raw)
+                    accounting.RecordProviderCall(new ProviderCallUsage { Iteration = invocation, Usage = raw });
+                if (aggregate is not null)
+                    accounting.RecordProviderUsage(aggregate, completed.Model ?? request.Model, UsageEvidenceSource.Provider);
+                if (completed.ProviderToolUsage is not null)
+                    accounting.AddProviderToolUsage(completed.ProviderToolUsage);
+                previousCompleted?.Invoke(invocation, completed, aggregate);
+            };
+            request.FunctionExecutionCompleted = metrics =>
+            {
+                StoreFunctionExecutionResults(metrics);
+                previousFunctions?.Invoke(metrics);
+            };
+            var routeCaptured = false;
+            try
+            {
+                var response = await _conduit.CreateChatCompletionAsync(request, null, virtualKeyId, cancellationToken);
 
-            if (response.Usage is not null)
-            {
-                HttpContext.GetOrCreateRequestAccountingContext().RecordProviderUsage(
-                    response.Usage,
-                    response.Model ?? request.Model,
-                    UsageEvidenceSource.Provider);
-            }
-            else
-            {
-                // Provider returned no usage (e.g. Replicate) — estimate from the actual
-                // content so the request is billed, recorded as estimated evidence.
-                await EstimateNonStreamingUsageAsync(request, response, cancellationToken);
-            }
-            var responseToolCalls = response.Choices
-                .SelectMany(choice => choice.Message?.ToolCalls ?? [])
-                .ToList();
-            if (responseToolCalls.Count > 0)
-            {
-                HttpContext.GetOrCreateRequestAccountingContext()
-                    .RecordStreamingToolCalls(responseToolCalls);
-            }
-            if (response.ProviderToolUsage is not null)
-            {
-                HttpContext.GetOrCreateRequestAccountingContext()
-                    .RecordProviderToolUsage(response.ProviderToolUsage);
-            }
-            HttpContext.Items[HttpContextKeys.PromptCachingEligible] =
-                request.PromptCachingIntent is not null ||
-                (HttpContext.Items.TryGetValue(HttpContextKeys.PromptCachingEligible, out var eligible) && eligible is true);
-
-            if (response.AgenticMetrics?.FunctionCalls != null && response.AgenticMetrics.FunctionCalls.Count > 0)
-            {
-                StoreFunctionExecutionResults(response.AgenticMetrics);
-            }
-            if (response.AgenticMetrics?.ProviderCalls.Count > 0)
-            {
-                HttpContext.GetOrCreateRequestAccountingContext()
-                    .RecordProviderCalls(response.AgenticMetrics.ProviderCalls);
-            }
-
-            // Stash the provider-reported cost via the side channel so the middleware can bill from it.
-            // It is intentionally not serialized into the response body (server-only), so the middleware
-            // cannot recover it by re-parsing the body the way it does for token counts.
-            if (response.Usage?.ProviderReportedCostUsd is decimal providerReportedCost)
-            {
-                HttpContext.Items[HttpContextKeys.ProviderReportedCost] = providerReportedCost;
-            }
-
-            if (response.AgenticMetrics is { } metrics)
-            {
-                // Unpriced or incomplete accounting has no complete monetary total. Counts,
-                // function outcomes and their independently known charges remain available.
-                metrics.TotalLLMCost = null;
-                metrics.TotalCost = null;
-                var snapshot = HttpContext.GetRequestAccountingSnapshot();
-                if (_costCalculationService is not null && snapshot?.ProviderUsage is { } evidence)
+                if (response.Usage is not null)
                 {
-                    var pricing = await ProviderUsagePricing.GetOrCalculateAsync(
-                        HttpContext, evidence.Model, evidence.Usage, _costCalculationService);
-                    decimal? toolCost = snapshot.ProviderToolUsage is null ? 0m : null;
-                    if (snapshot.ProviderToolUsage is not null && _toolCostCalculationService is not null)
-                        toolCost = (await ProviderUsagePricing.GetOrCalculateToolsAsync(
-                            HttpContext, _toolCostCalculationService)).Cost;
-                    if (!snapshot.IsIndeterminate && pricing.Cost is decimal providerCost)
+                    HttpContext.GetOrCreateRequestAccountingContext().RecordProviderUsage(
+                        response.Usage,
+                        response.Model ?? request.Model,
+                        UsageEvidenceSource.Provider);
+                }
+                else if (accounting.Snapshot().ProviderInvocations?.Count is not > 1)
+                {
+                    // Provider returned no usage (e.g. Replicate) — estimate from the actual
+                    // content so the request is billed, recorded as estimated evidence.
+                    await EstimateNonStreamingUsageAsync(request, response, cancellationToken);
+                }
+                var responseToolCalls = response.Choices
+                    .SelectMany(choice => choice.Message?.ToolCalls ?? [])
+                    .ToList();
+                if (responseToolCalls.Count > 0)
+                {
+                    HttpContext.GetOrCreateRequestAccountingContext()
+                        .RecordStreamingToolCalls(responseToolCalls);
+                }
+                if (response.ProviderToolUsage is not null && accounting.Snapshot().ProviderInvocations?.Count is not > 0)
+                {
+                    HttpContext.GetOrCreateRequestAccountingContext()
+                        .RecordProviderToolUsage(response.ProviderToolUsage);
+                }
+                HttpContext.Items[HttpContextKeys.PromptCachingEligible] =
+                    request.PromptCachingIntent is not null ||
+                    (HttpContext.Items.TryGetValue(HttpContextKeys.PromptCachingEligible, out var eligible) && eligible is true);
+
+                if (response.AgenticMetrics?.FunctionCalls != null && response.AgenticMetrics.FunctionCalls.Count > 0)
+                {
+                    StoreFunctionExecutionResults(response.AgenticMetrics);
+                }
+                if (response.AgenticMetrics?.ProviderCalls.Count > 0)
+                {
+                    HttpContext.GetOrCreateRequestAccountingContext()
+                        .RecordProviderCalls(response.AgenticMetrics.ProviderCalls);
+                }
+                if (accounting.Snapshot().HasIncompleteProviderUsage)
+                    accounting.MarkIndeterminate("One or more provider invocations ended without usage evidence");
+                await CaptureNonStreamingSelectedRouteAsync(request);
+                routeCaptured = true;
+
+                // Stash the provider-reported cost via the side channel so the middleware can bill from it.
+                // It is intentionally not serialized into the response body (server-only), so the middleware
+                // cannot recover it by re-parsing the body the way it does for token counts.
+                if (response.Usage?.ProviderReportedCostUsd is decimal providerReportedCost)
+                {
+                    HttpContext.Items[HttpContextKeys.ProviderReportedCost] = providerReportedCost;
+                }
+
+                if (response.AgenticMetrics is { } metrics)
+                {
+                    // Unpriced or incomplete accounting has no complete monetary total. Counts,
+                    // function outcomes and their independently known charges remain available.
+                    metrics.TotalLLMCost = null;
+                    metrics.TotalCost = null;
+                    var snapshot = HttpContext.GetRequestAccountingSnapshot();
+                    if (_costCalculationService is not null && snapshot?.ProviderUsage is { } evidence)
                     {
-                        metrics.TotalLLMCost = providerCost;
-                        if (toolCost is decimal providerToolCost)
-                            metrics.TotalCost = providerCost + providerToolCost + metrics.TotalFunctionCost;
+                        var pricing = await ProviderUsagePricing.GetOrCalculateAsync(
+                            HttpContext, evidence.Model, evidence.Usage, _costCalculationService);
+                        decimal? toolCost = snapshot.ProviderToolUsage is null ? 0m : null;
+                        if (snapshot.ProviderToolUsage is not null && _toolCostCalculationService is not null)
+                            toolCost = (await ProviderUsagePricing.GetOrCalculateToolsAsync(
+                                HttpContext, _toolCostCalculationService)).Cost;
+                        if (!snapshot.IsIndeterminate && pricing.Cost is decimal providerCost)
+                        {
+                            metrics.TotalLLMCost = providerCost;
+                            if (toolCost is decimal providerToolCost)
+                                metrics.TotalCost = providerCost + providerToolCost + metrics.TotalFunctionCost;
+                        }
                     }
                 }
-            }
 
-            GatewayOpsMetrics.RecordLlmOperation("chat_completion", request.Model, "success", operationStopwatch.Elapsed.TotalSeconds);
-            return Ok(response);
+                GatewayOpsMetrics.RecordLlmOperation("chat_completion", request.Model, "success", operationStopwatch.Elapsed.TotalSeconds);
+                return Ok(response);
+            }
+            finally
+            {
+                request.ProviderInvocationStarting = previousStarting;
+                request.ProviderInvocationCompleted = previousCompleted;
+                request.FunctionExecutionCompleted = previousFunctions;
+                if (!routeCaptured)
+                    await CaptureNonStreamingSelectedRouteAsync(request);
+                if (accounting.Snapshot().HasIncompleteProviderUsage)
+                    accounting.MarkIndeterminate("One or more provider invocations ended without usage evidence");
+            }
+        }
+
+        private async Task CaptureNonStreamingSelectedRouteAsync(ChatCompletionRequest request)
+        {
+            try
+            {
+                await CaptureSelectedRouteAsync(request);
+                if (request.SelectedMappingId is int selected &&
+                    !Equals(HttpContext.Items[HttpContextKeys.ModelProviderMappingId], selected))
+                    throw new InvalidOperationException("Selected provider route metadata is unavailable");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to capture selected route after provider invocation");
+                var accounting = HttpContext.GetOrCreateRequestAccountingContext();
+                if (accounting.Snapshot().ProviderInvocations?.Count is not > 0)
+                    return;
+                const string reason = "Selected provider route metadata is unavailable for billing";
+                // Aliased rates and trust settings cannot price a different selected provider.
+                HttpContext.Items.Remove(HttpContextKeys.ModelCostId);
+                HttpContext.Items.Remove(HttpContextKeys.ProviderBillingPolicy);
+                HttpContext.Items.Remove("ProviderId");
+                HttpContext.Items.Remove("ProviderType");
+                HttpContext.Items[HttpContextKeys.ModelProviderMappingId] = request.SelectedMappingId;
+                accounting.MarkIndeterminate(reason);
+                accounting.RecordProviderPricing(new ProviderPricingEvidence(null, FailureReason: reason));
+                if (accounting.Snapshot().ProviderToolUsage is { } hosted)
+                {
+                    var hostedUsage = new ToolUsageData
+                    {
+                        Tools = hosted.Tools.Select(tool => new ToolUsageItem
+                        {
+                            ToolName = tool.ToolName, Count = tool.Count, DurationSeconds = tool.DurationSeconds
+                        }).ToList()
+                    };
+                    accounting.RecordProviderToolPricing(new ProviderToolPricingEvidence(null,
+                        JsonSerializer.Serialize(hostedUsage, GatewayInternalJsonContext.Default.ToolUsageData), reason));
+                }
+            }
         }
 
         private void StoreFunctionExecutionResults(AgenticExecutionMetrics agenticMetrics)

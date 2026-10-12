@@ -90,7 +90,13 @@ namespace ConduitLLM.Core
                 // Get a chat-routed client; non-chat APIs continue to use deterministic alias mapping.
                 ILLMClient client = await GetChatClientAsync(request, cancellationToken);
 
-                return await client.CreateChatCompletionAsync(request, apiKey, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (request.ProviderInvocationStarting is { } starting)
+                    await starting(1, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                var response = await client.CreateChatCompletionAsync(request, apiKey, cancellationToken).ConfigureAwait(false);
+                request.ProviderInvocationCompleted?.Invoke(1, response, response.Usage);
+                return response;
             }
             finally
             {
@@ -204,6 +210,22 @@ namespace ConduitLLM.Core
             ILLMClient client = await GetChatClientAsync(request, cancellationToken);
             ChatCompletionResponse? response = null;
             Usage? accumulatedUsage = null;
+            var invocationOrdinal = 0;
+
+            async Task<ChatCompletionResponse> InvokeProviderAsync()
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var ordinal = invocationOrdinal + 1;
+                if (request.ProviderInvocationStarting is { } starting)
+                    await starting(ordinal, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                invocationOrdinal = ordinal;
+                var result = await client.CreateChatCompletionAsync(request, apiKey, cancellationToken).ConfigureAwait(false);
+                CaptureProviderCall(agenticMetrics, ordinal, result.Usage);
+                accumulatedUsage = AggregateUsage(accumulatedUsage, result.Usage);
+                request.ProviderInvocationCompleted?.Invoke(ordinal, result, accumulatedUsage);
+                return result;
+            }
 
             while (iteration < maxIterations)
             {
@@ -213,9 +235,7 @@ namespace ConduitLLM.Core
                 _logger.LogDebug("Agentic iteration {Iteration} for request {RequestId}", iteration, requestId);
 
                 // Call LLM
-                response = await client.CreateChatCompletionAsync(request, apiKey, cancellationToken).ConfigureAwait(false);
-                CaptureProviderCall(agenticMetrics, iteration, response.Usage);
-                accumulatedUsage = AggregateUsage(accumulatedUsage, response.Usage);
+                response = await InvokeProviderAsync();
 
                 // Check if LLM wants to call functions
                 var choice = response.Choices.FirstOrDefault();
@@ -244,9 +264,7 @@ namespace ConduitLLM.Core
                     });
 
                     // Make one more call to get a proper response
-                    response = await client.CreateChatCompletionAsync(request, apiKey, cancellationToken).ConfigureAwait(false);
-                    CaptureProviderCall(agenticMetrics, iteration + 1, response.Usage);
-                    accumulatedUsage = AggregateUsage(accumulatedUsage, response.Usage);
+                    response = await InvokeProviderAsync();
                     break;
                 }
 
@@ -271,6 +289,7 @@ namespace ConduitLLM.Core
                 agenticMetrics.FunctionCalls.AddRange(executionResult.FunctionCallSummaries);
                 agenticMetrics.TotalFunctionCalls += executionResult.FunctionCallSummaries.Count;
                 agenticMetrics.TotalFunctionCost += executionResult.TotalFunctionCost;
+                request.FunctionExecutionCompleted?.Invoke(agenticMetrics);
 
                 // Append assistant's message with tool calls to conversation
                 request.Messages.Add(choice.Message);
@@ -300,9 +319,7 @@ namespace ConduitLLM.Core
                 });
 
                 // Make one final call to get a response
-                response = await client.CreateChatCompletionAsync(request, apiKey, cancellationToken).ConfigureAwait(false);
-                CaptureProviderCall(agenticMetrics, iteration + 1, response.Usage);
-                accumulatedUsage = AggregateUsage(accumulatedUsage, response.Usage);
+                response = await InvokeProviderAsync();
             }
 
             if (response != null)

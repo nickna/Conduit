@@ -360,6 +360,11 @@ public class ChatCompletionRequest
     [JsonIgnore] public string? RoutingDecisionReason { get; set; }
     [JsonIgnore] public int RoutingFailoverCount { get; set; }
 
+    /// <summary>Server-only accounting observers, retained when context management replaces this request.</summary>
+    [JsonIgnore] public Func<int, CancellationToken, Task>? ProviderInvocationStarting { get; set; }
+    [JsonIgnore] public Action<int, ChatCompletionResponse, Usage?>? ProviderInvocationCompleted { get; set; }
+    [JsonIgnore] public Action<AgenticExecutionMetrics>? FunctionExecutionCompleted { get; set; }
+
     /// <summary>Preserves server-owned request state when context management replaces the request.</summary>
     internal void CopyRuntimeStateTo(ChatCompletionRequest target)
     {
@@ -369,5 +374,8 @@ public class ChatCompletionRequest
         target.RoutingAffinityUsed = RoutingAffinityUsed;
         target.RoutingDecisionReason = RoutingDecisionReason;
         target.RoutingFailoverCount = RoutingFailoverCount;
+        target.ProviderInvocationStarting = ProviderInvocationStarting;
+        target.ProviderInvocationCompleted = ProviderInvocationCompleted;
+        target.FunctionExecutionCompleted = FunctionExecutionCompleted;
     }
 }

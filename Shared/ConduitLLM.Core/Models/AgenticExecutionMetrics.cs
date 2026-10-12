@@ -59,6 +59,7 @@ public class AgenticExecutionMetrics
 /// </summary>
 public sealed class ProviderCallUsage
 {
+    /// <summary>Actual provider invocation ordinal, including fallback and forced-final calls.</summary>
     public int Iteration { get; set; }
     public Usage Usage { get; set; } = new();
 }

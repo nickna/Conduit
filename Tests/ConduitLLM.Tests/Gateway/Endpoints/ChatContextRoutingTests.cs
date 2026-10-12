@@ -15,6 +15,7 @@ using ConduitLLM.Gateway.Endpoints;
 using ConduitLLM.Gateway.Middleware;
 using ConduitLLM.Gateway.Options;
 using ConduitLLM.Gateway.Services;
+using ConduitLLM.Gateway.UsageTracking;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -113,6 +114,14 @@ public class ChatContextRoutingTests
         Assert.Equal("selected-route", request.RoutingDecisionReason);
         Assert.Equal(2, request.RoutingFailoverCount);
         Assert.Equal(2, request.Messages.Count);
+        if (!streaming)
+        {
+            Assert.Equal(new[] { 1 }, context.GetRequestAccountingSnapshot()!.ProviderInvocations);
+            Assert.Same(usage, Assert.Single(context.GetRequestAccountingSnapshot()!.ProviderCalls).Usage);
+            Assert.Null(request.ProviderInvocationStarting);
+            Assert.Null(request.ProviderInvocationCompleted);
+            Assert.Null(request.FunctionExecutionCompleted);
+        }
         modelCosts.Verify(service => service.GetCostByIdAsync(23, It.IsAny<CancellationToken>()), Times.Once);
         modelCosts.Verify(service => service.GetCostByIdAsync(17, It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -121,6 +130,9 @@ public class ChatContextRoutingTests
     public async Task BuiltInTrimming_PreservesRuntimeInputsForDirectContextManagerCall()
     {
         var request = Request(false);
+        request.ProviderInvocationStarting = (_, _) => Task.CompletedTask;
+        request.ProviderInvocationCompleted = (_, _, _) => { };
+        request.FunctionExecutionCompleted = _ => { };
         var managed = await Manager("built-in").ManageContextAsync(request, 100);
 
         Assert.NotSame(request, managed);
@@ -156,7 +168,14 @@ public class ChatContextRoutingTests
             else
                 await conduit.CreateChatCompletionAsync(request, cancellationToken: cancellation.Token);
         }
-        Assert.Same(failure, await Assert.ThrowsAnyAsync<Exception>(Execute));
+        var actualFailure = await Assert.ThrowsAnyAsync<Exception>(Execute);
+        if (!streaming && cancelled)
+        {
+            Assert.IsAssignableFrom<OperationCanceledException>(actualFailure);
+            client.Verify(service => service.CreateChatCompletionAsync(
+                It.IsAny<ChatCompletionRequest>(), null, It.IsAny<CancellationToken>()), Times.Never());
+        }
+        else Assert.Same(failure, actualFailure);
         Assert.Equal(23, request.SelectedMappingId);
         Assert.True(request.RoutingAffinityUsed);
         Assert.Equal("selected-route", request.RoutingDecisionReason);
@@ -205,6 +224,9 @@ public class ChatContextRoutingTests
         Assert.Equal(original.RoutingAffinityUsed, active.RoutingAffinityUsed);
         Assert.Equal(original.RoutingDecisionReason, active.RoutingDecisionReason);
         Assert.Equal(original.RoutingFailoverCount, active.RoutingFailoverCount);
+        Assert.Same(original.ProviderInvocationStarting, active.ProviderInvocationStarting);
+        Assert.Same(original.ProviderInvocationCompleted, active.ProviderInvocationCompleted);
+        Assert.Same(original.FunctionExecutionCompleted, active.FunctionExecutionCompleted);
     }
 
     private static Mock<ILLMClientFactory> Factory(ILLMClient client, ChatCompletionRequest original)

@@ -81,6 +81,8 @@ public static class ProviderUsagePricing
             var hasCalls = calls.Count > 0;
             var fallbackReasons = new List<string>();
             var failures = new List<string>();
+            if (snapshot.HasIncompleteProviderUsage)
+                failures.Add("One or more provider invocations ended without usage evidence");
             var pricedCallCount = 0;
             var modelCostId = context.Items.TryGetValue(HttpContextKeys.ModelCostId, out var costId)
                 ? costId as int?

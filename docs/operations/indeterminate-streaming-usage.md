@@ -6,6 +6,17 @@ retained before their SSE notification is attempted, including failed notificati
 writes and cancellation. A notification does not determine whether an invocation
 incurred a cost.
 
+Nonstreaming chat records each actual provider invocation before the call and
+retains its reported usage and hosted-tool evidence immediately after completion.
+Completed function batches remain available if a later call fails. A missing usage
+report on any invocation leaves the combined provider total unresolved, even when
+earlier calls returned usage. A successful single call may use the existing usage
+estimator; the final conversation and output cannot estimate a missing call in a
+multi-call request. HTTP errors and thrown request failures still finalize recorded
+work. Cancellation before a future call adds no invocation, so completely measured
+earlier work can settle normally. Failures before any provider work release an
+unstarted reservation.
+
 Pricing failures use the same reconciliation path for streaming and nonstreaming
 requests. Each provider call and provider-hosted tool is priced independently;
 successful prices remain known even when another call or tool has no price. A

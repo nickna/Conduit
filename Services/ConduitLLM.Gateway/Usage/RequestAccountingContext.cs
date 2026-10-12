@@ -95,7 +95,13 @@ public sealed record RequestAccountingSnapshot(
     bool IsIndeterminate,
     string? IndeterminateReason,
     ProviderPricingEvidence? ProviderPricing = null,
-    ProviderToolPricingEvidence? ProviderToolPricing = null);
+    ProviderToolPricingEvidence? ProviderToolPricing = null,
+    IReadOnlyList<int>? ProviderInvocations = null)
+{
+    public bool HasIncompleteProviderUsage =>
+        ProviderInvocations?.Any(id => !ProviderCalls.Any(call => call.Iteration == id)) == true &&
+        !(ProviderInvocations.Count == 1 && ProviderUsage?.Source == UsageEvidenceSource.Estimated);
+}
 
 public interface IRequestAccountingContext
 {
@@ -106,6 +112,12 @@ public interface IRequestAccountingContext
     void RecordProviderUsage(Usage usage, string model, UsageEvidenceSource source);
 
     void RecordProviderCalls(IEnumerable<ProviderCallUsage> providerCalls);
+
+    void RecordProviderInvocation(int invocation);
+
+    void RecordProviderCall(ProviderCallUsage providerCall);
+
+    void AddProviderToolUsage(ProviderToolUsage toolUsage);
 
     void RecordProviderPricing(ProviderPricingEvidence pricing);
 
@@ -144,6 +156,7 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
     private string? _requestedModel;
     private ProviderUsageEvidence? _providerUsage;
     private List<ProviderCallUsage> _providerCalls = [];
+    private readonly HashSet<int> _providerInvocations = [];
     private ProviderPricingEvidence? _providerPricing;
     private ProviderToolPricingEvidence? _providerToolPricing;
     private List<ToolExecutionEvent> _functionExecutions = [];
@@ -192,6 +205,39 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
         {
             _providerCalls = providerCalls.ToList();
             _providerPricing = null;
+        }
+    }
+
+    public void RecordProviderInvocation(int invocation)
+    {
+        lock (_sync)
+        {
+            _providerInvocations.Add(invocation);
+            _providerPricing = null;
+        }
+    }
+
+    public void RecordProviderCall(ProviderCallUsage providerCall)
+    {
+        ArgumentNullException.ThrowIfNull(providerCall);
+        lock (_sync)
+        {
+            _providerCalls.RemoveAll(call => call.Iteration == providerCall.Iteration);
+            _providerCalls.Add(providerCall);
+            _providerPricing = null;
+        }
+    }
+
+    public void AddProviderToolUsage(ProviderToolUsage toolUsage)
+    {
+        ArgumentNullException.ThrowIfNull(toolUsage);
+        lock (_sync)
+        {
+            _providerToolUsage = new ProviderToolUsage
+            {
+                Tools = (_providerToolUsage?.Tools ?? []).Concat(toolUsage.Tools).ToList()
+            };
+            _providerToolPricing = null;
         }
     }
 
@@ -342,7 +388,8 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
                 _isIndeterminate,
                 _indeterminateReason,
                 _providerPricing,
-                _providerToolPricing);
+                _providerToolPricing,
+                _providerInvocations.Order().ToArray());
         }
     }
 }

@@ -19,6 +19,9 @@ public class ChatRuntimeStateTests
         request.RoutingAffinityUsed = true;
         request.RoutingDecisionReason = "private-route";
         request.RoutingFailoverCount = 2;
+        request.ProviderInvocationStarting = (_, _) => Task.CompletedTask;
+        request.ProviderInvocationCompleted = (_, _, _) => { };
+        request.FunctionExecutionCompleted = _ => { };
 
         Assert.Equal(wire, JsonSerializer.Serialize(request, options));
     }

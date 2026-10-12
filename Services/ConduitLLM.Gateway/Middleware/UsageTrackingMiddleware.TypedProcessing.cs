@@ -25,13 +25,14 @@ public partial class UsageTrackingMiddleware
         IBillingAuditService billingAuditService,
         IToolCostCalculationService toolCostCalculationService)
     {
-        if (context.Response.StatusCode >= StatusCodes.Status400BadRequest)
+        var snapshot = context.GetRequestAccountingSnapshot();
+        if (context.Response.StatusCode >= StatusCodes.Status400BadRequest &&
+            snapshot?.ProviderInvocations?.Count is not > 0)
         {
             await LogBillingDecisionAsync(context, billingAuditService);
             return;
         }
 
-        var snapshot = context.GetRequestAccountingSnapshot();
         if (snapshot is null || snapshot.Operation == RequestOperation.Unknown)
         {
             LogMissingUsageData(
@@ -90,7 +91,7 @@ public partial class UsageTrackingMiddleware
     {
         var endpointType = UsageExtractor.DetermineRequestType(context.Request.Path);
         var evidence = snapshot.ProviderUsage;
-        if (evidence is null)
+        if (evidence is null && snapshot.ProviderInvocations?.Count is not > 0)
         {
             LogMissingUsageData(
                 context,
@@ -108,22 +109,32 @@ public partial class UsageTrackingMiddleware
                 billingAuditService,
                 "Typed accounting evidence did not contain a Virtual Key identifier",
                 "missing_virtual_key",
-                evidence.Model);
+                evidence?.Model ?? snapshot.RequestedModel);
             return;
         }
 
-        var model = evidence.Model;
-        var usage = evidence.Usage.CopyForBilling();
+        var model = evidence?.Model ?? snapshot.RequestedModel ?? "unknown";
+        var usage = evidence?.Usage.CopyForBilling() ?? new Usage();
         ApplyProviderBillingPolicy(context, usage);
         var providerType = context.Items.TryGetValue("ProviderType", out var providerTypeValue)
             ? providerTypeValue?.ToString() ?? "unknown"
             : "unknown";
-        var pricingResult = await CalculateTrackedCostAsync(
-            context,
-            model,
-            usage,
-            costCalculationService,
-            billingAuditService);
+        (decimal Cost, bool Failed) pricingResult;
+        if (evidence is null)
+        {
+            context.GetOrCreateRequestAccountingContext().MarkIndeterminate(
+                "Provider invocations ended without usage evidence");
+            context.GetOrCreateRequestAccountingContext().RecordProviderPricing(
+                new ProviderPricingEvidence(null, FailureReason: "Provider usage is missing"));
+            pricingResult = (0m, true);
+            LogMissingUsageData(context, billingAuditService, "Provider invocations ended without usage evidence",
+                "missing_typed_usage", model);
+        }
+        else
+        {
+            pricingResult = await CalculateTrackedCostAsync(context, model, usage,
+                costCalculationService, billingAuditService);
+        }
         var providerToolUsage = snapshot.ProviderToolUsage is null
             ? null
             : new ToolUsageData

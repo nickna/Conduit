@@ -133,12 +133,13 @@ namespace ConduitLLM.Gateway.Endpoints
                     return admissionError;
                 }
 
-                var invocationError = await MarkChatInvocationStartedAsync(
-                    virtualKeyId,
-                    accountingContext);
-                if (invocationError is not null)
+                // Streaming still uses its existing admission transition until its invocation
+                // observers are installed. Non-streaming marks the actual call inside Core.
+                if (request.Stream == true)
                 {
-                    return invocationError;
+                    var invocationError = await MarkChatInvocationStartedAsync(virtualKeyId, accountingContext);
+                    if (invocationError is not null)
+                        return invocationError;
                 }
 
                 if (request.Stream != true)
@@ -150,6 +151,10 @@ namespace ConduitLLM.Gateway.Endpoints
                     await HandleStreamingRequestAsync(request, virtualKeyId, operationStopwatch, cancellationToken);
                     return Results.Empty;
                 }
+            }
+            catch (ChatInvocationAdmissionException ex)
+            {
+                return ex.Result;
             }
             catch (LLMCommunicationException ex)
             {
@@ -499,6 +504,11 @@ namespace ConduitLLM.Gateway.Endpoints
 
         private IResult AdmissionFailure(int statusCode, string message, string code) =>
             OpenAIError(statusCode, message, code, "billing_error");
+
+        private sealed class ChatInvocationAdmissionException(IResult result) : Exception
+        {
+            public IResult Result { get; } = result;
+        }
 
     }
 
