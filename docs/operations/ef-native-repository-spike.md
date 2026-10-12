@@ -202,3 +202,47 @@ Setup-only and restricted-environment deadline attempts remain retained and
 unqualified; the final isolated commands were joined. Docker's successful stop
 output exposed a deprecated cleanup flag, tracked separately in
 [#1664](https://github.com/nickna/Conduit/issues/1664).
+
+## Local copies for EF query precompilation
+
+`GetByVirtualKeyIdAsync` now copies the owner ID and query cancellation token to
+locals before its two expressions. Context creation still receives the original
+token; deletion branches, ordering, disposal and logging are unchanged. The
+[pinned EF 10.0.12 translator](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore.Design/Query/Internal/CSharpToLinqTranslator.cs#L361)
+handles locals flowing into queries but rejects method parameters in that path.
+The local-copy workaround is also reported in
+[EF #35494](https://github.com/dotnet/efcore/issues/35494).
+
+A fresh Configuration-owner comparison starts from `3e39b28c5` and changes only
+those local copies and references. Both managed build controls pass. Both EF
+precompiler commands still exit 1, but the two targeted `ParameterSymbol`
+signatures disappear: four raw renderings before, zero after, with no replacement
+failure for either complete query token. Totals change from 528 renderings across
+246 signatures to 524 across 244. Every unrelated signature and its rendering
+count is unchanged. Actual compiler records bind both expressions in both phases
+to EF `ToListAsync<MediaRecord>` and the `MediaRecords` DbSet property.
+
+The corrected comparison receipt is
+`802042840053f3e26bc28e4528e67890873d4f50e338b55b269a08f689bcba5d`;
+independent source/token/SARIF/log replay is
+`f40f7d4d22c770b55f3013cc763fcafb8390169b86782d906205c58acd3cf665`.
+It closes all 61 sealed references. The first derived summary incorrectly summed
+the parameter-error family as zero before; that receipt remains retained, and
+the corrected summary reports four. Original compiler captures were unchanged.
+The frozen variant was applied to production source only after this capture.
+
+With those exact variant bytes applied, five existing SQLite rows and the real
+PostgreSQL 16.15 media parity fact pass without failures or skips. Independent
+replay verifies their source bindings and TRX identities, both deletion branches,
+owner isolation, ordering, detached reads, cancellation recovery and the SQLite
+filterless model. Both owned fixtures were removed, no test schemas remained,
+and protected base images were unchanged. The PostgreSQL receipt is
+`1e1f790ee9527af72319b0e56f5f41dfc21102ffc82a4a77b2d4c221afe117c1`;
+independent behavior replay is
+`a9432f61a8edd85580680b0222dcec7d2d0138d053c86eaf242a3efaead4742d`.
+
+No generated files or native test process were produced, and the compiler
+experiment executed no database queries. Removing these targeted translation
+errors does not prove generated-query execution, complete repository-suite
+qualification, or production readiness. The remaining owner failures still
+require fixes or verified replacements; production remains JIT under ADR 0006.

@@ -108,24 +108,26 @@ public class MediaRecordRepository : RepositoryBase<MediaRecord, Guid>, IMediaRe
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         await using var context = await DbContextFactory.CreateDbContextAsync(cancellationToken);
+        var ownerId = virtualKeyId;
+        var queryCancellationToken = cancellationToken;
         List<MediaRecord> records;
         if (includeDeleted)
         {
             records = await context.MediaRecords
                 .IgnoreQueryFilters()
                 .AsNoTracking()
-                .Where(m => m.VirtualKeyId == virtualKeyId)
+                .Where(m => m.VirtualKeyId == ownerId)
                 .OrderByDescending(m => m.CreatedAt)
-                .ToListAsync(cancellationToken);
+                .ToListAsync(queryCancellationToken);
         }
         else
         {
             // The experimental compiled model omits global query filters.
             records = await context.MediaRecords
                 .AsNoTracking()
-                .Where(m => m.VirtualKeyId == virtualKeyId && m.DeletedAt == null)
+                .Where(m => m.VirtualKeyId == ownerId && m.DeletedAt == null)
                 .OrderByDescending(m => m.CreatedAt)
-                .ToListAsync(cancellationToken);
+                .ToListAsync(queryCancellationToken);
         }
 
         stopwatch.Stop();
