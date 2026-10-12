@@ -13,6 +13,14 @@ namespace ConduitLLM.Configuration.Interfaces
         SpendReservationSettlementStatus Status,
         decimal ActualAmount);
 
+    public enum SpendReservationOwnerRecoveryStatus
+    {
+        Missing,
+        Recovered,
+        AlreadyRecovered,
+        Conflict
+    }
+
     public enum SpendReconciliationDisposition
     {
         AuthoritativeProviderCost,
@@ -83,6 +91,14 @@ namespace ConduitLLM.Configuration.Interfaces
         /// Releases a previously-created spend reservation.
         /// </summary>
         Task ReleaseSpendReservationAsync(int virtualKeyId, string reservationId);
+
+        /// <summary>
+        /// Binds an outstanding legacy reservation to an owner verified from request audit evidence.
+        /// Restricted operator tooling must provide the operator identity and evidence note.
+        /// Ordinary lifecycle operations reject legacy reservations with no owner metadata.
+        /// </summary>
+        Task<SpendReservationOwnerRecoveryStatus> RecoverLegacySpendReservationOwnerAsync(
+            int virtualKeyId, string reservationId, string auditActor, string auditNote);
 
         /// <summary>
         /// Durably marks unresolved provider accounting and atomically queues cumulative known

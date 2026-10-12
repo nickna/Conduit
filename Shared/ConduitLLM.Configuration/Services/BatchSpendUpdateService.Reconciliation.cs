@@ -51,6 +51,7 @@ public partial class BatchSpendUpdateService
         var remainingHold = Math.Max(0m, held.Value - deltaUnits / SpendUnitScale);
         var releasedHold = held.Value - remainingHold;
         const string script = """
+            if redis.call('HGET', KEYS[10], ARGV[1]) ~= ARGV[6] then return -1 end
             local raw = redis.call('HGET', KEYS[1], ARGV[1])
             local record
             if raw then
@@ -96,7 +97,8 @@ public partial class BatchSpendUpdateService
                 $"{_settledReservationPrefix}{groupId}", $"{_reservedSpendPrefix}{groupId}",
                 $"{_windowedSpendUnitsPrefix}{groupId}:window:{window}",
                 $"{_windowedPendingTotalUnitsPrefix}{groupId}",
-                $"{_windowedKeyUsageUnitsPrefix}{groupId}:window:{window}:key:{virtualKeyId}"
+                $"{_windowedKeyUsageUnitsPrefix}{groupId}:window:{window}:key:{virtualKeyId}",
+                $"{_reservationOwnerPrefix}{groupId}"
             },
             new RedisValue[]
             {
@@ -115,7 +117,14 @@ public partial class BatchSpendUpdateService
         var groupId = await GetGroupIdAsync(virtualKeyId);
         if (groupId is null) return null;
         var db = (await _redisConnectionFactory.GetConnectionAsync()).GetDatabase();
-        var record = await ReadReconciliationAsync(db, groupId.Value, reservationId);
+        const string script = """
+            if redis.call('HGET', KEYS[2], ARGV[1]) ~= ARGV[2] then return nil end
+            return redis.call('HGET', KEYS[1], ARGV[1])
+            """;
+        var value = (RedisValue)await db.ScriptEvaluateAsync(script,
+            new RedisKey[] { $"{_indeterminateReservationPrefix}{groupId}", $"{_reservationOwnerPrefix}{groupId}" },
+            new RedisValue[] { reservationId, virtualKeyId });
+        var record = ParseReconciliation(reservationId, value);
         return record?.VirtualKeyId == virtualKeyId ? record : null;
     }
 
@@ -123,6 +132,11 @@ public partial class BatchSpendUpdateService
         IDatabase db, int groupId, string reservationId)
     {
         var value = await db.HashGetAsync($"{_indeterminateReservationPrefix}{groupId}", reservationId);
+        return ParseReconciliation(reservationId, value);
+    }
+
+    private static SpendReservationReconciliation? ParseReconciliation(string reservationId, RedisValue value)
+    {
         if (!value.HasValue) return null;
         using var json = JsonDocument.Parse(value.ToString());
         var record = json.RootElement;
@@ -157,6 +171,7 @@ public partial class BatchSpendUpdateService
             return new(SpendReservationSettlementStatus.Conflict, providerAmount);
         var window = record.BillingWindowStartUtc.ToString("yyyyMMddHH", CultureInfo.InvariantCulture);
         const string script = """
+            if redis.call('HGET', KEYS[8], ARGV[1]) ~= ARGV[7] then return -1 end
             local raw = redis.call('HGET', KEYS[1], ARGV[1])
             if not raw then return 0 end
             local record = cjson.decode(raw)
@@ -195,7 +210,8 @@ public partial class BatchSpendUpdateService
                 $"{_reservedSpendPrefix}{groupId}", $"{_settledReservationPrefix}{groupId}",
                 $"{_windowedSpendUnitsPrefix}{groupId}:window:{window}",
                 $"{_windowedPendingTotalUnitsPrefix}{groupId}",
-                $"{_windowedKeyUsageUnitsPrefix}{groupId}:window:{window}:key:{virtualKeyId}"
+                $"{_windowedKeyUsageUnitsPrefix}{groupId}:window:{window}:key:{virtualKeyId}",
+                $"{_reservationOwnerPrefix}{groupId}"
             }, new RedisValue[]
             {
                 reservationId, ToSpendUnits(providerAmount).ToString(CultureInfo.InvariantCulture),

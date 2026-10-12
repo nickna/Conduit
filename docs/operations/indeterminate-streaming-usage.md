@@ -28,10 +28,40 @@ use `IBatchSpendUpdateService.GetSpendReservationReconciliationAsync(keyId,
 requestId)` to read a typed record. Restricted operator tooling can resolve a
 record through `ReconcileSpendReservationAsync` after verifying its request and
 provider evidence. There is no automatic inference of missing provider charges.
-Before creating the first reconciliation record, confirm the original Virtual Key
-and request ID from request audit evidence: the older reservation lifecycle stores
-holds by group/request ID and does not retain their owning key. Once recorded,
-reconciliation enforces that recorded key identity.
+Reservations now bind their original Virtual Key atomically in
+`spend_reservation_owners:group:{groupId}`, indexed by request ID. Reserve replays,
+invocation start, settlement, release, reconciliation recording, and typed queries
+verify that identity. Ownership survives started, indeterminate, and settled states,
+including zero-cost holds. Ordinary pre-invocation release or expiry removes the
+owner; settled owners remain for the same replay horizon as their settlement records.
+
+Legacy numeric holds and settled hashes remain readable without a data-format
+migration, but ordinary lifecycle operations reject records with no owner. They
+never infer ownership from a supplied sibling key in the same group. Before recovering
+a legacy record, confirm its original Virtual Key and request ID from request audit
+evidence, and check any existing reconciliation record, whose key identity cannot be
+replaced. Restricted operator tooling may then call
+`IBatchSpendUpdateService.RecoverLegacySpendReservationOwnerAsync(keyId, requestId,
+auditActor, auditNote)`. Provide the operator identity and a note identifying the
+verified request/provider or ledger evidence. This only binds ownership: it does
+not invoke a provider, change the held amount, extend its expiry, or queue a charge.
+
+Recovery returns `Recovered` once, or `AlreadyRecovered` for the same owner and
+exact audit actor/note. An absent record or an expired pre-invocation hold returns
+`Missing`. Conflicting ownership, an existing reconciliation key, or different audit
+evidence returns `Conflict` without changes. A normally owned reservation cannot be
+relabelled through recovery. The same immutable recovery evidence can explicitly
+restore a missing owner, returning `Recovered` while retaining the original audit
+timestamp; conflicting ownership or evidence still fails closed.
+The immutable recovery hash `spend_reservation_owner_recovery:group:{groupId}` retains
+the owner, actor, evidence note, and observation time. Back up ownership and recovery
+hashes with reservation state and retain recovery evidence for the replay/audit horizon.
+
+Drain older processes before enabling owner-enforcing lifecycle operations: old
+writers do not maintain ownership metadata and old code does not reject sibling
+keys. Inventory existing holds and recover verified legacy records before normal
+settlement or release. Unverified started holds remain held for investigation;
+unstarted legacy holds may expire through the ordinary reservation cleanup.
 
 - With authoritative provider evidence, calculate only the unresolved provider
   portion using the request's applicable pricing and call reconciliation with
