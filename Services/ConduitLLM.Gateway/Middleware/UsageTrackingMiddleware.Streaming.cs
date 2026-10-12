@@ -140,22 +140,15 @@ namespace ConduitLLM.Gateway.Middleware
 
             if (toolUsageData != null)
             {
-                var toolCostResult = await toolCostCalculationService.CalculateToolCostsAsync(toolUsageData, providerTypeEnum);
-                toolUsageJson = toolCostCalculationService.SerializeToolUsage(toolUsageData);
-
-                if (!toolCostResult.Failed)
-                {
-                    toolCost = toolCostResult.TotalCost;
-                    _logger.LogDebug("Streaming tool usage detected: {ToolUsageJson}, Cost: ${ToolCost}", toolUsageJson, toolCost);
-                }
-                else
-                {
-                    toolCost = 0m;
-                    _logger.LogError("Streaming tool cost calculation failed for provider {ProviderType}.", providerTypeEnum);
-                }
+                var toolPricing = await ProviderUsagePricing.GetOrCalculateToolsAsync(context, toolCostCalculationService);
+                if (toolPricing.Cost is not decimal pricedToolCost)
+                    throw new ToolCostCalculationException(toolPricing.FailureReason ?? "Provider-hosted tool pricing is unresolved");
+                toolUsageJson = toolPricing.UsageJson;
+                toolCost = pricedToolCost;
+                _logger.LogDebug("Streaming tool usage detected: {ToolUsageJson}, Cost: ${ToolCost}", toolUsageJson, toolCost);
 
                 // Only emit when there's also billable cost — BillingPolicyHandler handles the zero-cost case
-                if (toolCostResult.HasUnconfiguredTools && toolCost > 0)
+                if (!string.IsNullOrEmpty(toolPricing.UnconfiguredToolNames) && toolCost > 0)
                 {
                     billingAuditService.LogBillingEvent(new Configuration.Entities.BillingAuditEvent
                     {
@@ -168,7 +161,7 @@ namespace ConduitLLM.Gateway.Middleware
                         ProviderType = providerType,
                         ToolUsageJson = toolUsageJson,
                         ToolUsageCost = toolCost,
-                        FailureReason = $"Unconfigured tools: {string.Join(", ", toolCostResult.UnconfiguredToolNames)}"
+                        FailureReason = $"Unconfigured tools: {toolPricing.UnconfiguredToolNames}"
                     });
                     UsageMetrics.BillingAuditEvents.WithLabels("ToolUsageMissingCostConfig", providerType).Inc();
                 }

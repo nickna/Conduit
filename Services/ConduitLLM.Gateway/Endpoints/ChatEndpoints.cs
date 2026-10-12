@@ -37,6 +37,8 @@ namespace ConduitLLM.Gateway.Endpoints
         private readonly ISpendReservationService? _spendReservationService;
         private readonly BillingAdmissionOptions _billingAdmissionOptions;
         private readonly ConduitLLM.Core.Interfaces.IProviderErrorTranslator _providerErrorTranslator;
+        private readonly ConduitLLM.Core.Interfaces.ICostCalculationService? _costCalculationService;
+        private readonly ConduitLLM.Gateway.Services.IToolCostCalculationService? _toolCostCalculationService;
 
         public ChatEndpoints(
             Conduit conduit,
@@ -52,7 +54,9 @@ namespace ConduitLLM.Gateway.Endpoints
             ISpendReservationService? spendReservationService = null,
             IOptions<BillingAdmissionOptions>? billingAdmissionOptions = null,
             IHttpContextAccessor? httpContextAccessor = null,
-            ConduitLLM.Core.Interfaces.IProviderErrorTranslator? providerErrorTranslator = null) : base(eventPublisher, httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor)), logger)
+            ConduitLLM.Core.Interfaces.IProviderErrorTranslator? providerErrorTranslator = null,
+            ConduitLLM.Core.Interfaces.ICostCalculationService? costCalculationService = null,
+            ConduitLLM.Gateway.Services.IToolCostCalculationService? toolCostCalculationService = null) : base(eventPublisher, httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor)), logger)
         {
             _conduit = conduit ?? throw new ArgumentNullException(nameof(conduit));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -65,6 +69,8 @@ namespace ConduitLLM.Gateway.Endpoints
             _chatSpendEstimator = chatSpendEstimator;
             _spendReservationService = spendReservationService;
             _billingAdmissionOptions = billingAdmissionOptions?.Value ?? new BillingAdmissionOptions();
+            _costCalculationService = costCalculationService;
+            _toolCostCalculationService = toolCostCalculationService;
             // Default to External so an unwired construction sanitizes rather than leaks.
             _providerErrorTranslator = providerErrorTranslator
                 ?? new ProviderErrorTranslator(new ConduitLLM.Core.Configuration.CustomerErrorOptions());

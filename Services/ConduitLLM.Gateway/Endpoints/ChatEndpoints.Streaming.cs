@@ -77,6 +77,30 @@ namespace ConduitLLM.Gateway.Endpoints
                 HttpContext.Items[HttpContextKeys.ProviderReportedCost] = providerReportedCost;
             }
 
+            if (response.AgenticMetrics is { } metrics)
+            {
+                // Unpriced or incomplete accounting has no complete monetary total. Counts,
+                // function outcomes and their independently known charges remain available.
+                metrics.TotalLLMCost = null;
+                metrics.TotalCost = null;
+                var snapshot = HttpContext.GetRequestAccountingSnapshot();
+                if (_costCalculationService is not null && snapshot?.ProviderUsage is { } evidence)
+                {
+                    var pricing = await ProviderUsagePricing.GetOrCalculateAsync(
+                        HttpContext, evidence.Model, evidence.Usage, _costCalculationService);
+                    if (!snapshot.IsIndeterminate && pricing.Cost is decimal providerCost)
+                    {
+                        metrics.TotalLLMCost = providerCost;
+                        decimal? toolCost = snapshot.ProviderToolUsage is null ? 0m : null;
+                        if (snapshot.ProviderToolUsage is not null && _toolCostCalculationService is not null)
+                            toolCost = (await ProviderUsagePricing.GetOrCalculateToolsAsync(
+                                HttpContext, _toolCostCalculationService)).Cost;
+                        if (toolCost is decimal providerToolCost)
+                            metrics.TotalCost = providerCost + providerToolCost + metrics.TotalFunctionCost;
+                    }
+                }
+            }
+
             GatewayOpsMetrics.RecordLlmOperation("chat_completion", request.Model, "success", operationStopwatch.Elapsed.TotalSeconds);
             return Ok(response);
         }

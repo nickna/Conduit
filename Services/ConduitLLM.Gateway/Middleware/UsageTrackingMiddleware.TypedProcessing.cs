@@ -124,9 +124,6 @@ public partial class UsageTrackingMiddleware
             usage,
             costCalculationService,
             billingAuditService);
-        var providerTypeEnum = Enum.TryParse<ProviderType>(providerType, true, out var parsedProviderType)
-            ? parsedProviderType
-            : ProviderType.OpenAI;
         var providerToolUsage = snapshot.ProviderToolUsage is null
             ? null
             : new ToolUsageData
@@ -142,11 +139,11 @@ public partial class UsageTrackingMiddleware
         string? providerToolUsageJson = null;
         if (providerToolUsage is not null)
         {
-            var toolCostResult = await toolCostCalculationService.CalculateToolCostsAsync(
-                providerToolUsage,
-                providerTypeEnum);
-            providerToolUsageJson = toolCostCalculationService.SerializeToolUsage(providerToolUsage);
-            providerToolCost = toolCostResult.TotalCost;
+            var toolPricing = await ProviderUsagePricing.GetOrCalculateToolsAsync(context, toolCostCalculationService);
+            if (toolPricing.Cost is not decimal pricedToolCost)
+                throw new ToolCostCalculationException(toolPricing.FailureReason ?? "Provider-hosted tool pricing is unresolved");
+            providerToolUsageJson = toolPricing.UsageJson;
+            providerToolCost = pricedToolCost;
         }
 
         var totalCost = pricingResult.Cost + (providerToolCost ?? 0m) + snapshot.FunctionExecutionCost;

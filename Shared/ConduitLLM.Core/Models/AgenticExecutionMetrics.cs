@@ -34,16 +34,18 @@ public class AgenticExecutionMetrics
     public decimal TotalFunctionCost { get; set; }
 
     /// <summary>
-    /// Total cost of all LLM completions (across all iterations)
+    /// Total cost of all LLM completions (across all iterations), when pricing is resolved.
     /// </summary>
     [JsonPropertyName("total_llm_cost")]
-    public decimal TotalLLMCost { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? TotalLLMCost { get; set; }
 
     /// <summary>
-    /// Combined total cost (LLM + functions)
+    /// Combined cost of LLM completions, provider-hosted tools, and functions, when pricing is resolved.
     /// </summary>
     [JsonPropertyName("total_cost")]
-    public decimal TotalCost { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? TotalCost { get; set; }
 
     /// <summary>
     /// Summary of each function call that was executed

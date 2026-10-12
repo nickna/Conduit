@@ -139,20 +139,7 @@ public partial class UsageTrackingMiddleware
         HttpContext context,
         ConduitLLM.Core.Models.Usage usage,
         bool includeAggregateReportedCost = true)
-    {
-        if (context.Items.TryGetValue(HttpContextKeys.ProviderBillingPolicy, out var policyValue) &&
-            policyValue is ConduitLLM.Core.Models.ProviderCostBillingPolicy policy)
-        {
-            usage.ProviderCostPolicy = policy;
-        }
-
-        if (includeAggregateReportedCost && usage.ProviderReportedCostUsd is null &&
-            context.Items.TryGetValue(HttpContextKeys.ProviderReportedCost, out var costValue) &&
-            costValue is decimal reportedCost)
-        {
-            usage.ProviderReportedCostUsd = reportedCost;
-        }
-    }
+        => ProviderUsagePricing.ApplyProviderBillingPolicy(context, usage, includeAggregateReportedCost);
 }
 
 public static class UsageTrackingMiddlewareExtensions

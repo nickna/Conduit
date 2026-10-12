@@ -8,6 +8,35 @@ namespace ConduitLLM.SerializationTests;
 
 public class AgenticFunctionMetadataTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Agentic_response_serializes_known_costs_and_omits_unresolved_totals(bool priced)
+    {
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
+        var response = new ChatCompletionResponse
+        {
+            Id = "chat", Created = 0, Object = "chat.completion", Model = "model", Choices = [],
+            AgenticMetrics = new AgenticExecutionMetrics
+            {
+                TotalIterations = 2, TotalFunctionCalls = 1, TotalFunctionCost = 0.05m,
+                TotalLLMCost = priced ? 0.02m : null, TotalCost = priced ? 0.07m : null,
+                ProviderCalls = [new ProviderCallUsage { Iteration = 1, Usage = new Usage { ProviderReportedCostUsd = 0.01m } }]
+            }
+        };
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(response, GatewayJsonOptions.Create()));
+        var metrics = json.RootElement.GetProperty("agentic_metrics");
+        Assert.Equal(0.05m, metrics.GetProperty("total_function_cost").GetDecimal());
+        Assert.False(metrics.TryGetProperty("provider_calls", out _));
+        Assert.Equal(priced, metrics.TryGetProperty("total_llm_cost", out var llmCost));
+        Assert.Equal(priced, metrics.TryGetProperty("total_cost", out var totalCost));
+        if (priced)
+        {
+            Assert.Equal(0.02m, llmCost.GetDecimal());
+            Assert.Equal(0.07m, totalCost.GetDecimal());
+        }
+    }
+
     [Fact]
     public void Function_metadata_round_trips_all_billing_components_without_reflection()
     {

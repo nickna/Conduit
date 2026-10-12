@@ -37,6 +37,18 @@ public sealed record ProviderUsageEvidence(
     string Model,
     UsageEvidenceSource Source);
 
+/// <summary>Request-local pricing shared by response summaries and spend finalization.</summary>
+public sealed record ProviderPricingEvidence(
+    decimal? Cost,
+    string? FallbackReason = null,
+    string? FailureReason = null);
+
+public sealed record ProviderToolPricingEvidence(
+    decimal? Cost,
+    string? UsageJson = null,
+    string? FailureReason = null,
+    string? UnconfiguredToolNames = null);
+
 public sealed record StreamTransportEvidence(
     StreamTransportOutcome Outcome,
     long ProviderChunksObserved,
@@ -73,7 +85,9 @@ public sealed record RequestAccountingSnapshot(
     string? MetadataJson,
     SpendReservationEvidence? Reservation,
     bool IsIndeterminate,
-    string? IndeterminateReason);
+    string? IndeterminateReason,
+    ProviderPricingEvidence? ProviderPricing = null,
+    ProviderToolPricingEvidence? ProviderToolPricing = null);
 
 public interface IRequestAccountingContext
 {
@@ -84,6 +98,10 @@ public interface IRequestAccountingContext
     void RecordProviderUsage(Usage usage, string model, UsageEvidenceSource source);
 
     void RecordProviderCalls(IEnumerable<ProviderCallUsage> providerCalls);
+
+    void RecordProviderPricing(ProviderPricingEvidence pricing);
+
+    void RecordProviderToolPricing(ProviderToolPricingEvidence pricing);
 
     void RecordFunctionExecutions(
         IEnumerable<ToolExecutionEvent> executions,
@@ -118,6 +136,8 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
     private string? _requestedModel;
     private ProviderUsageEvidence? _providerUsage;
     private List<ProviderCallUsage> _providerCalls = [];
+    private ProviderPricingEvidence? _providerPricing;
+    private ProviderToolPricingEvidence? _providerToolPricing;
     private List<ToolExecutionEvent> _functionExecutions = [];
     private decimal _functionExecutionCost;
     private List<ToolCall> _streamingToolCalls = [];
@@ -153,6 +173,7 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
         lock (_sync)
         {
             _providerUsage = new ProviderUsageEvidence(usage, model, source);
+            _providerPricing = null;
         }
     }
 
@@ -162,6 +183,25 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
         lock (_sync)
         {
             _providerCalls = providerCalls.ToList();
+            _providerPricing = null;
+        }
+    }
+
+    public void RecordProviderPricing(ProviderPricingEvidence pricing)
+    {
+        ArgumentNullException.ThrowIfNull(pricing);
+        lock (_sync)
+        {
+            _providerPricing = pricing;
+        }
+    }
+
+    public void RecordProviderToolPricing(ProviderToolPricingEvidence pricing)
+    {
+        ArgumentNullException.ThrowIfNull(pricing);
+        lock (_sync)
+        {
+            _providerToolPricing = pricing;
         }
     }
 
@@ -192,6 +232,7 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
         lock (_sync)
         {
             _providerToolUsage = toolUsage;
+            _providerToolPricing = null;
         }
     }
 
@@ -291,7 +332,9 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
                 _metadataJson,
                 _reservation,
                 _isIndeterminate,
-                _indeterminateReason);
+                _indeterminateReason,
+                _providerPricing,
+                _providerToolPricing);
         }
     }
 }
