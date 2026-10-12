@@ -8,6 +8,22 @@ namespace ConduitLLM.SerializationTests;
 
 public class AgenticFunctionMetadataTests
 {
+    [Fact]
+    public void Partial_cost_metadata_preserves_known_amounts_without_false_complete_totals()
+    {
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
+        var json = FunctionExecutionSerializer.SerializeFunctionExecutionResults(
+            [new ToolExecutionEvent { Status = "completed", Cost = 0.05m, FunctionName = "lookup" }],
+            costBreakdown: new FunctionExecutionCostBreakdown(null, 0.05m, null, 0.13m, 0.05m, 0.03m));
+        var breakdown = FunctionExecutionSerializer.DeserializeFunctionExecutionMetadata(json)!.CostBreakdown!;
+
+        Assert.Null(breakdown.LlmCost);
+        Assert.Null(breakdown.ProviderToolCost);
+        Assert.Equal(0.05m, breakdown.KnownLlmCost);
+        Assert.Equal(0.03m, breakdown.KnownProviderToolCost);
+        Assert.Equal(0.13m, breakdown.TotalCost);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

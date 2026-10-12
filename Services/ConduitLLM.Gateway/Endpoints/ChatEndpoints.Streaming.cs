@@ -88,13 +88,13 @@ namespace ConduitLLM.Gateway.Endpoints
                 {
                     var pricing = await ProviderUsagePricing.GetOrCalculateAsync(
                         HttpContext, evidence.Model, evidence.Usage, _costCalculationService);
+                    decimal? toolCost = snapshot.ProviderToolUsage is null ? 0m : null;
+                    if (snapshot.ProviderToolUsage is not null && _toolCostCalculationService is not null)
+                        toolCost = (await ProviderUsagePricing.GetOrCalculateToolsAsync(
+                            HttpContext, _toolCostCalculationService)).Cost;
                     if (!snapshot.IsIndeterminate && pricing.Cost is decimal providerCost)
                     {
                         metrics.TotalLLMCost = providerCost;
-                        decimal? toolCost = snapshot.ProviderToolUsage is null ? 0m : null;
-                        if (snapshot.ProviderToolUsage is not null && _toolCostCalculationService is not null)
-                            toolCost = (await ProviderUsagePricing.GetOrCalculateToolsAsync(
-                                HttpContext, _toolCostCalculationService)).Cost;
                         if (toolCost is decimal providerToolCost)
                             metrics.TotalCost = providerCost + providerToolCost + metrics.TotalFunctionCost;
                     }

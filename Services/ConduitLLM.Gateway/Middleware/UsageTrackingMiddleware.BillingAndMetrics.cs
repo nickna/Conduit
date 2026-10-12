@@ -30,6 +30,8 @@ namespace ConduitLLM.Gateway.Middleware
                 context, model, usage, costCalculationService);
             if (pricing.Cost is not decimal cost)
             {
+                context.GetOrCreateRequestAccountingContext().MarkIndeterminate(
+                    pricing.FailureReason ?? "Provider pricing is unresolved");
                 _logger.LogError(
                     "BILLING ALERT: Cost calculation failed for model {Model}; preserving request for reconciliation: {Reason}",
                     model, pricing.FailureReason);
@@ -37,13 +39,22 @@ namespace ConduitLLM.Gateway.Middleware
                     "pricing_calculation_error", UsageExtractor.DetermineRequestType(context.Request.Path)).Inc();
                 LogPricingAuditEvent(context, model, usage, null, pricing.FailureReason ?? "Provider pricing is unresolved",
                     Configuration.Entities.BillingAuditEventType.PricingCalculationFailed, billingAuditService);
-                return (0m, true);
+                return (pricing.KnownCost, true);
             }
 
             if (!string.IsNullOrEmpty(pricing.FallbackReason))
                 LogPricingAuditEvent(context, model, usage, cost, pricing.FallbackReason,
                     Configuration.Entities.BillingAuditEventType.UsageEstimated, billingAuditService);
             return (cost, false);
+        }
+
+        private static void RecordToolPricingFailure(HttpContext context, string model, Usage usage,
+            ProviderToolPricingEvidence pricing, IBillingAuditService billingAuditService)
+        {
+            var reason = pricing.FailureReason ?? "Provider-hosted tool pricing is unresolved";
+            context.GetOrCreateRequestAccountingContext().MarkIndeterminate(reason);
+            LogPricingAuditEvent(context, model, usage, null, reason,
+                Configuration.Entities.BillingAuditEventType.PricingCalculationFailed, billingAuditService);
         }
 
         private static void LogPricingAuditEvent(

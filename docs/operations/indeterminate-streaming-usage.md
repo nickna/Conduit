@@ -1,4 +1,4 @@
-# Unresolved streaming provider usage
+# Unresolved provider usage and pricing
 
 When a chat provider stream ends without usage and bounded estimation fails or
 times out, Gateway marks accounting indeterminate. Completed function results are
@@ -6,12 +6,25 @@ retained before their SSE notification is attempted, including failed notificati
 writes and cancellation. A notification does not determine whether an invocation
 incurred a cost.
 
+Pricing failures use the same reconciliation path for streaming and nonstreaming
+requests. Each provider call and provider-hosted tool is priced independently;
+successful prices remain known even when another call or tool has no price. A
+failed complete-price calculation is recorded as unknown, rather than zero. The
+request log records the known total, and function metadata uses null `llmCost` or
+`providerToolCost` for an unresolved component, with `knownLlmCost` or
+`knownProviderToolCost` identifying its independently priced portion. Response
+summaries omit monetary totals that cannot be established completely.
+
 For requests admitted with a parent spend reservation, finalization atomically
-queues cumulative known function spend and retains the unused reservation as an
+queues cumulative known provider, hosted-tool and function spend and retains the unused reservation as an
 invocation-started hold. For example, a 0.25 reservation with 0.05 known function
 cost queues 0.05 and holds 0.20. The held 0.20 is a bound, not a measured provider
 charge. The request remains open and indeterminate; ordinary settlement and
 reservation release cannot discard that state.
+For example, known provider calls of 0.05, configured hosted tools of 0.03, and
+functions of 0.05 accept 0.13 once and retain 0.12 of a 0.25 reservation when another
+provider call or hosted tool cannot be priced. No unresolved price is substituted
+with the reservation bound or a different call's reported price.
 
 The atomic transition persists a reconciliation record in the Redis hash
 `spend_reservations_indeterminate:group:{groupId}`, indexed by the billing request
@@ -78,7 +91,9 @@ unstarted legacy holds may expire through the ordinary reservation cleanup.
 - With authoritative provider evidence, calculate only the unresolved provider
   portion using the request's applicable pricing and call reconciliation with
   `AuthoritativeProviderCost`, that amount, the operator identity, and a note
-  identifying the evidence. Exclude the function cost already accepted.
+  identifying the evidence. Exclude every provider, hosted-tool and function
+  amount already included in the record's cumulative known spend. Supplying the
+  full original request cost would charge those known portions again.
 - When provider usage cannot be established, an authorized operator may make an
   audited disposition with `ProviderCostWaived`, amount `0`, the operator identity,
   and a reason. This waives the unresolved portion and preserves the known charge.
@@ -100,5 +115,6 @@ started reservation held. Restore Redis and recover from request/provider audit
 evidence before attempting an audited disposition. Do not delete holds directly,
 bill the reservation remainder, or replay a completed invocation to reconstruct
 usage. Billing admission modes that did not create a reservation continue to bill
-known function cost through the normal spend path; they have no parent hold to
+known provider, hosted-tool and function costs through the normal spend path and
+still mark accounting indeterminate; they have no parent hold to
 reconcile.

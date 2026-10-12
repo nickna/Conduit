@@ -42,50 +42,57 @@ namespace ConduitLLM.Gateway.Middleware
 
             if (usage is null)
             {
-                if (accountingSnapshot?.Reservation?.InvocationStarted == true)
-                {
-                    context.GetOrCreateRequestAccountingContext().MarkIndeterminate(
-                        "Provider invocation ended without resolved streaming usage");
-                }
                 // Function execution cost is known independently of provider token usage. A provider
                 // may omit its final usage chunk (or the client may disconnect after functions ran),
                 // so preserve that charge before returning from the token-usage path.
                 var functionCost = accountingSnapshot?.FunctionExecutionCost ?? 0m;
+                var knownToolPricing = accountingSnapshot?.ProviderToolUsage is null
+                    ? new ProviderToolPricingEvidence(0m)
+                    : await ProviderUsagePricing.GetOrCalculateToolsAsync(context, toolCostCalculationService);
+                var knownCost = functionCost + knownToolPricing.KnownCost;
+                var functionUsage = new Usage { PromptTokens = 0, CompletionTokens = 0, TotalTokens = 0 };
+                var invocationEvident = accountingSnapshot?.Reservation?.InvocationStarted == true ||
+                    knownCost > 0m || accountingSnapshot?.ProviderToolUsage?.Tools.Count > 0;
+                if (invocationEvident)
+                {
+                    var accounting = context.GetOrCreateRequestAccountingContext();
+                    accounting.MarkInvocationStarted();
+                    accounting.MarkIndeterminate("Provider invocation ended without resolved streaming usage");
+                    if (knownToolPricing.Cost is null)
+                        RecordToolPricingFailure(context, accountingSnapshot?.RequestedModel ?? "unknown",
+                            functionUsage, knownToolPricing, billingAuditService);
+                }
 
-                if (endpointType == "chat" && functionCost > 0m)
+                if (invocationEvident && (knownCost > 0m || accountingSnapshot?.Reservation is not null))
                 {
                     var functionVirtualKeyId = (int)context.Items[HttpContextKeys.VirtualKeyId]!;
-                    var accepted = await RecordKnownStreamingSpendAsync(
+                    var accepted = await RecordKnownIndeterminateSpendAsync(
                         context,
                         functionVirtualKeyId,
-                        functionCost,
+                        knownCost,
                         batchSpendService,
                         virtualKeyService);
 
                     if (accepted)
                         _logger.LogInformation(
-                            "Preserved known streaming function cost for VirtualKey {VirtualKeyId} despite missing token usage: {Cost:C}",
-                            functionVirtualKeyId, functionCost);
+                            "Preserved known streaming cost for VirtualKey {VirtualKeyId} despite missing token usage: {Cost:C}",
+                            functionVirtualKeyId, knownCost);
 
-                    var functionUsage = new Usage
-                    {
-                        PromptTokens = 0,
-                        CompletionTokens = 0,
-                        TotalTokens = 0
-                    };
                     var functionMetadata = accountingSnapshot?.FunctionExecutions.Count > 0
                         ? FunctionExecutionSerializer.SerializeFunctionExecutionResults(
                             accountingSnapshot.FunctionExecutions,
                             accountingSnapshot.BillingRequestId,
                             context.TraceIdentifier,
-                            new FunctionExecutionCostBreakdown(null, functionCost, null, functionCost))
-                        : null;
+                            new FunctionExecutionCostBreakdown(null, functionCost,
+                                accountingSnapshot.ProviderToolUsage is null ? null : knownToolPricing.Cost, knownCost,
+                                0m, knownToolPricing.Cost is null ? knownToolPricing.KnownCost : null))
+                        : knownToolPricing.UsageJson;
                     await LogRequestAsync(
                         context,
                         functionVirtualKeyId,
                         accountingSnapshot?.RequestedModel ?? "unknown",
                         functionUsage,
-                        functionCost,
+                        knownCost,
                         requestLogService,
                         functionMetadata);
                 }
@@ -136,19 +143,21 @@ namespace ConduitLLM.Gateway.Middleware
                 : null;
 
             decimal? toolCost = null;
+            decimal knownToolCost = 0m;
             string? toolUsageJson = null;
 
             if (toolUsageData != null)
             {
                 var toolPricing = await ProviderUsagePricing.GetOrCalculateToolsAsync(context, toolCostCalculationService);
-                if (toolPricing.Cost is not decimal pricedToolCost)
-                    throw new ToolCostCalculationException(toolPricing.FailureReason ?? "Provider-hosted tool pricing is unresolved");
+                if (toolPricing.Cost is null)
+                    RecordToolPricingFailure(context, model, usage, toolPricing, billingAuditService);
                 toolUsageJson = toolPricing.UsageJson;
-                toolCost = pricedToolCost;
+                toolCost = toolPricing.Cost;
+                knownToolCost = toolPricing.KnownCost;
                 _logger.LogDebug("Streaming tool usage detected: {ToolUsageJson}, Cost: ${ToolCost}", toolUsageJson, toolCost);
 
                 // Only emit when there's also billable cost — BillingPolicyHandler handles the zero-cost case
-                if (!string.IsNullOrEmpty(toolPricing.UnconfiguredToolNames) && toolCost > 0)
+                if (!string.IsNullOrEmpty(toolPricing.UnconfiguredToolNames) && knownToolCost > 0)
                 {
                     billingAuditService.LogBillingEvent(new Configuration.Entities.BillingAuditEvent
                     {
@@ -160,7 +169,7 @@ namespace ConduitLLM.Gateway.Middleware
                         HttpStatusCode = context.Response.StatusCode,
                         ProviderType = providerType,
                         ToolUsageJson = toolUsageJson,
-                        ToolUsageCost = toolCost,
+                        ToolUsageCost = knownToolCost,
                         FailureReason = $"Unconfigured tools: {toolPricing.UnconfiguredToolNames}"
                     });
                     UsageMetrics.BillingAuditEvents.WithLabels("ToolUsageMissingCostConfig", providerType).Inc();
@@ -211,14 +220,17 @@ namespace ConduitLLM.Gateway.Middleware
             var pricingResult = await CalculateTrackedCostAsync(
                 context, model, usage, costCalculationService, billingAuditService);
             var baseCost = pricingResult.Cost;
-            var cost = baseCost + (toolCost ?? 0m) + functionExecutionCost;
+            var cost = baseCost + knownToolCost + functionExecutionCost;
             if (endpointType == "chat" && functionResults.Count > 0)
             {
                 chatToolCallsJson = FunctionExecutionSerializer.SerializeFunctionExecutionResults(
                     functionResults,
                     accountingSnapshot!.BillingRequestId,
                     context.TraceIdentifier,
-                    new FunctionExecutionCostBreakdown(baseCost, functionExecutionCost, toolCost ?? 0m, cost),
+                    new FunctionExecutionCostBreakdown(pricingResult.Failed ? null : baseCost,
+                        functionExecutionCost, toolUsageData is null ? 0m : toolCost, cost,
+                        pricingResult.Failed ? baseCost : null,
+                        toolUsageData is not null && toolCost is null ? knownToolCost : null),
                     toolUsageData);
             }
 
@@ -254,7 +266,12 @@ namespace ConduitLLM.Gateway.Middleware
             await RecordPromptCachingSavingsAsync(context, costCalculationService, model, usage);
 
             // Update spend only if there's a cost
-            if (cost > 0)
+            if (context.GetRequestAccountingSnapshot()!.IsIndeterminate)
+            {
+                await RecordKnownIndeterminateSpendAsync(context, virtualKeyId, cost,
+                    batchSpendService, virtualKeyService);
+            }
+            else if (cost > 0)
             {
                 if (await RecordSpendOrSettleReservationAsync(
                         context,

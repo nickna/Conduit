@@ -33,22 +33,24 @@ public static class ProviderUsagePricing
         if (snapshot.ProviderToolUsage is null)
             return new ProviderToolPricingEvidence(0m);
 
+        var usage = new ToolUsageData
+        {
+            Tools = snapshot.ProviderToolUsage.Tools.Select(tool => new ToolUsageItem
+            {
+                ToolName = tool.ToolName, Count = tool.Count, DurationSeconds = tool.DurationSeconds
+            }).ToList()
+        };
+        string? usageJson = null;
         try
         {
-            var usage = new ToolUsageData
-            {
-                Tools = snapshot.ProviderToolUsage.Tools.Select(tool => new ToolUsageItem
-                {
-                    ToolName = tool.ToolName, Count = tool.Count, DurationSeconds = tool.DurationSeconds
-                }).ToList()
-            };
+            usageJson = toolCostCalculationService.SerializeToolUsage(usage);
             var provider = context.Items.TryGetValue("ProviderType", out var providerValue) &&
                 Enum.TryParse<ProviderType>(providerValue?.ToString(), true, out var parsed)
                     ? parsed : ProviderType.OpenAI;
             var cost = await toolCostCalculationService.CalculateToolCostsAsync(usage, provider);
             var result = new ProviderToolPricingEvidence(
                 cost.Failed ? null : cost.TotalCost,
-                toolCostCalculationService.SerializeToolUsage(usage),
+                usageJson,
                 cost.Failed ? "Provider-hosted tool pricing failed" : null,
                 cost.HasUnconfiguredTools ? string.Join(", ", cost.UnconfiguredToolNames) : null);
             accounting.RecordProviderToolPricing(result);
@@ -56,7 +58,10 @@ public static class ProviderUsagePricing
         }
         catch (Exception exception)
         {
-            var result = new ProviderToolPricingEvidence(null, FailureReason: exception.Message);
+            var partial = exception as ToolCostCalculationException;
+            var result = new ProviderToolPricingEvidence(null, usageJson, exception.Message,
+                partial?.UnconfiguredToolNames.Count > 0 ? string.Join(", ", partial.UnconfiguredToolNames) : null,
+                partial?.KnownCost ?? 0m);
             accounting.RecordProviderToolPricing(result);
             return result;
         }
@@ -75,6 +80,7 @@ public static class ProviderUsagePricing
             var calls = snapshot.ProviderCalls.OrderBy(call => call.Iteration).ToList();
             var hasCalls = calls.Count > 0;
             var fallbackReasons = new List<string>();
+            var failures = new List<string>();
             var pricedCallCount = 0;
             var modelCostId = context.Items.TryGetValue(HttpContextKeys.ModelCostId, out var costId)
                 ? costId as int?
@@ -82,21 +88,29 @@ public static class ProviderUsagePricing
 
             async Task<decimal> CalculateCallAsync(Usage callUsage)
             {
-                var billingUsage = callUsage.CopyForBilling();
-                ApplyProviderBillingPolicy(context, billingUsage, includeAggregateReportedCost: !hasCalls);
-                var callCost = modelCostId is int id
-                    ? await costCalculationService.CalculateCostByIdAsync(id, billingUsage)
-                    : await costCalculationService.CalculateCostAsync(model, billingUsage);
-                if (!string.IsNullOrEmpty(billingUsage.PricingFallbackReason))
-                    fallbackReasons.Add(hasCalls
-                        ? $"iteration {calls[pricedCallCount].Iteration}: {billingUsage.PricingFallbackReason}"
-                        : billingUsage.PricingFallbackReason);
+                var label = hasCalls ? $"iteration {calls[pricedCallCount].Iteration}: " : string.Empty;
                 pricedCallCount++;
-                return callCost;
+                try
+                {
+                    var billingUsage = callUsage.CopyForBilling();
+                    ApplyProviderBillingPolicy(context, billingUsage, includeAggregateReportedCost: !hasCalls);
+                    var callCost = modelCostId is int id
+                        ? await costCalculationService.CalculateCostByIdAsync(id, billingUsage)
+                        : await costCalculationService.CalculateCostAsync(model, billingUsage);
+                    if (!string.IsNullOrEmpty(billingUsage.PricingFallbackReason))
+                        fallbackReasons.Add(label + billingUsage.PricingFallbackReason);
+                    return callCost;
+                }
+                catch (Exception exception)
+                {
+                    failures.Add(label + exception.Message);
+                    return 0m;
+                }
             }
 
             var cost = await BillingCostComposition.CalculateProviderCostAsync(calls, usage, CalculateCallAsync);
-            var result = new ProviderPricingEvidence(cost, string.Join("; ", fallbackReasons));
+            var result = new ProviderPricingEvidence(failures.Count == 0 ? cost : null,
+                string.Join("; ", fallbackReasons), failures.Count == 0 ? null : string.Join("; ", failures), cost);
             accounting.RecordProviderPricing(result);
             return result;
         }

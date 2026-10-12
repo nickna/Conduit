@@ -7,19 +7,25 @@ namespace ConduitLLM.Gateway.Middleware;
 
 public partial class UsageTrackingMiddleware
 {
-    private async Task<bool> RecordKnownStreamingSpendAsync(
+    private async Task<bool> RecordKnownIndeterminateSpendAsync(
         HttpContext context, int virtualKeyId, decimal knownCost,
         IBatchSpendUpdateService batchSpendService, IVirtualKeyRuntimeService virtualKeyService)
     {
         var accountingContext = context.GetOrCreateRequestAccountingContext();
+        const string reason = "Provider usage or pricing remains unresolved after request finalization";
+        accountingContext.MarkIndeterminate(reason);
         var snapshot = accountingContext.Snapshot();
         if (snapshot.Reservation is null)
-            return await RecordSpendOrSettleReservationAsync(
+            return knownCost == 0m || await RecordSpendOrSettleReservationAsync(
                 context, virtualKeyId, knownCost, batchSpendService, virtualKeyService);
 
-        const string reason = "Provider usage remains unresolved after streaming finalization";
-        accountingContext.MarkIndeterminate(reason);
-        var reservationService = context.RequestServices.GetRequiredService<ISpendReservationService>();
+        var reservationService = context.RequestServices.GetService<ISpendReservationService>();
+        if (reservationService is null)
+        {
+            _logger.LogCritical("Known spend could not be durably accepted for {BillingRequestId}: reservation service unavailable",
+                snapshot.BillingRequestId);
+            return false;
+        }
         var result = await reservationService.RecordKnownIndeterminateSpendAsync(
             virtualKeyId, snapshot.BillingRequestId, knownCost,
             snapshot.IndeterminateReason ?? reason, GetBillingTimestamp(context));
@@ -27,7 +33,7 @@ public partial class UsageTrackingMiddleware
             return true;
 
         _logger.LogCritical(
-            "Known streaming spend could not be durably accepted for {BillingRequestId}: {Status}",
+            "Known spend could not be durably accepted for {BillingRequestId}: {Status}",
             snapshot.BillingRequestId, result.Status);
         return false;
     }
@@ -64,11 +70,8 @@ public partial class UsageTrackingMiddleware
 
         if (snapshot.IsIndeterminate)
         {
-            await reservationService.MarkIndeterminateAsync(
-                virtualKeyId,
-                snapshot.BillingRequestId,
-                snapshot.IndeterminateReason ?? "Usage evidence is indeterminate");
-            return false;
+            return await RecordKnownIndeterminateSpendAsync(
+                context, virtualKeyId, actualCost, batchSpendService, virtualKeyService);
         }
 
         try

@@ -41,13 +41,21 @@ public sealed record ProviderUsageEvidence(
 public sealed record ProviderPricingEvidence(
     decimal? Cost,
     string? FallbackReason = null,
-    string? FailureReason = null);
+    string? FailureReason = null,
+    decimal KnownPartialCost = 0m)
+{
+    public decimal KnownCost => Cost ?? KnownPartialCost;
+}
 
 public sealed record ProviderToolPricingEvidence(
     decimal? Cost,
     string? UsageJson = null,
     string? FailureReason = null,
-    string? UnconfiguredToolNames = null);
+    string? UnconfiguredToolNames = null,
+    decimal KnownPartialCost = 0m)
+{
+    public decimal KnownCost => Cost ?? KnownPartialCost;
+}
 
 public sealed record StreamTransportEvidence(
     StreamTransportOutcome Outcome,

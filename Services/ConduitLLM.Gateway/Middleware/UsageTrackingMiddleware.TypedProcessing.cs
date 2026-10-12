@@ -136,27 +136,32 @@ public partial class UsageTrackingMiddleware
                 }).ToList()
             };
         decimal? providerToolCost = null;
+        decimal knownToolCost = 0m;
         string? providerToolUsageJson = null;
         if (providerToolUsage is not null)
         {
             var toolPricing = await ProviderUsagePricing.GetOrCalculateToolsAsync(context, toolCostCalculationService);
-            if (toolPricing.Cost is not decimal pricedToolCost)
-                throw new ToolCostCalculationException(toolPricing.FailureReason ?? "Provider-hosted tool pricing is unresolved");
+            if (toolPricing.Cost is null)
+                RecordToolPricingFailure(context, model, usage, toolPricing, billingAuditService);
             providerToolUsageJson = toolPricing.UsageJson;
-            providerToolCost = pricedToolCost;
+            providerToolCost = toolPricing.Cost;
+            knownToolCost = toolPricing.KnownCost;
         }
 
-        var totalCost = pricingResult.Cost + (providerToolCost ?? 0m) + snapshot.FunctionExecutionCost;
+        var indeterminate = context.GetRequestAccountingSnapshot()!.IsIndeterminate;
+        var totalCost = pricingResult.Cost + knownToolCost + snapshot.FunctionExecutionCost;
         var toolCallMetadata = snapshot.FunctionExecutions.Count > 0
             ? FunctionExecutionSerializer.SerializeFunctionExecutionResults(
                 snapshot.FunctionExecutions,
                 snapshot.BillingRequestId,
                 context.TraceIdentifier,
                 new FunctionExecutionCostBreakdown(
-                    pricingResult.Cost,
+                    pricingResult.Failed ? null : pricingResult.Cost,
                     snapshot.FunctionExecutionCost,
-                    providerToolCost ?? 0m,
-                    totalCost),
+                    providerToolUsage is null ? 0m : providerToolCost,
+                    totalCost,
+                    pricingResult.Failed ? pricingResult.Cost : null,
+                    providerToolUsage is not null && providerToolCost is null ? knownToolCost : null),
                 providerToolUsage)
             : snapshot.StreamingToolCalls.Count > 0
             ? JsonSerializer.Serialize(
@@ -195,7 +200,12 @@ public partial class UsageTrackingMiddleware
         RecordPromptCachingMetrics(context, usage, model, providerType);
         await RecordPromptCachingSavingsAsync(context, costCalculationService, model, usage);
 
-        if (totalCost > 0m)
+        if (indeterminate)
+        {
+            await RecordKnownIndeterminateSpendAsync(context, virtualKeyId, totalCost,
+                batchSpendService, virtualKeyService);
+        }
+        else if (totalCost > 0m)
         {
             if (await RecordSpendOrSettleReservationAsync(
                     context,
