@@ -278,8 +278,9 @@ public sealed class AdminContractEndpointFilterTests
                             $"UPDATE \"VirtualKeyGroups\" SET \"RowVersion\" = {rowVersion} WHERE \"Id\" = {id}");
                         break;
                     case "ip-filters":
-                        await db.Database.ExecuteSqlInterpolatedAsync(
-                            $"UPDATE \"IpFilters\" SET \"RowVersion\" = {rowVersion} WHERE \"Id\" = {id}");
+                        await db.Database.ExecuteSqlRawAsync(
+                            "UPDATE \"IpFilters\" SET \"RowVersion\" = {0} WHERE \"Id\" = {1}",
+                            rowVersion, id);
                         break;
                 }
             }
