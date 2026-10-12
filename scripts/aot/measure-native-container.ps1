@@ -306,20 +306,33 @@ function Protect-PrivatePath([string] $Path, [switch] $Directory) {
 function ConvertTo-ContainerUrl([string] $Value, [string[]] $Schemes) {
     try {
         $uri = $null
-        if ([string]::IsNullOrWhiteSpace($Value) -or $Value -match '[\r\n\x00]' -or
+        if ([string]::IsNullOrWhiteSpace($Value) -or $Value -cne $Value.Trim() -or $Value -match '[\x00-\x1f\x7f]' -or
             -not [Uri]::TryCreate($Value, [UriKind]::Absolute, [ref]$uri) -or
             $uri.Scheme -cnotin $Schemes -or [string]::IsNullOrEmpty($uri.Host)) {
             throw 'Invalid backing-service configuration.'
         }
-        if (-not $uri.IsLoopback) { return $uri.AbsoluteUri }
+        if (-not $uri.IsLoopback) { return $Value }
 
-        # UriBuilder cannot round-trip a Redis password with an empty username.
-        # Build only the replacement authority from parsed, escaped components.
+        # Change only the original hostname. URI canonicalization invents a
+        # slash for bare Redis endpoints and can change escaped credentials.
+        $authorityStart = $Value.IndexOf('://', [StringComparison]::Ordinal) + 3
+        if ($authorityStart -lt 3) { throw 'Invalid backing-service configuration.' }
+        $authorityEnd = $Value.IndexOfAny([char[]]'/?#', $authorityStart)
+        if ($authorityEnd -lt 0) { $authorityEnd = $Value.Length }
+        $authority = $Value.Substring($authorityStart, $authorityEnd - $authorityStart)
+        $hostStart = $authority.LastIndexOf('@') + 1
+        $hostAndPort = $authority.Substring($hostStart)
+        $hostLength = if ($hostAndPort.StartsWith('[', [StringComparison]::Ordinal)) {
+            $hostAndPort.IndexOf(']') + 1
+        }
+        else {
+            $portStart = $hostAndPort.IndexOf(':')
+            if ($portStart -lt 0) { $hostAndPort.Length } else { $portStart }
+        }
+        if ($hostLength -le 0) { throw 'Invalid backing-service configuration.' }
+        $rewritten = $Value.Substring(0, $authorityStart) + $authority.Substring(0, $hostStart) +
+            'host.docker.internal' + $hostAndPort.Substring($hostLength) + $Value.Substring($authorityEnd)
         $userInfo = $uri.GetComponents([UriComponents]::UserInfo, [UriFormat]::UriEscaped)
-        $authority = if ($userInfo.Length -gt 0) { $userInfo + '@host.docker.internal' }
-            else { 'host.docker.internal' }
-        if ($uri.Port -ge 0) { $authority += ':' + $uri.Port.ToString([Globalization.CultureInfo]::InvariantCulture) }
-        $rewritten = $uri.Scheme + '://' + $authority + $uri.AbsolutePath + $uri.Query + $uri.Fragment
         $result = $null
         if (-not [Uri]::TryCreate($rewritten, [UriKind]::Absolute, [ref]$result) -or
             $result.Host -cne 'host.docker.internal' -or $result.Scheme -cne $uri.Scheme -or
@@ -328,7 +341,7 @@ function ConvertTo-ContainerUrl([string] $Value, [string[]] $Schemes) {
             $result.GetComponents([UriComponents]::UserInfo, [UriFormat]::UriEscaped) -cne $userInfo) {
             throw 'Invalid backing-service configuration.'
         }
-        return $result.AbsoluteUri
+        return $rewritten
     }
     catch { throw 'Invalid backing-service configuration.' }
 }

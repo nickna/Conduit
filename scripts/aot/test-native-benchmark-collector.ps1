@@ -271,6 +271,8 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     [IO.File]::WriteAllText((Join-Path $caseRoot 'native-image.json'), (ConvertTo-Json -InputObject $packageFixture.image -Depth 32))
     [IO.File]::WriteAllText((Join-Path $caseRoot 'native-selected.json'), (ConvertTo-Json -InputObject $packageFixture.oci.selectedDescriptor -Depth 32))
     [IO.File]::WriteAllText((Join-Path $caseRoot 'expected-admin.key'), $privateKey)
+    [IO.File]::WriteAllText((Join-Path $caseRoot 'expected-redis.url'),
+        ('redis://:' + $privateRedisPassword + '@host.docker.internal:6379'))
     $caseEnvironmentPath = Join-Path $caseRoot 'input.env'
     $caseEnvironmentLines = @('database_url=postgresql://ignored:ignored@localhost:1/ignored',
         'redis_url=redis://localhost:1/0', 'conduit_migration_mode=Skip',
@@ -289,7 +291,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         NativeImage = if ($Scenario -cin @('package-dirty', 'package-unavailable', 'package-hold')) { $selectedFixture.requestedImage } else { $packageFixture.requestedImage }
         NativePackagingDirectory = $packageDirectory
         DatabaseUrl = 'postgresql://fixture:' + $privateDatabasePassword + '@127.0.0.1:5432/fixture'
-        RedisUrl = 'redis://:' + $privateRedisPassword + '@127.0.0.1:6379/0'
+        RedisUrl = 'redis://:' + $privateRedisPassword + '@127.0.0.1:6379'
         WorkloadConfigurationPaths = $configurationPaths
         WorkloadProbePath = $probePath
         EnvironmentEvidencePath = $environmentPath
@@ -1026,6 +1028,9 @@ if ($Mode -eq 'docker') {
                 throw 'Mandatory environment name was not canonicalized.'
             }
         }
+        if ($environmentValues['REDIS_URL'] -cne [IO.File]::ReadAllText((Join-Path $root 'expected-redis.url'))) {
+            throw 'Backing-service URL changed beyond its loopback hostname.'
+        }
         if ($environmentValues['CONDUIT_MIGRATION_MODE'] -cne 'Wait' -or
             $environmentValues['ConduitLLM__Messaging__Wolverine__AutoProvision'] -cne 'false' -or
             $environmentValues['ASPNETCORE_URLS'] -cne 'http://+:8080' -or
@@ -1233,31 +1238,68 @@ throw 'Unknown fixture mode.'
         Invoke-Expression $definition.Extent.Text
     }
     # These are public fixture credentials, not a connection to any service.
-    # Assert URI components independently so host translation cannot silently
-    # remove an empty Redis username's password or re-escape existing userinfo.
+    # Assert exact strings as well as parsed components: an invented slash on a
+    # bare Redis endpoint looks equivalent to System.Uri but breaks startup.
     $uriCases = @(
         @{ input = 'redis://:fixture-pass@127.0.0.1:6379/2'; schemes = @('redis', 'rediss');
+            expected = 'redis://:fixture-pass@host.docker.internal:6379/2';
             scheme = 'redis'; host = 'host.docker.internal'; port = 6379; path = '/2'; userInfo = ':fixture-pass' },
         @{ input = 'rediss://fixture:pass%40word%3Avalue@localhost:6380/3'; schemes = @('redis', 'rediss');
+            expected = 'rediss://fixture:pass%40word%3Avalue@host.docker.internal:6380/3';
             scheme = 'rediss'; host = 'host.docker.internal'; port = 6380; path = '/3'; userInfo = 'fixture:pass%40word%3Avalue' },
         @{ input = 'postgresql://fixture:fixture-pass@[::1]:5434/owned'; schemes = @('postgres', 'postgresql');
+            expected = 'postgresql://fixture:fixture-pass@host.docker.internal:5434/owned';
             scheme = 'postgresql'; host = 'host.docker.internal'; port = 5434; path = '/owned'; userInfo = 'fixture:fixture-pass' },
         @{ input = 'postgres://fixture:pass%40word@localhost:5433/owned'; schemes = @('postgres', 'postgresql');
+            expected = 'postgres://fixture:pass%40word@host.docker.internal:5433/owned';
             scheme = 'postgres'; host = 'host.docker.internal'; port = 5433; path = '/owned'; userInfo = 'fixture:pass%40word' },
         @{ input = 'redis://:fixture-pass@redis.example.invalid:6381/4'; schemes = @('redis', 'rediss');
-            scheme = 'redis'; host = 'redis.example.invalid'; port = 6381; path = '/4'; userInfo = ':fixture-pass' }
+            expected = 'redis://:fixture-pass@redis.example.invalid:6381/4';
+            scheme = 'redis'; host = 'redis.example.invalid'; port = 6381; path = '/4'; userInfo = ':fixture-pass' },
+        @{ input = 'redis://172.17.0.3:6379'; schemes = @('redis', 'rediss');
+            expected = 'redis://172.17.0.3:6379';
+            scheme = 'redis'; host = '172.17.0.3'; port = 6379; path = '/'; userInfo = '' },
+        @{ input = 'redis://localhost:6379'; schemes = @('redis', 'rediss');
+            expected = 'redis://host.docker.internal:6379';
+            scheme = 'redis'; host = 'host.docker.internal'; port = 6379; path = '/'; userInfo = '' },
+        @{ input = 'redis://:fixture-pass@127.0.0.1:6379'; schemes = @('redis', 'rediss');
+            expected = 'redis://:fixture-pass@host.docker.internal:6379';
+            scheme = 'redis'; host = 'host.docker.internal'; port = 6379; path = '/'; userInfo = ':fixture-pass' },
+        @{ input = 'redis://localhost:6379/'; schemes = @('redis', 'rediss');
+            expected = 'redis://host.docker.internal:6379/';
+            scheme = 'redis'; host = 'host.docker.internal'; port = 6379; path = '/'; userInfo = '' },
+        @{ input = 'redis://[::1]:6379'; schemes = @('redis', 'rediss');
+            expected = 'redis://host.docker.internal:6379';
+            scheme = 'redis'; host = 'host.docker.internal'; port = 6379; path = '/'; userInfo = '' },
+        @{ input = 'rediss://fixture:pass%40word%3Avalue@redis.example.invalid:6380/2?mode=%2F#part'; schemes = @('redis', 'rediss');
+            expected = 'rediss://fixture:pass%40word%3Avalue@redis.example.invalid:6380/2?mode=%2F#part';
+            scheme = 'rediss'; host = 'redis.example.invalid'; port = 6380; path = '/2'; userInfo = 'fixture:pass%40word%3Avalue';
+            query = '?mode=%2F'; fragment = '#part' },
+        @{ input = 'redis://localhost:06379'; schemes = @('redis', 'rediss');
+            expected = 'redis://host.docker.internal:06379';
+            scheme = 'redis'; host = 'host.docker.internal'; port = 6379; path = '/'; userInfo = '' },
+        @{ input = 'rediss://fixture:pass%40word%3Avalue@localhost:6380/2?mode=%2F#part'; schemes = @('redis', 'rediss');
+            expected = 'rediss://fixture:pass%40word%3Avalue@host.docker.internal:6380/2?mode=%2F#part';
+            scheme = 'rediss'; host = 'host.docker.internal'; port = 6380; path = '/2'; userInfo = 'fixture:pass%40word%3Avalue';
+            query = '?mode=%2F'; fragment = '#part' }
     )
     foreach ($uriCase in $uriCases) {
         $translatedText = ConvertTo-ContainerUrl $uriCase.input $uriCase.schemes
+        Assert-Contract ($translatedText -ceq $uriCase.expected) 'Backing-service host translation changed the exact URI beyond its hostname.'
         $translated = $null
         Assert-Contract ([Uri]::TryCreate($translatedText, [UriKind]::Absolute, [ref]$translated)) 'Translated backing-service URI is malformed.'
         Assert-Contract ($translated.Scheme -ceq $uriCase.scheme -and $translated.Host -ceq $uriCase.host -and
             $translated.Port -eq $uriCase.port -and $translated.AbsolutePath -ceq $uriCase.path -and
-            $translated.UserInfo -ceq $uriCase.userInfo -and $translated.Query.Length -eq 0 -and
-            $translated.Fragment.Length -eq 0) 'Backing-service host translation changed URI credentials or other components.'
+            $translated.UserInfo -ceq $uriCase.userInfo -and $translated.Query -ceq [string]$uriCase.query -and
+            $translated.Fragment -ceq [string]$uriCase.fragment) 'Backing-service host translation changed URI credentials or other components.'
         $cases++
     }
-    foreach ($invalidUri in @('http://127.0.0.1:6379/0', ('redis://127.0.0.1:6379/0' + [char]10))) {
+    foreach ($invalidUri in @('http://127.0.0.1:6379/0', ('redis://127.0.0.1:6379/0' + [char]10),
+        ' redis://localhost:6379', 'redis://localhost:6379 ',
+        ([char]9 + 'redis://localhost:6379'), ('redis://localhost:6379' + [char]9),
+        ' redis://172.17.0.3:6379', 'redis://172.17.0.3:6379 ',
+        ([char]9 + 'redis://172.17.0.3:6379'), ('redis://172.17.0.3:6379' + [char]9),
+        ('redis://local' + [char]9 + 'host:6379'), ('redis://localhost:6379' + [char]127))) {
         $uriFailure = $null
         try { $unexpectedUri = ConvertTo-ContainerUrl $invalidUri @('redis', 'rediss') }
         catch { $uriFailure = $_.Exception.Message }
