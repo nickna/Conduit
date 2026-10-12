@@ -465,6 +465,93 @@ complete native repository-suite qualification, or production readiness.
 Remaining owner failures still require fixes or verified replacements, and
 production remains JIT under ADR 0006.
 
+## Complete virtual-key queries with scalar snapshots
+
+All five public methods in `EfVirtualKeyRuntimeStore` now use local scalar query
+inputs. The two key reads project the same 18 key and 14 group fields into flat
+anonymous snapshots, then construct the original DTO graph after the awaited
+read. The three balance-state reads are complete expressions in their original
+duplicate, applied-update and unique-violation recovery contexts; their applied
+flags remain false, true and false. Context creation still receives the original
+token at each original boundary. Validation, detached reads, cardinality, key-ID
+ordering, execution strategy, transaction/rollback, idempotency validation,
+ledger creation, context disposal, and timestamp evaluation points are preserved.
+Both timestamp setters use row-value lambdas, and both decimal comparisons use
+explicit `0m` without changing signed-zero balance arithmetic.
+
+A first local-copy candidate was measured and rejected without applying it.
+It removed the original eight signatures but introduced four replacements:
+required-member DTO initialization failures in both reads, a decimal literal
+translation failure in the balance update, and a scalar timestamp funcletizer
+failure in touch. Totals changed from 502/233 to 494/229 renderings/signatures,
+leaving eight focused renderings. Inspection of pinned EF 10.0.12 source at
+`95017c711e6afc1085133d440e42b4bd78155701` informed the accepted scalar-snapshot,
+decimal-literal and timestamp-lambda variant. The source mechanisms and observed
+stacks are retained; the exact null-state cause in the funcletizer was inferred,
+not instrumented. The timestamp failure family remains tracked in
+[#1660](https://github.com/nickna/Conduit/issues/1660); a focused projection/decimal
+compiler reduction is an open follow-up in
+[#1667](https://github.com/nickna/Conduit/issues/1667).
+
+The accepted fresh Configuration-owner comparison starts from `7f887caca` with
+EF runtime/Design/Tasks/CLI 10.0.12 and Npgsql provider 10.0.3. Both managed build
+controls pass. Both precompiler commands still exit 1, but all 16 focused error
+renderings across eight signatures disappear, with no added signature or shared
+rendering-count change. Totals change from 502 renderings across 233 signatures
+to 486 across 225; every unrelated signature and rendering count is unchanged.
+Actual source/token/span/SARIF/checksum and type bindings cover all 29 before and
+37 after owner callsites, eight before and ten after terminal/update targets,
+both complete 32-field projections, all 22 scalar alias evaluation points and
+all three complete state reads. Global inventory counts change from 1,253 to
+1,261. These are compiler callsite counts, not executed SQL statements.
+
+The comparison seals 582 references, including the rejected first candidate;
+all 432 sealed references from the rejected comparison are unchanged. The mutable focused working source
+is excluded from that immutable set and guarded separately; the original before
+source and accepted variant remain retained. The comparison receipt is
+`0da546f683e01c073c34fc9390bb630a05a0be26d09bb0f75cce8f54a754ddea`;
+independent original-source/token/SARIF/compiler-input/log replay is
+`3915448d2d1963648c25337cebafeb60f19adad501343bc6c041afca1fcc46fb`.
+The source-application receipt is
+`1885de46db9f33c3e4ea3aba1e6e94bc185eaa29f80b5d5a50a8b3c7656a1480`.
+The compiler experiment produced no generated files or native process and
+executed no database queries.
+
+The exact applied variant passes all 19 selected real PostgreSQL 16.15 cases
+without failures or skips: five virtual-key runtime parity rows, eleven legacy
+ledger replay rows and three financial precision rows. Sixteen rows exercise
+runtime persistence contracts; three exercise only the recovery script. The
+new runtime cases cover complete enabled/disabled and optional-null snapshots,
+all key/group fields, detached row-version mutation, group and ordered-hash
+isolation, caller-supplied touch timestamps, misses, and touch without a ledger
+entry. Both EF and typed Npgsql cancel all five operations before execution,
+during occupied single-slot pool acquisition, and during observed PostgreSQL
+lock waits, then recover using the same store and pool. The balance cancellation
+case reaches the held ledger-insertion lock after the balance update and verifies
+rollback of the complete group snapshot and ledger count. Existing exact decimal,
+concurrent replay, identity-conflict, approval and migration contracts pass
+without rewriting the ledger or financial test classes. These cases do not force
+every execution-strategy retry or unique-violation catch branch; that explicit
+coverage gap remains a non-blocking follow-up in
+[#1666](https://github.com/nickna/Conduit/issues/1666), with no demonstrated
+production failure.
+
+All 255 frozen inputs and byte copies are unchanged at four stages. The 38 joined
+commands retain all 76 output streams. Both owned PostgreSQL and Redis 7.4.2
+fixtures were removed and verified absent by ID and name, all four schema-prefix
+checks returned zero, and protected image references were unchanged. The managed
+PostgreSQL receipt is
+`ed257373b62d5a0603e4f9dd9439ba72e557a2ba60540bad7c20be18fb5c3d65`;
+the original 19-row TRX is
+`728a0a930cdcdb50dd54026587816e9f2d91e416b4935ad5ff724c455a7f2510`.
+Independent source, exact TRX-identity, raw-command, fixture-ownership and cleanup
+replay is `adb9d85e2d48bc63c5b8a088ec14b2df3eaf98020a9f33a3c71e4133c223b22c`.
+
+Removing all focused diagnostics does not establish generated-query execution,
+complete native repository-suite qualification, or production readiness.
+Both new follow-ups remain open. #1373 and #1375 remain open, and production
+remains JIT under ADR 0006.
+
 ## Local copies for function pricing selection
 
 `EfFunctionPricingRuntimeStore.FindEligibleCostAsync` copies the configuration ID,
