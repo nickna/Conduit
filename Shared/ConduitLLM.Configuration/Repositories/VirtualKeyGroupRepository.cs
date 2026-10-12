@@ -161,6 +161,25 @@ public class VirtualKeyGroupRepository : RepositoryBase<VirtualKeyGroup, int>, I
         return await AdjustBalanceAsync(groupId, amount, description, initiatedBy, ReferenceType.Manual, null);
     }
 
+    public async Task<VirtualKeyGroup?> AdjustBalanceConditionalAsync(int groupId, decimal amount,
+        string? description, string? initiatedBy, ResourcePrecondition precondition, CancellationToken cancellationToken)
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await ResourceMutationGuard.ExecuteAsync<VirtualKeyGroup, VirtualKeyGroup>(db, groupId, precondition,
+            async (context, group, ct) =>
+            {
+                // The guard already holds the row lock: counters and ledger use this same transaction.
+                group.Balance += amount;
+                if (amount > 0) group.LifetimeCreditsAdded += amount;
+                else group.LifetimeSpent += Math.Abs(amount);
+                group.UpdatedAt = DateTime.UtcNow;
+                context.VirtualKeyGroupTransactions.Add(CreateTransaction(groupId, amount, group.Balance,
+                    amount > 0 ? TransactionType.Credit : TransactionType.Debit, ReferenceType.Manual,
+                    description ?? (amount > 0 ? "Credits added" : "Usage deducted"), initiatedBy: initiatedBy ?? "System"));
+                await context.Entry(group).Collection(entity => entity.VirtualKeys).LoadAsync(ct);
+            }, group => group, cancellationToken);
+    }
+
     /// <inheritdoc />
     public Task<decimal> AdjustBalanceAsync(int groupId, decimal amount, string? description, string? initiatedBy, ReferenceType referenceType, string? referenceId = null)
         => AdjustBalanceInternalAsync(groupId, amount, description, initiatedBy, referenceType, referenceId, null);

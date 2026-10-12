@@ -5,6 +5,10 @@ namespace ConduitLLM.Core.Models
     /// </summary>
     public class RefundResult
     {
+        /// <summary>Server-only version of the guarded group snapshot.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? ResourceETag { get; set; }
+
         /// <summary>
         /// Gets or sets the model ID for which the refund was calculated.
         /// </summary>

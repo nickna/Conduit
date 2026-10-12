@@ -1,3 +1,4 @@
+using ConduitLLM.Configuration.Utilities;
 using ConduitLLM.Configuration.DTOs.IpFilter;
 
 namespace ConduitLLM.Admin.Interfaces;
@@ -47,6 +48,8 @@ public interface IAdminIpFilterService
     /// <param name="filter">The filter to update</param>
     /// <returns>Success result with error message if failed</returns>
     Task<(bool Success, string? ErrorMessage)> UpdateFilterAsync(int id, UpdateIpFilterDto filter);
+    Task<(bool Success, string? ErrorMessage, IpFilterDto? Filter)> UpdateFilterConditionalAsync(
+        int id, UpdateIpFilterDto filter, ResourcePrecondition precondition, CancellationToken cancellationToken);
 
     /// <summary>
     /// Deletes an IP filter
@@ -54,6 +57,8 @@ public interface IAdminIpFilterService
     /// <param name="id">The ID of the filter to delete</param>
     /// <returns>Success result with error message if failed</returns>
     Task<(bool Success, string? ErrorMessage)> DeleteFilterAsync(int id);
+    Task<(bool Success, string? ErrorMessage)> DeleteFilterConditionalAsync(
+        int id, ResourcePrecondition precondition, CancellationToken cancellationToken);
 
     /// <summary>
     /// Gets the current IP filter settings

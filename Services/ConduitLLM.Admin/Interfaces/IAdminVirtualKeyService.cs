@@ -1,5 +1,6 @@
 using ConduitLLM.Configuration.DTOs;
 using ConduitLLM.Configuration.DTOs.VirtualKey;
+using ConduitLLM.Configuration.Utilities;
 
 namespace ConduitLLM.Admin.Interfaces;
 
@@ -36,6 +37,8 @@ public interface IAdminVirtualKeyService
     /// <param name="request">The update request with new properties</param>
     /// <returns>True if the update was successful, false otherwise</returns>
     Task<bool> UpdateVirtualKeyAsync(int id, UpdateVirtualKeyRequestDto request);
+    Task<VirtualKeyUpdateResult?> UpdateVirtualKeyConditionalAsync(int id,
+        UpdateVirtualKeyRequestDto request, ResourcePrecondition precondition, CancellationToken cancellationToken);
 
     /// <summary>
     /// Deletes a virtual key
@@ -44,6 +47,7 @@ public interface IAdminVirtualKeyService
     /// <returns>True if the deletion was successful, false otherwise</returns>
     Task<bool> DeleteVirtualKeyAsync(int id);
     Task<bool> DeleteVirtualKeyAsync(int id, CancellationToken cancellationToken);
+    Task<bool> DeleteVirtualKeyConditionalAsync(int id, ResourcePrecondition precondition, CancellationToken cancellationToken);
 
 
     /// <summary>
@@ -102,3 +106,5 @@ public interface IAdminVirtualKeyService
     /// <returns>Usage information for the virtual key, or null if not found</returns>
     Task<VirtualKeyUsageDto?> GetUsageByKeyAsync(string keyValue);
 }
+
+public sealed record VirtualKeyUpdateResult(VirtualKeyDto Before, VirtualKeyDto Current);

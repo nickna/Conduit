@@ -1,4 +1,5 @@
 using ConduitLLM.Core.Models;
+using ConduitLLM.Configuration.Utilities;
 
 namespace ConduitLLM.Admin.Interfaces;
 
@@ -7,6 +8,10 @@ namespace ConduitLLM.Admin.Interfaces;
 /// </summary>
 public interface IRefundService
 {
+    Task<RefundResult> ProcessRefundConditionalAsync(int virtualKeyGroupId, string modelId,
+        Usage originalUsage, Usage refundUsage, string refundReason, string originalTransactionId,
+        string idempotencyKey, string initiatedBy, string? initiatedByUserId, int? requestLogId,
+        ResourcePrecondition precondition, CancellationToken cancellationToken);
     /// <summary>
     /// Processes a refund for a virtual key group
     /// </summary>

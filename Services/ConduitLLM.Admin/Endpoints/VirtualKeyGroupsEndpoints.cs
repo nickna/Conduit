@@ -1,3 +1,5 @@
+using ConduitLLM.Configuration;
+using ConduitLLM.Configuration.Utilities;
 using ConduitLLM.Core.OpenApi;
 using System.Diagnostics.CodeAnalysis;
 
@@ -70,16 +72,16 @@ namespace ConduitLLM.Admin.Endpoints
             group.MapPost("/", ([FromServices] VirtualKeyGroupsEndpoints endpoints, CreateVirtualKeyGroupRequestDto request) => endpoints.CreateGroup(request))
                 .WithName("VirtualKeyGroups_Create")
                 .WithSummary("Create a new virtual key group").Produces<VirtualKeyGroupDto>(StatusCodes.Status201Created);
-            group.MapPatch("/{id}", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id, JsonMergePatch<UpdateVirtualKeyGroupRequestDto> patch) => endpoints.UpdateGroup(id, patch.Value))
+            group.MapPatch("/{id}", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id, JsonMergePatch<UpdateVirtualKeyGroupRequestDto> patch, HttpContext context) => endpoints.UpdateGroup(id, patch.Value, VersionedResourceEndpointFilter.ReadPrecondition(context), context.RequestAborted))
                 .AcceptsJsonMergePatch<UpdateVirtualKeyGroupRequestDto>()
                 .WithName("VirtualKeyGroups_Update")
                 .WithSummary("Update a virtual key group")
                 .WithParameterDescription("id", "Identifier of the Virtual Key Groups resource.").Produces<VirtualKeyGroupDto>().Produces(StatusCodes.Status404NotFound);
-            group.MapPost("/{id}/adjust-balance", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id, AdjustBalanceDto request) => endpoints.AdjustBalance(id, request))
+            group.MapPost("/{id}/adjust-balance", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id, AdjustBalanceDto request, HttpContext context) => endpoints.AdjustBalance(id, request, VersionedResourceEndpointFilter.ReadPrecondition(context), context.RequestAborted))
                 .WithName("VirtualKeyGroups_AdjustBalance")
                 .WithSummary("Adjust the balance of a virtual key group")
                 .WithParameterDescription("id", "Identifier of the Virtual Key Groups resource.").Produces<VirtualKeyGroupDto>().Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
-            group.MapDelete("/{id}", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id) => endpoints.DeleteGroup(id))
+            group.MapDelete("/{id}", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id, HttpContext context) => endpoints.DeleteGroup(id, VersionedResourceEndpointFilter.ReadPrecondition(context), context.RequestAborted))
                 .WithName("VirtualKeyGroups_Delete")
                 .WithSummary("Delete a virtual key group")
                 .WithParameterDescription("id", "Identifier of the Virtual Key Groups resource.").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound);
@@ -93,7 +95,7 @@ namespace ConduitLLM.Admin.Endpoints
                 .WithName("VirtualKeyGroups_GetKeys")
                 .WithSummary("Get virtual keys in a group")
                 .WithParameterDescription("id", "Identifier of the Virtual Key Groups resource.").Produces<List<VirtualKeyDto>>().Produces(StatusCodes.Status404NotFound);
-            group.MapPost("/{id}/refund", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id, ProcessRefundRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey) => endpoints.ProcessRefund(id, request, idempotencyKey))
+            group.MapPost("/{id}/refund", ([FromServices] VirtualKeyGroupsEndpoints endpoints, int id, ProcessRefundRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, HttpContext context) => endpoints.ProcessRefund(id, request, idempotencyKey, VersionedResourceEndpointFilter.ReadPrecondition(context), context.RequestAborted))
                 .WithName("VirtualKeyGroups_Refund")
                 .WithParameterDescription("Idempotency-Key", "Client-supplied key for deduplicating repeated requests. Reuse the same key only for the same intended operation.")
                 .WithSummary("Process a refund for a virtual key group")
@@ -167,63 +169,89 @@ namespace ConduitLLM.Admin.Endpoints
         /// <summary>
         /// Update a virtual key group
         /// </summary>
-        public async Task<IResult> UpdateGroup(int id, UpdateVirtualKeyGroupRequestDto request)
+        public async Task<IResult> UpdateGroup(int id, UpdateVirtualKeyGroupRequestDto request,
+            ResourcePrecondition? precondition = null, CancellationToken cancellationToken = default)
         {
-            var group = await _groupRepository.GetByIdAsync(id);
-            if (group == null)
-                throw new KeyNotFoundException();
-
             var changes = new List<(string Property, string? OldValue, string? NewValue)>();
-
-            if (request.TryGetPatchedProperty(nameof(request.GroupName), group.GroupName, out string? groupName))
-            {
-                if (string.IsNullOrWhiteSpace(groupName))
-                    throw new InvalidOperationException("groupName cannot be null or empty.");
-                changes.Add(("GroupName", group.GroupName, groupName));
-                group.GroupName = groupName;
-            }
-
-            if (request.TryGetPatchedProperty(nameof(request.ExternalGroupId), group.ExternalGroupId, out string? externalGroupId))
-            {
-                changes.Add(("ExternalGroupId", group.ExternalGroupId, externalGroupId));
-                group.ExternalGroupId = externalGroupId;
-            }
-
             var rateLimitsChanged = false;
-
-            if (request.TryGetPatchedProperty(nameof(request.RateLimitRpm), group.RateLimitRpm, out int? rateLimitRpm) &&
-                group.RateLimitRpm != rateLimitRpm)
+            var keyCount = 0;
+            void ApplyPatch(VirtualKeyGroup group)
             {
-                changes.Add(("RateLimitRpm", group.RateLimitRpm?.ToString(), rateLimitRpm?.ToString()));
-                group.RateLimitRpm = rateLimitRpm;
-                rateLimitsChanged = true;
+                if (request.TryGetPatchedProperty(nameof(request.GroupName), group.GroupName, out string? groupName))
+                {
+                    if (string.IsNullOrWhiteSpace(groupName))
+                        throw new InvalidOperationException("groupName cannot be null or empty.");
+                    if (group.GroupName != groupName)
+                    {
+                        changes.Add(("GroupName", group.GroupName, groupName));
+                        group.GroupName = groupName;
+                    }
+                }
+
+                if (request.TryGetPatchedProperty(nameof(request.ExternalGroupId), group.ExternalGroupId, out string? externalGroupId) && group.ExternalGroupId != externalGroupId)
+                {
+                    changes.Add(("ExternalGroupId", group.ExternalGroupId, externalGroupId));
+                    group.ExternalGroupId = externalGroupId;
+                }
+
+                if (request.TryGetPatchedProperty(nameof(request.RateLimitRpm), group.RateLimitRpm, out int? rateLimitRpm) &&
+                    group.RateLimitRpm != rateLimitRpm)
+                {
+                    changes.Add(("RateLimitRpm", group.RateLimitRpm?.ToString(), rateLimitRpm?.ToString()));
+                    group.RateLimitRpm = rateLimitRpm;
+                    rateLimitsChanged = true;
+                }
+
+                if (request.TryGetPatchedProperty(nameof(request.RateLimitRpd), group.RateLimitRpd, out int? rateLimitRpd) &&
+                    group.RateLimitRpd != rateLimitRpd)
+                {
+                    changes.Add(("RateLimitRpd", group.RateLimitRpd?.ToString(), rateLimitRpd?.ToString()));
+                    group.RateLimitRpd = rateLimitRpd;
+                    rateLimitsChanged = true;
+                }
+
+                if (request.TryGetPatchedProperty(nameof(request.RateLimitTpm), group.RateLimitTpm, out int? rateLimitTpm) &&
+                    group.RateLimitTpm != rateLimitTpm)
+                {
+                    changes.Add(("RateLimitTpm", group.RateLimitTpm?.ToString(), rateLimitTpm?.ToString()));
+                    group.RateLimitTpm = rateLimitTpm;
+                    rateLimitsChanged = true;
+                }
+
+                if (request.TryGetPatchedProperty(nameof(request.MaxParallelRequests), group.MaxParallelRequests, out int? maxParallelRequests) &&
+                    group.MaxParallelRequests != maxParallelRequests)
+                {
+                    changes.Add(("MaxParallelRequests", group.MaxParallelRequests?.ToString(), maxParallelRequests?.ToString()));
+                    group.MaxParallelRequests = maxParallelRequests;
+                    rateLimitsChanged = true;
+                }
+
             }
 
-            if (request.TryGetPatchedProperty(nameof(request.RateLimitRpd), group.RateLimitRpd, out int? rateLimitRpd) &&
-                group.RateLimitRpd != rateLimitRpd)
+            VirtualKeyGroupDto dto;
+            if (precondition is null)
             {
-                changes.Add(("RateLimitRpd", group.RateLimitRpd?.ToString(), rateLimitRpd?.ToString()));
-                group.RateLimitRpd = rateLimitRpd;
-                rateLimitsChanged = true;
+                var group = await _groupRepository.GetByIdAsync(id) ?? throw new KeyNotFoundException();
+                ApplyPatch(group);
+                await _groupRepository.UpdateAsync(group);
+                dto = VirtualKeyGroupDto.FromEntity(group);
             }
-
-            if (request.TryGetPatchedProperty(nameof(request.RateLimitTpm), group.RateLimitTpm, out int? rateLimitTpm) &&
-                group.RateLimitTpm != rateLimitTpm)
+            else
             {
-                changes.Add(("RateLimitTpm", group.RateLimitTpm?.ToString(), rateLimitTpm?.ToString()));
-                group.RateLimitTpm = rateLimitTpm;
-                rateLimitsChanged = true;
+                var db = _context as ConduitDbContext ?? throw new InvalidOperationException("Conditional group updates require a database context.");
+                dto = await ResourceMutationGuard.ExecuteAsync<VirtualKeyGroup, VirtualKeyGroupDto>(db, id, precondition,
+                    async (context, group, ct) =>
+                    {
+                        ApplyPatch(group);
+                        if (changes.Count > 0) group.UpdatedAt = DateTime.UtcNow;
+                        keyCount = await context.VirtualKeys.CountAsync(key => key.VirtualKeyGroupId == id, ct);
+                    }, group =>
+                    {
+                        var snapshot = VirtualKeyGroupDto.FromEntity(group);
+                        snapshot.VirtualKeyCount = keyCount;
+                        return snapshot;
+                    }, cancellationToken) ?? throw new KeyNotFoundException();
             }
-
-            if (request.TryGetPatchedProperty(nameof(request.MaxParallelRequests), group.MaxParallelRequests, out int? maxParallelRequests) &&
-                group.MaxParallelRequests != maxParallelRequests)
-            {
-                changes.Add(("MaxParallelRequests", group.MaxParallelRequests?.ToString(), maxParallelRequests?.ToString()));
-                group.MaxParallelRequests = maxParallelRequests;
-                rateLimitsChanged = true;
-            }
-
-            await _groupRepository.UpdateAsync(group);
 
             if (rateLimitsChanged)
             {
@@ -233,7 +261,7 @@ namespace ConduitLLM.Admin.Endpoints
             LogAdminAuditWithChanges("VirtualKeyGroup", id, changes);
             AdminOperationsMetricsService.RecordConfigurationChange("virtualkeygroup", "update");
 
-            return Ok(VirtualKeyGroupDto.FromEntity(group));
+            return Ok(dto);
         }
 
         /// <summary>
@@ -280,22 +308,27 @@ namespace ConduitLLM.Admin.Endpoints
         /// <summary>
         /// Adjust the balance of a virtual key group
         /// </summary>
-        public async Task<IResult> AdjustBalance(int id, AdjustBalanceDto request)
+        public async Task<IResult> AdjustBalance(int id, AdjustBalanceDto request,
+            ResourcePrecondition? precondition = null, CancellationToken cancellationToken = default)
         {
             // Get the authenticated user's identity
             var initiatedBy = User.Identity?.Name ?? "System";
 
-            var newBalance = await _groupRepository.AdjustBalanceAsync(
-                id,
-                request.Amount,
-                request.Description,
-                initiatedBy
-            );
+            VirtualKeyGroup? conditionalGroup = null;
+            decimal newBalance;
+            if (precondition is null)
+                newBalance = await _groupRepository.AdjustBalanceAsync(id, request.Amount, request.Description, initiatedBy);
+            else
+            {
+                conditionalGroup = await _groupRepository.AdjustBalanceConditionalAsync(id, request.Amount,
+                    request.Description, initiatedBy, precondition, cancellationToken) ?? throw new KeyNotFoundException();
+                newBalance = conditionalGroup.Balance;
+            }
 
             LogAdminAudit("AdjustedBalance", "VirtualKeyGroup", id,
                 $"Amount: {request.Amount}, Description: {request.Description}, NewBalance: {newBalance}");
 
-            var group = await _groupRepository.GetByIdAsync(id);
+            var group = conditionalGroup ?? await _groupRepository.GetByIdAsync(id);
             if (group == null)
                 throw new KeyNotFoundException();
 
@@ -305,17 +338,27 @@ namespace ConduitLLM.Admin.Endpoints
         /// <summary>
         /// Delete a virtual key group
         /// </summary>
-        public async Task<IResult> DeleteGroup(int id)
+        public async Task<IResult> DeleteGroup(int id, ResourcePrecondition? precondition = null, CancellationToken cancellationToken = default)
         {
-            var group = await _groupRepository.GetByIdAsync(id);
-            if (group == null)
-                throw new KeyNotFoundException();
-
-            // Check if group has any keys
-            if (group.VirtualKeys?.Count > 0)
-                throw new InvalidOperationException("Cannot delete group with existing virtual keys");
-
-            await _groupRepository.DeleteAsync(id);
+            VirtualKeyGroup group;
+            if (precondition is null)
+            {
+                group = await _groupRepository.GetByIdAsync(id) ?? throw new KeyNotFoundException();
+                if (group.VirtualKeys?.Count > 0)
+                    throw new InvalidOperationException("Cannot delete group with existing virtual keys");
+                await _groupRepository.DeleteAsync(id);
+            }
+            else
+            {
+                var db = _context as ConduitDbContext ?? throw new InvalidOperationException("Conditional group deletes require a database context.");
+                group = await ResourceMutationGuard.ExecuteAsync<VirtualKeyGroup, VirtualKeyGroup>(db, id, precondition,
+                    async (context, entity, ct) =>
+                    {
+                        if (await context.VirtualKeys.AnyAsync(key => key.VirtualKeyGroupId == id, ct))
+                            throw new InvalidOperationException("Cannot delete group with existing virtual keys");
+                        context.VirtualKeyGroups.Remove(entity);
+                    }, entity => entity, cancellationToken) ?? throw new KeyNotFoundException();
+            }
 
             LogAdminAudit("Deleted", "VirtualKeyGroup", id,
                 $"Name: {group.GroupName}");
@@ -419,11 +462,14 @@ namespace ConduitLLM.Admin.Endpoints
         /// <param name="id">The virtual key group ID</param>
         /// <param name="request">The refund request details</param>
         /// <param name="idempotencyKey">Unique identifier for this refund operation</param>
+        /// <param name="precondition">Explicit HTTP version condition, when provided.</param>
+        /// <param name="cancellationToken">Request cancellation.</param>
         /// <returns>The refund result with transaction details</returns>
         public async Task<IResult> ProcessRefund(
             int id,
             [FromBody] ProcessRefundRequestDto request,
-            [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey)
+            [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+            ResourcePrecondition? precondition = null, CancellationToken cancellationToken = default)
         {
             // Validate request
             if (string.IsNullOrEmpty(request.ModelId))
@@ -458,30 +504,41 @@ namespace ConduitLLM.Admin.Endpoints
             RefundResult refundResult;
             try
             {
-                refundResult = await _refundService.ProcessRefundAsync(
-                    id,
-                    request.ModelId,
-                    originalUsage,
-                    refundUsage,
-                    request.RefundReason,
-                    request.OriginalTransactionId,
-                    idempotencyKey.Trim(),
-                    initiatedBy,
-                    initiatedByUserId,
-                    request.RequestLogId);
+                if (precondition is null)
+                {
+                    refundResult = await _refundService.ProcessRefundAsync(
+                        id,
+                        request.ModelId,
+                        originalUsage,
+                        refundUsage,
+                        request.RefundReason,
+                        request.OriginalTransactionId,
+                        idempotencyKey.Trim(),
+                        initiatedBy,
+                        initiatedByUserId,
+                        request.RequestLogId);
+                }
+                else
+                {
+                    refundResult = await _refundService.ProcessRefundConditionalAsync(id, request.ModelId,
+                        originalUsage, refundUsage, request.RefundReason, request.OriginalTransactionId,
+                        idempotencyKey.Trim(), initiatedBy, initiatedByUserId, request.RequestLogId,
+                        precondition, cancellationToken);
+                }
             }
             catch (Configuration.Exceptions.IdempotencyConflictException ex)
             {
                 return Conflict(ex.Message);
             }
 
-            // Get updated group info for balance
-            var group = await _groupRepository.GetByIdAsync(id);
-            if (group == null)
+            // Conditional refunds already return their committed snapshot. A later group
+            // deletion must not turn that committed success into a not-found response.
+            if (precondition is null && await _groupRepository.GetByIdAsync(id) is null)
                 throw new KeyNotFoundException();
 
             // Map to response DTO
             var responseDto = MapToRefundResultDto(refundResult, refundResult.BalanceAfter);
+            responseDto.ResourceETag = refundResult.ResourceETag;
 
             LogAdminAudit("Refunded", "VirtualKeyGroup", id,
                 $"Amount: {refundResult.RefundAmount:C}, Model: {request.ModelId}, Reason: {request.RefundReason}, TransactionId: {refundResult.RefundTransactionId}, OriginalTransactionId: {refundResult.OriginalTransactionId ?? "none"}");
