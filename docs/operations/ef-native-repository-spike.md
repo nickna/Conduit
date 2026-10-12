@@ -738,3 +738,25 @@ complete native repository-suite qualification, or production readiness.
 #1373 and #1375 remain open, and production remains JIT under ADR 0006. The
 historical `b051389580a358fe7699e45f439d2c3fbc5ddce3` CI baseline does not qualify
 the Unit137 commit.
+
+### Unit 138: complete Gateway metrics owner
+
+The complete EfGatewayMetricsStore rewrite preserves six reads, 49 calls, eight SQL terminals, all 18 scalar fields and three collections. Sixteen scalar aliases retain each query's original evaluation, factory token and await-using disposal boundary; `0m` and an explicit `(double?)` retain the decimal comparison and existing conditional Average types. Filters, groups, aggregates, inclusive/half-open bounds, clock reads, ordering/limits and second-query boundaries remain intact.
+
+The first candidate is retained as REJECT: 464/214 became 450/207 after a conditional-expression replacement added one signature/two renderings. V1 was never applied or run against PostgreSQL. V2 adds nine bytes to the existing Average branch; retained Roslyn 5.0 semantic inspection and pinned EF source explain the nullable-lift hypothesis, while actual SDK Roslyn 5.9 supplies the acceptance evidence. [#1672](https://github.com/nickna/Conduit/issues/1672) remains a focused compiler follow-up.
+
+The accepted aligned EF 10.0.12 comparison measures **464 raw/214 signatures → 448/206**. All eight original signatures/sixteen renderings are removed; all 49 calls and eight terminals have zero focused failures. There are no added signatures, unrelated deltas or ambiguity. Both EF passes still exit 1 and emit zero generated artifacts; 1,274 calls and 56 global compiler sources remain measured.
+
+Primary `a50e9889…` and independent replay `d5f374f2…` seal 1,230 references, including all 1,106 rejected R1 references, prior accepted evidence and complete ranking inputs. Applied owner `7693c69b…` and test `9e337d8c…` bind source application `5d293fca…`; exact original→V1→V2 reversals remain retained.
+
+Actual managed PostgreSQL: **11/11 selected rows passed, 0 failed, 0 skipped**. The unchanged Fact and ten EF/typed theory rows exercise complete field/group/empty/boundary oracles and all six reads' pre-cancel, pool recovery and observed SQL cancellation, including both statements of the active-entity and queue reads.
+
+The runtime receipts bind all 284 source inputs and their copies at four ordered stages, exact eleven-row discovery/TRX identities, private joined command streams, PostgreSQL/Redis fixtures, protected images, six empty schema prefixes and removal of both owned IDs/names. Primary runtime: `660803f9ec6cde19bde47d64b011bfede18211c37a0bd561fdc0dbb2a83cf061`; independent file replay: `972e3603467ead0071f4ea3b66077ac9c283ea5eca9cd6067dc5b672840a1d3b`.
+
+The independently authored source/oracle and harness reviews strengthen the source proof; the runtime replay reader was authored by the coverage/harness producer. Its file replay checks actual commands, TRX, sources and cleanup rather than claiming an independently implemented test oracle or an additional execution.
+
+Existing typed validation differences and the native-profile EF test guard remain nonblocking in [#1670](https://github.com/nickna/Conduit/issues/1670)/[#1671](https://github.com/nickna/Conduit/issues/1671). These follow-ups and #1672/#1673 remain open and provide no scope waiver.
+
+At parent d312dfab, [native run 38316762573](https://github.com/nickna/Conduit/actions/runs/38316762573) failed “Collector left a live owned descendant.” after the 204-case promotion gate; later native publish/process/image steps were skipped. Regular CI 38316762657 passed 20 jobs. [#1673](https://github.com/nickna/Conduit/issues/1673) requires collector cleanup repair and a fresh native workflow; the retained console establishes no particular race. This parent result does not qualify the new commit.
+
+Compiler and managed PostgreSQL acceptance do not establish generated-query execution, the complete native repository suite, current-head artifacts, registry qualification or production readiness. #1373/#1375 remain open; production remains JIT under ADR 0006.
