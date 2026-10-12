@@ -60,8 +60,10 @@ public sealed class EfFunctionDiscoveryRuntimeStore : IFunctionDiscoveryRuntimeS
         int id, CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryId = id;
+        var queryCancellationToken = cancellationToken;
         return await context.FunctionConfigurations.AsNoTracking()
-            .FirstOrDefaultAsync(configuration => configuration.Id == id && configuration.IsEnabled, cancellationToken);
+            .FirstOrDefaultAsync(configuration => configuration.Id == queryId && configuration.IsEnabled, queryCancellationToken);
     }
 }
 #endif

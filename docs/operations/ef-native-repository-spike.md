@@ -306,3 +306,53 @@ No generated files or native process were produced by either compiler
 comparison, and neither executed database queries. The remaining owner failures,
 complete native repository-suite execution, and production qualification remain
 unresolved. Production remains JIT under ADR 0006.
+
+## Local copies for discovery ID reads
+
+`GetEnabledByIdAsync` copies its ID and query cancellation token to locals after
+context creation, which still receives the original token. Its enabled predicate,
+no tracking, awaited disposal, public signature, and the four list branches are
+unchanged.
+
+The isolated Configuration-owner comparison starts from `5a4a1d99d` with EF
+runtime/Design/Tasks/CLI 10.0.12 and Npgsql provider 10.0.3. Both managed build
+controls pass. Both query-precompiler commands still exit 1, but the exact ID
+query token's two `ParameterSymbol: id` error renderings disappear, with no
+replacement diagnostic. Totals change from 516 renderings across 240 signatures
+to 514 across 239; every unrelated signature and rendering count is unchanged.
+Actual compiler records bind the terminal in both phases to EF's predicate and
+cancellation-token `FirstOrDefaultAsync<FunctionConfiguration>` overload and the
+`FunctionConfigurations` DbSet property. The comparison seals 70 retained
+references and produces no generated files or native execution.
+
+The measured comparison receipt is
+`4ef11e8c061714b31d414d8b1c06a032f25b40a0b4aebdc7be601120202be442`.
+Independent original-source/token/compiler/log replay is
+`55dd65f8ad38656846bb5702e303ebad39f617471e153fb3550fd1e5443e8acd`.
+The first setup stopped before any EF command because archive line endings
+differed. Its raw archive and failure remain retained and unqualified. The fresh
+capture preserves the raw archived target and verifies exact canonical byte
+equality before normalizing only that target in its isolated source tree.
+
+The exact applied variant passes all five existing real PostgreSQL 16.15 parity
+rows without failures or skips. ID comparisons cover enabled, disabled, absent,
+and unknown-enum records, populated and null scalars, and detached reads. Both
+EF and typed Npgsql cancellation rows observe a lock-blocked ID read, cancel it,
+and verify ID and list recovery with a single connection slot. The list-filter
+and list-cancellation cases also pass. All 21 frozen inputs and byte copies are
+unchanged at four stages. Both owned fixtures were removed and verified absent
+by ID and name; test schemas are absent and protected image references unchanged.
+
+The managed PostgreSQL receipt is
+`c97dc30c86a98e9bdc4cea5cb5bcdae5cbcf49d97ecdbc57ad52af763851742c`;
+the original five-row TRX is
+`248019c970f502168f8c47c0a15630f7b57fe223de3f80dc52fdb6b3b6a4089c`.
+Independent source, TRX-identity, raw-command, fixture-ownership, and cleanup
+replay is
+`da9a4fb2ee86a1f3445c6a28226a7c93026315aa860847baeaf6be2d4dda222b`;
+it verifies all 34 joined commands and their 68 captured output streams.
+
+Removing this translation failure does not establish generated-query execution,
+complete native repository-suite qualification, or production readiness. The
+remaining owner failures still require fixes or verified replacements;
+production remains JIT under ADR 0006.
