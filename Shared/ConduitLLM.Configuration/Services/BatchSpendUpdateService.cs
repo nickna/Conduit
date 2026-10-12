@@ -28,7 +28,6 @@ namespace ConduitLLM.Configuration.Services
         private readonly IRedisCircuitBreaker? _circuitBreaker;
         private readonly IVirtualKeyRuntimeStore? _runtimeStore;
         private readonly BatchSpendingOptions _options;
-        private readonly Timer _flushTimer;
         private readonly TimeSpan _flushInterval;
         private readonly TimeSpan _reservationTtl;
         private readonly string _redisKeyPrefix = "pending_spend:group:";
@@ -51,14 +50,14 @@ namespace ConduitLLM.Configuration.Services
         private readonly string _settledReservationPrefix = "spend_reservations_settled:group:";
         private readonly string _reservationOwnerPrefix = "spend_reservation_owners:group:";
         private readonly string _reservationBoundPrefix = "spend_reservation_bounds:group:";
-        private readonly ConcurrentQueue<(int VirtualKeyId, decimal Cost, DateTime BillingWindowStartUtc)> _fallbackQueue = new();
+        private readonly ConcurrentQueue<FallbackSpendUpdate> _fallbackQueue = new();
         private const decimal SpendUnitScale = 100_000_000m;
 
         /// <summary>
         /// Event raised after successful batch spend updates with the key hashes that were updated
         /// Allows external cache invalidation without tight coupling
         /// </summary>
-        public event Action<string[]>? SpendUpdatesCompleted;
+        public event Func<string[], CancellationToken, Task>? SpendUpdatesCompleted;
 
         /// <summary>
         /// Initializes a new instance of the BatchSpendUpdateService
@@ -98,15 +97,13 @@ namespace ConduitLLM.Configuration.Services
                 "BatchSpendUpdateService configured with flush interval: {FlushInterval}; pending billing keys do not expire",
                 _flushInterval);
 
-            // Create timer for periodic flushing (in addition to background service)
-            _flushTimer = new Timer(FlushPendingUpdatesCallback, null, _flushInterval, _flushInterval);
         }
 
         /// <summary>
         /// Gets whether the service is healthy and able to accept updates
         /// </summary>
         public bool IsHealthy =>
-            (!_cancellationTokenSource?.Token.IsCancellationRequested ?? false) &&
+            !_admissionClosed && Volatile.Read(ref _leaderActive) != 0 &&
             _circuitBreaker?.IsOpen != true;
 
         private CancellationTokenSource? _cancellationTokenSource;
@@ -117,8 +114,20 @@ namespace ConduitLLM.Configuration.Services
         /// </summary>
         /// <param name="virtualKeyId">Virtual Key ID to update</param>
         /// <param name="cost">Cost to add to the current spend</param>
-        public async Task QueueSpendUpdateAsync(int virtualKeyId, decimal cost, DateTime? billedAtUtc = null)
+        public Task QueueSpendUpdateAsync(int virtualKeyId, decimal cost, DateTime? billedAtUtc = null)
         {
+            lock (_lifetimeSync)
+            {
+                ThrowIfAdmissionClosed();
+                var task = QueueSpendCoreAsync(virtualKeyId, cost, billedAtUtc, _queueLifetime.Token);
+                TrackTask(_queueTasks, task);
+                return task;
+            }
+        }
+
+        private async Task QueueSpendCoreAsync(int virtualKeyId, decimal cost, DateTime? billedAtUtc, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             // Check circuit breaker if available
             if (_circuitBreaker?.IsOpen == true)
             {
@@ -127,7 +136,8 @@ namespace ConduitLLM.Configuration.Services
                     CircuitState.Open);
             }
 
-            var groupId = await GetGroupIdAsync(virtualKeyId);
+            var groupId = await GetGroupIdAsync(virtualKeyId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             if (!groupId.HasValue)
             {
                 throw new BillingSystemException(
@@ -141,12 +151,12 @@ namespace ConduitLLM.Configuration.Services
             {
                 await _circuitBreaker.ExecuteAsync(async () =>
                 {
-                    await PerformRedisUpdate(virtualKeyId, groupId.Value, cost, GetBillingWindow(billedAtUtc));
+                    await PerformRedisUpdate(virtualKeyId, groupId.Value, cost, GetBillingWindow(billedAtUtc), cancellationToken);
                 });
             }
             else
             {
-                await PerformRedisUpdate(virtualKeyId, groupId.Value, cost, GetBillingWindow(billedAtUtc));
+                await PerformRedisUpdate(virtualKeyId, groupId.Value, cost, GetBillingWindow(billedAtUtc), cancellationToken);
             }
 
             _logger.LogDebug("Queued spend update to Redis for Virtual Key {VirtualKeyId} (Group {GroupId}): {Cost:C}",
@@ -156,15 +166,23 @@ namespace ConduitLLM.Configuration.Services
         /// <inheritdoc />
         public void QueueFallbackUpdate(int virtualKeyId, decimal cost, DateTime? billedAtUtc = null)
         {
-            _fallbackQueue.Enqueue((virtualKeyId, cost, GetBillingWindow(billedAtUtc)));
+            lock (_lifetimeSync)
+            {
+                ThrowIfAdmissionClosed();
+                _fallbackQueue.Enqueue(new FallbackSpendUpdate(
+                    virtualKeyId, cost, GetBillingWindow(billedAtUtc), $"fallback-spend:{Guid.NewGuid():N}"));
+            }
             _logger.LogWarning(
                 "Spend update for Virtual Key {VirtualKeyId} ({Cost:C}) queued to in-memory fallback. Will be flushed on next cycle.",
                 virtualKeyId, cost);
         }
 
-        private async Task PerformRedisUpdate(int virtualKeyId, int groupId, decimal cost, DateTime billingWindowStartUtc)
+        private async Task PerformRedisUpdate(int virtualKeyId, int groupId, decimal cost, DateTime billingWindowStartUtc,
+            CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var redis = await _redisConnectionFactory.GetConnectionAsync();
+            cancellationToken.ThrowIfCancellationRequested();
             var db = redis.GetDatabase();
 
             // Use group ID for accumulation
@@ -182,6 +200,7 @@ namespace ConduitLLM.Configuration.Services
                 script,
                 new RedisKey[] { key, $"{_windowedPendingTotalUnitsPrefix}{groupId}", keyUsageKey },
                 new RedisValue[] { costUnits });
+            cancellationToken.ThrowIfCancellationRequested();
 
             // Billing data must never have a TTL. It is acknowledged only after the
             // corresponding database debit commits; expiry would silently lose revenue
@@ -539,11 +558,11 @@ namespace ConduitLLM.Configuration.Services
                 new RedisValue[] { reservationId, virtualKeyId });
         }
 
-        private async Task<int?> GetGroupIdAsync(int virtualKeyId)
+        private async Task<int?> GetGroupIdAsync(int virtualKeyId, CancellationToken cancellationToken = default)
         {
             if (_runtimeStore is not null)
             {
-                return (await _runtimeStore.GetByIdAsync(virtualKeyId))?.VirtualKeyGroupId;
+                return (await _runtimeStore.GetByIdAsync(virtualKeyId, cancellationToken))?.VirtualKeyGroupId;
             }
 
 #if CONDUIT_NATIVE_AOT
@@ -555,7 +574,7 @@ namespace ConduitLLM.Configuration.Services
             return await context.VirtualKeys
                 .Where(vk => vk.Id == virtualKeyId)
                 .Select(vk => (int?)vk.VirtualKeyGroupId)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(cancellationToken);
 #endif
         }
 
@@ -610,9 +629,11 @@ namespace ConduitLLM.Configuration.Services
         /// Force flush all pending updates immediately
         /// </summary>
         /// <returns>Number of finalized Redis claims plus successfully persisted fallback updates</returns>
-        public async Task<int> FlushPendingUpdatesAsync()
+        private async Task<int> FlushCoreAsync(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var redis = await _redisConnectionFactory.GetConnectionAsync();
+            cancellationToken.ThrowIfCancellationRequested();
             var db = redis.GetDatabase();
             var server = redis.GetServer(redis.GetEndPoints()[0]);
 
@@ -620,8 +641,8 @@ namespace ConduitLLM.Configuration.Services
             // then atomically move current pending amounts into new claims. New usage
             // can continue accumulating under the original pending keys while a claim
             // is written to PostgreSQL.
-            var claims = await GetProcessingClaimsAsync(server, db);
-            claims.AddRange(await ClaimPendingSpendAsync(server, db));
+            var claims = await GetProcessingClaimsAsync(server, db, cancellationToken);
+            claims.AddRange(await ClaimPendingSpendAsync(server, db, cancellationToken));
 
             if (claims.Count == 0 && _fallbackQueue.IsEmpty)
             {
@@ -639,6 +660,7 @@ namespace ConduitLLM.Configuration.Services
 
             foreach (var claim in claims)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 // Create a description that includes which keys were used
                 var description = BuildUsageDescription(claim.KeyUsageByKeyId);
 
@@ -646,12 +668,14 @@ namespace ConduitLLM.Configuration.Services
                 // the debit. If the process dies after the DB commit but before deleting
                 // the Redis claim, recovery observes Applied=false and only acknowledges
                 // the already-recorded claim.
-                var result = await ApplyClaimAsync(claim, description);
+                var result = await ApplyClaimAsync(claim, description, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
 
                 // Acknowledge only after the database commit (or idempotent duplicate
                 // confirmation). Until this delete succeeds, the claim remains durable
                 // and retryable in Redis.
-                await DeleteClaimAsync(db, claim);
+                await DeleteClaimAsync(db, claim, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
 
                 processedCount++;
                 totalSpend += result.Applied ? claim.TotalCost : 0;
@@ -663,7 +687,7 @@ namespace ConduitLLM.Configuration.Services
                 // because AdjustBalanceIdempotentAsync already creates one with the correct balance.
                 // The individual key usage tracking is already handled in the description.
 
-                updatedKeyHashes.AddRange(await GetKeyHashesByGroupIdAsync(claim.GroupId));
+                updatedKeyHashes.AddRange(await GetKeyHashesByGroupIdAsync(claim.GroupId, cancellationToken));
             }
 
             flushStopwatch.Stop();
@@ -677,7 +701,9 @@ namespace ConduitLLM.Configuration.Services
             {
                 try
                 {
-                    var fallbackKeyHash = await ApplyFallbackAsync(fallbackItem);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var fallbackKeyHash = await ApplyFallbackAsync(fallbackItem, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (fallbackKeyHash is not null)
                     {
                         updatedKeyHashes.Add(fallbackKeyHash);
@@ -688,6 +714,13 @@ namespace ConduitLLM.Configuration.Services
                         _logger.LogWarning("Virtual Key {VirtualKeyId} from fallback queue not found — spend update lost",
                             fallbackItem.VirtualKeyId);
                     }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // A commit can have succeeded before cancellation was observed. The
+                    // same operation identity is retained for a safe in-process retry.
+                    _fallbackQueue.Enqueue(fallbackItem);
+                    throw;
                 }
                 catch (Exception fallbackEx)
                 {
@@ -706,18 +739,17 @@ namespace ConduitLLM.Configuration.Services
             }
 
             // Raise event for cache invalidation (if any subscribers)
-            if (updatedKeyHashes.Any() && SpendUpdatesCompleted != null)
+            if (updatedKeyHashes.Any() && SpendUpdatesCompleted is { } subscribers)
             {
-                try
+                foreach (Func<string[], CancellationToken, Task> subscriber in subscribers.GetInvocationList())
                 {
-                    SpendUpdatesCompleted.Invoke(updatedKeyHashes.ToArray());
-                    _logger.LogDebug("Raised SpendUpdatesCompleted event for {Count} Virtual Keys", updatedKeyHashes.Count());
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try { await subscriber(updatedKeyHashes.ToArray(), cancellationToken); }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                    catch (Exception eventEx) { _logger.LogWarning(eventEx, "Error in SpendUpdatesCompleted event handler"); }
                 }
-                catch (Exception eventEx)
-                {
-                    _logger.LogWarning(eventEx, "Error in SpendUpdatesCompleted event handler");
-                    // Don't fail the operation if event handler fails
-                }
+                cancellationToken.ThrowIfCancellationRequested();
+                _logger.LogDebug("Raised SpendUpdatesCompleted event for {Count} Virtual Keys", updatedKeyHashes.Count());
             }
 
             return processedCount + fallbackCount;
@@ -725,8 +757,9 @@ namespace ConduitLLM.Configuration.Services
 
         private async Task<VirtualKeyBalanceAdjustmentResult> ApplyClaimAsync(
             SpendClaim claim,
-            string description)
+            string description, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var idempotencyKey = $"batch-spend:{claim.ClaimId}";
             if (_runtimeStore is not null)
             {
@@ -738,7 +771,7 @@ namespace ConduitLLM.Configuration.Services
                     VirtualKeyBalanceReferenceType.System,
                     claim.ClaimId,
                     idempotencyKey,
-                    claim.BillingWindowStartUtc));
+                    claim.BillingWindowStartUtc), cancellationToken);
             }
 
 #if CONDUIT_NATIVE_AOT
@@ -747,6 +780,7 @@ namespace ConduitLLM.Configuration.Services
 #else
             using var scope = _serviceScopeFactory.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IVirtualKeyGroupRepository>();
+            cancellationToken.ThrowIfCancellationRequested();
             var result = claim.BillingWindowStartUtc.HasValue
                 ? await repository.AdjustBalanceIdempotentAsync(
                     claim.GroupId, -claim.TotalCost, idempotencyKey,
@@ -762,11 +796,12 @@ namespace ConduitLLM.Configuration.Services
 #endif
         }
 
-        private async Task<IReadOnlyList<string>> GetKeyHashesByGroupIdAsync(int groupId)
+        private async Task<IReadOnlyList<string>> GetKeyHashesByGroupIdAsync(int groupId, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (_runtimeStore is not null)
             {
-                return await _runtimeStore.GetKeyHashesByGroupIdAsync(groupId);
+                return await _runtimeStore.GetKeyHashesByGroupIdAsync(groupId, cancellationToken);
             }
 
 #if CONDUIT_NATIVE_AOT
@@ -780,21 +815,22 @@ namespace ConduitLLM.Configuration.Services
                 .Where(key => key.VirtualKeyGroupId == groupId)
                 .OrderBy(key => key.Id)
                 .Select(key => key.KeyHash)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 #endif
         }
 
         private async Task<string?> ApplyFallbackAsync(
-            (int VirtualKeyId, decimal Cost, DateTime BillingWindowStartUtc) fallback)
+            FallbackSpendUpdate fallback, CancellationToken cancellationToken)
         {
             if (_runtimeStore is not null)
             {
-                var key = await _runtimeStore.GetByIdAsync(fallback.VirtualKeyId);
+                var key = await _runtimeStore.GetByIdAsync(fallback.VirtualKeyId, cancellationToken);
                 if (key is null)
                 {
                     return null;
                 }
 
+                cancellationToken.ThrowIfCancellationRequested();
                 await _runtimeStore.AdjustBalanceAsync(new VirtualKeyBalanceAdjustment(
                     key.VirtualKeyGroupId,
                     -fallback.Cost,
@@ -802,7 +838,8 @@ namespace ConduitLLM.Configuration.Services
                     "System",
                     VirtualKeyBalanceReferenceType.System,
                     fallback.VirtualKeyId.ToString(CultureInfo.InvariantCulture),
-                    BillingWindowStartUtc: fallback.BillingWindowStartUtc));
+                    IdempotencyKey: fallback.IdempotencyKey,
+                    BillingWindowStartUtc: fallback.BillingWindowStartUtc), cancellationToken);
                 return key.KeyHash;
             }
 
@@ -816,15 +853,17 @@ namespace ConduitLLM.Configuration.Services
             var keyRecord = await context.VirtualKeys
                 .Where(key => key.Id == fallback.VirtualKeyId)
                 .Select(key => new { key.VirtualKeyGroupId, key.KeyHash })
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(cancellationToken);
             if (keyRecord is null)
             {
                 return null;
             }
 
-            await repository.AdjustBalanceAsync(
+            cancellationToken.ThrowIfCancellationRequested();
+            await repository.AdjustBalanceIdempotentAsync(
                 keyRecord.VirtualKeyGroupId,
                 -fallback.Cost,
+                fallback.IdempotencyKey,
                 $"API usage by virtual key #{fallback.VirtualKeyId} (recovered from fallback queue)",
                 "System",
                 ReferenceType.System,
@@ -834,21 +873,21 @@ namespace ConduitLLM.Configuration.Services
 #endif
         }
 
-        private async Task<List<SpendClaim>> ClaimPendingSpendAsync(IServer server, IDatabase db)
+        private async Task<List<SpendClaim>> ClaimPendingSpendAsync(IServer server, IDatabase db, CancellationToken cancellationToken)
         {
             var claims = new List<SpendClaim>();
-            claims.AddRange(await ClaimWindowedPendingSpendAsync(server, db));
+            claims.AddRange(await ClaimWindowedPendingSpendAsync(server, db, cancellationToken));
             claims.AddRange(await ClaimPendingSpendAsync(
-                server, db, _redisKeyPrefix, _processingKeyPrefix, _keyUsagePrefix, _processingKeyUsagePrefix, false));
+                server, db, _redisKeyPrefix, _processingKeyPrefix, _keyUsagePrefix, _processingKeyUsagePrefix, false, cancellationToken));
             claims.AddRange(await ClaimPendingSpendAsync(
-                server, db, _redisUnitsKeyPrefix, _processingUnitsKeyPrefix, _keyUsageUnitsPrefix, _processingKeyUsageUnitsPrefix, true));
+                server, db, _redisUnitsKeyPrefix, _processingUnitsKeyPrefix, _keyUsageUnitsPrefix, _processingKeyUsageUnitsPrefix, true, cancellationToken));
             return claims;
         }
 
-        private async Task<List<SpendClaim>> ClaimWindowedPendingSpendAsync(IServer server, IDatabase db)
+        private async Task<List<SpendClaim>> ClaimWindowedPendingSpendAsync(IServer server, IDatabase db, CancellationToken cancellationToken)
         {
             var claims = new List<SpendClaim>();
-            foreach (var pendingKey in server.Keys(pattern: $"{_windowedSpendUnitsPrefix}*:window:*").ToList())
+            foreach (var pendingKey in ScanKeys(server, $"{_windowedSpendUnitsPrefix}*:window:*", cancellationToken))
             {
                 if (!TryParseWindowedKey(pendingKey.ToString(), _windowedSpendUnitsPrefix, out var groupId, out var window, out _))
                     continue;
@@ -859,7 +898,9 @@ namespace ConduitLLM.Configuration.Services
                 bool claimed;
                 try
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     claimed = await db.KeyRenameAsync(pendingKey, processingKey, When.NotExists);
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
                 catch (RedisServerException ex) when (ex.Message.Contains("no such key", StringComparison.OrdinalIgnoreCase))
                 {
@@ -869,7 +910,7 @@ namespace ConduitLLM.Configuration.Services
                 if (!claimed) continue;
 
                 var usageKeys = new List<RedisKey>();
-                foreach (var usageKey in server.Keys(pattern: $"{_windowedKeyUsageUnitsPrefix}{groupId}:window:{token}:key:*").ToList())
+                foreach (var usageKey in ScanKeys(server, $"{_windowedKeyUsageUnitsPrefix}{groupId}:window:{token}:key:*", cancellationToken))
                 {
                     if (!TryParseWindowedKey(usageKey.ToString(), _windowedKeyUsageUnitsPrefix, out _, out _, out var keyId) || !keyId.HasValue)
                         continue;
@@ -877,8 +918,10 @@ namespace ConduitLLM.Configuration.Services
                     var processingUsageKey = $"{_windowedProcessingKeyUsageUnitsPrefix}{groupId}:window:{token}:key:{keyId.Value}:claim:{claimId}";
                     try
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         if (await db.KeyRenameAsync(usageKey, processingUsageKey, When.NotExists))
                             usageKeys.Add(processingUsageKey);
+                        cancellationToken.ThrowIfCancellationRequested();
                     }
                     catch (RedisServerException ex) when (ex.Message.Contains("no such key", StringComparison.OrdinalIgnoreCase))
                     {
@@ -886,24 +929,24 @@ namespace ConduitLLM.Configuration.Services
                     }
                 }
 
-                var claim = await ReadWindowedClaimAsync(db, processingKey, groupId, claimId, window, usageKeys);
+                var claim = await ReadWindowedClaimAsync(db, processingKey, groupId, claimId, window, usageKeys, cancellationToken);
                 if (claim != null) claims.Add(claim);
             }
 
             return claims;
         }
 
-        private async Task<List<SpendClaim>> GetWindowedProcessingClaimsAsync(IServer server, IDatabase db)
+        private async Task<List<SpendClaim>> GetWindowedProcessingClaimsAsync(IServer server, IDatabase db, CancellationToken cancellationToken)
         {
             var claims = new List<SpendClaim>();
-            foreach (var processingKey in server.Keys(pattern: $"{_windowedProcessingUnitsPrefix}*:window:*:claim:*").ToList())
+            foreach (var processingKey in ScanKeys(server, $"{_windowedProcessingUnitsPrefix}*:window:*:claim:*", cancellationToken))
             {
                 if (!TryParseWindowedKey(processingKey.ToString(), _windowedProcessingUnitsPrefix, out var groupId, out var window, out _, out var claimId))
                     continue;
 
                 var token = window.ToString("yyyyMMddHH", CultureInfo.InvariantCulture);
-                var usageKeys = server.Keys(pattern: $"{_windowedProcessingKeyUsageUnitsPrefix}{groupId}:window:{token}:key:*:claim:{claimId}").ToList();
-                var claim = await ReadWindowedClaimAsync(db, processingKey, groupId, claimId!, window, usageKeys);
+                var usageKeys = ScanKeys(server, $"{_windowedProcessingKeyUsageUnitsPrefix}{groupId}:window:{token}:key:*:claim:{claimId}", cancellationToken);
+                var claim = await ReadWindowedClaimAsync(db, processingKey, groupId, claimId!, window, usageKeys, cancellationToken);
                 if (claim != null) claims.Add(claim);
             }
 
@@ -916,9 +959,9 @@ namespace ConduitLLM.Configuration.Services
             int groupId,
             string claimId,
             DateTime window,
-            List<RedisKey> usageKeys)
+            List<RedisKey> usageKeys, CancellationToken cancellationToken)
         {
-            if (!TryParseRedisAmount(await db.StringGetAsync(processingKey), true, out var totalCost))
+            if (!TryParseRedisAmount(await ReadClaimValueAsync(db, processingKey, cancellationToken), true, out var totalCost))
                 return null;
 
             var usage = new Dictionary<int, decimal>();
@@ -926,7 +969,7 @@ namespace ConduitLLM.Configuration.Services
             {
                 if (TryParseWindowedKey(usageKey.ToString(), _windowedProcessingKeyUsageUnitsPrefix, out _, out _, out var keyId, out _) &&
                     keyId.HasValue &&
-                    TryParseRedisAmount(await db.StringGetAsync(usageKey), true, out var cost))
+                    TryParseRedisAmount(await ReadClaimValueAsync(db, usageKey, cancellationToken), true, out var cost))
                 {
                     usage[keyId.Value] = cost;
                 }
@@ -981,10 +1024,10 @@ namespace ConduitLLM.Configuration.Services
             string processingPrefix,
             string usagePrefix,
             string processingUsagePrefix,
-            bool storedAsUnits)
+            bool storedAsUnits, CancellationToken cancellationToken)
         {
             var claims = new List<SpendClaim>();
-            var pendingKeys = server.Keys(pattern: $"{pendingPrefix}*").ToList();
+            var pendingKeys = ScanKeys(server, $"{pendingPrefix}*", cancellationToken);
 
             foreach (var pendingKey in pendingKeys)
             {
@@ -995,9 +1038,11 @@ namespace ConduitLLM.Configuration.Services
                 bool claimed;
                 try
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     // RENAME is atomic in Redis. Once it completes, concurrent writers create
                     // a fresh pending key and cannot be erased when this claim is acknowledged.
                     claimed = await db.KeyRenameAsync(pendingKey, processingKey, When.NotExists);
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
                 catch (RedisServerException ex) when (ex.Message.Contains("no such key", StringComparison.OrdinalIgnoreCase))
                 {
@@ -1011,8 +1056,8 @@ namespace ConduitLLM.Configuration.Services
                 }
 
                 var usageKeys = await ClaimKeyUsageAsync(
-                    server, db, groupId, claimId, usagePrefix, processingUsagePrefix);
-                var claim = await ReadClaimAsync(db, processingKey, groupId, claimId, usageKeys, storedAsUnits);
+                    server, db, groupId, claimId, usagePrefix, processingUsagePrefix, cancellationToken);
+                var claim = await ReadClaimAsync(db, processingKey, groupId, claimId, usageKeys, storedAsUnits, cancellationToken);
                 if (claim != null)
                 {
                     claims.Add(claim);
@@ -1022,14 +1067,14 @@ namespace ConduitLLM.Configuration.Services
             return claims;
         }
 
-        private async Task<List<SpendClaim>> GetProcessingClaimsAsync(IServer server, IDatabase db)
+        private async Task<List<SpendClaim>> GetProcessingClaimsAsync(IServer server, IDatabase db, CancellationToken cancellationToken)
         {
             var claims = new List<SpendClaim>();
-            claims.AddRange(await GetWindowedProcessingClaimsAsync(server, db));
+            claims.AddRange(await GetWindowedProcessingClaimsAsync(server, db, cancellationToken));
             claims.AddRange(await GetProcessingClaimsAsync(
-                server, db, _processingKeyPrefix, _processingKeyUsagePrefix, false));
+                server, db, _processingKeyPrefix, _processingKeyUsagePrefix, false, cancellationToken));
             claims.AddRange(await GetProcessingClaimsAsync(
-                server, db, _processingUnitsKeyPrefix, _processingKeyUsageUnitsPrefix, true));
+                server, db, _processingUnitsKeyPrefix, _processingKeyUsageUnitsPrefix, true, cancellationToken));
             return claims;
         }
 
@@ -1038,10 +1083,10 @@ namespace ConduitLLM.Configuration.Services
             IDatabase db,
             string processingPrefix,
             string processingUsagePrefix,
-            bool storedAsUnits)
+            bool storedAsUnits, CancellationToken cancellationToken)
         {
             var claims = new List<SpendClaim>();
-            var processingKeys = server.Keys(pattern: $"{processingPrefix}*").ToList();
+            var processingKeys = ScanKeys(server, $"{processingPrefix}*", cancellationToken);
 
             foreach (var processingKey in processingKeys)
             {
@@ -1051,9 +1096,8 @@ namespace ConduitLLM.Configuration.Services
                     continue;
                 }
 
-                var usageKeys = server.Keys(
-                    pattern: $"{processingUsagePrefix}{groupId}:key:*:claim:{claimId}").ToList();
-                var claim = await ReadClaimAsync(db, processingKey, groupId, claimId, usageKeys, storedAsUnits);
+                var usageKeys = ScanKeys(server, $"{processingUsagePrefix}{groupId}:key:*:claim:{claimId}", cancellationToken);
+                var claim = await ReadClaimAsync(db, processingKey, groupId, claimId, usageKeys, storedAsUnits, cancellationToken);
                 if (claim != null)
                 {
                     claims.Add(claim);
@@ -1069,10 +1113,10 @@ namespace ConduitLLM.Configuration.Services
             int groupId,
             string claimId,
             string usagePrefix,
-            string processingUsagePrefix)
+            string processingUsagePrefix, CancellationToken cancellationToken)
         {
             var claimedKeys = new List<RedisKey>();
-            var pendingUsageKeys = server.Keys(pattern: $"{usagePrefix}{groupId}:key:*").ToList();
+            var pendingUsageKeys = ScanKeys(server, $"{usagePrefix}{groupId}:key:*", cancellationToken);
 
             foreach (var pendingUsageKey in pendingUsageKeys)
             {
@@ -1085,7 +1129,9 @@ namespace ConduitLLM.Configuration.Services
                 bool claimed;
                 try
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     claimed = await db.KeyRenameAsync(pendingUsageKey, processingUsageKey, When.NotExists);
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
                 catch (RedisServerException ex) when (ex.Message.Contains("no such key", StringComparison.OrdinalIgnoreCase))
                 {
@@ -1107,9 +1153,9 @@ namespace ConduitLLM.Configuration.Services
             int groupId,
             string claimId,
             List<RedisKey> usageKeys,
-            bool storedAsUnits)
+            bool storedAsUnits, CancellationToken cancellationToken)
         {
-            var value = await db.StringGetAsync(processingKey);
+            var value = await ReadClaimValueAsync(db, processingKey, cancellationToken);
             if (!TryParseRedisAmount(value, storedAsUnits, out var totalCost))
             {
                 _logger.LogError("Batch spend claim {ClaimId} for group {GroupId} has an invalid amount", claimId, groupId);
@@ -1120,7 +1166,7 @@ namespace ConduitLLM.Configuration.Services
             foreach (var usageKey in usageKeys)
             {
                 if (!TryParseProcessingKeyUsageKey(usageKey.ToString(), out var keyId) ||
-                    !TryParseRedisAmount(await db.StringGetAsync(usageKey), storedAsUnits, out var cost))
+                    !TryParseRedisAmount(await ReadClaimValueAsync(db, usageKey, cancellationToken), storedAsUnits, out var cost))
                 {
                     continue;
                 }
@@ -1131,14 +1177,16 @@ namespace ConduitLLM.Configuration.Services
             return new SpendClaim(groupId, claimId, processingKey, totalCost, keyUsageByKeyId, usageKeys, null);
         }
 
-        private async Task DeleteClaimAsync(IDatabase db, SpendClaim claim)
+        private async Task DeleteClaimAsync(IDatabase db, SpendClaim claim, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var keys = claim.ProcessingKeyUsageKeys
                 .Append(claim.ProcessingSpendKey)
                 .ToList();
             if (!claim.BillingWindowStartUtc.HasValue)
             {
                 await db.KeyDeleteAsync(keys.ToArray());
+                cancellationToken.ThrowIfCancellationRequested();
                 return;
             }
 
@@ -1163,6 +1211,31 @@ namespace ConduitLLM.Configuration.Services
                 script,
                 keys.ToArray(),
                 new RedisValue[] { ToSpendUnits(claim.TotalCost) });
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        private static List<RedisKey> ScanKeys(IServer server, string pattern, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var keys = new List<RedisKey>();
+            using var enumerator = server.Keys(pattern: pattern).GetEnumerator();
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!enumerator.MoveNext()) break;
+                cancellationToken.ThrowIfCancellationRequested();
+                keys.Add(enumerator.Current);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            return keys;
+        }
+
+        private static async Task<RedisValue> ReadClaimValueAsync(IDatabase db, RedisKey key, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var value = await db.StringGetAsync(key);
+            cancellationToken.ThrowIfCancellationRequested();
+            return value;
         }
 
         private static bool TryParseProcessingSpendKey(
@@ -1247,117 +1320,6 @@ namespace ConduitLLM.Configuration.Services
             }
 
             return $"API usage by {keyIds.Count} virtual keys";
-        }
-
-        /// <summary>
-        /// Timer callback for periodic flushing
-        /// </summary>
-        private void FlushPendingUpdatesCallback(object? state)
-        {
-            // Fire and forget with proper error handling
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await FlushPendingUpdatesAsync();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error in periodic flush timer");
-                }
-            });
-        }
-
-        /// <summary>
-        /// Background service execution
-        /// </summary>
-        /// <param name="stoppingToken">Cancellation token</param>
-        /// <returns>Async task</returns>
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-            _logger.LogInformation("BatchSpendUpdateService started");
-
-            // Check for any pending updates on startup
-            try
-            {
-                var count = await FlushPendingUpdatesAsync();
-                if (count > 0)
-                {
-                    _logger.LogInformation("Flushed {Count} pending updates from previous session", count);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error flushing pending updates on startup");
-            }
-
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                try
-                {
-                    // Flush updates every interval
-                    await Task.Delay(_flushInterval, stoppingToken);
-                    await FlushPendingUpdatesAsync();
-                }
-                catch (OperationCanceledException)
-                {
-                    // Normal shutdown
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error in BatchSpendUpdateService background execution");
-
-                    // Continue running even if there's an error
-                    await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
-                }
-            }
-
-            // Final flush before stopping
-            try
-            {
-                var finalCount = await FlushPendingUpdatesAsync();
-                if (finalCount > 0)
-                {
-                    _logger.LogInformation("Flushed {Count} pending updates during shutdown", finalCount);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error flushing pending updates during shutdown");
-            }
-
-            _logger.LogInformation("BatchSpendUpdateService stopped");
-        }
-
-        /// <summary>
-        /// Async cleanup - preferred over Dispose() to avoid sync-over-async.
-        /// </summary>
-        public async ValueTask DisposeAsync()
-        {
-            await _flushTimer.DisposeAsync();
-
-            try
-            {
-                await FlushPendingUpdatesAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error flushing pending updates during async disposal");
-            }
-
-            base.Dispose();
-        }
-
-        /// <summary>
-        /// Sync cleanup fallback. Does not flush: pending updates are durable in Redis and
-        /// are picked up by the next flush cycle, so blocking on async I/O here is unnecessary.
-        /// </summary>
-        public override void Dispose()
-        {
-            _flushTimer?.Dispose();
-            base.Dispose();
         }
 
         /// <summary>

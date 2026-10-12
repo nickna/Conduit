@@ -53,7 +53,7 @@ namespace ConduitLLM.Configuration.Interfaces
         /// <summary>
         /// Event raised after successful batch spend updates with the key hashes that were updated
         /// </summary>
-        event Action<string[]>? SpendUpdatesCompleted;
+        event Func<string[], CancellationToken, Task>? SpendUpdatesCompleted;
 
         /// <summary>
         /// Queues a spend update to Redis for batch processing.

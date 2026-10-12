@@ -48,38 +48,106 @@ namespace ConduitLLM.Gateway.Services
     /// <summary>
     /// Implementation of webhook delivery notification service.
     /// </summary>
-    public class WebhookDeliveryNotificationService : IWebhookDeliveryNotificationService, IHostedService
+    public class WebhookDeliveryNotificationService : IWebhookDeliveryNotificationService, IHostedService, IDisposable
     {
         private readonly IHubContext<WebhookDeliveryHub> _hubContext;
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<WebhookDeliveryNotificationService> _logger;
 
         
-        private Timer? _statisticsTimer;
+        private readonly TimeProvider _clock;
+        private readonly SemaphoreSlim _generationLock = new(1, 1);
+        private readonly object _generationSync = new();
+        private PeriodicTimer? _statisticsTimer;
+        private CancellationTokenSource? _statisticsCts;
+        private Task? _statisticsWorker;
+        private int _disposed;
 
         public WebhookDeliveryNotificationService(
             IHubContext<WebhookDeliveryHub> hubContext,
             IServiceProvider serviceProvider,
-            ILogger<WebhookDeliveryNotificationService> logger)
+            ILogger<WebhookDeliveryNotificationService> logger,
+            TimeProvider? clock = null)
         {
             _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _clock = clock ?? TimeProvider.System;
 
         }
 
-        public Task StartAsync(CancellationToken cancellationToken)
+        public async Task StartAsync(CancellationToken cancellationToken)
         {
-            _statisticsTimer = new Timer(async _ => await BroadcastStatisticsAsync(), null,
-                TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
-            return Task.CompletedTask;
+            await _generationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                lock (_generationSync)
+                {
+                    ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+                    if (_statisticsWorker is not null) return;
+                    _statisticsCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    _statisticsTimer = new PeriodicTimer(TimeSpan.FromMinutes(1), _clock);
+                    _statisticsWorker = RunStatisticsAsync(_statisticsTimer, _statisticsCts.Token);
+                }
+            }
+            finally { _generationLock.Release(); }
         }
 
-        public Task StopAsync(CancellationToken cancellationToken)
+        public async Task StopAsync(CancellationToken cancellationToken)
         {
-            _statisticsTimer?.Dispose();
-            _logger.LogInformation("WebhookDeliveryNotificationService stopped");
-            return Task.CompletedTask;
+            await _generationLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                Task worker;
+                CancellationTokenSource cancellation;
+                lock (_generationSync)
+                {
+                    if (_statisticsWorker is null) return;
+                    worker = _statisticsWorker;
+                    cancellation = _statisticsCts!;
+                }
+                try
+                {
+                    try { await cancellation.CancelAsync().ConfigureAwait(false); }
+                    finally { await worker.ConfigureAwait(false); }
+                }
+                finally
+                {
+                    lock (_generationSync)
+                    {
+                        _statisticsTimer!.Dispose();
+                        cancellation.Dispose();
+                        _statisticsTimer = null;
+                        _statisticsCts = null;
+                        _statisticsWorker = null;
+                    }
+                }
+                _logger.LogInformation("WebhookDeliveryNotificationService stopped");
+            }
+            finally { _generationLock.Release(); }
+        }
+
+        private async Task RunStatisticsAsync(PeriodicTimer timer, CancellationToken cancellationToken)
+        {
+            try
+            {
+                while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+                    await BroadcastStatisticsAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || Volatile.Read(ref _disposed) != 0) { }
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            lock (_generationSync)
+            {
+                // Close the timer locally, but retain cancellation until Stop joins a held
+                // callback. A later Stop can then drain safely without touching a disposed CTS.
+                _statisticsTimer?.Dispose();
+                try { _statisticsCts?.Cancel(); }
+                catch (Exception exception) { _logger.LogWarning(exception, "Webhook statistics cancellation failed"); }
+            }
         }
 
         public async Task NotifyDeliveryAttemptAsync(
@@ -255,10 +323,15 @@ namespace ConduitLLM.Gateway.Services
             }
         }
 
-        public async Task<WebhookStatistics> GetStatisticsAsync(string period = "last_hour")
+        public Task<WebhookStatistics> GetStatisticsAsync(string period = "last_hour") =>
+            GetStatisticsAsync(CancellationToken.None);
+
+        private async Task<WebhookStatistics> GetStatisticsAsync(CancellationToken cancellationToken)
         {
+            ThrowIfStatisticsStopped(cancellationToken);
             using var scope = _serviceProvider.CreateScope();
-            var backlog = await scope.ServiceProvider.GetRequiredService<IWebhookRecovery>().BacklogAsync(CancellationToken.None);
+            var backlog = await scope.ServiceProvider.GetRequiredService<IWebhookRecovery>().BacklogAsync(cancellationToken);
+            ThrowIfStatisticsStopped(cancellationToken);
             WebhookDeliveryTelemetry.Snapshot(backlog);
             var total = backlog.Pending + backlog.Delivered + backlog.Exhausted;
             return new WebhookStatistics
@@ -271,17 +344,26 @@ namespace ConduitLLM.Gateway.Services
             };
         }
 
-        private async Task BroadcastStatisticsAsync()
+        private async Task BroadcastStatisticsAsync(CancellationToken cancellationToken)
         {
             try
             {
-                var stats = await GetStatisticsAsync();
-                await _hubContext.Clients.All.SendAsync("DeliveryStatisticsUpdated", stats);
+                var stats = await GetStatisticsAsync(cancellationToken);
+                ThrowIfStatisticsStopped(cancellationToken);
+                await _hubContext.Clients.All.SendAsync("DeliveryStatisticsUpdated", stats, cancellationToken);
             }
-            catch (Exception)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || Volatile.Read(ref _disposed) != 0) { }
+            catch (Exception exception)
             {
-                _logger.LogWarning( "Error broadcasting webhook statistics");
+                _logger.LogWarning(exception, "Error broadcasting webhook statistics");
             }
+        }
+
+        private void ThrowIfStatisticsStopped(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Volatile.Read(ref _disposed) != 0)
+                throw new OperationCanceledException("Webhook statistics service was disposed", cancellationToken);
         }
 
         private static string DestinationKey(string url) =>
