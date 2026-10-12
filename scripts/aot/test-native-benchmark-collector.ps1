@@ -1695,6 +1695,41 @@ if ($env:CONDUIT_COLLECTOR_HELPER_VALUE -eq 'timeout') {
     Assert-Contract ($result.Stderr.Trim() -ceq 'private-child-diagnostic') 'Private helper stderr capture differs.'
     Assert-Contract ([Environment]::GetEnvironmentVariable('CONDUIT_COLLECTOR_HELPER_VALUE') -ceq $oldEnvironment.CONDUIT_COLLECTOR_HELPER_VALUE) 'Private helper changed parent environment.'
     $cases++
+
+    $utf8HelperChild = Join-Path $temporaryRoot 'utf8-helper-child.ps1'
+    $utf8HelperIdentity = Join-Path $temporaryRoot 'utf8-helper-child.identity'
+    @'
+param([string] $Value, [string] $IdentityPath)
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+. (Join-Path $PSScriptRoot 'process-identity.ps1')
+$self = [Diagnostics.Process]::GetCurrentProcess()
+try { [IO.File]::WriteAllText($IdentityPath, ($self.Id.ToString() + '|' + (Get-OwnedProcessIdentityToken $self))) }
+finally { $self.Dispose() }
+[Console]::Out.WriteLine($Value)
+[Console]::Error.WriteLine($Value)
+'@ | Set-Content -LiteralPath $utf8HelperChild -Encoding utf8NoBOM
+    $originalConsoleOutputEncoding = [Console]::OutputEncoding
+    try {
+        $legacyEncoding = [Text.CodePagesEncodingProvider]::Instance.GetEncoding(437)
+        Assert-Contract ($null -ne $legacyEncoding -and $legacyEncoding.CodePage -eq 437) 'The portable CP437 fixture encoding is unavailable.'
+        [Console]::OutputEncoding = $legacyEncoding
+        Assert-Contract ([Console]::OutputEncoding.CodePage -eq 437 -and $argumentValue.Length -eq 25) 'The UTF8 decoding fixture did not establish its CP437 parent and exact literal.'
+        $results = @(Invoke-BoundedProcess $utf8HelperChild @($argumentValue, $utf8HelperIdentity) 5)
+        Assert-Contract ($results.Count -eq 1 -and $results[0] -is [pscustomobject]) 'The UTF8 decoding helper must return exactly one result object.'
+        $result = $results[0]
+        $resultProperties = @($result.PSObject.Properties.Name | Sort-Object)
+        Assert-Contract ($resultProperties.Count -eq 3 -and ($resultProperties -join '|') -ceq 'ExitCode|Stderr|Stdout' -and
+            $result.ExitCode -is [int] -and $result.Stdout -is [string] -and $result.Stderr -is [string]) 'The UTF8 decoding helper result shape differs.'
+        $expectedOutput = $argumentValue + [Environment]::NewLine
+        Assert-Contract ($result.ExitCode -eq 0 -and $result.Stdout -ceq $expectedOutput -and $result.Stderr -ceq $expectedOutput) 'The CP437 parent corrupted UTF8 child stdout or stderr.'
+        Assert-Contract ([IO.File]::Exists($utf8HelperIdentity)) 'The UTF8 decoding child did not capture its owned identity.'
+        Test-OwnedProcessStopped $utf8HelperIdentity
+    }
+    finally { [Console]::OutputEncoding = $originalConsoleOutputEncoding }
+    Assert-Contract ([Console]::OutputEncoding.Equals($originalConsoleOutputEncoding)) 'The UTF8 decoding fixture did not restore the parent output encoding.'
+    $cases++
+
     $helperEnvironment.CONDUIT_COLLECTOR_HELPER_VALUE = 'nonzero'
     $results = @(Invoke-BoundedProcess $helperChild @($argumentValue) 5 $helperEnvironment)
     Assert-Contract ($results.Count -eq 1 -and $results[0] -is [pscustomobject]) 'Private helper nonzero exit must return exactly one result object.'

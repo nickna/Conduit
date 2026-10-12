@@ -75,6 +75,9 @@ function Invoke-BoundedProcess(
         $start.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
         $start.RedirectStandardOutput = $true
         $start.RedirectStandardError = $true
+        # Docker, workload probes, and custom command overrides emit UTF-8.
+        $start.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+        $start.StandardErrorEncoding = [System.Text.UTF8Encoding]::new($false)
         if ([System.IO.Path]::GetExtension($Command) -ieq '.ps1') {
             $start.FileName = 'pwsh'
             foreach ($argument in @('-NoProfile', '-File', [System.IO.Path]::GetFullPath($Command))) {
