@@ -42,6 +42,13 @@ namespace ConduitLLM.Gateway.Middleware
 
             if (usage is null)
             {
+                if (accountingSnapshot?.ProviderInvocations?.Count == 0 &&
+                    accountingSnapshot.Transport?.ProviderChunksObserved == 0 &&
+                    accountingSnapshot.Reservation?.InvocationStarted != true &&
+                    accountingSnapshot.FunctionExecutions.Count == 0 &&
+                    accountingSnapshot.ProviderToolUsage?.Tools.Count is not > 0)
+                    return;
+
                 // Function execution cost is known independently of provider token usage. A provider
                 // may omit its final usage chunk (or the client may disconnect after functions ran),
                 // so preserve that charge before returning from the token-usage path.
@@ -58,6 +65,9 @@ namespace ConduitLLM.Gateway.Middleware
                     var accounting = context.GetOrCreateRequestAccountingContext();
                     accounting.MarkInvocationStarted();
                     accounting.MarkIndeterminate("Provider invocation ended without resolved streaming usage");
+                    if (accounting.Snapshot().ProviderPricing is null)
+                        accounting.RecordProviderPricing(new ProviderPricingEvidence(null,
+                            FailureReason: "Provider invocation ended without resolved streaming usage"));
                     if (knownToolPricing.Cost is null)
                         RecordToolPricingFailure(context, accountingSnapshot?.RequestedModel ?? "unknown",
                             functionUsage, knownToolPricing, billingAuditService);

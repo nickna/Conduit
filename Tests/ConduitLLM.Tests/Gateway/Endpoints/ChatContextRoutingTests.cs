@@ -114,14 +114,15 @@ public class ChatContextRoutingTests
         Assert.Equal("selected-route", request.RoutingDecisionReason);
         Assert.Equal(2, request.RoutingFailoverCount);
         Assert.Equal(2, request.Messages.Count);
-        if (!streaming)
-        {
-            Assert.Equal(new[] { 1 }, context.GetRequestAccountingSnapshot()!.ProviderInvocations);
-            Assert.Same(usage, Assert.Single(context.GetRequestAccountingSnapshot()!.ProviderCalls).Usage);
-            Assert.Null(request.ProviderInvocationStarting);
-            Assert.Null(request.ProviderInvocationCompleted);
-            Assert.Null(request.FunctionExecutionCompleted);
-        }
+        Assert.Equal(new[] { 1 }, context.GetRequestAccountingSnapshot()!.ProviderInvocations);
+        Assert.Same(usage, Assert.Single(context.GetRequestAccountingSnapshot()!.ProviderCalls).Usage);
+        Assert.Null(request.ProviderInvocationStarting);
+        Assert.Null(request.ProviderInvocationCompleted);
+        Assert.Null(request.FunctionExecutionCompleted);
+        Assert.Null(request.ProviderStreamUsageObserved);
+        Assert.Null(request.ProviderStreamCompleted);
+        if (streaming)
+            Assert.Equal(new[] { 1 }, context.GetRequestAccountingSnapshot()!.CompletedStreamingProviderInvocations);
         modelCosts.Verify(service => service.GetCostByIdAsync(23, It.IsAny<CancellationToken>()), Times.Once);
         modelCosts.Verify(service => service.GetCostByIdAsync(17, It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -133,6 +134,8 @@ public class ChatContextRoutingTests
         request.ProviderInvocationStarting = (_, _) => Task.CompletedTask;
         request.ProviderInvocationCompleted = (_, _, _) => { };
         request.FunctionExecutionCompleted = _ => { };
+        request.ProviderStreamUsageObserved = (_, _, _) => { };
+        request.ProviderStreamCompleted = _ => { };
         var managed = await Manager("built-in").ManageContextAsync(request, 100);
 
         Assert.NotSame(request, managed);
@@ -169,11 +172,14 @@ public class ChatContextRoutingTests
                 await conduit.CreateChatCompletionAsync(request, cancellationToken: cancellation.Token);
         }
         var actualFailure = await Assert.ThrowsAnyAsync<Exception>(Execute);
-        if (!streaming && cancelled)
+        if (cancelled)
         {
             Assert.IsAssignableFrom<OperationCanceledException>(actualFailure);
             client.Verify(service => service.CreateChatCompletionAsync(
                 It.IsAny<ChatCompletionRequest>(), null, It.IsAny<CancellationToken>()), Times.Never());
+            if (streaming)
+                client.Verify(service => service.StreamChatCompletionAsync(
+                    It.IsAny<ChatCompletionRequest>(), null, It.IsAny<CancellationToken>()), Times.Never());
         }
         else Assert.Same(failure, actualFailure);
         Assert.Equal(23, request.SelectedMappingId);
@@ -227,6 +233,8 @@ public class ChatContextRoutingTests
         Assert.Same(original.ProviderInvocationStarting, active.ProviderInvocationStarting);
         Assert.Same(original.ProviderInvocationCompleted, active.ProviderInvocationCompleted);
         Assert.Same(original.FunctionExecutionCompleted, active.FunctionExecutionCompleted);
+        Assert.Same(original.ProviderStreamUsageObserved, active.ProviderStreamUsageObserved);
+        Assert.Same(original.ProviderStreamCompleted, active.ProviderStreamCompleted);
     }
 
     private static Mock<ILLMClientFactory> Factory(ILLMClient client, ChatCompletionRequest original)

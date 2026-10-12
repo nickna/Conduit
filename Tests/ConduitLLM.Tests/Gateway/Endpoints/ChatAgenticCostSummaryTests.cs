@@ -39,7 +39,11 @@ public class ChatAgenticCostSummaryTests
         foreach (var scenario in new[] { "missing-second", "missing-first", "all-missing", "failed-provider",
             "throw-provider", "fallback-missing", "forced-final-missing", "fallback-limit-gap", "cancel-after-functions", "single-estimate",
             "route-unavailable", "failed-provider-route-unavailable" })
-            yield return [path, scenario, false];
+        foreach (var streaming in scenario == "fallback-limit-gap" ? new[] { false } : new[] { false, true })
+            yield return [path, scenario, streaming];
+        foreach (var path in new[] { "/v1/chat/completions", "/v1/conduit/chat/completions" })
+        foreach (var scenario in new[] { "repeated-stream-usage", "same-call-interrupted", "repeated-hosted-stream", "interrupted-hosted-stream" })
+            yield return [path, scenario, true];
     }
 
     [Theory]
@@ -47,14 +51,17 @@ public class ChatAgenticCostSummaryTests
     public async Task Serialized_summary_matches_settlement_without_repricing(string path, string scenario, bool streaming)
     {
         var missingCases = scenario is "missing-second" or "missing-first" or "all-missing" or "failed-provider" or
-            "throw-provider" or "fallback-missing" or "forced-final-missing" or "fallback-limit-gap" or "failed-provider-route-unavailable";
+            "throw-provider" or "fallback-missing" or "forced-final-missing" or "fallback-limit-gap" or "failed-provider-route-unavailable" or
+            "same-call-interrupted" or "interrupted-hosted-stream";
         var routeUnavailable = scenario is "route-unavailable" or "failed-provider-route-unavailable";
         var incompletePricing = missingCases || routeUnavailable;
-        var observerCase = missingCases || routeUnavailable || scenario is "cancel-after-functions" or "single-estimate";
+        var singleCall = scenario is "single-estimate" or "repeated-stream-usage" or "same-call-interrupted" or "repeated-hosted-stream" or "interrupted-hosted-stream";
+        var observerCase = missingCases || routeUnavailable || singleCall || scenario == "cancel-after-functions";
         var fallback = scenario.StartsWith("fallback", StringComparison.Ordinal);
         var pricingFailure = scenario is "pricing-failure" or "partial-provider" or "provider-failure-hosted-tools";
         var toolPricingFailure = scenario is "tool-pricing-failure" or "partial-hosted-tools";
-        using var toolDatabase = scenario is "hosted-tools" or "tool-pricing-failure" or "partial-hosted-tools" or "provider-failure-hosted-tools"
+        using var toolDatabase = scenario is "hosted-tools" or "tool-pricing-failure" or "partial-hosted-tools" or "provider-failure-hosted-tools" or
+            "repeated-hosted-stream" or "interrupted-hosted-stream"
             ? new SqliteTestDatabase() : null;
         IToolCostCalculationService toolPricing = Mock.Of<IToolCostCalculationService>();
         if (toolDatabase is not null)
@@ -72,7 +79,7 @@ public class ChatAgenticCostSummaryTests
             toolPricing = new ToolCostCalculationService(toolDatabase.CreateDbContextFactory(),
                 NullLogger<ToolCostCalculationService>.Instance);
         }
-        var functionCost = fallback || scenario == "single-estimate" ? 0m : 0.05m;
+        var functionCost = fallback || singleCall ? 0m : 0.05m;
         var firstUsage = new Usage { PromptTokens = 10, CompletionTokens = 5, TotalTokens = 15,
             ProviderReportedCostUsd = scenario is "markup" or "partial-provider" ? 0.01m : scenario == "zero" ? 0m : null };
         var secondUsage = new Usage { PromptTokens = 20, CompletionTokens = 10, TotalTokens = 30,
@@ -114,6 +121,29 @@ public class ChatAgenticCostSummaryTests
             .Returns(StreamingResponse(firstUsage, toolCall: true))
             .Returns(StreamingResponse(secondUsage, toolCall: false, hostedTool: toolDatabase is not null,
                 partialHostedTool: scenario == "partial-hosted-tools"));
+        if (observerCase && streaming)
+        {
+            var calls = 0;
+            client.Setup(service => service.StreamChatCompletionAsync(
+                    It.IsAny<ChatCompletionRequest>(), null, It.IsAny<CancellationToken>()))
+                .Returns(() =>
+                {
+                    calls++;
+                    if (calls == 2 && scenario.StartsWith("failed-provider", StringComparison.Ordinal))
+                        return InterruptedStreamingResponse(new LLMCommunicationException("later provider unavailable", HttpStatusCode.ServiceUnavailable, null));
+                    if (calls == 2 && scenario == "throw-provider")
+                        return InterruptedStreamingResponse(new InvalidOperationException("later provider exploded"));
+                    if (scenario is "same-call-interrupted" or "interrupted-hosted-stream")
+                        return InterruptedStreamingResponse(new InvalidOperationException("unmeasured tail"), firstUsage,
+                            hosted: scenario == "interrupted-hosted-stream");
+                    if (scenario is "repeated-stream-usage" or "repeated-hosted-stream")
+                        return RevisedStreamingResponse(firstUsage, secondUsage, hosted: scenario == "repeated-hosted-stream");
+                    var missing = scenario == "all-missing" || (calls == 1 && scenario is "missing-first" or "single-estimate") ||
+                        (calls == 2 && scenario is "missing-second" or "fallback-missing" or "forced-final-missing");
+                    return StreamingResponse(missing ? null : calls == 1 ? firstUsage : secondUsage,
+                        toolCall: !singleCall && calls == 1, hostedTool: routeUnavailable && calls == 1);
+                });
+        }
         var factory = new Mock<ILLMClientFactory>();
         factory.Setup(service => service.GetClientForChatAsync(It.IsAny<ChatCompletionRequest>(), It.IsAny<CancellationToken>()))
             .Callback<ChatCompletionRequest, CancellationToken>((request, _) => request.SelectedMappingId = 23)
@@ -196,6 +226,7 @@ public class ChatAgenticCostSummaryTests
             .ConfigureHttpJsonOptions(options => GatewayJsonOptions.Configure(options.SerializerOptions))
             .AddSingleton<ISpendReservationService>(reservations.Object).BuildServiceProvider();
         var context = new DefaultHttpContext { RequestServices = services };
+        context.RequestAborted = cancellation.Token;
         context.Request.Path = path;
         context.Response.Body = new MemoryStream();
         context.Items["VirtualKeyId"] = 42;
@@ -253,16 +284,16 @@ public class ChatAgenticCostSummaryTests
         }, NullLogger<UsageTrackingMiddleware>.Instance);
         async Task Invoke() => await middleware.InvokeAsync(context, pricing, Mock.Of<IBatchSpendUpdateService>(), writer.Object,
             Mock.Of<IVirtualKeyRuntimeService>(), audit.Object, toolPricing);
-        if (scenario == "throw-provider")
+        if (scenario == "throw-provider" && !streaming)
             Assert.Equal("later provider exploded", (await Assert.ThrowsAsync<InvalidOperationException>(Invoke)).Message);
-        else if (scenario == "cancel-after-functions")
+        else if (scenario == "cancel-after-functions" && !streaming)
             await Assert.ThrowsAnyAsync<OperationCanceledException>(Invoke);
         else await Invoke();
 
         if (observerCase)
         {
             var snapshot = context.GetRequestAccountingSnapshot()!;
-            var invocationCount = scenario == "fallback-limit-gap" ? 3 : scenario is "single-estimate" or "cancel-after-functions" ? 1 : 2;
+            var invocationCount = scenario == "fallback-limit-gap" ? 3 : singleCall || scenario == "cancel-after-functions" ? 1 : 2;
             Assert.Equal(Enumerable.Range(1, invocationCount), snapshot.ProviderInvocations);
             Assert.Equal(missingCases, snapshot.HasIncompleteProviderUsage);
             Assert.Equal(incompletePricing, snapshot.IsIndeterminate);
@@ -271,15 +302,16 @@ public class ChatAgenticCostSummaryTests
             {
                 "all-missing" or "route-unavailable" or "failed-provider-route-unavailable" => 0m,
                 "missing-first" => 0.03m, "fallback-limit-gap" => 0.05m,
-                "single-estimate" => 0.000075m, _ => 0.02m
+                "single-estimate" => 0.000075m, "repeated-stream-usage" or "repeated-hosted-stream" => 0.03m, _ => 0.02m
             };
             Assert.Equal(providerCost, snapshot.ProviderPricing!.KnownCost);
             if (incompletePricing) Assert.Null(snapshot.ProviderPricing.Cost);
             else Assert.Equal(providerCost, snapshot.ProviderPricing.Cost);
-            Assert.Equal(providerCost + functionCost, incompletePricing ? knownCost : settledCost);
+            var hostedCost = scenario switch { "repeated-hosted-stream" => 0.06m, "interrupted-hosted-stream" => 0.03m, _ => 0m };
+            Assert.Equal(providerCost + functionCost + hostedCost, incompletePricing ? knownCost : settledCost);
             Assert.Equal(!incompletePricing, snapshot.Reservation!.Closed);
             var log = Assert.Single(logs);
-            Assert.Equal(providerCost + functionCost, log.Cost);
+            Assert.Equal(providerCost + functionCost + hostedCost, log.Cost);
             Assert.Equal(23, log.ModelProviderMappingId);
             if (incompletePricing && functionCost > 0m)
             {
@@ -291,13 +323,30 @@ public class ChatAgenticCostSummaryTests
                     Assert.Null(metadata.CostBreakdown.ProviderToolCost);
                     Assert.Single(metadata.ProviderToolUsage!.Tools);
                     Assert.NotNull(snapshot.ProviderToolPricing!.UsageJson);
+                    using var hostedJson = JsonDocument.Parse(snapshot.ProviderToolPricing.UsageJson!);
+                    Assert.Equal("browser_search", hostedJson.RootElement.GetProperty("tools")[0].GetProperty("tool_name").GetString());
                     Assert.False(context.Items.ContainsKey("ProviderId"));
                 }
             }
             estimation.Verify(service => service.EstimateUsageFromStreamingResponseAsync(
                     It.IsAny<string>(), It.IsAny<List<Message>>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<Tool>>(), It.IsAny<CancellationToken>()),
                 scenario == "single-estimate" ? Times.Once() : Times.Never());
-            if (scenario is not "throw-provider" and not "cancel-after-functions")
+            if (streaming)
+            {
+                Assert.Equal(Enumerable.Range(1, invocationCount), snapshot.StreamingProviderInvocations);
+                Assert.Equal(missingCases && scenario is "failed-provider" or "throw-provider" or "failed-provider-route-unavailable"
+                    ? new[] { 1 } : scenario is "same-call-interrupted" or "interrupted-hosted-stream" ? [] : Enumerable.Range(1, invocationCount),
+                    snapshot.CompletedStreamingProviderInvocations);
+                if (hostedCost > 0m)
+                {
+                    Assert.Equal(hostedCost, snapshot.ProviderToolPricing!.KnownCost);
+                    Assert.Equal(scenario == "interrupted-hosted-stream", snapshot.HasIncompleteProviderToolUsage);
+                    Assert.Equal(scenario == "interrupted-hosted-stream" ? null : (decimal?)hostedCost, snapshot.ProviderToolPricing.Cost);
+                    Assert.Equal(scenario == "interrupted-hosted-stream" ? 1 : 2, Assert.Single(snapshot.ProviderToolUsage!.Tools).Count);
+                }
+                Assert.Equal(200, context.Response.StatusCode);
+            }
+            else if (scenario is not "throw-provider" and not "cancel-after-functions")
             {
                 Assert.Equal(scenario.StartsWith("failed-provider", StringComparison.Ordinal) ? 503 : 200, context.Response.StatusCode);
                 context.Response.Body.Position = 0;
@@ -402,7 +451,7 @@ public class ChatAgenticCostSummaryTests
         return usage;
     }
 
-    private static async IAsyncEnumerable<ChatCompletionChunk> StreamingResponse(Usage usage, bool toolCall,
+    private static async IAsyncEnumerable<ChatCompletionChunk> StreamingResponse(Usage? usage, bool toolCall,
         bool hostedTool = false, bool partialHostedTool = false)
     {
         await Task.Yield();
@@ -415,5 +464,33 @@ public class ChatAgenticCostSummaryTests
                     ToolCalls = toolCall ? [new ToolCallChunk { Index = 0, Id = "call-1", Type = "function",
                         Function = new FunctionCallChunk { Name = "lookup", Arguments = "{}" } }] : null } }]
         };
+    }
+
+    private static async IAsyncEnumerable<ChatCompletionChunk> InterruptedStreamingResponse(Exception failure,
+        Usage? usage = null, bool hosted = false)
+    {
+        if (usage is not null)
+            await foreach (var chunk in StreamingResponse(usage, false))
+            {
+                if (hosted) chunk.ProviderToolUsage = new ProviderToolUsage
+                    { Tools = [new ProviderToolUsageItem { ToolName = "browser_search", Count = 1 }] };
+                yield return chunk;
+            }
+        await Task.Yield();
+        throw failure;
+#pragma warning disable CS0162
+        yield break;
+#pragma warning restore CS0162
+    }
+
+    private static async IAsyncEnumerable<ChatCompletionChunk> RevisedStreamingResponse(Usage first, Usage last, bool hosted)
+    {
+        foreach (var (usage, count) in new[] { (first, 1), (last, 2), (last, 2) })
+            await foreach (var chunk in StreamingResponse(usage, false))
+            {
+                if (hosted) chunk.ProviderToolUsage = new ProviderToolUsage
+                    { Tools = [new ProviderToolUsageItem { ToolName = "browser_search", Count = count }] };
+                yield return chunk;
+            }
     }
 }

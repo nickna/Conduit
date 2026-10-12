@@ -364,6 +364,8 @@ public class ChatCompletionRequest
     [JsonIgnore] public Func<int, CancellationToken, Task>? ProviderInvocationStarting { get; set; }
     [JsonIgnore] public Action<int, ChatCompletionResponse, Usage?>? ProviderInvocationCompleted { get; set; }
     [JsonIgnore] public Action<AgenticExecutionMetrics>? FunctionExecutionCompleted { get; set; }
+    [JsonIgnore] public Action<int, ChatCompletionChunk, Usage?>? ProviderStreamUsageObserved { get; set; }
+    [JsonIgnore] public Action<int>? ProviderStreamCompleted { get; set; }
 
     /// <summary>Preserves server-owned request state when context management replaces the request.</summary>
     internal void CopyRuntimeStateTo(ChatCompletionRequest target)
@@ -377,5 +379,7 @@ public class ChatCompletionRequest
         target.ProviderInvocationStarting = ProviderInvocationStarting;
         target.ProviderInvocationCompleted = ProviderInvocationCompleted;
         target.FunctionExecutionCompleted = FunctionExecutionCompleted;
+        target.ProviderStreamUsageObserved = ProviderStreamUsageObserved;
+        target.ProviderStreamCompleted = ProviderStreamCompleted;
     }
 }

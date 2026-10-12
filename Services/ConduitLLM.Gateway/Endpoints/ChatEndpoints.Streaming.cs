@@ -30,18 +30,7 @@ namespace ConduitLLM.Gateway.Endpoints
             var previousStarting = request.ProviderInvocationStarting;
             var previousCompleted = request.ProviderInvocationCompleted;
             var previousFunctions = request.FunctionExecutionCompleted;
-            request.ProviderInvocationStarting = async (invocation, token) =>
-            {
-                token.ThrowIfCancellationRequested();
-                if (previousStarting is not null)
-                    await previousStarting(invocation, token);
-                token.ThrowIfCancellationRequested();
-                var admissionError = await MarkChatInvocationStartedAsync(virtualKeyId, accounting);
-                if (admissionError is not null)
-                    throw new ChatInvocationAdmissionException(admissionError);
-                token.ThrowIfCancellationRequested();
-                accounting.RecordProviderInvocation(invocation);
-            };
+            request.ProviderInvocationStarting = CreateProviderStartingObserver(previousStarting, virtualKeyId, accounting);
             request.ProviderInvocationCompleted = (invocation, completed, aggregate) =>
             {
                 if (completed.Usage is { } raw)
@@ -103,7 +92,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 }
                 if (accounting.Snapshot().HasIncompleteProviderUsage)
                     accounting.MarkIndeterminate("One or more provider invocations ended without usage evidence");
-                await CaptureNonStreamingSelectedRouteAsync(request);
+                await CaptureSelectedRouteForAccountingAsync(request);
                 routeCaptured = true;
 
                 // Stash the provider-reported cost via the side channel so the middleware can bill from it.
@@ -147,13 +136,30 @@ namespace ConduitLLM.Gateway.Endpoints
                 request.ProviderInvocationCompleted = previousCompleted;
                 request.FunctionExecutionCompleted = previousFunctions;
                 if (!routeCaptured)
-                    await CaptureNonStreamingSelectedRouteAsync(request);
+                    await CaptureSelectedRouteForAccountingAsync(request);
                 if (accounting.Snapshot().HasIncompleteProviderUsage)
                     accounting.MarkIndeterminate("One or more provider invocations ended without usage evidence");
             }
         }
 
-        private async Task CaptureNonStreamingSelectedRouteAsync(ChatCompletionRequest request)
+        private Func<int, CancellationToken, Task> CreateProviderStartingObserver(
+            Func<int, CancellationToken, Task>? previous,
+            int? virtualKeyId,
+            IRequestAccountingContext accounting,
+            bool streaming = false) => async (invocation, token) =>
+        {
+            token.ThrowIfCancellationRequested();
+            if (previous is not null)
+                await previous(invocation, token);
+            token.ThrowIfCancellationRequested();
+            var admissionError = await MarkChatInvocationStartedAsync(virtualKeyId, accounting);
+            if (admissionError is not null)
+                throw new ChatInvocationAdmissionException(admissionError);
+            token.ThrowIfCancellationRequested();
+            accounting.RecordProviderInvocation(invocation, streaming);
+        };
+
+        private async Task CaptureSelectedRouteForAccountingAsync(ChatCompletionRequest request)
         {
             try
             {
@@ -187,7 +193,7 @@ namespace ConduitLLM.Gateway.Endpoints
                         }).ToList()
                     };
                     accounting.RecordProviderToolPricing(new ProviderToolPricingEvidence(null,
-                        JsonSerializer.Serialize(hostedUsage, GatewayInternalJsonContext.Default.ToolUsageData), reason));
+                        ToolCostCalculationService.SerializeToolUsageSnapshot(hostedUsage), reason));
                 }
             }
         }
@@ -250,6 +256,27 @@ namespace ConduitLLM.Gateway.Endpoints
                 _usageTrackingOptions.MaximumStreamingToolCalls);
             SseTransportMetrics.ActiveStreams.Add(1);
             var firstChunkTime = DateTime.UtcNow;
+            var previousStarting = request.ProviderInvocationStarting;
+            var previousObserved = request.ProviderStreamUsageObserved;
+            var previousCompleted = request.ProviderStreamCompleted;
+            request.ProviderInvocationStarting = CreateProviderStartingObserver(
+                previousStarting, virtualKeyId, accountingContext, streaming: true);
+            request.ProviderStreamUsageObserved = (invocation, chunk, aggregate) =>
+            {
+                CaptureUsageData(chunk, request, state);
+                if (chunk.ProviderCallUsage is { } raw)
+                    accountingContext.RecordProviderCall(raw);
+                if (aggregate is not null)
+                    accountingContext.RecordProviderUsage(aggregate, chunk.Model ?? request.Model, UsageEvidenceSource.Provider);
+                if (chunk.ProviderToolUsage is not null)
+                    accountingContext.RecordProviderToolCallUsage(invocation, chunk.ProviderToolUsage);
+                previousObserved?.Invoke(invocation, chunk, aggregate);
+            };
+            request.ProviderStreamCompleted = invocation =>
+            {
+                accountingContext.RecordProviderStreamCompleted(invocation);
+                previousCompleted?.Invoke(invocation);
+            };
 
             try
             {
@@ -328,6 +355,9 @@ namespace ConduitLLM.Gateway.Endpoints
             }
             finally
             {
+                request.ProviderInvocationStarting = previousStarting;
+                request.ProviderStreamUsageObserved = previousObserved;
+                request.ProviderStreamCompleted = previousCompleted;
                 var transportOutcome = state.EvidenceLimitExceeded && state.StreamingUsage is null
                     ? StreamTransportOutcome.AccountingIndeterminate
                     : state.Outcome;
@@ -340,15 +370,6 @@ namespace ConduitLLM.Gateway.Endpoints
                     sseWriter.FirstClientFlushAt,
                     state.EvidenceLimitExceeded));
 
-                try
-                {
-                    await CaptureSelectedRouteAsync(request);
-                }
-                catch (Exception routeCaptureEx)
-                {
-                    _logger.LogError(routeCaptureEx, "Failed to capture the selected streaming route for accounting");
-                }
-
                 // Billing data must survive provider failures and client disconnects. Do not use the
                 // request token here: it is normally cancelled precisely when this fallback is needed.
                 // The server-owned budget prevents a failed client transport from pinning the request forever.
@@ -360,6 +381,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 }
                 finally
                 {
+                    await CaptureSelectedRouteForAccountingAsync(request);
                     var providerLabel = modelMapping?.Provider?.ProviderType.ToString().ToLowerInvariant() ?? "unknown";
                     SseTransportMetrics.Streams.Add(
                         1,
@@ -572,7 +594,8 @@ namespace ConduitLLM.Gateway.Endpoints
                 HttpContext.GetOrCreateRequestAccountingContext().MarkIndeterminate(reason);
                 state.Outcome = StreamTransportOutcome.AccountingIndeterminate;
             }
-            else if (state.ContentAccumulator.Length > 0 || state.AccumulatedToolCalls.Count > 0)
+            else if (HttpContext.GetRequestAccountingSnapshot()?.ProviderInvocations?.Count is not > 1 &&
+                (state.ContentAccumulator.Length > 0 || state.AccumulatedToolCalls.Count > 0))
             {
                 _logger.LogWarning("No usage data received from provider for streaming response, estimating usage for model {Model}", LoggingSanitizer.S(request.Model));
                 await EstimateStreamingUsageAsync(request, state, cancellationToken);
@@ -581,7 +604,8 @@ namespace ConduitLLM.Gateway.Endpoints
             {
                 _logger.LogWarning("No output accumulated from streaming response, cannot estimate usage");
                 var accountingContext = HttpContext.GetOrCreateRequestAccountingContext();
-                if (accountingContext.Snapshot().Reservation?.InvocationStarted == true)
+                if (accountingContext.Snapshot().ProviderInvocations?.Count > 0 ||
+                    accountingContext.Snapshot().Reservation?.InvocationStarted == true)
                 {
                     accountingContext.MarkIndeterminate(
                         "Provider invocation ended without usage or bounded output evidence");
@@ -597,7 +621,8 @@ namespace ConduitLLM.Gateway.Endpoints
                         .Select(entry => new ProviderCallUsage { Iteration = entry.Key, Usage = entry.Value }));
             }
 
-            if (state.ProviderToolUsage is not null)
+            if (state.ProviderToolUsage is not null &&
+                HttpContext.GetRequestAccountingSnapshot()?.ProviderInvocations?.Count is not > 0)
             {
                 HttpContext.GetOrCreateRequestAccountingContext()
                     .RecordProviderToolUsage(state.ProviderToolUsage);
@@ -621,6 +646,10 @@ namespace ConduitLLM.Gateway.Endpoints
                     "Stored {Count} function execution results for request logging, total cost: {Cost:C}",
                     state.FunctionExecutionResults.Count, state.TotalFunctionCost);
             }
+
+            var accounting = HttpContext.GetOrCreateRequestAccountingContext();
+            if (accounting.Snapshot().HasIncompleteProviderUsage)
+                accounting.MarkIndeterminate("Provider streaming invocations ended without complete usage evidence");
 
         }
 

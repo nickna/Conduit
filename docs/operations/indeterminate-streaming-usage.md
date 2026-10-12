@@ -6,6 +6,16 @@ retained before their SSE notification is attempted, including failed notificati
 writes and cancellation. A notification does not determine whether an invocation
 incurred a cost.
 
+Streaming records actual provider starts before the first stream advance, and raw
+usage before yielding chunks to client transport. Repeated usage and hosted-tool
+snapshots replace the current invocation's cumulative evidence. Each invocation
+must exhaust and dispose successfully before reported usage is complete: a finish
+reason can precede a revised usage snapshot. Interrupted calls retain their latest
+priced subtotal and leave the parent hold open. Cancellation before the next
+provider call creates no invocation, and fully completed earlier work can settle.
+Only the existing single-call bounded estimator can resolve missing usage;
+multi-call output and conversation history never stand in for a missing report.
+
 Nonstreaming chat records each actual provider invocation before the call and
 retains its reported usage and hosted-tool evidence immediately after completion.
 Completed function batches remain available if a later call fails. A missing usage

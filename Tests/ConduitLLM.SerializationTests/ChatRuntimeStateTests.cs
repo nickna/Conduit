@@ -22,6 +22,8 @@ public class ChatRuntimeStateTests
         request.ProviderInvocationStarting = (_, _) => Task.CompletedTask;
         request.ProviderInvocationCompleted = (_, _, _) => { };
         request.FunctionExecutionCompleted = _ => { };
+        request.ProviderStreamUsageObserved = (_, _, _) => { };
+        request.ProviderStreamCompleted = _ => { };
 
         Assert.Equal(wire, JsonSerializer.Serialize(request, options));
     }

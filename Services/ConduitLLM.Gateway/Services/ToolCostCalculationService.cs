@@ -168,9 +168,7 @@ namespace ConduitLLM.Gateway.Services
                     return "{}";
                 }
 
-                return JsonSerializer.Serialize(
-                    toolUsage,
-                    GatewayJsonTypeInfo.Require<ToolUsageData>(ToolUsageJsonOptions));
+                return SerializeToolUsageSnapshot(toolUsage);
             }
             catch (Exception ex)
             {
@@ -178,6 +176,9 @@ namespace ConduitLLM.Gateway.Services
                 return "{}";
             }
         }
+
+        internal static string SerializeToolUsageSnapshot(ToolUsageData usage) => JsonSerializer.Serialize(
+            usage, GatewayJsonTypeInfo.Require<ToolUsageData>(ToolUsageJsonOptions));
 
         private static JsonSerializerOptions CreateToolUsageJsonOptions() => new()
         {

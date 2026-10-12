@@ -49,10 +49,12 @@ public static class ProviderUsagePricing
                     ? parsed : ProviderType.OpenAI;
             var cost = await toolCostCalculationService.CalculateToolCostsAsync(usage, provider);
             var result = new ProviderToolPricingEvidence(
-                cost.Failed ? null : cost.TotalCost,
+                cost.Failed || snapshot.HasIncompleteProviderToolUsage ? null : cost.TotalCost,
                 usageJson,
-                cost.Failed ? "Provider-hosted tool pricing failed" : null,
-                cost.HasUnconfiguredTools ? string.Join(", ", cost.UnconfiguredToolNames) : null);
+                cost.Failed ? "Provider-hosted tool pricing failed" : snapshot.HasIncompleteProviderToolUsage
+                    ? ProviderToolPricingEvidence.IncompleteStreamingUsageReason : null,
+                cost.HasUnconfiguredTools ? string.Join(", ", cost.UnconfiguredToolNames) : null,
+                cost.Failed ? 0m : cost.TotalCost);
             accounting.RecordProviderToolPricing(result);
             return result;
         }
@@ -82,7 +84,7 @@ public static class ProviderUsagePricing
             var fallbackReasons = new List<string>();
             var failures = new List<string>();
             if (snapshot.HasIncompleteProviderUsage)
-                failures.Add("One or more provider invocations ended without usage evidence");
+                failures.Add("One or more provider invocations ended without complete usage evidence");
             var pricedCallCount = 0;
             var modelCostId = context.Items.TryGetValue(HttpContextKeys.ModelCostId, out var costId)
                 ? costId as int?

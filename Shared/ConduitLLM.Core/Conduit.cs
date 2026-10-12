@@ -148,7 +148,7 @@ namespace ConduitLLM.Core
                 else
                 {
                     ILLMClient client = await GetChatClientAsync(request, cancellationToken);
-                    await foreach (var chunk in client.StreamChatCompletionAsync(request, apiKey, cancellationToken))
+                    await foreach (var chunk in StreamProviderInvocationAsync(request, client, apiKey, 1, null, cancellationToken))
                     {
                         request.CopyRuntimeStateTo(originalRequest);
                         yield return chunk;
@@ -159,6 +159,61 @@ namespace ConduitLLM.Core
             {
                 request.CopyRuntimeStateTo(originalRequest);
             }
+        }
+
+        private async IAsyncEnumerable<ChatCompletionChunk> StreamProviderInvocationAsync(
+            ChatCompletionRequest request,
+            ILLMClient client,
+            string? apiKey,
+            int invocation,
+            Usage? previousUsage,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (request.ProviderInvocationStarting is { } starting)
+                await starting(invocation, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            var provider = client.StreamChatCompletionAsync(request, apiKey, cancellationToken)
+                .GetAsyncEnumerator(cancellationToken);
+            Usage? currentUsage = null;
+            var exhausted = false;
+            try
+            {
+                while (true)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!await provider.MoveNextAsync().ConfigureAwait(false))
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        break;
+                    }
+                    var chunk = provider.Current;
+                    chunk.ProviderIteration = invocation;
+                    if (chunk.Usage is { } rawUsage)
+                    {
+                        currentUsage = rawUsage;
+                        chunk.ProviderCallUsage = new ProviderCallUsage { Iteration = invocation, Usage = rawUsage };
+                        chunk.Usage = AggregateUsage(previousUsage, rawUsage);
+                    }
+                    // Publish cumulative raw evidence before the caller can yield to client transport.
+                    request.ProviderStreamUsageObserved?.Invoke(invocation, chunk, AggregateUsage(previousUsage, currentUsage));
+                    yield return chunk;
+                }
+                exhausted = true;
+            }
+            finally
+            {
+                try { await provider.DisposeAsync().ConfigureAwait(false); }
+                catch (Exception cleanupEx) when (!exhausted)
+                {
+                    // Cleanup must preserve a provider/cancellation/client-write failure that
+                    // already interrupted this invocation. Its last raw usage is still retained.
+                    _logger.LogError(cleanupEx, "Provider stream cleanup failed after invocation {Invocation} was interrupted", invocation);
+                }
+            }
+            // A finish-reason chunk may precede a revised usage report. Only exhaustion
+            // establishes that this invocation cannot produce additional billable usage.
+            request.ProviderStreamCompleted?.Invoke(invocation);
         }
 
         /// <summary>
@@ -382,6 +437,7 @@ namespace ConduitLLM.Core
             ILLMClient client = await GetChatClientAsync(request, cancellationToken);
             var iteration = 0;
             Usage? accumulatedUsage = null;
+            var invocationOrdinal = 0;
 
             // Track tool calls outside the loop for iteration limit check
             var accumulatedToolCalls = new Dictionary<int, ToolCall>();
@@ -397,17 +453,11 @@ namespace ConduitLLM.Core
                 Usage? iterationUsage = null;
 
                 // Stream the LLM response
-                await foreach (var chunk in client.StreamChatCompletionAsync(request, apiKey, cancellationToken))
+                await foreach (var chunk in StreamProviderInvocationAsync(
+                    request, client, apiKey, ++invocationOrdinal, accumulatedUsage, cancellationToken))
                 {
-                    chunk.ProviderIteration = iteration;
-                    if (chunk.Usage != null)
-                    {
-                        // Providers may repeat usage in multiple chunks. Keep the latest usage for
-                        // this provider call, while exposing the running total across prior calls.
-                        iterationUsage = chunk.Usage;
-                        chunk.ProviderCallUsage = new ProviderCallUsage { Iteration = iteration, Usage = iterationUsage };
-                        chunk.Usage = AggregateUsage(accumulatedUsage, iterationUsage);
-                    }
+                    if (chunk.ProviderCallUsage is { } providerCall)
+                        iterationUsage = providerCall.Usage;
 
                     // Forward the chunk to the client
                     yield return chunk;
@@ -490,17 +540,9 @@ namespace ConduitLLM.Core
                     });
 
                     // Stream one more response
-                    Usage? finalCallUsage = null;
-                    await foreach (var chunk in client.StreamChatCompletionAsync(request, apiKey, cancellationToken))
+                    await foreach (var chunk in StreamProviderInvocationAsync(
+                        request, client, apiKey, ++invocationOrdinal, accumulatedUsage, cancellationToken))
                     {
-                        chunk.ProviderIteration = iteration + 1;
-                        if (chunk.Usage != null)
-                        {
-                            finalCallUsage = chunk.Usage;
-                            chunk.ProviderCallUsage = new ProviderCallUsage { Iteration = iteration + 1, Usage = finalCallUsage };
-                            chunk.Usage = AggregateUsage(accumulatedUsage, finalCallUsage);
-                        }
-
                         yield return chunk;
                     }
                     // The fallback is the final provider response. End the iterator so
@@ -632,16 +674,9 @@ namespace ConduitLLM.Core
                     Content = $"Maximum iteration limit ({maxIterations}) reached. Please provide a response based on the information available."
                 });
 
-                await foreach (var chunk in client.StreamChatCompletionAsync(request, apiKey, cancellationToken))
+                await foreach (var chunk in StreamProviderInvocationAsync(
+                    request, client, apiKey, ++invocationOrdinal, accumulatedUsage, cancellationToken))
                 {
-                    chunk.ProviderIteration = iteration + 1;
-                    if (chunk.Usage != null)
-                    {
-                        var finalUsage = chunk.Usage;
-                        chunk.ProviderCallUsage = new ProviderCallUsage { Iteration = iteration + 1, Usage = finalUsage };
-                        chunk.Usage = AggregateUsage(accumulatedUsage, finalUsage);
-                    }
-
                     yield return chunk;
                 }
             }

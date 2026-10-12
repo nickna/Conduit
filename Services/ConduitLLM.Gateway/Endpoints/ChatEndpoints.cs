@@ -133,15 +133,6 @@ namespace ConduitLLM.Gateway.Endpoints
                     return admissionError;
                 }
 
-                // Streaming still uses its existing admission transition until its invocation
-                // observers are installed. Non-streaming marks the actual call inside Core.
-                if (request.Stream == true)
-                {
-                    var invocationError = await MarkChatInvocationStartedAsync(virtualKeyId, accountingContext);
-                    if (invocationError is not null)
-                        return invocationError;
-                }
-
                 if (request.Stream != true)
                 {
                     return await HandleNonStreamingRequestAsync(request, virtualKeyId, operationStopwatch, cancellationToken);
