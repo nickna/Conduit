@@ -10,7 +10,7 @@ namespace ConduitLLM.Configuration.Services
     public static class RedisUrlValidator
     {
         private static readonly Regex RedisUrlRegex = new Regex(
-            @"^rediss?://(?:(?<username>[^:@]+)?:?(?<password>[^@]+)?@)?(?<host>[^:]+)(?::(?<port>\d+))?$",
+            @"^rediss?://(?:(?<username>[^:@]+)?:?(?<password>[^@]+)?@)?(?<host>[^:@/\s]+)(?::(?<port>\d+))?$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         /// <summary>
