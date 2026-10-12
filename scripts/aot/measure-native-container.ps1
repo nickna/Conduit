@@ -42,6 +42,13 @@ function Get-SafeFailureMessage([Exception] $Exception, [string] $Fallback) {
         'Native benchmark image binding failed.', 'Native benchmark container image binding failed.',
         'Native benchmark image changed during collection.'
     )
+    # Tags are closed local classifications; arbitrary callback/private text is
+    # never added to the public failure message.
+    foreach ($tag in @('command-deadline', 'poll-command-deadline', 'poll-callback', 'poll-memory-sample', 'poll-memory-value')) {
+        foreach ($prefix in @('Private command failed.', 'Private command failed and its cleanup failed.')) {
+            $allowed += $prefix + ' [stage=' + $tag + ']'
+        }
+    }
     if ($Exception.Message -cin $allowed) { return $Exception.Message }
     return $Fallback
 }
@@ -57,6 +64,8 @@ function Invoke-BoundedProcess(
     $streams = @()
     $started = $false
     $failed = $false
+    $failureKind = 'unknown'
+    $pollFailureKind = $null
     $cleanupFailed = $false
     $result = $null
     try {
@@ -116,7 +125,22 @@ function Invoke-BoundedProcess(
                 $remaining = $TimeoutSeconds - $runTimer.Elapsed.TotalSeconds
                 # Poll commands receive the remaining budget and have their own
                 # bounded disposal; never start a sample with less than one second.
-                if ($remaining -ge 1) { & $PollAction ([int][Math]::Floor($remaining)) | Out-Null }
+                if ($remaining -ge 1) {
+                    try { & $PollAction ([int][Math]::Floor($remaining)) | Out-Null }
+                    catch {
+                        $pollFailureKind = 'poll-callback'
+                        $deadlineMessages = @()
+                        foreach ($tag in @('command-deadline', 'poll-command-deadline')) {
+                            foreach ($prefix in @('Private command failed.', 'Private command failed and its cleanup failed.')) {
+                                $deadlineMessages += $prefix + ' [stage=' + $tag + ']'
+                            }
+                        }
+                        if ($_.Exception.Message -cin $deadlineMessages) { $pollFailureKind = 'poll-command-deadline' }
+                        elseif ($_.Exception.Message -ceq 'Container memory sampling failed.') { $pollFailureKind = 'poll-memory-sample' }
+                        elseif ($_.Exception.Message -ceq 'Invalid container memory sample.') { $pollFailureKind = 'poll-memory-value' }
+                        throw
+                    }
+                }
                 $sampleTimer.Restart()
             }
             Start-Sleep -Milliseconds 10
@@ -124,7 +148,11 @@ function Invoke-BoundedProcess(
         $deadline.Token.ThrowIfCancellationRequested()
         $result = [pscustomobject]@{ ExitCode = $process.ExitCode; Stdout = $streams[0].Text.ToString(); Stderr = $streams[1].Text.ToString() }
     }
-    catch { $failed = $true }
+    catch {
+        $failed = $true
+        if ($null -ne $pollFailureKind) { $failureKind = $pollFailureKind }
+        elseif ($deadline.IsCancellationRequested) { $failureKind = 'command-deadline' }
+    }
     finally {
         $reap = [System.Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds(5))
         try {
@@ -152,8 +180,13 @@ function Invoke-BoundedProcess(
             $reap.Dispose()
         }
     }
-    if ($failed -and $cleanupFailed) { throw 'Private command failed and its cleanup failed.' }
-    if ($failed) { throw 'Private command failed.' }
+    if ($failed) {
+        $message = if ($cleanupFailed) { 'Private command failed and its cleanup failed.' } else { 'Private command failed.' }
+        if ($failureKind -cin @('command-deadline', 'poll-command-deadline', 'poll-callback', 'poll-memory-sample', 'poll-memory-value')) {
+            $message += ' [stage=' + $failureKind + ']'
+        }
+        throw $message
+    }
     if ($cleanupFailed) { throw 'Private command cleanup failed.' }
     return $result
 }

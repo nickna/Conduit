@@ -189,6 +189,25 @@ attempt. It rechecks the attempt after image and metric evaluation; an active
 writer or changed attempt holds promotion. Archived selection requires the
 explicit approval described below; legacy hash-named inspection copies cannot qualify.
 
+Known private-command failures append a fixed classification to the existing
+controlled error message:
+
+| Tag | Meaning |
+| --- | --- |
+| `[stage=command-deadline]` | The command exceeded its own deadline. |
+| `[stage=poll-command-deadline]` | Its poll callback propagated a nested command deadline. |
+| `[stage=poll-memory-sample]` | The memory sampler reported a command or output-format failure. |
+| `[stage=poll-memory-value]` | The memory sampler reported an invalid numeric value. |
+| `[stage=poll-callback]` | Another poll callback failed. |
+
+Unknown failures retain the generic message, and cleanup failure retains its
+separate controlled wording. Tags exclude private exception text, arguments,
+environment values and captured output. Polling intervals, deadlines, output
+caps and process cleanup remain unchanged; a callback failure still terminates
+its owned workload and fails collection. Preserve earlier unclassified attempts:
+a later tag cannot establish their cause. Full persisted per-phase diagnostics
+remain tracked in [#1642](https://github.com/nickna/Conduit/issues/1642).
+
 The evaluator independently recomputes the medians and comparisons, validates
 complete zero-failure workloads and identical load parameters and fingerprints
 across every pair, and applies throughput and p99 thresholds separately to each

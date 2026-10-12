@@ -237,6 +237,12 @@ function Get-CaseFailureDiagnostic([string] $CaseRoot, [object[]] $Commands, [ob
         'Owned benchmark container cleanup failed.', 'Container ownership verification failed.')) {
         if ($Failure -ceq ($allowed + ' No qualification was recorded.')) { $safeFailure = $allowed }
     }
+    foreach ($tag in @('command-deadline', 'poll-command-deadline', 'poll-callback', 'poll-memory-sample', 'poll-memory-value')) {
+        foreach ($prefix in @('Private command failed.', 'Private command failed and its cleanup failed.')) {
+            $allowed = $prefix + ' [stage=' + $tag + ']'
+            if ($Failure -ceq ($allowed + ' No qualification was recorded.')) { $safeFailure = $allowed }
+        }
+    }
     $traces = @{}
     foreach ($entry in @(@('driver', 'driver-timeout-trace.json'), @('run', 'docker-run-trace.json'))) {
         $path = Join-Path $CaseRoot ('processes/' + $entry[1])
@@ -451,7 +457,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
             $identityPath = Join-Path $caseRoot 'processes/driver-descendant.identity'
             Assert-Contract ([IO.File]::Exists($identityPath)) ('Timeout driver did not start its latched descendant; ' + $failureDiagnostic.Text)
             Test-OwnedProcessStopped $identityPath
-            Assert-Contract ($failureDiagnostic.Classification -ceq 'Private command failed.') 'Timeout fixture failed for a reason other than the bounded command deadline.'
+            Assert-Contract ($failureDiagnostic.Classification -ceq 'Private command failed. [stage=command-deadline]') 'Timeout fixture failed for a reason other than the bounded command deadline.'
         }
         if ($Scenario -cin @('package-absent', 'legacy-baseline', 'package-wrong-service', 'package-cross-build',
             'package-dirty', 'package-unavailable', 'package-hold', 'candidate-config', 'candidate-selected-swap')) {
@@ -1266,7 +1272,7 @@ throw 'Unknown fixture mode.'
     $parseErrors = $null
     $ast = [Management.Automation.Language.Parser]::ParseFile($collector, [ref]$tokens, [ref]$parseErrors)
     Assert-Contract ($parseErrors.Count -eq 0) 'Collector syntax is invalid.'
-    foreach ($functionName in @('Invoke-BoundedProcess', 'ConvertTo-ContainerUrl', 'Get-ResultNumber', 'Test-WorkloadResult')) {
+    foreach ($functionName in @('Get-SafeFailureMessage', 'Invoke-BoundedProcess', 'Invoke-Docker', 'Get-ContainerMemory', 'ConvertTo-ContainerUrl', 'Get-ResultNumber', 'Test-WorkloadResult')) {
         $definition = $ast.Find({
             param($node)
             $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $functionName
@@ -1445,7 +1451,7 @@ if ($env:CONDUIT_COLLECTOR_HELPER_VALUE -eq 'timeout') {
     $poll = { param([int] $RemainingSeconds); $remainingBudgets.Add($RemainingSeconds) }
     try { $unused = Invoke-BoundedProcess $helperChild @($argumentValue) 3 $helperEnvironment $poll }
     catch { $failure = $_.Exception.Message }
-    Assert-Contract ($failure -ceq 'Private command failed.' -and $watch.Elapsed.TotalSeconds -lt 10 -and
+    Assert-Contract ($failure -ceq 'Private command failed. [stage=command-deadline]' -and $watch.Elapsed.TotalSeconds -lt 10 -and
         [IO.File]::Exists($helperIdentity)) 'Private helper timeout did not terminate within its cleanup deadline.'
     Test-OwnedProcessStopped $helperIdentity
     Assert-Contract ($remainingBudgets.Count -gt 0 -and @($remainingBudgets | Where-Object { $_ -lt 1 -or $_ -gt 2 }).Count -eq 0) 'Private helper did not bound polling by its remaining deadline.'
@@ -1460,6 +1466,75 @@ if ($env:CONDUIT_COLLECTOR_HELPER_VALUE -eq 'timeout') {
         [Math]::Round($watch.Elapsed.TotalSeconds, 3) + ', controlled failure matched ' + $matchedFailure + '.')
     $cases++
 
+    # Real nested processes model the memory-poll boundary without adding Docker
+    # containers or HTTP workloads. Every outer descendant and inner sleeper
+    # must latch its identity before the error can satisfy the case.
+    $privatePollSentinel = 'private-poll-' + [Guid]::NewGuid().ToString('N')
+    foreach ($pollScenario in @('deadline', 'invalid-memory', 'zero-memory', 'private-callback')) {
+        $outerIdentity = Join-Path $temporaryRoot ('helper-poll-' + $pollScenario + '-outer.identity')
+        $innerIdentity = Join-Path $temporaryRoot ('helper-poll-' + $pollScenario + '-inner.identity')
+        $statsScript = Join-Path $temporaryRoot ('helper-poll-' + $pollScenario + '-stats.ps1')
+        $statsSource = @'
+param([Parameter(ValueFromRemainingArguments)][string[]] $CommandArguments)
+. (Join-Path $PSScriptRoot 'process-identity.ps1')
+$mode = '__MODE__'
+if ($mode -ceq 'deadline') {
+    $self = [Diagnostics.Process]::GetCurrentProcess()
+    try { [IO.File]::WriteAllText((Join-Path $PSScriptRoot '__IDENTITY__'),
+        ($self.Id.ToString() + '|' + (Get-OwnedProcessIdentityToken $self))) }
+    finally { $self.Dispose() }
+    Start-Sleep -Seconds 60
+}
+if ($mode -ceq 'invalid-memory') { [Console]::Out.WriteLine('not-a-memory-value __PRIVATE__') }
+if ($mode -ceq 'zero-memory') { [Console]::Out.WriteLine('0 B / 128 GiB') }
+exit 0
+'@
+        $statsSource = $statsSource.Replace('__MODE__', $pollScenario).Replace('__IDENTITY__', [IO.Path]::GetFileName($innerIdentity)).Replace('__PRIVATE__', $privatePollSentinel)
+        [IO.File]::WriteAllText($statsScript, $statsSource, [Text.UTF8Encoding]::new($false))
+        $outerEnvironment = @{
+            CONDUIT_COLLECTOR_HELPER_VALUE = 'timeout'
+            CONDUIT_COLLECTOR_HELPER_SLEEPER = $sleeper
+            CONDUIT_COLLECTOR_HELPER_IDENTITY = $outerIdentity
+        }
+        $poll = {
+            param([int] $RemainingSeconds)
+            if (-not [IO.File]::Exists($outerIdentity)) { return }
+            if ($pollScenario -ceq 'private-callback') { throw ($privatePollSentinel + $privateKey + $privateDatabasePassword) }
+            $unusedMemory = Get-ContainerMemory 'owned-stats-target' $RemainingSeconds
+        }
+        $hadDockerPath = $null -ne (Get-Variable DockerCommandPath -ErrorAction SilentlyContinue)
+        $hadDockerTimeout = $null -ne (Get-Variable DockerCommandTimeoutSeconds -ErrorAction SilentlyContinue)
+        $oldDockerPath = $DockerCommandPath; $oldDockerTimeout = $DockerCommandTimeoutSeconds
+        $DockerCommandPath = $statsScript; $DockerCommandTimeoutSeconds = 5
+        $watch = [Diagnostics.Stopwatch]::StartNew(); $failure = $null
+        try { $unused = Invoke-BoundedProcess $helperChild @($argumentValue) 20 $outerEnvironment $poll }
+        catch { $failure = $_.Exception.Message }
+        finally {
+            $watch.Stop()
+            if ($hadDockerPath) { $DockerCommandPath = $oldDockerPath } else { Remove-Variable DockerCommandPath }
+            if ($hadDockerTimeout) { $DockerCommandTimeoutSeconds = $oldDockerTimeout } else { Remove-Variable DockerCommandTimeoutSeconds }
+        }
+        $tag = switch ($pollScenario) {
+            'deadline' { 'poll-command-deadline' }
+            'invalid-memory' { 'poll-memory-sample' }
+            'zero-memory' { 'poll-memory-value' }
+            'private-callback' { 'poll-callback' }
+        }
+        $expected = 'Private command failed. [stage=' + $tag + ']'
+        Assert-Contract ($failure -ceq $expected -and $watch.Elapsed.TotalSeconds -lt 30 -and [IO.File]::Exists($outerIdentity)) 'The nested poll fixture did not reach its latched controlled failure within bounded cleanup.'
+        Test-OwnedProcessStopped $outerIdentity
+        if ($pollScenario -ceq 'deadline') {
+            Assert-Contract ([IO.File]::Exists($innerIdentity)) 'The inner deadline fixture did not start its owned process.'
+            Test-OwnedProcessStopped $innerIdentity
+        }
+        Assert-Contract (-not $failure.Contains($privatePollSentinel) -and -not $failure.Contains($privateKey) -and
+            -not $failure.Contains($privateDatabasePassword)) 'The controlled poll failure exposed private text.'
+        $safe = Get-SafeFailureMessage ([InvalidOperationException]::new($failure)) 'fixed-fallback'
+        Assert-Contract ($safe -ceq $expected) 'The collection boundary discarded its closed poll classification.'
+        $unknown = Get-SafeFailureMessage ([InvalidOperationException]::new($privatePollSentinel)) 'fixed-fallback'
+        Assert-Contract ($unknown -ceq 'fixed-fallback') 'Unknown private failures escaped the fixed fallback.'
+        $cases++
+    }
     $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult
     Invoke-CollectorCase 'admin' 'lowercase-missing-object' $null
     Invoke-CollectorCase 'admin' 'lowercase-missing-container' $null
