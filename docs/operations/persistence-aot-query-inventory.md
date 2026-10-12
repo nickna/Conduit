@@ -88,6 +88,9 @@ two repository-dispatcher native publishes failed before execution. Its 224
 planned cases are explicitly unexecuted and do not complete #1373's full native
 repository-suite scope. See that report for failure stages, source identity,
 repeat steps, and the compiled-model soft-delete limitations.
+The [observed failure index](ef-query-precompiler-failure-inventory.md) records
+derived source matches and explicit ambiguities. It also identifies nine direct
+repository tests outside the 224-case plan, preserving the full-suite coverage gap.
 
 ## Extracted slices and actual evidence
 

@@ -48,6 +48,9 @@ wall time from the bounded command receipt, rounded to two decimal places.
 The internal `ParameterSymbol`/`UnreachableException` signature matches
 [upstream EF issue 35494](https://github.com/dotnet/efcore/issues/35494).
 Repeated diagnostic renderings were not counted as distinct unsupported queries.
+The [observed failure index](ef-query-precompiler-failure-inventory.md) separates
+334 project/expression/failure signatures, source-match ambiguity, nested null
+references, and a concrete nine-case omission from the dispatcher plan.
 `MSB3026` retry messages and IL warning occurrences were not counted as fatal
 compiler errors or successful query coverage. The PostgreSQL publish did not
 reach database execution and does not establish a PostgreSQL translation failure.
