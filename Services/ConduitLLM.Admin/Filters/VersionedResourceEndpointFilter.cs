@@ -67,7 +67,7 @@ public sealed class VersionedResourceEndpointFilter : IEndpointFilter
         {
             return await db.VirtualKeys.AsNoTracking()
                 .Where(entity => entity.Id == id)
-                .Select(entity => new ResourceVersion(entity.RowVersion, entity.UpdatedAt))
+                .Select(entity => (ResourceVersion?)new ResourceVersion(entity.RowVersion, entity.UpdatedAt))
                 .SingleOrDefaultAsync(cancellationToken);
         }
 
@@ -75,7 +75,7 @@ public sealed class VersionedResourceEndpointFilter : IEndpointFilter
         {
             return await db.VirtualKeyGroups.AsNoTracking()
                 .Where(entity => entity.Id == id)
-                .Select(entity => new ResourceVersion(entity.RowVersion, entity.UpdatedAt))
+                .Select(entity => (ResourceVersion?)new ResourceVersion(entity.RowVersion, entity.UpdatedAt))
                 .SingleOrDefaultAsync(cancellationToken);
         }
 
@@ -83,7 +83,7 @@ public sealed class VersionedResourceEndpointFilter : IEndpointFilter
         {
             return await db.IpFilters.AsNoTracking()
                 .Where(entity => entity.Id == id)
-                .Select(entity => new ResourceVersion(entity.RowVersion, entity.UpdatedAt))
+                .Select(entity => (ResourceVersion?)new ResourceVersion(entity.RowVersion, entity.UpdatedAt))
                 .SingleOrDefaultAsync(cancellationToken);
         }
 

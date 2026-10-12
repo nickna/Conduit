@@ -90,26 +90,25 @@ public sealed class AdminContractEndpointFilterTests
             Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
     }
 
-    [Fact]
-    public async Task VersionFilter_EmitsStrongEtagAndAcceptsMatchingOrWildcardPreconditions()
+    [Theory]
+    [InlineData("virtual-keys", false)]
+    [InlineData("virtual-keys", true)]
+    [InlineData("virtual-key-groups", false)]
+    [InlineData("virtual-key-groups", true)]
+    [InlineData("ip-filters", false)]
+    [InlineData("ip-filters", true)]
+    public async Task VersionFilter_EmitsStrongEtagAndAcceptsMatchingOrWildcardPreconditions(
+        string resource, bool useRowVersion)
     {
         await using var database = new SqliteTestDatabase();
         var updatedAt = new DateTime(2026, 7, 23, 12, 0, 0, DateTimeKind.Utc);
-        await database.SeedAsync(async db =>
-        {
-            db.VirtualKeyGroups.Add(new VirtualKeyGroup
-            {
-                Id = 41,
-                GroupName = "etag-test",
-                UpdatedAt = updatedAt
-            });
-            await db.SaveChangesAsync();
-        });
+        byte[]? rowVersion = useRowVersion ? new byte[] { 1, 2, 3, 4 } : null;
+        await SeedResourceAsync(database, resource, 41, updatedAt, rowVersion);
 
         var factory = database.CreateDbContextFactory();
         var filter = new VersionedResourceEndpointFilter();
-        var expected = $"\"{Convert.ToBase64String(BitConverter.GetBytes(updatedAt.Ticks))}\"";
-        var get = Context("GET", "/v1/admin/virtual-key-groups/41", 41, factory);
+        var expected = $"\"{Convert.ToBase64String(rowVersion ?? BitConverter.GetBytes(updatedAt.Ticks))}\"";
+        var get = Context("GET", $"/v1/admin/{resource}/41", 41, factory);
 
         var result = await filter.InvokeAsync(
             get,
@@ -118,9 +117,9 @@ public sealed class AdminContractEndpointFilterTests
         Assert.Equal(StatusCodes.Status200OK, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
         Assert.Equal(expected, get.HttpContext.Response.Headers.ETag);
 
-        foreach (var candidate in new[] { expected, "*" })
+        foreach (var candidate in new[] { expected, "*", $"\"stale\", {expected}" })
         {
-            var patch = Context("PATCH", "/v1/admin/virtual-key-groups/41", 41, factory);
+            var patch = Context("PATCH", $"/v1/admin/{resource}/41", 41, factory);
             patch.HttpContext.Request.Headers.IfMatch = candidate;
             var called = false;
 
@@ -170,6 +169,122 @@ public sealed class AdminContractEndpointFilterTests
         Assert.False(called);
         Assert.Equal(expectedStatus, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
     }
+
+    public static IEnumerable<object?[]> MissingResourceRequests()
+    {
+        foreach (var resource in new[] { "virtual-keys", "virtual-key-groups", "ip-filters" })
+        {
+            yield return new object?[] { resource, "GET", null };
+            yield return new object?[] { resource, "HEAD", null };
+            foreach (var method in new[] { "PATCH", "DELETE" })
+            {
+                foreach (var ifMatch in new[] { null, "\"stale\"", "*" })
+                    yield return new object?[] { resource, method, ifMatch };
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(MissingResourceRequests))]
+    public async Task VersionFilter_MissingResourcesReachHandlerWithoutSyntheticVersion(
+        string resource, string method, string? ifMatch)
+    {
+        await using var database = new SqliteTestDatabase();
+        var context = Context(method, $"/v1/admin/{resource}/404", 404,
+            database.CreateDbContextFactory());
+        if (ifMatch is not null)
+            context.HttpContext.Request.Headers.IfMatch = ifMatch;
+        var called = false;
+
+        var result = await new VersionedResourceEndpointFilter().InvokeAsync(context, _ =>
+        {
+            called = true;
+            return ValueTask.FromResult<object?>(Results.NotFound());
+        });
+
+        Assert.True(called);
+        Assert.Equal(StatusCodes.Status404NotFound,
+            Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+        Assert.Equal(0, context.HttpContext.Response.Headers.ETag.Count);
+    }
+
+    [Theory]
+    [InlineData("virtual-keys")]
+    [InlineData("virtual-key-groups")]
+    [InlineData("ip-filters")]
+    public async Task VersionFilter_DeletedResourceRetainsItsOriginalEtag(string resource)
+    {
+        await using var database = new SqliteTestDatabase();
+        var updatedAt = new DateTime(2026, 7, 23, 12, 0, 0, DateTimeKind.Utc);
+        await SeedResourceAsync(database, resource, 43, updatedAt);
+        var context = Context("DELETE", $"/v1/admin/{resource}/43", 43,
+            database.CreateDbContextFactory());
+        var expected = $"\"{Convert.ToBase64String(BitConverter.GetBytes(updatedAt.Ticks))}\"";
+        context.HttpContext.Request.Headers.IfMatch = expected;
+
+        var result = await new VersionedResourceEndpointFilter().InvokeAsync(context, async _ =>
+        {
+            await using var db = database.CreateContext();
+            switch (resource)
+            {
+                case "virtual-keys":
+                    await db.VirtualKeys.Where(key => key.Id == 43).ExecuteDeleteAsync();
+                    break;
+                case "virtual-key-groups":
+                    await db.VirtualKeyGroups.Where(group => group.Id == 43).ExecuteDeleteAsync();
+                    break;
+                case "ip-filters":
+                    await db.IpFilters.Where(filter => filter.Id == 43).ExecuteDeleteAsync();
+                    break;
+            }
+            return Results.NoContent();
+        });
+
+        Assert.Equal(StatusCodes.Status204NoContent,
+            Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+        Assert.Equal(expected, context.HttpContext.Response.Headers.ETag);
+    }
+
+    private static Task SeedResourceAsync(SqliteTestDatabase database, string resource,
+        int id, DateTime updatedAt, byte[]? rowVersion = null) => database.SeedAsync(async db =>
+        {
+            db.VirtualKeyGroups.Add(new VirtualKeyGroup
+            {
+                Id = id, GroupName = "etag-test", UpdatedAt = updatedAt, RowVersion = rowVersion
+            });
+            if (resource == "virtual-keys")
+                db.VirtualKeys.Add(new VirtualKey
+                {
+                    Id = id, KeyName = "etag-test", KeyHash = "etag-test-hash",
+                    VirtualKeyGroupId = id, UpdatedAt = updatedAt, RowVersion = rowVersion
+                });
+            if (resource == "ip-filters")
+                db.IpFilters.Add(new IpFilterEntity
+                {
+                    Id = id, IpAddressOrCidr = "192.0.2.1", UpdatedAt = updatedAt, RowVersion = rowVersion
+                });
+            await db.SaveChangesAsync();
+            // SQLite has no database-generated rowversion. Seed the stored bytes explicitly.
+            if (rowVersion is not null)
+            {
+                switch (resource)
+                {
+                    case "virtual-keys":
+                        await db.Database.ExecuteSqlInterpolatedAsync(
+                            $"UPDATE \"VirtualKeys\" SET \"RowVersion\" = {rowVersion} WHERE \"Id\" = {id}");
+                        break;
+                    case "virtual-key-groups":
+                        await db.Database.ExecuteSqlInterpolatedAsync(
+                            $"UPDATE \"VirtualKeyGroups\" SET \"RowVersion\" = {rowVersion} WHERE \"Id\" = {id}");
+                        break;
+                    case "ip-filters":
+                        await db.Database.ExecuteSqlRawAsync(
+                            "UPDATE \"IpFilters\" SET \"RowVersion\" = {0} WHERE \"Id\" = {1}",
+                            rowVersion, id);
+                        break;
+                }
+            }
+        });
 
     private static TestInvocationContext Context(
         string method,

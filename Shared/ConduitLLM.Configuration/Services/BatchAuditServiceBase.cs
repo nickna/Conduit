@@ -304,15 +304,19 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
                 using var scope = _serviceProvider.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<ConduitDbContext>();
 
-                await GetDbSet(context).AddRangeAsync(events);
-                await context.SaveChangesAsync();
+                await GetDbSet(context).AddRangeAsync(events, cancellationToken);
+                await context.SaveChangesAsync(cancellationToken);
 
                 _logger.LogDebug("Final flush of {Count} {EntityName} audit events to database", events.Count, EntityName);
+                AuditEventsFlushed.WithLabels(EntityName, "success").Inc(events.Count);
+                AuditQueueDepth.WithLabels(EntityName).Set(_eventQueue.Count);
             }
         }
         catch (Exception ex)
         {
             RequeueEvents(events);
+            // Preserve shutdown's failure contract: requeue and rethrow without counting
+            // a normal background-flush failure. Only successful drains update metrics.
             _logger.LogError(ex, "Failed to flush remaining {EntityName} audit events to database", EntityName);
             throw;
         }
