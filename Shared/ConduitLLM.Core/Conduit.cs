@@ -77,22 +77,25 @@ namespace ConduitLLM.Core
                 throw new ArgumentException("The request must specify a target Model alias.", "request.Model");
             }
 
-            // Apply context management if enabled
+            var originalRequest = request;
             request = await ApplyContextManagementAsync(request);
-
-            // Check if function calling is requested
-            if (request.FunctionConfigurationIds?.Any() == true)
+            try
             {
-                return await CreateChatCompletionWithFunctionsAsync(request, apiKey, virtualKeyId ?? 0, cancellationToken);
+                // Check if function calling is requested
+                if (request.FunctionConfigurationIds?.Any() == true)
+                {
+                    return await CreateChatCompletionWithFunctionsAsync(request, apiKey, virtualKeyId ?? 0, cancellationToken);
+                }
+
+                // Get a chat-routed client; non-chat APIs continue to use deterministic alias mapping.
+                ILLMClient client = await GetChatClientAsync(request, cancellationToken);
+
+                return await client.CreateChatCompletionAsync(request, apiKey, cancellationToken).ConfigureAwait(false);
             }
-
-            // Get a chat-routed client; non-chat APIs continue to use deterministic alias mapping.
-            ILLMClient client = await GetChatClientAsync(request, cancellationToken);
-
-            // Call the client's method, passing the optional apiKey
-            // Exceptions specific to providers (like communication errors) are expected to bubble up from the client.
-            // The factory handles ConfigurationException and UnsupportedProviderException.
-            return await client.CreateChatCompletionAsync(request, apiKey, cancellationToken).ConfigureAwait(false);
+            finally
+            {
+                request.CopyRuntimeStateTo(originalRequest);
+            }
         }
 
         /// <summary>
@@ -122,28 +125,33 @@ namespace ConduitLLM.Core
                 throw new ArgumentException("The request must specify a target Model alias.", "request.Model");
             }
 
-            // Apply context management if enabled
+            var originalRequest = request;
             request = await ApplyContextManagementAsync(request);
-
-            // Check if function calling is requested
-            var hasFunctionConfigs = request.FunctionConfigurationIds != null && request.FunctionConfigurationIds.Count > 0;
-
-            if (hasFunctionConfigs)
+            try
             {
-                // Use streaming agentic loop
-                await foreach (var chunk in StreamChatCompletionWithFunctionsAsync(request, apiKey, virtualKeyId ?? 0, onToolExecutingEvent, cancellationToken))
+                var hasFunctionConfigs = request.FunctionConfigurationIds != null && request.FunctionConfigurationIds.Count > 0;
+
+                if (hasFunctionConfigs)
                 {
-                    yield return chunk;
+                    await foreach (var chunk in StreamChatCompletionWithFunctionsAsync(request, apiKey, virtualKeyId ?? 0, onToolExecutingEvent, cancellationToken))
+                    {
+                        request.CopyRuntimeStateTo(originalRequest);
+                        yield return chunk;
+                    }
+                }
+                else
+                {
+                    ILLMClient client = await GetChatClientAsync(request, cancellationToken);
+                    await foreach (var chunk in client.StreamChatCompletionAsync(request, apiKey, cancellationToken))
+                    {
+                        request.CopyRuntimeStateTo(originalRequest);
+                        yield return chunk;
+                    }
                 }
             }
-            else
+            finally
             {
-                // Standard streaming without function calling
-                ILLMClient client = await GetChatClientAsync(request, cancellationToken);
-                await foreach (var chunk in client.StreamChatCompletionAsync(request, apiKey, cancellationToken))
-                {
-                    yield return chunk;
-                }
+                request.CopyRuntimeStateTo(originalRequest);
             }
         }
 
@@ -731,7 +739,9 @@ namespace ConduitLLM.Core
                 // Apply context management only if we have a limit from the database
                 if (maxInputTokens.HasValue && _contextManager != null)
                 {
-                    return await _contextManager.ManageContextAsync(request, maxInputTokens.Value);
+                    var managedRequest = await _contextManager.ManageContextAsync(request, maxInputTokens.Value);
+                    request.CopyRuntimeStateTo(managedRequest);
+                    return managedRequest;
                 }
             }
             catch (Exception ex)

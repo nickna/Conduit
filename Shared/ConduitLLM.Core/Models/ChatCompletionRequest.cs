@@ -359,4 +359,15 @@ public class ChatCompletionRequest
     [JsonIgnore] public bool RoutingAffinityUsed { get; set; }
     [JsonIgnore] public string? RoutingDecisionReason { get; set; }
     [JsonIgnore] public int RoutingFailoverCount { get; set; }
+
+    /// <summary>Preserves server-owned request state when context management replaces the request.</summary>
+    internal void CopyRuntimeStateTo(ChatCompletionRequest target)
+    {
+        target.PromptCachingIntent = PromptCachingIntent;
+        target.RoutingAffinityKey = RoutingAffinityKey;
+        target.SelectedMappingId = SelectedMappingId;
+        target.RoutingAffinityUsed = RoutingAffinityUsed;
+        target.RoutingDecisionReason = RoutingDecisionReason;
+        target.RoutingFailoverCount = RoutingFailoverCount;
+    }
 }
