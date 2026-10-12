@@ -20,6 +20,7 @@ on:
       - 'Tests/ConduitLLM.GatewayNativeAotTests/**'
       - 'Tests/ConduitLLM.SerializationTests/**'
       - 'Tests/ConduitLLM.Tests/Admin/Filters/**'
+      - 'Tests/ConduitLLM.Tests/Admin/Middleware/NativeAdminRuntimeProfile*Tests.cs'
       - 'Tests/ConduitLLM.Tests/Core/Consumers/GlobalSetting*Tests.cs'
       - 'Tests/ConduitLLM.Tests/Configuration/Services/GlobalSettingsCacheServiceTests.cs'
       - 'Tests/ConduitLLM.Tests/Core/Caching/FusionFunctionDiscoveryCacheTests.cs'
@@ -149,8 +150,8 @@ jobs:
         with:
           project: Tests/ConduitLLM.Tests
           suite: admin-conditional-requests-jit
-          filter: FullyQualifiedName~AdminContractEndpointFilterTests|FullyQualifiedName~IpFilterVersionEndpointFilterTests|FullyQualifiedName~IpFilterConditionalRequestHttpTests|FullyQualifiedName~HostCompositionTests|FullyQualifiedName~GlobalSettingCacheInvalidationHandlerTests|FullyQualifiedName~GlobalSettingsReloadHandlerTests|FullyQualifiedName~GlobalSettingsCacheServiceTests|FullyQualifiedName~FusionFunctionDiscoveryCacheTests.DisabledReadsBypassAndReenableEventRejectsOldCombinations
-          minimum: '138'
+          filter: FullyQualifiedName~AdminContractEndpointFilterTests|FullyQualifiedName~IpFilterVersionEndpointFilterTests|FullyQualifiedName~IpFilterConditionalRequestHttpTests|FullyQualifiedName~HostCompositionTests|FullyQualifiedName~GlobalSettingCacheInvalidationHandlerTests|FullyQualifiedName~GlobalSettingsReloadHandlerTests|FullyQualifiedName~GlobalSettingsCacheServiceTests|FullyQualifiedName~FusionFunctionDiscoveryCacheTests.DisabledReadsBypassAndReenableEventRejectsOldCombinations|FullyQualifiedName~NativeAdminRuntimeProfileMiddlewareTests|FullyQualifiedName~NativeAdminRuntimeProfileRouteInventoryTests
+          minimum: '189'
         env:
           CONDUIT_CACHE_TEST_REDIS: 127.0.0.1:6379
 
@@ -160,10 +161,10 @@ jobs:
           $results = 'artifacts/tests/native-host-composition'
           New-Item -ItemType Directory -Force $results | Out-Null
           dotnet test Tests/ConduitLLM.Tests --configuration Release -p:DefineConstants=CONDUIT_NATIVE_AOT `
-            --filter 'FullyQualifiedName~HostCompositionTests' `
+            --filter 'FullyQualifiedName~HostCompositionTests|FullyQualifiedName~NativeAdminRuntimeProfileMiddlewareTests|FullyQualifiedName~NativeAdminRuntimeProfileRouteInventoryTests' `
             --logger 'trx;LogFileName=native-host-composition.trx' --results-directory $results
           $testExit = $LASTEXITCODE
-          python scripts/ci/test-evidence.py "$results/native-host-composition.trx" --minimum 10 --maximum-skips 0
+          python scripts/ci/test-evidence.py "$results/native-host-composition.trx" --minimum 44 --maximum-skips 0
           if ($LASTEXITCODE -ne 0 -or $testExit -ne 0) { throw 'Native host composition validation failed.' }
         env:
           CONDUIT_CACHE_TEST_REDIS: 127.0.0.1:6379

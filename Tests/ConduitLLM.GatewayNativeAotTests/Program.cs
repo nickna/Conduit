@@ -376,6 +376,10 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
     {
         await AssertRuntimeAndOperationsAsync();
         await AssertModelDiscoveryBoundaryAsync();
+        await using (var source = NpgsqlDataSource.Create(settings.DatabaseConnectionString))
+            await NativeAdminRuntimeProfileProbe.RunAsync(settings.Admin, settings.Provider, source,
+                ProbeSettings.FunctionFixtureOwnerFromEnvironment(), settings.RedisConnectionString,
+                ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
         await AssertFunctionDiscoveryAsync();
         await AssertFunctionExecutionPreflightAsync();
         await AssertSchemaReadinessAsync();

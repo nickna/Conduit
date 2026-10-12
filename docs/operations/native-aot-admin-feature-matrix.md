@@ -19,6 +19,35 @@ metadata contracts and owned cleanup. Its image packages record clean Git source
 but their classic-store OCI descriptor association remains HOLD. The later cache
 convergence proof below is separate local evidence.
 
+## Matched management route boundary
+
+Native Admin checks the matched endpoint's operation name, complete route pattern
+and single HTTP method after the existing authentication, IP/rate-limit and
+authorization middleware. Exactly 23 operations are selected: the 12 global
+settings operations, 10 IP-filter operations and the cache-only
+`Auth_GenerateEphemeralMasterKey` operation. The boundary uses exact metadata
+triples; a supported name on a different route or method is rejected.
+
+Other matched `/v1/admin` management endpoints return generated
+`application/problem+json` with status 501 and code `not_implemented` before
+request-body binding, endpoint filters or handler-service resolution. This makes
+excluded EF management/reporting/manual-media operations observable without
+invoking their persistence paths. Pricing routes retain their existing native
+omission. Unmatched paths and wrong methods retain routing's 404/405 responses;
+health, metrics and OpenAPI routes remain outside the management boundary. JIT
+retains its endpoint behavior and the full OpenAPI contract.
+
+The managed tests materialize the actual production endpoint map, pin all 23
+triples and check that no alternate management namespace or alias escapes the
+boundary. TestServer sentinels cover body/DI/filter rejection and security order,
+with JIT controls and sequential ephemeral-key consumption. The published-native
+probe requires authenticated rejections across six excluded families, anonymous
+authentication failure, and real cache-only key issuance, consumption and replay
+rejection. These assertions do not claim atomic concurrent key consumption or
+native EF query execution. Final committed-source Main and Native CI remains
+required; capability feature arrays below retain nine included and nine excluded
+features.
+
 ## Selected native behavior and evidence
 
 | Area | Selected implementation | Evidence and limit |
