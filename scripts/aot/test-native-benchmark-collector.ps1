@@ -115,7 +115,7 @@ function Assert-AttemptContractSuccess([string] $OutputPath, [string] $Service) 
     return ,$evidence
 }
 
-function Get-OwnedProcessIdentityToken([Diagnostics.Process] $Process) {
+function Get-OwnedProcessIdentityToken([Diagnostics.Process] $Process, [switch] $IncludeState) {
     if ($IsLinux) {
         # /proc field 22 has no separately calculated wall-clock boot origin.
         $stat = [IO.File]::ReadAllText('/proc/' + $Process.Id + '/stat')
@@ -128,9 +128,37 @@ function Get-OwnedProcessIdentityToken([Diagnostics.Process] $Process) {
                 [Globalization.CultureInfo]::InvariantCulture, [ref]$start) -or $start -eq 0) {
             throw 'Owned process start token is invalid.'
         }
-        return 'linux:' + $start.ToString([Globalization.CultureInfo]::InvariantCulture)
+        $token = 'linux:' + $start.ToString([Globalization.CultureInfo]::InvariantCulture)
+        if ($IncludeState) {
+            return [pscustomobject]@{ Token = $token; Zombie = ($fields[0] -ceq 'Z') }
+        }
+        return $token
     }
-    return 'windows:' + $Process.StartTime.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture)
+    $token = 'windows:' + $Process.StartTime.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture)
+    if ($IncludeState) { return [pscustomobject]@{ Token = $token; Zombie = $false } }
+    return $token
+}
+
+function Get-OwnedProcessCleanupInspection([Diagnostics.Process] $Process) {
+    if ($Process.HasExited) { return }
+    try { return Get-OwnedProcessIdentityToken $Process -IncludeState }
+    catch {
+        # A child may exit and be reaped after HasExited/lookup but before the
+        # single /proc read. Missing metadata is never a matching identity.
+        $exception = $_.Exception
+        $missing = $false
+        while ($null -ne $exception) {
+            if ($exception -is [IO.FileNotFoundException] -or $exception -is [IO.DirectoryNotFoundException]) {
+                $missing = $true
+                break
+            }
+            $exception = $exception.InnerException
+        }
+        if (-not $IsLinux -or -not $missing) { throw }
+        $Process.Refresh()
+        if ($Process.HasExited) { return }
+        throw
+    }
 }
 
 function Test-OwnedProcessStopped([string] $IdentityPath, [switch] $Stop) {
@@ -140,15 +168,14 @@ function Test-OwnedProcessStopped([string] $IdentityPath, [switch] $Stop) {
     $ownedProcess = Get-Process -Id ([int]$identity[0]) -ErrorAction SilentlyContinue
     if ($null -eq $ownedProcess) { return }
     try {
-        Assert-Contract ((Get-OwnedProcessIdentityToken $ownedProcess) -ceq $identity[1]) 'Fixture cleanup rejected a reused PID.'
-        $statPath = '/proc/' + $ownedProcess.Id + '/stat'
-        $zombie = $IsLinux -and [IO.File]::Exists($statPath) -and
-            [IO.File]::ReadAllText($statPath) -match '^\d+ \(.+\) Z '
-        if ($Stop -and -not $ownedProcess.HasExited -and -not $zombie) {
+        $inspection = Get-OwnedProcessCleanupInspection $ownedProcess
+        if ($null -eq $inspection) { return }
+        Assert-Contract ($inspection.Token -ceq $identity[1]) 'Fixture cleanup rejected a reused PID.'
+        if ($Stop -and -not $ownedProcess.HasExited -and -not $inspection.Zombie) {
             $ownedProcess.Kill($true)
             Assert-Contract ($ownedProcess.WaitForExit(5000)) 'Owned fixture process did not terminate.'
         }
-        elseif (-not $ownedProcess.HasExited -and -not $zombie) {
+        elseif (-not $ownedProcess.HasExited -and -not $inspection.Zombie) {
             throw 'Collector left a live owned descendant.'
         }
     }
@@ -159,6 +186,7 @@ function Stop-OwnedReadinessServer($Record) {
     $failures = [Collections.Generic.List[string]]::new()
     $stage = 'identity-file'
     try {
+        Assert-Contract $Record.IdentityCaptured 'Owned readiness startup identity was not captured.'
         $expectedIdentity = [string]$Record.Id + '|' + $Record.StartToken
         Assert-Contract ([IO.File]::Exists($Record.IdentityPath) -and
             [IO.File]::ReadAllText($Record.IdentityPath) -ceq $expectedIdentity) 'Owned readiness identity file was rejected.'
@@ -171,9 +199,19 @@ function Stop-OwnedReadinessServer($Record) {
     $stage = 'original-handle'
     try {
         Assert-Contract ($Record.Process.Id -eq $Record.Id) 'Original owned readiness handle was rejected.'
-        if (-not $Record.Process.HasExited) {
-            Assert-Contract ((Get-OwnedProcessIdentityToken $Record.Process) -ceq $Record.StartToken) 'Original owned readiness handle was rejected.'
-            $Record.Process.Kill($true)
+        if (-not $Record.IdentityCaptured) {
+            # This directly started original handle was retained before token
+            # capture. Reap it on failed startup; never find a replacement by PID.
+            if (-not $Record.Process.HasExited) { $Record.Process.Kill($true) }
+        }
+        else {
+            $inspection = Get-OwnedProcessCleanupInspection $Record.Process
+            if ($null -ne $inspection) {
+                Assert-Contract ($inspection.Token -ceq $Record.StartToken) 'Original owned readiness handle was rejected.'
+                if (-not $Record.Process.HasExited -and -not $inspection.Zombie) {
+                    $Record.Process.Kill($true)
+                }
+            }
         }
         $stage = 'original-process-reap'
         Assert-Contract ($Record.Process.WaitForExit(5000)) 'Original owned readiness child did not reap.'
@@ -192,6 +230,232 @@ function Stop-OwnedReadinessServer($Record) {
     }
     $Record.CleanupDiagnostics = @($failures.ToArray())
     if ($failures.Count -gt 0) { throw 'Owned readiness cleanup failed.' }
+}
+
+function Register-OwnedReadinessServer([Diagnostics.Process] $Process, [string] $IdentityPath,
+    [string] $AssociationPath, [Collections.Generic.List[object]] $CaseServers) {
+    $record = [pscustomobject]@{ Process = $Process; IdentityPath = $IdentityPath
+        AssociationPath = $AssociationPath; Id = $Process.Id; StartToken = $null
+        IdentityCaptured = $false; Reaped = $false; Disposed = $false; CleanupDiagnostics = @() }
+    $CaseServers.Add($record)
+    $ownedReadinessServers.Add($record)
+    Assert-Contract (-not $Process.HasExited) 'Owned readiness child exited before identity capture.'
+    $record.StartToken = Get-OwnedProcessIdentityToken $Process
+    Assert-Contract ($record.StartToken -is [string] -and
+        $record.StartToken -cmatch '\A(?:linux|windows):[1-9][0-9]*\z' -and -not $Process.HasExited) 'Owned readiness startup identity is invalid.'
+    $record.IdentityCaptured = $true
+    [IO.File]::WriteAllText($IdentityPath, ([string]$record.Id + '|' + $record.StartToken))
+    [IO.File]::WriteAllText($AssociationPath, $IdentityPath)
+    return $record
+}
+
+function Invoke-OwnedProcessCleanupContracts {
+    $contractRoot = Join-Path $temporaryRoot ('process-lifecycle-' + [Guid]::NewGuid().ToString('N'))
+    [IO.Directory]::CreateDirectory($contractRoot) | Out-Null
+    $childScript = Join-Path $contractRoot 'owned-child.ps1'
+    [IO.File]::WriteAllText($childScript, @'
+param([string] $ExitPath, [string] $ReadyPath)
+[IO.File]::WriteAllText($ReadyPath, 'ready')
+while (-not [IO.File]::Exists($ExitPath)) { Start-Sleep -Milliseconds 20 }
+exit 0
+'@, [Text.UTF8Encoding]::new($false))
+    $caseServers = [Collections.Generic.List[object]]::new()
+    $startedProcesses = [Collections.Generic.List[Diagnostics.Process]]::new()
+    $breakpoints = [Collections.Generic.List[object]]::new()
+    $contractFailures = [Collections.Generic.List[string]]::new()
+
+    function New-OwnedProcessContractChild([string] $Name) {
+        $exitPath = Join-Path $contractRoot ($Name + '.exit')
+        $readyPath = Join-Path $contractRoot ($Name + '.ready')
+        $start = [Diagnostics.ProcessStartInfo]::new($env:CONDUIT_COLLECTOR_TEST_PWSH)
+        $start.UseShellExecute = $false
+        $start.CreateNoWindow = $true
+        $start.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+        $start.RedirectStandardOutput = $true
+        $start.RedirectStandardError = $true
+        foreach ($argument in @('-NoProfile', '-File', $childScript, '-ExitPath', $exitPath, '-ReadyPath', $readyPath)) {
+            $start.ArgumentList.Add($argument)
+        }
+        $child = [Diagnostics.Process]::Start($start)
+        $startedProcesses.Add($child)
+        return [pscustomobject]@{ Process = $child; ExitPath = $exitPath; ReadyPath = $readyPath
+            IdentityPath = (Join-Path $contractRoot ($Name + '.identity'))
+            AssociationPath = (Join-Path $contractRoot ($Name + '.association')) }
+    }
+
+    function Wait-OwnedProcessContractReady($Child) {
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        while (-not [IO.File]::Exists($Child.ReadyPath) -and -not $Child.Process.HasExited -and
+            $watch.Elapsed.TotalSeconds -lt 10) { Start-Sleep -Milliseconds 20 }
+        Assert-Contract ([IO.File]::Exists($Child.ReadyPath) -and -not $Child.Process.HasExited) 'Owned process lifecycle child did not become ready.'
+    }
+
+    function New-OwnedProcessReadBoundary($Child) {
+        $tokens = $null; $parseErrors = $null
+        $sourceAst = [Management.Automation.Language.Parser]::ParseFile($PSCommandPath, [ref]$tokens, [ref]$parseErrors)
+        Assert-Contract ($parseErrors.Count -eq 0) 'Owned process regression source did not parse.'
+        $tokenDefinition = @($sourceAst.FindAll({ param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -ceq 'Get-OwnedProcessIdentityToken'
+        }, $true))
+        Assert-Contract ($tokenDefinition.Count -eq 1) 'Owned process token definition is ambiguous.'
+        $read = @($tokenDefinition[0].Body.FindAll({ param($node)
+            $node -is [Management.Automation.Language.InvokeMemberExpressionAst] -and
+                $node.Member.Value -ceq 'ReadAllText'
+        }, $true))
+        Assert-Contract ($read.Count -eq 1) 'Owned process token read boundary is ambiguous.'
+        $boundary = [pscustomobject]@{ TargetId = $Child.Process.Id; Handle = $Child.Process
+            ExitPath = $Child.ExitPath; Hits = 0; Joined = $false; ProcAbsent = $false; Failure = $false }
+        $action = {
+            # Debugger frames expose automatic variables, including the actual
+            # bound arguments, while user-defined parameter locals may be absent.
+            # Restrict the read boundary to this directly started child.
+            $frames = @(Get-PSCallStack | Where-Object { $_.FunctionName -ceq 'Get-OwnedProcessIdentityToken' })
+            if ($frames.Count -ne 1) { return }
+            $variables = $frames[0].GetFrameVariables()
+            if (-not $variables.ContainsKey('PSBoundParameters')) { return }
+            $boundParameters = $variables['PSBoundParameters'].Value
+            if ($boundParameters -isnot [Collections.IDictionary] -or -not $boundParameters.ContainsKey('Process')) { return }
+            $readProcess = $boundParameters['Process']
+            if ($readProcess -isnot [Diagnostics.Process] -or $readProcess.Id -ne $boundary.TargetId) { return }
+            $boundary.Hits++
+            try {
+                [IO.File]::WriteAllText($boundary.ExitPath, 'exit')
+                $boundary.Joined = $boundary.Handle.WaitForExit(5000) -and $boundary.Handle.ExitCode -eq 0
+                $boundary.ProcAbsent = -not [IO.Directory]::Exists('/proc/' + $boundary.TargetId)
+                if (-not $boundary.Joined -or -not $boundary.ProcAbsent) { $boundary.Failure = $true }
+            }
+            catch { $boundary.Failure = $true }
+            # Resume the real ReadAllText. Startup must throw; cleanup must only
+            # accept the missing file after confirming the original exit.
+        }.GetNewClosure()
+        $breakpoint = Set-PSBreakpoint -Script $PSCommandPath -Line $read[0].Extent.StartLineNumber -Action $action
+        $breakpoints.Add($breakpoint)
+        return [pscustomobject]@{ State = $boundary; Breakpoint = $breakpoint }
+    }
+
+    function Assert-OwnedProcessReadBoundary($Boundary) {
+        Assert-Contract ($Boundary.State.Hits -eq 1 -and $Boundary.State.Joined -and
+            $Boundary.State.ProcAbsent -and -not $Boundary.State.Failure) 'Owned process did not exit at the actual Linux stat-read boundary.'
+        Remove-PSBreakpoint -Id $Boundary.Breakpoint.Id
+        $null = $breakpoints.Remove($Boundary.Breakpoint)
+    }
+
+    try {
+        # Strict startup must not turn absent /proc metadata into a valid token.
+        # The original handle is already retained when this read fails.
+        $child = New-OwnedProcessContractChild 'startup'
+        Wait-OwnedProcessContractReady $child
+        $boundary = $null
+        if ($IsLinux) { $boundary = New-OwnedProcessReadBoundary $child }
+        else {
+            [IO.File]::WriteAllText($child.ExitPath, 'exit')
+            Assert-Contract ($child.Process.WaitForExit(5000) -and $child.Process.ExitCode -eq 0) 'Owned startup exit fixture did not join.'
+        }
+        $startupFailure = $null
+        try { $unused = Register-OwnedReadinessServer $child.Process $child.IdentityPath $child.AssociationPath $caseServers }
+        catch { $startupFailure = $_.Exception }
+        Assert-Contract ($null -ne $startupFailure -and $caseServers.Count -eq 1) 'Missing startup identity was accepted or its original handle was lost.'
+        $startupRecord = $caseServers[0]
+        Assert-Contract (-not $startupRecord.IdentityCaptured -and $null -eq $startupRecord.StartToken -and
+            -not [IO.File]::Exists($child.IdentityPath) -and -not [IO.File]::Exists($child.AssociationPath)) 'Failed startup retained a claimed identity.'
+        if ($IsLinux) {
+            $missing = $false; $exception = $startupFailure
+            while ($null -ne $exception) {
+                if ($exception -is [IO.FileNotFoundException] -or $exception -is [IO.DirectoryNotFoundException]) { $missing = $true; break }
+                $exception = $exception.InnerException
+            }
+            Assert-Contract $missing 'The strict original stat read did not reject the reaped startup child.'
+            Assert-OwnedProcessReadBoundary $boundary
+        }
+        $startupCleanupFailed = $false
+        try { Stop-OwnedReadinessServer $startupRecord }
+        catch { $startupCleanupFailed = $_.Exception.Message -ceq 'Owned readiness cleanup failed.' }
+        Assert-Contract ($startupCleanupFailed -and $startupRecord.Reaped -and $startupRecord.Disposed -and
+            $startupRecord.CleanupDiagnostics.Count -eq 1 -and
+            $startupRecord.CleanupDiagnostics[0].StartsWith('identity-file:', [StringComparison]::Ordinal)) 'Failed startup did not retain failure while reaping its original handle.'
+        $script:cases++
+
+        # Both the PID lookup path and the retained original-handle fallback
+        # encounter disappearance after their initial live-process check.
+        foreach ($cleanupPath in @('identity', 'fallback')) {
+            $child = New-OwnedProcessContractChild ('cleanup-' + $cleanupPath)
+            $record = Register-OwnedReadinessServer $child.Process $child.IdentityPath $child.AssociationPath $caseServers
+            Wait-OwnedProcessContractReady $child
+            if ($cleanupPath -ceq 'fallback') { Remove-Item -LiteralPath $child.IdentityPath }
+            $boundary = $null
+            if ($IsLinux) { $boundary = New-OwnedProcessReadBoundary $child }
+            else {
+                [IO.File]::WriteAllText($child.ExitPath, 'exit')
+                Assert-Contract ($child.Process.WaitForExit(5000) -and $child.Process.ExitCode -eq 0) 'Owned cleanup exit fixture did not join.'
+            }
+            if ($cleanupPath -ceq 'identity') {
+                Test-OwnedProcessStopped $child.IdentityPath -Stop
+                if ($IsLinux) { Assert-OwnedProcessReadBoundary $boundary }
+                Stop-OwnedReadinessServer $record
+            }
+            else {
+                $fallbackFailed = $false
+                try { Stop-OwnedReadinessServer $record }
+                catch { $fallbackFailed = $_.Exception.Message -ceq 'Owned readiness cleanup failed.' }
+                if ($IsLinux) { Assert-OwnedProcessReadBoundary $boundary }
+                Assert-Contract ($fallbackFailed -and $record.CleanupDiagnostics.Count -eq 1 -and
+                    $record.CleanupDiagnostics[0].StartsWith('identity-file:', [StringComparison]::Ordinal)) 'Original-handle fallback discarded the identity-file failure.'
+            }
+            Assert-Contract ($record.Reaped -and $record.Disposed) 'Stat-read disappearance left an unreaped original handle.'
+        }
+        $script:cases++
+
+        $child = New-OwnedProcessContractChild 'wrong-token'
+        $record = Register-OwnedReadinessServer $child.Process $child.IdentityPath $child.AssociationPath $caseServers
+        Wait-OwnedProcessContractReady $child
+        $correctIdentity = [string]$record.Id + '|' + $record.StartToken
+        $parts = $record.StartToken.Split(':')
+        $wrongToken = $parts[0] + ':' + ([ulong]::Parse($parts[1], [Globalization.CultureInfo]::InvariantCulture) + 1).ToString([Globalization.CultureInfo]::InvariantCulture)
+        [IO.File]::WriteAllText($child.IdentityPath, ([string]$record.Id + '|' + $wrongToken))
+        $wrongTokenRejected = $false
+        try { Test-OwnedProcessStopped $child.IdentityPath -Stop }
+        catch { $wrongTokenRejected = $_.Exception.Message -ceq 'Fixture cleanup rejected a reused PID.' }
+        finally { [IO.File]::WriteAllText($child.IdentityPath, $correctIdentity) }
+        Assert-Contract ($wrongTokenRejected -and -not $child.Process.HasExited -and
+            (Get-OwnedProcessIdentityToken $child.Process) -ceq $record.StartToken) 'A live wrong start token was signalled or accepted.'
+        Stop-OwnedReadinessServer $record
+        Assert-Contract ($record.Reaped -and $record.Disposed) 'The rejected wrong-token child was not subsequently reaped through its exact identity.'
+        $script:cases++
+
+        $child = New-OwnedProcessContractChild 'normal-stop'
+        $record = Register-OwnedReadinessServer $child.Process $child.IdentityPath $child.AssociationPath $caseServers
+        Wait-OwnedProcessContractReady $child
+        Test-OwnedProcessStopped $child.IdentityPath -Stop
+        Assert-Contract ($child.Process.WaitForExit(5000) -and $child.Process.HasExited) 'Exact-token stop did not join the original child.'
+        Stop-OwnedReadinessServer $record
+        Assert-Contract ($record.Reaped -and $record.Disposed -and
+            -not [IO.File]::Exists($child.IdentityPath) -and -not [IO.File]::Exists($child.AssociationPath)) 'Normal owned-process cleanup did not reap and remove its identity files.'
+        $script:cases++
+    }
+    finally {
+        foreach ($breakpoint in $breakpoints) {
+            try { Remove-PSBreakpoint -Id $breakpoint.Id }
+            catch { $contractFailures.Add('breakpoint-removal') }
+        }
+        foreach ($record in $caseServers) {
+            if (-not $record.Disposed) {
+                try { Stop-OwnedReadinessServer $record }
+                catch { $contractFailures.Add('registered-process-cleanup') }
+            }
+        }
+        foreach ($child in $startedProcesses) {
+            if (@($caseServers | Where-Object { [object]::ReferenceEquals($_.Process, $child) }).Count -eq 0) {
+                try {
+                    if (-not $child.HasExited) { $child.Kill($true) }
+                    Assert-Contract ($child.WaitForExit(5000)) 'Unregistered original lifecycle child did not reap.'
+                    $child.Dispose()
+                }
+                catch { $contractFailures.Add('unregistered-process-cleanup') }
+            }
+        }
+        Assert-Contract ($contractFailures.Count -eq 0) 'Owned process lifecycle contract cleanup failed.'
+    }
 }
 
 function New-CaseRoot([string] $Scenario) {
@@ -356,15 +620,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
                 $start.ArgumentList.Add($argument)
             }
             $serverProcess = [Diagnostics.Process]::Start($start)
-            $serverRecord = [pscustomobject]@{ Process = $serverProcess; IdentityPath = $identityPath
-                AssociationPath = $associationPath; Id = $serverProcess.Id
-                StartToken = Get-OwnedProcessIdentityToken $serverProcess; Reaped = $false; Disposed = $false
-                CleanupDiagnostics = @() }
-            $caseServers.Add($serverRecord)
-            $ownedReadinessServers.Add($serverRecord)
-            [IO.File]::WriteAllText($identityPath,
-                ([string]$serverRecord.Id + '|' + $serverRecord.StartToken))
-            [IO.File]::WriteAllText($associationPath, $identityPath)
+            $unusedServer = Register-OwnedReadinessServer $serverProcess $identityPath $associationPath $caseServers
         }
     }
     $before = @{}
@@ -849,9 +1105,11 @@ try {
     [Environment]::SetEnvironmentVariable('CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS', '1000')
     [Environment]::SetEnvironmentVariable('CONDUIT_CORE_RATE_LIMIT_WINDOW_SECONDS', '60')
     $processIdentityHelper = Join-Path $temporaryRoot 'process-identity.ps1'
-    [IO.File]::WriteAllText($processIdentityHelper,
-        ('function Get-OwnedProcessIdentityToken {' + [Environment]::NewLine +
-            (Get-Item Function:\Get-OwnedProcessIdentityToken).ScriptBlock.ToString() + [Environment]::NewLine + '}'))
+    $identityDefinitions = foreach ($name in @('Get-OwnedProcessIdentityToken', 'Get-OwnedProcessCleanupInspection')) {
+        'function ' + $name + ' {' + [Environment]::NewLine +
+            (Get-Item ('Function:\' + $name)).ScriptBlock.ToString() + [Environment]::NewLine + '}'
+    }
+    [IO.File]::WriteAllText($processIdentityHelper, ($identityDefinitions -join [Environment]::NewLine))
     $fixture = Join-Path $temporaryRoot 'fixture.ps1'
     @'
 [CmdletBinding()]
@@ -881,8 +1139,13 @@ function Stop-Identity([string] $Path) {
     $owned = Get-Process -Id ([int]$identity[0]) -ErrorAction SilentlyContinue
     if ($null -ne $owned) {
         try {
-            if ((Get-OwnedProcessIdentityToken $owned) -cne $identity[1]) { throw 'Reused owned fixture PID.' }
-            if (-not $owned.HasExited) { $owned.Kill($true); if (-not $owned.WaitForExit(5000)) { throw 'Fixture reap failed.' } }
+            $inspection = Get-OwnedProcessCleanupInspection $owned
+            if ($null -eq $inspection) { return }
+            if ($inspection.Token -cne $identity[1]) { throw 'Reused owned fixture PID.' }
+            if (-not $owned.HasExited -and -not $inspection.Zombie) {
+                $owned.Kill($true)
+                if (-not $owned.WaitForExit(5000)) { throw 'Fixture reap failed.' }
+            }
         }
         finally { $owned.Dispose() }
     }
@@ -1535,6 +1798,7 @@ exit 0
         Assert-Contract ($unknown -ceq 'fixed-fallback') 'Unknown private failures escaped the fixed fallback.'
         $cases++
     }
+    Invoke-OwnedProcessCleanupContracts
     $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult
     Invoke-CollectorCase 'admin' 'lowercase-missing-object' $null
     Invoke-CollectorCase 'admin' 'lowercase-missing-container' $null
