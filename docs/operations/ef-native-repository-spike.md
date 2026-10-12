@@ -604,3 +604,137 @@ Removing this translation failure does not establish generated-query execution,
 complete native repository-suite qualification, or production readiness.
 Remaining owner failures still require fixes or verified replacements, and
 production remains JIT under ADR 0006.
+
+## Complete model-routing queries with nested typed includes
+
+The exact applied V2 variant rewrites all nine public methods in
+`EfModelProviderMappingRuntimeStore` as complete query expressions, with 23
+local scalar aliases at the original evaluation boundaries. Five graph readers
+inline no tracking and typed `Include` paths for `Provider`,
+`ModelProviderTypeAssociation.ModelCost`, and
+`ModelProviderTypeAssociation.Model.Series`. The paths retain exactly the
+original five navigation edges, repeated association traversal, optional cost,
+and required provider/association/model/series graph. All six remaining helpers,
+99 mapper assignments (94 scalar and five navigation assignments), and 12 policy
+projection fields are unchanged. Guards, culture-sensitive alias lowercasing,
+clock sampling, factory cancellation, count-before-offset evaluation, pagination,
+cardinality, ordering, materialization, and awaited disposal are preserved.
+
+A first complete-owner candidate was measured and rejected without applying it.
+It removed the original failures but introduced five `ThenInclude` replacement
+signatures, ten renderings; totals changed from 486/225 to 474/219
+renderings/signatures. Pinned EF 10.0.12 source at
+`95017c711e6afc1085133d440e42b4bd78155701` explains the observed generator
+failure: the operator source check expects one generic type argument, while
+`ThenInclude` has two. Nested typed `Include` member paths use the supported
+`IQueryable<TEntity>` source and retain the complete navigation union. This
+failure family remains tracked in
+[#1662](https://github.com/nickna/Conduit/issues/1662); the rejected candidate and
+its original compiler captures remain retained.
+
+The accepted fresh Configuration-owner comparison starts from `188834cfd` with
+isolated EF runtime/Design/Tasks/CLI 10.0.12 and Npgsql provider 10.0.3. Both
+managed build controls pass. Both precompiler commands still exit 1, but all 64
+after owner callsites and 11 terminal targets have zero focused failures, with
+no added diagnostics or unrelated signature/count changes. Totals change from
+486 renderings across 225 signatures to 464 across 214, removing 22 renderings
+across 11 signatures. Twenty removed renderings across ten signatures are
+uniquely attributable to this owner. The shared association bucket initially
+matches two owners and contains four renderings across two signatures; the
+controlled change leaves two renderings across one signature for the unchanged
+legacy owner. Only that measured two-rendering reduction is attributed to this
+change. The baseline token is `008b6bd82fc7281403c1172ab3a5c87237fd0445e2b63933f2747e69f13a3a03`;
+the retained legacy diagnostic is not claimed removed. These are compiler
+callsite and diagnostic counts, not executed SQL statement counts.
+
+The comparison seals 848 references, including all 582 prior accepted references
+and 720 rejected V1 references. Its receipt is
+`99f4df3bc9277b61846c04bf2e0fc354c320d576a84e0a054505cb834f28602c`.
+Independent original-source/token/span/type/SARIF/compiler-input/log replay is
+`ff0e48a3d641fe1f67b421be23b1232a53bcfc087c04aa60692e813f7482fe11`.
+The source-application receipt is
+`83ff38aa989a5f1b0b7f59b065ba0e9a871e5752121282803c9095645a0d470a`.
+The compiler comparison produced no generated files or native process and
+executed no database queries. The central package configuration is unchanged:
+EF Core/Relational/SQLite 10.0.12, EF Design 10.0.10, and Npgsql/provider 10.0.3;
+the experiment aligns the isolated tooling without a framework bump.
+
+The exact repaired test source and applied V2 variant pass all seven selected real PostgreSQL 16.15 rows without failures or skips. The selected
+main parity class declares seven rows: one existing fact and three Boolean
+theories with both EF and typed Npgsql cases. The passing rows cover complete
+graph/policy/cost scalar fidelity, optional nulls, unknown enums, UTC/JSON/decimal
+values, detached provider/dictionary snapshots, disabled graphs, misses,
+case-sensitive policy/identifier matching, alias priority ordering, 103-row
+pagination and provider isolation, cost eligibility/ranking, and cancellation
+for all nine reads before execution, during two-slot pool acquisition, and
+during observed SQL waits including count and item phases for both page reads.
+All seven source-declared and discovered identities join to distinct Passed
+TRX results and definitions. All nine reads recover using the same store and
+two-slot pool, and both slots are independently reusable after cancellation.
+
+The first real PostgreSQL attempt joined with exit 1: the existing fact passed,
+and all six new theory rows failed. Four failures came from seed rows violating
+the unique `(ModelAlias, ProviderId)` index. Two cancellation-observer failures
+came from matching table names beyond PostgreSQL's 1,024-byte activity-query
+capture. The original failed receipt is
+`84440361a242407bec329ae404bca4f2e311c4b0c01f45e4efa6b404090fee8f`;
+its seven-result TRX is
+`4a8ef8f93f86e34f366b401cebc8096b0a20d8ab2144f89e6e027c1cf833cc7b`.
+Independent failed-run replay is
+`bf582db914f1c5dc0dd14a8bca8e8706e4ad0e0f74cc6fdc48078358d0ef06d0`.
+All 251 frozen inputs and copies passed four checks, and all 35 joined commands
+and 70 streams remain retained. Both owned fixtures were removed and absent by
+ID and name, with protected images unchanged. Post-test schema-count queries
+were not executed, so the failed attempt does not establish zero remaining
+schemas before fixture removal. No passing runtime result is inferred from it.
+
+Only the new test setup and observation logic were repaired. Snapshot seeds use
+distinct raw-case alias/provider pairs while retaining case-insensitive alias
+reads and independent provider-dictionary mutation checks. Selection seeds use
+101 distinct fixed-width aliases and an additional provider's `page-route-099`
+tie, preserving 103 total rows, 102 provider rows, and the alias/ID ordering
+boundary at the 100-row cap. The SQL observer now joins activity, ungranted
+`pg_locks` relation OIDs, the fully quoted owned schema/table, exact application
+and process IDs, and the specific blocker. Both page count and Providers item
+phases remain observed before manual cancellation. The seven case identities,
+94 scalar/five navigation assertions, 12 policy fields, and recovery logic are
+preserved; production sources are unchanged by this test repair.
+
+The current repaired main-test source is
+`f4e0a868b2b832509ada254f05997c8cfbaadb2e5d067fe83542bb160658b009`;
+`d2437cf47b69b16cd1cfa09da0cef27144927915d2fc5b4e058fe38f80926a85`
+identifies the retained failed-run test preimage and historical compiler-capture test gate. Independent source review
+is `fe9e2b540a8a37b50188f6266d5137606c15edfc9668483b16b52edae9711fb1`,
+and exact test application is
+`42dd8fe9f524171021f13676353fb880a3b80d2acb4b70262338a770266d97bc`.
+The source-only review and application receipts remain separate from the
+fresh actual seven-row runtime run and its independent behavior replay.
+
+Managed PostgreSQL receipt: `0551305542ae29378ed13af75c279e8596642465fc4c1514c764883b479d2de4`.
+Original seven-row TRX: `e653b53c55b7ce8fe2d359e122766b6232a8b7d4905feeafca9f7d1e374683e8`.
+Independent source/TRX/raw-command/fixture-ownership/cleanup replay:
+`ce1bf60ee5021715c185a4bb91386d502066f873e8065f17cb00bb75f9781a04`.
+All 251 frozen inputs and their byte copies are unchanged at four stages,
+producing 1,004 source/copy joins. The 40 joined commands retain all 80 captured
+streams. Actual PostgreSQL is 16.15 with the unchanged default 100-connection
+capacity, and actual Redis is 7.4.2. All five schema-prefix checks return zero.
+Both owned fixtures were removed and verified absent by ID and name, and
+protected image references are unchanged. Independent replay verifies the
+original commands, exact seven-row TRX identities, private capture protection,
+fixture ownership, and cleanup without rerunning tests or fixtures.
+
+Source-observed follow-ups remain open in
+[#1668](https://github.com/nickna/Conduit/issues/1668) for typed Npgsql page-count
+connection retention and
+[#1669](https://github.com/nickna/Conduit/issues/1669) for eligibility-clock
+placement. The EF clock remains sampled before context acquisition; typed
+Npgsql samples after acquiring its connection. Wide timing margins do not prove
+the two sampling boundaries equivalent, and the two-slot cancellation cases do
+not establish one-slot page success. No actual runtime failure is demonstrated
+by these source observations. Existing #1666 and #1667 remain open.
+
+Removing these diagnostics does not establish generated-query execution,
+complete native repository-suite qualification, or production readiness.
+#1373 and #1375 remain open, and production remains JIT under ADR 0006. The
+historical `b051389580a358fe7699e45f439d2c3fbc5ddce3` CI baseline does not qualify
+the Unit137 commit.
