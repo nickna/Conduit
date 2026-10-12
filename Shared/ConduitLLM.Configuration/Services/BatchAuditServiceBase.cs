@@ -304,11 +304,15 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
                 await PersistEventsAsync(events, cancellationToken);
 
                 _logger.LogDebug("Final flush of {Count} {EntityName} audit events to database", events.Count, EntityName);
+                AuditEventsFlushed.WithLabels(EntityName, "success").Inc(events.Count);
+                AuditQueueDepth.WithLabels(EntityName).Set(_eventQueue.Count);
             }
         }
         catch (Exception ex)
         {
             RequeueEvents(events);
+            // Preserve shutdown's failure contract: requeue and rethrow without counting
+            // a normal background-flush failure. Only successful drains update metrics.
             _logger.LogError(ex, "Failed to flush remaining {EntityName} audit events to database", EntityName);
             throw;
         }
@@ -354,9 +358,7 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
     #region Protected Methods (Can be overridden by derived classes)
 
     /// <summary>
-    /// Persists one complete batch. The default EF implementation preserves the
-    /// existing save behavior; runtime implementations may honor the supplied
-    /// shutdown cancellation token.
+    /// Persists one complete batch using the supplied persistence cancellation token.
     /// </summary>
     protected virtual async Task PersistEventsAsync(
         IReadOnlyList<TEvent> events,
@@ -364,8 +366,8 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
     {
         using var scope = _serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ConduitDbContext>();
-        await GetDbSet(context).AddRangeAsync(events);
-        await context.SaveChangesAsync();
+        await GetDbSet(context).AddRangeAsync(events, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>
