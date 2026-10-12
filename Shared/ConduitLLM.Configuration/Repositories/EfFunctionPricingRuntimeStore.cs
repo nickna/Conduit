@@ -20,15 +20,18 @@ public sealed class EfFunctionPricingRuntimeStore : IFunctionPricingRuntimeStore
         int functionConfigurationId, DateTime asOfUtc, CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var pricingConfigurationId = functionConfigurationId;
+        var pricingAsOfUtc = asOfUtc;
+        var queryCancellationToken = cancellationToken;
         return await context.FunctionCosts.AsNoTracking()
             .Where(cost => context.FunctionCostMappings.Any(mapping =>
-                mapping.FunctionConfigurationId == functionConfigurationId && mapping.IsActive &&
+                mapping.FunctionConfigurationId == pricingConfigurationId && mapping.IsActive &&
                 mapping.FunctionCostId == cost.Id))
-            .Where(cost => cost.IsActive && cost.EffectiveDate <= asOfUtc &&
-                (cost.ExpiryDate == null || cost.ExpiryDate > asOfUtc))
+            .Where(cost => cost.IsActive && cost.EffectiveDate <= pricingAsOfUtc &&
+                (cost.ExpiryDate == null || cost.ExpiryDate > pricingAsOfUtc))
             .OrderByDescending(cost => cost.Priority)
             .ThenByDescending(cost => cost.EffectiveDate)
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(queryCancellationToken);
     }
 }
 #endif

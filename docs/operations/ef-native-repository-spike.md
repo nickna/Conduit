@@ -410,3 +410,56 @@ Removing these translation errors does not establish generated-query execution,
 complete native repository-suite qualification, or production readiness.
 Remaining owner failures still require fixes or verified replacements, and
 production remains JIT under ADR 0006.
+
+## Local copies for function pricing selection
+
+`EfFunctionPricingRuntimeStore.FindEligibleCostAsync` copies the configuration ID,
+pricing timestamp, and query cancellation token to locals after context creation,
+which still receives the original token. Canonical mapping IDs, active filters,
+effective/expiry boundaries, priority/date ranking, no tracking, awaited disposal,
+the public signature, and the native guard are unchanged.
+
+The fresh Configuration-owner comparison starts from `da920eb30` with EF
+runtime/Design/Tasks/CLI 10.0.12 and Npgsql provider 10.0.3. Both managed build
+controls pass. Both precompiler commands still exit 1, but the exact pricing
+query's two `ParameterSymbol: functionConfigurationId` renderings disappear,
+with no replacement diagnostic. Totals change from 508 renderings across 236
+signatures to 506 across 235; every unrelated signature and rendering count is
+unchanged. Actual compiler records bind the outer EF `FirstOrDefaultAsync`,
+nested `Queryable.Any`, and five query operators in both phases, with proven
+`FunctionCosts` and `FunctionCostMappings` roots. These are seven compiler
+callsites, not separately executed SQL queries.
+
+The comparison seals 228 retained references and verifies the earlier media,
+discovery, and pre-execution configuration source is preserved. Its receipt is
+`c28f07decd241378f24238205432c18b6f2e9459e423c210e063fbab3404268d`.
+Independent original-log/source/token/SARIF/compiler-input replay is
+`f1b8a6eb0dd0469bb97d0541a2cd32fe9addeb22927069806412e799260f0aac`.
+The setup-only first attempt and failed file-only summation seals remain retained;
+the actual before/after commands each ran once, and corrected sealing reuses
+their original captures. No generated files or native process were produced, and
+the compiler comparison executed no database queries.
+
+The exact applied variant passes all four existing real PostgreSQL 16.15 pricing
+rows without failures or skips. They cover canonical versus shadow mapping IDs,
+inactive/future/expired candidates, priority/date ranking and unspecified exact
+ties, microsecond effective/expiry boundaries, unknown enums, decimal precision,
+SQL NULL versus JSON null, all persisted scalars, detached reads, and the legacy
+billing-service selection oracle. Both implementations preserve pre-cancellation
+and recover from pool waits and observed SQL lock waits with a single connection
+slot. All 33 frozen inputs and byte copies are unchanged at four stages. Both
+owned fixtures were removed and verified absent by ID and name, no pricing
+schemas remained, and protected image references were unchanged.
+
+The managed PostgreSQL receipt is
+`682603a80dc106fe97cf4a8a86878df36e1d12204bcc4da91f9e8b8d11282a6b`;
+the original four-row TRX is
+`66e6567bf285b7abb8a2f4119598efd9a65cfdd243e9c27dda7b75a615e1946e`.
+Independent source, TRX-identity, raw-command, ownership, and cleanup replay is
+`0f3237331fda6a56715bc19e1d0bbcadef15c37c58d7a0308fb47ad3030923f8`;
+it verifies all 34 joined commands and their 68 captured output streams.
+
+Removing this translation failure does not establish generated-query execution,
+complete native repository-suite qualification, or production readiness.
+Remaining owner failures still require fixes or verified replacements, and
+production remains JIT under ADR 0006.
