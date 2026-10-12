@@ -23,32 +23,37 @@ public sealed class EfFunctionDiscoveryRuntimeStore : IFunctionDiscoveryRuntimeS
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryCancellationToken = cancellationToken;
         if (purpose.HasValue && providerType.HasValue)
         {
+            var selectedPurpose = purpose.Value;
+            var selectedProvider = providerType.Value;
             return await context.FunctionConfigurations.AsNoTracking()
                 .Where(configuration => configuration.IsEnabled &&
-                    configuration.Purpose == purpose.Value &&
-                    configuration.ProviderType == providerType.Value)
-                .ToListAsync(cancellationToken);
+                    configuration.Purpose == selectedPurpose &&
+                    configuration.ProviderType == selectedProvider)
+                .ToListAsync(queryCancellationToken);
         }
 
         if (purpose.HasValue)
         {
+            var selectedPurpose = purpose.Value;
             return await context.FunctionConfigurations.AsNoTracking()
-                .Where(configuration => configuration.IsEnabled && configuration.Purpose == purpose.Value)
-                .ToListAsync(cancellationToken);
+                .Where(configuration => configuration.IsEnabled && configuration.Purpose == selectedPurpose)
+                .ToListAsync(queryCancellationToken);
         }
 
         if (providerType.HasValue)
         {
+            var selectedProvider = providerType.Value;
             return await context.FunctionConfigurations.AsNoTracking()
-                .Where(configuration => configuration.IsEnabled && configuration.ProviderType == providerType.Value)
-                .ToListAsync(cancellationToken);
+                .Where(configuration => configuration.IsEnabled && configuration.ProviderType == selectedProvider)
+                .ToListAsync(queryCancellationToken);
         }
 
         return await context.FunctionConfigurations.AsNoTracking()
             .Where(configuration => configuration.IsEnabled)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(queryCancellationToken);
     }
 
     public async Task<FunctionConfiguration?> GetEnabledByIdAsync(

@@ -83,9 +83,11 @@ public sealed class FunctionDiscoveryPersistenceParityTests(PostgresLockTestCont
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task CancellationOfBlockedReadReleasesTheSingleConnectionSlot(bool typed)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task CancellationOfBlockedReadReleasesTheSingleConnectionSlot(bool typed, bool listRead)
     {
         var schema = $"function_discovery_{Guid.NewGuid():N}";
         try
@@ -113,7 +115,9 @@ public sealed class FunctionDiscoveryPersistenceParityTests(PostgresLockTestCont
                 await command.ExecuteNonQueryAsync();
             }
             using var cancelledRead = new CancellationTokenSource();
-            var blockedRead = store.GetEnabledByIdAsync(2, cancelledRead.Token);
+            Task blockedRead = listRead
+                ? store.ListEnabledAsync(cancellationToken: cancelledRead.Token)
+                : store.GetEnabledByIdAsync(2, cancelledRead.Token);
             try
             {
                 await WaitForLockWaitAsync(connectionString, schema, blockedRead);
@@ -130,6 +134,7 @@ public sealed class FunctionDiscoveryPersistenceParityTests(PostgresLockTestCont
             await transaction.RollbackAsync();
             using var recovery = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             (await store.GetEnabledByIdAsync(2, recovery.Token))!.Id.Should().Be(2);
+            (await store.ListEnabledAsync(cancellationToken: recovery.Token)).Count.Should().Be(4);
         }
         finally { await DropAsync(schema); }
     }

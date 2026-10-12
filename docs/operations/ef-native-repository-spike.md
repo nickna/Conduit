@@ -246,3 +246,63 @@ experiment executed no database queries. Removing these targeted translation
 errors does not prove generated-query execution, complete repository-suite
 qualification, or production readiness. The remaining owner failures still
 require fixes or verified replacements; production remains JIT under ADR 0006.
+
+## Guarded scalar copies for discovery queries
+
+`ListEnabledAsync` copies nonnullable purpose/provider values inside its original
+`HasValue` guards and uses a local query cancellation token in all four complete
+expressions. Context creation still receives the original token. Enabled
+filtering, optional and unknown enum values, no tracking, awaited disposal, the
+public signature, and `GetEnabledByIdAsync` are unchanged.
+
+A fresh Configuration-owner comparison starts from `87218b656` and pins EF
+runtime/Design/Tasks/CLI 10.0.12 with Npgsql provider 10.0.3. Both managed build
+controls pass. Both query-precompiler commands still exit 1, but all eight focused
+error renderings disappear, with no replacement failure for any of the four
+query token sequences. Totals change from 524 renderings across 244 signatures
+to 516 across 240; every unrelated signature and rendering count is unchanged.
+Actual compiler records bind each expression in both phases to EF
+`ToListAsync<FunctionConfiguration>` and the `FunctionConfigurations` DbSet
+property. Independent replay verifies all 61 sealed references, original logs,
+source checksums, token sequences, and SARIF bindings.
+
+A nullable-copy candidate was measured and retained without applying it. It
+removes the eight parameter-error renderings but introduces six replacements:
+each of the three filtered expressions fails at `Nullable.Value` with
+"Nullable object must have a value." Its totals are 522/243. The applied variant
+evaluates `.Value` outside each query under the original guard, then captures
+the nonnullable local. This is an observed compiler workaround, not evidence of
+generated native query execution.
+
+The scalar comparison receipt is
+`ed2f6e0004f1b6d2dad0c265b26532af35187602e1af7d91867d614e81e1348e`;
+independent compiler replay is
+`7192ed94c3364a9608bb9350ee6e14ae30f10b2d07ff5191165d542a15a8a0a5`.
+The unapplied nullable comparison is
+`bfa470040cfab5bf6d9b22466f542ebcccc55cf48690915a00e11ebbe5ec9ad8`;
+its inner-exception evidence is
+`3ac969a72cb00ad760162d95987d6c72267a6668f0ddd94499fbc9605fae59fc`.
+
+The exact scalar variant passes five real PostgreSQL 16.15 parity rows without
+failures or skips. The existing fact checks all 36 optional/known/unknown enum
+filter combinations, persisted scalars, enabled filtering, and detached reads.
+The cancellation theory now covers both list and ID reads in both EF and typed
+Npgsql. It observes an actual PostgreSQL lock wait, cancels the read, and verifies
+both ID and list recovery with a single connection slot. Pre-cancelled list
+reads remain covered. All 21 frozen source/build/test/fixture/helper inputs and
+their byte copies are unchanged at four check stages. Both owned PostgreSQL and
+Redis fixtures were removed and verified absent by ID and name; no test schemas
+remained, and protected base image references were unchanged.
+
+The managed PostgreSQL receipt is
+`b800927cfcb9a14c7b4e911dfec28b4eafbc8033611a4e49a2cabf590f0e0b6c`;
+the original five-row TRX is
+`643f6a7d8bcf01c2fa73bf4c38d71b0590447d10cc49941c30daa786c75d5c71`.
+Independent source, TRX-identity, raw command, ownership, and cleanup replay is
+`df98d7983da0d32387637818226dac8a45b843dc9e992fb6aaed5f04fabcbe13`;
+it verifies 119 retained references and all 34 joined commands.
+
+No generated files or native process were produced by either compiler
+comparison, and neither executed database queries. The remaining owner failures,
+complete native repository-suite execution, and production qualification remain
+unresolved. Production remains JIT under ADR 0006.
