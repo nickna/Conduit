@@ -64,7 +64,8 @@ public sealed partial class FunctionExecutionPersistenceParityTests
                 var row = Snapshot(index % 2 == 0);
                 row.VirtualKeyId = -11;
                 row.FunctionConfigurationId = index % 2 + 1;
-                row.RequestedAt = Instant.AddMilliseconds(index / 2);
+                // Adjacent executions share a millisecond to exercise equal-timestamp ordering.
+                row.RequestedAt = Instant.AddTicks((index / 2) * TimeSpan.TicksPerMillisecond);
                 await legacy.CreateAsync(row);
             }
             var other = Snapshot(true);
