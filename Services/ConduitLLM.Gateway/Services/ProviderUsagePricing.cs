@@ -1,6 +1,7 @@
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Configuration;
+using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Gateway.Constants;
 using ConduitLLM.Gateway.Middleware;
 using ConduitLLM.Gateway.UsageTracking;
@@ -10,6 +11,18 @@ namespace ConduitLLM.Gateway.Services;
 /// <summary>Prices provider usage once, preserving the call boundaries and original evidence.</summary>
 public static class ProviderUsagePricing
 {
+    /// <summary>Replaces the request-local reported-cost policy with the current routed provider's policy.</summary>
+    public static void SetProviderBillingPolicy(HttpContext context, Provider? provider)
+    {
+        context.Items.Remove(HttpContextKeys.ProviderBillingPolicy);
+        if (provider?.TrustProviderReportedCosts == true)
+            context.Items[HttpContextKeys.ProviderBillingPolicy] = new ProviderCostBillingPolicy
+            {
+                TrustProviderReportedCost = true,
+                MarkupMultiplier = provider.ProviderCostMarkupMultiplier
+            };
+    }
+
     public static async Task<ProviderToolPricingEvidence> GetOrCalculateToolsAsync(
         HttpContext context, IToolCostCalculationService toolCostCalculationService)
     {

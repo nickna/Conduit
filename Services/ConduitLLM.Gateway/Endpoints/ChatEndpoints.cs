@@ -339,15 +339,7 @@ namespace ConduitLLM.Gateway.Endpoints
                         HttpContext.Items[ConduitLLM.Gateway.Constants.HttpContextKeys.ModelCostId] = modelMapping.ModelProviderTypeAssociation.ModelCostId;
                     }
 
-                    if (modelMapping.Provider?.TrustProviderReportedCosts == true)
-                    {
-                        HttpContext.Items[ConduitLLM.Gateway.Constants.HttpContextKeys.ProviderBillingPolicy] =
-                            new ConduitLLM.Core.Models.ProviderCostBillingPolicy
-                            {
-                                TrustProviderReportedCost = true,
-                                MarkupMultiplier = modelMapping.Provider.ProviderCostMarkupMultiplier
-                            };
-                    }
+                    ConduitLLM.Gateway.Services.ProviderUsagePricing.SetProviderBillingPolicy(HttpContext, modelMapping.Provider);
                 }
             }
             catch (Exception ex)
@@ -361,6 +353,7 @@ namespace ConduitLLM.Gateway.Endpoints
             if (request.SelectedMappingId is not int mappingId) return;
             var mapping = await _modelMappingService.GetMappingByIdAsync(mappingId);
             if (mapping is null) return;
+            ConduitLLM.Gateway.Services.ProviderUsagePricing.SetProviderBillingPolicy(HttpContext, mapping.Provider);
             HttpContext.Items[ConduitLLM.Gateway.Constants.HttpContextKeys.ModelProviderMappingId] = mappingId;
             HttpContext.Items["ProviderId"] = mapping.ProviderId;
             HttpContext.Items["ProviderType"] = mapping.Provider?.ProviderType;
