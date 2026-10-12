@@ -21,8 +21,10 @@ public sealed class EfFunctionExecutionConfigurationStore : IFunctionExecutionCo
         int id, CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var configurationId = id;
+        var queryCancellationToken = cancellationToken;
         return await context.FunctionConfigurations.AsNoTracking()
-            .FirstOrDefaultAsync(configuration => configuration.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(configuration => configuration.Id == configurationId, queryCancellationToken);
     }
 
     public async Task<IReadOnlyList<FunctionConfiguration>> GetConfigurationsAsync(
@@ -30,18 +32,22 @@ public sealed class EfFunctionExecutionConfigurationStore : IFunctionExecutionCo
     {
         if (ids is null || ids.Count == 0) return Array.Empty<FunctionConfiguration>();
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var configurationIds = ids;
+        var queryCancellationToken = cancellationToken;
         return await context.FunctionConfigurations.AsNoTracking()
-            .Where(configuration => ids.Contains(configuration.Id)).ToListAsync(cancellationToken);
+            .Where(configuration => configurationIds.Contains(configuration.Id)).ToListAsync(queryCancellationToken);
     }
 
     public async Task<IReadOnlyList<FunctionCredential>> ListCredentialsForProviderAsync(
         FunctionProviderType providerType, CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var credentialProviderType = providerType;
+        var queryCancellationToken = cancellationToken;
         return await context.FunctionCredentials.AsNoTracking()
-            .Where(credential => credential.ProviderType == providerType)
+            .Where(credential => credential.ProviderType == credentialProviderType)
             .OrderByDescending(credential => credential.IsPrimary).ThenBy(credential => credential.KeyName)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(queryCancellationToken);
     }
 }
 #endif

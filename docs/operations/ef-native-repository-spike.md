@@ -356,3 +356,57 @@ Removing this translation failure does not establish generated-query execution,
 complete native repository-suite qualification, or production readiness. The
 remaining owner failures still require fixes or verified replacements;
 production remains JIT under ADR 0006.
+
+## Local copies for pre-execution configuration reads
+
+`EfFunctionExecutionConfigurationStore` copies query values and cancellation
+tokens to locals in its three reads. Single-ID lookup still includes disabled
+configurations. Batch lookup preserves the original null/empty fast return,
+including an already-cancelled token, and captures the original collection
+reference. Credential lookup retains disabled rows and the legacy primary/name
+ordering. Public signatures, no tracking, awaited disposal, native guards, and
+original-token context creation are unchanged.
+
+A fresh Configuration-owner comparison starts from `8915a7a88` with EF
+runtime/Design/Tasks/CLI 10.0.12 and Npgsql provider 10.0.3. Both managed build
+controls pass. Both precompiler commands still exit 1, but all six focused
+parameter-error renderings disappear without replacements: totals change from
+514 renderings across 239 signatures to 508 across 236. Every unrelated
+signature and rendering count is unchanged. Actual compiler records bind the
+three terminals in both phases to EF's `FirstOrDefaultAsync`/`ToListAsync`
+overloads and their `FunctionConfigurations`/`FunctionCredentials` DbSet roots.
+The comparison seals 139 retained references and produces no generated files or
+native execution. Its receipt is
+`9ca5b9a7b46785b29af10c106a5732c8fcc9cb87df56f28b0ca104456493025a`.
+Independent original-log/source/token/SARIF/compiler-input replay is
+`089c75a3821ee67cc5c9262d01f48296b035d98c2aa6728cd413fdfffaa019b4`.
+
+The exact applied variant passes all four existing real PostgreSQL 16.15 parity
+rows without failures or skips. Configuration reads preserve known/missing IDs,
+null/empty/duplicate ID lists, disabled rows, unknown enums, scalar fidelity,
+and detached reads. Credential reads preserve strict legacy ordering, scope
+selection, opaque secrets, null fields, disabled rows, and detached reads.
+Pre-cancelled reads and null/empty fast returns pass; both credential pool-wait
+cancellation rows recover with a single connection slot. All 26 frozen inputs
+and byte copies are unchanged at four check stages. Both owned fixtures were
+removed and verified absent by ID and name, no test schemas remained, and
+protected image references were unchanged. No SQLite owner parity is claimed.
+
+The managed PostgreSQL receipt is
+`27afcba5b66d7ab1258bb70bf9317a313f739a673dd9f959551f1aa0a5b46317`;
+the original four-row TRX is
+`f57f9bfeae5f636794c37dc4162263239efb77536b107075c9420e63be53c9cd`.
+Independent source, TRX-identity, raw-command, ownership, and cleanup replay is
+`03eef96022e2b287b9bfbc1e2410a6d1bb4cefc016cd755e287f0f57ff8827b1`;
+it verifies all 34 joined commands and their 68 captured output streams.
+
+Existing coverage cancels before execution and during pool acquisition. Adding
+observed SQL-in-flight cancellation cases for all three reads is tracked as a
+non-blocking coverage improvement in
+[#1665](https://github.com/nickna/Conduit/issues/1665); no current cancellation
+failure has been demonstrated.
+
+Removing these translation errors does not establish generated-query execution,
+complete native repository-suite qualification, or production readiness.
+Remaining owner failures still require fixes or verified replacements, and
+production remains JIT under ADR 0006.
