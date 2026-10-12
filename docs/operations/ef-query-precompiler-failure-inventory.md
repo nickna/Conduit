@@ -77,6 +77,10 @@ history, initial transactions, default descriptions, missing groups, reference
 types, and rollback when saving the ledger fails. They were not in the native
 dispatcher plan and did not execute natively. This is a concrete omission, not
 an exhaustive list of missing repository tests.
+The later [expanded repository spike](ef-native-repository-spike.md) adds those
+nine direct bindings to a 233-case lower-bound plan. Its historical 224-case
+omission remains recorded here; expanded planning does not establish execution
+or complete repository coverage.
 
 Broader service, locking, migration, endpoint, and orchestration candidates need
 their own subject/call-path classification. Using a repository mock alone does
