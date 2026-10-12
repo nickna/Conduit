@@ -9,7 +9,7 @@ internal static partial class NativeFunctionExecutionProbe
 {
     private const decimal AgenticRequestPrice = 0.12515001m;
     private static readonly Accounting AgenticSettled =
-        new(6, 0.750600m, 99.24939994m, 0.75060006m, 100m, 0.750600m, 0m, 99.249400m);
+        new(6, 0.75060006m, 99.24939994m, 0.75060006m, 100m, 0.75060006m, 0m, 99.24939994m);
 
     private static async Task AssertAgenticExecutionAsync(HttpClient[] gateways, HttpClient provider,
         NpgsqlDataSource source, NativeFunctionFixtureSnapshot fixture, string otherVirtualKey, CancellationToken token)
@@ -58,7 +58,7 @@ internal static partial class NativeFunctionExecutionProbe
             foreach (var gateway in gateways)
                 AssertNotFound(await GetExecutionAsync(gateway, otherVirtualKey, executionId,
                     HttpStatusCode.NotFound, ct), executionId);
-            observed.Add(new AgenticObservedExecution(executionId, path, marker));
+            observed.Add(new AgenticObservedExecution(executionId, path, marker, billingId, callerId));
         }
 
         var settled = await WaitForAgenticSettlementAsync(source, fixture, ct);
@@ -134,12 +134,12 @@ internal static partial class NativeFunctionExecutionProbe
         Require(calls.ValueKind == JsonValueKind.Array && calls.GetArrayLength() == 1, "one configured function summary");
         var call = calls[0];
         Properties(call, "iteration", "tool_call_id", "function_name", "function_configuration_id", "function_execution_id", "success", "cost", "duration_ms");
-        Require(call.GetProperty("iteration").GetInt32() == 0 &&
+        Require(call.GetProperty("iteration").GetInt32() == 1 &&
             call.GetProperty("tool_call_id").GetString() == "call_native_" + marker.ToString("N") &&
             call.GetProperty("function_name").GetString() == $"native_function_{fixture.Owner:N}exa" &&
             call.GetProperty("function_configuration_id").GetInt32() == fixture.ConfigurationId &&
             call.GetProperty("success").GetBoolean() && call.GetProperty("cost").GetDecimal() == Price,
-            "successful owned function summary preserves inherited zero iteration");
+            "successful owned function summary identifies the first actual provider iteration");
 
         var performance = root.GetProperty("performance_metrics");
         // Nonstream performance measures the final provider call, before aggregate usage is assigned.
@@ -231,6 +231,7 @@ internal static partial class NativeFunctionExecutionProbe
             executions.Select(execution => execution.Marker).Distinct().Count() == 4,
             "four distinct agentic requests and persisted executions");
         var paths = executions.GroupBy(execution => "/" + execution.Path).ToDictionary(group => group.Key, group => group.Count());
+        var expected = executions.ToDictionary(execution => execution.Id);
         await using var connection = await source.OpenConnectionAsync(token);
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -251,10 +252,39 @@ internal static partial class NativeFunctionExecutionProbe
             Require(reader.GetString(0) == NativeParityFixture.ModelAlias && reader.GetInt32(1) == -9001 &&
                 reader.GetString(2) == "OpenAI" && reader.GetString(3) == "chat" && reader.GetInt32(4) == 20 &&
                 reader.GetInt32(5) == 10 && reader.IsDBNull(6) && reader.IsDBNull(7) &&
-                reader.GetDecimal(8) == decimal.Round(AgenticRequestPrice, 6) && reader.GetInt32(9) == 0 &&
-                reader.IsDBNull(10) && reader.IsDBNull(11) && reader.GetInt32(13) == 200 && reader.IsDBNull(14),
-                "each chat logs aggregate tokens and combined configured model/function price, without provider dollars or tool metadata");
+                reader.GetDecimal(8) == AgenticRequestPrice && reader.GetInt32(9) == 0 &&
+                reader.IsDBNull(10) && reader.IsDBNull(11) && reader.GetInt32(13) == 200 && !reader.IsDBNull(14),
+                "each chat logs aggregate tokens, exact combined configured model/function price and generated function metadata");
+            var metadata = Parse(reader.GetString(14));
+            Properties(metadata, "type", "functionCallCount", "totalCost", "successCount", "failedCount",
+                "functionCalls", "billingRequestId", "requestId", "costBreakdown");
+            Require(metadata.GetProperty("type").GetString() == "chat_with_functions" &&
+                metadata.GetProperty("functionCallCount").GetInt32() == 1 && metadata.GetProperty("totalCost").GetDecimal() == Price &&
+                metadata.GetProperty("successCount").GetInt32() == 1 && metadata.GetProperty("failedCount").GetInt32() == 0,
+                "request-log function metadata retains the distinct configured-function total");
+            var calls = metadata.GetProperty("functionCalls");
+            Require(calls.ValueKind == JsonValueKind.Array && calls.GetArrayLength() == 1,
+                "one persisted configured-function event per parent chat");
+            var call = calls[0];
+            Properties(call, "iteration", "tool_call_id", "function_name", "status", "cost", "function_execution_id");
+            Require(expected.TryGetValue(call.GetProperty("function_execution_id").GetGuid(), out var execution) &&
+                expected.Remove(execution!.Id), "each chat log independently joins one observed execution exactly once");
+            var observedExecution = execution!;
+            Require(call.GetProperty("iteration").GetInt32() == 1 &&
+                call.GetProperty("tool_call_id").GetString() == "call_native_" + observedExecution.Marker.ToString("N") &&
+                call.GetProperty("function_name").GetString() == $"native_function_{fixture.Owner:N}exa" &&
+                call.GetProperty("status").GetString() == "completed" && call.GetProperty("cost").GetDecimal() == Price &&
+                metadata.GetProperty("billingRequestId").GetString() == observedExecution.BillingId.ToString("N") &&
+                metadata.GetProperty("requestId").GetString() == observedExecution.CallerId.ToString("N"),
+                "stored event links actual provider iteration, execution, billing and original caller identities");
+            var costs = metadata.GetProperty("costBreakdown");
+            Properties(costs, "llmCost", "functionCost", "providerToolCost", "totalCost");
+            Require(costs.GetProperty("llmCost").GetDecimal() == 0.000150m &&
+                costs.GetProperty("functionCost").GetDecimal() == Price && costs.GetProperty("providerToolCost").GetDecimal() == 0m &&
+                costs.GetProperty("totalCost").GetDecimal() == AgenticRequestPrice,
+                "stored billing breakdown records both provider-call token usage and configured function cost without hosted tools");
             var path = reader.GetString(12);
+            Require(path == "/" + observedExecution.Path, "stored billing metadata execution joins its actual HTTP route");
             Require(paths.TryGetValue(path, out var remaining) && remaining > 0, "each actual chat route logged exactly twice");
             paths[path] = remaining - 1;
             var billed = reader.GetDateTime(15);
@@ -273,7 +303,8 @@ internal static partial class NativeFunctionExecutionProbe
                 $"failovers={reader.GetInt32(25)}, userMatches={reader.GetString(26) == $"native_function_{fixture.Owner:N}:key"}, " +
                 $"ipMatches={reader.GetString(27) == "127.0.0.1"})");
         }
-        Require(count == 4 && paths.Values.All(remaining => remaining == 0), "exactly four agentic chat logs across both aliases");
+        Require(count == 4 && expected.Count == 0 && paths.Values.All(remaining => remaining == 0),
+            "exactly four agentic chat logs across both aliases and all observed executions");
     }
 
     private static void AssertAgenticProviderCounters(JsonElement before, JsonElement after)
@@ -293,5 +324,5 @@ internal static partial class NativeFunctionExecutionProbe
                 "exact agentic provider counter delta for " + name);
     }
 
-    private sealed record AgenticObservedExecution(Guid Id, string Path, Guid Marker);
+    private sealed record AgenticObservedExecution(Guid Id, string Path, Guid Marker, Guid BillingId, Guid CallerId);
 }

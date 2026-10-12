@@ -70,7 +70,11 @@ namespace ConduitLLM.Gateway.Services
         }
 
         /// <inheritdoc />
-        public async Task<bool> UpdateSpendAsync(int keyId, decimal cost)
+        public Task<bool> UpdateSpendAsync(int keyId, decimal cost) =>
+            UpdateSpendAsync(keyId, cost, billedAtUtc: null);
+
+        /// <inheritdoc />
+        public async Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc)
         {
             if (cost <= 0) return true; // No cost to add, consider it successful
 
@@ -88,7 +92,6 @@ namespace ConduitLLM.Gateway.Services
                 }
 
                 // Update the group balance
-                var billingTimestamp = DateTime.UtcNow;
                 var newBalance = await GroupRepository.AdjustBalanceAsync(
                     group.Id,
                     -cost,
@@ -96,7 +99,7 @@ namespace ConduitLLM.Gateway.Services
                     "System",
                     ReferenceType.VirtualKey,
                     keyId.ToString(),
-                    billingTimestamp.Date.AddHours(billingTimestamp.Hour));
+                    ConduitLLM.Configuration.Utilities.BillingTimeUtilities.GetBillingWindowStartUtc(billedAtUtc));
 
                 // Update virtual key timestamp
                 virtualKey.UpdatedAt = DateTime.UtcNow;

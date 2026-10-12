@@ -410,6 +410,7 @@ public sealed class AotDependencyBoundaryTests
 
         var runtimeMethods = typeof(IVirtualKeyRuntimeService).GetMethods()
             .Select(method => method.Name)
+            .Distinct()
             .OrderBy(name => name)
             .ToArray();
         Assert.Equal(

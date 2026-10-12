@@ -158,7 +158,8 @@ public class AgenticOrchestrationService : IAgenticOrchestrationService
         var stopwatch = Stopwatch.StartNew();
         var singleResult = new SingleToolCallResult
         {
-            ToolCall = toolCall
+            ToolCall = toolCall,
+            Iteration = iterationNumber
         };
 
         try
@@ -268,6 +269,7 @@ public class AgenticOrchestrationService : IAgenticOrchestrationService
         // Add function call summary
         var summary = new FunctionCallSummary
         {
+            Iteration = singleResult.Iteration,
             ToolCallId = singleResult.ToolCall.Id,
             FunctionName = singleResult.ToolCall.Function.Name,
             FunctionConfigurationId = singleResult.FunctionExecution?.FunctionConfigurationId ?? 0,
@@ -299,6 +301,7 @@ public class AgenticOrchestrationService : IAgenticOrchestrationService
     private class SingleToolCallResult
     {
         public required ToolCall ToolCall { get; set; }
+        public int Iteration { get; set; }
         public bool Success { get; set; }
         public string? Result { get; set; }
         public string? ErrorMessage { get; set; }

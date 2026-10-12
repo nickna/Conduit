@@ -56,4 +56,10 @@
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeProbeJsonContext.cs" Link="Infrastructure/NativeProbeJsonContext.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="../../scripts/db/approve-legacy-ledger-replay.sql"
+          Link="TestData/approve-legacy-ledger-replay.sql"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

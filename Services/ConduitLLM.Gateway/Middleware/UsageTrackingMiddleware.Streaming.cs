@@ -42,6 +42,11 @@ namespace ConduitLLM.Gateway.Middleware
 
             if (usage is null)
             {
+                if (accountingSnapshot?.Reservation?.InvocationStarted == true)
+                {
+                    context.GetOrCreateRequestAccountingContext().MarkIndeterminate(
+                        "Provider invocation ended without resolved streaming usage");
+                }
                 // Function execution cost is known independently of provider token usage. A provider
                 // may omit its final usage chunk (or the client may disconnect after functions ran),
                 // so preserve that charge before returning from the token-usage path.
@@ -50,16 +55,17 @@ namespace ConduitLLM.Gateway.Middleware
                 if (endpointType == "chat" && functionCost > 0m)
                 {
                     var functionVirtualKeyId = (int)context.Items[HttpContextKeys.VirtualKeyId]!;
-                    await RecordSpendOrSettleReservationAsync(
+                    var accepted = await RecordKnownStreamingSpendAsync(
                         context,
                         functionVirtualKeyId,
                         functionCost,
                         batchSpendService,
                         virtualKeyService);
 
-                    _logger.LogInformation(
-                        "Billed known streaming function cost for VirtualKey {VirtualKeyId} despite missing token usage: {Cost:C}",
-                        functionVirtualKeyId, functionCost);
+                    if (accepted)
+                        _logger.LogInformation(
+                            "Preserved known streaming function cost for VirtualKey {VirtualKeyId} despite missing token usage: {Cost:C}",
+                            functionVirtualKeyId, functionCost);
 
                     var functionUsage = new Usage
                     {
@@ -69,12 +75,15 @@ namespace ConduitLLM.Gateway.Middleware
                     };
                     var functionMetadata = accountingSnapshot?.FunctionExecutions.Count > 0
                         ? FunctionExecutionSerializer.SerializeFunctionExecutionResults(
-                            accountingSnapshot.FunctionExecutions.ToList())
+                            accountingSnapshot.FunctionExecutions,
+                            accountingSnapshot.BillingRequestId,
+                            context.TraceIdentifier,
+                            new FunctionExecutionCostBreakdown(null, functionCost, null, functionCost))
                         : null;
                     await LogRequestAsync(
                         context,
                         functionVirtualKeyId,
-                        accountingSnapshot?.ProviderUsage?.Model ?? "unknown",
+                        accountingSnapshot?.RequestedModel ?? "unknown",
                         functionUsage,
                         functionCost,
                         requestLogService,
@@ -173,8 +182,6 @@ namespace ConduitLLM.Gateway.Middleware
             if (endpointType == "chat" && functionResults.Count > 0)
             {
                 // Use richer function execution data (includes status, cost, execution ID)
-                chatToolCallsJson = FunctionExecutionSerializer.SerializeFunctionExecutionResults(functionResults);
-
                 // Get total function cost from HttpContext
                 functionExecutionCost = accountingSnapshot?.FunctionExecutionCost ?? 0m;
 
@@ -211,6 +218,15 @@ namespace ConduitLLM.Gateway.Middleware
                 context, model, usage, costCalculationService, billingAuditService);
             var baseCost = pricingResult.Cost;
             var cost = baseCost + (toolCost ?? 0m) + functionExecutionCost;
+            if (endpointType == "chat" && functionResults.Count > 0)
+            {
+                chatToolCallsJson = FunctionExecutionSerializer.SerializeFunctionExecutionResults(
+                    functionResults,
+                    accountingSnapshot!.BillingRequestId,
+                    context.TraceIdentifier,
+                    new FunctionExecutionCostBreakdown(baseCost, functionExecutionCost, toolCost ?? 0m, cost),
+                    toolUsageData);
+            }
 
             // Update metrics
             UsageMetrics.UsageTrackingRequests.WithLabels(endpointType + "_stream", "success").Inc();

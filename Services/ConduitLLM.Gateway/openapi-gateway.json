@@ -1770,13 +1770,13 @@
           "Chat"
         ],
         "summary": "Creates a chat completion with Conduit streaming events.",
-        "description": "Uses the same chat execution and accounting as /v1/chat/completions. Set stream=true for chat chunks plus named Conduit metrics, reasoning, and tool progress events, followed by [DONE].",
+        "description": "Uses the same chat execution and accounting as /v1/chat/completions. Supports video_url, additional input_audio formats, and provider-specific content parts with a nonempty type discriminator; the configured provider determines support. Known content parts retain their required fields and documented value restrictions. Set stream=true for chat chunks plus named Conduit metrics, reasoning, and tool progress events, followed by [DONE].",
         "operationId": "Chat_CreateEnhancedCompletion",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ChatCompletionRequest"
+                "$ref": "#/components/schemas/ProviderChatCompletionRequest"
               },
               "example": {
                 "model": "your-model-alias",
@@ -9105,6 +9105,54 @@
           }
         }
       },
+      "ChatAudioContentPart": {
+        "required": [
+          "type",
+          "input_audio"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "input_audio"
+            ],
+            "type": "string"
+          },
+          "input_audio": {
+            "required": [
+              "data",
+              "format"
+            ],
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "string"
+              },
+              "format": {
+                "enum": [
+                  "wav",
+                  "mp3"
+                ],
+                "type": "string"
+              }
+            }
+          },
+          "prompt_cache_breakpoint": {
+            "required": [
+              "mode"
+            ],
+            "type": "object",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "explicit"
+                ],
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
       "ChatAudioOptions": {
         "required": [
           "voice",
@@ -9466,6 +9514,99 @@
           "moderation": { }
         }
       },
+      "ChatFileContentPart": {
+        "required": [
+          "type",
+          "file"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "file"
+            ],
+            "type": "string"
+          },
+          "file": {
+            "type": "object",
+            "properties": {
+              "filename": {
+                "type": "string"
+              },
+              "file_data": {
+                "type": "string"
+              },
+              "file_id": {
+                "type": "string"
+              }
+            }
+          },
+          "prompt_cache_breakpoint": {
+            "required": [
+              "mode"
+            ],
+            "type": "object",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "explicit"
+                ],
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ChatImageContentPart": {
+        "required": [
+          "type",
+          "image_url"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "image_url"
+            ],
+            "type": "string"
+          },
+          "image_url": {
+            "required": [
+              "url"
+            ],
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "detail": {
+                "enum": [
+                  "auto",
+                  "low",
+                  "high"
+                ],
+                "type": "string",
+                "default": "auto"
+              }
+            }
+          },
+          "prompt_cache_breakpoint": {
+            "required": [
+              "mode"
+            ],
+            "type": "object",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "explicit"
+                ],
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
       "ChatPrediction": {
         "required": [
           "content"
@@ -9477,6 +9618,56 @@
           },
           "content": {
             "$ref": "#/components/schemas/JsonElement"
+          }
+        }
+      },
+      "ChatRefusalContentPart": {
+        "required": [
+          "type",
+          "refusal"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "refusal"
+            ],
+            "type": "string"
+          },
+          "refusal": {
+            "type": "string"
+          }
+        }
+      },
+      "ChatTextContentPart": {
+        "required": [
+          "type",
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "text"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "prompt_cache_breakpoint": {
+            "required": [
+              "mode"
+            ],
+            "type": "object",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "explicit"
+                ],
+                "type": "string"
+              }
+            }
           }
         }
       },
@@ -10938,12 +11129,42 @@
           "content": {
             "oneOf": [
               {
-                "type": "string"
+                "type": [
+                  "null",
+                  "string"
+                ]
               },
               {
+                "minItems": 1,
                 "type": "array",
                 "items": {
-                  "type": "object"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ChatTextContentPart"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ChatImageContentPart"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ChatAudioContentPart"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ChatFileContentPart"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ChatRefusalContentPart"
+                    }
+                  ],
+                  "discriminator": {
+                    "propertyName": "type",
+                    "mapping": {
+                      "text": "#/components/schemas/ChatTextContentPart",
+                      "image_url": "#/components/schemas/ChatImageContentPart",
+                      "input_audio": "#/components/schemas/ChatAudioContentPart",
+                      "file": "#/components/schemas/ChatFileContentPart",
+                      "refusal": "#/components/schemas/ChatRefusalContentPart"
+                    }
+                  }
                 }
               }
             ]
@@ -11230,6 +11451,550 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "ProviderChatAudioContentPart": {
+        "required": [
+          "type",
+          "input_audio"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "input_audio"
+            ],
+            "type": "string"
+          },
+          "input_audio": {
+            "required": [
+              "data",
+              "format"
+            ],
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "string"
+              },
+              "format": {
+                "enum": [
+                  "wav",
+                  "mp3",
+                  "aiff",
+                  "aac",
+                  "ogg",
+                  "flac",
+                  "m4a",
+                  "pcm16",
+                  "pcm24"
+                ],
+                "type": "string"
+              }
+            }
+          },
+          "prompt_cache_breakpoint": {
+            "required": [
+              "mode"
+            ],
+            "type": "object",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "explicit"
+                ],
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ProviderChatCompletionRequest": {
+        "required": [
+          "model",
+          "messages"
+        ],
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderChatMessage"
+            }
+          },
+          "temperature": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "max_tokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "max_completion_tokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "top_p": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "n": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "stream": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "stream_options": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StreamOptions"
+              }
+            ]
+          },
+          "stop": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "user": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tools": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Tool"
+            }
+          },
+          "tool_choice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolChoice"
+              }
+            ]
+          },
+          "functions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/FunctionDefinition"
+            }
+          },
+          "function_call": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LegacyFunctionChoice"
+              }
+            ]
+          },
+          "response_format": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResponseFormat"
+              }
+            ]
+          },
+          "reasoning_effort": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "parallel_tool_calls": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "modalities": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "audio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChatAudioOptions"
+              }
+            ]
+          },
+          "prediction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChatPrediction"
+              }
+            ]
+          },
+          "logprobs": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "top_logprobs": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "service_tier": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "store": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "metadata": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "safety_identifier": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "verbosity": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "moderation": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "prompt_cache_key": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "prompt_cache_options": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PromptCacheOptions"
+              }
+            ]
+          },
+          "prompt_cache_retention": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "web_search_options": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WebSearchOptions"
+              }
+            ]
+          },
+          "seed": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "presence_penalty": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "frequency_penalty": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "logit_bias": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "ProviderChatMessage": {
+        "required": [
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "content": {
+            "oneOf": [
+              {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/ChatTextContentPart"
+                        },
+                        {
+                          "$ref": "#/components/schemas/ChatImageContentPart"
+                        },
+                        {
+                          "$ref": "#/components/schemas/ProviderChatAudioContentPart"
+                        },
+                        {
+                          "$ref": "#/components/schemas/ChatFileContentPart"
+                        },
+                        {
+                          "$ref": "#/components/schemas/ChatRefusalContentPart"
+                        },
+                        {
+                          "$ref": "#/components/schemas/ProviderChatVideoContentPart"
+                        }
+                      ],
+                      "discriminator": {
+                        "propertyName": "type",
+                        "mapping": {
+                          "text": "#/components/schemas/ChatTextContentPart",
+                          "image_url": "#/components/schemas/ChatImageContentPart",
+                          "input_audio": "#/components/schemas/ProviderChatAudioContentPart",
+                          "file": "#/components/schemas/ChatFileContentPart",
+                          "refusal": "#/components/schemas/ChatRefusalContentPart",
+                          "video_url": "#/components/schemas/ProviderChatVideoContentPart"
+                        }
+                      }
+                    },
+                    {
+                      "title": "Provider content part",
+                      "required": [
+                        "type"
+                      ],
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "minLength": 1,
+                          "type": "string",
+                          "not": {
+                            "enum": [
+                              "text",
+                              "image_url",
+                              "input_audio",
+                              "file",
+                              "refusal",
+                              "video_url"
+                            ],
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "description": "Additional provider-specific content types. Only available on the Conduit chat route; the configured provider determines support."
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tool_calls": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ToolCall"
+            }
+          },
+          "tool_call_id": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "annotations": {
+            "type": [
+              "null",
+              "array"
+            ]
+          },
+          "audio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "images": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "reasoning_details": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "reasoning": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ProviderChatVideoContentPart": {
+        "required": [
+          "type",
+          "video_url"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "video_url"
+            ],
+            "type": "string"
+          },
+          "video_url": {
+            "required": [
+              "url"
+            ],
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "detail": {
+                "enum": [
+                  "auto",
+                  "low",
+                  "high"
+                ],
+                "type": "string"
+              },
+              "max_frames": {
+                "type": "integer"
+              },
+              "sample_rate": {
+                "type": "number"
+              },
+              "start_time": {
+                "type": "number"
+              },
+              "end_time": {
+                "type": "number"
+              }
+            }
           }
         }
       },
@@ -11889,10 +12654,39 @@
       "ToolChoice": {
         "oneOf": [
           {
+            "enum": [
+              "none",
+              "auto",
+              "required"
+            ],
             "type": "string"
           },
           {
-            "type": "object"
+            "required": [
+              "type",
+              "function"
+            ],
+            "type": "object",
+            "properties": {
+              "type": {
+                "enum": [
+                  "function"
+                ],
+                "type": "string"
+              },
+              "function": {
+                "required": [
+                  "name"
+                ],
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                }
+              }
+            }
           }
         ]
       },

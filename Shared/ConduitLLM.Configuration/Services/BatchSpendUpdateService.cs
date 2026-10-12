@@ -19,7 +19,7 @@ namespace ConduitLLM.Configuration.Services
     /// Background service that batches Virtual Key spend updates to reduce database writes
     /// Provides events for cache invalidation integration
     /// </summary>
-    public class BatchSpendUpdateService : BackgroundService, IBatchSpendUpdateService, IAsyncDisposable
+    public partial class BatchSpendUpdateService : BackgroundService, IBatchSpendUpdateService, IAsyncDisposable
     {
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly ILogger<BatchSpendUpdateService> _logger;
@@ -222,12 +222,8 @@ namespace ConduitLLM.Configuration.Services
             }
         }
 
-        private static DateTime GetBillingWindow(DateTime? billedAtUtc)
-        {
-            var value = billedAtUtc ?? DateTime.UtcNow;
-            value = value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime();
-            return new DateTime(value.Year, value.Month, value.Day, value.Hour, 0, 0, DateTimeKind.Utc);
-        }
+        private static DateTime GetBillingWindow(DateTime? billedAtUtc) =>
+            Utilities.BillingTimeUtilities.GetBillingWindowStartUtc(billedAtUtc);
 
         /// <inheritdoc />
         public async Task<bool> TryReserveSpendAsync(int virtualKeyId, decimal amount, string reservationId)
@@ -404,6 +400,12 @@ namespace ConduitLLM.Configuration.Services
                     return -1
                 end
 
+                -- Partial known spend is already queued. Only audited reconciliation may
+                -- charge the unresolved provider portion and release its remaining hold.
+                if redis.call('HEXISTS', KEYS[9], ARGV[1]) == 1 then
+                    return -1
+                end
+
                 local reservedAmount = redis.call('HGET', KEYS[3], ARGV[1])
                 if not reservedAmount then
                     reservedAmount = redis.call('HGET', KEYS[1], ARGV[1])
@@ -441,7 +443,8 @@ namespace ConduitLLM.Configuration.Services
                     $"{_reservedSpendPrefix}{groupId.Value}",
                     $"{_windowedSpendUnitsPrefix}{groupId.Value}:window:{windowToken}",
                     $"{_windowedPendingTotalUnitsPrefix}{groupId.Value}",
-                    $"{_windowedKeyUsageUnitsPrefix}{groupId.Value}:window:{windowToken}:key:{virtualKeyId}"
+                    $"{_windowedKeyUsageUnitsPrefix}{groupId.Value}:window:{windowToken}:key:{virtualKeyId}",
+                    $"{_indeterminateReservationPrefix}{groupId.Value}"
                 },
                 new RedisValue[]
                 {
@@ -571,7 +574,7 @@ namespace ConduitLLM.Configuration.Services
         /// <summary>
         /// Force flush all pending updates immediately
         /// </summary>
-        /// <returns>Number of groups updated</returns>
+        /// <returns>Number of finalized Redis claims plus successfully persisted fallback updates</returns>
         public async Task<int> FlushPendingUpdatesAsync()
         {
             var redis = await _redisConnectionFactory.GetConnectionAsync();
@@ -585,7 +588,7 @@ namespace ConduitLLM.Configuration.Services
             var claims = await GetProcessingClaimsAsync(server, db);
             claims.AddRange(await ClaimPendingSpendAsync(server, db));
 
-            if (claims.Count == 0)
+            if (claims.Count == 0 && _fallbackQueue.IsEmpty)
             {
                 _logger.LogDebug("No pending spend updates to flush");
                 return 0;
@@ -682,7 +685,7 @@ namespace ConduitLLM.Configuration.Services
                 }
             }
 
-            return processedCount;
+            return processedCount + fallbackCount;
         }
 
         private async Task<VirtualKeyBalanceAdjustmentResult> ApplyClaimAsync(
@@ -1328,6 +1331,9 @@ namespace ConduitLLM.Configuration.Services
         /// <returns>Dictionary with service statistics</returns>
         public async Task<Dictionary<string, object>> GetStatisticsAsync()
         {
+            // Snapshot the process-local recovery backlog even when Redis is unavailable.
+            var fallbackUpdates = _fallbackQueue.ToArray();
+            var fallbackPendingCost = fallbackUpdates.Sum(update => update.Cost);
             try
             {
                 var redis = await _redisConnectionFactory.GetConnectionAsync();
@@ -1349,6 +1355,8 @@ namespace ConduitLLM.Configuration.Services
                     ["FlushIntervalSeconds"] = _flushInterval.TotalSeconds,
                     ["PendingSpendKeysExpire"] = false,
                     ["RedisTtlHours"] = _reservationTtl.TotalHours,
+                    ["FallbackPendingUpdates"] = fallbackUpdates.Length,
+                    ["FallbackPendingCost"] = fallbackPendingCost,
                     ["ConfiguredFlushInterval"] = _options.FlushIntervalSeconds,
                     ["MinimumInterval"] = _options.MinimumIntervalSeconds,
                     ["MaximumInterval"] = _options.MaximumIntervalSeconds
@@ -1361,6 +1369,8 @@ namespace ConduitLLM.Configuration.Services
                 {
                     ["Error"] = ex.Message,
                     ["FlushIntervalSeconds"] = _flushInterval.TotalSeconds,
+                    ["FallbackPendingUpdates"] = fallbackUpdates.Length,
+                    ["FallbackPendingCost"] = fallbackPendingCost,
                     ["ConfiguredFlushInterval"] = _options.FlushIntervalSeconds
                 };
             }

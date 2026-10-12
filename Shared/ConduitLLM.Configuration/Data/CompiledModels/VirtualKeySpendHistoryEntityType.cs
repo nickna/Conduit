@@ -131,11 +131,11 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                     int (decimal v) => ((object)v).GetHashCode(),
                     decimal (decimal v) => v),
                 mappingInfo: new RelationalTypeMappingInfo(
-                    storeTypeName: "numeric(10,6)",
-                    precision: 10,
-                    scale: 6));
+                    storeTypeName: "numeric(12,8)",
+                    precision: 12,
+                    scale: 8));
             amount.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
-            amount.AddAnnotation("Relational:ColumnType", "decimal(10, 6)");
+            amount.AddAnnotation("Relational:ColumnType", "decimal(12, 8)");
 
             var date = runtimeEntityType.AddProperty(
                 "Date",

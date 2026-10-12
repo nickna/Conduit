@@ -23,7 +23,7 @@ namespace ConduitLLM.Tests.Core.Services
     /// </remarks>
     [Trait("Category", "Unit")]
     [Trait("Component", "RedisRateLimitService")]
-    public class RedisRateLimitServiceTests : IDisposable
+    public class RedisRateLimitServiceTests : IAsyncLifetime
     {
         private readonly Mock<ILogger<RedisVirtualKeyRateLimitService>> _mockLogger = new();
         private readonly Mock<ILogger<RedisSignalRRateLimitService>> _mockSignalRLogger = new();
@@ -33,6 +33,11 @@ namespace ConduitLLM.Tests.Core.Services
         private IDatabase _db;
         private RedisVirtualKeyRateLimitService _rateLimitService;
         private RedisSignalRRateLimitService _signalRService;
+        private readonly ITestOutputHelper _output;
+
+        public RedisRateLimitServiceTests(ITestOutputHelper output) => _output = output;
+
+        public Task InitializeAsync() => Task.CompletedTask;
 
         /// <summary>
         /// Skips when Redis is genuinely absent, and fails when it was declared mandatory but
@@ -357,11 +362,7 @@ namespace ConduitLLM.Tests.Core.Services
             Assert.Null(usage.GroupTokensThisMinute);
         }
 
-        public void Dispose()
-        {
-            // The multiplexer is shared across the suite, so clean up keys but leave it open.
-            RedisTestServer.CleanupAsync(_testKeyPrefix).GetAwaiter().GetResult();
-            GC.SuppressFinalize(this);
-        }
+        // The multiplexer is shared across the suite, so clean up keys but leave it open.
+        public Task DisposeAsync() => RedisTestServer.CleanupAsync(_testKeyPrefix, _output.WriteLine);
     }
 }

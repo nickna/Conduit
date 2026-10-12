@@ -3,6 +3,7 @@ using ConduitLLM.Migrator;
 using ConduitLLM.SchemaStartupFixtures;
 
 using Npgsql;
+using NpgsqlTypes;
 
 namespace ConduitLLM.Tests.Configuration.Data;
 
@@ -32,15 +33,22 @@ public sealed class SchemaStartupDatabaseTests
     {
         var management = ManagementConnection();
         var fixture = await SchemaStartupDatabase.CreateAsync(management, previousSchema: true);
+        var originalEvidenceColumns = new[]
+        {
+            "OriginalAmount", "OriginalAmountEvidence", "OriginalAmountVerifiedAtUtc", "OriginalAmountVerifiedBy"
+        };
         var variables = new[] { "DATABASE_URL", "ConduitLLM__Messaging__Backend", "ConduitLLM__Messaging__Wolverine__Transport" };
         var originals = variables.Select(Environment.GetEnvironmentVariable).ToArray();
         try
         {
             Assert.NotNull(fixture.AppliedVersion);
             Assert.NotEqual(ConduitSchemaVersion.Current, fixture.AppliedVersion);
-            // The actual latest migration's table is absent, not just a forged
-            // history row in an otherwise current database.
-            Assert.False(await TableExistsAsync(fixture.ConnectionString, "WebhookReplayAudits"));
+            // The prior migration has real tables, but none of the latest
+            // migration's original-amount evidence columns.
+            Assert.True(await TableExistsAsync(fixture.ConnectionString, "WebhookReplayAudits"));
+            Assert.True(await TableExistsAsync(fixture.ConnectionString, "VirtualKeyGroupTransactions"));
+            Assert.Empty(await ReadColumnNullabilityAsync(
+                fixture.ConnectionString, "VirtualKeyGroupTransactions", originalEvidenceColumns));
             Environment.SetEnvironmentVariable(variables[0], fixture.ConnectionString);
             Environment.SetEnvironmentVariable(variables[1], "Wolverine");
             Environment.SetEnvironmentVariable(variables[2], "InMemory");
@@ -48,6 +56,12 @@ public sealed class SchemaStartupDatabaseTests
             await using var dataSource = NpgsqlDataSource.Create(fixture.ConnectionString);
             Assert.True((await new SchemaVersionProbe(dataSource).GetStatusAsync()).IsCurrent);
             Assert.True(await TableExistsAsync(fixture.ConnectionString, "WebhookReplayAudits"));
+            var latestColumns = await ReadColumnNullabilityAsync(
+                fixture.ConnectionString, "VirtualKeyGroupTransactions", originalEvidenceColumns);
+            Assert.Equal(originalEvidenceColumns.Length, latestColumns.Count);
+            foreach (var column in originalEvidenceColumns)
+                Assert.True(latestColumns.TryGetValue(column, out var isNullable) && isNullable,
+                    $"The latest migration must create nullable column '{column}'.");
         }
         finally
         {
@@ -118,5 +132,24 @@ public sealed class SchemaStartupDatabaseTests
         await using var query = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = @name)", connection);
         query.Parameters.AddWithValue("name", name);
         return (bool)(await query.ExecuteScalarAsync())!;
+    }
+
+    private static async Task<Dictionary<string, bool>> ReadColumnNullabilityAsync(
+        string connectionString, string table, IReadOnlyList<string> columns)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var query = new NpgsqlCommand("""
+            SELECT column_name, is_nullable = 'YES'
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = @table AND column_name = ANY(@columns)
+            """, connection);
+        query.Parameters.Add("table", NpgsqlDbType.Text).Value = table;
+        query.Parameters.Add("columns", NpgsqlDbType.Array | NpgsqlDbType.Text).Value = columns.ToArray();
+        await using var reader = await query.ExecuteReaderAsync();
+        var result = new Dictionary<string, bool>(StringComparer.Ordinal);
+        while (await reader.ReadAsync())
+            result.Add(reader.GetString(0), reader.GetBoolean(1));
+        return result;
     }
 }

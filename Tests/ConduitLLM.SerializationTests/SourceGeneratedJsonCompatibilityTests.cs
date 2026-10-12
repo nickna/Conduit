@@ -100,6 +100,19 @@ public sealed class SourceGeneratedJsonCompatibilityTests
     }
 
     [Fact]
+    public void Named_tool_choice_round_trips_without_reflection()
+    {
+        const string json = """{"model":"test","messages":[],"tool_choice":{"type":"function","function":{"name":"weather"}}}""";
+        var request = JsonSerializer.Deserialize(json, CoreHttpJsonContext.Default.ChatCompletionRequest)!;
+        Assert.True(request.ToolChoice!.TryGetFunctionName(out var name));
+        Assert.Equal("weather", name);
+        var result = JsonSerializer.Serialize(request, CoreHttpJsonContext.Default.ChatCompletionRequest);
+        using var document = JsonDocument.Parse(result);
+        Assert.Equal("function", document.RootElement.GetProperty("tool_choice").GetProperty("type").GetString());
+        Assert.Equal("weather", document.RootElement.GetProperty("tool_choice").GetProperty("function").GetProperty("name").GetString());
+    }
+
+    [Fact]
     public void Admin_collection_wrapper_resolves_runtime_dto_items_without_reflection()
     {
         var page = new PagedResult<object>
@@ -199,6 +212,31 @@ public sealed class SourceGeneratedJsonCompatibilityTests
         AssertJsonEqual(
             ReadFixture("wolverine-spend-update.json"),
             JsonSerializer.Serialize(value, typeof(SpendUpdateRequested), runtimeOptions));
+
+        var legacy = JsonSerializer.Deserialize(
+            ReadFixture("wolverine-spend-update.json"),
+            CoreMessagingJsonContext.Default.SpendUpdateRequested)!;
+        Assert.Null(legacy.BilledAtUtc);
+        Assert.Equal(FixtureTime, legacy.Timestamp);
+    }
+
+    [Fact]
+    public void Wolverine_spend_usage_timestamp_round_trips_without_reflection()
+    {
+        var billedAtUtc = new DateTime(2000, 1, 1, 2, 37, 0, DateTimeKind.Utc);
+        var legacy = JsonSerializer.Deserialize(
+            ReadFixture("wolverine-spend-update.json"),
+            CoreMessagingJsonContext.Default.SpendUpdateRequested)!;
+        var value = legacy with { BilledAtUtc = billedAtUtc };
+
+        var json = JsonSerializer.Serialize(value, CoreMessagingJsonContext.Default.SpendUpdateRequested);
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal("2000-01-01T02:37:00Z", document.RootElement.GetProperty("BilledAtUtc").GetString());
+
+        var restored = JsonSerializer.Deserialize(json, CoreMessagingJsonContext.Default.SpendUpdateRequested)!;
+        Assert.Equal(billedAtUtc, restored.BilledAtUtc);
+        Assert.Equal(DateTimeKind.Utc, restored.BilledAtUtc!.Value.Kind);
+        Assert.Equal(FixtureTime, restored.Timestamp);
     }
 
     [Fact]

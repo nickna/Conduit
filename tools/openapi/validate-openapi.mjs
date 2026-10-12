@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildChatUnionBaseline, compareChatUnions, validateChatUnionBaseline } from './chat-unions.mjs';
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptsDir, '..', '..');
@@ -416,6 +417,7 @@ function compareOpenAiConformance(gatewayDocument, baseline) {
       }
     }
   }
+  if (baseline.chatUnions) warnings.push(...compareChatUnions(gatewayDocument, baseline.chatUnions));
   return warnings;
 }
 
@@ -428,25 +430,28 @@ function buildOpenAiBaseline(officialDocument, commit) {
     operations[key] = operationShape(operation, officialDocument, key);
   }
   return {
-    version: 2,
-    description: 'Enforces top-level fields on compatible operations, nested model objects, and selected field types. Does not compare enums, constraints, nullability, or unlisted nested schemas.',
+    version: 3,
+    description: 'Enforces top-level fields, nested model objects, selected field types, and recursive supported chat content/tool-choice unions. Other unlisted schemas and constraints are not compared; this is not full pinned-schema equivalence.',
     source: {
       repository: 'https://github.com/openai/openai-openapi',
       commit,
       document: 'openapi.json',
     },
     enforcement: 'enforced',
+    chatUnions: buildChatUnionBaseline(officialDocument),
     operations,
   };
 }
 
 function validateOpenAiBaseline(baseline) {
   const invalid = (message) => { throw new Error(`Invalid OpenAI conformance baseline: ${message}`); };
-  if (baseline?.version !== 2) invalid('version must be 2');
+  if (baseline?.version !== 3) invalid('version must be 3');
   if (baseline.enforcement !== 'enforced') invalid('enforcement must be enforced');
   if (baseline.source?.repository !== 'https://github.com/openai/openai-openapi' ||
       !/^[a-f0-9]{40}$/.test(baseline.source?.commit ?? '') ||
       baseline.source?.document !== 'openapi.json') invalid('pinned OpenAI source is missing or invalid');
+  try { validateChatUnionBaseline(baseline.chatUnions); }
+  catch { invalid('supported chat union schemas are missing or invalid'); }
   const validList = (values) => Array.isArray(values) && values.every((value) => typeof value === 'string') &&
     new Set(values).size === values.length;
   for (const [method, route] of openAiRoutes) {
@@ -559,6 +564,7 @@ function conformanceSelfTest() {
   for (const mutate of [
     (changed) => { changed.enforcement = 'warn-only'; },
     (changed) => { changed.source.commit = ''; },
+    (changed) => { delete changed.chatUnions; },
     (changed) => { delete changed.operations['GET /v1/models/{model}']; },
     (changed) => { changed.operations['POST /v1/embeddings'].response = null; },
     (changed) => { delete changed.operations['GET /v1/models'].response.schemas['/properties/data/items']; },

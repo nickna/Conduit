@@ -271,9 +271,9 @@ internal static partial class NativeFunctionExecutionProbe
             count++;
             Require(reader.GetString(0) == fixture.ConfigurationName && reader.IsDBNull(1) && reader.GetString(2) == "Mcp" &&
                 reader.GetString(3) == "function" && reader.GetInt32(4) == 0 && reader.GetInt32(5) == 0 && reader.IsDBNull(6) &&
-                reader.IsDBNull(7) && reader.GetDecimal(8) == 0.125000m && reader.GetInt32(9) == 0 && reader.IsDBNull(10) &&
+                reader.IsDBNull(7) && reader.GetDecimal(8) == Price && reader.GetInt32(9) == 0 && reader.IsDBNull(10) &&
                 reader.IsDBNull(11) && reader.GetString(12) == "/" + ExecutePath && reader.GetInt32(13) == 200,
-                "MCP function request-log identity, zero token usage and configured six-decimal cost");
+                "MCP function request-log identity, zero token usage and exact eight-decimal configured cost");
             var metadata = Parse(reader.GetString(14));
             Properties(metadata, "functionConfigurationId", "executionId", "state");
             Require(metadata.GetProperty("functionConfigurationId").GetInt32() == fixture.ConfigurationId &&

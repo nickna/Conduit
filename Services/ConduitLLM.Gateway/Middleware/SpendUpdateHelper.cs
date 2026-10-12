@@ -25,6 +25,10 @@ namespace ConduitLLM.Gateway.Middleware
             ILogger logger,
             DateTime? billedAtUtc = null)
         {
+            // Capture one usage instant so retries retain the same hour, even if a
+            // persistence attempt crosses an hour boundary.
+            billedAtUtc = ConduitLLM.Configuration.Utilities.BillingTimeUtilities.NormalizeUtc(billedAtUtc);
+
             // Tier 1: Try Redis batch queue (primary path)
             if (batchSpendService.IsHealthy)
             {
@@ -52,7 +56,7 @@ namespace ConduitLLM.Gateway.Middleware
             Exception? databaseFailure = null;
             try
             {
-                if (await virtualKeyService.UpdateSpendAsync(virtualKeyId, cost))
+                if (await virtualKeyService.UpdateSpendAsync(virtualKeyId, cost, billedAtUtc))
                 {
                     return;
                 }

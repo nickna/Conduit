@@ -1,8 +1,14 @@
 # Multimodal chat inputs
 
-The Gateway accepts ordered OpenAI-style content parts in `messages[].content`. A message can be
-a string or an array containing text, images, PDFs, audio, and video. The Gateway preserves the
-array order when forwarding the request and does not download caller-provided URLs.
+The Gateway accepts ordered content parts in `messages[].content` and preserves their order
+when forwarding the request. `/v1/chat/completions` supports the OpenAI `text`, `image_url`,
+`input_audio`, `file`, and `refusal` parts. Image, audio, and file parts belong to user messages;
+refusal parts belong to assistant messages. Malformed parts return an OpenAI-shaped 400 error.
+
+Use `/v1/conduit/chat/completions` for video, additional audio formats, and other provider
+content types. Its contract describes these extensions separately. Provider parts require a
+nonempty `type`; known parts still require their documented fields. The Gateway does not
+download caller-provided URLs.
 
 OpenRouter is the reference implementation for the full contract. Other providers receive the
 same ordered content when their OpenAI-compatible endpoint supports it; unsupported modalities
@@ -65,8 +71,9 @@ Audio uses raw base64, not a data URL or remote URL:
 }
 ```
 
-Supported audio formats are `wav`, `mp3`, `aiff`, `aac`, `ogg`, `flac`, `m4a`, `pcm16`, and
-`pcm24`. Inline images support PNG, JPEG, WebP, and GIF. Inline video supports MP4, MPEG,
+The standard route supports `wav` and `mp3`. The Conduit route also supports provider formats
+`aiff`, `aac`, `ogg`, `flac`, `m4a`, `pcm16`, and `pcm24`. Inline images support PNG, JPEG, WebP,
+and GIF. Inline video supports MP4, MPEG,
 QuickTime/MOV, and WebM.
 
 ## Complete mixed request
@@ -74,7 +81,7 @@ QuickTime/MOV, and WebM.
 The following request asks about media in a deliberate order:
 
 ```bash
-curl https://your-conduit.example/v1/chat/completions \
+curl https://your-conduit.example/v1/conduit/chat/completions \
   -H "Authorization: Bearer $CONDUIT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -93,7 +100,12 @@ curl https://your-conduit.example/v1/chat/completions \
 ```
 
 Unknown fields on messages, responses, deltas, and content parts are preserved for provider
-extensions. Unknown content-part types are rejected by OpenRouter validation with a 400 response.
+extensions. Unknown content-part types are accepted only on the Conduit route; OpenRouter
+validation rejects types it does not support with a 400 response.
+
+Both chat routes support `tool_choice` modes `none`, `auto`, and `required`, or a named function
+choice (`{"type":"function","function":{"name":"my_function"}}`). Other tool-choice
+discriminators and malformed function choices return an OpenAI-shaped 400 error.
 
 ## PDF parsing and reuse
 

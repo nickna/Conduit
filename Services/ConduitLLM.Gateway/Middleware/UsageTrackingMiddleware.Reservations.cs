@@ -7,6 +7,31 @@ namespace ConduitLLM.Gateway.Middleware;
 
 public partial class UsageTrackingMiddleware
 {
+    private async Task<bool> RecordKnownStreamingSpendAsync(
+        HttpContext context, int virtualKeyId, decimal knownCost,
+        IBatchSpendUpdateService batchSpendService, IVirtualKeyRuntimeService virtualKeyService)
+    {
+        var accountingContext = context.GetOrCreateRequestAccountingContext();
+        var snapshot = accountingContext.Snapshot();
+        if (snapshot.Reservation is null)
+            return await RecordSpendOrSettleReservationAsync(
+                context, virtualKeyId, knownCost, batchSpendService, virtualKeyService);
+
+        const string reason = "Provider usage remains unresolved after streaming finalization";
+        accountingContext.MarkIndeterminate(reason);
+        var reservationService = context.RequestServices.GetRequiredService<ISpendReservationService>();
+        var result = await reservationService.RecordKnownIndeterminateSpendAsync(
+            virtualKeyId, snapshot.BillingRequestId, knownCost,
+            snapshot.IndeterminateReason ?? reason, GetBillingTimestamp(context));
+        if (result.Status is SpendReservationSettlementStatus.Settled or SpendReservationSettlementStatus.AlreadySettled)
+            return true;
+
+        _logger.LogCritical(
+            "Known streaming spend could not be durably accepted for {BillingRequestId}: {Status}",
+            snapshot.BillingRequestId, result.Status);
+        return false;
+    }
+
     private async Task<bool> RecordSpendOrSettleReservationAsync(
         HttpContext context,
         int virtualKeyId,

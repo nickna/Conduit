@@ -461,7 +461,7 @@ internal static partial class NativeFunctionExecutionProbe
             {
                 latest = await ReadAccountingAsync(source, fixture, deadline.Token);
                 if (latest == Accounting.Settled) return latest;
-                Require(latest.LogCount <= 2 && latest.LogCost <= 0.250000m && latest.Spent <= 2 * Price && latest.Debits <= 0.250000m,
+                Require(latest.LogCount <= 2 && latest.LogCost <= 2 * Price && latest.Spent <= 2 * Price && latest.Debits <= 2 * Price,
                     "function accounting never exceeds the two successful calls");
                 await Task.Delay(100, deadline.Token);
             }
@@ -520,9 +520,9 @@ internal static partial class NativeFunctionExecutionProbe
             count++;
             Require(reader.GetString(0) == fixture.ConfigurationName && reader.IsDBNull(1) && reader.GetString(2) == "Exa" &&
                 reader.GetString(3) == "function" && reader.GetInt32(4) == 0 && reader.GetInt32(5) == 0 && reader.IsDBNull(6) &&
-                reader.IsDBNull(7) && reader.GetDecimal(8) == 0.125000m && reader.GetInt32(9) == 0 && reader.IsDBNull(10) &&
+                reader.IsDBNull(7) && reader.GetDecimal(8) == Price && reader.GetInt32(9) == 0 && reader.IsDBNull(10) &&
                 reader.IsDBNull(11) && reader.GetString(12) == "/" + ExecutePath && reader.GetInt32(13) == 200,
-                "success-only function request logs, fresh zero-token usage and configured price at six-decimal precision");
+                "success-only function request logs, fresh zero-token usage and exact eight-decimal configured price");
             var metadata = Parse(reader.GetString(14));
             Properties(metadata, "functionConfigurationId", "executionId", "state");
             Require(metadata.GetProperty("functionConfigurationId").GetInt32() == fixture.ConfigurationId &&
@@ -578,7 +578,7 @@ internal static partial class NativeFunctionExecutionProbe
         decimal Debits, decimal OtherTransactions, decimal LedgerBalance)
     {
         internal static readonly Accounting Pristine = new(0, 0m, 100m, 0m, 100m, 0m, 0m, 100m);
-        internal static readonly Accounting Settled = new(2, 0.250000m, 99.74999998m, 0.25000002m, 100m, 0.250000m, 0m, 99.750000m);
+        internal static readonly Accounting Settled = new(2, 0.25000002m, 99.74999998m, 0.25000002m, 100m, 0.25000002m, 0m, 99.74999998m);
     }
     private readonly record struct ProviderState(int Successes, int Failures, int AuthorizationFailures, int ChunkedRequests);
 }

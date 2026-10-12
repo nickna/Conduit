@@ -225,7 +225,7 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
     }
 
     [Fact]
-    public async Task ActualSchemaRetainsEightDecimalFunctionAndGroupValuesButRoundsLedgerAndRequestLogValues()
+    public async Task ActualSchemaRetainsEightDecimalFunctionGroupLedgerAndRequestLogValues()
     {
         await using var database = await OwnedDatabase.CreateAsync(fixture.ConnectionString);
         var owned = await CreateAsync(database, Guid.NewGuid());
@@ -245,7 +245,7 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
             WHERE c."Id" = @cost
             """, ("execution", execution), ("group", owned.GroupId), ("key", owned.KeyId), ("cost", owned.CostId));
         Assert.Equal(new object[] { Price, Price, Price, 99.87499999m,
-            0.125000m, 99.875000m, 0.125000m, 0.125000m }, values);
+            Price, 99.87499999m, Price, Price }, values);
     }
 
     [Fact]

@@ -86,6 +86,7 @@ namespace ConduitLLM.Gateway.Endpoints
             var functionExecutionResults = agenticMetrics.FunctionCalls
                 .Select(fc => new ToolExecutionEvent
                 {
+                    Iteration = fc.Iteration,
                     ToolCallId = fc.ToolCallId,
                     FunctionName = fc.FunctionName,
                     Status = fc.Success ? "completed" : "failed",
@@ -289,14 +290,20 @@ namespace ConduitLLM.Gateway.Endpoints
         {
             return async (toolEvent, ct) =>
             {
-                await sseWriter.WriteToolExecutingEventAsync(toolEvent, ct);
-                state.Outcome = StreamTransportOutcome.Emitting;
-
                 if (toolEvent.Status == "completed" || toolEvent.Status == "failed")
                 {
-                    state.FunctionExecutionResults.Add(toolEvent);
-                    state.TotalFunctionCost += toolEvent.Cost ?? 0m;
+                    if (state.RetainFunctionExecution(toolEvent))
+                    {
+                        // The function has already incurred its charge. Publish that evidence before
+                        // client I/O, which can fail or observe a cancelled request token.
+                        HttpContext.GetOrCreateRequestAccountingContext().RecordFunctionExecutions(
+                            state.FunctionExecutionResults,
+                            state.TotalFunctionCost);
+                    }
                 }
+
+                await sseWriter.WriteToolExecutingEventAsync(toolEvent, ct);
+                state.Outcome = StreamTransportOutcome.Emitting;
             };
         }
 
@@ -326,7 +333,8 @@ namespace ConduitLLM.Gateway.Endpoints
 
                 foreach (var toolCallChunk in toolCallDeltas)
                 {
-                    if (!state.AccumulatedToolCalls.TryGetValue(toolCallChunk.Index, out var existing))
+                    var key = (chunk.ProviderIteration ?? 0, choice.Index, toolCallChunk.Index);
+                    if (!state.AccumulatedToolCalls.TryGetValue(key, out var existing))
                     {
                         if (state.AccumulatedToolCalls.Count >= state.MaximumToolCalls)
                         {
@@ -335,7 +343,7 @@ namespace ConduitLLM.Gateway.Endpoints
                         }
 
                         existing = new StreamingToolCallAccumulator();
-                        state.AccumulatedToolCalls[toolCallChunk.Index] = existing;
+                        state.AccumulatedToolCalls[key] = existing;
                     }
 
                     existing.AppendId(state.RetainToolFragment(toolCallChunk.Id));
@@ -607,7 +615,7 @@ namespace ConduitLLM.Gateway.Endpoints
                     request.Messages,
                     completionOutput,
                     request.Tools,
-                    cancellationToken);
+                    cancellationToken).WaitAsync(cancellationToken);
 
                 HttpContext.GetOrCreateRequestAccountingContext().RecordProviderUsage(
                     estimatedUsage,
@@ -621,6 +629,12 @@ namespace ConduitLLM.Gateway.Endpoints
             catch (Exception estEx)
             {
                 _logger.LogError(estEx, "Failed to estimate usage for streaming response");
+                var accountingContext = HttpContext.GetOrCreateRequestAccountingContext();
+                accountingContext.MarkIndeterminate(
+                    "Provider usage is missing and streaming usage estimation failed or timed out");
+                state.Outcome = StreamTransportOutcome.AccountingIndeterminate;
+                if (accountingContext.Snapshot().Transport is { } transport)
+                    accountingContext.RecordTransport(transport with { Outcome = state.Outcome });
             }
         }
 
@@ -663,7 +677,7 @@ namespace ConduitLLM.Gateway.Endpoints
             public ChatCompletionChunk? LastChunk { get; set; }
             public string? StreamingModel { get; set; }
             public BoundedStringAccumulator ContentAccumulator { get; }
-            public Dictionary<int, StreamingToolCallAccumulator> AccumulatedToolCalls { get; } = new();
+            public Dictionary<(int Iteration, int Choice, int Tool), StreamingToolCallAccumulator> AccumulatedToolCalls { get; } = new();
             public List<ToolExecutionEvent> FunctionExecutionResults { get; } = new();
             public decimal TotalFunctionCost { get; set; }
             public Dictionary<int, Usage> ProviderCalls { get; } = new();
@@ -671,6 +685,21 @@ namespace ConduitLLM.Gateway.Endpoints
             public int MaximumToolCalls { get; }
             public bool ToolEvidenceLimitExceeded { get; set; }
             public bool EvidenceLimitExceeded => ContentAccumulator.LimitExceeded || ToolEvidenceLimitExceeded;
+
+            public bool RetainFunctionExecution(ToolExecutionEvent toolEvent)
+            {
+                if (FunctionExecutionResults.Any(existing =>
+                    ReferenceEquals(existing, toolEvent) ||
+                    (toolEvent.FunctionExecutionId is { } id && id != Guid.Empty &&
+                     existing.FunctionExecutionId == id)))
+                {
+                    return false;
+                }
+
+                FunctionExecutionResults.Add(toolEvent);
+                TotalFunctionCost += toolEvent.Cost ?? 0m;
+                return true;
+            }
 
             public string RetainToolFragment(string? fragment)
             {

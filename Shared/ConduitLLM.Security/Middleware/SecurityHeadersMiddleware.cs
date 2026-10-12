@@ -38,8 +38,11 @@ namespace ConduitLLM.Security.Middleware
         /// </summary>
         public async Task InvokeAsync(HttpContext context)
         {
-            // Add security headers before processing the request
-            AddSecurityHeaders(context);
+            // The aggregate switch takes precedence over all individual settings.
+            if (_options.Enabled)
+            {
+                AddSecurityHeaders(context);
+            }
 
             await _next(context);
         }

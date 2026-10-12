@@ -34,7 +34,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 "ConduitLLM.Configuration.Entities.VirtualKeyGroupTransaction",
                 typeof(VirtualKeyGroupTransaction),
                 baseEntityType,
-                propertyCount: 15,
+                propertyCount: 19,
                 navigationCount: 1,
                 foreignKeyCount: 1,
                 unnamedIndexCount: 8,
@@ -136,11 +136,11 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                     int (decimal v) => ((object)v).GetHashCode(),
                     decimal (decimal v) => v),
                 mappingInfo: new RelationalTypeMappingInfo(
-                    storeTypeName: "numeric(18,6)",
-                    precision: 18,
-                    scale: 6));
+                    storeTypeName: "numeric(20,8)",
+                    precision: 20,
+                    scale: 8));
             amount.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
-            amount.AddAnnotation("Relational:ColumnType", "decimal(18, 6)");
+            amount.AddAnnotation("Relational:ColumnType", "decimal(20, 8)");
 
             var balanceAfter = runtimeEntityType.AddProperty(
                 "BalanceAfter",
@@ -188,11 +188,11 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                     int (decimal v) => ((object)v).GetHashCode(),
                     decimal (decimal v) => v),
                 mappingInfo: new RelationalTypeMappingInfo(
-                    storeTypeName: "numeric(18,6)",
-                    precision: 18,
-                    scale: 6));
+                    storeTypeName: "numeric(20,8)",
+                    precision: 20,
+                    scale: 8));
             balanceAfter.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
-            balanceAfter.AddAnnotation("Relational:ColumnType", "decimal(18, 6)");
+            balanceAfter.AddAnnotation("Relational:ColumnType", "decimal(20, 8)");
 
             var billingWindowStartUtc = runtimeEntityType.AddProperty(
                 "BillingWindowStartUtc",
@@ -594,6 +594,213 @@ isDeleted.TypeMapping = NpgsqlBoolTypeMapping.Default.Clone(
         bool (bool v) => v));
 isDeleted.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
 
+var originalAmount = runtimeEntityType.AddProperty(
+    "OriginalAmount",
+    typeof(decimal?),
+    propertyInfo: typeof(VirtualKeyGroupTransaction).GetProperty("OriginalAmount", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+    fieldInfo: typeof(VirtualKeyGroupTransaction).GetField("<OriginalAmount>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+    nullable: true);
+originalAmount.SetGetter(
+    decimal? (VirtualKeyGroupTransaction instance) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmount(instance),
+    bool (VirtualKeyGroupTransaction instance) => !(VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmount(instance).HasValue));
+originalAmount.SetSetter(
+    VirtualKeyGroupTransaction (VirtualKeyGroupTransaction instance, decimal? value) =>
+    {
+        VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmount(instance) = value;
+        return instance;
+    });
+originalAmount.SetMaterializationSetter(
+    VirtualKeyGroupTransaction (VirtualKeyGroupTransaction instance, decimal? value) =>
+    {
+        VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmount(instance) = value;
+        return instance;
+    });
+originalAmount.SetAccessors(
+    decimal? (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmount(((VirtualKeyGroupTransaction)(entry.Entity))),
+    decimal? (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmount(((VirtualKeyGroupTransaction)(entry.Entity))),
+    decimal? (IInternalEntry entry) => entry.ReadOriginalValue<decimal?>(originalAmount, 11),
+    decimal? (IInternalEntry entry) => entry.GetCurrentValue<decimal?>(originalAmount));
+originalAmount.SetPropertyIndexes(
+    index: 11,
+    originalValueIndex: 11,
+    shadowIndex: -1,
+    relationshipIndex: -1,
+    storeGenerationIndex: -1);
+originalAmount.TypeMapping = NpgsqlDecimalTypeMapping.Default.Clone(
+    comparer: new ValueComparer<decimal>(
+        bool (decimal v1, decimal v2) => v1 == v2,
+        int (decimal v) => ((object)v).GetHashCode(),
+        decimal (decimal v) => v),
+    keyComparer: new ValueComparer<decimal>(
+        bool (decimal v1, decimal v2) => v1 == v2,
+        int (decimal v) => ((object)v).GetHashCode(),
+        decimal (decimal v) => v),
+    providerValueComparer: new ValueComparer<decimal>(
+        bool (decimal v1, decimal v2) => v1 == v2,
+        int (decimal v) => ((object)v).GetHashCode(),
+        decimal (decimal v) => v),
+    mappingInfo: new RelationalTypeMappingInfo(
+        storeTypeName: "numeric(20,8)",
+        precision: 20,
+        scale: 8));
+originalAmount.SetComparer(new NullableValueComparer<decimal>(originalAmount.TypeMapping.Comparer));
+originalAmount.SetKeyComparer(new NullableValueComparer<decimal>(originalAmount.TypeMapping.KeyComparer));
+originalAmount.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
+originalAmount.AddAnnotation("Relational:ColumnType", "decimal(20, 8)");
+
+var originalAmountEvidence = runtimeEntityType.AddProperty(
+    "OriginalAmountEvidence",
+    typeof(string),
+    propertyInfo: typeof(VirtualKeyGroupTransaction).GetProperty("OriginalAmountEvidence", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+    fieldInfo: typeof(VirtualKeyGroupTransaction).GetField("<OriginalAmountEvidence>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+    nullable: true,
+    maxLength: 500);
+originalAmountEvidence.SetGetter(
+    string (VirtualKeyGroupTransaction instance) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountEvidence(instance),
+    bool (VirtualKeyGroupTransaction instance) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountEvidence(instance) == null);
+originalAmountEvidence.SetSetter(
+    VirtualKeyGroupTransaction (VirtualKeyGroupTransaction instance, string value) =>
+    {
+        VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountEvidence(instance) = value;
+        return instance;
+    });
+originalAmountEvidence.SetMaterializationSetter(
+    VirtualKeyGroupTransaction (VirtualKeyGroupTransaction instance, string value) =>
+    {
+        VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountEvidence(instance) = value;
+        return instance;
+    });
+originalAmountEvidence.SetAccessors(
+    string (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountEvidence(((VirtualKeyGroupTransaction)(entry.Entity))),
+    string (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountEvidence(((VirtualKeyGroupTransaction)(entry.Entity))),
+    string (IInternalEntry entry) => entry.ReadOriginalValue<string>(originalAmountEvidence, 12),
+    string (IInternalEntry entry) => entry.GetCurrentValue<string>(originalAmountEvidence));
+originalAmountEvidence.SetPropertyIndexes(
+    index: 12,
+    originalValueIndex: 12,
+    shadowIndex: -1,
+    relationshipIndex: -1,
+    storeGenerationIndex: -1);
+originalAmountEvidence.TypeMapping = NpgsqlStringTypeMapping.Default.Clone(
+    comparer: new ValueComparer<string>(
+        bool (string v1, string v2) => v1 == v2,
+        int (string v) => ((object)v).GetHashCode(),
+        string (string v) => v),
+    keyComparer: new ValueComparer<string>(
+        bool (string v1, string v2) => v1 == v2,
+        int (string v) => ((object)v).GetHashCode(),
+        string (string v) => v),
+    providerValueComparer: new ValueComparer<string>(
+        bool (string v1, string v2) => v1 == v2,
+        int (string v) => ((object)v).GetHashCode(),
+        string (string v) => v),
+    mappingInfo: new RelationalTypeMappingInfo(
+        storeTypeName: "character varying(500)",
+        size: 500));
+originalAmountEvidence.TypeMapping = ((NpgsqlStringTypeMapping)originalAmountEvidence.TypeMapping).Clone(npgsqlDbType: NpgsqlTypes.NpgsqlDbType.Varchar);
+originalAmountEvidence.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
+
+var originalAmountVerifiedAtUtc = runtimeEntityType.AddProperty(
+    "OriginalAmountVerifiedAtUtc",
+    typeof(DateTime?),
+    propertyInfo: typeof(VirtualKeyGroupTransaction).GetProperty("OriginalAmountVerifiedAtUtc", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+    fieldInfo: typeof(VirtualKeyGroupTransaction).GetField("<OriginalAmountVerifiedAtUtc>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+    nullable: true);
+originalAmountVerifiedAtUtc.SetGetter(
+    DateTime? (VirtualKeyGroupTransaction instance) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountVerifiedAtUtc(instance),
+    bool (VirtualKeyGroupTransaction instance) => !(VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountVerifiedAtUtc(instance).HasValue));
+originalAmountVerifiedAtUtc.SetSetter(
+    VirtualKeyGroupTransaction (VirtualKeyGroupTransaction instance, DateTime? value) =>
+    {
+        VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountVerifiedAtUtc(instance) = value;
+        return instance;
+    });
+originalAmountVerifiedAtUtc.SetMaterializationSetter(
+    VirtualKeyGroupTransaction (VirtualKeyGroupTransaction instance, DateTime? value) =>
+    {
+        VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountVerifiedAtUtc(instance) = value;
+        return instance;
+    });
+originalAmountVerifiedAtUtc.SetAccessors(
+    DateTime? (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountVerifiedAtUtc(((VirtualKeyGroupTransaction)(entry.Entity))),
+    DateTime? (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountVerifiedAtUtc(((VirtualKeyGroupTransaction)(entry.Entity))),
+    DateTime? (IInternalEntry entry) => entry.ReadOriginalValue<DateTime?>(originalAmountVerifiedAtUtc, 13),
+    DateTime? (IInternalEntry entry) => entry.GetCurrentValue<DateTime?>(originalAmountVerifiedAtUtc));
+originalAmountVerifiedAtUtc.SetPropertyIndexes(
+    index: 13,
+    originalValueIndex: 13,
+    shadowIndex: -1,
+    relationshipIndex: -1,
+    storeGenerationIndex: -1);
+originalAmountVerifiedAtUtc.TypeMapping = NpgsqlTimestampTzTypeMapping.Default.Clone(
+    comparer: new ValueComparer<DateTime>(
+        bool (DateTime v1, DateTime v2) => v1.Equals(v2),
+        int (DateTime v) => ((object)v).GetHashCode(),
+        DateTime (DateTime v) => v),
+    keyComparer: new ValueComparer<DateTime>(
+        bool (DateTime v1, DateTime v2) => v1.Equals(v2),
+        int (DateTime v) => ((object)v).GetHashCode(),
+        DateTime (DateTime v) => v),
+    providerValueComparer: new ValueComparer<DateTime>(
+        bool (DateTime v1, DateTime v2) => v1.Equals(v2),
+        int (DateTime v) => ((object)v).GetHashCode(),
+        DateTime (DateTime v) => v));
+originalAmountVerifiedAtUtc.SetComparer(new NullableValueComparer<DateTime>(originalAmountVerifiedAtUtc.TypeMapping.Comparer));
+originalAmountVerifiedAtUtc.SetKeyComparer(new NullableValueComparer<DateTime>(originalAmountVerifiedAtUtc.TypeMapping.KeyComparer));
+originalAmountVerifiedAtUtc.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
+
+var originalAmountVerifiedBy = runtimeEntityType.AddProperty(
+    "OriginalAmountVerifiedBy",
+    typeof(string),
+    propertyInfo: typeof(VirtualKeyGroupTransaction).GetProperty("OriginalAmountVerifiedBy", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+    fieldInfo: typeof(VirtualKeyGroupTransaction).GetField("<OriginalAmountVerifiedBy>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+    nullable: true,
+    maxLength: 100);
+originalAmountVerifiedBy.SetGetter(
+    string (VirtualKeyGroupTransaction instance) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountVerifiedBy(instance),
+    bool (VirtualKeyGroupTransaction instance) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountVerifiedBy(instance) == null);
+originalAmountVerifiedBy.SetSetter(
+    VirtualKeyGroupTransaction (VirtualKeyGroupTransaction instance, string value) =>
+    {
+        VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountVerifiedBy(instance) = value;
+        return instance;
+    });
+originalAmountVerifiedBy.SetMaterializationSetter(
+    VirtualKeyGroupTransaction (VirtualKeyGroupTransaction instance, string value) =>
+    {
+        VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountVerifiedBy(instance) = value;
+        return instance;
+    });
+originalAmountVerifiedBy.SetAccessors(
+    string (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountVerifiedBy(((VirtualKeyGroupTransaction)(entry.Entity))),
+    string (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.OriginalAmountVerifiedBy(((VirtualKeyGroupTransaction)(entry.Entity))),
+    string (IInternalEntry entry) => entry.ReadOriginalValue<string>(originalAmountVerifiedBy, 14),
+    string (IInternalEntry entry) => entry.GetCurrentValue<string>(originalAmountVerifiedBy));
+originalAmountVerifiedBy.SetPropertyIndexes(
+    index: 14,
+    originalValueIndex: 14,
+    shadowIndex: -1,
+    relationshipIndex: -1,
+    storeGenerationIndex: -1);
+originalAmountVerifiedBy.TypeMapping = NpgsqlStringTypeMapping.Default.Clone(
+    comparer: new ValueComparer<string>(
+        bool (string v1, string v2) => v1 == v2,
+        int (string v) => ((object)v).GetHashCode(),
+        string (string v) => v),
+    keyComparer: new ValueComparer<string>(
+        bool (string v1, string v2) => v1 == v2,
+        int (string v) => ((object)v).GetHashCode(),
+        string (string v) => v),
+    providerValueComparer: new ValueComparer<string>(
+        bool (string v1, string v2) => v1 == v2,
+        int (string v) => ((object)v).GetHashCode(),
+        string (string v) => v),
+    mappingInfo: new RelationalTypeMappingInfo(
+        storeTypeName: "character varying(100)",
+        size: 100));
+originalAmountVerifiedBy.TypeMapping = ((NpgsqlStringTypeMapping)originalAmountVerifiedBy.TypeMapping).Clone(npgsqlDbType: NpgsqlTypes.NpgsqlDbType.Varchar);
+originalAmountVerifiedBy.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
+
 var referenceId = runtimeEntityType.AddProperty(
     "ReferenceId",
     typeof(string),
@@ -619,11 +826,11 @@ referenceId.SetMaterializationSetter(
 referenceId.SetAccessors(
     string (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.ReferenceId(((VirtualKeyGroupTransaction)(entry.Entity))),
     string (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.ReferenceId(((VirtualKeyGroupTransaction)(entry.Entity))),
-    string (IInternalEntry entry) => entry.ReadOriginalValue<string>(referenceId, 11),
+    string (IInternalEntry entry) => entry.ReadOriginalValue<string>(referenceId, 15),
     string (IInternalEntry entry) => entry.GetCurrentValue<string>(referenceId));
 referenceId.SetPropertyIndexes(
-    index: 11,
-    originalValueIndex: 11,
+    index: 15,
+    originalValueIndex: 15,
     shadowIndex: -1,
     relationshipIndex: -1,
     storeGenerationIndex: -1);
@@ -670,11 +877,11 @@ referenceType.SetMaterializationSetter(
 referenceType.SetAccessors(
     ReferenceType (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.ReferenceType(((VirtualKeyGroupTransaction)(entry.Entity))),
     ReferenceType (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.ReferenceType(((VirtualKeyGroupTransaction)(entry.Entity))),
-    ReferenceType (IInternalEntry entry) => entry.ReadOriginalValue<ReferenceType>(referenceType, 12),
+    ReferenceType (IInternalEntry entry) => entry.ReadOriginalValue<ReferenceType>(referenceType, 16),
     ReferenceType (IInternalEntry entry) => entry.GetCurrentValue<ReferenceType>(referenceType));
 referenceType.SetPropertyIndexes(
-    index: 12,
-    originalValueIndex: 12,
+    index: 16,
+    originalValueIndex: 16,
     shadowIndex: -1,
     relationshipIndex: -1,
     storeGenerationIndex: -1);
@@ -728,11 +935,11 @@ transactionType.SetMaterializationSetter(
 transactionType.SetAccessors(
     TransactionType (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.TransactionType(((VirtualKeyGroupTransaction)(entry.Entity))),
     TransactionType (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.TransactionType(((VirtualKeyGroupTransaction)(entry.Entity))),
-    TransactionType (IInternalEntry entry) => entry.ReadOriginalValue<TransactionType>(transactionType, 13),
+    TransactionType (IInternalEntry entry) => entry.ReadOriginalValue<TransactionType>(transactionType, 17),
     TransactionType (IInternalEntry entry) => entry.GetCurrentValue<TransactionType>(transactionType));
 transactionType.SetPropertyIndexes(
-    index: 13,
-    originalValueIndex: 13,
+    index: 17,
+    originalValueIndex: 17,
     shadowIndex: -1,
     relationshipIndex: -1,
     storeGenerationIndex: -1);
@@ -784,13 +991,13 @@ virtualKeyGroupId.SetMaterializationSetter(
         return instance;
     });
 virtualKeyGroupId.SetAccessors(
-    int (IInternalEntry entry) => (entry.FlaggedAsStoreGenerated(14) ? entry.ReadStoreGeneratedValue<int>(1) : (entry.FlaggedAsTemporary(14) && VirtualKeyGroupTransactionUnsafeAccessors.VirtualKeyGroupId(((VirtualKeyGroupTransaction)(entry.Entity))) == 0 ? entry.ReadTemporaryValue<int>(1) : VirtualKeyGroupTransactionUnsafeAccessors.VirtualKeyGroupId(((VirtualKeyGroupTransaction)(entry.Entity))))),
+    int (IInternalEntry entry) => (entry.FlaggedAsStoreGenerated(18) ? entry.ReadStoreGeneratedValue<int>(1) : (entry.FlaggedAsTemporary(18) && VirtualKeyGroupTransactionUnsafeAccessors.VirtualKeyGroupId(((VirtualKeyGroupTransaction)(entry.Entity))) == 0 ? entry.ReadTemporaryValue<int>(1) : VirtualKeyGroupTransactionUnsafeAccessors.VirtualKeyGroupId(((VirtualKeyGroupTransaction)(entry.Entity))))),
     int (IInternalEntry entry) => VirtualKeyGroupTransactionUnsafeAccessors.VirtualKeyGroupId(((VirtualKeyGroupTransaction)(entry.Entity))),
-    int (IInternalEntry entry) => entry.ReadOriginalValue<int>(virtualKeyGroupId, 14),
+    int (IInternalEntry entry) => entry.ReadOriginalValue<int>(virtualKeyGroupId, 18),
     int (IInternalEntry entry) => ((InternalEntityEntry)entry).ReadRelationshipSnapshotValue<int>(virtualKeyGroupId, 1));
 virtualKeyGroupId.SetPropertyIndexes(
-    index: 14,
-    originalValueIndex: 14,
+    index: 18,
+    originalValueIndex: 18,
     shadowIndex: -1,
     relationshipIndex: 1,
     storeGenerationIndex: 1);
@@ -941,6 +1148,10 @@ public static void CreateAnnotations(RuntimeEntityType runtimeEntityType)
     var initiatedBy = runtimeEntityType.FindProperty("InitiatedBy");
     var initiatedByUserId = runtimeEntityType.FindProperty("InitiatedByUserId");
     var isDeleted = runtimeEntityType.FindProperty("IsDeleted");
+    var originalAmount = runtimeEntityType.FindProperty("OriginalAmount");
+    var originalAmountEvidence = runtimeEntityType.FindProperty("OriginalAmountEvidence");
+    var originalAmountVerifiedAtUtc = runtimeEntityType.FindProperty("OriginalAmountVerifiedAtUtc");
+    var originalAmountVerifiedBy = runtimeEntityType.FindProperty("OriginalAmountVerifiedBy");
     var referenceId = runtimeEntityType.FindProperty("ReferenceId");
     var referenceType = runtimeEntityType.FindProperty("ReferenceType");
     var transactionType = runtimeEntityType.FindProperty("TransactionType");
@@ -953,7 +1164,7 @@ public static void CreateAnnotations(RuntimeEntityType runtimeEntityType)
         ISnapshot (IInternalEntry source) =>
         {
             var structuralType = ((VirtualKeyGroupTransaction)(source.Entity));
-            return ((ISnapshot)(new Snapshot<long, decimal, decimal, DateTime?, DateTime, DateTime?, string, string, string, string, bool, string, ReferenceType, TransactionType, int>(((ValueComparer<long>)(((IProperty)id).GetValueComparer())).Snapshot(source.GetCurrentValue<long>(id)), ((ValueComparer<decimal>)(((IProperty)amount).GetValueComparer())).Snapshot(source.GetCurrentValue<decimal>(amount)), ((ValueComparer<decimal>)(((IProperty)balanceAfter).GetValueComparer())).Snapshot(source.GetCurrentValue<decimal>(balanceAfter)), (source.GetCurrentValue<DateTime?>(billingWindowStartUtc) == null ? null : ((ValueComparer<DateTime?>)(((IProperty)billingWindowStartUtc).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime?>(billingWindowStartUtc))), ((ValueComparer<DateTime>)(((IProperty)createdAt).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime>(createdAt)), (source.GetCurrentValue<DateTime?>(deletedAt) == null ? null : ((ValueComparer<DateTime?>)(((IProperty)deletedAt).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime?>(deletedAt))), (source.GetCurrentValue<string>(description) == null ? null : ((ValueComparer<string>)(((IProperty)description).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(description))), (source.GetCurrentValue<string>(idempotencyKey) == null ? null : ((ValueComparer<string>)(((IProperty)idempotencyKey).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(idempotencyKey))), (source.GetCurrentValue<string>(initiatedBy) == null ? null : ((ValueComparer<string>)(((IProperty)initiatedBy).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(initiatedBy))), (source.GetCurrentValue<string>(initiatedByUserId) == null ? null : ((ValueComparer<string>)(((IProperty)initiatedByUserId).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(initiatedByUserId))), ((ValueComparer<bool>)(((IProperty)isDeleted).GetValueComparer())).Snapshot(source.GetCurrentValue<bool>(isDeleted)), (source.GetCurrentValue<string>(referenceId) == null ? null : ((ValueComparer<string>)(((IProperty)referenceId).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(referenceId))), ((ValueComparer<ReferenceType>)(((IProperty)referenceType).GetValueComparer())).Snapshot(source.GetCurrentValue<ReferenceType>(referenceType)), ((ValueComparer<TransactionType>)(((IProperty)transactionType).GetValueComparer())).Snapshot(source.GetCurrentValue<TransactionType>(transactionType)), ((ValueComparer<int>)(((IProperty)virtualKeyGroupId).GetValueComparer())).Snapshot(source.GetCurrentValue<int>(virtualKeyGroupId)))));
+            return ((ISnapshot)(new Snapshot<long, decimal, decimal, DateTime?, DateTime, DateTime?, string, string, string, string, bool, decimal?, string, DateTime?, string, string, ReferenceType, TransactionType, int>(((ValueComparer<long>)(((IProperty)id).GetValueComparer())).Snapshot(source.GetCurrentValue<long>(id)), ((ValueComparer<decimal>)(((IProperty)amount).GetValueComparer())).Snapshot(source.GetCurrentValue<decimal>(amount)), ((ValueComparer<decimal>)(((IProperty)balanceAfter).GetValueComparer())).Snapshot(source.GetCurrentValue<decimal>(balanceAfter)), (source.GetCurrentValue<DateTime?>(billingWindowStartUtc) == null ? null : ((ValueComparer<DateTime?>)(((IProperty)billingWindowStartUtc).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime?>(billingWindowStartUtc))), ((ValueComparer<DateTime>)(((IProperty)createdAt).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime>(createdAt)), (source.GetCurrentValue<DateTime?>(deletedAt) == null ? null : ((ValueComparer<DateTime?>)(((IProperty)deletedAt).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime?>(deletedAt))), (source.GetCurrentValue<string>(description) == null ? null : ((ValueComparer<string>)(((IProperty)description).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(description))), (source.GetCurrentValue<string>(idempotencyKey) == null ? null : ((ValueComparer<string>)(((IProperty)idempotencyKey).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(idempotencyKey))), (source.GetCurrentValue<string>(initiatedBy) == null ? null : ((ValueComparer<string>)(((IProperty)initiatedBy).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(initiatedBy))), (source.GetCurrentValue<string>(initiatedByUserId) == null ? null : ((ValueComparer<string>)(((IProperty)initiatedByUserId).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(initiatedByUserId))), ((ValueComparer<bool>)(((IProperty)isDeleted).GetValueComparer())).Snapshot(source.GetCurrentValue<bool>(isDeleted)), (source.GetCurrentValue<decimal?>(originalAmount) == null ? null : ((ValueComparer<decimal?>)(((IProperty)originalAmount).GetValueComparer())).Snapshot(source.GetCurrentValue<decimal?>(originalAmount))), (source.GetCurrentValue<string>(originalAmountEvidence) == null ? null : ((ValueComparer<string>)(((IProperty)originalAmountEvidence).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(originalAmountEvidence))), (source.GetCurrentValue<DateTime?>(originalAmountVerifiedAtUtc) == null ? null : ((ValueComparer<DateTime?>)(((IProperty)originalAmountVerifiedAtUtc).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime?>(originalAmountVerifiedAtUtc))), (source.GetCurrentValue<string>(originalAmountVerifiedBy) == null ? null : ((ValueComparer<string>)(((IProperty)originalAmountVerifiedBy).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(originalAmountVerifiedBy))), (source.GetCurrentValue<string>(referenceId) == null ? null : ((ValueComparer<string>)(((IProperty)referenceId).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(referenceId))), ((ValueComparer<ReferenceType>)(((IProperty)referenceType).GetValueComparer())).Snapshot(source.GetCurrentValue<ReferenceType>(referenceType)), ((ValueComparer<TransactionType>)(((IProperty)transactionType).GetValueComparer())).Snapshot(source.GetCurrentValue<TransactionType>(transactionType)), ((ValueComparer<int>)(((IProperty)virtualKeyGroupId).GetValueComparer())).Snapshot(source.GetCurrentValue<int>(virtualKeyGroupId)))));
         });
     runtimeEntityType.SetStoreGeneratedValuesFactory(
         ISnapshot () => ((ISnapshot)(new Snapshot<long, int>(((ValueComparer<long>)(((IProperty)id).GetValueComparer())).Snapshot(default(long)), ((ValueComparer<int>)(((IProperty)virtualKeyGroupId).GetValueComparer())).Snapshot(default(int))))));
@@ -970,11 +1181,11 @@ public static void CreateAnnotations(RuntimeEntityType runtimeEntityType)
             return ((ISnapshot)(new Snapshot<long, int, object>(((ValueComparer<long>)(((IProperty)id).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<long>(id)), ((ValueComparer<int>)(((IProperty)virtualKeyGroupId).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<int>(virtualKeyGroupId)), source.GetCurrentValue<VirtualKeyGroup>(virtualKeyGroup))));
         });
     runtimeEntityType.SetCounts(new PropertyCounts(
-        propertyCount: 15,
+        propertyCount: 19,
         navigationCount: 1,
         complexPropertyCount: 0,
         complexCollectionCount: 0,
-        originalValueCount: 15,
+        originalValueCount: 19,
         shadowCount: 0,
         relationshipCount: 3,
         storeGeneratedCount: 2));

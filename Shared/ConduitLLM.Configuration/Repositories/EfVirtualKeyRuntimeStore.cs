@@ -265,6 +265,7 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
         VirtualKeyGroupId = adjustment.GroupId,
         TransactionType = adjustment.Amount > 0 ? TransactionType.Credit : TransactionType.Debit,
         Amount = Math.Abs(adjustment.Amount),
+        OriginalAmount = adjustment.IdempotencyKey is null ? null : Math.Abs(adjustment.Amount),
         BalanceAfter = balanceAfter,
         ReferenceType = (ReferenceType)(int)adjustment.ReferenceType,
         ReferenceId = adjustment.ReferenceId,
@@ -283,6 +284,8 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
             throw new ArgumentOutOfRangeException(nameof(adjustment), "Group ID must be positive.");
         }
 
+        VirtualKeyBalanceReplayEvidence.ValidateAmount(adjustment.Amount, adjustment.IdempotencyKey);
+
         if (adjustment.IdempotencyKey is not null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(adjustment.IdempotencyKey);
@@ -296,7 +299,7 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
         var expectedType = adjustment.Amount > 0 ? TransactionType.Credit : TransactionType.Debit;
         if (existing.VirtualKeyGroupId != adjustment.GroupId ||
             existing.TransactionType != expectedType ||
-            existing.Amount != Math.Abs(adjustment.Amount) ||
+            !VirtualKeyBalanceReplayEvidence.AmountMatches(existing.Amount, existing.OriginalAmount, adjustment.Amount) ||
             (int)existing.ReferenceType != (int)adjustment.ReferenceType ||
             existing.ReferenceId != adjustment.ReferenceId ||
             existing.BillingWindowStartUtc != adjustment.BillingWindowStartUtc)

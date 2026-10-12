@@ -9,6 +9,8 @@ using ConduitLLM.Security.Cryptography;
 using ConduitLLM.Admin.Interfaces;
 using ConduitLLM.Admin.Security;
 
+using StackExchange.Redis;
+
 namespace ConduitLLM.Admin.Services
 {
     /// <summary>
@@ -37,13 +39,38 @@ namespace ConduitLLM.Admin.Services
             ILogger<SecurityService> logger,
             IMemoryCache memoryCache,
             IDistributedCache? distributedCache = null,
-            IServiceScopeFactory? serviceScopeFactory = null)
-            : base(logger, memoryCache, distributedCache)
+            IServiceScopeFactory? serviceScopeFactory = null,
+            IServiceProvider? serviceProvider = null)
+            : base(logger, memoryCache, distributedCache,
+                BuildRateLimitCounter(options.Value, serviceProvider, logger))
         {
             _options = options.Value;
             _configuration = configuration;
             _serviceScopeFactory = serviceScopeFactory;
             _keyHeaders = MasterKeyCredentialReader.GetKeyHeaders(_options.ApiAuth);
+        }
+
+        private static IFixedWindowCounter? BuildRateLimitCounter(
+            AdminSecurityOptions options,
+            IServiceProvider? serviceProvider,
+            ILogger logger)
+        {
+            if (!options.UseDistributedTracking)
+            {
+                return null;
+            }
+
+            // IDistributedCache does not provide atomic increments and need not use Redis.
+            var redis = serviceProvider?.GetService<IConnectionMultiplexer>();
+            if (redis is null)
+            {
+                logger.LogWarning(
+                    "Distributed rate-limit tracking is enabled but no Redis connection is registered; " +
+                    "Admin IP limits will be counted per instance only");
+                return null;
+            }
+
+            return new RedisFixedWindowCounter(redis, logger);
         }
 
         /// <inheritdoc/>

@@ -1,5 +1,6 @@
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Configuration.Utilities;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Persistence;
@@ -46,7 +47,11 @@ public sealed class StoreBackedVirtualKeyRuntimeService : IVirtualKeyRuntimeServ
         ValidateInternalAsync(key, requestedModel, checkBalance: true);
 
     /// <inheritdoc />
-    public async Task<bool> UpdateSpendAsync(int keyId, decimal cost)
+    public Task<bool> UpdateSpendAsync(int keyId, decimal cost) =>
+        UpdateSpendAsync(keyId, cost, billedAtUtc: null);
+
+    /// <inheritdoc />
+    public async Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc)
     {
         if (cost <= 0)
         {
@@ -66,7 +71,6 @@ public sealed class StoreBackedVirtualKeyRuntimeService : IVirtualKeyRuntimeServ
                 return false;
             }
 
-            var billingTimestamp = DateTime.UtcNow;
             var adjustment = await _store.AdjustBalanceAsync(
                 new VirtualKeyBalanceAdjustment(
                     record.Group.Id,
@@ -75,7 +79,7 @@ public sealed class StoreBackedVirtualKeyRuntimeService : IVirtualKeyRuntimeServ
                     "System",
                     VirtualKeyBalanceReferenceType.VirtualKey,
                     keyId.ToString(),
-                    BillingWindowStartUtc: billingTimestamp.Date.AddHours(billingTimestamp.Hour)));
+                    BillingWindowStartUtc: BillingTimeUtilities.GetBillingWindowStartUtc(billedAtUtc)));
 
             // The charge is already durable at this point. Timestamp maintenance is
             // best-effort, including cancellation, so timestamp maintenance cannot

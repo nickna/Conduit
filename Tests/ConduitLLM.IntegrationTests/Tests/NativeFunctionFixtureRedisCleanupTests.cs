@@ -161,7 +161,8 @@ public sealed class NativeFunctionFixtureRedisCleanupTests(FunctionCredentialRed
         yield return RedisKeys.Lock.AlertThreshold(key.ToString(CultureInfo.InvariantCulture), "80");
         foreach (var prefix in new[] { "pending_spend", "pending_spend_units", "processing_spend",
                      "processing_spend_units", "pending_spend_window_total_units", "reserved_spend",
-                     "spend_reservations", "spend_reservation_expiry", "spend_reservations_started", "spend_reservations_settled" })
+                     "spend_reservations", "spend_reservation_expiry", "spend_reservations_started", "spend_reservations_settled",
+                     "spend_reservations_indeterminate" })
             yield return $"{prefix}:group:{group}";
         yield return $"key_usage:group:{group}:key:{key}";
         yield return $"key_usage_units:group:{group}:key:{key}";
@@ -189,6 +190,9 @@ public sealed class NativeFunctionFixtureRedisCleanupTests(FunctionCredentialRed
         yield return $"rate:vkg:{group}3:rpm";
         yield return $"pending_spend:group:{group}3";
         yield return $"pending_spend:group:{group}:unrelated";
+        yield return $"spend_reservations_indeterminate:group:{group}3";
+        yield return $"spend_reservations_indeterminate:group:{group}:unrelated";
+        yield return $"other_spend_reservations_indeterminate:group:{group}";
         yield return $"processing_spend:group:{group}3:claim:sentinel";
         yield return $"pending_spend_window_units:group:{group}3:window:2026101107";
         yield return $"processing_spend_window_units:group:{group}3:window:2026101107:claim:sentinel";

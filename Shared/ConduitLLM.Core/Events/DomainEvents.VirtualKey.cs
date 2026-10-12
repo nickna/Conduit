@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ConduitLLM.Core.Events
 {
     // ===============================
@@ -120,6 +122,12 @@ namespace ConduitLLM.Core.Events
         /// Amount to add to current spend
         /// </summary>
         public decimal Amount { get; init; }
+
+        /// <summary>
+        /// Original usage timestamp for hourly attribution. Older events fall back to Timestamp.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public DateTime? BilledAtUtc { get; init; }
         
         /// <summary>
         /// Optional request identifier for tracking

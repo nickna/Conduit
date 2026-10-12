@@ -1,6 +1,7 @@
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Enums;
+using ConduitLLM.Configuration.Exceptions;
 using ConduitLLM.Configuration.Repositories;
 using ConduitLLM.Tests.TestInfrastructure;
 
@@ -130,6 +131,56 @@ namespace ConduitLLM.Tests.Configuration.Repositories
             using var context = new ConduitDbContext(_options);
             var ledgerRow = await context.VirtualKeyGroupTransactions.SingleAsync();
             Assert.Null(ledgerRow.IdempotencyKey);
+        }
+
+        [Fact]
+        public async Task AdjustBalanceIdempotentAsync_VerifiedLegacyExactAmount_ReplaysWithoutSecondDebitAsync()
+        {
+            const decimal original = 0.12500001m;
+            await _repository.AdjustBalanceIdempotentAsync(
+                1, -original, "batch-spend:legacy", "usage", "System", ReferenceType.System, "legacy");
+            using (var context = _database.CreateContext())
+            {
+                var row = await context.VirtualKeyGroupTransactions.SingleAsync();
+                Assert.Equal(original, row.OriginalAmount);
+                row.Amount = 0.125000m;
+                row.OriginalAmount = null;
+                await context.SaveChangesAsync();
+            }
+
+            await Assert.ThrowsAsync<IdempotencyConflictException>(() => _repository.AdjustBalanceIdempotentAsync(
+                1, -original, "batch-spend:legacy", "usage", "System", ReferenceType.System, "legacy"));
+            using (var context = _database.CreateContext())
+            {
+                var row = await context.VirtualKeyGroupTransactions.SingleAsync();
+                row.OriginalAmount = original;
+                row.OriginalAmountVerifiedBy = "test-operator";
+                row.OriginalAmountEvidence = "verified-original-operation";
+                row.OriginalAmountVerifiedAtUtc = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+            }
+
+            var replay = await _repository.AdjustBalanceIdempotentAsync(
+                1, -original, "batch-spend:legacy", "usage", "System", ReferenceType.System, "legacy");
+            Assert.False(replay.Applied);
+            Assert.Equal(100m - original, replay.NewBalance);
+            Assert.Equal(original, replay.LifetimeSpent);
+            await Assert.ThrowsAsync<IdempotencyConflictException>(() => _repository.AdjustBalanceIdempotentAsync(
+                1, -0.12500002m, "batch-spend:legacy", "usage", "System", ReferenceType.System, "legacy"));
+            using var verified = _database.CreateContext();
+            var ledger = await verified.VirtualKeyGroupTransactions.SingleAsync();
+            Assert.Equal(0.125000m, ledger.Amount);
+            Assert.Equal(original, ledger.OriginalAmount);
+        }
+
+        [Fact]
+        public async Task AdjustBalanceIdempotentAsync_ExcessPrecision_RejectsBeforeBalanceChangesAsync()
+        {
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => _repository.AdjustBalanceIdempotentAsync(
+                1, -0.125000011m, "batch-spend:excess", "usage", "System", ReferenceType.System, "excess"));
+            using var context = _database.CreateContext();
+            Assert.Empty(await context.VirtualKeyGroupTransactions.ToListAsync());
+            Assert.Equal(100m, (await context.VirtualKeyGroups.SingleAsync()).Balance);
         }
 
         public void Dispose() => _database.Dispose();

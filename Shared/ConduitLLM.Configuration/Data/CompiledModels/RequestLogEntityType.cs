@@ -504,11 +504,11 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 int (decimal v) => ((object)v).GetHashCode(),
                 decimal (decimal v) => v),
             mappingInfo: new RelationalTypeMappingInfo(
-                storeTypeName: "numeric(10,6)",
-                precision: 10,
-                scale: 6));
+                storeTypeName: "numeric(12,8)",
+                precision: 12,
+                scale: 8));
         cost.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
-        cost.AddAnnotation("Relational:ColumnType", "decimal(10, 6)");
+        cost.AddAnnotation("Relational:ColumnType", "decimal(12, 8)");
 
         var inputTokens = runtimeEntityType.AddProperty(
             "InputTokens",

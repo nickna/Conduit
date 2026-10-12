@@ -3,6 +3,12 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace ConduitLLM.Tests.Core.Caching;
 
+// This test deliberately blocks a synchronous publication callback. Run it apart
+// from unrelated collections so CI thread-pool contention cannot cause Redis timeouts.
+[CollectionDefinition("Application cache generation publication", DisableParallelization = true)]
+public sealed class ApplicationCacheGenerationCollection;
+
+[Collection("Application cache generation publication")]
 public sealed class ApplicationCacheGenerationTests
 {
     [SkippableTheory]

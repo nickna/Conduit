@@ -24,7 +24,7 @@ internal static class BillingAuditPersistenceProbe
             {
                 UsageJson = "null", MetadataJson = "[]", ToolUsageJson = "null", ProviderType = "",
                 Model = "", RequestId = "", FailureReason = "", RequestPath = "", IsEstimated = false,
-                CalculatedCost = -0.0000005m, ToolUsageCost = 9999.999999m
+                CalculatedCost = -0.000000005m, ToolUsageCost = 9999.99999999m
             }
         };
         var original = rows.ToArray();
@@ -201,10 +201,10 @@ internal static class BillingAuditPersistenceProbe
     {
         Id = Guid.NewGuid(), Timestamp = Instant, EventType = 197, VirtualKeyId = 41, VirtualKeyGroupId = 7,
         Model = "O'Hare 雪", RequestId = Guid.NewGuid().ToString("D"),
-        UsageJson = """{"quoted":"café 雪 🔎","nested":[1,null,false]}""", CalculatedCost = 0.1250005m,
+        UsageJson = """{"quoted":"café 雪 🔎","nested":[1,null,false]}""", CalculatedCost = 0.125000005m,
         FailureReason = "diagnostic O'Hare 雪", ProviderType = "future-provider 雪", HttpStatusCode = -197,
         MetadataJson = """{"missing":null,"value":true}""", RequestPath = "/v1/雪'O", IsEstimated = true,
-        ToolUsageJson = """[{"name":"雪","count":2}]""", ToolUsageCost = -0.0000005m
+        ToolUsageJson = """[{"name":"雪","count":2}]""", ToolUsageCost = -0.000000005m
     };
 
     private static async Task AssertRowAsync(NpgsqlDataSource source, BillingAuditRuntimeRecord expected, CancellationToken token)
@@ -283,7 +283,7 @@ internal static class BillingAuditPersistenceProbe
     }
 
     private static decimal? Rounded(decimal? value) =>
-        value is null ? null : decimal.Round(value.Value, 6, MidpointRounding.AwayFromZero);
+        value is null ? null : decimal.Round(value.Value, 8, MidpointRounding.AwayFromZero);
     private static bool SameJson(string? left, string? right)
     {
         if (left is null || right is null) return left is null && right is null;

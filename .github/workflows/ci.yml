@@ -24,23 +24,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  select:
+    name: Select PR validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      plan: ${{ steps.plan.outputs.plan }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Classify complete PR change impact
+        id: plan
+        run: node scripts/ci/change-impact.mjs
+      - name: Retain validation selection and reasons
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-selection
+          path: artifacts/ci-selection/plan.json
+          if-no-files-found: error
+          retention-days: 30
+
   migrations:
     name: Migration validation
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['migrations'] }}
     uses: ./.github/workflows/migration-validation.yml
 
   distributed-lock:
     name: Distributed lock validation
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['distributed-lock'] }}
     uses: ./.github/workflows/distributed-lock.yml
     with:
       repeat_policy_tests: ${{ github.event_name == 'workflow_dispatch' && inputs.measure_previous_scheduling }}
 
   codeql:
     name: Security analysis
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['codeql'] }}
     permissions:
       contents: read
       actions: read
       security-events: write
     uses: ./.github/workflows/codeql-analysis.yml
+    with:
+      languages: ${{ toJSON(fromJSON(needs.select.outputs.plan).codeqlLanguages) }}
 
   dependencies:
     name: Dependency security policy
@@ -82,7 +115,7 @@ jobs:
   required:
     name: CI required
     if: ${{ always() }}
-    needs: [source-ignore-guard, media-dispatch-integration, billing-fault-injection, billing-invariants, signalr-integration, aot-analyzers, validate, wolverine-two-host, docker, s3-storage, contracts, webadmin, migrations, distributed-lock, codeql, dependencies]
+    needs: [select, source-ignore-guard, media-dispatch-integration, billing-fault-injection, billing-invariants, signalr-integration, aot-analyzers, validate, wolverine-two-host, docker, s3-storage, contracts, webadmin, migrations, distributed-lock, codeql, dependencies]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -91,9 +124,12 @@ jobs:
         run: node scripts/ci/required-check.mjs
         env:
           CI_NEEDS: ${{ toJSON(needs) }}
+          CI_PLAN: ${{ needs.select.outputs.plan }}
 
   media-dispatch-integration:
     name: Durable media dispatch
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['media-dispatch-integration'] }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -150,6 +186,8 @@ jobs:
 
   billing-fault-injection:
     name: Billing fault injection
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['billing-fault-injection'] }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -164,8 +202,18 @@ jobs:
           project: Tests/ConduitLLM.FaultInjectionTests/ConduitLLM.FaultInjectionTests.csproj
           suite: billing-fault-injection
 
+      - name: Verify persisted financial precision and migration
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj
+          suite: billing-persistence
+          filter: Component=BillingPersistence
+          minimum: '3'
+
   billing-invariants:
     name: Billing invariants
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['billing-invariants'] }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -183,6 +231,8 @@ jobs:
 
   signalr-integration:
     name: SignalR integration
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['signalr-integration'] }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -200,6 +250,8 @@ jobs:
 
   s3-storage:
     name: S3 video operations
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['s3-storage'] }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -216,6 +268,8 @@ jobs:
 
   aot-analyzers:
     name: NativeAOT analyzer ratchet
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['aot-analyzers'] }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -255,6 +309,8 @@ jobs:
   # Quick validation that everything builds
   validate:
     name: Validate
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['validate'] }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -389,6 +445,8 @@ jobs:
 
   contracts:
     name: Contracts and official SDK clients
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['contracts'] }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -439,6 +497,8 @@ jobs:
 
   webadmin:
     name: WebAdmin correctness and coverage
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['webadmin'] }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -492,6 +552,8 @@ jobs:
   # real hosts on real Postgres and is invisible to the in-memory dual-backend tests.
   wolverine-two-host:
     name: Wolverine Two-Host Smoke
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['wolverine-two-host'] }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -541,6 +603,8 @@ jobs:
   # Build and execute the same packaged applications used by release candidates.
   docker:
     name: Packaged application business flows
+    needs: [select]
+    if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['docker'] }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:

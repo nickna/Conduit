@@ -120,7 +120,8 @@ internal static class NativeFunctionFixtureRedisCleanup
                  {
                      "pending_spend", "pending_spend_units", "processing_spend", "processing_spend_units",
                      "pending_spend_window_total_units", "reserved_spend", "spend_reservations",
-                     "spend_reservation_expiry", "spend_reservations_started", "spend_reservations_settled"
+                     "spend_reservation_expiry", "spend_reservations_started", "spend_reservations_settled",
+                     "spend_reservations_indeterminate"
                  })
             yield return $"{prefix}:group:{group}";
         yield return $"key_usage:group:{group}:key:{key}";
