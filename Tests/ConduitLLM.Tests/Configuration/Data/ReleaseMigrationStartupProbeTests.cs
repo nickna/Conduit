@@ -98,10 +98,21 @@ public sealed class ReleaseMigrationStartupProbeTests
             var deadline = DateTime.UtcNow.AddSeconds(2);
             while (DateTime.UtcNow < deadline)
             {
-                await using var exclusive = new NpgsqlCommand($"SELECT pg_try_advisory_lock({ReleaseMigrationLock.Id})", control);
-                if (await exclusive.ExecuteScalarAsync() is false) { sawProbeLock = true; break; }
-                await using var release = new NpgsqlCommand($"SELECT pg_advisory_unlock({ReleaseMigrationLock.Id})", control);
-                await release.ExecuteNonQueryAsync();
+                // Observe the probe without competing for its advisory lock. Taking
+                // an exclusive lock here can make the probe legitimately return false.
+                await using var waiting = new NpgsqlCommand("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM pg_catalog.pg_locks advisory
+                        JOIN pg_catalog.pg_locks history ON history.pid = advisory.pid
+                        WHERE advisory.locktype = 'advisory'
+                            AND advisory.classid::bigint = 0 AND advisory.objid::bigint = @lock
+                            AND advisory.objsubid = 1 AND advisory.mode = 'ShareLock' AND advisory.granted
+                            AND history.locktype = 'relation'
+                            AND history.relation = '"__EFMigrationsHistory"'::regclass
+                            AND NOT history.granted)
+                    """, control);
+                waiting.Parameters.AddWithValue("lock", ReleaseMigrationLock.Id);
+                if (await waiting.ExecuteScalarAsync() is true) { sawProbeLock = true; break; }
                 await Task.Delay(20);
             }
             cancelled.Cancel();
