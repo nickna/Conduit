@@ -219,6 +219,7 @@ public sealed class BillingAuditServicePersistenceTests(PostgresLockTestContaine
         private readonly CancellationTokenSource _deadline = new(TimeSpan.FromSeconds(60));
         public string ConnectionString { get; }
         public NpgsqlDataSource Source { get; }
+        public NpgsqlDataSource EfSource { get; }
         public CancellationToken Token => _deadline.Token;
 
         private OwnedDatabase(string management)
@@ -227,6 +228,17 @@ public sealed class BillingAuditServicePersistenceTests(PostgresLockTestContaine
             ConnectionString = new NpgsqlConnectionStringBuilder(management)
                 { SearchPath = _schema, ApplicationName = _schema, MaxPoolSize = 1 }.ConnectionString;
             Source = NpgsqlDataSource.Create(ConnectionString);
+            try { EfSource = NpgsqlDataSource.Create(ConnectionString); }
+            catch (Exception primary)
+            {
+                try { Source.Dispose(); }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException("Owned billing service data source initialization and cleanup failed.", primary, cleanup);
+                }
+                finally { _deadline.Dispose(); }
+                throw;
+            }
         }
 
         public static async Task<OwnedDatabase> CreateAsync(string management)
@@ -242,7 +254,7 @@ public sealed class BillingAuditServicePersistenceTests(PostgresLockTestContaine
                     await command.ExecuteNonQueryAsync(database.Token);
                 }
                 await using var context = new ConduitDbContext(new DbContextOptionsBuilder<ConduitDbContext>()
-                    .UseNpgsql(database.ConnectionString).Options);
+                    .UseNpgsql(database.EfSource).Options);
                 await context.Database.OpenConnectionAsync(database.Token);
                 await using (var command = context.Database.GetDbConnection().CreateCommand())
                 {
@@ -296,20 +308,35 @@ public sealed class BillingAuditServicePersistenceTests(PostgresLockTestContaine
 
         public async ValueTask DisposeAsync()
         {
-            try { await Source.DisposeAsync(); }
+            var failures = new List<Exception>();
+            try { await EfSource.DisposeAsync(); }
+            catch (Exception exception) { failures.Add(exception); }
             finally
             {
-                _deadline.Dispose();
-                if (!_schema.StartsWith(Prefix, StringComparison.Ordinal) ||
-                    !Guid.TryParseExact(_schema[Prefix.Length..], "N", out _))
-                    throw new InvalidOperationException("Cleanup requires an owned billing service schema.");
-                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                await using var connection = new NpgsqlConnection(_management);
-                await connection.OpenAsync(cleanup.Token);
-                await using var command = connection.CreateCommand();
-                command.CommandText = $"DROP SCHEMA IF EXISTS \"{_schema}\" CASCADE";
-                await command.ExecuteNonQueryAsync(cleanup.Token);
+                try { await Source.DisposeAsync(); }
+                catch (Exception exception) { failures.Add(exception); }
+                finally
+                {
+                    try
+                    {
+                        _deadline.Dispose();
+                        if (!_schema.StartsWith(Prefix, StringComparison.Ordinal) ||
+                            !Guid.TryParseExact(_schema[Prefix.Length..], "N", out _))
+                            throw new InvalidOperationException("Cleanup requires an owned billing service schema.");
+                        using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                        await using var connection = new NpgsqlConnection(_management);
+                        await connection.OpenAsync(cleanup.Token);
+                        await using var command = connection.CreateCommand();
+                        command.CommandText = $"DROP SCHEMA IF EXISTS \"{_schema}\" CASCADE";
+                        await command.ExecuteNonQueryAsync(cleanup.Token);
+                    }
+                    catch (Exception exception) { failures.Add(exception); }
+                }
             }
+            if (failures.Count == 1)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures[0]).Throw();
+            if (failures.Count > 1)
+                throw new AggregateException("Owned billing service fixture cleanup failed.", failures);
         }
     }
 }

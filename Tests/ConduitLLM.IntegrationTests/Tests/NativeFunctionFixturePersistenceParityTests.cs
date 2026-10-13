@@ -701,6 +701,7 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
         private readonly string _connectionString;
         private readonly CancellationTokenSource _deadline = new(TimeSpan.FromSeconds(60));
         public NpgsqlDataSource Source { get; }
+        public NpgsqlDataSource EfSource { get; }
         public CancellationToken Token => _deadline.Token;
 
         private OwnedDatabase(string management, string schema)
@@ -710,6 +711,17 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
             _connectionString = new NpgsqlConnectionStringBuilder(management)
                 { SearchPath = schema, ApplicationName = schema, MaxPoolSize = 1 }.ConnectionString;
             Source = NpgsqlDataSource.Create(_connectionString);
+            try { EfSource = NpgsqlDataSource.Create(_connectionString); }
+            catch (Exception primary)
+            {
+                try { Source.Dispose(); }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException("Owned function data source initialization and cleanup failed.", primary, cleanup);
+                }
+                finally { _deadline.Dispose(); }
+                throw;
+            }
         }
 
         public static async Task<OwnedDatabase> CreateAsync(string management)
@@ -745,7 +757,7 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
         }
 
         public ConduitDbContext CreateContext() => new(new DbContextOptionsBuilder<ConduitDbContext>()
-            .UseNpgsql(_connectionString).Options);
+            .UseNpgsql(EfSource).Options);
 
         public async Task<object[]> RowAsync(string sql, params (string Name, object Value)[] parameters)
         {
@@ -791,20 +803,35 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
 
         public async ValueTask DisposeAsync()
         {
-            try { await Source.DisposeAsync(); }
+            var failures = new List<Exception>();
+            try { await EfSource.DisposeAsync(); }
+            catch (Exception exception) { failures.Add(exception); }
             finally
             {
-                _deadline.Dispose();
-                if (!_schema.StartsWith("native_function_fixture_", StringComparison.Ordinal) ||
-                    !Guid.TryParseExact(_schema["native_function_fixture_".Length..], "N", out _))
-                    throw new InvalidOperationException("Cleanup requires an owned function fixture schema.");
-                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                await using var connection = new NpgsqlConnection(_management);
-                await connection.OpenAsync(cleanup.Token);
-                await using var command = connection.CreateCommand();
-                command.CommandText = $"DROP SCHEMA IF EXISTS \"{_schema}\" CASCADE";
-                await command.ExecuteNonQueryAsync(cleanup.Token);
+                try { await Source.DisposeAsync(); }
+                catch (Exception exception) { failures.Add(exception); }
+                finally
+                {
+                    try
+                    {
+                        _deadline.Dispose();
+                        if (!_schema.StartsWith("native_function_fixture_", StringComparison.Ordinal) ||
+                            !Guid.TryParseExact(_schema["native_function_fixture_".Length..], "N", out _))
+                            throw new InvalidOperationException("Cleanup requires an owned function fixture schema.");
+                        using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                        await using var connection = new NpgsqlConnection(_management);
+                        await connection.OpenAsync(cleanup.Token);
+                        await using var command = connection.CreateCommand();
+                        command.CommandText = $"DROP SCHEMA IF EXISTS \"{_schema}\" CASCADE";
+                        await command.ExecuteNonQueryAsync(cleanup.Token);
+                    }
+                    catch (Exception exception) { failures.Add(exception); }
+                }
             }
+            if (failures.Count == 1)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures[0]).Throw();
+            if (failures.Count > 1)
+                throw new AggregateException("Owned function fixture cleanup failed.", failures);
         }
     }
 }

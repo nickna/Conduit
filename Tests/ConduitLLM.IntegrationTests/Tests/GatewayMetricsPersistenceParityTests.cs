@@ -40,7 +40,8 @@ public sealed class GatewayMetricsPersistenceParityTests
         {
             await CreateSchemaAndSeedAsync(schema, now);
             var connectionString = WithSearchPath(schema);
-            var efStore = new EfGatewayMetricsStore(new TestDbContextFactory(connectionString));
+            await using var efSource = NpgsqlDataSource.Create(connectionString);
+            var efStore = new EfGatewayMetricsStore(new TestDbContextFactory(efSource));
             await using var dataSource = NpgsqlDataSource.Create(connectionString);
             var npgsqlStore = new NpgsqlGatewayMetricsStore(dataSource);
 
@@ -165,12 +166,12 @@ public sealed class GatewayMetricsPersistenceParityTests
             SearchPath = schema
         }.ConnectionString;
 
-    private sealed class TestDbContextFactory(string connectionString) :
+    private sealed class TestDbContextFactory(NpgsqlDataSource source) :
         IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
             new DbContextOptionsBuilder<ConduitDbContext>()
-                .UseNpgsql(connectionString)
+                .UseNpgsql(source)
                 .Options;
 
         public ConduitDbContext CreateDbContext() => new(_options);
@@ -510,7 +511,8 @@ public sealed class GatewayMetricsPersistenceParityTests
             command.CommandText = $"CREATE SCHEMA \"{schema}\"";
             await command.ExecuteNonQueryAsync();
         }
-        await using var context = new TestDbContextFactory(WithSearchPath(schema)).CreateDbContext();
+        await using var efSource = NpgsqlDataSource.Create(WithSearchPath(schema));
+        await using var context = new TestDbContextFactory(efSource).CreateDbContext();
         // Use the actual production model, including FK and unique indexes. EnsureCreated would
         // see unrelated shared fixture tables, so execute its creation script in this owned schema.
         await context.Database.OpenConnectionAsync();

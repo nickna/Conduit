@@ -20,14 +20,14 @@ public sealed partial class FunctionExecutionPersistenceParityTests
     [Fact]
     public async Task ExecutionReadsPreserveEveryScalarAndLegacyIncludedGraph()
     {
-        await InSchemaAsync(async (connectionString, source) =>
+        await InSchemaAsync(async (connectionString, efSource, source) =>
         {
-            var legacy = new FunctionExecutionRepository(new ContextFactory(connectionString),
+            var legacy = new FunctionExecutionRepository(new ContextFactory(efSource),
                 NullLogger<FunctionExecutionRepository>.Instance);
             var rows = new[] { Snapshot(true), Snapshot(false) };
             rows[1].FunctionConfigurationId = 2;
             foreach (var row in rows) await legacy.CreateAsync(row);
-            foreach (var reader in Readers(connectionString, source))
+            foreach (var reader in Readers(efSource, source))
             {
                 (await reader.GetByIdAsync(Guid.Empty)).Should().BeNull();
                 (await reader.GetByIdAsync(Guid.NewGuid())).Should().BeNull();
@@ -55,9 +55,9 @@ public sealed partial class FunctionExecutionPersistenceParityTests
     [Fact]
     public async Task ExecutionListsRetainUnboundedKeyIsolationOrderingAndSeparateConfigurations()
     {
-        await InSchemaAsync(async (connectionString, source) =>
+        await InSchemaAsync(async (connectionString, efSource, source) =>
         {
-            var legacy = new FunctionExecutionRepository(new ContextFactory(connectionString),
+            var legacy = new FunctionExecutionRepository(new ContextFactory(efSource),
                 NullLogger<FunctionExecutionRepository>.Instance);
             for (var index = 0; index < 105; index++)
             {
@@ -73,7 +73,7 @@ public sealed partial class FunctionExecutionPersistenceParityTests
             await legacy.CreateAsync(other);
             var expected = await legacy.GetByVirtualKeyIdAsync(-11);
             expected.Should().HaveCount(105);
-            foreach (var reader in Readers(connectionString, source))
+            foreach (var reader in Readers(efSource, source))
             {
                 (await reader.ListByVirtualKeyAsync(int.MinValue)).Should().BeEmpty();
                 (await reader.ListByVirtualKeyAsync(0)).Select(row => row.Id).Should().Equal(other.Id);
@@ -96,11 +96,11 @@ public sealed partial class FunctionExecutionPersistenceParityTests
     [InlineData(2)]
     public async Task ExecutionReadsCancelPoolAndObservedSqlWaitsAndReuseSlots(int adapter)
     {
-        await InSchemaAsync(async (connectionString, source) =>
+        await InSchemaAsync(async (connectionString, efSource, source) =>
         {
             var seed = Snapshot(true);
-            await Writers(connectionString, source)[0].CreateAsync(seed);
-            var reader = Readers(connectionString, source)[adapter];
+            await Writers(efSource, source)[0].CreateAsync(seed);
+            var reader = Readers(efSource, source)[adapter];
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             using (var cancelled = new CancellationTokenSource())
             {
@@ -108,9 +108,8 @@ public sealed partial class FunctionExecutionPersistenceParityTests
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reader.GetByIdAsync(Guid.Empty, cancelled.Token));
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reader.ListByVirtualKeyAsync(int.MinValue, cancelled.Token));
             }
-            await using (var held = adapter == 2 ? await source.OpenConnectionAsync(deadline.Token) : new NpgsqlConnection(connectionString))
+            await using (var held = await source.OpenConnectionAsync(deadline.Token))
             {
-                if (adapter != 2) await held.OpenAsync(deadline.Token);
                 foreach (var list in new[] { false, true })
                 {
                     using var cancelled = new CancellationTokenSource();
@@ -149,19 +148,19 @@ public sealed partial class FunctionExecutionPersistenceParityTests
             await transaction.RollbackAsync(deadline.Token);
             (await reader.ListByVirtualKeyAsync(42, deadline.Token)).Should().ContainSingle();
             AssertReadEquivalent((await reader.GetByIdAsync(seed.Id, deadline.Token))!,
-                (await Readers(connectionString, source)[0].GetByIdAsync(seed.Id, deadline.Token))!);
-        });
+                (await Readers(efSource, source)[0].GetByIdAsync(seed.Id, deadline.Token))!);
+        }, singleAdapter: true);
     }
 
     [Fact]
     public async Task ExecutionReaderGraphsRemainOutsideScalarWritersBeforeCallerMutation()
     {
-        await InSchemaAsync(async (connectionString, source) =>
+        await InSchemaAsync(async (connectionString, efSource, source) =>
         {
             var seed = Snapshot(true);
-            await Writers(connectionString, source)[0].CreateAsync(seed);
-            foreach (var reader in Readers(connectionString, source))
-            foreach (var writer in Writers(connectionString, source).Skip(1))
+            await Writers(efSource, source)[0].CreateAsync(seed);
+            foreach (var reader in Readers(efSource, source))
+            foreach (var writer in Writers(efSource, source).Skip(1))
             {
                 var graph = (await reader.GetByIdAsync(seed.Id))!;
                 graph.Id = Guid.Empty;
@@ -176,9 +175,9 @@ public sealed partial class FunctionExecutionPersistenceParityTests
         });
     }
 
-    private static IFunctionExecutionRuntimeReader[] Readers(string connectionString, NpgsqlDataSource source)
+    private static IFunctionExecutionRuntimeReader[] Readers(NpgsqlDataSource efSource, NpgsqlDataSource source)
     {
-        var factory = new ContextFactory(connectionString);
+        var factory = new ContextFactory(efSource);
         return [new LegacyReader(new FunctionExecutionRepository(factory, NullLogger<FunctionExecutionRepository>.Instance)),
             new EfFunctionExecutionRuntimeReader(factory), new NpgsqlFunctionExecutionRuntimeReader(source)];
     }

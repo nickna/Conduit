@@ -43,9 +43,11 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
             var efIds = await CreateAndSeedSchemaAsync(efSchema);
             var npgsqlIds = await CreateAndSeedSchemaAsync(npgsqlSchema);
 
+            await using var efSource = NpgsqlDataSource.Create(WithSearchPath(efSchema));
+
             await ExerciseContractAsync(
                 new EfModelProviderMappingRuntimeStore(
-                    new TestDbContextFactory(WithSearchPath(efSchema))),
+                    new TestDbContextFactory(efSource)),
                 efIds);
 
             await using var dataSource = NpgsqlDataSource.Create(WithSearchPath(npgsqlSchema));
@@ -72,7 +74,7 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
             await CreateAndSeedSchemaAsync(schema);
             var matrix = await SeedSnapshotMatrixAsync(schema);
             await using var source = NpgsqlDataSource.Create(connectionString);
-            var store = CreateMatrixStore(connectionString, source, typedNpgsql);
+            var store = CreateMatrixStore(source, typedNpgsql);
 
             AssertGraphSnapshot(await store.GetByIdAsync(matrix.Populated.Id), matrix.Populated);
             AssertGraphSnapshot(await store.GetByIdAsync(matrix.Nulls.Id), matrix.Nulls);
@@ -131,7 +133,7 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
             var ids = await CreateAndSeedSchemaAsync(schema);
             var matrix = await SeedSelectionMatrixAsync(schema, ids);
             await using var source = NpgsqlDataSource.Create(connectionString);
-            var store = CreateMatrixStore(connectionString, source, typedNpgsql);
+            var store = CreateMatrixStore(source, typedNpgsql);
             var allIds = matrix.Mappings.Select(mapping => new { Alias = mapping.ModelAlias, mapping.Id })
                 .Append(new { Alias = matrix.Mappings[99].ModelAlias, Id = ids.PrimaryMappingId })
                 .Append(new { Alias = "route-model", Id = ids.SecondaryMappingId })
@@ -208,7 +210,7 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
                     { ApplicationName = applicationName, MaxPoolSize = 2 }.ConnectionString;
                 ownedConnectionStrings.Add(connectionString);
                 await using var source = NpgsqlDataSource.Create(connectionString);
-                var store = CreateMatrixStore(connectionString, source, typedNpgsql);
+                var store = CreateMatrixStore(source, typedNpgsql);
                 var providerId = (await store.GetByIdAsync(ids.SecondaryMappingId, deadline.Token))!.ProviderId;
                 using (var cancelled = new CancellationTokenSource())
                 {
@@ -270,13 +272,14 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
         new DateTime(2026, 10, 12, 12, 0, 0, DateTimeKind.Utc).AddTicks(1_234_560);
 
     private static IModelProviderMappingRuntimeStore CreateMatrixStore(
-        string connectionString, NpgsqlDataSource source, bool typedNpgsql) => typedNpgsql
+        NpgsqlDataSource source, bool typedNpgsql) => typedNpgsql
             ? new NpgsqlModelProviderMappingRuntimeStore(source)
-            : new EfModelProviderMappingRuntimeStore(new TestDbContextFactory(connectionString));
+            : new EfModelProviderMappingRuntimeStore(new TestDbContextFactory(source));
 
     private async Task<SnapshotMatrix> SeedSnapshotMatrixAsync(string schema)
     {
-        await using var context = new TestDbContextFactory(WithSearchPath(schema)).CreateDbContext();
+        await using var efSource = NpgsqlDataSource.Create(WithSearchPath(schema));
+        await using var context = new TestDbContextFactory(efSource).CreateDbContext();
         var populated = NewSnapshotGraph("snapshot-route", populated: true);
         var nulls = NewSnapshotGraph("null-route", populated: false);
         var shared = new ModelProviderMapping
@@ -468,7 +471,8 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
 
     private async Task<SelectionMatrix> SeedSelectionMatrixAsync(string schema, SeedIds ids)
     {
-        await using var context = new TestDbContextFactory(WithSearchPath(schema)).CreateDbContext();
+        await using var efSource = NpgsqlDataSource.Create(WithSearchPath(schema));
+        await using var context = new TestDbContextFactory(efSource).CreateDbContext();
         var mappings = await context.ModelProviderMappings.Include(mapping => mapping.Provider)
             .Include(mapping => mapping.ModelProviderTypeAssociation).ThenInclude(association => association.Model)
             .ToListAsync();
@@ -520,7 +524,8 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
 
     private async Task SetCostActiveAsync(string schema, int costId, bool isActive)
     {
-        await using var context = new TestDbContextFactory(WithSearchPath(schema)).CreateDbContext();
+        await using var efSource = NpgsqlDataSource.Create(WithSearchPath(schema));
+        await using var context = new TestDbContextFactory(efSource).CreateDbContext();
         (await context.ModelCosts.SingleAsync(cost => cost.Id == costId)).IsActive = isActive;
         await context.SaveChangesAsync();
     }
@@ -576,14 +581,9 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
         }
     }
 
-    private static async Task<NpgsqlConnection> OpenMatchingPoolConnectionAsync(
-        NpgsqlDataSource source, string connectionString, bool typedNpgsql, CancellationToken token)
-    {
-        if (typedNpgsql) return await source.OpenConnectionAsync(token);
-        var connection = new NpgsqlConnection(connectionString);
-        try { await connection.OpenAsync(token); return connection; }
-        catch { await connection.DisposeAsync(); throw; }
-    }
+    private static Task<NpgsqlConnection> OpenMatchingPoolConnectionAsync(
+        NpgsqlDataSource source, string connectionString, bool typedNpgsql, CancellationToken token) =>
+        source.OpenConnectionAsync(token).AsTask();
 
     private static async Task AssertBothPoolSlotsReusableAsync(
         NpgsqlDataSource source, string connectionString, bool typedNpgsql, CancellationToken token)
@@ -783,7 +783,8 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
             await command.ExecuteNonQueryAsync();
         }
 
-        var factory = new TestDbContextFactory(WithSearchPath(schema));
+        await using var efSource = NpgsqlDataSource.Create(WithSearchPath(schema));
+        var factory = new TestDbContextFactory(efSource);
         await using var context = await factory.CreateDbContextAsync();
         // EnsureCreated checks every schema in the database and sees Testcontainers'
         // resource-reaper table. Execute EF's deterministic creation script directly so
@@ -953,12 +954,12 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
         int PrimaryMappingId,
         int SecondaryMappingId);
 
-    private sealed class TestDbContextFactory(string connectionString) :
+    private sealed class TestDbContextFactory(NpgsqlDataSource source) :
         IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
             new DbContextOptionsBuilder<ConduitDbContext>()
-                .UseNpgsql(connectionString)
+                .UseNpgsql(source)
                 .Options;
 
         public ConduitDbContext CreateDbContext() => new(_options);

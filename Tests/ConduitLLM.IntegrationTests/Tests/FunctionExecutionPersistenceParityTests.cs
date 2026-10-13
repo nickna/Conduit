@@ -27,9 +27,9 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
     [Fact]
     public async Task InsertsPreserveAllScalarsAndGenerateOnlyEmptyIds()
     {
-        await InSchemaAsync(async (connectionString, source) =>
+        await InSchemaAsync(async (connectionString, efSource, source) =>
         {
-            foreach (var writer in Writers(connectionString, source))
+            foreach (var writer in Writers(efSource, source))
             foreach (var populated in new[] { false, true })
             {
                 var row = Snapshot(populated);
@@ -46,9 +46,9 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
     [Fact]
     public async Task UpdatesReplaceSnapshotsAndPreserveLegacyMissMutationAndOverflow()
     {
-        await InSchemaAsync(async (connectionString, source) =>
+        await InSchemaAsync(async (connectionString, efSource, source) =>
         {
-            foreach (var writer in Writers(connectionString, source))
+            foreach (var writer in Writers(efSource, source))
             {
                 var original = Snapshot(true);
                 await writer.CreateAsync(original);
@@ -98,9 +98,9 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
     [Fact]
     public async Task ConcurrentDetachedSnapshotsHaveExactlyOneWinnerAcrossAdapters()
     {
-        await InSchemaAsync(async (connectionString, source) =>
+        await InSchemaAsync(async (connectionString, efSource, source) =>
         {
-            var writers = Writers(connectionString, source);
+            var writers = Writers(efSource, source);
             var seed = Snapshot(true);
             await writers[0].CreateAsync(seed);
             var contenders = writers.Select((_, index) =>
@@ -120,9 +120,9 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
     [Fact]
     public async Task DatabaseFailuresPropagateWithoutInsertsOrPartialUpdates()
     {
-        await InSchemaAsync(async (connectionString, source) =>
+        await InSchemaAsync(async (connectionString, efSource, source) =>
         {
-            foreach (var writer in Writers(connectionString, source))
+            foreach (var writer in Writers(efSource, source))
             {
                 var seed = Snapshot(true);
                 await writer.CreateAsync(seed);
@@ -151,16 +151,15 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
     [InlineData(2)]
     public async Task CancellationOfPoolAndObservedSqlWaitsKeepsMutationsAndReleasesSlots(int adapter)
     {
-        await InSchemaAsync(async (connectionString, source) =>
+        await InSchemaAsync(async (connectionString, efSource, source) =>
         {
-            var writer = Writers(connectionString, source)[adapter];
+            var writer = Writers(efSource, source)[adapter];
             var seed = Snapshot(true);
             await writer.CreateAsync(seed);
             using var recovery = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             var cancelledInsertIds = new List<Guid>();
-            await using (var held = adapter == 2 ? await source.OpenConnectionAsync(recovery.Token) : new NpgsqlConnection(connectionString))
+            await using (var held = await source.OpenConnectionAsync(recovery.Token))
             {
-                if (adapter != 2) await held.OpenAsync(recovery.Token);
                 foreach (var create in new[] { true, false })
                 {
                     var row = Snapshot(!create);
@@ -209,15 +208,15 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
             await AssertRowAsync(connectionString, seed);
             (await writer.UpdateAsync(seed, recovery.Token)).Should().BeTrue();
             await AssertRowAsync(connectionString, seed);
-        });
+        }, singleAdapter: true);
     }
 
     [Fact]
     public async Task PrecancelledCallsRetainLegacyMutationsAndScalarPortsRejectGraphs()
     {
-        await InSchemaAsync(async (connectionString, source) =>
+        await InSchemaAsync(async (connectionString, efSource, source) =>
         {
-            var writers = Writers(connectionString, source);
+            var writers = Writers(efSource, source);
             using var cancelled = new CancellationTokenSource();
             cancelled.Cancel();
             foreach (var writer in writers)
@@ -248,13 +247,13 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
         });
     }
 
-    private async Task InSchemaAsync(Func<string, NpgsqlDataSource, Task> test, int maxPoolSize = 1)
+    private async Task InSchemaAsync(Func<string, NpgsqlDataSource, NpgsqlDataSource, Task> test, int maxPoolSize = 1, bool singleAdapter = false)
     {
         var schema = $"function_execution_{Guid.NewGuid():N}";
         try
         {
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            await using (var connection = new NpgsqlConnection(fixture.ConnectionString))
+            await using (var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = false }.ConnectionString))
             {
                 await connection.OpenAsync(deadline.Token);
                 await using var command = connection.CreateCommand();
@@ -288,12 +287,18 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
             var connectionString = new NpgsqlConnectionStringBuilder(fixture.ConnectionString)
                 { SearchPath = schema, ApplicationName = schema, MaxPoolSize = maxPoolSize }.ConnectionString;
             await using var source = NpgsqlDataSource.Create(connectionString);
-            await test(connectionString, source);
+            if (singleAdapter)
+                await test(connectionString, source, source);
+            else
+            {
+                await using var efSource = NpgsqlDataSource.Create(connectionString);
+                await test(connectionString, efSource, source);
+            }
         }
         finally
         {
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+            await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = false }.ConnectionString);
             await connection.OpenAsync(deadline.Token);
             await using var command = connection.CreateCommand();
             command.CommandText = $"DROP SCHEMA IF EXISTS \"{schema}\" CASCADE";
@@ -301,9 +306,9 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
         }
     }
 
-    private static IFunctionExecutionRuntimeWriter[] Writers(string connectionString, NpgsqlDataSource source)
+    private static IFunctionExecutionRuntimeWriter[] Writers(NpgsqlDataSource efSource, NpgsqlDataSource source)
     {
-        var factory = new ContextFactory(connectionString);
+        var factory = new ContextFactory(efSource);
         return [new LegacyWriter(new FunctionExecutionRepository(factory, NullLogger<FunctionExecutionRepository>.Instance)),
             new EfFunctionExecutionRuntimeWriter(factory), new NpgsqlFunctionExecutionRuntimeWriter(source)];
     }
@@ -326,7 +331,8 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
     private static async Task<FunctionExecution?> ReadAsync(string connectionString, Guid id)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await using var context = new ContextFactory(connectionString).CreateDbContext();
+        await using var source = NpgsqlDataSource.Create(connectionString);
+        await using var context = new ContextFactory(source).CreateDbContext();
         return await context.FunctionExecutions.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, deadline.Token);
     }
 
@@ -383,10 +389,10 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
     }
 
     // Match the production EF DbContextFactory: constructing a context does not inspect its token.
-    private sealed class ContextFactory(string connectionString) : IDbContextFactory<ConduitDbContext>
+    private sealed class ContextFactory(NpgsqlDataSource dataSource) : IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
-            new DbContextOptionsBuilder<ConduitDbContext>().UseNpgsql(connectionString).Options;
+            new DbContextOptionsBuilder<ConduitDbContext>().UseNpgsql(dataSource).Options;
         public ConduitDbContext CreateDbContext() => new(_options);
         public Task<ConduitDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) => Task.FromResult(CreateDbContext());
     }

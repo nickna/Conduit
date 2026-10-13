@@ -42,8 +42,10 @@ public sealed class VirtualKeyRuntimePersistenceParityTests
             var efIds = await CreateAndSeedSchemaAsync(efSchema);
             var npgsqlIds = await CreateAndSeedSchemaAsync(npgsqlSchema);
 
+            await using var efSource = NpgsqlDataSource.Create(WithSearchPath(efSchema));
+
             await ExerciseContractAsync(
-                new EfVirtualKeyRuntimeStore(new TestDbContextFactory(WithSearchPath(efSchema))),
+                new EfVirtualKeyRuntimeStore(new TestDbContextFactory(efSource)),
                 efIds);
 
             await using var dataSource = NpgsqlDataSource.Create(WithSearchPath(npgsqlSchema));
@@ -67,7 +69,7 @@ public sealed class VirtualKeyRuntimePersistenceParityTests
             var ids = await CreateAndSeedSchemaAsync(schema);
             var expected = await SeedRuntimeReadMatrixAsync(schema, ids);
             await using var source = NpgsqlDataSource.Create(WithSearchPath(schema));
-            var store = CreateRuntimeMatrixStore(WithSearchPath(schema), source, typedNpgsql);
+            var store = CreateRuntimeMatrixStore(source, typedNpgsql);
 
             foreach (var invalidHash in new[] { null, "", " \t\r\n" })
                 await Assert.ThrowsAnyAsync<ArgumentException>(() => store.GetByHashAsync(invalidHash!));
@@ -126,7 +128,7 @@ public sealed class VirtualKeyRuntimePersistenceParityTests
                 var connectionString = new NpgsqlConnectionStringBuilder(WithSearchPath(schema))
                     { ApplicationName = applicationName, MaxPoolSize = 1 }.ConnectionString;
                 await using var source = NpgsqlDataSource.Create(connectionString);
-                var store = CreateRuntimeMatrixStore(connectionString, source, typedNpgsql);
+                var store = CreateRuntimeMatrixStore(source, typedNpgsql);
                 var baseline = (await store.GetByIdAsync(ids.KeyId, deadline.Token))!;
                 var ledgerCount = await ReadRuntimeMatrixLedgerCountAsync(connectionString, deadline.Token);
 
@@ -150,11 +152,8 @@ public sealed class VirtualKeyRuntimePersistenceParityTests
                 }
                 await AssertRuntimeCancellationHadNoEffectsAsync(store, connectionString, baseline, ledgerCount, deadline.Token);
 
-                await using (var held = typedNpgsql
-                    ? await source.OpenConnectionAsync(deadline.Token)
-                    : new NpgsqlConnection(connectionString))
+                await using (var held = await source.OpenConnectionAsync(deadline.Token))
                 {
-                    if (!typedNpgsql) await held.OpenAsync(deadline.Token);
                     using var cancelled = new CancellationTokenSource();
                     var pending = InvokeRuntimeCancellationOperationAsync(store, ids, operation, cancelled.Token);
                     try
@@ -212,9 +211,9 @@ public sealed class VirtualKeyRuntimePersistenceParityTests
     private enum RuntimeCancellationOperation { Hash, Id, Hashes, Touch, Adjust }
 
     private static IVirtualKeyRuntimeStore CreateRuntimeMatrixStore(
-        string connectionString, NpgsqlDataSource source, bool typedNpgsql) => typedNpgsql
+        NpgsqlDataSource source, bool typedNpgsql) => typedNpgsql
             ? new NpgsqlVirtualKeyRuntimeStore(source)
-            : new EfVirtualKeyRuntimeStore(new TestDbContextFactory(connectionString));
+            : new EfVirtualKeyRuntimeStore(new TestDbContextFactory(source));
 
     private static Task InvokeRuntimeCancellationOperationAsync(
         IVirtualKeyRuntimeStore store, SeedIds ids, RuntimeCancellationOperation operation, CancellationToken token) => operation switch
@@ -302,7 +301,7 @@ public sealed class VirtualKeyRuntimePersistenceParityTests
 
     private static async Task<long> ReadRuntimeMatrixLedgerCountAsync(string connectionString, CancellationToken token)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(token);
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT count(*) FROM \"VirtualKeyGroupTransactions\"";
@@ -333,7 +332,7 @@ public sealed class VirtualKeyRuntimePersistenceParityTests
 
     private async Task<VirtualKeyRuntimeRecord[]> SeedRuntimeReadMatrixAsync(string schema, SeedIds ids)
     {
-        await using var connection = new NpgsqlConnection(WithSearchPath(schema));
+        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(WithSearchPath(schema)) { Pooling = false }.ConnectionString);
         await connection.OpenAsync();
         await using (var command = connection.CreateCommand())
         {
@@ -682,12 +681,12 @@ public sealed class VirtualKeyRuntimePersistenceParityTests
 
     private sealed record SeedIds(int GroupId, int KeyId);
 
-    private sealed class TestDbContextFactory(string connectionString) :
+    private sealed class TestDbContextFactory(NpgsqlDataSource source) :
         IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
             new DbContextOptionsBuilder<ConduitDbContext>()
-                .UseNpgsql(connectionString)
+                .UseNpgsql(source)
                 .Options;
 
         public ConduitDbContext CreateDbContext() => new(_options);

@@ -28,8 +28,9 @@ public sealed class FunctionDiscoveryPersistenceParityTests(PostgresLockTestCont
             await SeedAsync(schema);
             var connectionString = WithSearchPath(schema);
             await using var source = NpgsqlDataSource.Create(connectionString);
+            await using var efSource = NpgsqlDataSource.Create(connectionString);
             IFunctionDiscoveryRuntimeStore[] stores =
-            [new EfFunctionDiscoveryRuntimeStore(new ContextFactory(connectionString)),
+            [new EfFunctionDiscoveryRuntimeStore(new ContextFactory(efSource)),
                 new NpgsqlFunctionDiscoveryRuntimeStore(source)];
             FunctionPurpose?[] purposes = [null, FunctionPurpose.Search, FunctionPurpose.Answer,
                 FunctionPurpose.RAG, (FunctionPurpose)(-9), (FunctionPurpose)999];
@@ -97,7 +98,7 @@ public sealed class FunctionDiscoveryPersistenceParityTests(PostgresLockTestCont
             await using var source = NpgsqlDataSource.Create(connectionString);
             IFunctionDiscoveryRuntimeStore store = typed
                 ? new NpgsqlFunctionDiscoveryRuntimeStore(source)
-                : new EfFunctionDiscoveryRuntimeStore(new ContextFactory(connectionString));
+                : new EfFunctionDiscoveryRuntimeStore(new ContextFactory(source));
             (await store.ListEnabledAsync()).Count.Should().Be(4);
             using (var cancelled = new CancellationTokenSource())
             {
@@ -141,7 +142,7 @@ public sealed class FunctionDiscoveryPersistenceParityTests(PostgresLockTestCont
 
     private async Task SeedAsync(string schema)
     {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = false }.ConnectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -182,7 +183,7 @@ public sealed class FunctionDiscoveryPersistenceParityTests(PostgresLockTestCont
     private async Task DropAsync(string schema)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(deadline.Token);
         await using var command = connection.CreateCommand();
         command.CommandText = $"DROP SCHEMA IF EXISTS \"{schema}\" CASCADE";
@@ -220,10 +221,10 @@ public sealed class FunctionDiscoveryPersistenceParityTests(PostgresLockTestCont
         }
     }
 
-    private sealed class ContextFactory(string connectionString) : IDbContextFactory<ConduitDbContext>
+    private sealed class ContextFactory(NpgsqlDataSource dataSource) : IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
-            new DbContextOptionsBuilder<ConduitDbContext>().UseNpgsql(connectionString).Options;
+            new DbContextOptionsBuilder<ConduitDbContext>().UseNpgsql(dataSource).Options;
         public ConduitDbContext CreateDbContext() => new(_options);
         public Task<ConduitDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
         {

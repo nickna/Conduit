@@ -43,8 +43,9 @@ public sealed class GlobalSettingRepositoryParityTests
             await CreateSchemaAsync(npgsqlSchema);
 
             var efConnectionString = WithSearchPath(efSchema);
+            await using var efSource = NpgsqlDataSource.Create(efConnectionString);
             var efRepository = new GlobalSettingRepository(
-                new TestDbContextFactory(efConnectionString),
+                new TestDbContextFactory(efSource),
                 NullLogger<GlobalSettingRepository>.Instance);
             await ExerciseContractAsync(efRepository);
 
@@ -146,12 +147,12 @@ public sealed class GlobalSettingRepositoryParityTests
         return builder.ConnectionString;
     }
 
-    private sealed class TestDbContextFactory(string connectionString) :
+    private sealed class TestDbContextFactory(NpgsqlDataSource source) :
         IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
             new DbContextOptionsBuilder<ConduitDbContext>()
-                .UseNpgsql(connectionString)
+                .UseNpgsql(source)
                 .Options;
 
         public ConduitDbContext CreateDbContext() => new(_options);
@@ -682,7 +683,7 @@ public sealed class GlobalSettingRepositoryParityTests
 
     private async Task<DateTime> ServerClockAsync(string schema, CancellationToken token)
     {
-        await using var connection = new NpgsqlConnection(WithSearchPath(schema));
+        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(WithSearchPath(schema)) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(token);
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT clock_timestamp()";

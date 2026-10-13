@@ -41,7 +41,8 @@ public sealed class MediaRuntimePersistenceParityTests
             await CreateSchemaAsync(npgsqlSchema);
 
             var efConnection = WithSearchPath(efSchema);
-            var factory = new TestDbContextFactory(efConnection);
+            await using var efSource = NpgsqlDataSource.Create(efConnection);
+            var factory = new TestDbContextFactory(efSource);
             await using (var context = factory.CreateDbContext())
             {
                 var repository = new MediaRecordRepository(
@@ -324,12 +325,12 @@ public sealed class MediaRuntimePersistenceParityTests
         return builder.ConnectionString;
     }
 
-    private sealed class TestDbContextFactory(string connectionString) :
+    private sealed class TestDbContextFactory(NpgsqlDataSource source) :
         IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
             new DbContextOptionsBuilder<ConduitDbContext>()
-                .UseNpgsql(connectionString)
+                .UseNpgsql(source)
                 .Options;
 
         public List<MediaRecord> TrackedMedia { get; } = [];

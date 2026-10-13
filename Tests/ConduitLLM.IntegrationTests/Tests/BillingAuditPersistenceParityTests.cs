@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Text.Json;
 
 using ConduitLLM.Configuration;
@@ -313,6 +314,131 @@ public sealed class BillingAuditPersistenceParityTests(PostgresLockTestContainer
         await AssertRowAsync(database, committed);
     }
 
+    [Fact]
+    public Task OwnedEfAndTypedBackendsCloseAfterSuccessfulFixtureDisposal() =>
+        AssertFixtureBackendReleaseAsync(failQuery: false);
+
+    [Fact]
+    public Task OwnedEfAndTypedBackendsCloseAfterAnEfQueryFailure() =>
+        AssertFixtureBackendReleaseAsync(failQuery: true);
+
+    [Fact]
+    public async Task SetupFailureClosesBothOwnedBackendsAndPreservesThePrimaryException()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await using var observer = new NpgsqlConnection(RegressionConnectionString("observer", pooling: false));
+        await observer.OpenAsync(deadline.Token);
+        await using var sentinelSource = NpgsqlDataSource.Create(RegressionConnectionString("sentinel", pooling: true));
+        await using var sentinel = await sentinelSource.OpenConnectionAsync(deadline.Token);
+        var sentinelPid = await BackendPidAsync(sentinel, deadline.Token);
+        var primary = new InvalidOperationException("Injected owned EF setup failure.");
+        string? schema = null;
+        var efPid = 0;
+        var typedPid = 0;
+
+        var actual = await Record.ExceptionAsync(async () =>
+        {
+            await using var database = await OwnedDatabase.CreateAsync(fixture.ConnectionString, async (owned, context) =>
+            {
+                schema = new NpgsqlConnectionStringBuilder(owned.ConnectionString).SearchPath;
+                efPid = await BackendPidAsync(context.Database.GetDbConnection(), deadline.Token);
+                await using (var typed = await owned.Source.OpenConnectionAsync(deadline.Token))
+                    typedPid = await BackendPidAsync(typed, deadline.Token);
+                throw primary;
+            });
+        });
+
+        Assert.Same(primary, actual);
+        Assert.NotNull(schema);
+        Assert.True(efPid > 0);
+        Assert.True(typedPid > 0);
+        Assert.NotEqual(efPid, typedPid);
+        Assert.NotEqual(sentinelPid, efPid);
+        Assert.NotEqual(sentinelPid, typedPid);
+        await WaitForOwnedBackendsAndSchemaToDisappearAsync(observer, schema!, efPid, typedPid, deadline.Token);
+        Assert.Equal(sentinelPid, await BackendPidAsync(sentinel, deadline.Token));
+        await AssertSentinelUsableAsync(sentinel, deadline.Token);
+    }
+
+    private async Task AssertFixtureBackendReleaseAsync(bool failQuery)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await using var observer = new NpgsqlConnection(RegressionConnectionString("observer", pooling: false));
+        await observer.OpenAsync(deadline.Token);
+        await using var sentinelSource = NpgsqlDataSource.Create(RegressionConnectionString("sentinel", pooling: true));
+        await using var sentinel = await sentinelSource.OpenConnectionAsync(deadline.Token);
+        var sentinelPid = await BackendPidAsync(sentinel, deadline.Token);
+        var database = await OwnedDatabase.CreateAsync(fixture.ConnectionString);
+        var schema = new NpgsqlConnectionStringBuilder(database.ConnectionString).SearchPath!;
+        var efPid = 0;
+        var typedPid = 0;
+        try
+        {
+            Assert.NotSame(database.Source, database.EfSource);
+            await using var context = database.CreateContext();
+            await context.Database.OpenConnectionAsync(deadline.Token);
+            efPid = await BackendPidAsync(context.Database.GetDbConnection(), deadline.Token);
+            await using (var typed = await database.Source.OpenConnectionAsync(deadline.Token))
+                typedPid = await BackendPidAsync(typed, deadline.Token);
+            Assert.True(efPid > 0);
+            Assert.True(typedPid > 0);
+            Assert.NotEqual(efPid, typedPid);
+            Assert.NotEqual(sentinelPid, efPid);
+            Assert.NotEqual(sentinelPid, typedPid);
+            if (failQuery)
+            {
+                await using var command = context.Database.GetDbConnection().CreateCommand();
+                command.CommandText = "SELECT 1 / 0";
+                var failure = await Assert.ThrowsAsync<PostgresException>(async () =>
+                {
+                    await command.ExecuteScalarAsync(deadline.Token);
+                });
+                Assert.Equal(PostgresErrorCodes.DivisionByZero, failure.SqlState);
+            }
+        }
+        finally { await database.DisposeAsync(); }
+
+        await WaitForOwnedBackendsAndSchemaToDisappearAsync(observer, schema, efPid, typedPid, deadline.Token);
+        Assert.Equal(sentinelPid, await BackendPidAsync(sentinel, deadline.Token));
+        await AssertSentinelUsableAsync(sentinel, deadline.Token);
+    }
+
+    private string RegressionConnectionString(string role, bool pooling) =>
+        new NpgsqlConnectionStringBuilder(fixture.ConnectionString)
+        {
+            ApplicationName = $"ba_{role}_{Guid.NewGuid():N}",
+            Pooling = pooling,
+            MaxPoolSize = 1
+        }.ConnectionString;
+
+    private static async Task<int> BackendPidAsync(DbConnection connection, CancellationToken token)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT pg_backend_pid()";
+        return (int)(await command.ExecuteScalarAsync(token))!;
+    }
+
+    private static async Task AssertSentinelUsableAsync(NpgsqlConnection sentinel, CancellationToken token)
+    {
+        await using var command = sentinel.CreateCommand();
+        command.CommandText = "SELECT 1";
+        Assert.Equal(1, (int)(await command.ExecuteScalarAsync(token))!);
+    }
+
+    private static async Task WaitForOwnedBackendsAndSchemaToDisappearAsync(
+        NpgsqlConnection observer, string schema, int efPid, int typedPid, CancellationToken token)
+    {
+        await using var command = observer.CreateCommand();
+        command.CommandText = """
+            SELECT NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ANY(@pids))
+                AND to_regnamespace(@schema) IS NULL
+            """;
+        command.Parameters.AddWithValue("pids", new[] { efPid, typedPid });
+        command.Parameters.AddWithValue("schema", schema);
+        while (!(bool)(await command.ExecuteScalarAsync(token))!)
+            await Task.Delay(25, token);
+    }
+
     private static BillingAuditRuntimeRecord Populated() => new()
     {
         Id = Guid.NewGuid(), Timestamp = Instant, EventType = 197, VirtualKeyId = 41, VirtualKeyGroupId = 7,
@@ -373,10 +499,10 @@ public sealed class BillingAuditPersistenceParityTests(PostgresLockTestContainer
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
     }
 
-    private sealed class ContextFactory(string connectionString, int? maxBatchSize = null) : IDbContextFactory<ConduitDbContext>
+    private sealed class ContextFactory(NpgsqlDataSource dataSource, int? maxBatchSize = null) : IDbContextFactory<ConduitDbContext>
     {
         public ConduitDbContext CreateDbContext() => new(new DbContextOptionsBuilder<ConduitDbContext>()
-            .UseNpgsql(connectionString, options => { if (maxBatchSize is { } size) options.MaxBatchSize(size); }).Options);
+            .UseNpgsql(dataSource, options => { if (maxBatchSize is { } size) options.MaxBatchSize(size); }).Options);
     }
 
     private sealed class UnavailableContextFactory : IDbContextFactory<ConduitDbContext>
@@ -392,6 +518,7 @@ public sealed class BillingAuditPersistenceParityTests(PostgresLockTestContainer
         private readonly CancellationTokenSource _deadline = new(TimeSpan.FromSeconds(60));
         public string ConnectionString { get; }
         public NpgsqlDataSource Source { get; }
+        public NpgsqlDataSource EfSource { get; }
         public CancellationToken Token => _deadline.Token;
 
         private OwnedDatabase(string management)
@@ -401,9 +528,20 @@ public sealed class BillingAuditPersistenceParityTests(PostgresLockTestContainer
             ConnectionString = new NpgsqlConnectionStringBuilder(management)
                 { SearchPath = _schema, ApplicationName = _schema, MaxPoolSize = 1 }.ConnectionString;
             Source = NpgsqlDataSource.Create(ConnectionString);
+            try { EfSource = NpgsqlDataSource.Create(ConnectionString); }
+            catch (Exception primary)
+            {
+                try { Source.Dispose(); }
+                catch (Exception cleanup)
+                {
+                    throw new AggregateException("Owned billing audit data source initialization and cleanup failed.", primary, cleanup);
+                }
+                finally { _deadline.Dispose(); }
+                throw;
+            }
         }
 
-        public static async Task<OwnedDatabase> CreateAsync(string management)
+        public static async Task<OwnedDatabase> CreateAsync(string management, Func<OwnedDatabase, ConduitDbContext, Task>? setupProbe = null)
         {
             var database = new OwnedDatabase(management);
             try
@@ -417,6 +555,7 @@ public sealed class BillingAuditPersistenceParityTests(PostgresLockTestContainer
                 }
                 await using var context = database.CreateContext();
                 await context.Database.OpenConnectionAsync(database.Token);
+                if (setupProbe is not null) await setupProbe(database, context);
                 await using (var command = context.Database.GetDbConnection().CreateCommand())
                 {
                     command.CommandText = context.Database.GenerateCreateScript();
@@ -435,9 +574,9 @@ public sealed class BillingAuditPersistenceParityTests(PostgresLockTestContainer
             }
         }
 
-        public ConduitDbContext CreateContext() => new ContextFactory(ConnectionString).CreateDbContext();
+        public ConduitDbContext CreateContext() => new ContextFactory(EfSource).CreateDbContext();
         public IBillingAuditRuntimeWriter Writer(bool native, int? maxBatchSize = null) => native
-            ? new NpgsqlBillingAuditRuntimeWriter(Source) : new EfBillingAuditRuntimeWriter(new ContextFactory(ConnectionString, maxBatchSize));
+            ? new NpgsqlBillingAuditRuntimeWriter(Source) : new EfBillingAuditRuntimeWriter(new ContextFactory(EfSource, maxBatchSize));
 
         public async Task<long> CountAsync()
         {
@@ -493,20 +632,35 @@ public sealed class BillingAuditPersistenceParityTests(PostgresLockTestContainer
 
         public async ValueTask DisposeAsync()
         {
-            try { await Source.DisposeAsync(); }
+            var failures = new List<Exception>();
+            try { await EfSource.DisposeAsync(); }
+            catch (Exception exception) { failures.Add(exception); }
             finally
             {
-                _deadline.Dispose();
-                if (!_schema.StartsWith(Prefix, StringComparison.Ordinal) ||
-                    !Guid.TryParseExact(_schema[Prefix.Length..], "N", out _))
-                    throw new InvalidOperationException("Cleanup requires an owned billing audit schema.");
-                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                await using var connection = new NpgsqlConnection(_management);
-                await connection.OpenAsync(cleanup.Token);
-                await using var command = connection.CreateCommand();
-                command.CommandText = $"DROP SCHEMA IF EXISTS \"{_schema}\" CASCADE";
-                await command.ExecuteNonQueryAsync(cleanup.Token);
+                try { await Source.DisposeAsync(); }
+                catch (Exception exception) { failures.Add(exception); }
+                finally
+                {
+                    try
+                    {
+                        _deadline.Dispose();
+                        if (!_schema.StartsWith(Prefix, StringComparison.Ordinal) ||
+                            !Guid.TryParseExact(_schema[Prefix.Length..], "N", out _))
+                            throw new InvalidOperationException("Cleanup requires an owned billing audit schema.");
+                        using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                        await using var connection = new NpgsqlConnection(_management);
+                        await connection.OpenAsync(cleanup.Token);
+                        await using var command = connection.CreateCommand();
+                        command.CommandText = $"DROP SCHEMA IF EXISTS \"{_schema}\" CASCADE";
+                        await command.ExecuteNonQueryAsync(cleanup.Token);
+                    }
+                    catch (Exception exception) { failures.Add(exception); }
+                }
             }
+            if (failures.Count == 1)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures[0]).Throw();
+            if (failures.Count > 1)
+                throw new AggregateException("Owned billing audit fixture cleanup failed.", failures);
         }
 
         private static int? Number(NpgsqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);

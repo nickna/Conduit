@@ -31,7 +31,8 @@ public sealed class FunctionExecutionConfigurationPersistenceParityTests(Postgre
             await SeedAsync(schema);
             var connectionString = WithSearchPath(schema);
             await using var source = NpgsqlDataSource.Create(connectionString);
-            var stores = CreateStores(connectionString, source);
+            await using var efSource = NpgsqlDataSource.Create(connectionString);
+            var stores = CreateStores(efSource, source);
             foreach (var id in new[] { -1, 0, 1, 2, 3, 999 })
                 (await stores[1].GetConfigurationAsync(id)).Should()
                     .BeEquivalentTo(await stores[0].GetConfigurationAsync(id));
@@ -82,8 +83,9 @@ public sealed class FunctionExecutionConfigurationPersistenceParityTests(Postgre
             await SeedAsync(schema);
             var connectionString = WithSearchPath(schema);
             await using var source = NpgsqlDataSource.Create(connectionString);
-            var stores = CreateStores(connectionString, source);
-            var legacy = new FunctionCredentialRepository(new ContextFactory(connectionString),
+            await using var efSource = NpgsqlDataSource.Create(connectionString);
+            var stores = CreateStores(efSource, source);
+            var legacy = new FunctionCredentialRepository(new ContextFactory(efSource),
                 NullLogger<FunctionCredentialRepository>.Instance);
             foreach (var provider in new[] { FunctionProviderType.Exa, FunctionProviderType.Tavily, (FunctionProviderType)197 })
             {
@@ -139,10 +141,9 @@ public sealed class FunctionExecutionConfigurationPersistenceParityTests(Postgre
             await SeedAsync(schema);
             var connectionString = WithSearchPath(schema);
             await using var source = NpgsqlDataSource.Create(connectionString);
-            var store = CreateStores(connectionString, source)[typed ? 1 : 0];
+            var store = CreateStores(source, source)[typed ? 1 : 0];
             (await store.ListCredentialsForProviderAsync(FunctionProviderType.Exa)).Count.Should().Be(7);
-            await using var held = typed ? await source.OpenConnectionAsync() : new NpgsqlConnection(connectionString);
-            if (!typed) await held.OpenAsync();
+            await using var held = await source.OpenConnectionAsync();
             using var cancelled = new CancellationTokenSource();
             var read = store.ListCredentialsForProviderAsync(FunctionProviderType.Exa, cancelled.Token);
             try
@@ -166,13 +167,13 @@ public sealed class FunctionExecutionConfigurationPersistenceParityTests(Postgre
         finally { await DropAsync(schema); }
     }
 
-    private static IFunctionExecutionConfigurationStore[] CreateStores(string connectionString, NpgsqlDataSource source) =>
-        [new EfFunctionExecutionConfigurationStore(new ContextFactory(connectionString)),
+    private static IFunctionExecutionConfigurationStore[] CreateStores(NpgsqlDataSource efSource, NpgsqlDataSource source) =>
+        [new EfFunctionExecutionConfigurationStore(new ContextFactory(efSource)),
             new NpgsqlFunctionExecutionConfigurationStore(source)];
 
     private async Task SeedAsync(string schema)
     {
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = false }.ConnectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -223,7 +224,7 @@ public sealed class FunctionExecutionConfigurationPersistenceParityTests(Postgre
     private async Task DropAsync(string schema)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(deadline.Token);
         await using var command = connection.CreateCommand();
         command.CommandText = $"DROP SCHEMA IF EXISTS \"{schema}\" CASCADE";
@@ -233,10 +234,10 @@ public sealed class FunctionExecutionConfigurationPersistenceParityTests(Postgre
     private string WithSearchPath(string schema) => new NpgsqlConnectionStringBuilder(fixture.ConnectionString)
         { SearchPath = schema, MaxPoolSize = 1 }.ConnectionString;
 
-    private sealed class ContextFactory(string connectionString) : IDbContextFactory<ConduitDbContext>
+    private sealed class ContextFactory(NpgsqlDataSource dataSource) : IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
-            new DbContextOptionsBuilder<ConduitDbContext>().UseNpgsql(connectionString).Options;
+            new DbContextOptionsBuilder<ConduitDbContext>().UseNpgsql(dataSource).Options;
         public ConduitDbContext CreateDbContext() => new(_options);
         public Task<ConduitDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
         {

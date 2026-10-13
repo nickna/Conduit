@@ -38,7 +38,8 @@ public sealed class FunctionPricingPersistenceParityTests(PostgresLockTestContai
             await SeedAsync(schema, asOf);
             var connectionString = WithSearchPath(schema);
             await using var source = NpgsqlDataSource.Create(connectionString);
-            var stores = CreateStores(connectionString, source);
+            await using var efSource = NpgsqlDataSource.Create(connectionString);
+            var stores = CreateStores(efSource, source);
             var expected = (await stores[0].FindEligibleCostAsync(1, asOf))!;
             expected.Id.Should().Be(102); // Eligibility precedes ranking, newest equal-priority eligible cost wins.
             foreach (var store in stores)
@@ -90,8 +91,8 @@ public sealed class FunctionPricingPersistenceParityTests(PostgresLockTestContai
             // have day-wide windows, so this comparison does not race a date boundary.
             using var memory = new MemoryCache(new MemoryCacheOptions());
             var legacy = new FunctionCostService(
-                new FunctionCostRepository(new ContextFactory(connectionString), NullLogger<FunctionCostRepository>.Instance),
-                new FunctionCostMappingRepository(new ContextFactory(connectionString), NullLogger<FunctionCostMappingRepository>.Instance),
+                new FunctionCostRepository(new ContextFactory(efSource), NullLogger<FunctionCostRepository>.Instance),
+                new FunctionCostMappingRepository(new ContextFactory(efSource), NullLogger<FunctionCostMappingRepository>.Instance),
                 memory, NullLogger<FunctionCostService>.Instance);
             var legacyCost = await legacy.GetCostForConfigurationAsync(1);
             legacyCost.Should().BeEquivalentTo(expected, options => options.Excluding(cost => cost.FunctionMappings));
@@ -109,7 +110,8 @@ public sealed class FunctionPricingPersistenceParityTests(PostgresLockTestContai
             await SeedAsync(schema, asOf);
             var connectionString = WithSearchPath(schema);
             await using var source = NpgsqlDataSource.Create(connectionString);
-            foreach (var store in CreateStores(connectionString, source))
+            await using var efSource = NpgsqlDataSource.Create(connectionString);
+            foreach (var store in CreateStores(efSource, source))
             {
                 (await store.FindEligibleCostAsync(2, asOf.AddTicks(-10))).Should().BeNull();
                 var boundary = (await store.FindEligibleCostAsync(2, asOf))!;
@@ -152,11 +154,10 @@ public sealed class FunctionPricingPersistenceParityTests(PostgresLockTestContai
             await SeedAsync(schema, asOf);
             var connectionString = WithSearchPath(schema);
             await using var source = NpgsqlDataSource.Create(connectionString);
-            var store = CreateStores(connectionString, source)[typed ? 1 : 0];
+            var store = CreateStores(source, source)[typed ? 1 : 0];
             (await store.FindEligibleCostAsync(1, asOf))!.Id.Should().Be(102);
-            await using (var held = typed ? await source.OpenConnectionAsync() : new NpgsqlConnection(connectionString))
+            await using (var held = await source.OpenConnectionAsync())
             {
-                if (!typed) await held.OpenAsync();
                 using var cancelled = new CancellationTokenSource();
                 var read = store.FindEligibleCostAsync(1, asOf, cancelled.Token);
                 try
@@ -200,13 +201,13 @@ public sealed class FunctionPricingPersistenceParityTests(PostgresLockTestContai
         catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
     }
 
-    private static IFunctionPricingRuntimeStore[] CreateStores(string connectionString, NpgsqlDataSource source) =>
-        [new EfFunctionPricingRuntimeStore(new ContextFactory(connectionString)), new NpgsqlFunctionPricingRuntimeStore(source)];
+    private static IFunctionPricingRuntimeStore[] CreateStores(NpgsqlDataSource efSource, NpgsqlDataSource source) =>
+        [new EfFunctionPricingRuntimeStore(new ContextFactory(efSource)), new NpgsqlFunctionPricingRuntimeStore(source)];
 
     private async Task SeedAsync(string schema, DateTime asOf)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(deadline.Token);
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
@@ -283,7 +284,7 @@ public sealed class FunctionPricingPersistenceParityTests(PostgresLockTestContai
     private async Task DropAsync(string schema)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        await using var connection = new NpgsqlConnection(fixture.ConnectionString);
+        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(deadline.Token);
         await using var command = connection.CreateCommand();
         command.CommandText = $"DROP SCHEMA IF EXISTS \"{schema}\" CASCADE";
@@ -316,10 +317,10 @@ public sealed class FunctionPricingPersistenceParityTests(PostgresLockTestContai
         }
     }
 
-    private sealed class ContextFactory(string connectionString) : IDbContextFactory<ConduitDbContext>
+    private sealed class ContextFactory(NpgsqlDataSource dataSource) : IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
-            new DbContextOptionsBuilder<ConduitDbContext>().UseNpgsql(connectionString).Options;
+            new DbContextOptionsBuilder<ConduitDbContext>().UseNpgsql(dataSource).Options;
         public ConduitDbContext CreateDbContext() => new(_options);
         public Task<ConduitDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
         {
