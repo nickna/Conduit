@@ -51,7 +51,8 @@ namespace ConduitLLM.Gateway.Services
                 logger,
                 memoryCache,
                 serviceProvider.GetService<IDistributedCache>(),
-                BuildRateLimitCounter(options.Value, serviceProvider, logger))
+                BuildRateLimitCounter(options.Value, serviceProvider, logger),
+                FailedAuthTrackerFactory.Create(options.Value, serviceProvider, memoryCache, logger))
         {
             _options = options.Value;
             _configuration = configuration;

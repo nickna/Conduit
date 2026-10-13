@@ -14,9 +14,15 @@ namespace ConduitLLM.Gateway.Services
     /// </summary>
     public sealed class ToolCostCalculationException : InvalidOperationException
     {
-        public ToolCostCalculationException(string message, Exception? innerException = null)
+        public decimal KnownCost { get; }
+        public IReadOnlyList<string> UnconfiguredToolNames { get; }
+
+        public ToolCostCalculationException(string message, Exception? innerException = null,
+            decimal knownCost = 0m, IReadOnlyList<string>? unconfiguredToolNames = null)
             : base(message, innerException)
         {
+            KnownCost = knownCost;
+            UnconfiguredToolNames = unconfiguredToolNames?.ToArray() ?? [];
         }
     }
 
@@ -145,7 +151,8 @@ namespace ConduitLLM.Gateway.Services
                     "Refusing to calculate a partial tool cost for provider {ProviderType}; missing active cost configuration for: {ToolNames}",
                     providerType, names);
                 throw new ToolCostCalculationException(
-                    $"Active tool cost configuration is required for provider {providerType}: {names}.");
+                    $"Active tool cost configuration is required for provider {providerType}: {names}.",
+                    knownCost: totalCost, unconfiguredToolNames: unconfiguredTools.Distinct(StringComparer.Ordinal).ToArray());
             }
 
             return new ToolCostResult { TotalCost = totalCost };
@@ -161,9 +168,7 @@ namespace ConduitLLM.Gateway.Services
                     return "{}";
                 }
 
-                return JsonSerializer.Serialize(
-                    toolUsage,
-                    GatewayJsonTypeInfo.Require<ToolUsageData>(ToolUsageJsonOptions));
+                return SerializeToolUsageSnapshot(toolUsage);
             }
             catch (Exception ex)
             {
@@ -171,6 +176,9 @@ namespace ConduitLLM.Gateway.Services
                 return "{}";
             }
         }
+
+        internal static string SerializeToolUsageSnapshot(ToolUsageData usage) => JsonSerializer.Serialize(
+            usage, GatewayJsonTypeInfo.Require<ToolUsageData>(ToolUsageJsonOptions));
 
         private static JsonSerializerOptions CreateToolUsageJsonOptions() => new()
         {

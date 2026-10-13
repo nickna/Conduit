@@ -1,3 +1,5 @@
+using ConduitLLM.Configuration.Utilities;
+using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 
@@ -6,8 +8,12 @@ namespace ConduitLLM.Configuration.DTOs.VirtualKey;
 /// <summary>
 /// Data Transfer Object representing a Virtual Key for API responses, excluding sensitive hash.
 /// </summary>
-public class VirtualKeyDto
+public class VirtualKeyDto : IVersionedRepresentation
 {
+    /// <summary>Version of the database snapshot represented by this response.</summary>
+    [JsonIgnore]
+    public string? ResourceETag { get; set; }
+
     /// <summary>
     /// Unique identifier for the virtual key.
     /// </summary>

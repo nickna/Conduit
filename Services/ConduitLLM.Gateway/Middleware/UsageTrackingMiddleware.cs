@@ -47,9 +47,11 @@ public partial class UsageTrackingMiddleware
 
         try
         {
+            var downstreamCompleted = false;
             try
             {
                 await _next(context);
+                downstreamCompleted = true;
             }
             finally
             {
@@ -64,35 +66,31 @@ public partial class UsageTrackingMiddleware
                         billingAuditService,
                         toolCostCalculationService);
                 }
-            }
-
-            if (context.Response.ContentType?.Contains("text/event-stream") == true)
-            {
-                _logger.LogDebug("Detected streaming response; response body was never intercepted");
-                return;
-            }
-
-            try
-            {
-                await ProcessTypedResponseAsync(
-                    context,
-                    costCalculationService,
-                    batchSpendService,
-                    requestLogService,
-                    virtualKeyService,
-                    billingAuditService,
-                    toolCostCalculationService);
-            }
-            catch (Exception accountingEx)
-            {
-                var accountingContext = context.GetOrCreateRequestAccountingContext();
-                accountingContext.MarkIndeterminate(
-                    "Typed accounting finalization failed after the response was produced");
-                _logger.LogCritical(
-                    accountingEx,
-                    "Typed accounting finalization failed for {Path}",
-                    LoggingSanitizer.S(context.Request.Path.ToString()));
-                LogUnexpectedError(context, accountingEx, billingAuditService);
+                else if (downstreamCompleted || context.GetRequestAccountingSnapshot() is { } snapshot &&
+                    (snapshot.ProviderUsage is not null || snapshot.ProviderInvocations?.Count > 0 ||
+                     snapshot.DirectCost is not null || snapshot.FunctionExecutions.Count > 0 ||
+                     snapshot.ProviderToolUsage?.Tools.Count > 0))
+                {
+                    // Published evidence survives a later provider or response-writing exception.
+                    // Accounting failures must not replace the downstream exception.
+                    try
+                    {
+                        await ProcessTypedResponseAsync(context, costCalculationService, batchSpendService,
+                            requestLogService, virtualKeyService, billingAuditService, toolCostCalculationService);
+                    }
+                    catch (Exception accountingEx)
+                    {
+                        context.GetOrCreateRequestAccountingContext().MarkIndeterminate(
+                            "Typed accounting finalization failed after request execution");
+                        _logger.LogCritical(accountingEx, "Typed accounting finalization failed for {Path}",
+                            LoggingSanitizer.S(context.Request.Path.ToString()));
+                        try { LogUnexpectedError(context, accountingEx, billingAuditService); }
+                        catch (Exception auditEx)
+                        {
+                            _logger.LogCritical(auditEx, "Failed to report typed accounting finalization error");
+                        }
+                    }
+                }
             }
         }
         finally
@@ -135,21 +133,11 @@ public partial class UsageTrackingMiddleware
                path.Contains("/functions/execute");
     }
 
-    private static void ApplyProviderBillingPolicy(HttpContext context, ConduitLLM.Core.Models.Usage usage)
-    {
-        if (context.Items.TryGetValue(HttpContextKeys.ProviderBillingPolicy, out var policyValue) &&
-            policyValue is ConduitLLM.Core.Models.ProviderCostBillingPolicy policy)
-        {
-            usage.ProviderCostPolicy = policy;
-        }
-
-        if (usage.ProviderReportedCostUsd is null &&
-            context.Items.TryGetValue(HttpContextKeys.ProviderReportedCost, out var costValue) &&
-            costValue is decimal reportedCost)
-        {
-            usage.ProviderReportedCostUsd = reportedCost;
-        }
-    }
+    private static void ApplyProviderBillingPolicy(
+        HttpContext context,
+        ConduitLLM.Core.Models.Usage usage,
+        bool includeAggregateReportedCost = true)
+        => ProviderUsagePricing.ApplyProviderBillingPolicy(context, usage, includeAggregateReportedCost);
 }
 
 public static class UsageTrackingMiddlewareExtensions

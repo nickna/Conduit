@@ -61,7 +61,12 @@ public sealed record MediaDeletionRequest(
     bool Purge = false,
     int? TotalEligibleCount = null,
     long? TotalEligibleBytes = null,
-    bool IsFinalPage = true);
+    bool IsFinalPage = true)
+{
+    /// <summary>Server-only removal in the caller's guarded transaction.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Func<Guid, CancellationToken, Task<bool>>? RemoveMediaRecordAsync { get; init; }
+}
 
 /// <summary>
 /// Result of a guarded deletion operation.

@@ -732,7 +732,11 @@ namespace ConduitLLM.Tests.Configuration.Services
                 runtimeStore: runtimeStore.Object);
 
             var updatedHashes = Array.Empty<string>();
-            service.SpendUpdatesCompleted += hashes => updatedHashes = hashes;
+            service.SpendUpdatesCompleted += (hashes, _) =>
+            {
+                updatedHashes = hashes;
+                return Task.CompletedTask;
+            };
             var result = await service.FlushPendingUpdatesAsync();
 
             Assert.Equal(1, result);
@@ -769,12 +773,12 @@ namespace ConduitLLM.Tests.Configuration.Services
                     groupId, -0.125m, It.IsAny<string>(), It.IsAny<string>(),
                     "System", ReferenceType.System, It.IsAny<string>()))
                 .ReturnsAsync(new BalanceAdjustmentResult(49.875m, 0.125m, true));
-            _mockGroupRepository.Setup(repository => repository.AdjustBalanceAsync(
-                    groupId, -fallbackCost, It.IsAny<string>(), "System",
+            _mockGroupRepository.Setup(repository => repository.AdjustBalanceIdempotentAsync(
+                    groupId, -fallbackCost, It.IsAny<string>(), It.IsAny<string>(), "System",
                     ReferenceType.System, "41", It.IsAny<DateTime>()))
-                .Callback<int, decimal, string, string, ReferenceType, string, DateTime>(
-                    (_, _, _, _, _, _, window) => recoveredWindow = window)
-                .ReturnsAsync(47.125m);
+                .Callback<int, decimal, string, string, string, ReferenceType, string, DateTime>(
+                    (_, _, _, _, _, _, _, window) => recoveredWindow = window)
+                .ReturnsAsync(new BalanceAdjustmentResult(47.125m, 2.875m, true));
             var store = new Mock<IVirtualKeyRuntimeStore>();
             store.Setup(value => value.GetByIdAsync(virtualKeyId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new VirtualKeyRuntimeRecord

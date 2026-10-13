@@ -312,11 +312,12 @@ public class ChatCompletionRequest
     /// 3. Append tool result messages to the conversation
     /// 4. Make a new LLM request with the updated conversation
     /// 5. Repeat until the LLM provides a final answer or max iterations reached
-    /// Default: Configurable via GlobalSetting 'Agentic.DefaultEnabled' (fallback: true)
+    /// Omitted or null: resolved by the Gateway from GlobalSetting 'Agentic.DefaultEnabled'
+    /// (fallback: true). Direct Conduit callers use the fallback when unspecified.
     /// </remarks>
     [JsonPropertyName("enable_agentic_mode")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? EnableAgenticMode { get; set; } = true;
+    public bool? EnableAgenticMode { get; set; }
 
     /// <summary>
     /// Maximum number of agentic iterations (function call loops) allowed.
@@ -324,13 +325,14 @@ public class ChatCompletionRequest
     /// </summary>
     /// <remarks>
     /// Each iteration consists of: LLM response → function execution → LLM response.
-    /// Default: Configurable via GlobalSetting 'Agentic.MaxIterations' (fallback: 5)
+    /// Omitted or null: resolved by the Gateway from GlobalSetting 'Agentic.MaxIterations'
+    /// (fallback: 5). Direct Conduit callers use the fallback when unspecified.
     /// Valid Range: Configurable via GlobalSettings 'Agentic.MinIterations' and 'Agentic.MaxIterations' (fallback: 1-100)
     /// If the limit is reached, the system will return the conversation state with an error message.
     /// </remarks>
     [JsonPropertyName("max_agentic_iterations")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? MaxAgenticIterations { get; set; } = 5;
+    public int? MaxAgenticIterations { get; set; }
 
     /// <summary>
     /// Additional model-specific parameters that are passed through to the provider API.
@@ -357,4 +359,27 @@ public class ChatCompletionRequest
     [JsonIgnore] public bool RoutingAffinityUsed { get; set; }
     [JsonIgnore] public string? RoutingDecisionReason { get; set; }
     [JsonIgnore] public int RoutingFailoverCount { get; set; }
+
+    /// <summary>Server-only accounting observers, retained when context management replaces this request.</summary>
+    [JsonIgnore] public Func<int, CancellationToken, Task>? ProviderInvocationStarting { get; set; }
+    [JsonIgnore] public Action<int, ChatCompletionResponse, Usage?>? ProviderInvocationCompleted { get; set; }
+    [JsonIgnore] public Action<AgenticExecutionMetrics>? FunctionExecutionCompleted { get; set; }
+    [JsonIgnore] public Action<int, ChatCompletionChunk, Usage?>? ProviderStreamUsageObserved { get; set; }
+    [JsonIgnore] public Action<int>? ProviderStreamCompleted { get; set; }
+
+    /// <summary>Preserves server-owned request state when context management replaces the request.</summary>
+    internal void CopyRuntimeStateTo(ChatCompletionRequest target)
+    {
+        target.PromptCachingIntent = PromptCachingIntent;
+        target.RoutingAffinityKey = RoutingAffinityKey;
+        target.SelectedMappingId = SelectedMappingId;
+        target.RoutingAffinityUsed = RoutingAffinityUsed;
+        target.RoutingDecisionReason = RoutingDecisionReason;
+        target.RoutingFailoverCount = RoutingFailoverCount;
+        target.ProviderInvocationStarting = ProviderInvocationStarting;
+        target.ProviderInvocationCompleted = ProviderInvocationCompleted;
+        target.FunctionExecutionCompleted = FunctionExecutionCompleted;
+        target.ProviderStreamUsageObserved = ProviderStreamUsageObserved;
+        target.ProviderStreamCompleted = ProviderStreamCompleted;
+    }
 }

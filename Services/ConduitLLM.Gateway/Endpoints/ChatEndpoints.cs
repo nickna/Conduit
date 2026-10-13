@@ -37,6 +37,8 @@ namespace ConduitLLM.Gateway.Endpoints
         private readonly ISpendReservationService? _spendReservationService;
         private readonly BillingAdmissionOptions _billingAdmissionOptions;
         private readonly ConduitLLM.Core.Interfaces.IProviderErrorTranslator _providerErrorTranslator;
+        private readonly ConduitLLM.Core.Interfaces.ICostCalculationService? _costCalculationService;
+        private readonly ConduitLLM.Gateway.Services.IToolCostCalculationService? _toolCostCalculationService;
 
         public ChatEndpoints(
             Conduit conduit,
@@ -52,7 +54,9 @@ namespace ConduitLLM.Gateway.Endpoints
             ISpendReservationService? spendReservationService = null,
             IOptions<BillingAdmissionOptions>? billingAdmissionOptions = null,
             IHttpContextAccessor? httpContextAccessor = null,
-            ConduitLLM.Core.Interfaces.IProviderErrorTranslator? providerErrorTranslator = null) : base(eventPublisher, httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor)), logger)
+            ConduitLLM.Core.Interfaces.IProviderErrorTranslator? providerErrorTranslator = null,
+            ConduitLLM.Core.Interfaces.ICostCalculationService? costCalculationService = null,
+            ConduitLLM.Gateway.Services.IToolCostCalculationService? toolCostCalculationService = null) : base(eventPublisher, httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor)), logger)
         {
             _conduit = conduit ?? throw new ArgumentNullException(nameof(conduit));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -65,6 +69,8 @@ namespace ConduitLLM.Gateway.Endpoints
             _chatSpendEstimator = chatSpendEstimator;
             _spendReservationService = spendReservationService;
             _billingAdmissionOptions = billingAdmissionOptions?.Value ?? new BillingAdmissionOptions();
+            _costCalculationService = costCalculationService;
+            _toolCostCalculationService = toolCostCalculationService;
             // Default to External so an unwired construction sanitizes rather than leaks.
             _providerErrorTranslator = providerErrorTranslator
                 ?? new ProviderErrorTranslator(new ConduitLLM.Core.Configuration.CustomerErrorOptions());
@@ -127,14 +133,6 @@ namespace ConduitLLM.Gateway.Endpoints
                     return admissionError;
                 }
 
-                var invocationError = await MarkChatInvocationStartedAsync(
-                    virtualKeyId,
-                    accountingContext);
-                if (invocationError is not null)
-                {
-                    return invocationError;
-                }
-
                 if (request.Stream != true)
                 {
                     return await HandleNonStreamingRequestAsync(request, virtualKeyId, operationStopwatch, cancellationToken);
@@ -144,6 +142,10 @@ namespace ConduitLLM.Gateway.Endpoints
                     await HandleStreamingRequestAsync(request, virtualKeyId, operationStopwatch, cancellationToken);
                     return Results.Empty;
                 }
+            }
+            catch (ChatInvocationAdmissionException ex)
+            {
+                return ex.Result;
             }
             catch (LLMCommunicationException ex)
             {
@@ -333,15 +335,7 @@ namespace ConduitLLM.Gateway.Endpoints
                         HttpContext.Items[ConduitLLM.Gateway.Constants.HttpContextKeys.ModelCostId] = modelMapping.ModelProviderTypeAssociation.ModelCostId;
                     }
 
-                    if (modelMapping.Provider?.TrustProviderReportedCosts == true)
-                    {
-                        HttpContext.Items[ConduitLLM.Gateway.Constants.HttpContextKeys.ProviderBillingPolicy] =
-                            new ConduitLLM.Core.Models.ProviderCostBillingPolicy
-                            {
-                                TrustProviderReportedCost = true,
-                                MarkupMultiplier = modelMapping.Provider.ProviderCostMarkupMultiplier
-                            };
-                    }
+                    ConduitLLM.Gateway.Services.ProviderUsagePricing.SetProviderBillingPolicy(HttpContext, modelMapping.Provider);
                 }
             }
             catch (Exception ex)
@@ -355,6 +349,7 @@ namespace ConduitLLM.Gateway.Endpoints
             if (request.SelectedMappingId is not int mappingId) return;
             var mapping = await _modelMappingService.GetMappingByIdAsync(mappingId);
             if (mapping is null) return;
+            ConduitLLM.Gateway.Services.ProviderUsagePricing.SetProviderBillingPolicy(HttpContext, mapping.Provider);
             HttpContext.Items[ConduitLLM.Gateway.Constants.HttpContextKeys.ModelProviderMappingId] = mappingId;
             HttpContext.Items["ProviderId"] = mapping.ProviderId;
             HttpContext.Items["ProviderType"] = mapping.Provider?.ProviderType;
@@ -500,6 +495,11 @@ namespace ConduitLLM.Gateway.Endpoints
 
         private IResult AdmissionFailure(int statusCode, string message, string code) =>
             OpenAIError(statusCode, message, code, "billing_error");
+
+        private sealed class ChatInvocationAdmissionException(IResult result) : Exception
+        {
+            public IResult Result { get; } = result;
+        }
 
     }
 
