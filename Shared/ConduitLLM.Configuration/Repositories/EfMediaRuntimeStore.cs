@@ -15,11 +15,11 @@ namespace ConduitLLM.Configuration.Repositories;
 public sealed class EfMediaRuntimeStore : IMediaRuntimeStore
 {
     private readonly IMediaRecordRepository _repository;
-    private readonly IConfigurationDbContext _context;
+    private readonly ConduitDbContext _context;
 
     public EfMediaRuntimeStore(
         IMediaRecordRepository repository,
-        IConfigurationDbContext context)
+        ConduitDbContext context)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _context = context ?? throw new ArgumentNullException(nameof(context));
@@ -82,12 +82,20 @@ public sealed class EfMediaRuntimeStore : IMediaRuntimeStore
     {
         if (string.IsNullOrWhiteSpace(storageKey))
             return null;
-        var query = _context.MediaRecords.AsNoTracking();
-        if (includeDeleted)
-            query = query.IgnoreQueryFilters();
-        var media = await query.FirstOrDefaultAsync(
-            record => record.StorageKey == storageKey,
-            cancellationToken);
+        var queryStorageKey = storageKey;
+        var queryToken = cancellationToken;
+        var media = includeDeleted
+            ? await _context.MediaRecords
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(
+                    record => record.StorageKey == queryStorageKey,
+                    queryToken)
+            : await _context.MediaRecords
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    record => record.StorageKey == queryStorageKey,
+                    queryToken);
         return media is null ? null : ToRecord(media);
     }
 
@@ -142,15 +150,17 @@ public sealed class EfMediaRuntimeStore : IMediaRuntimeStore
         int virtualKeyId,
         CancellationToken cancellationToken = default)
     {
+        var queryVirtualKeyId = virtualKeyId;
+        var queryToken = cancellationToken;
         var assignment = await _context.VirtualKeys
             .AsNoTracking()
-            .Where(key => key.Id == virtualKeyId)
+            .Where(key => key.Id == queryVirtualKeyId)
             .Select(key => new
             {
                 GroupId = key.VirtualKeyGroupId,
                 PolicyId = key.VirtualKeyGroup.MediaRetentionPolicyId
             })
-            .SingleOrDefaultAsync(cancellationToken);
+            .SingleOrDefaultAsync(queryToken);
         if (assignment is null)
             return null;
 
@@ -173,24 +183,34 @@ public sealed class EfMediaRuntimeStore : IMediaRuntimeStore
         int? virtualKeyGroupId = null,
         CancellationToken cancellationToken = default)
     {
+        var queryToken = cancellationToken;
         var defaultPolicy = await _context.MediaRetentionPolicies
             .AsNoTracking()
             .Where(policy => policy.IsDefault && policy.IsActive)
             .OrderBy(policy => policy.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(queryToken);
 
-        var groupsQuery = _context.VirtualKeyGroups.AsNoTracking();
-        if (virtualKeyGroupId.HasValue)
-            groupsQuery = groupsQuery.Where(group => group.Id == virtualKeyGroupId.Value);
-
-        var groups = await groupsQuery
-            .Select(group => new
-            {
-                group.Id,
-                group.GroupName,
-                group.MediaRetentionPolicyId
-            })
-            .ToListAsync(cancellationToken);
+        var queryVirtualKeyGroupId = virtualKeyGroupId.GetValueOrDefault();
+        var groups = virtualKeyGroupId.HasValue
+            ? await _context.VirtualKeyGroups
+                .AsNoTracking()
+                .Where(group => group.Id == queryVirtualKeyGroupId)
+                .Select(group => new
+                {
+                    group.Id,
+                    group.GroupName,
+                    group.MediaRetentionPolicyId
+                })
+                .ToListAsync(queryToken)
+            : await _context.VirtualKeyGroups
+                .AsNoTracking()
+                .Select(group => new
+                {
+                    group.Id,
+                    group.GroupName,
+                    group.MediaRetentionPolicyId
+                })
+                .ToListAsync(queryToken);
         var assignedPolicyIds = groups
             .Where(group => group.MediaRetentionPolicyId.HasValue)
             .Select(group => group.MediaRetentionPolicyId!.Value)
@@ -199,7 +219,7 @@ public sealed class EfMediaRuntimeStore : IMediaRuntimeStore
         var assignedPolicies = await _context.MediaRetentionPolicies
             .AsNoTracking()
             .Where(policy => assignedPolicyIds.Contains(policy.Id) && policy.IsActive)
-            .ToDictionaryAsync(policy => policy.Id, cancellationToken);
+            .ToDictionaryAsync(policy => policy.Id, queryToken);
         var groupIds = groups.Select(group => group.Id).ToList();
         var usageRows = await _context.MediaRecords
             .IgnoreQueryFilters()
@@ -211,7 +231,7 @@ public sealed class EfMediaRuntimeStore : IMediaRuntimeStore
                 (media, key) => new
                 {
                     key.VirtualKeyGroupId,
-                    SizeBytes = media.SizeBytes ?? 0
+                    SizeBytes = (long)(media.SizeBytes ?? 0L)
                 })
             .Where(item => groupIds.Contains(item.VirtualKeyGroupId))
             .GroupBy(item => item.VirtualKeyGroupId)
@@ -221,7 +241,7 @@ public sealed class EfMediaRuntimeStore : IMediaRuntimeStore
                 TotalFiles = group.Count(),
                 TotalSizeBytes = group.Sum(item => item.SizeBytes)
             })
-            .ToDictionaryAsync(row => row.GroupId, cancellationToken);
+            .ToDictionaryAsync(row => row.GroupId, queryToken);
 
         return groups.Select(group =>
         {
@@ -249,13 +269,15 @@ public sealed class EfMediaRuntimeStore : IMediaRuntimeStore
         int? assignedPolicyId,
         CancellationToken cancellationToken)
     {
+        var queryToken = cancellationToken;
         if (assignedPolicyId.HasValue)
         {
+            var queryAssignedPolicyId = assignedPolicyId.Value;
             var assigned = await _context.MediaRetentionPolicies
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
-                    policy => policy.Id == assignedPolicyId.Value && policy.IsActive,
-                    cancellationToken);
+                    policy => policy.Id == queryAssignedPolicyId && policy.IsActive,
+                    queryToken);
             if (assigned is not null)
                 return assigned;
         }
@@ -264,7 +286,7 @@ public sealed class EfMediaRuntimeStore : IMediaRuntimeStore
             .AsNoTracking()
             .Where(policy => policy.IsDefault && policy.IsActive)
             .OrderBy(policy => policy.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(queryToken);
     }
 
     [UnconditionalSuppressMessage(
@@ -275,21 +297,23 @@ public sealed class EfMediaRuntimeStore : IMediaRuntimeStore
         int groupId,
         CancellationToken cancellationToken)
     {
+        var queryGroupId = groupId;
+        var queryToken = cancellationToken;
         var row = await _context.MediaRecords
             .IgnoreQueryFilters()
             .AsNoTracking()
             .Join(
-                _context.VirtualKeys.AsNoTracking().Where(key => key.VirtualKeyGroupId == groupId),
+                _context.VirtualKeys.AsNoTracking().Where(key => key.VirtualKeyGroupId == queryGroupId),
                 media => media.VirtualKeyId,
                 key => key.Id,
-                (media, _) => new { SizeBytes = media.SizeBytes ?? 0 })
+                (media, _) => new { SizeBytes = (long)(media.SizeBytes ?? 0L) })
             .GroupBy(_ => 1)
             .Select(group => new
             {
                 TotalFiles = group.Count(),
                 TotalSizeBytes = group.Sum(item => item.SizeBytes)
             })
-            .SingleOrDefaultAsync(cancellationToken);
+            .SingleOrDefaultAsync(queryToken);
         return row is null ? (0, 0) : (row.TotalFiles, row.TotalSizeBytes);
     }
 
