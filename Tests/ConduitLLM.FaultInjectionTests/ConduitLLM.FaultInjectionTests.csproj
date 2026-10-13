@@ -17,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Shared\ConduitLLM.Configuration\ConduitLLM.Configuration.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Core\ConduitLLM.Core.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Npgsql\ConduitLLM.Persistence.Npgsql.csproj" />
     <ProjectReference Include="..\..\Services\ConduitLLM.Gateway\ConduitLLM.Gateway.csproj" />
   </ItemGroup>
 </Project>

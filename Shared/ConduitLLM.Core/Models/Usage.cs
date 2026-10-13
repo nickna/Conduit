@@ -9,6 +9,23 @@ namespace ConduitLLM.Core.Models;
 public class Usage
 {
     /// <summary>
+    /// Copies usage for pricing without changing the provider's accounting evidence.
+    /// Includes server-only cost and token-inclusion fields that JSON serialization omits.
+    /// </summary>
+    /// <remarks>
+    /// Rules-based pricing enriches its parameter map from standard usage fields. Copy
+    /// that map so these additions do not alter the provider evidence. Other metadata
+    /// remains read-only during pricing.
+    /// </remarks>
+    public Usage CopyForBilling()
+    {
+        var copy = (Usage)MemberwiseClone();
+        copy.PricingParameters = PricingParameters is null
+            ? null : new Dictionary<string, object>(PricingParameters, PricingParameters.Comparer);
+        return copy;
+    }
+
+    /// <summary>
     /// Number of tokens in the prompt.
     /// </summary>
     [JsonPropertyName("prompt_tokens")]

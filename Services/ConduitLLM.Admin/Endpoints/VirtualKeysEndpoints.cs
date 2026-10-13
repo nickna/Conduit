@@ -6,6 +6,7 @@ using ConduitLLM.Admin.Interfaces;
 using ConduitLLM.Admin.Services;
 using ConduitLLM.Admin.Filters;
 using ConduitLLM.Configuration.DTOs;
+using ConduitLLM.Configuration.Utilities;
 using ConduitLLM.Configuration.DTOs.VirtualKey;
 
 using Microsoft.AspNetCore.Authorization;
@@ -55,14 +56,14 @@ public partial class VirtualKeysEndpoints : AdminEndpointHandlerBase
             .WithName("VirtualKeys_GetById")
             .WithSummary("Retrieves details for a specific virtual key by ID")
             .WithParameterDescription("id", "The ID of the key to retrieve").Produces<VirtualKeyDto>().Produces(StatusCodes.Status404NotFound).RequireAuthorization("MasterKeyPolicy");
-        group.MapPatch("/{id}", ([FromServices] VirtualKeysEndpoints endpoints, int id, JsonMergePatch<UpdateVirtualKeyRequestDto> patch) => endpoints.UpdateKey(id, patch.Value))
+        group.MapPatch("/{id}", ([FromServices] VirtualKeysEndpoints endpoints, int id, JsonMergePatch<UpdateVirtualKeyRequestDto> patch, HttpContext context) => endpoints.UpdateKey(id, patch.Value, VersionedResourceEndpointFilter.ReadPrecondition(context), context.RequestAborted))
             .AcceptsJsonMergePatch<UpdateVirtualKeyRequestDto>()
             .WithName("VirtualKeys_Update")
             .WithSummary("Updates an existing virtual key")
             .WithParameterDescription("id", "The ID of the key to update").Produces<VirtualKeyDto>().Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden).Produces(StatusCodes.Status404NotFound)
             .RequireAuthorization("MasterKeyPolicy");
-        group.MapDelete("/{id}", ([FromServices] VirtualKeysEndpoints endpoints, int id, CancellationToken cancellationToken) => endpoints.DeleteKey(id, cancellationToken))
+        group.MapDelete("/{id}", ([FromServices] VirtualKeysEndpoints endpoints, int id, CancellationToken cancellationToken, HttpContext context) => endpoints.DeleteKey(id, cancellationToken, VersionedResourceEndpointFilter.ReadPrecondition(context)))
             .WithName("VirtualKeys_Delete")
             .WithSummary("Deletes a virtual key by ID")
             .WithParameterDescription("id", "The ID of the key to delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status401Unauthorized)
@@ -158,27 +159,41 @@ public partial class VirtualKeysEndpoints : AdminEndpointHandlerBase
     /// </summary>
     /// <param name="id">The ID of the key to update</param>
     /// <param name="request">The updated key details</param>
+    /// <param name="precondition">Explicit HTTP version condition, when provided.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
     /// <returns>No content if successful</returns>
-    public async Task<IResult> UpdateKey(int id, UpdateVirtualKeyRequestDto request)
+    public async Task<IResult> UpdateKey(int id, UpdateVirtualKeyRequestDto request,
+        ResourcePrecondition? precondition = null, CancellationToken cancellationToken = default)
     {
-        // Fetch pre-state for change tracking
-        var preState = await _virtualKeyService.GetVirtualKeyInfoAsync(id);
-        if (preState == null)
-            throw new KeyNotFoundException();
+        VirtualKeyDto preState;
+        VirtualKeyDto? current = null;
+        if (precondition is not null)
+        {
+            var result = await _virtualKeyService.UpdateVirtualKeyConditionalAsync(id, request, precondition, cancellationToken)
+                ?? throw new KeyNotFoundException();
+            preState = result.Before;
+            current = result.Current;
+        }
+        else
+        {
+            // Fetch pre-state for change tracking
+            preState = await _virtualKeyService.GetVirtualKeyInfoAsync(id) ?? throw new KeyNotFoundException();
 
-        if (request.TryGetPatchedProperty(
-                nameof(request.Metadata),
-                preState.Metadata,
-                out Dictionary<string, JsonElement>? metadata))
-            request.Metadata = metadata;
-        if (request.TryGetPatchedProperty(
-                nameof(request.ModelRateLimits),
-                preState.ModelRateLimits,
-                out Dictionary<string, ModelRateLimitDto>? modelRateLimits))
-            request.ModelRateLimits = modelRateLimits;
+            if (request.TryGetPatchedProperty(
+                        nameof(request.Metadata),
+                        preState.Metadata,
+                        out Dictionary<string, JsonElement>? metadata))
+                request.Metadata = metadata;
+            if (request.TryGetPatchedProperty(
+                        nameof(request.ModelRateLimits),
+                        preState.ModelRateLimits,
+                        out Dictionary<string, ModelRateLimitDto>? modelRateLimits))
+                request.ModelRateLimits = modelRateLimits;
 
-        if (!await _virtualKeyService.UpdateVirtualKeyAsync(id, request))
-            throw new KeyNotFoundException();
+            if (!await _virtualKeyService.UpdateVirtualKeyAsync(id, request))
+                throw new KeyNotFoundException();
+
+        }
 
         // Build change list from pre-state vs request
         var changes = new List<(string Property, string? OldValue, string? NewValue)>();
@@ -227,7 +242,7 @@ public partial class VirtualKeysEndpoints : AdminEndpointHandlerBase
         }
         AdminOperationsMetricsService.RecordVirtualKeyOperation("update", "success");
         AdminOperationsMetricsService.RecordConfigurationChange("virtualkey", "update");
-        return Ok(await _virtualKeyService.GetVirtualKeyInfoAsync(id) ?? throw new KeyNotFoundException());
+        return Ok(current ?? await _virtualKeyService.GetVirtualKeyInfoAsync(id) ?? throw new KeyNotFoundException());
     }
 
     /// <summary>
@@ -235,10 +250,13 @@ public partial class VirtualKeysEndpoints : AdminEndpointHandlerBase
     /// </summary>
     /// <param name="id">The ID of the key to delete</param>
     /// <param name="cancellationToken">Request/shutdown cancellation.</param>
+    /// <param name="precondition">Explicit HTTP version condition, when provided.</param>
     /// <returns>No content if successful</returns>
-    public async Task<IResult> DeleteKey(int id, CancellationToken cancellationToken = default)
+    public async Task<IResult> DeleteKey(int id, CancellationToken cancellationToken = default, ResourcePrecondition? precondition = null)
     {
-        if (!await _virtualKeyService.DeleteVirtualKeyAsync(id, cancellationToken))
+        if (!(precondition is null
+            ? await _virtualKeyService.DeleteVirtualKeyAsync(id, cancellationToken)
+            : await _virtualKeyService.DeleteVirtualKeyConditionalAsync(id, precondition, cancellationToken)))
             throw new KeyNotFoundException();
         LogAdminAudit("Deleted", "VirtualKey", id);
         AdminOperationsMetricsService.RecordVirtualKeyOperation("delete", "success");

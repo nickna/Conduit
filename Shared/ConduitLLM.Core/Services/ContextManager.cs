@@ -236,6 +236,7 @@ namespace ConduitLLM.Core.Services
                     ExtensionData = request.ExtensionData
                 };
 
+                request.CopyRuntimeStateTo(newRequest);
                 return newRequest;
             }
 

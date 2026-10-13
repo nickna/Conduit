@@ -1,10 +1,44 @@
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Gateway.Services;
+using ConduitLLM.Gateway.Middleware;
 using ConduitLLM.Gateway.UsageTracking;
+using Microsoft.AspNetCore.Http;
+using Moq;
 
 namespace ConduitLLM.Tests.Http.Accounting;
 
 public class RequestAccountingContextTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompletedStream_PromotesKnownToolPriceWithoutRepricing(bool estimated)
+    {
+        var http = new DefaultHttpContext();
+        var accounting = http.GetOrCreateRequestAccountingContext();
+        accounting.RecordProviderInvocation(1, streaming: true);
+        accounting.RecordProviderToolCallUsage(1, new ProviderToolUsage
+            { Tools = [new ProviderToolUsageItem { ToolName = "browser_search", Count = 1 }] });
+        var pricing = new Mock<IToolCostCalculationService>();
+        pricing.Setup(service => service.CalculateToolCostsAsync(It.IsAny<ToolUsageData>(), It.IsAny<ConduitLLM.Configuration.ProviderType>()))
+            .ReturnsAsync(new ToolCostResult { TotalCost = 0.03m });
+        var partial = await ProviderUsagePricing.GetOrCalculateToolsAsync(http, pricing.Object);
+        Assert.Null(partial.Cost);
+        Assert.Equal(0.03m, partial.KnownCost);
+
+        if (estimated)
+            accounting.RecordProviderUsage(new Usage { TotalTokens = 10 }, "test", UsageEvidenceSource.Estimated);
+        else accounting.RecordProviderStreamCompleted(1);
+
+        var complete = await ProviderUsagePricing.GetOrCalculateToolsAsync(http, pricing.Object);
+        Assert.Equal(0.03m, complete.Cost);
+        Assert.Null(complete.FailureReason);
+        Assert.Null(partial.Cost);
+        pricing.Verify(service => service.CalculateToolCostsAsync(It.IsAny<ToolUsageData>(),
+            It.IsAny<ConduitLLM.Configuration.ProviderType>()), Times.Once());
+    }
+
     [Fact]
     public void SnapshotCarriesTypedUsageTransportAndIndeterminateState()
     {
