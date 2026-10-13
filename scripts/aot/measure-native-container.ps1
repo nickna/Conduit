@@ -59,6 +59,146 @@ function Invoke-BoundedProcess(
     [string] $Command, [string[]] $Arguments, [int] $TimeoutSeconds,
     [System.Collections.IDictionary] $ChildEnvironment = @{}, [scriptblock] $PollAction
 ) {
+    function Test-LinuxMissingMetadata([Exception] $Exception) {
+        while ($null -ne $Exception) {
+            if ($Exception -is [IO.FileNotFoundException] -or $Exception -is [IO.DirectoryNotFoundException]) { return $true }
+            $Exception = $Exception.InnerException
+        }
+        return $false
+    }
+    function Read-LinuxOwnedProcess([Diagnostics.Process] $OwnedProcess,
+        [object] $CompletionIdentity = $null,
+        [Threading.CancellationToken] $CleanupToken = [Threading.CancellationToken]::None) {
+        $OwnedProcess.Refresh()
+        if ($OwnedProcess.HasExited) { return }
+        try {
+            $stat = [IO.File]::ReadAllText('/proc/' + $OwnedProcess.Id + '/stat')
+            $separator = $stat.LastIndexOf(') ', [StringComparison]::Ordinal)
+            $open = $stat.IndexOf(' (', [StringComparison]::Ordinal)
+            [int]$statId = 0; [int]$parentId = 0; [ulong]$startToken = 0
+            if ($open -lt 1 -or $separator -le $open -or
+                -not [int]::TryParse($stat.Substring(0, $open), [ref]$statId) -or $statId -ne $OwnedProcess.Id) {
+                throw 'Invalid owned process metadata.'
+            }
+            $fields = $stat.Substring($separator + 2).Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+            if ($fields.Count -le 19 -or $fields[0] -cnotin @('R','S','D','Z','T','t','X','x','K','W','P','I') -or
+                -not [int]::TryParse($fields[1], [ref]$parentId) -or $parentId -lt 0 -or
+                -not [ulong]::TryParse($fields[19], [Globalization.NumberStyles]::None,
+                    [Globalization.CultureInfo]::InvariantCulture, [ref]$startToken) -or $startToken -eq 0) {
+                throw 'Invalid owned process metadata.'
+            }
+            return [pscustomobject]@{ Id = $statId; ParentId = $parentId; StartToken = $startToken; Zombie = ($fields[0] -ceq 'Z') }
+        }
+        catch {
+            $missing = Test-LinuxMissingMetadata $_.Exception
+            $OwnedProcess.Refresh()
+            if ($missing -and $OwnedProcess.HasExited) { return }
+            if ($missing -and $null -ne $CompletionIdentity) {
+                $CleanupToken.ThrowIfCancellationRequested()
+                [ulong]$capturedStart = 0
+                if ($CompletionIdentity.Id -ne $OwnedProcess.Id -or
+                    -not [ulong]::TryParse([string]$CompletionIdentity.StartToken, [Globalization.NumberStyles]::None,
+                        [Globalization.CultureInfo]::InvariantCulture, [ref]$capturedStart) -or $capturedStart -eq 0) {
+                    throw 'Invalid captured completion identity.'
+                }
+                # A GetProcessById wait wrapper can lag a reaped process. Only a
+                # captured identity plus typed absence of this exact PID path completes it.
+                try { [void][IO.File]::GetAttributes('/proc/' + $OwnedProcess.Id) }
+                catch {
+                    if (-not (Test-LinuxMissingMetadata $_.Exception)) { throw }
+                    $CleanupToken.ThrowIfCancellationRequested()
+                    return
+                }
+                $CleanupToken.ThrowIfCancellationRequested()
+            }
+            throw
+        }
+    }
+
+    # Kill(true) signals descendants; waiting for the root does not wait for them.
+    # This completion set excludes an already exited root and later-created children.
+    function Capture-LinuxOwnedDescendants([Diagnostics.Process] $RootProcess,
+        [Collections.Generic.List[object]] $Records, [Threading.CancellationToken] $CleanupToken) {
+        $rootIdentity = Read-LinuxOwnedProcess $RootProcess
+        if ($null -eq $rootIdentity) { return }
+        $queue = [Collections.Generic.Queue[object]]::new()
+        $queue.Enqueue([pscustomobject]@{ Process = $RootProcess; Identity = $rootIdentity })
+        $seen = [Collections.Generic.HashSet[int]]::new(); [void]$seen.Add($RootProcess.Id)
+        while ($queue.Count -gt 0) {
+            $CleanupToken.ThrowIfCancellationRequested()
+            $parent = $queue.Dequeue(); $identity = Read-LinuxOwnedProcess $parent.Process
+            if ($null -eq $identity) { continue }
+            if ($identity.StartToken -ne $parent.Identity.StartToken) { throw 'Owned process identity changed.' }
+            if ($identity.Zombie) { continue }
+            foreach ($thread in [IO.Directory]::EnumerateDirectories('/proc/' + $identity.Id + '/task')) {
+                $CleanupToken.ThrowIfCancellationRequested()
+                try { $children = [IO.File]::ReadAllText((Join-Path $thread 'children')) }
+                catch {
+                    if (-not (Test-LinuxMissingMetadata $_.Exception)) { throw }
+                    $CleanupToken.ThrowIfCancellationRequested()
+                    $taskMissing = $false
+                    try { [void][IO.File]::GetAttributes($thread) }
+                    catch {
+                        if (-not (Test-LinuxMissingMetadata $_.Exception)) { throw }
+                        $taskMissing = $true
+                    }
+                    $CleanupToken.ThrowIfCancellationRequested()
+                    if (-not $taskMissing) { throw }
+                    $parentIdentity = Read-LinuxOwnedProcess $parent.Process
+                    $CleanupToken.ThrowIfCancellationRequested()
+                    if ($null -eq $parentIdentity) { continue }
+                    if ($parentIdentity.StartToken -ne $identity.StartToken) { throw }
+                    # This enumerated thread disappeared before its child list was acquired.
+                    continue
+                }
+                foreach ($value in $children.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
+                    $CleanupToken.ThrowIfCancellationRequested()
+                    [int]$childId = 0
+                    if (-not [int]::TryParse($value.Trim(), [ref]$childId) -or $childId -le 0) { throw 'Invalid owned child metadata.' }
+                    if (-not $seen.Add($childId)) { continue }
+                    try { $child = [Diagnostics.Process]::GetProcessById($childId) }
+                    catch {
+                        $exception = $_.Exception; $notRunning = $false
+                        while ($null -ne $exception) {
+                            if ($exception -is [ArgumentException]) { $notRunning = $true; break }
+                            $exception = $exception.InnerException
+                        }
+                        if (-not $notRunning) { throw }
+                        $CleanupToken.ThrowIfCancellationRequested()
+                        try { [void][IO.File]::ReadAllText('/proc/' + $childId + '/stat') }
+                        catch {
+                            if (-not (Test-LinuxMissingMetadata $_.Exception)) { throw }
+                            $CleanupToken.ThrowIfCancellationRequested()
+                            $parentIdentity = Read-LinuxOwnedProcess $parent.Process
+                            $CleanupToken.ThrowIfCancellationRequested()
+                            if ($null -eq $parentIdentity) { continue }
+                            if ($parentIdentity.StartToken -ne $identity.StartToken) { throw }
+                            # No managed record was acquired; the child is no longer present.
+                            continue
+                        }
+                        throw
+                    }
+                    $record = [pscustomobject]@{ Process = $child; Identity = $null }
+                    $Records.Add($record)
+                    $childIdentity = Read-LinuxOwnedProcess $child
+                    if ($null -eq $childIdentity) { continue }
+                    # Unix SafeHandle is a managed wait wrapper, not a PID lifetime pin.
+                    # The metadata recheck still validates start identity and ancestry.
+                    [void]$child.SafeHandle
+                    $latchedIdentity = Read-LinuxOwnedProcess $child
+                    if ($null -eq $latchedIdentity) { continue }
+                    $parentIdentity = Read-LinuxOwnedProcess $parent.Process
+                    if ($null -eq $parentIdentity -or $parentIdentity.StartToken -ne $identity.StartToken -or
+                        $latchedIdentity.StartToken -ne $childIdentity.StartToken -or
+                        $latchedIdentity.ParentId -ne $identity.Id -or $latchedIdentity.StartToken -lt $identity.StartToken) {
+                        throw 'Owned child ancestry changed.'
+                    }
+                    $record.Identity = $latchedIdentity
+                    $queue.Enqueue($record)
+                }
+            }
+        }
+    }
     $process = [System.Diagnostics.Process]::new()
     $deadline = [System.Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds($TimeoutSeconds))
     $streams = @()
@@ -68,6 +208,7 @@ function Invoke-BoundedProcess(
     $pollFailureKind = $null
     $cleanupFailed = $false
     $result = $null
+    $linuxDescendants = [Collections.Generic.List[object]]::new()
     try {
         $start = [System.Diagnostics.ProcessStartInfo]::new()
         $start.UseShellExecute = $false
@@ -160,8 +301,34 @@ function Invoke-BoundedProcess(
         $reap = [System.Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds(5))
         try {
             if ($started) {
-                if (-not $process.HasExited) { $process.Kill($true) }
-                $process.WaitForExitAsync($reap.Token).GetAwaiter().GetResult() | Out-Null
+                if ($IsLinux) {
+                    try { if (-not $process.HasExited) { Capture-LinuxOwnedDescendants $process $linuxDescendants $reap.Token } }
+                    catch { $cleanupFailed = $true }
+                    # A metadata failure never bypasses termination of the original root.
+                    try { if (-not $process.HasExited) { $process.Kill($true) } }
+                    catch { $cleanupFailed = $true }
+                    try { $process.WaitForExitAsync($reap.Token).GetAwaiter().GetResult() | Out-Null }
+                    catch { $cleanupFailed = $true }
+                    # Await matching zombie, managed exit, or strict latched PID-path absence.
+                    # The condition poll shares the original reap deadline.
+                    foreach ($record in $linuxDescendants) {
+                        try {
+                            while ($true) {
+                                $reap.Token.ThrowIfCancellationRequested()
+                                $identity = Read-LinuxOwnedProcess $record.Process $record.Identity $reap.Token
+                                if ($null -eq $identity) { break }
+                                if ($null -eq $record.Identity -or $identity.StartToken -ne $record.Identity.StartToken) { throw 'Owned process identity changed.' }
+                                if ($identity.Zombie) { break }
+                                Start-Sleep -Milliseconds 10
+                            }
+                        }
+                        catch { $cleanupFailed = $true }
+                    }
+                }
+                else {
+                    if (-not $process.HasExited) { $process.Kill($true) }
+                    $process.WaitForExitAsync($reap.Token).GetAwaiter().GetResult() | Out-Null
+                }
             }
         }
         catch { $cleanupFailed = $true }
@@ -178,6 +345,7 @@ function Invoke-BoundedProcess(
                     if (-not $failed -or -not $task.IsCompleted) { $cleanupFailed = $true }
                 }
             }
+            foreach ($record in $linuxDescendants) { try { $record.Process.Dispose() } catch { $cleanupFailed = $true } }
             $process.Dispose()
             $deadline.Dispose()
             $reap.Dispose()

@@ -1543,6 +1543,7 @@ throw 'Unknown fixture mode.'
         Assert-Contract ($null -ne $definition) ('Collector helper is missing: ' + $functionName)
         Invoke-Expression $definition.Extent.Text
     }
+    & (Join-Path $PSScriptRoot 'test-native-process-cleanup-metadata.ps1')
     # These are public fixture credentials, not a connection to any service.
     # Assert exact strings as well as parsed components: an invented slash on a
     # bare Redis endpoint looks equivalent to System.Uri but breaks startup.
