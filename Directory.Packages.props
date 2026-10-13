@@ -95,7 +95,7 @@
     <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.17.14" />
     <!-- Security override for EF Core Sqlite transitives (GHSA-2m69-gcr7-jv3q, high; fixed in 2.1.12). -->
-    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
     <!-- Compatibility pin: SignalR's transitive floor predates the Expiration StringSet API used by Conduit. -->
     <PackageVersion Include="StackExchange.Redis" Version="2.13.17" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.3" />
