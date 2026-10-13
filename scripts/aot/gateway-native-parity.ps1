@@ -143,6 +143,33 @@ if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
 if ($LASTEXITCODE -ne 0) { throw 'Native Gateway parity fixture seed failed.' }
 
 $processes = [Collections.Generic.List[Diagnostics.Process]]::new()
+$ownedStartTimes = [Collections.Generic.Dictionary[int, long]]::new()
+function Remember-OwnedProcess([Diagnostics.Process]$process) {
+    $processes.Add($process)
+    $ownedStartTimes.Add($process.Id, $process.StartTime.ToUniversalTime().Ticks)
+}
+
+function Test-OwnedProcess([Diagnostics.Process]$process) {
+    if ($process.HasExited) { return $false }
+    $current = Get-Process -Id $process.Id -ErrorAction SilentlyContinue
+    return $current -and $current.StartTime.ToUniversalTime().Ticks -eq $ownedStartTimes[$process.Id]
+}
+
+function Stop-GatewayGracefully([Diagnostics.Process]$process, [string]$name) {
+    if (-not (Test-OwnedProcess $process)) { throw "$name exited before graceful shutdown." }
+    & /bin/kill -TERM -- $process.Id
+    if ($LASTEXITCODE -ne 0) { throw "Could not signal owned $name process." }
+    if (-not $process.WaitForExit(60000)) { throw "$name did not finish graceful shutdown within 60 seconds." }
+    if ($process.ExitCode -ne 0) { throw "$name shutdown exited with code $($process.ExitCode)." }
+    foreach ($stream in @('stdout', 'stderr')) {
+        $path = Join-Path $logRoot "$name.$stream.log"
+        $content = Get-Content -LiteralPath $path -Raw
+        if ($content -match 'SafeWaitHandle|ObjectDisposedException|Error flushing pending updates during async disposal|Error stopping inner service SpendNotificationService') {
+            throw "$name logged a shutdown lifecycle failure. See $path."
+        }
+    }
+    Write-Host "  PASS  $name graceful traced shutdown"
+}
 try {
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
         $provider = Start-LoggedProcess 'provider' $nativeProbe @('--mock-provider') (Split-Path $nativeProbe) $null
@@ -151,21 +178,21 @@ try {
         $probeDll = Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll'
         $provider = Start-LoggedProcess 'provider' $dotnet @($probeDll, '--mock-provider') $probeProject $null
     }
-    $processes.Add($provider)
+    Remember-OwnedProcess $provider
     Wait-ForHttp "http://127.0.0.1:$ProviderPort/health" 'OpenAI-compatible provider stub'
 
     $adminExecutable = Get-NativeExecutable 'Admin'
     $admin = Start-LoggedProcess 'admin' $adminExecutable @() (Split-Path $adminExecutable) "http://127.0.0.1:$AdminPort"
-    $processes.Add($admin)
+    Remember-OwnedProcess $admin
     Wait-ForHttp "http://127.0.0.1:$AdminPort/health/live" 'native Admin liveness'
 
     $gatewayExecutable = Get-NativeExecutable 'Gateway'
     $gateway = Start-LoggedProcess 'gateway-primary' $gatewayExecutable @() (Split-Path $gatewayExecutable) "http://127.0.0.1:$GatewayPort"
-    $processes.Add($gateway)
+    Remember-OwnedProcess $gateway
     Wait-ForHttp "http://127.0.0.1:$GatewayPort/health/runtime-capabilities" 'primary native Gateway'
 
     $secondary = Start-LoggedProcess 'gateway-secondary' $gatewayExecutable @() (Split-Path $gatewayExecutable) "http://127.0.0.1:$SecondaryGatewayPort"
-    $processes.Add($secondary)
+    Remember-OwnedProcess $secondary
     Wait-ForHttp "http://127.0.0.1:$SecondaryGatewayPort/health/runtime-capabilities" 'secondary native Gateway'
 
     $env:CONDUIT_NATIVE_ADMIN_URL = "http://127.0.0.1:$AdminPort"
@@ -177,6 +204,16 @@ try {
         dotnet (Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll')
     }
     if ($LASTEXITCODE -ne 0) { throw "Gateway native parity probe exited with $LASTEXITCODE." }
+    if ($IsLinux) {
+        Stop-GatewayGracefully $secondary 'gateway-secondary'
+        Stop-GatewayGracefully $gateway 'gateway-primary'
+        if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
+            & $nativeProbe --verify-shutdown
+        } else {
+            dotnet (Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll') --verify-shutdown
+        }
+        if ($LASTEXITCODE -ne 0) { throw 'Accounting verification after native shutdown failed.' }
+    }
 }
 catch {
     Write-Host "Native parity logs: $logRoot" -ForegroundColor Yellow
@@ -188,7 +225,7 @@ catch {
 }
 finally {
     foreach ($process in $processes) {
-        if ($process -and -not $process.HasExited) {
+        if ($process -and (Test-OwnedProcess $process)) {
             try { Stop-Process -Id $process.Id -Force -Confirm:$false } catch {}
         }
     }

@@ -2,6 +2,8 @@ using ConduitLLM.Admin.Endpoints;
 using ConduitLLM.Admin.Filters;
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.DTOs;
+using ConduitLLM.Configuration.DTOs.VirtualKey;
+using ConduitLLM.Configuration.Utilities;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Tests.TestInfrastructure;
 
@@ -107,12 +109,12 @@ public sealed class AdminContractEndpointFilterTests
 
         var factory = database.CreateDbContextFactory();
         var filter = new VersionedResourceEndpointFilter();
-        var expected = $"\"{Convert.ToBase64String(rowVersion ?? BitConverter.GetBytes(updatedAt.Ticks))}\"";
+        var expected = new ResourceVersion(rowVersion, updatedAt).ETag;
         var get = Context("GET", $"/v1/admin/{resource}/41", 41, factory);
 
         var result = await filter.InvokeAsync(
             get,
-            _ => ValueTask.FromResult<object?>(Results.Ok()));
+            _ => ValueTask.FromResult<object?>(Results.Ok(new VirtualKeyGroupDto { UpdatedAt = updatedAt, ResourceETag = expected })));
 
         Assert.Equal(StatusCodes.Status200OK, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
         Assert.Equal(expected, get.HttpContext.Response.Headers.ETag);
@@ -126,7 +128,7 @@ public sealed class AdminContractEndpointFilterTests
             result = await filter.InvokeAsync(patch, _ =>
             {
                 called = true;
-                return ValueTask.FromResult<object?>(Results.Ok());
+                return ValueTask.FromResult<object?>(Results.Ok(new VirtualKeyGroupDto { UpdatedAt = updatedAt, ResourceETag = expected }));
             });
 
             Assert.True(called);
@@ -212,14 +214,14 @@ public sealed class AdminContractEndpointFilterTests
     [InlineData("virtual-keys")]
     [InlineData("virtual-key-groups")]
     [InlineData("ip-filters")]
-    public async Task VersionFilter_DeletedResourceRetainsItsOriginalEtag(string resource)
+    public async Task VersionFilter_DeletedResourceDoesNotInventARepresentationEtag(string resource)
     {
         await using var database = new SqliteTestDatabase();
         var updatedAt = new DateTime(2026, 7, 23, 12, 0, 0, DateTimeKind.Utc);
         await SeedResourceAsync(database, resource, 43, updatedAt);
         var context = Context("DELETE", $"/v1/admin/{resource}/43", 43,
             database.CreateDbContextFactory());
-        var expected = $"\"{Convert.ToBase64String(BitConverter.GetBytes(updatedAt.Ticks))}\"";
+        var expected = new ResourceVersion(null, updatedAt).ETag;
         context.HttpContext.Request.Headers.IfMatch = expected;
 
         var result = await new VersionedResourceEndpointFilter().InvokeAsync(context, async _ =>
@@ -242,7 +244,7 @@ public sealed class AdminContractEndpointFilterTests
 
         Assert.Equal(StatusCodes.Status204NoContent,
             Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
-        Assert.Equal(expected, context.HttpContext.Response.Headers.ETag);
+        Assert.Equal(0, context.HttpContext.Response.Headers.ETag.Count);
     }
 
     private static Task SeedResourceAsync(SqliteTestDatabase database, string resource,
@@ -285,6 +287,87 @@ public sealed class AdminContractEndpointFilterTests
                 }
             }
         });
+
+    [Fact]
+    public async Task VersionFilter_GetTagComesFromReturnedSnapshotDespiteLaterCommit()
+    {
+        await using var database = new SqliteTestDatabase();
+        await database.SeedAsync(async db =>
+        {
+            db.VirtualKeyGroups.Add(new VirtualKeyGroup { Id = 1, GroupName = "old" });
+            await db.SaveChangesAsync();
+        });
+        var context = Context("GET", "/v1/admin/virtual-key-groups/1", 1, database.CreateDbContextFactory());
+        VirtualKeyGroupDto? snapshot = null;
+        await new VersionedResourceEndpointFilter().InvokeAsync(context, async _ =>
+        {
+            await using var db = database.CreateContext();
+            var group = await db.VirtualKeyGroups.SingleAsync();
+            snapshot = VirtualKeyGroupDto.FromEntity(group);
+            group.GroupName = "winner";
+            group.UpdatedAt = group.UpdatedAt.AddMinutes(1);
+            await db.SaveChangesAsync();
+            return Results.Ok(snapshot);
+        });
+        Assert.Equal("old", snapshot!.GroupName);
+        Assert.Equal(snapshot.ResourceETag, context.HttpContext.Response.Headers.ETag);
+        await using var persisted = database.CreateContext();
+        Assert.NotEqual(snapshot.ResourceETag, (await ResourceMutationGuard.ReadVersionAsync<VirtualKeyGroup>(persisted, 1))!.ETag);
+    }
+
+    [Fact]
+    public async Task VersionFilter_DoesNotTagAnUnversionedSubresourceOrMissingResource()
+    {
+        await using var database = new SqliteTestDatabase();
+        var context = Context("GET", "/v1/admin/virtual-key-groups/1/transactions", 1, database.CreateDbContextFactory());
+        await new VersionedResourceEndpointFilter().InvokeAsync(context,
+            _ => ValueTask.FromResult<object?>(Results.Ok(new[] { "history" })));
+        Assert.True(Microsoft.Extensions.Primitives.StringValues.IsNullOrEmpty(context.HttpContext.Response.Headers.ETag));
+        context = Context("DELETE", "/v1/admin/virtual-key-groups/1", 1, database.CreateDbContextFactory());
+        var result = await new VersionedResourceEndpointFilter().InvokeAsync(context,
+            _ => ValueTask.FromResult<object?>(Results.NotFound()));
+        Assert.Equal(404, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+        Assert.True(Microsoft.Extensions.Primitives.StringValues.IsNullOrEmpty(context.HttpContext.Response.Headers.ETag));
+    }
+
+    [Theory]
+    [InlineData(false, 404)]
+    [InlineData(true, 428)]
+    public async Task VersionFilter_MissingHeaderRecheckedAtStoreWhenResourceAppearsAfterPreflight(
+        bool createAfterPreflight, int expectedStatus)
+    {
+        await using var database = new SqliteTestDatabase();
+        var context = Context("PATCH", "/v1/admin/virtual-key-groups/1", 1, database.CreateDbContextFactory());
+        var callbackCount = 0;
+        var result = await new VersionedResourceEndpointFilter().InvokeAsync(context, async _ =>
+        {
+            if (createAfterPreflight)
+            {
+                await database.SeedAsync(async db =>
+                {
+                    db.VirtualKeyGroups.Add(new VirtualKeyGroup { Id = 1, GroupName = "new resource" });
+                    await db.SaveChangesAsync();
+                });
+            }
+            var condition = VersionedResourceEndpointFilter.ReadPrecondition(context.HttpContext);
+            Assert.NotNull(condition);
+            Assert.True(condition.IsMissing);
+            await using var request = database.CreateContext();
+            var updated = await ResourceMutationGuard.ExecuteAsync<VirtualKeyGroup, VirtualKeyGroupDto>(
+                request, 1, condition, (_, group, _) =>
+                {
+                    callbackCount++;
+                    group.GroupName = "unguarded overwrite";
+                    return Task.CompletedTask;
+                }, VirtualKeyGroupDto.FromEntity);
+            return updated is null ? Results.NotFound() : Results.Ok(updated);
+        });
+        Assert.Equal(expectedStatus, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+        Assert.Equal(0, callbackCount);
+        await using var persisted = database.CreateContext();
+        var group = await persisted.VirtualKeyGroups.SingleOrDefaultAsync();
+        Assert.Equal(createAfterPreflight ? "new resource" : null, group?.GroupName);
+    }
 
     private static TestInvocationContext Context(
         string method,

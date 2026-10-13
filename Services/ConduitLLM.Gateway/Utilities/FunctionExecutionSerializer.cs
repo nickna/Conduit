@@ -152,7 +152,9 @@ public sealed record FunctionExecutionCostBreakdown(
     [property: JsonPropertyName("llmCost")] decimal? LlmCost,
     [property: JsonPropertyName("functionCost")] decimal FunctionCost,
     [property: JsonPropertyName("providerToolCost")] decimal? ProviderToolCost,
-    [property: JsonPropertyName("totalCost")] decimal TotalCost);
+    [property: JsonPropertyName("totalCost")] decimal TotalCost,
+    [property: JsonPropertyName("knownLlmCost"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] decimal? KnownLlmCost = null,
+    [property: JsonPropertyName("knownProviderToolCost"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] decimal? KnownProviderToolCost = null);
 
 /// <summary>
 /// Reads legacy camelCase request-log entries and writes the canonical snake_case

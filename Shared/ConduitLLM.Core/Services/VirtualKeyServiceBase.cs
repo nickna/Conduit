@@ -202,6 +202,48 @@ namespace ConduitLLM.Core.Services
                 return false;
             }
 
+            var changedProperties = await ApplyVirtualKeyUpdateAsync(key, request);
+
+            if (!changedProperties.Any())
+            {
+                Logger.LogDebug("No changes detected for virtual key {KeyId} — skipping update", id);
+                return true;
+            }
+
+            key.UpdatedAt = DateTime.UtcNow;
+            var success = await VirtualKeyRepository.UpdateAsync(key);
+
+            if (success)
+            {
+                await NotifyVirtualKeyUpdatedAsync(key, changedProperties);
+            }
+
+            return success;
+        }
+
+        protected async Task NotifyVirtualKeyUpdatedAsync(VirtualKey key, string[] changed)
+        {
+            await PublishEventAsync(
+                new VirtualKeyUpdated
+                {
+                    KeyId = key.Id,
+                    KeyHash = key.KeyHash,
+                    ChangedProperties = changed,
+                    CorrelationId = Guid.NewGuid().ToString()
+                },
+                $"update virtual key {key.Id}",
+                new { ChangedProperties = string.Join(", ", changed) });
+
+            await OnVirtualKeyUpdatedAsync(key, changed);
+
+            Logger.LogInformation("Updated virtual key {KeyId} ({KeyName}), changed: [{ChangedProperties}]",
+                key.Id, LoggingSanitizer.S(key.KeyName), string.Join(", ", changed));
+        }
+
+        /// <summary>Applies a patch to the supplied current entity without saving or publishing.</summary>
+        protected async Task<string[]> ApplyVirtualKeyUpdateAsync(VirtualKey key,
+            UpdateVirtualKeyRequestDto request, Func<int, Task<VirtualKeyGroup?>>? getGroupAsync = null)
+        {
             // Track actual changes
             var changedProperties = new List<string>();
 
@@ -234,7 +276,7 @@ namespace ConduitLLM.Core.Services
                     throw new InvalidOperationException("Virtual key group ID cannot be null.");
                 if (key.VirtualKeyGroupId != request.VirtualKeyGroupId.Value)
                 {
-                    var newGroup = await GroupRepository.GetByIdAsync(request.VirtualKeyGroupId.Value);
+                    var newGroup = await (getGroupAsync ?? (groupId => GroupRepository.GetByIdAsync(groupId)))(request.VirtualKeyGroupId.Value);
                     if (newGroup == null)
                     {
                         throw new InvalidOperationException(
@@ -316,37 +358,7 @@ namespace ConduitLLM.Core.Services
                 }
             }
 
-            if (!changedProperties.Any())
-            {
-                Logger.LogDebug("No changes detected for virtual key {KeyId} — skipping update", id);
-                return true;
-            }
-
-            key.UpdatedAt = DateTime.UtcNow;
-            var success = await VirtualKeyRepository.UpdateAsync(key);
-
-            if (success)
-            {
-                var changed = changedProperties.ToArray();
-
-                await PublishEventAsync(
-                    new VirtualKeyUpdated
-                    {
-                        KeyId = key.Id,
-                        KeyHash = key.KeyHash,
-                        ChangedProperties = changed,
-                        CorrelationId = Guid.NewGuid().ToString()
-                    },
-                    $"update virtual key {id}",
-                    new { ChangedProperties = string.Join(", ", changed) });
-
-                await OnVirtualKeyUpdatedAsync(key, changed);
-
-                Logger.LogInformation("Updated virtual key {KeyId} ({KeyName}), changed: [{ChangedProperties}]",
-                    id, LoggingSanitizer.S(key.KeyName), string.Join(", ", changed));
-            }
-
-            return success;
+            return changedProperties.ToArray();
         }
 
         public virtual Task<bool> DeleteVirtualKeyAsync(int id) => DeleteVirtualKeyCoreAsync(id, CancellationToken.None);
@@ -368,24 +380,29 @@ namespace ConduitLLM.Core.Services
 
             if (success)
             {
-                await PublishEventAsync(
-                    new VirtualKeyDeleted
-                    {
-                        KeyId = key.Id,
-                        KeyHash = key.KeyHash,
-                        KeyName = key.KeyName,
-                        CorrelationId = Guid.NewGuid().ToString()
-                    },
-                    $"delete virtual key {key.Id}",
-                    new { KeyName = key.KeyName });
-
-                await OnVirtualKeyDeletedAsync(key);
-
-                Logger.LogInformation("Deleted virtual key {KeyId} ({KeyName})",
-                    id, LoggingSanitizer.S(key.KeyName));
+                await NotifyVirtualKeyDeletedAsync(key);
             }
 
             return success;
+        }
+
+        protected async Task NotifyVirtualKeyDeletedAsync(VirtualKey key)
+        {
+            await PublishEventAsync(
+                new VirtualKeyDeleted
+                {
+                    KeyId = key.Id,
+                    KeyHash = key.KeyHash,
+                    KeyName = key.KeyName,
+                    CorrelationId = Guid.NewGuid().ToString()
+                },
+                $"delete virtual key {key.Id}",
+                new { KeyName = key.KeyName });
+
+            await OnVirtualKeyDeletedAsync(key);
+
+            Logger.LogInformation("Deleted virtual key {KeyId} ({KeyName})",
+                key.Id, LoggingSanitizer.S(key.KeyName));
         }
 
         public virtual async Task<bool> ResetSpendAsync(int id)

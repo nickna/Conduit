@@ -156,7 +156,7 @@ internal static class NativeProviderStub
         {
             await WriteSseHeadersAsync(stream);
             await WriteSseDataAsync(stream, """
-                {"id":"chatcmpl-native-cancel","object":"chat.completion.chunk","created":1787800002,"model":"native-aot-provider-model","choices":[{"index":0,"delta":{"role":"assistant","content":"partial"},"finish_reason":null}]}
+                {"id":"chatcmpl-native-cancel","object":"chat.completion.chunk","created":1787800002,"model":"native-aot-provider-model","choices":[{"index":0,"delta":{"role":"assistant","content":"partial"},"finish_reason":null}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}
                 """);
 
             while (true)

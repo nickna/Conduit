@@ -11,6 +11,7 @@ using ConduitLLM.Gateway.Billing;
 using ConduitLLM.Gateway.Constants;
 using ConduitLLM.Gateway.Options;
 using ConduitLLM.Gateway.Serialization;
+using ConduitLLM.Gateway.Services;
 using ConduitLLM.Gateway.UsageTracking;
 
 using Microsoft.AspNetCore.Http.Features;
@@ -677,14 +678,7 @@ public sealed class ResponsesEndpoints : GatewayEndpointHandlerBase
         HttpContext.Items["ProviderType"] = mapping.Provider?.ProviderType;
         if (mapping.ModelProviderTypeAssociation?.ModelCostId is int modelCostId)
             HttpContext.Items[HttpContextKeys.ModelCostId] = modelCostId;
-        if (mapping.Provider?.TrustProviderReportedCosts == true)
-        {
-            HttpContext.Items[HttpContextKeys.ProviderBillingPolicy] = new ProviderCostBillingPolicy
-            {
-                TrustProviderReportedCost = true,
-                MarkupMultiplier = mapping.Provider.ProviderCostMarkupMultiplier
-            };
-        }
+        ProviderUsagePricing.SetProviderBillingPolicy(HttpContext, mapping.Provider);
     }
 
     private async Task CaptureSelectedRouteAsync(ChatCompletionRequest request)
@@ -694,6 +688,7 @@ public sealed class ResponsesEndpoints : GatewayEndpointHandlerBase
         var mapping = await _modelMappingService.GetMappingByIdAsync(mappingId);
         if (mapping is null)
             return;
+        ProviderUsagePricing.SetProviderBillingPolicy(HttpContext, mapping.Provider);
         HttpContext.Items[HttpContextKeys.ModelProviderMappingId] = mappingId;
         HttpContext.Items["ProviderId"] = mapping.ProviderId;
         HttpContext.Items["ProviderType"] = mapping.Provider?.ProviderType;

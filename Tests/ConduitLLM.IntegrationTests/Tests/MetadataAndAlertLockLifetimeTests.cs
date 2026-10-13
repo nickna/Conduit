@@ -59,7 +59,8 @@ public sealed class MetadataAndAlertLockLifetimeTests(PostgresLockTestContainerF
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var complete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var repository = new Mock<ISpendDataRepository>();
-        repository.Setup(value => value.MarkAlertSentAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<TimeSpan>())).ReturnsAsync(true);
+        repository.Setup(value => value.MarkAlertSentAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<TimeSpan>(),
+            It.IsAny<CancellationToken>())).ReturnsAsync(true);
         var client = new Mock<IClientProxy>();
         client.Setup(value => value.SendCoreAsync("BudgetAlert", It.IsAny<object[]>(), It.IsAny<CancellationToken>()))
             .Returns(async (string _, object[] _, CancellationToken _) => { started.TrySetResult(); await complete.Task; });
@@ -77,7 +78,7 @@ public sealed class MetadataAndAlertLockLifetimeTests(PostgresLockTestContainerF
             cancellation.Cancel();
             await Manager().CheckBudgetThresholdsAsync(42, 50, 100, 50);
             Assert.Null(await Provider().TryAcquireAsync(RedisKeys.Lock.AlertThreshold("42", "50")));
-            repository.Verify(value => value.MarkAlertSentAsync(42, 50, TimeSpan.FromHours(24)), Times.Once);
+            repository.Verify(value => value.MarkAlertSentAsync(42, 50, TimeSpan.FromHours(24), It.IsAny<CancellationToken>()), Times.Once);
             client.Verify(value => value.SendCoreAsync("BudgetAlert", It.IsAny<object[]>(), It.IsAny<CancellationToken>()), Times.Once);
         }
         finally

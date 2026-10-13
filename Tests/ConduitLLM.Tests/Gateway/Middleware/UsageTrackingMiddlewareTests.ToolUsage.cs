@@ -115,7 +115,9 @@ namespace ConduitLLM.Tests.Http.Middleware
                 Times.Never);
             Assert.True(context.GetRequestAccountingSnapshot()!.IsIndeterminate);
             Assert.Contains(Fixture.CapturedBillingEvents,
-                billingEvent => billingEvent.EventType == BillingAuditEventType.UnexpectedError);
+                billingEvent => billingEvent.EventType == BillingAuditEventType.PricingCalculationFailed);
+            Assert.Null(context.GetRequestAccountingSnapshot()!.ProviderToolPricing!.Cost);
+            Assert.Equal(0m, context.GetRequestAccountingSnapshot()!.ProviderToolPricing!.KnownCost);
         }
 
         [Fact]

@@ -85,11 +85,21 @@ public class VirtualKeyGroupRepository : RepositoryBase<VirtualKeyGroup, int>, I
     }
 
     /// <summary>
-    /// Overrides UpdateAsync to provide logging.
+    /// Updates only the group's scalar values and logs the completed update.
     /// </summary>
     public override async Task<bool> UpdateAsync(VirtualKeyGroup entity, CancellationToken cancellationToken = default)
     {
-        var result = await base.UpdateAsync(entity, cancellationToken);
+        ArgumentNullException.ThrowIfNull(entity);
+
+        var result = await ExecuteWriteAsync(async context =>
+        {
+            OnBeforeUpdate(entity);
+
+            // Reads include member keys. Marking the whole detached graph modified would
+            // overwrite changes to those keys when only the group was edited.
+            context.Entry(entity).State = EntityState.Modified;
+            return await context.SaveChangesAsync(cancellationToken) > 0;
+        }, $"updating ID {entity.Id}", cancellationToken);
 
         if (result)
         {
@@ -149,6 +159,25 @@ public class VirtualKeyGroupRepository : RepositoryBase<VirtualKeyGroup, int>, I
     public async Task<decimal> AdjustBalanceAsync(int groupId, decimal amount, string? description, string? initiatedBy)
     {
         return await AdjustBalanceAsync(groupId, amount, description, initiatedBy, ReferenceType.Manual, null);
+    }
+
+    public async Task<VirtualKeyGroup?> AdjustBalanceConditionalAsync(int groupId, decimal amount,
+        string? description, string? initiatedBy, ResourcePrecondition precondition, CancellationToken cancellationToken)
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await ResourceMutationGuard.ExecuteAsync<VirtualKeyGroup, VirtualKeyGroup>(db, groupId, precondition,
+            async (context, group, ct) =>
+            {
+                // The guard already holds the row lock: counters and ledger use this same transaction.
+                group.Balance += amount;
+                if (amount > 0) group.LifetimeCreditsAdded += amount;
+                else group.LifetimeSpent += Math.Abs(amount);
+                group.UpdatedAt = DateTime.UtcNow;
+                context.VirtualKeyGroupTransactions.Add(CreateTransaction(groupId, amount, group.Balance,
+                    amount > 0 ? TransactionType.Credit : TransactionType.Debit, ReferenceType.Manual,
+                    description ?? (amount > 0 ? "Credits added" : "Usage deducted"), initiatedBy: initiatedBy ?? "System"));
+                await context.Entry(group).Collection(entity => entity.VirtualKeys).LoadAsync(ct);
+            }, group => group, cancellationToken);
     }
 
     /// <inheritdoc />
