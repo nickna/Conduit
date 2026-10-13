@@ -1,3 +1,5 @@
+using ConduitLLM.Configuration.Utilities;
+using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations;
 
 using ConduitLLM.Configuration.Constants;
@@ -7,8 +9,12 @@ namespace ConduitLLM.Configuration.DTOs.IpFilter;
 /// <summary>
 /// Data Transfer Object for IP filtering rules
 /// </summary>
-public class IpFilterDto
+public class IpFilterDto : IVersionedRepresentation
 {
+    /// <summary>Version of the database snapshot represented by this response.</summary>
+    [JsonIgnore]
+    public string? ResourceETag { get; set; }
+
     /// <summary>
     /// Unique identifier for the IP filter
     /// </summary>

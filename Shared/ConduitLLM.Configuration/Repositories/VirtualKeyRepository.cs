@@ -69,8 +69,9 @@ namespace ConduitLLM.Configuration.Repositories
                 // Set the updated timestamp
                 OnBeforeUpdate(virtualKey);
 
-                // Ensure the entity is tracked
-                context.VirtualKeys.Update(virtualKey);
+                // Update this key's scalar values only. Reads include its group for authentication,
+                // but that detached snapshot must not overwrite a later group change.
+                context.Entry(virtualKey).State = EntityState.Modified;
 
                 // Save changes
                 int rowsAffected = await context.SaveChangesAsync(cancellationToken);

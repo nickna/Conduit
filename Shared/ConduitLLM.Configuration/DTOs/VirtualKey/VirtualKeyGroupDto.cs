@@ -1,3 +1,5 @@
+using ConduitLLM.Configuration.Utilities;
+using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations;
 
 namespace ConduitLLM.Configuration.DTOs.VirtualKey
@@ -5,8 +7,12 @@ namespace ConduitLLM.Configuration.DTOs.VirtualKey
     /// <summary>
     /// Data Transfer Object representing a Virtual Key Group
     /// </summary>
-    public class VirtualKeyGroupDto
+    public class VirtualKeyGroupDto : IVersionedRepresentation
     {
+        /// <summary>Version of the database snapshot represented by this response.</summary>
+        [JsonIgnore]
+        public string? ResourceETag { get; set; }
+
         /// <summary>
         /// Unique identifier for the virtual key group
         /// </summary>
@@ -87,6 +93,7 @@ namespace ConduitLLM.Configuration.DTOs.VirtualKey
             LifetimeSpent = group.LifetimeSpent,
             CreatedAt = group.CreatedAt,
             UpdatedAt = group.UpdatedAt,
+            ResourceETag = new ResourceVersion(group.RowVersion, group.UpdatedAt).ETag,
             VirtualKeyCount = group.VirtualKeys?.Count ?? 0,
             RateLimitRpm = group.RateLimitRpm,
             RateLimitRpd = group.RateLimitRpd,

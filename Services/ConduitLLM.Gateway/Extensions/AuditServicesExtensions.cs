@@ -21,13 +21,13 @@ public static class AuditServicesExtensions
             provider.GetRequiredService<IRequestLogService>());
         services.AddLeaderElectedHostedService<RequestLogService>(
             provider => (RequestLogService)provider.GetRequiredService<IRequestLogService>(),
-            "RequestLogService");
+            "RequestLogService", ownsInnerService: false);
 
         // Register Function Call Audit service with leader election
         services.AddSingleton<IFunctionCallAuditService, FunctionCallAuditService>();
         services.AddLeaderElectedHostedService<FunctionCallAuditService>(
             provider => (FunctionCallAuditService)provider.GetRequiredService<IFunctionCallAuditService>(),
-            "FunctionCallAuditService");
+            "FunctionCallAuditService", ownsInnerService: false);
 
         return services;
     }

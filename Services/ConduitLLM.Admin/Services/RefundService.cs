@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using ConduitLLM.Admin.Interfaces;
 using ConduitLLM.Configuration.Entities;
+using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Enums;
 using ConduitLLM.Configuration.Exceptions;
 using ConduitLLM.Configuration.Interfaces;
@@ -43,8 +44,33 @@ public class RefundService : IRefundService
         _requestLogRepository = requestLogRepository;
     }
 
+    public async Task<RefundResult> ProcessRefundConditionalAsync(int virtualKeyGroupId, string modelId,
+        Usage originalUsage, Usage refundUsage, string refundReason, string originalTransactionId,
+        string idempotencyKey, string initiatedBy, string? initiatedByUserId, int? requestLogId,
+        ResourcePrecondition precondition, CancellationToken cancellationToken)
+    {
+        var db = _context as ConduitDbContext ?? throw new InvalidOperationException(
+            "Conditional refunds require a database context.");
+        db.ChangeTracker.Clear();
+        RefundResult? result = null;
+        return await ResourceMutationGuard.ExecuteAsync<VirtualKeyGroup, RefundResult>(db, virtualKeyGroupId, precondition,
+            async (_, lockedGroup, ct) =>
+            {
+                // Lock the group before replay and cumulative-refund checks. All debits and
+                // refunds checked below belong to this group, so competing conditional refunds
+                // serialize on this row even under ReadCommitted isolation.
+                result = await ProcessRefundCoreAsync(virtualKeyGroupId, modelId, originalUsage, refundUsage,
+                    refundReason, originalTransactionId, idempotencyKey, initiatedBy, initiatedByUserId,
+                    requestLogId, ct, lockedGroup);
+            }, group =>
+            {
+                result!.ResourceETag = new ResourceVersion(group.RowVersion, group.UpdatedAt).ETag;
+                return result;
+            }, cancellationToken) ?? throw new KeyNotFoundException($"Virtual key group {virtualKeyGroupId} not found");
+    }
+
     /// <inheritdoc />
-    public async Task<RefundResult> ProcessRefundAsync(
+    public Task<RefundResult> ProcessRefundAsync(
         int virtualKeyGroupId,
         string modelId,
         Usage originalUsage,
@@ -56,6 +82,13 @@ public class RefundService : IRefundService
         string? initiatedByUserId,
         int? requestLogId = null,
         CancellationToken cancellationToken = default)
+        => ProcessRefundCoreAsync(virtualKeyGroupId, modelId, originalUsage, refundUsage, refundReason,
+            originalTransactionId, idempotencyKey, initiatedBy, initiatedByUserId, requestLogId, cancellationToken, null);
+
+    private async Task<RefundResult> ProcessRefundCoreAsync(int virtualKeyGroupId, string modelId,
+        Usage originalUsage, Usage refundUsage, string refundReason, string originalTransactionId,
+        string idempotencyKey, string initiatedBy, string? initiatedByUserId, int? requestLogId,
+        CancellationToken cancellationToken, VirtualKeyGroup? guardedGroup)
     {
         idempotencyKey = idempotencyKey?.Trim() ?? string.Empty;
         if (idempotencyKey.Length is < 1 or > 100)
@@ -89,7 +122,7 @@ public class RefundService : IRefundService
         }
 
         // Validate group exists
-        var group = await _groupRepository.GetByIdAsync(virtualKeyGroupId);
+        var group = guardedGroup ?? await _groupRepository.GetByIdAsync(virtualKeyGroupId);
         if (group == null)
         {
             _logger.LogWarning("Refund rejected: virtual key group {GroupId} not found", virtualKeyGroupId);
@@ -279,6 +312,10 @@ public class RefundService : IRefundService
         }
         catch (Exception)
         {
+            // The conditional wrapper owns rollback. Do not turn a failed callback into a
+            // replay inside its still-active (possibly aborted) transaction.
+            if (_context is DbContext guarded && guarded.Database.CurrentTransaction is not null)
+                throw;
             if (_context is DbContext dbContext)
             {
                 dbContext.ChangeTracker.Clear();
@@ -301,7 +338,8 @@ public class RefundService : IRefundService
         Func<CancellationToken, Task> work,
         CancellationToken cancellationToken)
     {
-        if (_context is not DbContext dbContext || !dbContext.Database.IsRelational())
+        if (_context is not DbContext dbContext || !dbContext.Database.IsRelational() ||
+            dbContext.Database.CurrentTransaction is not null)
         {
             await work(cancellationToken);
             return;

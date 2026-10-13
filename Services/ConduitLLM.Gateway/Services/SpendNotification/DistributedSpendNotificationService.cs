@@ -5,229 +5,231 @@ using ConduitLLM.Gateway.Hubs;
 using ConduitLLM.Gateway.Serialization;
 using StackExchange.Redis;
 
-namespace ConduitLLM.Gateway.Services.SpendNotification
+namespace ConduitLLM.Gateway.Services.SpendNotification;
+
+/// <summary>Owns periodic and request notification work until hosted shutdown joins it.</summary>
+public class DistributedSpendNotificationService : ISpendNotificationService, IHostedService, IDisposable
 {
-    /// <summary>
-    /// Distributed implementation of spend notification service using Redis for multi-instance consistency
-    /// </summary>
-    public class DistributedSpendNotificationService : ISpendNotificationService, IHostedService, IDisposable
+    private readonly IHubContext<SpendNotificationHub> _hubContext;
+    private readonly ILogger<DistributedSpendNotificationService> _logger;
+    private readonly ISpendDataRepository _repository;
+    private readonly IBudgetAlertManager _budgetAlertManager;
+    private readonly ISpendPatternAnalyzer _patternAnalyzer;
+    private readonly TimeSpan _analysisInterval;
+    private readonly object _lifecycleSync = new();
+    private readonly HashSet<Task> _requests = new();
+    private readonly SemaphoreSlim _backgroundTransition = new(1, 1);
+    private readonly CancellationTokenSource _shutdown = new();
+    private readonly CancellationToken _shutdownToken;
+    private CancellationTokenSource? _analysisCancellation;
+    private Task? _analysisTask;
+    private Task? _shutdownTask;
+    private bool _registrationAttempted;
+    private bool _stopping;
+    private bool _disposed;
+
+    public string InstanceId { get; } = $"{Environment.MachineName}_{Environment.ProcessId}_{Guid.NewGuid():N}"[..Math.Min(50,
+        $"{Environment.MachineName}_{Environment.ProcessId}_{Guid.NewGuid():N}".Length)];
+
+    public DistributedSpendNotificationService(IHubContext<SpendNotificationHub> hubContext,
+        ILogger<DistributedSpendNotificationService> logger, ISpendDataRepository repository,
+        IBudgetAlertManager budgetAlertManager, ISpendPatternAnalyzer patternAnalyzer)
+        : this(hubContext, logger, repository, budgetAlertManager, patternAnalyzer, TimeSpan.FromMinutes(5)) { }
+
+    internal DistributedSpendNotificationService(IHubContext<SpendNotificationHub> hubContext,
+        ILogger<DistributedSpendNotificationService> logger, ISpendDataRepository repository,
+        IBudgetAlertManager budgetAlertManager, ISpendPatternAnalyzer patternAnalyzer, TimeSpan analysisInterval)
     {
-        private readonly IHubContext<SpendNotificationHub> _hubContext;
-        private readonly ILogger<DistributedSpendNotificationService> _logger;
+        _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _budgetAlertManager = budgetAlertManager ?? throw new ArgumentNullException(nameof(budgetAlertManager));
+        _patternAnalyzer = patternAnalyzer ?? throw new ArgumentNullException(nameof(patternAnalyzer));
+        _analysisInterval = analysisInterval;
+        _shutdownToken = _shutdown.Token;
+    }
 
-        private readonly ISpendDataRepository _repository;
-        private readonly IBudgetAlertManager _budgetAlertManager;
-        private readonly ISpendPatternAnalyzer _patternAnalyzer;
-
-        private Timer? _patternAnalysisTimer;
-        private readonly TimeSpan _analysisInterval = TimeSpan.FromMinutes(5);
-
-        public string InstanceId { get; }
-
-        public DistributedSpendNotificationService(
-            IHubContext<SpendNotificationHub> hubContext,
-            ILogger<DistributedSpendNotificationService> logger,
-            ISpendDataRepository repository,
-            IBudgetAlertManager budgetAlertManager,
-            ISpendPatternAnalyzer patternAnalyzer)
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        await _backgroundTransition.WaitAsync(cancellationToken);
+        try
         {
-            _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _repository = repository ?? throw new ArgumentNullException(nameof(repository));
-            _budgetAlertManager = budgetAlertManager ?? throw new ArgumentNullException(nameof(budgetAlertManager));
-            _patternAnalyzer = patternAnalyzer ?? throw new ArgumentNullException(nameof(patternAnalyzer));
-
-            InstanceId = GenerateInstanceId();
-        }
-
-        public async Task StartAsync(CancellationToken cancellationToken)
-        {
-            await RegisterInstanceAsync();
-
-            _patternAnalysisTimer = new Timer(
-                async _ => await AnalyzeSpendingPatternsAsync(),
-                null,
-                _analysisInterval,
-                _analysisInterval);
-
-            _logger.LogInformation("DistributedSpendNotificationService started with instance ID: {InstanceId}",
-                InstanceId);
-        }
-
-        public async Task StopAsync(CancellationToken cancellationToken)
-        {
-            _logger.LogInformation("DistributedSpendNotificationService stopping...");
-
-            _patternAnalysisTimer?.Change(Timeout.Infinite, 0);
-            _patternAnalysisTimer?.Dispose();
-
-            try
+            lock (_lifecycleSync)
             {
-                await _repository.UnregisterInstanceAsync(InstanceId);
+                if (_stopping || _disposed) return;
             }
-            catch (RedisException ex)
-            {
-                _logger.LogWarning(ex, "Failed to unregister spend notification instance; shutdown will continue");
-            }
-            catch (TimeoutException ex)
-            {
-                _logger.LogWarning(ex, "Timed out unregistering spend notification instance; shutdown will continue");
-            }
+            if (_analysisTask is { IsCompleted: false }) return;
+            cancellationToken.ThrowIfCancellationRequested();
+            _shutdownToken.ThrowIfCancellationRequested();
+            _registrationAttempted = true;
+            using var startup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownToken);
+            await RegisterInstanceAsync(startup.Token);
+            cancellationToken.ThrowIfCancellationRequested();
+            _shutdownToken.ThrowIfCancellationRequested();
+            _analysisCancellation?.Dispose();
+            _analysisCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownToken);
+            _analysisTask = RunPatternAnalysisAsync(_analysisCancellation.Token);
+            _logger.LogInformation("DistributedSpendNotificationService started with instance ID: {InstanceId}", InstanceId);
         }
+        finally { _backgroundTransition.Release(); }
+    }
 
-        public async Task NotifySpendUpdateAsync(
-            int virtualKeyId,
-            decimal amount,
-            decimal totalSpend,
-            decimal? budget,
-            string? model,
-            string? provider)
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await _backgroundTransition.WaitAsync();
+        try
         {
-            try
-            {
-                await _repository.RecordSpendingPatternAsync(virtualKeyId, amount, totalSpend);
-
-                // Check budget thresholds if applicable
-                if (budget.HasValue && budget.Value > 0)
-                {
-                    var budgetPercentage = (totalSpend / budget.Value) * 100;
-                    await _budgetAlertManager.CheckBudgetThresholdsAsync(
-                        virtualKeyId, totalSpend, budget.Value, budgetPercentage);
-                }
-
-                // Send spend update notification
-                await SendSpendUpdateNotificationAsync(
-                    virtualKeyId, amount, totalSpend, budget, model, provider);
-
-                // Check for unusual spending patterns
-                await _patternAnalyzer.CheckUnusualSpendingAsync(virtualKeyId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error processing spend update for VirtualKey {VirtualKeyId}", virtualKeyId);
-            }
+            if (_analysisCancellation is not null) await _analysisCancellation.CancelAsync();
+            if (_analysisTask is not null) await _analysisTask;
+            _analysisTask = null;
+            _analysisCancellation?.Dispose();
+            _analysisCancellation = null;
+            // Ordinary leadership loss stops only this producer. Request notifications remain
+            // admissible until the final hosted lifecycle phase closes and joins them.
         }
+        finally { _backgroundTransition.Release(); }
+    }
 
-        /// <summary>
-        /// Legacy method for backward compatibility
-        /// </summary>
-        public async Task NotifySpendUpdatedAsync(int virtualKeyId, decimal spendAmount, string? model, string? provider)
+    public Task ShutdownAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_lifecycleSync)
         {
-            await NotifySpendUpdateAsync(virtualKeyId, spendAmount, spendAmount, null, model, provider);
+            _stopping = true;
+            return _shutdownTask ??= ShutdownCoreAsync(cancellationToken);
         }
+    }
 
-        /// <summary>
-        /// Sends a spend summary for a period
-        /// </summary>
-        public async Task SendSpendSummaryAsync(int virtualKeyId, SpendSummaryNotification summary)
+    private async Task ShutdownCoreAsync(CancellationToken cancellationToken)
+    {
+        await _shutdown.CancelAsync();
+        await StopAsync(cancellationToken);
+        Task[] requests;
+        lock (_lifecycleSync) requests = _requests.ToArray();
+        await Task.WhenAll(requests);
+        if (!_registrationAttempted || cancellationToken.IsCancellationRequested || _disposed) return;
+        _registrationAttempted = false;
+        try { await _repository.UnregisterInstanceAsync(InstanceId); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (RedisException exception) { _logger.LogWarning(exception, "Failed to unregister spend notification instance"); }
+        catch (TimeoutException exception) { _logger.LogWarning(exception, "Timed out unregistering spend notification instance"); }
+    }
+
+    private Task TrackOperation(Func<CancellationToken, Task> operation)
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_lifecycleSync)
         {
-            try
-            {
-                var groupName = $"vkey-{virtualKeyId}";
-                await _hubContext.Clients.Group(groupName).SendAsync("SpendSummary", summary);
-
-                _logger.LogInformation(
-                    "Sent spend summary for VirtualKey {VirtualKeyId}: Period {Period}, Total: ${TotalSpend:F2}",
-                    virtualKeyId, summary.Period, summary.TotalSpend);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error sending spend summary for VirtualKey {VirtualKeyId}", virtualKeyId);
-            }
+            if (_stopping || _disposed) return Task.CompletedTask;
+            _requests.Add(completion.Task);
         }
+        _ = RunTrackedOperationAsync(operation, completion);
+        return completion.Task;
+    }
 
-        /// <summary>
-        /// Records spend data for pattern analysis
-        /// </summary>
-        public void RecordSpend(int virtualKeyId, decimal amount)
+    private async Task RunTrackedOperationAsync(Func<CancellationToken, Task> operation, TaskCompletionSource completion)
+    {
+        try
         {
-            // Fire and forget to avoid blocking
-            _ = _repository.RecordSpendingPatternAsync(virtualKeyId, amount, amount);
+            _shutdownToken.ThrowIfCancellationRequested();
+            await operation(_shutdownToken);
         }
-
-        /// <summary>
-        /// Public method to check for unusual spending patterns
-        /// </summary>
-        public Task CheckUnusualSpendingAsync(int virtualKeyId) =>
-            _patternAnalyzer.CheckUnusualSpendingAsync(virtualKeyId);
-
-        private async Task SendSpendUpdateNotificationAsync(
-            int virtualKeyId, decimal amount, decimal totalSpend, decimal? budget, string? model, string? provider)
+        catch (OperationCanceledException) when (_shutdownToken.IsCancellationRequested) { }
+        catch (Exception exception) { _logger.LogError(exception, "Error processing spend notification"); }
+        finally
         {
-            var notification = new SpendUpdateNotification
-            {
-                NewSpend = amount,
-                TotalSpend = totalSpend,
-                Budget = budget,
-                BudgetPercentage = budget.HasValue && budget.Value > 0 ? (totalSpend / budget.Value) * 100 : null,
-                Model = model,
-                Provider = provider
-                // Metadata is intentionally not set: this notification has no per-request
-                // context, so fabricating a request id / endpoint here would be misleading
-            };
-
-            var groupName = $"vkey-{virtualKeyId}";
-            await _hubContext.Clients.Group(groupName).SendAsync("SpendUpdate", notification);
-
-            _logger.LogInformation(
-                "Sent spend update for VirtualKey {VirtualKeyId}: ${Amount:F2} (Total: ${TotalSpend:F2})",
-                virtualKeyId, amount, totalSpend);
+            completion.SetResult();
+            lock (_lifecycleSync) _requests.Remove(completion.Task);
         }
+    }
 
-        private async Task AnalyzeSpendingPatternsAsync()
+    public Task NotifySpendUpdateAsync(int virtualKeyId, decimal amount, decimal totalSpend,
+        decimal? budget, string? model, string? provider) => TrackOperation(async token =>
+    {
+        token.ThrowIfCancellationRequested();
+        await _repository.RecordSpendingPatternAsync(virtualKeyId, amount, totalSpend, token);
+        token.ThrowIfCancellationRequested();
+        if (budget is > 0)
         {
-            try
+            await _budgetAlertManager.CheckBudgetThresholdsAsync(virtualKeyId, totalSpend, budget.Value,
+                totalSpend / budget.Value * 100, token);
+            token.ThrowIfCancellationRequested();
+        }
+        var notification = new SpendUpdateNotification
+        {
+            NewSpend = amount, TotalSpend = totalSpend, Budget = budget,
+            BudgetPercentage = budget is > 0 ? totalSpend / budget.Value * 100 : null,
+            Model = model, Provider = provider
+        };
+        await _hubContext.Clients.Group($"vkey-{virtualKeyId}").SendAsync("SpendUpdate", notification, token);
+        token.ThrowIfCancellationRequested();
+        await _patternAnalyzer.CheckUnusualSpendingAsync(virtualKeyId, token);
+        token.ThrowIfCancellationRequested();
+    });
+
+    public Task NotifySpendUpdatedAsync(int virtualKeyId, decimal spendAmount, string? model, string? provider) =>
+        NotifySpendUpdateAsync(virtualKeyId, spendAmount, spendAmount, null, model, provider);
+
+    public Task SendSpendSummaryAsync(int virtualKeyId, SpendSummaryNotification summary) =>
+        TrackOperation(token => _hubContext.Clients.Group($"vkey-{virtualKeyId}").SendAsync("SpendSummary", summary, token));
+
+    public void RecordSpend(int virtualKeyId, decimal amount) =>
+        _ = TrackOperation(token =>
+        {
+            token.ThrowIfCancellationRequested();
+            return _repository.RecordSpendingPatternAsync(virtualKeyId, amount, amount, token);
+        });
+
+    public Task CheckUnusualSpendingAsync(int virtualKeyId) => TrackOperation(token =>
+    {
+        token.ThrowIfCancellationRequested();
+        return _patternAnalyzer.CheckUnusualSpendingAsync(virtualKeyId, token);
+    });
+
+    private async Task RunPatternAnalysisAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(_analysisInterval);
+            while (await timer.WaitForNextTickAsync(cancellationToken))
             {
-                await _patternAnalyzer.AnalyzeAllPatternsAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in periodic pattern analysis");
+                cancellationToken.ThrowIfCancellationRequested();
+                try { await _patternAnalyzer.AnalyzeAllPatternsAsync(cancellationToken); }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception exception) { _logger.LogError(exception, "Error in periodic pattern analysis"); }
+                cancellationToken.ThrowIfCancellationRequested();
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+    }
 
-        private async Task RegisterInstanceAsync()
+    private async Task RegisterInstanceAsync(CancellationToken cancellationToken)
+    {
+        try
         {
-            try
-            {
-                var now = DateTime.UtcNow;
-                var instanceData = new SpendNotificationInstanceData(
-                    InstanceId,
-                    Environment.MachineName,
-                    Environment.ProcessId,
-                    now,
-                    now);
-
-                await _repository.RegisterInstanceAsync(InstanceId, instanceData);
-                _logger.LogInformation("Registered spend notification instance: {InstanceId}", InstanceId);
-            }
-            catch (OperationCanceledException)
-            {
-                // Cancellation is expected during shutdown/startup race conditions.
-            }
-            catch (TimeoutException ex)
-            {
-                _logger.LogWarning(ex, "Timed out registering spend notification instance; notification processing will continue");
-            }
-            catch (RedisException ex)
-            {
-                _logger.LogWarning(ex, "Failed to register spend notification instance; notification processing will continue");
-            }
-            catch (InvalidOperationException ex)
-            {
-                _logger.LogWarning(ex, "Failed to register spend notification instance due to invalid operation; notification processing will continue");
-            }
+            var now = DateTime.UtcNow;
+            await _repository.RegisterInstanceAsync(InstanceId, new SpendNotificationInstanceData(
+                InstanceId, Environment.MachineName, Environment.ProcessId, now, now), cancellationToken);
         }
+        catch (OperationCanceledException) { }
+        catch (TimeoutException exception) { _logger.LogWarning(exception, "Timed out registering spend notification instance"); }
+        catch (RedisException exception) { _logger.LogWarning(exception, "Failed to register spend notification instance"); }
+        catch (InvalidOperationException exception) { _logger.LogWarning(exception, "Invalid spend notification instance registration"); }
+    }
 
-        private static string GenerateInstanceId()
+    public void Dispose()
+    {
+        lock (_lifecycleSync)
         {
-            return $"{Environment.MachineName}_{Environment.ProcessId}_{Guid.NewGuid():N}".Substring(0,
-                Math.Min(50, $"{Environment.MachineName}_{Environment.ProcessId}_{Guid.NewGuid():N}".Length));
+            if (_disposed) return;
+            _disposed = true;
+            _stopping = true;
+            _shutdown.Cancel();
+            _analysisCancellation?.Cancel();
+            // Hosted shutdown owns all awaited dependency work. Disposal starts no I/O.
+            // Stop owns generation disposal under its transition gate. Even a completed
+            // generation's source can be in use by a concurrent Stop's CancelAsync.
+            if (_shutdownTask is { IsCompleted: true }) _shutdown.Dispose();
         }
-
-        public void Dispose()
-        {
-            _patternAnalysisTimer?.Dispose();
-        }
+        GC.SuppressFinalize(this);
     }
 }

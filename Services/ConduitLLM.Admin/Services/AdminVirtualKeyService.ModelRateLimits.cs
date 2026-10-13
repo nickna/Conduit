@@ -29,7 +29,8 @@ namespace ConduitLLM.Admin.Services
         /// is the only point at which the mistake is visible.
         /// </remarks>
         /// <exception cref="ArgumentException">An alias, or a prefix rule's stem, matches no configured model.</exception>
-        private async Task ValidateModelRateLimitsAsync(Dictionary<string, ModelRateLimitDto>? modelRateLimits)
+        private async Task ValidateModelRateLimitsAsync(Dictionary<string, ModelRateLimitDto>? modelRateLimits,
+            ConduitLLM.Configuration.ConduitDbContext? guardedContext = null, CancellationToken cancellationToken = default)
         {
             if (modelRateLimits is null || modelRateLimits.Count == 0)
             {
@@ -62,11 +63,12 @@ namespace ConduitLLM.Admin.Services
 
                     if (knownAliases is null)
                     {
-                        await using var context = await _dbContextFactory.CreateDbContextAsync();
+                        await using var ownContext = guardedContext is null ? await _dbContextFactory.CreateDbContextAsync(cancellationToken) : null;
+                        var context = guardedContext ?? ownContext!;
                         knownAliases = await context.ModelProviderMappings
                             .AsNoTracking()
                             .Select(m => m.ModelAlias)
-                            .ToListAsync();
+                            .ToListAsync(cancellationToken);
                     }
 
                     if (!knownAliases.Any(alias => alias.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
@@ -78,7 +80,9 @@ namespace ConduitLLM.Admin.Services
                     continue;
                 }
 
-                if (await _modelProviderMappingRepository.GetByModelNameAsync(pattern) is null)
+                if (guardedContext is not null
+                    ? !await guardedContext.ModelProviderMappings.AnyAsync(mapping => mapping.ModelAlias == pattern, cancellationToken)
+                    : await _modelProviderMappingRepository.GetByModelNameAsync(pattern) is null)
                 {
                     throw new ArgumentException(
                         $"'{pattern}' is not a configured model alias, so the per-model rate limit for it would never apply.");

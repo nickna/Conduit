@@ -135,6 +135,10 @@ public sealed class StreamingReservationReconciliationTests(BillingFaultFixture 
         snapshot.FunctionExecutionCost.Should().Be(0.05m);
         snapshot.IsIndeterminate.Should().BeTrue();
         snapshot.Reservation!.Closed.Should().BeFalse();
+        snapshot.ProviderInvocations.Should().Equal(notificationFailure == 2 ? [1] : [1, 2]);
+        snapshot.StreamingProviderInvocations.Should().Equal(notificationFailure == 2 ? [1] : [1, 2]);
+        snapshot.CompletedStreamingProviderInvocations.Should().Equal([1]);
+        snapshot.HasIncompleteProviderUsage.Should().BeTrue();
         var evidence = await batch.GetSpendReservationReconciliationAsync(account.KeyId, snapshot.BillingRequestId);
         evidence.Should().NotBeNull();
         evidence!.KnownAmount.Should().Be(0.05m);
@@ -156,7 +160,7 @@ public sealed class StreamingReservationReconciliationTests(BillingFaultFixture 
             x.TransactionType == TransactionType.Debit)).Should().Be(1);
         estimator.Verify(x => x.EstimateUsageFromStreamingResponseAsync(
             "fault-model", It.IsAny<List<Message>>(), It.IsAny<string>(),
-            It.IsAny<IReadOnlyList<Tool>?>(), It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<IReadOnlyList<Tool>?>(), It.IsAny<CancellationToken>()), notificationFailure == 2 ? Times.Once() : Times.Never());
         orchestration.Verify(x => x.ExecuteToolCallsAsync(
             It.IsAny<List<ToolCall>>(), account.KeyId, It.IsAny<Dictionary<string, FunctionRoute>>(),
             It.IsAny<string>(), It.IsAny<Guid>(), 1, It.IsAny<CancellationToken>()), Times.Once);

@@ -23,6 +23,22 @@ namespace ConduitLLM.Tests.Http.Middleware
     public partial class UsageTrackingMiddlewareTests
     {
         [Fact]
+        public async Task NonStreaming_ExceptionBeforeWork_PreservesFailureWithoutMissingUsageAudit()
+        {
+            var context = new HttpContextBuilder().ForChatCompletions().WithVirtualKey(650).Build();
+            context.GetOrCreateRequestAccountingContext().SetOperation(RequestOperation.ChatCompletion, 650, "test-model");
+            var failure = new InvalidOperationException("routing failed before invocation");
+
+            var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                Invoker.WithNextDelegate(_ => throw failure).InvokeAsync(context));
+
+            Assert.Same(failure, actual);
+            Assert.Empty(Fixture.CapturedBillingEvents);
+            Assert.Empty(Fixture.CapturedRequestLogs);
+            UsageTrackingAssertions.VerifyNoCostCalculation(Fixture.CostService);
+        }
+
+        [Fact]
         public async Task NonStreaming_Response_Without_Model_Emits_RevenueLoss_Audit()
         {
             var context = new HttpContextBuilder().ForChatCompletions().WithVirtualKey(651).Build();

@@ -178,16 +178,18 @@ public class BatchSpendUpdateServiceFallbackTests
     }
 
     [Fact]
-    public async Task DisposeAsync_WithOnlyFallback_DrainsFinalUpdates()
+    public async Task DisposeAsync_WithOnlyFallback_DoesNotStartDatabaseOrRedisWork()
     {
         var service = CreateService();
         service.QueueFallbackUpdate(KeyId, Cost, BilledAtUtc);
 
         await service.DisposeAsync();
 
-        Assert.Equal([KeyHash], Assert.Single(_notifications));
+        Assert.Empty(_notifications);
         _runtimeStore.Verify(store => store.AdjustBalanceAsync(
-            It.IsAny<VirtualKeyBalanceAdjustment>(), It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<VirtualKeyBalanceAdjustment>(), It.IsAny<CancellationToken>()), Times.Never);
+        _server.Verify(server => server.Keys(It.IsAny<int>(), It.IsAny<RedisValue>(), It.IsAny<int>(),
+            It.IsAny<long>(), It.IsAny<int>(), It.IsAny<CommandFlags>()), Times.Never);
     }
 
     [Fact]
@@ -196,7 +198,11 @@ public class BatchSpendUpdateServiceFallbackTests
         using var service = CreateService(flushIntervalSeconds: 1);
         await StartAfterEmptyStartupFlushAsync(service);
         var recovered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        service.SpendUpdatesCompleted += _ => recovered.TrySetResult(true);
+        service.SpendUpdatesCompleted += (_, _) =>
+        {
+            recovered.TrySetResult(true);
+            return Task.CompletedTask;
+        };
         service.QueueFallbackUpdate(KeyId, Cost, BilledAtUtc);
 
         await recovered.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -234,7 +240,11 @@ public class BatchSpendUpdateServiceFallbackTests
             _logger.Object,
             Mock.Of<IBillingAlertingService>(),
             runtimeStore: _runtimeStore.Object);
-        service.SpendUpdatesCompleted += hashes => _notifications.Add(hashes);
+        service.SpendUpdatesCompleted += (hashes, _) =>
+        {
+            _notifications.Add(hashes);
+            return Task.CompletedTask;
+        };
         return service;
     }
 

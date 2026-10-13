@@ -1,10 +1,16 @@
+using ConduitLLM.Configuration.Utilities;
+using System.Text.Json.Serialization;
 namespace ConduitLLM.Configuration.DTOs.VirtualKey
 {
     /// <summary>
     /// Data transfer object for refund processing results
     /// </summary>
-    public class RefundResultDto
+    public class RefundResultDto : IVersionedRepresentation
     {
+        /// <summary>Server-only version of the guarded group snapshot.</summary>
+        [JsonIgnore]
+        public string? ResourceETag { get; set; }
+
         /// <summary>
         /// The transaction ID created for this refund
         /// </summary>

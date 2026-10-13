@@ -26,49 +26,35 @@ namespace ConduitLLM.Gateway.Middleware
             // the first point where the real figure is known for every response shape.
             await ReconcileTokenReservationAsync(context, usage);
 
-            try
+            var pricing = await ProviderUsagePricing.GetOrCalculateAsync(
+                context, model, usage, costCalculationService);
+            if (pricing.Cost is not decimal cost)
             {
-                var providerCalls = context.GetRequestAccountingSnapshot()?.ProviderCalls.ToList();
-
-                async Task<decimal> CalculateCallAsync(Usage callUsage)
-                {
-                    ApplyProviderBillingPolicy(context, callUsage);
-                    return context.Items.TryGetValue(HttpContextKeys.ModelCostId, out var callCostIdObj) &&
-                        callCostIdObj is int callCostId
-                            ? await costCalculationService.CalculateCostByIdAsync(callCostId, callUsage)
-                            : await costCalculationService.CalculateCostAsync(model, callUsage);
-                }
-
-                var cost = await BillingCostComposition.CalculateProviderCostAsync(
-                    providerCalls, usage, CalculateCallAsync);
-
-                var fallbackReason = usage.PricingFallbackReason;
-                if (string.IsNullOrEmpty(fallbackReason) && providerCalls is { Count: > 0 })
-                {
-                    fallbackReason = string.Join("; ", providerCalls
-                        .Where(call => !string.IsNullOrEmpty(call.Usage.PricingFallbackReason))
-                        .Select(call => $"iteration {call.Iteration}: {call.Usage.PricingFallbackReason}"));
-                }
-
-                if (!string.IsNullOrEmpty(fallbackReason))
-                {
-                    LogPricingAuditEvent(context, model, usage, cost, fallbackReason,
-                        Configuration.Entities.BillingAuditEventType.UsageEstimated, billingAuditService);
-                }
-
-                return (cost, false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "BILLING ALERT: Cost calculation failed for model {Model}; preserving request for reconciliation",
-                    model);
+                context.GetOrCreateRequestAccountingContext().MarkIndeterminate(
+                    pricing.FailureReason ?? "Provider pricing is unresolved");
+                _logger.LogError(
+                    "BILLING ALERT: Cost calculation failed for model {Model}; preserving request for reconciliation: {Reason}",
+                    model, pricing.FailureReason);
                 UsageMetrics.UsageTrackingFailures.WithLabels(
                     "pricing_calculation_error", UsageExtractor.DetermineRequestType(context.Request.Path)).Inc();
-                LogPricingAuditEvent(context, model, usage, null, ex.Message,
+                LogPricingAuditEvent(context, model, usage, null, pricing.FailureReason ?? "Provider pricing is unresolved",
                     Configuration.Entities.BillingAuditEventType.PricingCalculationFailed, billingAuditService);
-                return (0m, true);
+                return (pricing.KnownCost, true);
             }
+
+            if (!string.IsNullOrEmpty(pricing.FallbackReason))
+                LogPricingAuditEvent(context, model, usage, cost, pricing.FallbackReason,
+                    Configuration.Entities.BillingAuditEventType.UsageEstimated, billingAuditService);
+            return (cost, false);
+        }
+
+        private static void RecordToolPricingFailure(HttpContext context, string model, Usage usage,
+            ProviderToolPricingEvidence pricing, IBillingAuditService billingAuditService)
+        {
+            var reason = pricing.FailureReason ?? "Provider-hosted tool pricing is unresolved";
+            context.GetOrCreateRequestAccountingContext().MarkIndeterminate(reason);
+            LogPricingAuditEvent(context, model, usage, null, reason,
+                Configuration.Entities.BillingAuditEventType.PricingCalculationFailed, billingAuditService);
         }
 
         private static void LogPricingAuditEvent(

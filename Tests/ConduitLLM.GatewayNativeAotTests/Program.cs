@@ -27,6 +27,11 @@ if (args is ["--mock-provider"])
 
 var settings = ProbeSettings.FromEnvironment();
 var probe = new GatewayNativeParityProbe(settings);
+if (args is ["--verify-shutdown"])
+{
+    await probe.AssertShutdownAccountingAsync();
+    return;
+}
 await probe.RunAsync();
 
 internal sealed record ProbeSettings(
@@ -479,18 +484,17 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             reader.GetBoolean(4));
     }
 
-    private async Task AssertDurableAccountingAsync()
+    private async Task AssertDurableAccountingAsync(int measuredRequests = 4)
     {
         const decimal singleRequestCost = 0.000075m;
-        const int completedRequests = 4; // One non-stream completion and all three streaming modes.
-        var expectedCost = singleRequestCost * completedRequests;
+        var expectedCost = singleRequestCost * measuredRequests;
         var deadline = DateTime.UtcNow.AddSeconds(60);
         AccountingSnapshot? latest = null;
 
         while (DateTime.UtcNow < deadline)
         {
             latest = await ReadAccountingSnapshotAsync();
-            if (latest.MatchingRequestLogs == completedRequests &&
+            if (latest.MatchingRequestLogs == measuredRequests &&
                 latest.RequestLogCost == expectedCost &&
                 latest.LifetimeSpent == expectedCost &&
                 latest.LedgerDebits == expectedCost &&
@@ -507,6 +511,17 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         throw new InvalidOperationException(
             "Native accounting did not settle before the timeout. " +
             $"Latest state: {latest}");
+    }
+
+    public async Task AssertShutdownAccountingAsync()
+    {
+        // This mode runs after both Gateway processes have gracefully exited.
+        // An exit code alone cannot establish that accepted spend was preserved.
+        // The four completed requests and canceled stream each report the same
+        // deterministic raw usage. Interrupted usage must survive cancellation
+        // and shutdown as a fifth measured debit, without estimating this fixture.
+        await AssertDurableAccountingAsync(measuredRequests: 5);
+        Console.WriteLine("Gateway NativeAOT accounting after graceful shutdown: PASS");
     }
 
     private async Task<AccountingSnapshot> ReadAccountingSnapshotAsync()
