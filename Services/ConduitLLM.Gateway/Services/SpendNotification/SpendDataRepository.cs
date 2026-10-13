@@ -14,6 +14,11 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
         /// Records spending pattern data in Redis
         /// </summary>
         Task RecordSpendingPatternAsync(int virtualKeyId, decimal amount, decimal totalSpend);
+        Task RecordSpendingPatternAsync(int virtualKeyId, decimal amount, decimal totalSpend, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return RecordSpendingPatternAsync(virtualKeyId, amount, totalSpend);
+        }
         
         /// <summary>
         /// Gets spending pattern data for a virtual key
@@ -24,6 +29,11 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
         /// Gets all spending pattern keys
         /// </summary>
         Task<List<int>> GetAllPatternKeysAsync();
+        Task<List<int>> GetAllPatternKeysAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return GetAllPatternKeysAsync();
+        }
         
         /// <summary>
         /// Checks if an alert has been sent for a threshold
@@ -34,6 +44,11 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
         /// Marks an alert as sent with TTL
         /// </summary>
         Task<bool> MarkAlertSentAsync(int virtualKeyId, int threshold, TimeSpan ttl);
+        Task<bool> MarkAlertSentAsync(int virtualKeyId, int threshold, TimeSpan ttl, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return MarkAlertSentAsync(virtualKeyId, threshold, ttl);
+        }
         
         /// <summary>
         /// Sets a cooldown for an alert type
@@ -54,6 +69,11 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
         /// Registers an instance in Redis
         /// </summary>
         Task RegisterInstanceAsync(string instanceId, SpendNotificationInstanceData instanceData);
+        Task RegisterInstanceAsync(string instanceId, SpendNotificationInstanceData instanceData, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return RegisterInstanceAsync(instanceId, instanceData);
+        }
         
         /// <summary>
         /// Unregisters an instance from Redis
@@ -92,15 +112,20 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task RecordSpendingPatternAsync(int virtualKeyId, decimal amount, decimal totalSpend)
+        public Task RecordSpendingPatternAsync(int virtualKeyId, decimal amount, decimal totalSpend) =>
+            RecordSpendingPatternAsync(virtualKeyId, amount, totalSpend, CancellationToken.None);
+
+        public async Task RecordSpendingPatternAsync(int virtualKeyId, decimal amount, decimal totalSpend, CancellationToken cancellationToken)
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var patternKey = RedisKeys.Spend.Patterns(virtualKeyId.ToString());
                 var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 
                 // Get existing pattern data
                 var existingData = await _database.HashGetAllAsync(patternKey);
+                cancellationToken.ThrowIfCancellationRequested();
                 var patternData = ParseExistingPattern(existingData, amount, now);
                 
                 // Store updated pattern data
@@ -116,7 +141,9 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                 };
                 
                 await _database.HashSetAsync(patternKey, hashEntries);
+                cancellationToken.ThrowIfCancellationRequested();
                 await _database.KeyExpireAsync(patternKey, _patternRetentionPeriod);
+                cancellationToken.ThrowIfCancellationRequested();
                 
                 // Add to spend history stream
                 var streamEntry = new NameValueEntry[]
@@ -128,7 +155,9 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                 };
                 
                 await _database.StreamAddAsync(RedisKeys.Spend.HistoryStream, streamEntry, maxLength: 10000);
+                cancellationToken.ThrowIfCancellationRequested();
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error recording spending pattern for VirtualKey {VirtualKeyId}", virtualKeyId);
@@ -162,16 +191,18 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             }
         }
 
-        public Task<List<int>> GetAllPatternKeysAsync()
+        public Task<List<int>> GetAllPatternKeysAsync() => GetAllPatternKeysAsync(CancellationToken.None);
+
+        public async Task<List<int>> GetAllPatternKeysAsync(CancellationToken cancellationToken)
         {
             var keys = new List<int>();
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var server = _database.Multiplexer.GetServer(_database.Multiplexer.GetEndPoints()[0]);
-                var patternKeys = server.Keys(pattern: RedisKeys.Spend.PatternsScanPattern()).ToArray();
-                
-                foreach (var key in patternKeys)
+                await foreach (var key in server.KeysAsync(pattern: RedisKeys.Spend.PatternsScanPattern()).WithCancellation(cancellationToken))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var keyString = key.ToString();
                     if (int.TryParse(keyString.Split(':').Last(), out var virtualKeyId))
                     {
@@ -179,11 +210,12 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                     }
                 }
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting all pattern keys");
             }
-            return Task.FromResult(keys);
+            return keys;
         }
 
         public async Task<bool> IsAlertSentAsync(int virtualKeyId, int threshold)
@@ -192,15 +224,21 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             return await _database.KeyExistsAsync(alertKey);
         }
 
-        public async Task<bool> MarkAlertSentAsync(int virtualKeyId, int threshold, TimeSpan ttl)
+        public Task<bool> MarkAlertSentAsync(int virtualKeyId, int threshold, TimeSpan ttl) =>
+            MarkAlertSentAsync(virtualKeyId, threshold, ttl, CancellationToken.None);
+
+        public async Task<bool> MarkAlertSentAsync(int virtualKeyId, int threshold, TimeSpan ttl, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var alertKey = RedisKeys.Spend.SentAlert(virtualKeyId.ToString(), threshold.ToString());
             var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
             var result = await _database.StringSetAsync(alertKey, timestamp, when: When.NotExists);
+            cancellationToken.ThrowIfCancellationRequested();
             
             if (result)
             {
                 await _database.KeyExpireAsync(alertKey, ttl);
+                cancellationToken.ThrowIfCancellationRequested();
             }
             
             return result;
@@ -239,8 +277,12 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             }
         }
 
-        public async Task RegisterInstanceAsync(string instanceId, SpendNotificationInstanceData instanceData)
+        public Task RegisterInstanceAsync(string instanceId, SpendNotificationInstanceData instanceData) =>
+            RegisterInstanceAsync(instanceId, instanceData, CancellationToken.None);
+
+        public async Task RegisterInstanceAsync(string instanceId, SpendNotificationInstanceData instanceData, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var key = RedisKeys.Spend.Instance(instanceId);
             await _database.HashSetAsync(
                 key,
@@ -248,7 +290,9 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                 JsonSerializer.Serialize(
                     instanceData,
                     GatewayInternalJsonContext.Default.SpendNotificationInstanceData));
+            cancellationToken.ThrowIfCancellationRequested();
             await _database.KeyExpireAsync(key, TimeSpan.FromMinutes(2));
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         public async Task UnregisterInstanceAsync(string instanceId)

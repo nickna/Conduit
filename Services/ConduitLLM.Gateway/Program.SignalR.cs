@@ -80,6 +80,11 @@ public partial class Program
         // Register Redis circuit breaker service
         builder.Services.AddSingleton<ConduitLLM.Configuration.Interfaces.IRedisCircuitBreaker, ConduitLLM.Configuration.Services.RedisCircuitBreaker>();
 
+        // Keep cache subscriptions alive through Batch's final Stopped-phase publish,
+        // then unsubscribe and join their Redis deletes before DI disposes tracing.
+        builder.Services.AddHostedService(sp => new RedisVirtualKeyCacheLifecycleHostedService(
+            sp.GetService<ConduitLLM.Core.Interfaces.IVirtualKeyCache>() as RedisVirtualKeyCache));
+
         // Register batch spend update service for optimized Virtual Key operations
         // Use factory to prevent auto-discovery by ASP.NET Core - register ONLY via interface
         builder.Services.AddSingleton<IBatchSpendUpdateService>(serviceProvider =>
@@ -104,13 +109,14 @@ public partial class Program
             var cache = serviceProvider.GetService<ConduitLLM.Core.Interfaces.IVirtualKeyCache>();
             if (cache != null)
             {
-                batchService.SpendUpdatesCompleted += async (keyHashes) =>
+                batchService.SpendUpdatesCompleted += async (keyHashes, cancellationToken) =>
                 {
                     try
                     {
-                        await cache.InvalidateVirtualKeysAsync(keyHashes);
+                        await cache.InvalidateVirtualKeysAsync(keyHashes, cancellationToken);
                         logger.LogDebug("Cache invalidated for {Count} Virtual Keys after batch spend update", keyHashes.Length);
                     }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                     catch (Exception ex)
                     {
                         logger.LogWarning(ex, "Failed to invalidate cache after batch spend update");
@@ -120,11 +126,12 @@ public partial class Program
 
             return batchService;
         });
-        builder.Services.AddLeaderElectedHostedService<ConduitLLM.Configuration.Services.BatchSpendUpdateService>(
-            sp => {
-                var service = (ConduitLLM.Configuration.Services.BatchSpendUpdateService)sp.GetRequiredService<IBatchSpendUpdateService>();
-                return service;
-            },
-            "BatchSpendUpdateService");
+        builder.Services.AddSingleton<ConduitLLM.Configuration.Services.BatchSpendLeaderWorker>(sp =>
+            new((ConduitLLM.Configuration.Services.BatchSpendUpdateService)sp.GetRequiredService<IBatchSpendUpdateService>()));
+        builder.Services.AddLeaderElectedHostedService<ConduitLLM.Configuration.Services.BatchSpendLeaderWorker>(
+            sp => sp.GetRequiredService<ConduitLLM.Configuration.Services.BatchSpendLeaderWorker>(),
+            "BatchSpendUpdateService", ownsInnerService: false);
+        builder.Services.AddHostedService(sp => new ConduitLLM.Configuration.Services.BatchSpendLifecycleHostedService(
+            (ConduitLLM.Configuration.Services.BatchSpendUpdateService)sp.GetRequiredService<IBatchSpendUpdateService>()));
     }
 }

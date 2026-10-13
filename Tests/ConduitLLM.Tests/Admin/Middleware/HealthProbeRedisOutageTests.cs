@@ -74,12 +74,31 @@ public sealed class HealthProbeRedisOutageTests
     {
         var cache = OutageCache();
         using var memory = new MemoryCache(new MemoryCacheOptions());
-        var service = CreateService(cache.Object, memory);
+        var service = CreateService(cache.Object, memory, checkIpRateLimit: true);
         var context = new DefaultHttpContext();
         context.Request.Path = path;
         context.Request.Method = method;
-        await Assert.ThrowsAsync<IOException>(() => service.IsRequestAllowedAsync(context));
-        cache.Verify(value => value.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+
+        var first = await service.IsRequestAllowedAsync(context);
+        var second = await service.IsRequestAllowedAsync(context);
+
+        Assert.False(second.IsAllowed);
+        if (path == "/api/health-status")
+        {
+            // An unavailable failure tracker never authenticates a missing API key.
+            Assert.False(first.IsAllowed);
+            Assert.Equal(StatusCodes.Status401Unauthorized, first.StatusCode);
+            Assert.Equal(StatusCodes.Status401Unauthorized, second.StatusCode);
+            cache.Verify(value => value.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+        else
+        {
+            // Legacy ban-cache outages are tolerated, but these non-probe requests
+            // still consume the local counter when no Redis multiplexer is registered.
+            Assert.True(first.IsAllowed);
+            Assert.Equal(StatusCodes.Status429TooManyRequests, second.StatusCode);
+            cache.Verify(value => value.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        }
     }
 
     [Fact]
@@ -104,7 +123,16 @@ public sealed class HealthProbeRedisOutageTests
         return cache;
     }
 
-    private static SecurityService CreateService(IDistributedCache cache, IMemoryCache memory) =>
-        new(Microsoft.Extensions.Options.Options.Create(new AdminSecurityOptions { UseDistributedTracking = true }),
+    private static SecurityService CreateService(IDistributedCache cache, IMemoryCache memory, bool checkIpRateLimit = false)
+    {
+        var options = new AdminSecurityOptions { UseDistributedTracking = true };
+        if (checkIpRateLimit)
+        {
+            options.RateLimiting.Enabled = true;
+            options.RateLimiting.MaxRequests = 1;
+            options.RateLimiting.ExcludedPaths.Clear();
+        }
+        return new(Microsoft.Extensions.Options.Options.Create(options),
             new ConfigurationBuilder().Build(), NullLogger<SecurityService>.Instance, memory, cache);
+    }
 }

@@ -87,6 +87,7 @@ namespace ConduitLLM.Configuration.Utilities
                 ExpiresAt = virtualKey.ExpiresAt,
                 CreatedAt = virtualKey.CreatedAt,
                 UpdatedAt = virtualKey.UpdatedAt,
+                ResourceETag = new ResourceVersion(virtualKey.RowVersion, virtualKey.UpdatedAt).ETag,
                 Metadata = ParseMetadata(virtualKey.Metadata),
                 RateLimitRpm = virtualKey.RateLimitRpm,
                 RateLimitRpd = virtualKey.RateLimitRpd,

@@ -43,7 +43,8 @@ public static class GatewayApiEndpoints
             provider.GetRequiredService<ConduitLLM.Functions.Services.FunctionParameterValidationService>(),
             provider.GetRequiredService<IEventPublisher>(),
             provider.GetRequiredService<IHttpContextAccessor>(),
-            provider.GetRequiredService<ILogger<FunctionsEndpoints>>()));
+            provider.GetRequiredService<ILogger<FunctionsEndpoints>>(),
+            provider.GetRequiredService<IProviderErrorTranslator>()));
 #else
         services.AddScoped<FunctionsEndpoints>();
 #endif
@@ -71,7 +72,9 @@ public static class GatewayApiEndpoints
             provider.GetService<ISpendReservationService>(),
             provider.GetService<IOptions<BillingAdmissionOptions>>(),
             provider.GetService<IHttpContextAccessor>(),
-            provider.GetService<IProviderErrorTranslator>()));
+            provider.GetService<IProviderErrorTranslator>(),
+            provider.GetService<ICostCalculationService>(),
+            provider.GetService<IToolCostCalculationService>()));
 #else
         services.AddScoped<ChatEndpoints>();
 #endif

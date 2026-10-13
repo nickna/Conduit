@@ -683,9 +683,19 @@ public sealed class HostCompositionTests
             Assert.Single(workers.OfType<MediaTaskLeaseRecoveryService>());
             Assert.Single(workers.OfType<ProviderKeyReprobeService>());
             Assert.Single(workers.OfType<GatewayHeartbeatPublisher>());
-            Assert.Single(workers.OfType<BatchSpendUpdateService>());
-            Assert.Single(workers.OfType<DistributedSpendNotificationService>());
-            Assert.Single(workers.OfType<WebhookDeliveryNotificationService>());
+            var batch = Assert.IsType<BatchSpendUpdateService>(provider.GetRequiredService<IBatchSpendUpdateService>());
+            var batchWorker = Assert.Single(workers.OfType<BatchSpendLeaderWorker>());
+            Assert.Same(provider.GetRequiredService<BatchSpendLeaderWorker>(), batchWorker);
+            AssertBorrowedSingleton(batchWorker, batch);
+            AssertBorrowedSingleton(Assert.Single(hosted.OfType<BatchSpendLifecycleHostedService>()), batch);
+            Assert.DoesNotContain(workers, worker => worker is BatchSpendUpdateService);
+
+            var spend = Assert.IsType<DistributedSpendNotificationService>(provider.GetRequiredService<ISpendNotificationService>());
+            Assert.Same(spend, Assert.Single(workers.OfType<DistributedSpendNotificationService>()));
+            AssertBorrowedSingleton(Assert.Single(hosted.OfType<SpendNotificationLifecycleHostedService>()), spend);
+
+            var webhook = Assert.IsType<WebhookDeliveryNotificationService>(provider.GetRequiredService<IWebhookDeliveryNotificationService>());
+            Assert.Same(webhook, Assert.Single(workers.OfType<WebhookDeliveryNotificationService>()));
         }
         else
         {
@@ -698,6 +708,14 @@ public sealed class HostCompositionTests
             Assert.Same(cleanup, Assert.Single(workers.OfType<MediaCleanupService>()));
 #endif
         }
+    }
+
+    private static void AssertBorrowedSingleton(IHostedService adapter, object singleton)
+    {
+        var captured = Assert.Single(adapter.GetType().GetFields(
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic),
+            field => field.FieldType == singleton.GetType());
+        Assert.Same(singleton, captured.GetValue(adapter));
     }
 
     private static void AssertBillingAuditComposition(IServiceCollection descriptors, IServiceProvider provider)

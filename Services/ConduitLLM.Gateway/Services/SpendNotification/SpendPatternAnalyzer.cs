@@ -13,11 +13,21 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
         /// Checks for unusual spending patterns for a virtual key
         /// </summary>
         Task CheckUnusualSpendingAsync(int virtualKeyId);
+        Task CheckUnusualSpendingAsync(int virtualKeyId, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return CheckUnusualSpendingAsync(virtualKeyId);
+        }
         
         /// <summary>
         /// Analyzes all spending patterns periodically
         /// </summary>
         Task AnalyzeAllPatternsAsync();
+        Task AnalyzeAllPatternsAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return AnalyzeAllPatternsAsync();
+        }
     }
 
     /// <summary>
@@ -45,11 +55,15 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task CheckUnusualSpendingAsync(int virtualKeyId)
+        public Task CheckUnusualSpendingAsync(int virtualKeyId) => CheckUnusualSpendingAsync(virtualKeyId, CancellationToken.None);
+
+        public async Task CheckUnusualSpendingAsync(int virtualKeyId, CancellationToken cancellationToken)
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var pattern = await _repository.GetSpendingPatternAsync(virtualKeyId);
+                cancellationToken.ThrowIfCancellationRequested();
                 if (pattern == null) return;
                 
                 var analysis = AnalyzePattern(pattern);
@@ -57,36 +71,46 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                 
                 // Check cooldown for unusual spending alerts
                 var cooldownKey = $"unusual:{analysis.PatternType}";
-                if (await _repository.IsAlertInCooldownAsync(virtualKeyId, cooldownKey))
+                var inCooldown = await _repository.IsAlertInCooldownAsync(virtualKeyId, cooldownKey);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (inCooldown)
                 {
                     return;
                 }
+                cancellationToken.ThrowIfCancellationRequested();
                 
                 // Set cooldown
                 await _repository.SetAlertCooldownAsync(virtualKeyId, cooldownKey, _unusualAlertCooldown);
+                cancellationToken.ThrowIfCancellationRequested();
                 
                 // Send unusual spending notification
-                await SendUnusualSpendingNotificationAsync(virtualKeyId, analysis);
+                await SendUnusualSpendingNotificationAsync(virtualKeyId, analysis, cancellationToken);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error checking unusual spending patterns for VirtualKey {VirtualKeyId}", virtualKeyId);
             }
         }
 
-        public async Task AnalyzeAllPatternsAsync()
+        public Task AnalyzeAllPatternsAsync() => AnalyzeAllPatternsAsync(CancellationToken.None);
+
+        public async Task AnalyzeAllPatternsAsync(CancellationToken cancellationToken)
         {
             try
             {
-                var virtualKeyIds = await _repository.GetAllPatternKeysAsync();
+                cancellationToken.ThrowIfCancellationRequested();
+                var virtualKeyIds = await _repository.GetAllPatternKeysAsync(cancellationToken);
                 
                 foreach (var virtualKeyId in virtualKeyIds)
                 {
-                    await CheckUnusualSpendingAsync(virtualKeyId);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await CheckUnusualSpendingAsync(virtualKeyId, cancellationToken);
                 }
                 
                 _logger.LogDebug("Analyzed {Count} spending patterns", virtualKeyIds.Count);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error analyzing all spending patterns");
@@ -128,10 +152,11 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             return analysis;
         }
 
-        private async Task SendUnusualSpendingNotificationAsync(int virtualKeyId, PatternAnalysis analysis)
+        private async Task SendUnusualSpendingNotificationAsync(int virtualKeyId, PatternAnalysis analysis, CancellationToken cancellationToken)
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var notification = new UnusualSpendingNotification
                 {
                     ActivityType = analysis.PatternType,
@@ -143,13 +168,15 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
                 };
                 
                 var groupName = $"vkey-{virtualKeyId}";
-                await _hubContext.Clients.Group(groupName).SendAsync("UnusualSpendingDetected", notification);
+                await _hubContext.Clients.Group(groupName).SendAsync("UnusualSpendingDetected", notification, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 
                 _logger.LogWarning(
                     "[UnusualSpending] Detected - VirtualKey: {VirtualKeyId}, Pattern: {PatternType}, " +
                     "Description: {Description}",
                     virtualKeyId, analysis.PatternType, analysis.Description);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error sending unusual spending notification for VirtualKey {VirtualKeyId}", 

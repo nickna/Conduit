@@ -188,11 +188,11 @@ public sealed class ChatFunctionExecutionConfigurationRuntimeStoreTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task OmittedFlags_KeepDtoInitializersAndOnlyValidateTheirExplicitIterationValue(bool runtime)
+    public async Task OmittedFlags_ResolveGlobalDefaultsOnlyAfterConfigurationValidation(bool runtime)
     {
         await using var fixture = new Fixture(runtime);
         fixture.Rows = [Configuration(4)];
-        fixture.AllowIterationBounds(minimum: 2, maximum: 6);
+        fixture.AllowDefaults(maximum: 7, agentic: true);
         fixture.AllowProvider();
 
         using var response = await fixture.PostAsync(StandardRoute,
@@ -200,8 +200,9 @@ public sealed class ChatFunctionExecutionConfigurationRuntimeStoreTests
 
         await AssertCompletionAsync(response, fixture, hasFunctions: true);
         fixture.AssertRead([4]);
-        Assert.Equal(["min", "max"], fixture.SettingsCalls);
-        Assert.Equal(5, fixture.ProviderRequest.MaxAgenticIterations);
+        Assert.Equal(0, fixture.SettingsCallsAtRead);
+        Assert.Equal(["max", "default"], fixture.SettingsCalls);
+        Assert.Equal(7, fixture.ProviderRequest.MaxAgenticIterations);
         Assert.True(fixture.ProviderRequest.EnableAgenticMode);
         fixture.AssertProviderCalls(hasFunctions: true);
     }
@@ -248,13 +249,25 @@ public sealed class ChatFunctionExecutionConfigurationRuntimeStoreTests
     }
 
     [Fact]
-    public async Task PublicConstructor_RemainsTheSingleFourteenArgumentRepositoryConstructor()
+    public async Task PublicConstructor_RemainsSingleRepositoryConstructorWithOptionalPricingServices()
     {
         var constructor = Assert.Single(typeof(ChatEndpoints).GetConstructors());
         var parameters = constructor.GetParameters();
-        Assert.Equal(14, parameters.Length);
+        Assert.Equal(16, parameters.Length);
+        Assert.Equal([
+            "conduit", "logger", "modelMappingService", "jsonSerializerOptions", "eventPublisher",
+            "globalSettingsCacheService", "usageEstimationService", "functionConfigRepository",
+            "usageTrackingOptions", "chatSpendEstimator", "spendReservationService", "billingAdmissionOptions",
+            "httpContextAccessor", "providerErrorTranslator", "costCalculationService", "toolCostCalculationService"
+        ], parameters.Select(parameter => parameter.Name));
         Assert.Equal(typeof(IFunctionConfigurationRepository), parameters[7].ParameterType);
-        Assert.All(parameters.Skip(7), parameter => Assert.True(parameter.IsOptional));
+        Assert.Equal(typeof(ICostCalculationService), parameters[14].ParameterType);
+        Assert.Equal(typeof(ConduitLLM.Gateway.Services.IToolCostCalculationService), parameters[15].ParameterType);
+        Assert.All(parameters.Skip(7), parameter =>
+        {
+            Assert.True(parameter.IsOptional);
+            Assert.Null(parameter.DefaultValue);
+        });
 
         await using var legacy = new Fixture(runtime: false) { NullEventPublisher = true, UnavailableRepository = true };
         await using var runtime = new Fixture(runtime: true) { NullEventPublisher = true };
@@ -566,8 +579,8 @@ public sealed class ChatFunctionExecutionConfigurationRuntimeStoreTests
             if (!preserveExplicitNullFlags)
                 return generated.GetRawText();
 
-            // These DTO members omit null when written and have non-null initializers
-            // when bound. Send an explicit null to exercise the endpoint defaults.
+            // These DTO members omit null when written. Send explicit nulls so this
+            // fixture can exercise omission and explicit-null binding separately.
             using var stream = new MemoryStream();
             using (var writer = new Utf8JsonWriter(stream))
             {

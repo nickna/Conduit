@@ -26,9 +26,12 @@ namespace ConduitLLM.Security.Services
         /// counting undercounts under exactly the concurrency a rate limiter exists to handle.
         /// </summary>
         protected readonly IFixedWindowCounter RateLimitCounter;
+        protected readonly IFailedAuthTracker FailedAuthTracker;
 
-        // Cache key prefixes — shared across Admin and Gateway for consistent tracking
+        // Fixed-window keys include the API service name.
         protected const string RateLimitPrefix = "rate_limit:";
+        // Legacy failed-auth keys use each API's configured cache namespace. The atomic
+        // tracker scopes its versioned keys explicitly by service name and IP address.
         protected const string FailedLoginPrefix = "failed_login:";
         protected const string BanPrefix = "ban:";
 
@@ -46,7 +49,8 @@ namespace ConduitLLM.Security.Services
             ILogger logger,
             IMemoryCache memoryCache,
             IDistributedCache? distributedCache,
-            IFixedWindowCounter? rateLimitCounter = null)
+            IFixedWindowCounter? rateLimitCounter = null,
+            IFailedAuthTracker? failedAuthTracker = null)
         {
             Logger = logger ?? throw new ArgumentNullException(nameof(logger));
             MemoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
@@ -55,6 +59,7 @@ namespace ConduitLLM.Security.Services
             // Without a shared store there is no cross-instance limit to make atomic, so the
             // in-process counter is the honest fallback rather than a degraded distributed one.
             RateLimitCounter = rateLimitCounter ?? new MemoryFixedWindowCounter(memoryCache);
+            FailedAuthTracker = failedAuthTracker ?? new MemoryFailedAuthTracker(memoryCache);
         }
 
         /// <inheritdoc/>
@@ -69,65 +74,44 @@ namespace ConduitLLM.Security.Services
                 return;
             }
 
-            var key = $"{FailedLoginPrefix}{ipAddress}";
-            var banKey = $"{BanPrefix}{ipAddress}";
-
-            var attempts = (await GetCacheObjectAsync(
-                key,
-                SecurityCacheJsonContext.Default.FailedAuthData))?.Attempts ?? 0;
-            attempts++;
-
             var maskedKey = MaskKey(attemptedKey);
+            var recorded = await FailedAuthTracker.RecordAsync(ServiceName, ipAddress,
+                Options.FailedAuth.MaxAttempts, TimeSpan.FromMinutes(Options.FailedAuth.BanDurationMinutes), maskedKey);
             Logger.LogWarning(
                 "Failed authentication attempt {Attempts}/{MaxAttempts} for IP {IpAddress}{KeyInfo}",
-                attempts, Options.FailedAuth.MaxAttempts, ipAddress,
+                recorded.Attempts, Options.FailedAuth.MaxAttempts, ipAddress,
                 string.IsNullOrEmpty(maskedKey) ? "" : $" with key {maskedKey}");
-
-            if (attempts >= Options.FailedAuth.MaxAttempts)
+            if (recorded.NewBan && recorded.Ban is { } banInfo)
             {
-                var banInfo = new BannedIpInfo
+                // The atomic tracker is authoritative. Mirror the first ban for legacy readers
+                // during rollout, with its original absolute deadline rather than a fresh TTL.
+                try
                 {
-                    BannedUntil = DateTime.UtcNow.AddMinutes(Options.FailedAuth.BanDurationMinutes),
-                    FailedAttempts = attempts,
-                    Source = ServiceName,
-                    Reason = "Exceeded max failed authentication attempts",
-                    LastAttemptedKey = maskedKey
-                };
-
-                await SetCacheValueAsync(
-                    banKey,
-                    banInfo,
-                    TimeSpan.FromMinutes(Options.FailedAuth.BanDurationMinutes),
-                    SecurityCacheJsonContext.Default.BannedIpInfo);
+                    var remaining = banInfo.BannedUntil - DateTime.UtcNow;
+                    if (remaining > TimeSpan.Zero)
+                        await SetCacheValueAsync($"{BanPrefix}{ipAddress}", banInfo, remaining,
+                            SecurityCacheJsonContext.Default.BannedIpInfo);
+                }
+                catch (Exception exception)
+                {
+                    Logger.LogWarning(exception, "Could not mirror failed-auth ban for legacy readers at {IpAddress}", ipAddress);
+                }
                 Logger.LogWarning("IP {IpAddress} has been banned after {Attempts} failed authentication attempts",
-                    ipAddress, attempts);
-
-                await RemoveCacheValueAsync(key);
-            }
-            else
-            {
-                var authData = new FailedAuthData
-                {
-                    Attempts = attempts,
-                    Source = ServiceName,
-                    LastAttempt = DateTime.UtcNow,
-                    LastAttemptedKey = maskedKey
-                };
-
-                await SetCacheValueAsync(
-                    key,
-                    authData,
-                    TimeSpan.FromMinutes(Options.FailedAuth.BanDurationMinutes),
-                    SecurityCacheJsonContext.Default.FailedAuthData,
-                    sliding: true);
+                    ipAddress, recorded.Attempts);
             }
         }
 
         /// <inheritdoc/>
         public virtual async Task ClearFailedAuthAttemptsAsync(string ipAddress)
         {
+            if (!Options.FailedAuth.Enabled) return;
+            await FailedAuthTracker.ClearAttemptsAsync(ServiceName, ipAddress);
             var key = $"{FailedLoginPrefix}{ipAddress}";
-            await RemoveCacheValueAsync(key);
+            try { await RemoveCacheValueAsync(key); }
+            catch (Exception exception)
+            {
+                Logger.LogWarning(exception, "Could not clear legacy failed-auth attempts at {IpAddress}", ipAddress);
+            }
             Logger.LogDebug("Cleared failed authentication attempts for IP {IpAddress}", ipAddress);
         }
 
@@ -139,26 +123,18 @@ namespace ConduitLLM.Security.Services
                 return false;
             }
 
-            var banKey = $"{BanPrefix}{ipAddress}";
-
-            if (Options.UseDistributedTracking && DistributedCache != null)
+            if (await FailedAuthTracker.GetBanAsync(ServiceName, ipAddress) is not null) return true;
+            // Keep live legacy bans visible until their recorded deadline. Reads never renew them.
+            try
             {
-                var cachedValue = await DistributedCache.GetStringAsync(banKey);
-                if (!string.IsNullOrEmpty(cachedValue))
-                {
-                    var banInfo = JsonSerializer.Deserialize(
-                        cachedValue,
-                        SecurityCacheJsonContext.Default.BannedIpInfo);
-                    return banInfo?.BannedUntil > DateTime.UtcNow;
-                }
+                var legacy = await GetCacheObjectAsync($"{BanPrefix}{ipAddress}", SecurityCacheJsonContext.Default.BannedIpInfo);
+                return legacy?.BannedUntil > DateTime.UtcNow;
             }
-            else
+            catch (Exception exception)
             {
-                var banInfo = MemoryCache.Get<BannedIpInfo>(banKey);
-                return banInfo?.BannedUntil > DateTime.UtcNow;
+                Logger.LogWarning(exception, "Legacy failed-auth ban lookup unavailable for {IpAddress}", ipAddress);
+                return false;
             }
-
-            return false;
         }
 
         /// <summary>

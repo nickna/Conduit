@@ -27,7 +27,7 @@ namespace ConduitLLM.Core.Interfaces
         /// Bulk invalidate multiple Virtual Keys efficiently
         /// </summary>
         /// <param name="keyHashes">Array of hashed keys to invalidate</param>
-        Task InvalidateVirtualKeysAsync(string[] keyHashes);
+        Task InvalidateVirtualKeysAsync(string[] keyHashes, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Get cache performance statistics

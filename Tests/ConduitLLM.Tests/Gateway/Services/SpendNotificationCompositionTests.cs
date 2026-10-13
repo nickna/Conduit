@@ -1,4 +1,5 @@
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Extensions;
 using ConduitLLM.Gateway.Hubs;
 using ConduitLLM.Gateway.Services.SpendNotification;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Moq;
 using StackExchange.Redis;
 
@@ -43,8 +45,13 @@ public sealed class SpendNotificationCompositionTests
         Assert.Same(provider.GetRequiredService<ISpendDataRepository>(), scope.ServiceProvider.GetRequiredService<ISpendDataRepository>());
         Assert.Same(provider.GetRequiredService<IBudgetAlertManager>(), scope.ServiceProvider.GetRequiredService<IBudgetAlertManager>());
         Assert.Same(provider.GetRequiredService<ISpendPatternAnalyzer>(), scope.ServiceProvider.GetRequiredService<ISpendPatternAnalyzer>());
-        Assert.Same(provider.GetRequiredService<DistributedSpendNotificationService>(), provider.GetRequiredService<ISpendNotificationService>());
-        Assert.Single(provider.GetServices<IHostedService>());
+        Assert.IsType<DistributedSpendNotificationService>(provider.GetRequiredService<ISpendNotificationService>());
+        Assert.Same(provider.GetRequiredService<ISpendNotificationService>(), scope.ServiceProvider.GetRequiredService<ISpendNotificationService>());
+        Assert.DoesNotContain(services, value => value.ServiceType == typeof(DistributedSpendNotificationService));
+        var hosted = provider.GetServices<IHostedService>().ToArray();
+        Assert.Collection(hosted,
+            service => Assert.IsType<SpendNotificationLifecycleHostedService>(service),
+            service => Assert.IsType<LeaderElectedServiceWrapper>(service));
         Assert.Single(services, value => value.ServiceType == typeof(ISpendDataRepository));
         Assert.Single(services, value => value.ServiceType == typeof(IBudgetAlertManager));
         Assert.Single(services, value => value.ServiceType == typeof(ISpendPatternAnalyzer));
@@ -83,17 +90,18 @@ public sealed class SpendNotificationCompositionTests
         services.RemoveAll<ISpendPatternAnalyzer>();
         services.AddSingleton(patterns.Object);
         using var provider = Build(services);
-        var service = provider.GetRequiredService<DistributedSpendNotificationService>();
+        var service = (DistributedSpendNotificationService)provider.GetRequiredService<ISpendNotificationService>();
 
         await service.StartAsync(CancellationToken.None);
         await service.NotifySpendUpdateAsync(42, 5, 75, 100, "example", "provider");
         await service.StopAsync(CancellationToken.None);
+        await service.ShutdownAsync(CancellationToken.None);
 
         repository.Verify(value => value.RegisterInstanceAsync(service.InstanceId,
-            It.IsAny<ConduitLLM.Gateway.Serialization.SpendNotificationInstanceData>()), Times.Once);
-        repository.Verify(value => value.RecordSpendingPatternAsync(42, 5, 75), Times.Once);
+            It.IsAny<ConduitLLM.Gateway.Serialization.SpendNotificationInstanceData>(), It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(value => value.RecordSpendingPatternAsync(42, 5, 75, It.IsAny<CancellationToken>()), Times.Once);
         budget.Verify(value => value.CheckBudgetThresholdsAsync(42, 75, 100, 75, It.IsAny<CancellationToken>()), Times.Once);
-        patterns.Verify(value => value.CheckUnusualSpendingAsync(42), Times.Once);
+        patterns.Verify(value => value.CheckUnusualSpendingAsync(42, It.IsAny<CancellationToken>()), Times.Once);
         repository.Verify(value => value.UnregisterInstanceAsync(service.InstanceId), Times.Once);
     }
 
@@ -126,11 +134,12 @@ public sealed class SpendNotificationCompositionTests
         services.RemoveAll<IHubContext<SpendNotificationHub>>();
         services.AddSingleton(hub.Object);
         using var provider = Build(services);
-        var service = provider.GetRequiredService<DistributedSpendNotificationService>();
+        var service = (DistributedSpendNotificationService)provider.GetRequiredService<ISpendNotificationService>();
 
         await service.StartAsync(CancellationToken.None);
         await service.NotifySpendUpdateAsync(42, 5, 75, null, "example", "provider");
         await service.StopAsync(CancellationToken.None);
+        await service.ShutdownAsync(CancellationToken.None);
 
         client.Verify(value => value.SendCoreAsync("SpendUpdate", It.IsAny<object[]>(),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -152,21 +161,53 @@ public sealed class SpendNotificationCompositionTests
         else
         {
             repository.Setup(value => value.RegisterInstanceAsync(It.IsAny<string>(),
-                It.IsAny<ConduitLLM.Gateway.Serialization.SpendNotificationInstanceData>())).ThrowsAsync(failure);
+                It.IsAny<ConduitLLM.Gateway.Serialization.SpendNotificationInstanceData>(), It.IsAny<CancellationToken>())).ThrowsAsync(failure);
         }
         services.RemoveAll<ISpendDataRepository>();
         services.AddSingleton(repository.Object);
         using var provider = Build(services);
-        var service = provider.GetRequiredService<DistributedSpendNotificationService>();
+        var service = (DistributedSpendNotificationService)provider.GetRequiredService<ISpendNotificationService>();
 
         if (shutdown)
         {
             await service.StartAsync(CancellationToken.None);
         }
         var actual = await Assert.ThrowsAsync<ArgumentException>(() => shutdown
-            ? service.StopAsync(CancellationToken.None)
+            ? service.ShutdownAsync(CancellationToken.None)
             : service.StartAsync(CancellationToken.None));
 
         Assert.Same(failure, actual);
+    }
+
+    [Fact]
+    public async Task ProductionGraph_CapturesOneDisposableOwnerForTheBorrowedNotificationService()
+    {
+        var services = Services();
+        services.Replace(ServiceDescriptor.Singleton<ISpendNotificationService, DisposalCountingNotificationService>());
+        var provider = Build(services);
+        var service = (DisposalCountingNotificationService)provider.GetRequiredService<ISpendNotificationService>();
+        var hosted = provider.GetServices<IHostedService>().ToArray();
+        Assert.Equal(2, hosted.Length);
+        foreach (var adapter in hosted.Reverse()) await adapter.StopAsync(CancellationToken.None);
+        foreach (var adapter in hosted.OfType<IHostedLifecycleService>().Reverse())
+            await adapter.StoppedAsync(CancellationToken.None);
+        Assert.Equal(0, service.Disposals);
+
+        await provider.DisposeAsync();
+
+        Assert.Equal(1, service.Disposals);
+    }
+
+    public sealed class DisposalCountingNotificationService(IHubContext<SpendNotificationHub> hub,
+        ILogger<DistributedSpendNotificationService> logger, ISpendDataRepository repository,
+        IBudgetAlertManager budget, ISpendPatternAnalyzer patterns)
+        : DistributedSpendNotificationService(hub, logger, repository, budget, patterns), IDisposable
+    {
+        public int Disposals { get; private set; }
+        void IDisposable.Dispose()
+        {
+            Disposals++;
+            base.Dispose();
+        }
     }
 }

@@ -95,7 +95,7 @@
     <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.17.14" />
     <!-- Security override for EF Core Sqlite transitives (GHSA-2m69-gcr7-jv3q, high; fixed in 2.1.12). -->
-    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
     <!-- Compatibility pin: SignalR's transitive floor predates the Expiration StringSet API used by Conduit. -->
     <PackageVersion Include="StackExchange.Redis" Version="2.13.17" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.3" />
@@ -104,10 +104,10 @@
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.12" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
     <PackageVersion Include="Testcontainers.Redis" Version="4.16.0" />
-    <PackageVersion Include="WolverineFx" Version="6.48.3" />
-    <PackageVersion Include="WolverineFx.Postgresql" Version="6.48.3" />
+    <PackageVersion Include="WolverineFx" Version="6.49.0" />
+    <PackageVersion Include="WolverineFx.Postgresql" Version="6.49.0" />
     <!-- Generation/test-only; production service restores exclude this package. -->
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.48.3" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.49.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
     <!-- Runtime skips for tests that need external infrastructure (Redis). xUnit v2 has no

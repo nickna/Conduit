@@ -6,6 +6,7 @@ using ConduitLLM.Core.Options;
 using ConduitLLM.Core.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -42,6 +43,10 @@ namespace ConduitLLM.Core.Extensions
                 }
             });
 
+            // This adapter borrows the singleton. Lease/maintenance cleanup runs after
+            // leader workers stop, before Redis, tracing and the container are disposed.
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, LeaderElectionLifecycleHostedService>());
+
             return services;
         }
 
@@ -70,7 +75,8 @@ namespace ConduitLLM.Core.Extensions
                 var logger = serviceProvider.GetRequiredService<ILogger<Services.LeaderElectedServiceWrapper>>();
                 var name = serviceName ?? typeof(TService).Name;
 
-                return new Services.LeaderElectedServiceWrapper(innerService, leaderElectionService, logger, name);
+                return new Services.LeaderElectedServiceWrapper(innerService, leaderElectionService, logger, name,
+                    ownsInnerService: false);
             });
 
             return services;
@@ -79,10 +85,15 @@ namespace ConduitLLM.Core.Extensions
         /// <summary>
         /// Adds a hosted service with leader election using a factory
         /// </summary>
+        /// <param name="services">The service collection.</param>
+        /// <param name="implementationFactory">Creates a new owned service or returns a borrowed registration.</param>
+        /// <param name="serviceName">The unique leadership name, defaulting to the service type name.</param>
+        /// <param name="ownsInnerService">True for a newly created service; false when DI owns the returned service.</param>
         public static IServiceCollection AddLeaderElectedHostedService<TService>(
             this IServiceCollection services,
             Func<IServiceProvider, TService> implementationFactory,
-            string? serviceName = null)
+            string? serviceName = null,
+            bool ownsInnerService = true)
             where TService : class, IHostedService
         {
             // Register the wrapper as a hosted service
@@ -95,7 +106,8 @@ namespace ConduitLLM.Core.Extensions
                 var logger = serviceProvider.GetRequiredService<ILogger<Services.LeaderElectedServiceWrapper>>();
                 var name = serviceName ?? typeof(TService).Name;
 
-                return new Services.LeaderElectedServiceWrapper(innerService, leaderElectionService, logger, name);
+                return new Services.LeaderElectedServiceWrapper(innerService, leaderElectionService, logger, name,
+                    ownsInnerService);
             });
 
             return services;

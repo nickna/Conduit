@@ -19,6 +19,37 @@ namespace ConduitLLM.Tests.Core;
 public class ConduitAgenticUsageTests
 {
     [Fact]
+    public async Task StreamingProvider_SwallowsCancellationAtExhaustion_DoesNotPublishCompletion()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var client = new Mock<ILLMClient>();
+        client.Setup(service => service.StreamChatCompletionAsync(
+                It.IsAny<ChatCompletionRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns(CancelBeforeExhaustion());
+        var request = CreateRequest();
+        var observed = new List<Usage>();
+        var completed = new List<int>();
+        request.ProviderStreamUsageObserved = (_, chunk, _) => observed.Add(chunk.ProviderCallUsage!.Usage);
+        request.ProviderStreamCompleted = completed.Add;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in CreateConduit(client.Object).StreamChatCompletionAsync(
+                request, virtualKeyId: 42, cancellationToken: cancellation.Token)) { }
+        });
+
+        Assert.Equal(0.01m, Assert.Single(observed).ProviderReportedCostUsd);
+        Assert.Empty(completed);
+
+        async IAsyncEnumerable<ChatCompletionChunk> CancelBeforeExhaustion()
+        {
+            await Task.Yield();
+            yield return CreateChunk(FinishReason.Stop, new Usage { TotalTokens = 10, ProviderReportedCostUsd = 0.01m });
+            cancellation.Cancel();
+        }
+    }
+
+    [Fact]
     public async Task CreateChatCompletionAsync_AgenticIterations_AggregatesAllProviderUsage()
     {
         var client = new Mock<ILLMClient>();

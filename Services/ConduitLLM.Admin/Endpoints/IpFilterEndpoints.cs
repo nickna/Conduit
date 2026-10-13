@@ -1,3 +1,4 @@
+using ConduitLLM.Configuration.Utilities;
 using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Admin.Extensions;
@@ -67,13 +68,13 @@ public class IpFilterEndpoints : AdminEndpointHandlerBase
             .WithName("IpFilter_Create")
             .WithSummary("Creates a new IP filter").Produces<IpFilterDto>(StatusCodes.Status201Created).Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden);
-        group.MapPatch("/{id}", ([FromServices] IpFilterEndpoints endpoints, int id, JsonMergePatch<UpdateIpFilterDto> patch) => endpoints.UpdateFilter(id, patch.Value))
+        group.MapPatch("/{id}", ([FromServices] IpFilterEndpoints endpoints, int id, JsonMergePatch<UpdateIpFilterDto> patch, HttpContext context) => endpoints.UpdateFilter(id, patch.Value, VersionedResourceEndpointFilter.ReadPrecondition(context), context.RequestAborted))
             .AcceptsJsonMergePatch<UpdateIpFilterDto>()
             .WithName("IpFilter_Update")
             .WithSummary("Updates an existing IP filter")
             .WithParameterDescription("id", "The ID of the filter to update").Produces<IpFilterDto>().Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized).Produces(StatusCodes.Status403Forbidden).Produces(StatusCodes.Status404NotFound);
-        group.MapDelete("/{id}", ([FromServices] IpFilterEndpoints endpoints, int id) => endpoints.DeleteFilter(id))
+        group.MapDelete("/{id}", ([FromServices] IpFilterEndpoints endpoints, int id, HttpContext context) => endpoints.DeleteFilter(id, VersionedResourceEndpointFilter.ReadPrecondition(context), context.RequestAborted))
             .WithName("IpFilter_Delete")
             .WithSummary("Deletes an IP filter")
             .WithParameterDescription("id", "The ID of the filter to delete").Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status401Unauthorized)
@@ -161,10 +162,19 @@ public class IpFilterEndpoints : AdminEndpointHandlerBase
     /// </summary>
     /// <param name="id">The ID of the filter to update</param>
     /// <param name="filter">The updated filter data</param>
+    /// <param name="precondition">Explicit HTTP version condition, when provided.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
     /// <returns>No content if successful</returns>
-    public async Task<IResult> UpdateFilter(int id, UpdateIpFilterDto filter)
+    public async Task<IResult> UpdateFilter(int id, UpdateIpFilterDto filter,
+        ResourcePrecondition? precondition = null, CancellationToken cancellationToken = default)
     {
-        var (success, errorMessage) = await _ipFilterService.UpdateFilterAsync(id, filter);
+        IpFilterDto? current = null;
+        bool success;
+        string? errorMessage;
+        if (precondition is null)
+            (success, errorMessage) = await _ipFilterService.UpdateFilterAsync(id, filter);
+        else
+            (success, errorMessage, current) = await _ipFilterService.UpdateFilterConditionalAsync(id, filter, precondition, cancellationToken);
 
         if (!success)
         {
@@ -177,17 +187,21 @@ public class IpFilterEndpoints : AdminEndpointHandlerBase
         }
 
         LogAdminAudit("Updated", "IpFilter", id, $"CIDR: {LoggingSanitizer.S(filter.IpAddressOrCidr)}, Type: {filter.FilterType}");
-        return Ok(await _ipFilterService.GetFilterByIdAsync(id) ?? throw new KeyNotFoundException());
+        return Ok(current ?? await _ipFilterService.GetFilterByIdAsync(id) ?? throw new KeyNotFoundException());
     }
 
     /// <summary>
     /// Deletes an IP filter
     /// </summary>
     /// <param name="id">The ID of the filter to delete</param>
+    /// <param name="precondition">Explicit HTTP version condition, when provided.</param>
+    /// <param name="cancellationToken">Request cancellation.</param>
     /// <returns>No content if successful</returns>
-    public async Task<IResult> DeleteFilter(int id)
+    public async Task<IResult> DeleteFilter(int id, ResourcePrecondition? precondition = null, CancellationToken cancellationToken = default)
     {
-        var (success, errorMessage) = await _ipFilterService.DeleteFilterAsync(id);
+        var (success, errorMessage) = precondition is null
+            ? await _ipFilterService.DeleteFilterAsync(id)
+            : await _ipFilterService.DeleteFilterConditionalAsync(id, precondition, cancellationToken);
 
         if (!success)
         {

@@ -163,7 +163,7 @@ public static class ServiceCollectionExtensions
         services.AddLeaderElectedHostedService<ConduitLLM.Configuration.Services.BillingAuditService>(
             provider => provider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IBillingAuditService>() as ConduitLLM.Configuration.Services.BillingAuditService
             ?? throw new InvalidOperationException("BillingAuditService must implement IHostedService"),
-            "BillingAuditService");
+            "BillingAuditService", ownsInnerService: false);
 #endif
 #if !CONDUIT_NATIVE_AOT
         services.AddHostedService<ConduitLLM.Admin.Services.PricingConfigurationAuditHostedService>();
@@ -184,7 +184,7 @@ public static class ServiceCollectionExtensions
         services.AddLeaderElectedHostedService<ConduitLLM.Configuration.Services.PricingAuditService>(
             provider => provider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IPricingAuditService>() as ConduitLLM.Configuration.Services.PricingAuditService
             ?? throw new InvalidOperationException("PricingAuditService must implement IHostedService"),
-            "PricingAuditService");
+            "PricingAuditService", ownsInnerService: false);
 #endif
 
         services.AddAdminRedisServices(!string.IsNullOrEmpty(
