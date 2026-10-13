@@ -492,6 +492,8 @@ try {
 
     # Run the same bounded, authenticated workload driver used by the benchmark
     # collector. These small correctness samples are not promotion measurements.
+    # The transport probe accepts four completed requests and one canceled stream.
+    $shutdownMeasuredRequests = 5
     foreach ($workload in @('admin-setting-read', 'gateway-chat-nonstream', 'gateway-chat-sse')) {
         $configuration = [ordered]@{
             workload = $workload
@@ -538,6 +540,9 @@ try {
         }
         $benchmarkOutput | Set-Content -LiteralPath (Join-Path $logRoot "$workload.benchmark.json") -Encoding utf8
         Write-Host "  PASS  Authenticated benchmark workload $workload"
+        if ($workload -ne 'admin-setting-read') {
+            $shutdownMeasuredRequests += $configuration.requests + $configuration.warmupRequests
+        }
     }
     foreach ($hostProcess in @($admin, $gateway, $secondary)) {
         if ($hostProcess.HasExited) { throw "Native host $($hostProcess.Id) exited during dependency recovery." }
@@ -605,8 +610,22 @@ try {
         }
         Invoke-BillingAuditLifecycle '--billing-audit-verify-host' `
             "Native BillingAudit graceful shutdown tail $($hostEntry.HostName): PASS" $hostEntry.HostName
+        foreach ($stream in @('stdout', 'stderr')) {
+            $path = Join-Path $logRoot "$($hostEntry.Name).$stream.log"
+            $content = Get-Content -LiteralPath $path -Raw
+            if ($content -match 'SafeWaitHandle|ObjectDisposedException|Error flushing pending updates during async disposal|Error stopping inner service SpendNotificationService') {
+                throw "$($hostEntry.Name) logged a shutdown lifecycle failure. See $path."
+            }
+        }
+        Write-Host "  PASS  $($hostEntry.Name) graceful traced shutdown"
     }
     Invoke-BillingAuditLifecycle '--billing-audit-verify' 'Native BillingAudit graceful shutdown tails: PASS'
+    if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
+        & $nativeProbe --verify-shutdown $shutdownMeasuredRequests
+    } else {
+        dotnet $probeDll --verify-shutdown $shutdownMeasuredRequests
+    }
+    if ($LASTEXITCODE -ne 0) { throw 'Accounting verification after native shutdown failed.' }
 }
 catch {
     $parityFailure = $_

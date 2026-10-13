@@ -55,7 +55,7 @@ public static class WebhookServicesExtensions
         });
         services.AddLeaderElectedHostedService<WebhookDeliveryNotificationService>(
             sp => (WebhookDeliveryNotificationService)sp.GetRequiredService<IWebhookDeliveryNotificationService>(),
-            "WebhookDeliveryNotificationService");
+            "WebhookDeliveryNotificationService", ownsInnerService: false);
 
         return services;
     }
@@ -68,12 +68,12 @@ public static class WebhookServicesExtensions
             provider.GetRequiredService<ILogger<SpendDataRepository>>()));
         services.AddSingleton<IBudgetAlertManager, BudgetAlertManager>();
         services.AddSingleton<ISpendPatternAnalyzer, SpendPatternAnalyzer>();
-        services.AddSingleton<DistributedSpendNotificationService>();
-        services.AddSingleton<ISpendNotificationService>(provider =>
-            provider.GetRequiredService<DistributedSpendNotificationService>());
+        services.AddSingleton<ISpendNotificationService, DistributedSpendNotificationService>();
+        services.AddSingleton<IHostedService>(provider => new SpendNotificationLifecycleHostedService(
+            (DistributedSpendNotificationService)provider.GetRequiredService<ISpendNotificationService>()));
         services.AddLeaderElectedHostedService<DistributedSpendNotificationService>(
-            provider => provider.GetRequiredService<DistributedSpendNotificationService>(),
-            "SpendNotificationService");
+            provider => (DistributedSpendNotificationService)provider.GetRequiredService<ISpendNotificationService>(),
+            "SpendNotificationService", ownsInnerService: false);
         return services;
     }
 

@@ -413,6 +413,7 @@ public sealed class MediaDeletionEngine : IMediaDeletionEngine
             {
                 var permanentResult = await DeletePermanentBatchAsync(
                     permanentCandidates,
+                    request.RemoveMediaRecordAsync,
                     cancellationToken);
                 filesDeleted += permanentResult.FilesDeleted;
                 bytesFreed += permanentResult.BytesFreed;
@@ -451,6 +452,7 @@ public sealed class MediaDeletionEngine : IMediaDeletionEngine
     private async Task<(int FilesDeleted, long BytesFreed, int Failures)>
         DeletePermanentBatchAsync(
         DeletionCandidate[] candidates,
+        Func<Guid, CancellationToken, Task<bool>>? removeMediaRecordAsync,
         CancellationToken cancellationToken)
     {
         var pending = candidates.ToDictionary(
@@ -573,9 +575,8 @@ public sealed class MediaDeletionEngine : IMediaDeletionEngine
         {
             bytesFreed += candidate.SizeBytes;
             if (candidate.MediaRecordId.HasValue &&
-                !await _mediaRepository.HardDeleteAsync(
-                    candidate.MediaRecordId.Value,
-                    cancellationToken))
+                !await (removeMediaRecordAsync ?? _mediaRepository.HardDeleteAsync)(
+                    candidate.MediaRecordId.Value, cancellationToken))
             {
                 failures++;
                 _logger.LogWarning(

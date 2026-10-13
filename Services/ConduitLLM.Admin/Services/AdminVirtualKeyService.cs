@@ -96,14 +96,18 @@ namespace ConduitLLM.Admin.Services
         protected override Task OnBeforeVirtualKeyDeleteAsync(int keyId)
             => OnBeforeVirtualKeyDeleteAsync(keyId, CancellationToken.None);
 
-        protected override async Task OnBeforeVirtualKeyDeleteAsync(int keyId, CancellationToken cancellationToken)
+        protected override Task OnBeforeVirtualKeyDeleteAsync(int keyId, CancellationToken cancellationToken)
+            => CleanupVirtualKeyMediaAsync(keyId, cancellationToken);
+
+        private async Task CleanupVirtualKeyMediaAsync(int keyId, CancellationToken cancellationToken, ConduitDbContext? guardedContext = null)
         {
             using var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownToken);
             cancellationToken = requestCancellation.Token;
             if (_mediaLifecycleService != null)
             {
-                await using var mediaContext =
-                    await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+                await using var ownContext = guardedContext is null
+                    ? await _dbContextFactory.CreateDbContextAsync(cancellationToken) : null;
+                var mediaContext = guardedContext ?? ownContext!;
                 var mediaRecords = await mediaContext.MediaRecords
                     .IgnoreQueryFilters()
                     .AsNoTracking()
@@ -143,7 +147,13 @@ namespace ConduitLLM.Admin.Services
                         new MediaDeletionRequest(
                             mediaRecords,
                             operation,
-                            Purge: true), protectedToken), protectedToken);
+                            Purge: true)
+                        {
+                            RemoveMediaRecordAsync = guardedContext is null ? null : async (mediaId, ct) =>
+                                await guardedContext.MediaRecords.IgnoreQueryFilters()
+                                    .Where(record => record.Id == mediaId && record.VirtualKeyId == keyId)
+                                    .ExecuteDeleteAsync(ct) > 0
+                        }, protectedToken), protectedToken);
                 protectedToken.ThrowIfCancellationRequested();
 
                 if (result.IsDryRun || result.BudgetExhausted || result.Failures > 0)

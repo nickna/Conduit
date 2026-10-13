@@ -25,13 +25,14 @@ public partial class UsageTrackingMiddleware
         IBillingAuditService billingAuditService,
         IToolCostCalculationService toolCostCalculationService)
     {
-        if (context.Response.StatusCode >= StatusCodes.Status400BadRequest)
+        var snapshot = context.GetRequestAccountingSnapshot();
+        if (context.Response.StatusCode >= StatusCodes.Status400BadRequest &&
+            snapshot?.ProviderInvocations?.Count is not > 0)
         {
             await LogBillingDecisionAsync(context, billingAuditService);
             return;
         }
 
-        var snapshot = context.GetRequestAccountingSnapshot();
         if (snapshot is null || snapshot.Operation == RequestOperation.Unknown)
         {
             LogMissingUsageData(
@@ -90,7 +91,7 @@ public partial class UsageTrackingMiddleware
     {
         var endpointType = UsageExtractor.DetermineRequestType(context.Request.Path);
         var evidence = snapshot.ProviderUsage;
-        if (evidence is null)
+        if (evidence is null && snapshot.ProviderInvocations?.Count is not > 0)
         {
             LogMissingUsageData(
                 context,
@@ -108,25 +109,32 @@ public partial class UsageTrackingMiddleware
                 billingAuditService,
                 "Typed accounting evidence did not contain a Virtual Key identifier",
                 "missing_virtual_key",
-                evidence.Model);
+                evidence?.Model ?? snapshot.RequestedModel);
             return;
         }
 
-        var model = evidence.Model;
-        var usage = evidence.Usage;
+        var model = evidence?.Model ?? snapshot.RequestedModel ?? "unknown";
+        var usage = evidence?.Usage.CopyForBilling() ?? new Usage();
         ApplyProviderBillingPolicy(context, usage);
         var providerType = context.Items.TryGetValue("ProviderType", out var providerTypeValue)
             ? providerTypeValue?.ToString() ?? "unknown"
             : "unknown";
-        var pricingResult = await CalculateTrackedCostAsync(
-            context,
-            model,
-            usage,
-            costCalculationService,
-            billingAuditService);
-        var providerTypeEnum = Enum.TryParse<ProviderType>(providerType, true, out var parsedProviderType)
-            ? parsedProviderType
-            : ProviderType.OpenAI;
+        (decimal Cost, bool Failed) pricingResult;
+        if (evidence is null)
+        {
+            context.GetOrCreateRequestAccountingContext().MarkIndeterminate(
+                "Provider invocations ended without usage evidence");
+            context.GetOrCreateRequestAccountingContext().RecordProviderPricing(
+                new ProviderPricingEvidence(null, FailureReason: "Provider usage is missing"));
+            pricingResult = (0m, true);
+            LogMissingUsageData(context, billingAuditService, "Provider invocations ended without usage evidence",
+                "missing_typed_usage", model);
+        }
+        else
+        {
+            pricingResult = await CalculateTrackedCostAsync(context, model, usage,
+                costCalculationService, billingAuditService);
+        }
         var providerToolUsage = snapshot.ProviderToolUsage is null
             ? null
             : new ToolUsageData
@@ -139,27 +147,32 @@ public partial class UsageTrackingMiddleware
                 }).ToList()
             };
         decimal? providerToolCost = null;
+        decimal knownToolCost = 0m;
         string? providerToolUsageJson = null;
         if (providerToolUsage is not null)
         {
-            var toolCostResult = await toolCostCalculationService.CalculateToolCostsAsync(
-                providerToolUsage,
-                providerTypeEnum);
-            providerToolUsageJson = toolCostCalculationService.SerializeToolUsage(providerToolUsage);
-            providerToolCost = toolCostResult.TotalCost;
+            var toolPricing = await ProviderUsagePricing.GetOrCalculateToolsAsync(context, toolCostCalculationService);
+            if (toolPricing.Cost is null)
+                RecordToolPricingFailure(context, model, usage, toolPricing, billingAuditService);
+            providerToolUsageJson = toolPricing.UsageJson;
+            providerToolCost = toolPricing.Cost;
+            knownToolCost = toolPricing.KnownCost;
         }
 
-        var totalCost = pricingResult.Cost + (providerToolCost ?? 0m) + snapshot.FunctionExecutionCost;
+        var indeterminate = context.GetRequestAccountingSnapshot()!.IsIndeterminate;
+        var totalCost = pricingResult.Cost + knownToolCost + snapshot.FunctionExecutionCost;
         var toolCallMetadata = snapshot.FunctionExecutions.Count > 0
             ? FunctionExecutionSerializer.SerializeFunctionExecutionResults(
                 snapshot.FunctionExecutions,
                 snapshot.BillingRequestId,
                 context.TraceIdentifier,
                 new FunctionExecutionCostBreakdown(
-                    pricingResult.Cost,
+                    pricingResult.Failed ? null : pricingResult.Cost,
                     snapshot.FunctionExecutionCost,
-                    providerToolCost ?? 0m,
-                    totalCost),
+                    providerToolUsage is null ? 0m : providerToolCost,
+                    totalCost,
+                    pricingResult.Failed ? pricingResult.Cost : null,
+                    providerToolUsage is not null && providerToolCost is null ? knownToolCost : null),
                 providerToolUsage)
             : snapshot.StreamingToolCalls.Count > 0
             ? JsonSerializer.Serialize(
@@ -198,7 +211,12 @@ public partial class UsageTrackingMiddleware
         RecordPromptCachingMetrics(context, usage, model, providerType);
         await RecordPromptCachingSavingsAsync(context, costCalculationService, model, usage);
 
-        if (totalCost > 0m)
+        if (indeterminate)
+        {
+            await RecordKnownIndeterminateSpendAsync(context, virtualKeyId, totalCost,
+                batchSpendService, virtualKeyService);
+        }
+        else if (totalCost > 0m)
         {
             if (await RecordSpendOrSettleReservationAsync(
                     context,
@@ -301,12 +319,13 @@ public partial class UsageTrackingMiddleware
             },
             GatewayInternalJsonContext.Default.MediaUsageMetadata);
 
-        ApplyProviderBillingPolicy(context, evidence.Usage);
+        var billingUsage = evidence.Usage.CopyForBilling();
+        ApplyProviderBillingPolicy(context, billingUsage);
         await ProcessMediaResponseAsync(context, new MediaProcessingContext
         {
             MediaType = mediaType,
             Model = evidence.Model,
-            Usage = evidence.Usage,
+            Usage = billingUsage,
             MetadataJson = metadata,
             ProviderType = providerType,
             VirtualKeyId = virtualKeyId,

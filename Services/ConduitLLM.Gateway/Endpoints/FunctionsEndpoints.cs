@@ -6,6 +6,8 @@ using ConduitLLM.Functions.Enums;
 using ConduitLLM.Functions.Exceptions;
 using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Functions.Entities;
 using ConduitLLM.Gateway.UsageTracking;
 using ConduitLLM.Gateway.Serialization;
 using ConduitLLM.Persistence.Interfaces;
@@ -22,6 +24,7 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
     private readonly IFunctionExecutionConfigurationStore? _runtimeConfigurationStore;
     private readonly ConduitLLM.Functions.Services.FunctionParameterValidationService _validationService;
     private readonly ILogger<FunctionsEndpoints> _logger;
+    private readonly IProviderErrorTranslator _errorTranslator;
 
     /// <summary>
     /// Initializes the Functions endpoint handler.
@@ -32,13 +35,15 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
         ConduitLLM.Functions.Services.FunctionParameterValidationService validationService,
         IEventPublisher eventPublisher,
         IHttpContextAccessor httpContextAccessor,
-        ILogger<FunctionsEndpoints> logger)
+        ILogger<FunctionsEndpoints> logger,
+        IProviderErrorTranslator errorTranslator)
         : base(eventPublisher, httpContextAccessor, logger)
     {
         _executionService = executionService ?? throw new ArgumentNullException(nameof(executionService));
         _configurationRepository = configurationRepository ?? throw new ArgumentNullException(nameof(configurationRepository));
         _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _errorTranslator = errorTranslator ?? throw new ArgumentNullException(nameof(errorTranslator));
     }
 
     /// <summary>
@@ -51,8 +56,9 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
         ConduitLLM.Functions.Services.FunctionParameterValidationService validationService,
         IEventPublisher eventPublisher,
         IHttpContextAccessor httpContextAccessor,
-        ILogger<FunctionsEndpoints> logger) =>
-        new(executionService, configurationStore, validationService, eventPublisher, httpContextAccessor, logger);
+        ILogger<FunctionsEndpoints> logger,
+        IProviderErrorTranslator errorTranslator) =>
+        new(executionService, configurationStore, validationService, eventPublisher, httpContextAccessor, logger, errorTranslator);
 
     private FunctionsEndpoints(
         IFunctionExecutionService executionService,
@@ -60,13 +66,15 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
         ConduitLLM.Functions.Services.FunctionParameterValidationService validationService,
         IEventPublisher eventPublisher,
         IHttpContextAccessor httpContextAccessor,
-        ILogger<FunctionsEndpoints> logger)
+        ILogger<FunctionsEndpoints> logger,
+        IProviderErrorTranslator errorTranslator)
         : base(eventPublisher, httpContextAccessor, logger)
     {
         _executionService = executionService ?? throw new ArgumentNullException(nameof(executionService));
         _runtimeConfigurationStore = configurationStore ?? throw new ArgumentNullException(nameof(configurationStore));
         _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _errorTranslator = errorTranslator ?? throw new ArgumentNullException(nameof(errorTranslator));
     }
 
     /// <summary>
@@ -174,11 +182,12 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
                     GatewayInternalJsonContext.Default.FunctionCostMetadata)));
 
             // Return execution result
-            return Ok(execution.ToContractDto());
+            return Ok(ToCustomerDto(execution));
         }
         catch (FunctionCommunicationException ex)
         {
-            var mapping = ExceptionToResponseMapper.Map(ex);
+            var translated = _errorTranslator.Translate(ex.StatusCode, ex.ResponseBody ?? ex.Message, ex.ProviderName);
+            var mapping = ExceptionToResponseMapper.MapProviderCommunicationStatus(ex.StatusCode, translated.Message);
             _logger.Log(
                 mapping.LogLevel,
                 ex,
@@ -190,7 +199,8 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
                 mapping.ResponseMessage,
                 mapping.ErrorCode,
                 mapping.OpenAIErrorType,
-                mapping.Param);
+                mapping.Param,
+                ChatEndpoints.BuildProviderErrorMetadata(null, translated.Detail));
         }
         catch (InvalidOperationException ex)
         {
@@ -240,13 +250,33 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
                 return OpenAIError(404, $"Function execution {executionId} not found", "not_found", "not_found_error");
             }
 
-            return Ok(execution.ToContractDto());
+            return Ok(ToCustomerDto(execution));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting function execution {ExecutionId}", executionId);
             return OpenAIError(500, "An unexpected error occurred", "internal_error", "server_error");
         }
+    }
+
+    private FunctionExecutionDto ToCustomerDto(FunctionExecution execution)
+    {
+        var dto = execution.ToContractDto();
+        if (!string.IsNullOrWhiteSpace(dto.Error))
+        {
+            // Persisted diagnostics are private. Translate at read time so another host's
+            // customer mode also applies, including records created before this policy.
+            System.Net.HttpStatusCode? status = null;
+            if (dto.Cost.Breakdown?.TryGetValue("httpStatusCode", out var value) == true &&
+                value.ValueKind == JsonValueKind.Number &&
+                value.TryGetInt32(out var code))
+            {
+                status = (System.Net.HttpStatusCode)code;
+            }
+            dto.Error = _errorTranslator.Translate(
+                status, execution.ErrorMessage, execution.FunctionConfiguration?.ProviderType.ToString()).Message;
+        }
+        return dto;
     }
 
     /// <summary>

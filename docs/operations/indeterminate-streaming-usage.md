@@ -1,4 +1,4 @@
-# Unresolved streaming provider usage
+# Unresolved provider usage and pricing
 
 When a chat provider stream ends without usage and bounded estimation fails or
 times out, Gateway marks accounting indeterminate. Completed function results are
@@ -6,12 +6,46 @@ retained before their SSE notification is attempted, including failed notificati
 writes and cancellation. A notification does not determine whether an invocation
 incurred a cost.
 
+Streaming records actual provider starts before the first stream advance, and raw
+usage before yielding chunks to client transport. Repeated usage and hosted-tool
+snapshots replace the current invocation's cumulative evidence. Each invocation
+must exhaust and dispose successfully before reported usage is complete: a finish
+reason can precede a revised usage snapshot. Interrupted calls retain their latest
+priced subtotal and leave the parent hold open. Cancellation before the next
+provider call creates no invocation, and fully completed earlier work can settle.
+Only the existing single-call bounded estimator can resolve missing usage;
+multi-call output and conversation history never stand in for a missing report.
+
+Nonstreaming chat records each actual provider invocation before the call and
+retains its reported usage and hosted-tool evidence immediately after completion.
+Completed function batches remain available if a later call fails. A missing usage
+report on any invocation leaves the combined provider total unresolved, even when
+earlier calls returned usage. A successful single call may use the existing usage
+estimator; the final conversation and output cannot estimate a missing call in a
+multi-call request. HTTP errors and thrown request failures still finalize recorded
+work. Cancellation before a future call adds no invocation, so completely measured
+earlier work can settle normally. Failures before any provider work release an
+unstarted reservation.
+
+Pricing failures use the same reconciliation path for streaming and nonstreaming
+requests. Each provider call and provider-hosted tool is priced independently;
+successful prices remain known even when another call or tool has no price. A
+failed complete-price calculation is recorded as unknown, rather than zero. The
+request log records the known total, and function metadata uses null `llmCost` or
+`providerToolCost` for an unresolved component, with `knownLlmCost` or
+`knownProviderToolCost` identifying its independently priced portion. Response
+summaries omit monetary totals that cannot be established completely.
+
 For requests admitted with a parent spend reservation, finalization atomically
-queues cumulative known function spend and retains the unused reservation as an
+queues cumulative known provider, hosted-tool and function spend and retains the unused reservation as an
 invocation-started hold. For example, a 0.25 reservation with 0.05 known function
 cost queues 0.05 and holds 0.20. The held 0.20 is a bound, not a measured provider
 charge. The request remains open and indeterminate; ordinary settlement and
 reservation release cannot discard that state.
+For example, known provider calls of 0.05, configured hosted tools of 0.03, and
+functions of 0.05 accept 0.13 once and retain 0.12 of a 0.25 reservation when another
+provider call or hosted tool cannot be priced. No unresolved price is substituted
+with the reservation bound or a different call's reported price.
 
 The atomic transition persists a reconciliation record in the Redis hash
 `spend_reservations_indeterminate:group:{groupId}`, indexed by the billing request
@@ -28,15 +62,59 @@ use `IBatchSpendUpdateService.GetSpendReservationReconciliationAsync(keyId,
 requestId)` to read a typed record. Restricted operator tooling can resolve a
 record through `ReconcileSpendReservationAsync` after verifying its request and
 provider evidence. There is no automatic inference of missing provider charges.
-Before creating the first reconciliation record, confirm the original Virtual Key
-and request ID from request audit evidence: the older reservation lifecycle stores
-holds by group/request ID and does not retain their owning key. Once recorded,
-reconciliation enforces that recorded key identity.
+Reservations now bind their original Virtual Key atomically in
+`spend_reservation_owners:group:{groupId}`, indexed by request ID. Reserve replays,
+invocation start, settlement, release, reconciliation recording, and typed queries
+verify that identity. Ownership survives started, indeterminate, and settled states,
+including zero-cost holds. Ordinary pre-invocation release or expiry removes the
+owner; settled owners remain for the same replay horizon as their settlement records.
+
+The immutable original maximum is stored separately in
+`spend_reservation_bounds:group:{groupId}`. Reserve replay requires both the same
+owner and the same original maximum, even when known spend has reduced the held
+amount or the request has settled. Decimal values with equivalent numeric values
+match. A changed maximum is rejected without changing the hold or accepting a new
+invocation bound. Bound metadata follows owner retention and pre-invocation cleanup.
+
+Legacy numeric holds and settled hashes remain readable without a data-format
+migration, but ordinary lifecycle operations reject records with no owner. They
+never infer ownership from a supplied sibling key in the same group. Before recovering
+a legacy record, confirm its original Virtual Key and request ID from request audit
+evidence, and check any existing reconciliation record, whose key identity cannot be
+replaced. Restricted operator tooling may then call
+`IBatchSpendUpdateService.RecoverLegacySpendReservationOwnerAsync(keyId, requestId,
+auditActor, auditNote)`. Provide the operator identity and a note identifying the
+verified request/provider or ledger evidence. This only binds ownership: it does
+not invoke a provider, change the held amount, extend its expiry, or queue a charge.
+
+Recovery returns `Recovered` once, or `AlreadyRecovered` for the same owner and
+exact audit actor/note. An absent record or an expired pre-invocation hold returns
+`Missing`. Conflicting ownership, an existing reconciliation key, or different audit
+evidence returns `Conflict` without changes. A normally owned reservation cannot be
+relabelled through recovery. The same immutable recovery evidence can explicitly
+restore a missing owner, returning `Recovered` while retaining the original audit
+timestamp; conflicting ownership or evidence still fails closed.
+Legacy records with no original-bound metadata continue to reject reserve replay
+after ownership recovery. Start, settlement, and audited reconciliation remain
+available to complete their existing accounting. Do not infer the original maximum
+from a reduced hold, add a fabricated bound, or replay the provider invocation.
+The immutable recovery hash `spend_reservation_owner_recovery:group:{groupId}` retains
+the owner, actor, evidence note, and observation time. Back up ownership and recovery
+hashes and original-bound metadata with reservation state and retain recovery evidence
+for the replay/audit horizon.
+
+Drain older processes before enabling owner-enforcing lifecycle operations: old
+writers do not maintain ownership metadata and old code does not reject sibling
+keys. Inventory existing holds and recover verified legacy records before normal
+settlement or release. Unverified started holds remain held for investigation;
+unstarted legacy holds may expire through the ordinary reservation cleanup.
 
 - With authoritative provider evidence, calculate only the unresolved provider
   portion using the request's applicable pricing and call reconciliation with
   `AuthoritativeProviderCost`, that amount, the operator identity, and a note
-  identifying the evidence. Exclude the function cost already accepted.
+  identifying the evidence. Exclude every provider, hosted-tool and function
+  amount already included in the record's cumulative known spend. Supplying the
+  full original request cost would charge those known portions again.
 - When provider usage cannot be established, an authorized operator may make an
   audited disposition with `ProviderCostWaived`, amount `0`, the operator identity,
   and a reason. This waives the unresolved portion and preserves the known charge.
@@ -58,5 +136,6 @@ started reservation held. Restore Redis and recover from request/provider audit
 evidence before attempting an audited disposition. Do not delete holds directly,
 bill the reservation remainder, or replay a completed invocation to reconstruct
 usage. Billing admission modes that did not create a reservation continue to bill
-known function cost through the normal spend path; they have no parent hold to
+known provider, hosted-tool and function costs through the normal spend path and
+still mark accounting indeterminate; they have no parent hold to
 reconcile.

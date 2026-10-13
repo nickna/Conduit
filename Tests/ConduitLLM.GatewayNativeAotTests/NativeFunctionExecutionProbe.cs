@@ -14,6 +14,7 @@ internal static partial class NativeFunctionExecutionProbe
     private const decimal Price = 0.12500001m;
     private const string ProviderError = """{"error":{"message":"native function upstream private diagnostic","type":"invalid_request_error","code":"native_bad_query"}}""";
     private const string ErrorMessage = "Bad request to Exa API: " + ProviderError;
+    private const string CustomerErrorMessage = "An upstream provider error occurred. Please retry later.";
     private const string ProviderSuccess = """
         {"requestId":"native-function-search","resolvedSearchType":"neural","results":[{"title":"Native search 雪 🔎","url":"https://example.test/native-function","publishedDate":"2026-10-11T00:00:00Z","author":"Native fixture","score":0.875,"text":"Unicode text café 雪","highlights":["snow 雪","café"],"highlightScores":[0.875,0.75],"summary":"Native summary","subpages":[{"title":"Nested 雪","url":"https://example.test/native-function/child","text":"Nested content"}],"extras":{"links":["https://example.test/link"],"imageLinks":["https://example.test/image.png"]}}]}
         """;
@@ -317,8 +318,9 @@ internal static partial class NativeFunctionExecutionProbe
         var error = root.GetProperty("error");
         Require(error.GetProperty("code").GetString() == "provider_request_error" &&
             error.GetProperty("type").GetString() == "invalid_request_error" &&
-            error.GetProperty("message").GetString() == ErrorMessage,
-            "inherited Exa provider error status, type and diagnostic");
+            error.GetProperty("message").GetString() == CustomerErrorMessage &&
+            !root.GetRawText().Contains("native function upstream private diagnostic", StringComparison.Ordinal),
+            "Exa provider error status and type with external customer policy");
     }
 
     private static void AssertNotFound(JsonElement root, Guid id)
@@ -349,8 +351,17 @@ internal static partial class NativeFunctionExecutionProbe
             Require(row.CostDetails is not null, "stored cost calculation details");
             AssertCostDetails(Parse(row.CostDetails!), row.Duration!.Value);
         }
-        else Require(row.ResponseJson is null && row.Error == ErrorMessage && row.CostDetails is null,
-            "stored provider rejection has zero actual cost, diagnostic and null response/cost details");
+        else
+        {
+            Require(row.ResponseJson is null && row.Error == ErrorMessage && row.CostDetails is not null,
+                "stored provider rejection has zero actual cost, private diagnostic and upstream status evidence");
+            var details = Parse(row.CostDetails!);
+            Properties(details, "usage", "estimatedCost", "actualCost", "httpStatusCode");
+            Require(details.GetProperty("estimatedCost").GetDecimal() == 0m &&
+                details.GetProperty("actualCost").GetDecimal() == 0m &&
+                details.GetProperty("httpStatusCode").GetInt32() == 400,
+                "stored provider rejection retains its unbilled upstream HTTP status");
+        }
     }
 
     private static void AssertResource(JsonElement root, Execution row, ProbeCase test, bool fromPersistence)
@@ -368,8 +379,7 @@ internal static partial class NativeFunctionExecutionProbe
         Require(Math.Abs(root.GetProperty("duration_ms").GetInt64() - duration) <= (fromPersistence ? 0 : 1),
             "function DTO integer duration matches persisted interval precision");
         var cost = root.GetProperty("cost");
-        if (test.Success) Properties(cost, "estimated", "actual", "currency", "breakdown");
-        else Properties(cost, "estimated", "actual", "currency");
+        Properties(cost, "estimated", "actual", "currency", "breakdown");
         Require(cost.GetProperty("estimated").GetDecimal() == Price && cost.GetProperty("actual").GetDecimal() == row.Actual &&
             cost.GetProperty("currency").GetString() == "USD", "function DTO exact configured decimal price and currency");
         if (test.Success)
@@ -377,7 +387,9 @@ internal static partial class NativeFunctionExecutionProbe
             Require(JsonElement.DeepEquals(root.GetProperty("output"), Parse(ProviderSuccess)) &&
                 SameJson(row.CostDetails!, cost.GetProperty("breakdown")), "function DTO preserves structured nested output and cost breakdown");
         }
-        else Require(root.GetProperty("error").GetString() == ErrorMessage, "failed function GET preserves inherited diagnostic");
+        else Require(root.GetProperty("error").GetString() == CustomerErrorMessage &&
+            SameJson(row.CostDetails!, cost.GetProperty("breakdown")),
+            "failed function GET applies external customer policy and retains structured upstream status");
     }
 
     private static void AssertCostDetails(JsonElement details, TimeSpan duration)

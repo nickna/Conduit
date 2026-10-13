@@ -2,6 +2,7 @@ using ConduitLLM.Admin.Filters;
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Configuration.DTOs.IpFilter;
 using ConduitLLM.Tests.TestInfrastructure;
 
 using Microsoft.AspNetCore.Http;
@@ -26,7 +27,7 @@ public sealed class IpFilterVersionEndpointFilterTests
     [InlineData(true, 0)]
     [InlineData(true, 1)]
     [InlineData(true, 2)]
-    public async Task BothReadersEmitStrongByteOrTimestampTagsForGetAndHead(bool runtime, int versionKind)
+    public async Task BothReadersEmitSnapshotTagsForGetAndHead(bool runtime, int versionKind)
     {
         await using var fixture = await Fixture.CreateAsync(runtime, Row(Version(versionKind)));
         var before = await fixture.ReadRowAsync();
@@ -37,7 +38,7 @@ public sealed class IpFilterVersionEndpointFilterTests
         {
             fixture.ClearReads();
             var context = Context(method, fixture.Services, request.Token);
-            var handlerResult = Results.Ok();
+            var handlerResult = Results.Ok(new IpFilterDto { ResourceETag = expected });
             var handlerCalls = 0;
 
             var result = await fixture.Filter.InvokeAsync(context, _ =>
@@ -50,7 +51,7 @@ public sealed class IpFilterVersionEndpointFilterTests
             Assert.Equal(1, handlerCalls);
             Assert.Equal(expected, context.HttpContext.Response.Headers.ETag.ToString());
             Assert.Equal(Fingerprint(before), Fingerprint(await fixture.ReadRowAsync()));
-            fixture.AssertReads(2, request.Token);
+            fixture.AssertReads(0, request.Token);
         }
     }
 
@@ -88,13 +89,35 @@ public sealed class IpFilterVersionEndpointFilterTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetTagIdentifiesReturnedSnapshotDespiteLaterCommit(bool runtime)
+    {
+        await using var fixture = await Fixture.CreateAsync(runtime, Row(null));
+        var context = Context("GET", fixture.Services);
+        var snapshotTag = ExpectedTag(null, OriginalTime);
+
+        await fixture.Filter.InvokeAsync(context, async _ =>
+        {
+            var later = Row([5, 6, 7, 8]);
+            later.UpdatedAt = ChangedTime;
+            await fixture.WriteRowAsync(later);
+            return Results.Ok(new IpFilterDto { ResourceETag = snapshotTag });
+        });
+
+        Assert.Equal(snapshotTag, context.HttpContext.Response.Headers.ETag.ToString());
+        Assert.Equal(ChangedTime, (await fixture.ReadRowAsync())!.UpdatedAt);
+        fixture.AssertReads(0, CancellationToken.None);
+    }
+
+    [Theory]
     [InlineData(false, 0)]
     [InlineData(false, 1)]
     [InlineData(false, 2)]
     [InlineData(true, 0)]
     [InlineData(true, 1)]
     [InlineData(true, 2)]
-    public async Task MatchingWildcardAndCommaHeadersRefreshTheTagAfterTheHandler(bool runtime, int headerKind)
+    public async Task MatchingWildcardAndCommaHeadersUseTheReturnedSnapshotTag(bool runtime, int headerKind)
     {
         await using var fixture = await Fixture.CreateAsync(runtime, Row([1, 2, 3, 4]));
         using var request = new CancellationTokenSource();
@@ -106,7 +129,7 @@ public sealed class IpFilterVersionEndpointFilterTests
             1 => "*",
             _ => $" \"stale\" , {originalTag} , \"another\" "
         };
-        var handlerResult = Results.Ok();
+        var handlerResult = Results.Ok(new IpFilterDto { ResourceETag = ExpectedTag([5, 6, 7, 8], ChangedTime) });
         var handlerCalls = 0;
 
         var result = await fixture.Filter.InvokeAsync(context, async _ =>
@@ -127,7 +150,7 @@ public sealed class IpFilterVersionEndpointFilterTests
         Assert.Equal("updated café 雪", stored.Description);
         Assert.Equal(ChangedTime, stored.UpdatedAt);
         Assert.Equal(OriginalTime.AddHours(-1), stored.CreatedAt);
-        fixture.AssertReads(2, request.Token);
+        fixture.AssertReads(1, request.Token);
     }
 
     [Theory]
@@ -142,12 +165,12 @@ public sealed class IpFilterVersionEndpointFilterTests
         context.HttpContext.Request.Headers.IfMatch = expected;
 
         var result = await fixture.Filter.InvokeAsync(context,
-            _ => ValueTask.FromResult<object?>(Results.Ok()));
+            _ => ValueTask.FromResult<object?>(Results.Ok(new IpFilterDto { ResourceETag = expected })));
 
         Assert.Equal(StatusCodes.Status200OK, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
         Assert.Equal(expected, context.HttpContext.Response.Headers.ETag.ToString());
         Assert.Equal(Fingerprint(before), Fingerprint(await fixture.ReadRowAsync()));
-        fixture.AssertReads(2, CancellationToken.None);
+        fixture.AssertReads(1, CancellationToken.None);
     }
 
     [Theory]
@@ -155,7 +178,7 @@ public sealed class IpFilterVersionEndpointFilterTests
     [InlineData(false, 1)]
     [InlineData(true, 0)]
     [InlineData(true, 1)]
-    public async Task ActualDeletionRetainsTheOriginalTagWhenTheSecondReadFindsNoRow(bool runtime, int versionKind)
+    public async Task ActualDeletionDoesNotInventARepresentationTag(bool runtime, int versionKind)
     {
         var version = Version(versionKind);
         await using var fixture = await Fixture.CreateAsync(runtime, Row(version));
@@ -171,9 +194,8 @@ public sealed class IpFilterVersionEndpointFilterTests
 
         Assert.Equal(StatusCodes.Status204NoContent, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
         Assert.Null(await fixture.ReadRowAsync());
-        Assert.Equal(expected, context.HttpContext.Response.Headers.ETag.ToString());
-        Assert.NotEqual("\"AAAAAAAAAAA=\"", context.HttpContext.Response.Headers.ETag.ToString());
-        fixture.AssertReads(2, CancellationToken.None);
+        Assert.False(context.HttpContext.Response.Headers.ContainsKey("ETag"));
+        fixture.AssertReads(1, CancellationToken.None);
     }
 
     [Theory]
@@ -197,16 +219,17 @@ public sealed class IpFilterVersionEndpointFilterTests
         Assert.Equal(1, handlerCalls);
         Assert.Equal(StatusCodes.Status404NotFound, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
         Assert.False(context.HttpContext.Response.Headers.ContainsKey("ETag"));
-        fixture.AssertReads(1, CancellationToken.None);
+        fixture.AssertReads(method == "GET" ? 0 : 1, CancellationToken.None);
     }
 
     [Fact]
-    public async Task RuntimeReadsForwardTheCurrentRequestTokenBeforeAndAfterTheHandler()
+    public async Task RuntimeMutationPreflightForwardsTheCurrentRequestToken()
     {
         await using var fixture = await Fixture.CreateAsync(true, Row(null));
         using var before = new CancellationTokenSource();
         using var after = new CancellationTokenSource();
-        var context = Context("GET", fixture.Services, before.Token);
+        var context = Context("PATCH", fixture.Services, before.Token);
+        context.HttpContext.Request.Headers.IfMatch = "*";
 
         await fixture.Filter.InvokeAsync(context, _ =>
         {
@@ -214,8 +237,8 @@ public sealed class IpFilterVersionEndpointFilterTests
             return ValueTask.FromResult<object?>(Results.Ok());
         });
 
-        Assert.Equal(new[] { before.Token, after.Token }, fixture.ReadTokens);
-        Assert.Equal(new[] { FilterId, FilterId }, fixture.ReadIds);
+        Assert.Equal(new[] { before.Token }, fixture.ReadTokens);
+        Assert.Equal(new[] { FilterId }, fixture.ReadIds);
     }
 
     [Theory]
@@ -226,7 +249,8 @@ public sealed class IpFilterVersionEndpointFilterTests
         await using var fixture = await Fixture.CreateAsync(true, Row(null));
         using var request = new CancellationTokenSource();
         if (!cancelAfterHandler) request.Cancel();
-        var context = Context("GET", fixture.Services, request.Token);
+        var context = Context("PATCH", fixture.Services, request.Token);
+        context.HttpContext.Request.Headers.IfMatch = "*";
         var handlerCalls = 0;
 
         var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
@@ -235,6 +259,7 @@ public sealed class IpFilterVersionEndpointFilterTests
             {
                 handlerCalls++;
                 request.Cancel();
+                request.Token.ThrowIfCancellationRequested();
                 return ValueTask.FromResult<object?>(Results.Ok());
             });
         });
@@ -242,7 +267,7 @@ public sealed class IpFilterVersionEndpointFilterTests
         Assert.Equal(request.Token, exception.CancellationToken);
         Assert.Equal(cancelAfterHandler ? 1 : 0, handlerCalls);
         Assert.False(context.HttpContext.Response.Headers.ContainsKey("ETag"));
-        fixture.AssertReads(cancelAfterHandler ? 2 : 1, request.Token);
+        fixture.AssertReads(1, request.Token);
     }
 
     [Fact]
@@ -295,10 +320,11 @@ public sealed class IpFilterVersionEndpointFilterTests
         await using var services = new ServiceCollection()
             .AddSingleton(database.CreateDbContextFactory()).BuildServiceProvider();
         var path = virtualKey ? $"/v1/admin/virtual-keys/{FilterId}" : $"/v1/admin/virtual-key-groups/{FilterId}";
-        var context = Context("GET", services, path: path);
+        var context = Context("PATCH", services, path: path);
+        context.HttpContext.Request.Headers.IfMatch = ExpectedTag(null, OriginalTime);
 
         var result = await filter.InvokeAsync(context,
-            _ => ValueTask.FromResult<object?>(Results.Ok()));
+            _ => ValueTask.FromResult<object?>(Results.Ok(new IpFilterDto { ResourceETag = ExpectedTag(null, OriginalTime) })));
 
         Assert.Equal(StatusCodes.Status200OK, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
         Assert.Equal(ExpectedTag(null, OriginalTime), context.HttpContext.Response.Headers.ETag.ToString());
@@ -324,7 +350,7 @@ public sealed class IpFilterVersionEndpointFilterTests
     };
 
     private static string ExpectedTag(byte[]? version, DateTime time) =>
-        $"\"{Convert.ToBase64String(version is { Length: > 0 } ? version : BitConverter.GetBytes(time.Ticks))}\"";
+        $"\"{Convert.ToBase64String(version ?? [])}.{time.Ticks:x}\"";
 
     private static IpFilterEntity Row(byte[]? version) => new()
     {

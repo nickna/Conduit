@@ -37,6 +37,28 @@ public sealed record ProviderUsageEvidence(
     string Model,
     UsageEvidenceSource Source);
 
+/// <summary>Request-local pricing shared by response summaries and spend finalization.</summary>
+public sealed record ProviderPricingEvidence(
+    decimal? Cost,
+    string? FallbackReason = null,
+    string? FailureReason = null,
+    decimal KnownPartialCost = 0m)
+{
+    public decimal KnownCost => Cost ?? KnownPartialCost;
+}
+
+public sealed record ProviderToolPricingEvidence(
+    decimal? Cost,
+    string? UsageJson = null,
+    string? FailureReason = null,
+    string? UnconfiguredToolNames = null,
+    decimal KnownPartialCost = 0m)
+{
+    public const string IncompleteStreamingUsageReason =
+        "Provider-hosted tool usage belongs to an incomplete streaming invocation";
+    public decimal KnownCost => Cost ?? KnownPartialCost;
+}
+
 public sealed record StreamTransportEvidence(
     StreamTransportOutcome Outcome,
     long ProviderChunksObserved,
@@ -73,7 +95,23 @@ public sealed record RequestAccountingSnapshot(
     string? MetadataJson,
     SpendReservationEvidence? Reservation,
     bool IsIndeterminate,
-    string? IndeterminateReason);
+    string? IndeterminateReason,
+    ProviderPricingEvidence? ProviderPricing = null,
+    ProviderToolPricingEvidence? ProviderToolPricing = null,
+    IReadOnlyList<int>? ProviderInvocations = null,
+    IReadOnlyList<int>? StreamingProviderInvocations = null,
+    IReadOnlyList<int>? CompletedStreamingProviderInvocations = null,
+    IReadOnlyList<int>? ProviderToolInvocations = null)
+{
+    public bool HasIncompleteProviderUsage =>
+        !(ProviderInvocations?.Count == 1 && ProviderUsage?.Source == UsageEvidenceSource.Estimated) &&
+        (ProviderInvocations?.Any(id => !ProviderCalls.Any(call => call.Iteration == id)) == true ||
+         StreamingProviderInvocations?.Any(id => CompletedStreamingProviderInvocations?.Contains(id) != true) == true);
+
+    public bool HasIncompleteProviderToolUsage => HasIncompleteProviderUsage &&
+        ProviderToolInvocations?.Any(id => StreamingProviderInvocations?.Contains(id) == true &&
+            CompletedStreamingProviderInvocations?.Contains(id) != true) == true;
+}
 
 public interface IRequestAccountingContext
 {
@@ -84,6 +122,20 @@ public interface IRequestAccountingContext
     void RecordProviderUsage(Usage usage, string model, UsageEvidenceSource source);
 
     void RecordProviderCalls(IEnumerable<ProviderCallUsage> providerCalls);
+
+    void RecordProviderInvocation(int invocation, bool streaming = false);
+
+    void RecordProviderStreamCompleted(int invocation);
+
+    void RecordProviderToolCallUsage(int invocation, ProviderToolUsage toolUsage);
+
+    void RecordProviderCall(ProviderCallUsage providerCall);
+
+    void AddProviderToolUsage(ProviderToolUsage toolUsage);
+
+    void RecordProviderPricing(ProviderPricingEvidence pricing);
+
+    void RecordProviderToolPricing(ProviderToolPricingEvidence pricing);
 
     void RecordFunctionExecutions(
         IEnumerable<ToolExecutionEvent> executions,
@@ -118,6 +170,12 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
     private string? _requestedModel;
     private ProviderUsageEvidence? _providerUsage;
     private List<ProviderCallUsage> _providerCalls = [];
+    private readonly HashSet<int> _providerInvocations = [];
+    private readonly HashSet<int> _streamingProviderInvocations = [];
+    private readonly HashSet<int> _completedStreamingProviderInvocations = [];
+    private readonly Dictionary<int, ProviderToolUsage> _providerToolCalls = [];
+    private ProviderPricingEvidence? _providerPricing;
+    private ProviderToolPricingEvidence? _providerToolPricing;
     private List<ToolExecutionEvent> _functionExecutions = [];
     private decimal _functionExecutionCost;
     private List<ToolCall> _streamingToolCalls = [];
@@ -153,6 +211,8 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
         lock (_sync)
         {
             _providerUsage = new ProviderUsageEvidence(usage, model, source);
+            _providerPricing = null;
+            CompleteMeasuredToolPricing();
         }
     }
 
@@ -162,6 +222,92 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
         lock (_sync)
         {
             _providerCalls = providerCalls.ToList();
+            _providerPricing = null;
+        }
+    }
+
+    public void RecordProviderInvocation(int invocation, bool streaming = false)
+    {
+        lock (_sync)
+        {
+            _providerInvocations.Add(invocation);
+            if (streaming)
+                _streamingProviderInvocations.Add(invocation);
+            _providerPricing = null;
+        }
+    }
+
+    public void RecordProviderStreamCompleted(int invocation)
+    {
+        lock (_sync)
+        {
+            _completedStreamingProviderInvocations.Add(invocation);
+            _providerPricing = null;
+            CompleteMeasuredToolPricing();
+        }
+    }
+
+    private void CompleteMeasuredToolPricing()
+    {
+        if (_providerToolPricing is { Cost: null, FailureReason: ProviderToolPricingEvidence.IncompleteStreamingUsageReason } pricing &&
+            ((_providerInvocations.Count == 1 && _providerUsage?.Source == UsageEvidenceSource.Estimated) ||
+             _providerToolCalls.Keys.All(_completedStreamingProviderInvocations.Contains)))
+            _providerToolPricing = pricing with { Cost = pricing.KnownCost, FailureReason = null };
+    }
+
+    public void RecordProviderToolCallUsage(int invocation, ProviderToolUsage toolUsage)
+    {
+        ArgumentNullException.ThrowIfNull(toolUsage);
+        lock (_sync)
+        {
+            _providerToolCalls[invocation] = toolUsage;
+            _providerToolUsage = new ProviderToolUsage
+            {
+                Tools = _providerToolCalls.OrderBy(call => call.Key).SelectMany(call => call.Value.Tools).ToList()
+            };
+            _providerToolPricing = null;
+        }
+    }
+
+    public void RecordProviderCall(ProviderCallUsage providerCall)
+    {
+        ArgumentNullException.ThrowIfNull(providerCall);
+        lock (_sync)
+        {
+            _providerCalls.RemoveAll(call => call.Iteration == providerCall.Iteration);
+            _providerCalls.Add(providerCall);
+            _providerPricing = null;
+        }
+    }
+
+    public void AddProviderToolUsage(ProviderToolUsage toolUsage)
+    {
+        ArgumentNullException.ThrowIfNull(toolUsage);
+        lock (_sync)
+        {
+            _providerToolUsage = new ProviderToolUsage
+            {
+                Tools = (_providerToolUsage?.Tools ?? []).Concat(toolUsage.Tools).ToList()
+            };
+            _providerToolPricing = null;
+        }
+    }
+
+    public void RecordProviderPricing(ProviderPricingEvidence pricing)
+    {
+        ArgumentNullException.ThrowIfNull(pricing);
+        lock (_sync)
+        {
+            _providerPricing = pricing;
+        }
+    }
+
+    public void RecordProviderToolPricing(ProviderToolPricingEvidence pricing)
+    {
+        ArgumentNullException.ThrowIfNull(pricing);
+        lock (_sync)
+        {
+            _providerToolPricing = pricing;
         }
     }
 
@@ -192,6 +338,7 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
         lock (_sync)
         {
             _providerToolUsage = toolUsage;
+            _providerToolPricing = null;
         }
     }
 
@@ -291,7 +438,13 @@ public sealed class RequestAccountingContext : IRequestAccountingContext
                 _metadataJson,
                 _reservation,
                 _isIndeterminate,
-                _indeterminateReason);
+                _indeterminateReason,
+                _providerPricing,
+                _providerToolPricing,
+                _providerInvocations.Order().ToArray(),
+                _streamingProviderInvocations.Order().ToArray(),
+                _completedStreamingProviderInvocations.Order().ToArray(),
+                _providerToolCalls.Keys.Order().ToArray());
         }
     }
 }

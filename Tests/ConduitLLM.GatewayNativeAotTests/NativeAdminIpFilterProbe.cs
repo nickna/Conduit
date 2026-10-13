@@ -124,7 +124,7 @@ internal static class NativeAdminIpFilterProbe
             {
                 var deleted = await SendAsync(control, HttpMethod.Delete, $"{Path}/{row.Id}", null,
                     masterKey, HttpStatusCode.NoContent, token, ETag(row));
-                Require(deleted.ETag == ETag(row), "existing DELETE returns the old strong ETag after its row is gone");
+                Require(deleted.ETag is null, "DELETE does not emit a representation ETag after its row is gone");
                 Require((await RowsAsync(source, token)).All(current => current.Id != row.Id), "DELETE removes exactly its owned row");
                 foreach (var (method, version) in new (HttpMethod, string?)[]
                          { (HttpMethod.Get, null), (HttpMethod.Patch, null), (HttpMethod.Delete, null),
@@ -211,7 +211,7 @@ internal static class NativeAdminIpFilterProbe
         var observed = await SendAsync(client, HttpMethod.Get, $"{Path}/{row.Id}", null, masterKey, HttpStatusCode.OK, ct);
         AssertDto(observed.Body!.Value, row);
         Require(observed.ETag is { } actual && actual == ETag(row) && !actual.StartsWith("W/", StringComparison.Ordinal),
-            "GET emits exact quoted Base64 RowVersion-or-persisted-ticks strong ETag");
+            "GET emits exact quoted RowVersion-and-persisted-ticks strong ETag");
         return row;
     }
 
@@ -376,7 +376,7 @@ internal static class NativeAdminIpFilterProbe
             "all eleven DTO scalars match independently persisted IP fields");
     }
 
-    private static string ETag(Row row) => "\"" + Convert.ToBase64String(row.Version is { Length: > 0 } ? row.Version : BitConverter.GetBytes(row.Updated.Ticks)) + "\"";
+    private static string ETag(Row row) => $"\"{Convert.ToBase64String(row.Version ?? [])}.{row.Updated.Ticks:x}\"";
 
     private static HttpClient Client(Uri admin, IPAddress source)
     {

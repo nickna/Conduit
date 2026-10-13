@@ -43,7 +43,8 @@ public static class GatewayApiEndpoints
             provider.GetRequiredService<ConduitLLM.Functions.Services.FunctionParameterValidationService>(),
             provider.GetRequiredService<IEventPublisher>(),
             provider.GetRequiredService<IHttpContextAccessor>(),
-            provider.GetRequiredService<ILogger<FunctionsEndpoints>>()));
+            provider.GetRequiredService<ILogger<FunctionsEndpoints>>(),
+            provider.GetRequiredService<IProviderErrorTranslator>()));
 #else
         services.AddScoped<FunctionsEndpoints>();
 #endif

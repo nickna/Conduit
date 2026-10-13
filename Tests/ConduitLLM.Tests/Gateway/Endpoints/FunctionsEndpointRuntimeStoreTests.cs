@@ -2,6 +2,8 @@ using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
 
+using ConduitLLM.Core.Configuration;
+using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Enums;
@@ -31,7 +33,7 @@ public sealed class FunctionsEndpointRuntimeStoreTests
         [
             typeof(IFunctionExecutionService), typeof(IFunctionConfigurationRepository),
             typeof(FunctionParameterValidationService), typeof(IEventPublisher),
-            typeof(IHttpContextAccessor), typeof(ILogger<FunctionsEndpoints>)
+            typeof(IHttpContextAccessor), typeof(ILogger<FunctionsEndpoints>), typeof(IProviderErrorTranslator)
         ]));
         Assert.Single(typeof(FunctionsEndpoints).GetConstructors());
     }
@@ -289,7 +291,15 @@ public sealed class FunctionsEndpointRuntimeStoreTests
             _ => new Exception(detail)
         };
         using var body = await fixture.RenderAsync(await fixture.ExecuteAsync(), status);
-        AssertError(body, status == 500 ? "An unexpected error occurred during function execution" : detail, code, type);
+        var expectedMessage = failure switch
+        {
+            "rate-limit" => "The model provider rate-limited this request. Please retry later.",
+            "provider-auth" => "The model provider rejected the request due to an upstream configuration issue.",
+            "provider-unavailable" => "The model provider is temporarily unavailable. Please retry later.",
+            "invalid" => detail,
+            _ => "An unexpected error occurred during function execution"
+        };
+        AssertError(body, expectedMessage, code, type);
         Assert.DoesNotContain("private provider body", body.RootElement.GetRawText());
         fixture.AssertForwardedRequest();
         var accounting = fixture.Context.GetRequestAccountingSnapshot();
@@ -449,9 +459,10 @@ public sealed class FunctionsEndpointRuntimeStoreTests
             Service.Setup(value => value.GetExecutionAsync(Execution.Id, Token)).Returns(() => Task.FromResult(ReadExecution));
             var validation = new FunctionParameterValidationService(ValidationLog);
             var accessor = new HttpContextAccessor { HttpContext = Context };
+            var errorTranslator = new ProviderErrorTranslator(new CustomerErrorOptions { Mode = CustomerErrorMode.External });
             Handler = runtime
-                ? FunctionsEndpoints.CreateWithRuntimePersistence(Service.Object, Store.Object, validation, Events.Object, accessor, EndpointLog)
-                : new FunctionsEndpoints(Service.Object, Repository.Object, validation, Events.Object, accessor, EndpointLog);
+                ? FunctionsEndpoints.CreateWithRuntimePersistence(Service.Object, Store.Object, validation, Events.Object, accessor, EndpointLog, errorTranslator)
+                : new FunctionsEndpoints(Service.Object, Repository.Object, validation, Events.Object, accessor, EndpointLog, errorTranslator);
         }
 
         public Task<IResult> ExecuteAsync() => Handler.ExecuteFunction(Request, Key, Token);

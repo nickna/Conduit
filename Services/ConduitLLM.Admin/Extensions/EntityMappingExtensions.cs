@@ -31,6 +31,7 @@ namespace ConduitLLM.Admin.Extensions
                 IsEnabled = entity.IsEnabled,
                 CreatedAt = entity.CreatedAt,
                 UpdatedAt = entity.UpdatedAt,
+                ResourceETag = new ConduitLLM.Configuration.Utilities.ResourceVersion(entity.RowVersion, entity.UpdatedAt).ETag,
                 CreatedBy = entity.CreatedBy,
                 UpdatedBy = entity.UpdatedBy,
                 VirtualKeyId = entity.VirtualKeyId

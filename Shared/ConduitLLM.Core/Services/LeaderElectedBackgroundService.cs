@@ -24,8 +24,9 @@ namespace ConduitLLM.Core.Services
         private bool _wasLeader;
         private long _currentFencingToken;
         private int _consecutiveFailures;
-        private bool _disposed;
-        private readonly SemaphoreSlim _disposeLock = new(1, 1);
+        private volatile bool _disposed;
+        private readonly object _lifecycleSync = new();
+        private Task? _stopTask;
 
         /// <summary>
         /// Initializes a new instance of the LeaderElectedBackgroundService class
@@ -65,6 +66,13 @@ namespace ConduitLLM.Core.Services
         /// </summary>
         public string ServiceName => _serviceName;
 
+        public override Task StartAsync(CancellationToken cancellationToken)
+        {
+            lock (_lifecycleSync)
+                return _disposed || _stopTask is not null || ExecuteTask is not null
+                    ? Task.CompletedTask : base.StartAsync(cancellationToken);
+        }
+
         /// <summary>
         /// Validates that the current fencing token is still valid before performing critical work.
         /// Call this before any operation that must not be performed by stale leaders.
@@ -97,6 +105,7 @@ namespace ConduitLLM.Core.Services
                 {
                     // Check if we are the leader
                     _isLeader = await _leaderElectionService.IsLeaderAsync(_serviceName, stoppingToken);
+                    stoppingToken.ThrowIfCancellationRequested();
 
                     if (!_isLeader)
                     {
@@ -110,6 +119,7 @@ namespace ConduitLLM.Core.Services
                             _consecutiveFailures = 0; // Reset backoff on success
                         }
                     }
+                    stoppingToken.ThrowIfCancellationRequested();
 
                     if (_isLeader && !_wasLeader)
                     {
@@ -171,8 +181,32 @@ namespace ConduitLLM.Core.Services
                 }
             }
 
-            // Clean up leadership on shutdown
-            await CleanupLeadershipAsync();
+        }
+
+        public override Task StopAsync(CancellationToken cancellationToken)
+        {
+            lock (_lifecycleSync)
+                return _stopTask ??= StopAndReleaseLeadershipAsync(cancellationToken);
+        }
+
+        private async Task StopAndReleaseLeadershipAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                // A canceled host deadline must not detach work that still uses dependencies.
+                if (!_disposed)
+                    await base.StopAsync(CancellationToken.None);
+                if (ExecuteTask is { } execution)
+                    await execution;
+            }
+            catch (OperationCanceledException)
+            {
+                // The background service's own cancellation ends its producer loop.
+            }
+            finally
+            {
+                await CleanupLeadershipAsync(cancellationToken);
+            }
         }
 
         /// <summary>
@@ -196,15 +230,17 @@ namespace ConduitLLM.Core.Services
         /// <summary>
         /// Cleans up leadership state during shutdown
         /// </summary>
-        private async Task CleanupLeadershipAsync()
+        private async Task CleanupLeadershipAsync(CancellationToken cancellationToken)
         {
-            if (_isLeader)
+            if (!_disposed && (_isLeader || _wasLeader || _currentFencingToken != 0))
             {
                 try
                 {
-                    await _leaderElectionService.ReleaseLeadershipAsync(_serviceName);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await _leaderElectionService.ReleaseLeadershipAsync(_serviceName, cancellationToken);
                     _logger.LogInformation("Service {ServiceName} released leadership on shutdown", _serviceName);
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error releasing leadership for service {ServiceName} on shutdown", _serviceName);
@@ -247,27 +283,10 @@ namespace ConduitLLM.Core.Services
         /// <summary>
         /// Asynchronously disposes resources used by the service
         /// </summary>
-        public virtual async ValueTask DisposeAsync()
+        public virtual ValueTask DisposeAsync()
         {
-            if (_disposed) return;
-
-            await _disposeLock.WaitAsync();
-            try
-            {
-                if (_disposed) return;
-                _disposed = true;
-
-                await CleanupLeadershipAsync();
-            }
-            finally
-            {
-                _disposeLock.Release();
-                _disposeLock.Dispose();
-            }
-
-            // Call base dispose (BackgroundService.Dispose())
-            base.Dispose();
-            GC.SuppressFinalize(this);
+            DisposeLocalResources();
+            return ValueTask.CompletedTask;
         }
 
         /// <summary>
@@ -275,36 +294,17 @@ namespace ConduitLLM.Core.Services
         /// Prefer using DisposeAsync when possible.
         /// </summary>
         public override void Dispose()
-        {
-            if (_disposed) return;
+            => DisposeLocalResources();
 
-            _disposeLock.Wait();
-            try
+        private void DisposeLocalResources()
+        {
+            lock (_lifecycleSync)
             {
                 if (_disposed) return;
                 _disposed = true;
-
-                // Best-effort synchronous cleanup
-                if (_isLeader)
-                {
-                    try
-                    {
-                        // Fire and forget - we can't block in Dispose
-                        _ = _leaderElectionService.ReleaseLeadershipAsync(_serviceName);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error releasing leadership during disposal for service {ServiceName}", _serviceName);
-                    }
-                }
+                base.Dispose();
             }
-            finally
-            {
-                _disposeLock.Release();
-                _disposeLock.Dispose();
-            }
-
-            base.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
 }

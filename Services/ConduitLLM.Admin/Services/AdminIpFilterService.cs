@@ -1,3 +1,5 @@
+using ConduitLLM.Configuration;
+using Microsoft.EntityFrameworkCore;
 using ConduitLLM.Admin.Extensions;
 using ConduitLLM.Admin.Endpoints;
 using ConduitLLM.Core.Extensions;
@@ -19,8 +21,9 @@ namespace ConduitLLM.Admin.Services;
 /// <summary>
 /// Service for managing IP filters through the Admin API
 /// </summary>
-public class AdminIpFilterService : EventPublishingServiceBase, IAdminIpFilterService
+public partial class AdminIpFilterService : EventPublishingServiceBase, IAdminIpFilterService
 {
+    private readonly IDbContextFactory<ConduitDbContext>? _dbContextFactory;
     private readonly IIpFilterRepository _ipFilterRepository;
     private readonly IGlobalSettingRepository _globalSettingRepository;
     private readonly IOptionsMonitor<IpFilterOptions> _ipFilterOptions;
@@ -40,14 +43,16 @@ public class AdminIpFilterService : EventPublishingServiceBase, IAdminIpFilterSe
     /// <param name="ipFilterOptions">The IP filter options</param>
     /// <param name="eventBus">Optional event bus (null if not configured)</param>
     /// <param name="logger">The logger</param>
+    /// <param name="dbContextFactory">Factory used for conditional mutations.</param>
     public AdminIpFilterService(
         IIpFilterRepository ipFilterRepository,
         IGlobalSettingRepository globalSettingRepository,
         IOptionsMonitor<IpFilterOptions> ipFilterOptions,
         ILogger<AdminIpFilterService> logger,
-        IEventBus? eventBus = null)
+        IEventBus? eventBus = null, IDbContextFactory<ConduitDbContext>? dbContextFactory = null)
         : base(eventBus, logger)
     {
+        _dbContextFactory = dbContextFactory;
         _ipFilterRepository = ipFilterRepository ?? throw new ArgumentNullException(nameof(ipFilterRepository));
         _globalSettingRepository = globalSettingRepository ?? throw new ArgumentNullException(nameof(globalSettingRepository));
         _ipFilterOptions = ipFilterOptions ?? throw new ArgumentNullException(nameof(ipFilterOptions));
@@ -198,78 +203,8 @@ public class AdminIpFilterService : EventPublishingServiceBase, IAdminIpFilterSe
                 return (false, $"IP filter with ID {id} not found");
             }
 
-            updateFilter.TryGetPatchedProperty(
-                nameof(updateFilter.FilterType),
-                existingFilter.FilterType,
-                out string? filterType);
-            updateFilter.TryGetPatchedProperty(
-                nameof(updateFilter.IpAddressOrCidr),
-                existingFilter.IpAddressOrCidr,
-                out string? ipAddressOrCidr);
-            updateFilter.TryGetPatchedProperty(
-                nameof(updateFilter.Name),
-                existingFilter.Name,
-                out string? name);
-            updateFilter.TryGetPatchedProperty(
-                nameof(updateFilter.Description),
-                existingFilter.Description,
-                out string? description);
-            updateFilter.TryGetPatchedProperty(
-                nameof(updateFilter.IsEnabled),
-                existingFilter.IsEnabled,
-                out bool isEnabled);
-
-            if (updateFilter.IsDefined(nameof(updateFilter.FilterType)) &&
-                string.IsNullOrWhiteSpace(filterType))
-            {
-                return (false, "Filter type cannot be null or empty");
-            }
-            if (updateFilter.IsDefined(nameof(updateFilter.IpAddressOrCidr)) &&
-                (string.IsNullOrWhiteSpace(ipAddressOrCidr) ||
-                 !IsValidIpAddressOrCidr(ipAddressOrCidr)))
-            {
-                return (false, "Invalid IP address or CIDR format");
-            }
-
-            // Track changes for event publishing
-            var changedProperties = new List<string>();
-
-            if (updateFilter.IsDefined(nameof(updateFilter.FilterType)) &&
-                existingFilter.FilterType != filterType)
-            {
-                existingFilter.FilterType = filterType!;
-                changedProperties.Add(nameof(existingFilter.FilterType));
-            }
-
-            if (updateFilter.IsDefined(nameof(updateFilter.IpAddressOrCidr)) &&
-                existingFilter.IpAddressOrCidr != ipAddressOrCidr)
-            {
-                existingFilter.IpAddressOrCidr = ipAddressOrCidr!;
-                changedProperties.Add(nameof(existingFilter.IpAddressOrCidr));
-            }
-
-            // Normalize null vs empty so a null-named legacy row and an unset ("") DTO field are not
-            // treated as a change (which would break the no-op-skip path).
-            if (updateFilter.IsDefined(nameof(updateFilter.Name)) &&
-                existingFilter.Name != name)
-            {
-                existingFilter.Name = name;
-                changedProperties.Add(nameof(existingFilter.Name));
-            }
-
-            if (updateFilter.IsDefined(nameof(updateFilter.Description)) &&
-                existingFilter.Description != description)
-            {
-                existingFilter.Description = description;
-                changedProperties.Add(nameof(existingFilter.Description));
-            }
-
-            if (updateFilter.IsDefined(nameof(updateFilter.IsEnabled)) &&
-                existingFilter.IsEnabled != isEnabled)
-            {
-                existingFilter.IsEnabled = isEnabled;
-                changedProperties.Add(nameof(existingFilter.IsEnabled));
-            }
+            var (changedProperties, patchError) = ApplyFilterPatch(existingFilter, updateFilter);
+            if (patchError is not null) return (false, patchError);
 
             // Only proceed if there are actual changes
             if (!changedProperties.Any())
@@ -317,6 +252,84 @@ public class AdminIpFilterService : EventPublishingServiceBase, IAdminIpFilterSe
             _logger.LogError(ex, "Error updating IP filter with ID {FilterId}", id);
             return (false, "An unexpected error occurred");
         }
+    }
+
+    private static (List<string> Changed, string? Error) ApplyFilterPatch(IpFilterEntity existingFilter, UpdateIpFilterDto updateFilter)
+    {
+        updateFilter.TryGetPatchedProperty(
+            nameof(updateFilter.FilterType),
+            existingFilter.FilterType,
+            out string? filterType);
+        updateFilter.TryGetPatchedProperty(
+            nameof(updateFilter.IpAddressOrCidr),
+            existingFilter.IpAddressOrCidr,
+            out string? ipAddressOrCidr);
+        updateFilter.TryGetPatchedProperty(
+            nameof(updateFilter.Name),
+            existingFilter.Name,
+            out string? name);
+        updateFilter.TryGetPatchedProperty(
+            nameof(updateFilter.Description),
+            existingFilter.Description,
+            out string? description);
+        updateFilter.TryGetPatchedProperty(
+            nameof(updateFilter.IsEnabled),
+            existingFilter.IsEnabled,
+            out bool isEnabled);
+
+        if (updateFilter.IsDefined(nameof(updateFilter.FilterType)) &&
+            string.IsNullOrWhiteSpace(filterType))
+        {
+            return ([], "Filter type cannot be null or empty");
+        }
+        if (updateFilter.IsDefined(nameof(updateFilter.IpAddressOrCidr)) &&
+            (string.IsNullOrWhiteSpace(ipAddressOrCidr) ||
+             !IsValidIpAddressOrCidr(ipAddressOrCidr)))
+        {
+            return ([], "Invalid IP address or CIDR format");
+        }
+
+        // Track changes for event publishing
+        var changedProperties = new List<string>();
+
+        if (updateFilter.IsDefined(nameof(updateFilter.FilterType)) &&
+            existingFilter.FilterType != filterType)
+        {
+            existingFilter.FilterType = filterType!;
+            changedProperties.Add(nameof(existingFilter.FilterType));
+        }
+
+        if (updateFilter.IsDefined(nameof(updateFilter.IpAddressOrCidr)) &&
+            existingFilter.IpAddressOrCidr != ipAddressOrCidr)
+        {
+            existingFilter.IpAddressOrCidr = ipAddressOrCidr!;
+            changedProperties.Add(nameof(existingFilter.IpAddressOrCidr));
+        }
+
+        // Normalize null vs empty so a null-named legacy row and an unset ("") DTO field are not
+        // treated as a change (which would break the no-op-skip path).
+        if (updateFilter.IsDefined(nameof(updateFilter.Name)) &&
+            existingFilter.Name != name)
+        {
+            existingFilter.Name = name;
+            changedProperties.Add(nameof(existingFilter.Name));
+        }
+
+        if (updateFilter.IsDefined(nameof(updateFilter.Description)) &&
+            existingFilter.Description != description)
+        {
+            existingFilter.Description = description;
+            changedProperties.Add(nameof(existingFilter.Description));
+        }
+
+        if (updateFilter.IsDefined(nameof(updateFilter.IsEnabled)) &&
+            existingFilter.IsEnabled != isEnabled)
+        {
+            existingFilter.IsEnabled = isEnabled;
+            changedProperties.Add(nameof(existingFilter.IsEnabled));
+        }
+
+        return (changedProperties, null);
     }
 
     public Task<(bool Success, string? ErrorMessage)> UpdateFilterAsync(UpdateIpFilterDto updateFilter) =>
@@ -593,7 +606,7 @@ public class AdminIpFilterService : EventPublishingServiceBase, IAdminIpFilterSe
     /// </summary>
     /// <param name="ipAddressOrCidr">The string to validate</param>
     /// <returns>True if valid, false otherwise</returns>
-    private bool IsValidIpAddressOrCidr(string ipAddressOrCidr)
+    private static bool IsValidIpAddressOrCidr(string ipAddressOrCidr)
     {
         return IpAddressHelper.IsValidIpAddressOrCidr(ipAddressOrCidr);
     }

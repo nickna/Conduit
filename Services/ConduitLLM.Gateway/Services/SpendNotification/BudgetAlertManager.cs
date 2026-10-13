@@ -114,7 +114,7 @@ namespace ConduitLLM.Gateway.Services.SpendNotification
             
             // Try to mark alert as sent (idempotent operation)
             cancellationToken.ThrowIfCancellationRequested();
-            var marked = await _repository.MarkAlertSentAsync(virtualKeyId, threshold, _alertTtl);
+            var marked = await _repository.MarkAlertSentAsync(virtualKeyId, threshold, _alertTtl, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (!marked)
             {

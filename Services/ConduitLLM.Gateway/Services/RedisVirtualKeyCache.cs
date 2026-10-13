@@ -14,7 +14,7 @@ namespace ConduitLLM.Gateway.Services
     /// <summary>
     /// Redis-based Virtual Key cache with immediate invalidation for security-critical validation
     /// </summary>
-    public class RedisVirtualKeyCache : RedisCacheServiceBase, ConduitLLM.Core.Interfaces.IVirtualKeyCache, IBatchInvalidatable
+    public partial class RedisVirtualKeyCache : RedisCacheServiceBase, ConduitLLM.Core.Interfaces.IVirtualKeyCache, IBatchInvalidatable, IDisposable
     {
         private readonly ISubscriber _subscriber;
 
@@ -131,19 +131,26 @@ namespace ConduitLLM.Gateway.Services
         /// Immediately invalidate a Virtual Key across all instances
         /// CRITICAL: Call this when keys are disabled, deleted, or quota exceeded
         /// </summary>
-        public async Task InvalidateVirtualKeyAsync(string keyHash)
+        public Task InvalidateVirtualKeyAsync(string keyHash) => InvalidateVirtualKeyAsync(keyHash, CancellationToken.None);
+
+        private async Task InvalidateVirtualKeyAsync(string keyHash, CancellationToken cancellationToken)
         {
             var cacheKey = CacheKeys.VirtualKey.ByHash(keyHash);
 
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 await Database.KeyDeleteAsync(cacheKey);
+                cancellationToken.ThrowIfCancellationRequested();
                 await _subscriber.PublishAsync(RedisChannel.Literal(CacheKeys.VirtualKey.InvalidationChannel), keyHash);
+                cancellationToken.ThrowIfCancellationRequested();
                 await TrackInvalidationAsync(CacheKeys.Stats.VirtualKeyService);
+                cancellationToken.ThrowIfCancellationRequested();
                 GatewayCacheMetrics.RecordInvalidation("virtualkey", "explicit");
 
                 Logger.LogInformation("Invalidated Virtual Key across all instances: {KeyHash}", keyHash);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error invalidating Virtual Key: {KeyHash}", keyHash);
@@ -155,12 +162,13 @@ namespace ConduitLLM.Gateway.Services
         /// <summary>
         /// Bulk invalidate multiple keys (useful for quota updates)
         /// </summary>
-        public async Task InvalidateVirtualKeysAsync(string[] keyHashes)
+        public async Task InvalidateVirtualKeysAsync(string[] keyHashes, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var tasks = new Task[keyHashes.Length];
             for (int i = 0; i < keyHashes.Length; i++)
             {
-                tasks[i] = InvalidateVirtualKeyAsync(keyHashes[i]);
+                tasks[i] = InvalidateVirtualKeyAsync(keyHashes[i], cancellationToken);
             }
 
             await Task.WhenAll(tasks);
@@ -224,18 +232,18 @@ namespace ConduitLLM.Gateway.Services
 
         private void OnKeyInvalidated(RedisChannel channel, RedisValue keyHash)
         {
-            _ = OnKeyInvalidatedAsync(keyHash);
+            TrackCallback(token => OnKeyInvalidatedAsync(keyHash, token));
         }
 
-        private async Task OnKeyInvalidatedAsync(RedisValue keyHash)
+        private async Task OnKeyInvalidatedAsync(RedisValue keyHash, CancellationToken cancellationToken)
         {
             try
             {
-                var cacheKey = CacheKeys.VirtualKey.ByHash(keyHash.ToString());
-                await Database.KeyDeleteAsync(cacheKey);
+                await DeleteCallbackKeyAsync(keyHash.ToString(), cancellationToken);
 
                 Logger.LogDebug("Invalidated Virtual Key from pub/sub: {KeyHash}", keyHash.ToString());
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error handling key invalidation: {KeyHash}", keyHash.ToString());
@@ -244,10 +252,10 @@ namespace ConduitLLM.Gateway.Services
 
         private void OnBatchInvalidated(RedisChannel channel, RedisValue message)
         {
-            _ = OnBatchInvalidatedAsync(message);
+            TrackCallback(token => OnBatchInvalidatedAsync(message, token));
         }
 
-        private async Task OnBatchInvalidatedAsync(RedisValue message)
+        private async Task OnBatchInvalidatedAsync(RedisValue message, CancellationToken cancellationToken)
         {
             try
             {
@@ -256,23 +264,14 @@ namespace ConduitLLM.Gateway.Services
                     GatewayRedisJsonContext.Default.VirtualKeyBatchInvalidation);
                 if (batchMessage?.KeyHashes != null)
                 {
-                    var batch = Database.CreateBatch();
-                    var deleteTasks = new List<Task<bool>>();
-
-                    foreach (var keyHash in batchMessage.KeyHashes)
-                    {
-                        var cacheKey = CacheKeys.VirtualKey.ByHash(keyHash);
-                        deleteTasks.Add(batch.KeyDeleteAsync(cacheKey));
-                    }
-
-                    batch.Execute();
-                    await Task.WhenAll(deleteTasks);
+                    await Task.WhenAll(batchMessage.KeyHashes.Select(hash => DeleteCallbackKeyAsync(hash, cancellationToken)));
 
                     Logger.LogDebug(
                         "Batch invalidated {Count} virtual keys from pub/sub",
                         batchMessage.KeyHashes.Length);
                 }
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error handling batch key invalidation");

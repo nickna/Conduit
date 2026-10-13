@@ -62,7 +62,7 @@ public static class BillingServicesExtensions
         services.AddSingleton<IBillingAuditService, BillingAuditService>();
         services.AddLeaderElectedHostedService<BillingAuditService>(
             provider => (BillingAuditService)provider.GetRequiredService<IBillingAuditService>(),
-            "BillingAuditService");
+            "BillingAuditService", ownsInnerService: false);
 #endif
 
         services.AddOptions<ConduitLLM.Configuration.Options.BillingReconciliationOptions>()
@@ -79,7 +79,7 @@ public static class BillingServicesExtensions
         services.AddSingleton<BillingReconciliationService>();
         services.AddLeaderElectedHostedService<BillingReconciliationService>(
             provider => provider.GetRequiredService<BillingReconciliationService>(),
-            "BillingReconciliationService");
+            "BillingReconciliationService", ownsInnerService: false);
 #endif
 
         // Pricing rules engine services for flexible rules-based pricing
@@ -94,7 +94,7 @@ public static class BillingServicesExtensions
         services.AddSingleton<IPricingAuditService, PricingAuditService>();
         services.AddLeaderElectedHostedService<PricingAuditService>(
             provider => (PricingAuditService)provider.GetRequiredService<IPricingAuditService>(),
-            "PricingAuditService");
+            "PricingAuditService", ownsInnerService: false);
 #endif
 
         return services;

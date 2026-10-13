@@ -281,6 +281,12 @@ public class FunctionExecutionService : IFunctionExecutionService
                         WebhookDelivered = false
                     };
 
+                    if (ex is ConduitLLM.Functions.Exceptions.FunctionCommunicationException communicationError)
+                    {
+                        execution.CostCalculationDetails = JsonSerializer.Serialize(
+                            new FunctionExecutionCostDetails { Usage = new(), HttpStatusCode = (int)communicationError.StatusCode },
+                            FunctionsJsonContext.Default.FunctionExecutionCostDetails);
+                    }
                     await CreateExecutionAsync(execution, cancellationToken);
                 }
                 else
@@ -293,6 +299,13 @@ public class FunctionExecutionService : IFunctionExecutionService
                     execution.ActualCost = providerExecutionCompleted
                         ? incurredCost ?? execution.ActualCost ?? execution.EstimatedCost ?? 0m
                         : 0m;
+
+                    if (ex is ConduitLLM.Functions.Exceptions.FunctionCommunicationException communicationError)
+                    {
+                        execution.CostCalculationDetails = JsonSerializer.Serialize(
+                            new FunctionExecutionCostDetails { Usage = new(), HttpStatusCode = (int)communicationError.StatusCode },
+                            FunctionsJsonContext.Default.FunctionExecutionCostDetails);
+                    }
 
                     await UpdateExecutionAsync(execution, cancellationToken);
                 }

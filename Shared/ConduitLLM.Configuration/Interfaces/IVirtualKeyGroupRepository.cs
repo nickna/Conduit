@@ -1,5 +1,6 @@
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Enums;
+using ConduitLLM.Configuration.Utilities;
 
 namespace ConduitLLM.Configuration.Interfaces;
 
@@ -40,6 +41,8 @@ public interface IVirtualKeyGroupRepository : IRepositoryBase<VirtualKeyGroup, i
     /// <param name="initiatedBy">User who initiated the transaction</param>
     /// <returns>The new balance after adjustment</returns>
     Task<decimal> AdjustBalanceAsync(int groupId, decimal amount, string? description, string? initiatedBy);
+    Task<VirtualKeyGroup?> AdjustBalanceConditionalAsync(int groupId, decimal amount,
+        string? description, string? initiatedBy, ResourcePrecondition precondition, CancellationToken cancellationToken);
 
     /// <summary>
     /// Adjusts the balance of a virtual key group with full transaction details including reference type

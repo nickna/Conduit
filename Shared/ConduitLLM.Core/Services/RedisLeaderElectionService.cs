@@ -1,602 +1,367 @@
-using System;
 using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
 using ConduitLLM.Core.Interfaces;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
-namespace ConduitLLM.Core.Services
+namespace ConduitLLM.Core.Services;
+
+/// <summary>Redis leader leases and their owned renewal generations.</summary>
+public class RedisLeaderElectionService : ILeaderElectionService, IAsyncDisposable, IDisposable
 {
-    /// <summary>
-    /// Redis-based implementation of leader election service using distributed locks.
-    /// Implements fencing tokens to prevent split-brain scenarios.
-    /// </summary>
-    public class RedisLeaderElectionService : ILeaderElectionService, IAsyncDisposable, IDisposable
+    private readonly IConnectionMultiplexer _redis;
+    private readonly ILogger<RedisLeaderElectionService> _logger;
+    private readonly string _instanceId = $"{Environment.MachineName}:{Environment.ProcessId}:{Guid.NewGuid():N}";
+    private readonly TimeSpan _leadershipTtl = TimeSpan.FromSeconds(60);
+    private readonly TimeSpan _renewalInterval;
+    private readonly ConcurrentDictionary<string, MaintenanceState> _maintenanceStates = new();
+    private readonly ConcurrentDictionary<string, LeadershipState> _leadershipStates = new();
+    private readonly object _lifecycleSync = new();
+    private readonly Dictionary<MaintenanceState, string> _generations = new();
+    private readonly HashSet<string> _leases = new();
+    private readonly SemaphoreSlim _transition = new(1, 1);
+    private readonly CancellationTokenSource _shutdown = new();
+    private readonly CancellationToken _shutdownToken;
+    private Task? _shutdownTask;
+    private volatile bool _stopping;
+    private volatile bool _disposed;
+
+    private sealed class MaintenanceState(CancellationToken cancellationToken, CancellationToken shutdown) : IDisposable
     {
-        private readonly IConnectionMultiplexer _redis;
-        private readonly ILogger<RedisLeaderElectionService> _logger;
-        private readonly string _instanceId;
-        private readonly TimeSpan _leadershipTtl;
-        private readonly TimeSpan _renewalInterval;
-        private readonly ConcurrentDictionary<string, MaintenanceState> _maintenanceStates;
-        private readonly ConcurrentDictionary<string, LeadershipState> _leadershipStates;
-        private readonly SemaphoreSlim _disposeLock;
-        private bool _disposed;
+        public CancellationTokenSource Cancellation { get; } = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, shutdown);
+        public Task Task { get; set; } = Task.CompletedTask;
+        public void Dispose() => Cancellation.Dispose();
+    }
 
-        /// <summary>
-        /// Tracks the state of leadership maintenance for a service
-        /// </summary>
-        private sealed class MaintenanceState : IDisposable
+    private sealed class LeadershipState
+    {
+        public bool IsLeader { get; set; }
+        public long FencingToken { get; init; }
+        public DateTime LastRenewal { get; set; }
+    }
+
+    public RedisLeaderElectionService(IConnectionMultiplexer redis, ILogger<RedisLeaderElectionService> logger)
+        : this(redis, logger, TimeSpan.FromSeconds(30)) { }
+
+    internal RedisLeaderElectionService(IConnectionMultiplexer redis, ILogger<RedisLeaderElectionService> logger, TimeSpan renewalInterval)
+    {
+        _redis = redis ?? throw new ArgumentNullException(nameof(redis));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _renewalInterval = renewalInterval;
+        _shutdownToken = _shutdown.Token;
+        _logger.LogInformation("Leader election service initialized with instance ID: {InstanceId}", _instanceId);
+    }
+
+    private void CheckRunning(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_stopping || _disposed) throw new OperationCanceledException(_shutdownToken);
+    }
+
+    public async Task<LeadershipAcquisitionResult> TryAcquireLeadershipAsync(string serviceName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        await _transition.WaitAsync(cancellationToken);
+        try
         {
-            public CancellationTokenSource CancellationTokenSource { get; }
-            public Task? MaintenanceTask { get; set; }
-            private bool _disposed;
-
-            public MaintenanceState()
+            CheckRunning(cancellationToken);
+            await JoinGenerationsAsync(serviceName, retireActive: false);
+            CheckRunning(cancellationToken);
+            var database = _redis.GetDatabase();
+            var result = await database.ScriptEvaluateAsync(@"
+                if redis.call('SET', KEYS[1], ARGV[1], 'NX', 'EX', ARGV[2]) then
+                    return redis.call('INCR', KEYS[2])
+                else return -1 end", [GetLockKey(serviceName), GetFencingKey(serviceName)],
+                [_instanceId, (int)_leadershipTtl.TotalSeconds]);
+            var fencingToken = (long)result;
+            if (fencingToken > 0)
             {
-                CancellationTokenSource = new CancellationTokenSource();
+                // Remember a lease even when cancellation races the Redis reply.
+                lock (_lifecycleSync) _leases.Add(serviceName);
+                CheckRunning(cancellationToken);
+                await JoinGenerationsAsync(serviceName, retireActive: true);
+                CheckRunning(cancellationToken);
+                _leadershipStates[serviceName] = new LeadershipState
+                    { IsLeader = true, FencingToken = fencingToken, LastRenewal = DateTime.UtcNow };
+                StartMaintenanceCore(serviceName, cancellationToken);
+                return LeadershipAcquisitionResult.Success(fencingToken);
             }
+            CheckRunning(cancellationToken);
+            var currentLeader = await database.StringGetAsync(GetLockKey(serviceName));
+            CheckRunning(cancellationToken);
+            _logger.LogDebug("Could not acquire leadership for {ServiceName}; current leader: {CurrentLeader}", serviceName, currentLeader);
+            return LeadershipAcquisitionResult.Failure();
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Error acquiring leadership for {ServiceName}", serviceName);
+            return LeadershipAcquisitionResult.Failure();
+        }
+        finally { _transition.Release(); }
+    }
 
-            public void Dispose()
+    public async Task ReleaseLeadershipAsync(string serviceName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        await _transition.WaitAsync(cancellationToken);
+        try
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            await JoinGenerationsAsync(serviceName, retireActive: true);
+            cancellationToken.ThrowIfCancellationRequested();
+            await ReleaseLeaseAsync(serviceName, cancellationToken);
+        }
+        finally { _transition.Release(); }
+    }
+
+    private async Task ReleaseLeaseAsync(string serviceName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var database = _redis.GetDatabase();
+            await database.ScriptEvaluateAsync(@"
+                if redis.call('GET', KEYS[1]) == ARGV[1] then
+                    return redis.call('DEL', KEYS[1])
+                else return 0 end", [GetLockKey(serviceName)], [_instanceId]);
+            lock (_lifecycleSync) _leases.Remove(serviceName);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Error releasing leadership for {ServiceName}", serviceName);
+        }
+        finally { _leadershipStates.TryRemove(serviceName, out _); }
+    }
+
+    public async Task<bool> IsLeaderAsync(string serviceName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        try
+        {
+            CheckRunning(cancellationToken);
+            var database = _redis.GetDatabase();
+            CheckRunning(cancellationToken);
+            var leader = await database.StringGetAsync(GetLockKey(serviceName));
+            CheckRunning(cancellationToken);
+            var ownsLease = leader == _instanceId;
+            if (_leadershipStates.TryGetValue(serviceName, out var state)) state.IsLeader = ownsLease;
+            return ownsLease;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception exception)
+        {
+            if (_leadershipStates.TryGetValue(serviceName, out var state)) state.IsLeader = false;
+            _logger.LogError(exception, "Error checking leadership for {ServiceName}", serviceName);
+            return false;
+        }
+    }
+
+    public async Task<string?> GetCurrentLeaderAsync(string serviceName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        try
+        {
+            CheckRunning(cancellationToken);
+            var value = await _redis.GetDatabase().StringGetAsync(GetLockKey(serviceName));
+            CheckRunning(cancellationToken);
+            return value.HasValue ? value.ToString() : null;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Error reading leadership for {ServiceName}", serviceName);
+            return null;
+        }
+    }
+
+    public Task<long?> GetCurrentFencingTokenAsync(string serviceName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        CheckRunning(cancellationToken);
+        return Task.FromResult(_leadershipStates.TryGetValue(serviceName, out var state) && state.IsLeader
+            ? (long?)state.FencingToken : null);
+    }
+
+    public async Task<bool> ValidateFencingTokenAsync(string serviceName, long fencingToken, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        CheckRunning(cancellationToken);
+        return _leadershipStates.TryGetValue(serviceName, out var state) && state.IsLeader &&
+            state.FencingToken == fencingToken && await IsLeaderAsync(serviceName, cancellationToken);
+    }
+
+    public async Task StartLeadershipMaintenanceAsync(string serviceName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        await _transition.WaitAsync(cancellationToken);
+        try
+        {
+            CheckRunning(cancellationToken);
+            await JoinGenerationsAsync(serviceName, retireActive: true);
+            CheckRunning(cancellationToken);
+            StartMaintenanceCore(serviceName, cancellationToken);
+        }
+        finally { _transition.Release(); }
+    }
+
+    private void StartMaintenanceCore(string serviceName, CancellationToken cancellationToken)
+    {
+        var state = new MaintenanceState(cancellationToken, _shutdownToken);
+        lock (_lifecycleSync)
+        {
+            _maintenanceStates[serviceName] = state;
+            _generations.Add(state, serviceName);
+            state.Task = RunMaintenanceLoopAsync(serviceName, state);
+        }
+    }
+
+    public async Task StopLeadershipMaintenanceAsync(string serviceName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        await _transition.WaitAsync();
+        try { await JoinGenerationsAsync(serviceName, retireActive: true); }
+        finally { _transition.Release(); }
+    }
+
+    private async Task JoinGenerationsAsync(string? serviceName, bool retireActive)
+    {
+        MaintenanceState[] generations;
+        lock (_lifecycleSync)
+        {
+            generations = _generations.Where(pair => serviceName is null || pair.Value == serviceName)
+                .Where(pair => retireActive || !_maintenanceStates.TryGetValue(pair.Value, out var active) || active != pair.Key)
+                .Select(pair => pair.Key).ToArray();
+            foreach (var state in generations)
             {
-                if (_disposed) return;
-                _disposed = true;
-                CancellationTokenSource.Cancel();
-                CancellationTokenSource.Dispose();
+                if (_generations.TryGetValue(state, out var name) &&
+                    _maintenanceStates.TryGetValue(name, out var active) && active == state)
+                    _maintenanceStates.TryRemove(name, out _);
+                state.Cancellation.Cancel();
             }
         }
-
-        /// <summary>
-        /// Tracks the leadership state including fencing token
-        /// </summary>
-        private sealed class LeadershipState
-        {
-            public bool IsLeader { get; set; }
-            public long FencingToken { get; set; }
-            public DateTime LastRenewal { get; set; }
-        }
-
-        public RedisLeaderElectionService(
-            IConnectionMultiplexer redis,
-            ILogger<RedisLeaderElectionService> logger)
-        {
-            _redis = redis ?? throw new ArgumentNullException(nameof(redis));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-            // Generate unique instance ID
-            _instanceId = $"{Environment.MachineName}:{Process.GetCurrentProcess().Id}:{Guid.NewGuid():N}";
-
-            // Configure TTL and renewal intervals
-            _leadershipTtl = TimeSpan.FromSeconds(60);
-            _renewalInterval = TimeSpan.FromSeconds(30); // Renew at half the TTL
-
-            _maintenanceStates = new ConcurrentDictionary<string, MaintenanceState>();
-            _leadershipStates = new ConcurrentDictionary<string, LeadershipState>();
-            _disposeLock = new SemaphoreSlim(1, 1);
-
-            _logger.LogInformation("Leader election service initialized with instance ID: {InstanceId}", _instanceId);
-        }
-
-        /// <inheritdoc/>
-        public async Task<LeadershipAcquisitionResult> TryAcquireLeadershipAsync(string serviceName, CancellationToken cancellationToken = default)
-        {
-            if (string.IsNullOrWhiteSpace(serviceName))
-                throw new ArgumentException("Service name cannot be null or empty", nameof(serviceName));
-
-            var lockKey = GetLockKey(serviceName);
-            var fencingKey = GetFencingKey(serviceName);
-
-            try
+        await Task.WhenAll(generations.Select(state => state.Task));
+        lock (_lifecycleSync)
+            foreach (var state in generations)
             {
-                var db = _redis.GetDatabase();
-
-                // Lua script to atomically:
-                // 1. Try to acquire the lock (SET NX EX)
-                // 2. If acquired, increment and return the fencing token
-                var acquireScript = @"
-                    if redis.call('SET', KEYS[1], ARGV[1], 'NX', 'EX', ARGV[2]) then
-                        local token = redis.call('INCR', KEYS[2])
-                        return token
-                    else
-                        return -1
-                    end";
-
-                var result = await db.ScriptEvaluateAsync(
-                    acquireScript,
-                    new RedisKey[] { lockKey, fencingKey },
-                    new RedisValue[] { _instanceId, (int)_leadershipTtl.TotalSeconds });
-
-                var fencingToken = (long)result;
-
-                if (fencingToken > 0)
-                {
-                    var state = _leadershipStates.GetOrAdd(serviceName, _ => new LeadershipState());
-                    state.IsLeader = true;
-                    state.FencingToken = fencingToken;
-                    state.LastRenewal = DateTime.UtcNow;
-
-                    _logger.LogInformation(
-                        "Leadership acquired for service {ServiceName} by instance {InstanceId} with fencing token {FencingToken}",
-                        serviceName, _instanceId, fencingToken);
-
-                    // Start automatic renewal
-                    await StartLeadershipMaintenanceAsync(serviceName, cancellationToken);
-
-                    return LeadershipAcquisitionResult.Success(fencingToken);
-                }
-                else
-                {
-                    var currentLeader = await db.StringGetAsync(lockKey);
-                    _logger.LogDebug(
-                        "Failed to acquire leadership for service {ServiceName}. Current leader: {CurrentLeader}",
-                        serviceName, currentLeader);
-
-                    return LeadershipAcquisitionResult.Failure();
-                }
-            }
-            catch (RedisConnectionException ex)
-            {
-                _logger.LogError(ex, "Redis connection error acquiring leadership for service {ServiceName}", serviceName);
-                return LeadershipAcquisitionResult.Failure();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error acquiring leadership for service {ServiceName}", serviceName);
-                return LeadershipAcquisitionResult.Failure();
-            }
-        }
-
-        /// <inheritdoc/>
-        public async Task ReleaseLeadershipAsync(string serviceName, CancellationToken cancellationToken = default)
-        {
-            if (string.IsNullOrWhiteSpace(serviceName))
-                throw new ArgumentException("Service name cannot be null or empty", nameof(serviceName));
-
-            var lockKey = GetLockKey(serviceName);
-
-            try
-            {
-                // Stop renewal first
-                await StopLeadershipMaintenanceAsync(serviceName);
-
-                var db = _redis.GetDatabase();
-
-                // Only delete if we own the lock (atomic check and delete)
-                var script = @"
-                    if redis.call('GET', KEYS[1]) == ARGV[1] then
-                        return redis.call('DEL', KEYS[1])
-                    else
-                        return 0
-                    end";
-
-                var result = await db.ScriptEvaluateAsync(
-                    script,
-                    new RedisKey[] { lockKey },
-                    new RedisValue[] { _instanceId });
-
-                if ((long)result == 1)
-                {
-                    if (_leadershipStates.TryRemove(serviceName, out _))
-                    {
-                        _logger.LogInformation(
-                            "Leadership released for service {ServiceName} by instance {InstanceId}",
-                            serviceName, _instanceId);
-                    }
-                }
-                else
-                {
-                    _logger.LogWarning(
-                        "Could not release leadership for service {ServiceName} - not the current leader",
-                        serviceName);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error releasing leadership for service {ServiceName}", serviceName);
-            }
-            finally
-            {
-                // Always clean up local state
-                _leadershipStates.TryRemove(serviceName, out _);
-            }
-        }
-
-        /// <inheritdoc/>
-        public async Task<bool> IsLeaderAsync(string serviceName, CancellationToken cancellationToken = default)
-        {
-            if (string.IsNullOrWhiteSpace(serviceName))
-                throw new ArgumentException("Service name cannot be null or empty", nameof(serviceName));
-
-            var lockKey = GetLockKey(serviceName);
-
-            try
-            {
-                var db = _redis.GetDatabase();
-                var currentLeader = await db.StringGetAsync(lockKey);
-                var isLeader = currentLeader == _instanceId;
-
-                // Update local state
-                if (_leadershipStates.TryGetValue(serviceName, out var state))
-                {
-                    state.IsLeader = isLeader;
-                }
-
-                return isLeader;
-            }
-            catch (RedisConnectionException ex)
-            {
-                _logger.LogError(ex, "Redis connection error checking leadership status for service {ServiceName}", serviceName);
-                // On connection error, assume we lost leadership for safety
-                if (_leadershipStates.TryGetValue(serviceName, out var state))
-                {
-                    state.IsLeader = false;
-                }
-                return false;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error checking leadership status for service {ServiceName}", serviceName);
-                return false;
-            }
-        }
-
-        /// <inheritdoc/>
-        public async Task<string?> GetCurrentLeaderAsync(string serviceName, CancellationToken cancellationToken = default)
-        {
-            if (string.IsNullOrWhiteSpace(serviceName))
-                throw new ArgumentException("Service name cannot be null or empty", nameof(serviceName));
-
-            var lockKey = GetLockKey(serviceName);
-
-            try
-            {
-                var db = _redis.GetDatabase();
-                var currentLeader = await db.StringGetAsync(lockKey);
-                return currentLeader.HasValue ? currentLeader.ToString() : null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting current leader for service {ServiceName}", serviceName);
-                return null;
-            }
-        }
-
-        /// <inheritdoc/>
-        public Task<long?> GetCurrentFencingTokenAsync(string serviceName, CancellationToken cancellationToken = default)
-        {
-            if (string.IsNullOrWhiteSpace(serviceName))
-                throw new ArgumentException("Service name cannot be null or empty", nameof(serviceName));
-
-            if (_leadershipStates.TryGetValue(serviceName, out var state) && state.IsLeader)
-            {
-                return Task.FromResult<long?>(state.FencingToken);
-            }
-
-            return Task.FromResult<long?>(null);
-        }
-
-        /// <inheritdoc/>
-        public async Task<bool> ValidateFencingTokenAsync(string serviceName, long fencingToken, CancellationToken cancellationToken = default)
-        {
-            if (string.IsNullOrWhiteSpace(serviceName))
-                throw new ArgumentException("Service name cannot be null or empty", nameof(serviceName));
-
-            // First check local state
-            if (!_leadershipStates.TryGetValue(serviceName, out var state) || !state.IsLeader)
-            {
-                return false;
-            }
-
-            // Verify our fencing token matches
-            if (state.FencingToken != fencingToken)
-            {
-                _logger.LogWarning(
-                    "Fencing token mismatch for service {ServiceName}. Expected: {Expected}, Got: {Actual}",
-                    serviceName, state.FencingToken, fencingToken);
-                return false;
-            }
-
-            // Verify we still hold the lock in Redis
-            var isStillLeader = await IsLeaderAsync(serviceName, cancellationToken);
-            if (!isStillLeader)
-            {
-                _logger.LogWarning(
-                    "Fencing token validation failed - no longer leader for service {ServiceName}",
-                    serviceName);
-                state.IsLeader = false;
-                return false;
-            }
-
-            return true;
-        }
-
-        /// <inheritdoc/>
-        public Task StartLeadershipMaintenanceAsync(string serviceName, CancellationToken cancellationToken = default)
-        {
-            if (string.IsNullOrWhiteSpace(serviceName))
-                throw new ArgumentException("Service name cannot be null or empty", nameof(serviceName));
-
-            // Stop any existing maintenance first
-            StopMaintenanceInternal(serviceName);
-
-            var maintenanceState = new MaintenanceState();
-
-            // Link the provided cancellation token
-            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                maintenanceState.CancellationTokenSource.Token,
-                cancellationToken);
-
-            maintenanceState.MaintenanceTask = RunMaintenanceLoopAsync(serviceName, linkedCts.Token, linkedCts);
-
-            _maintenanceStates[serviceName] = maintenanceState;
-
-            _logger.LogDebug(
-                "Started leadership maintenance for service {ServiceName} with renewal interval {RenewalInterval}",
-                serviceName, _renewalInterval);
-
-            return Task.CompletedTask;
-        }
-
-        /// <inheritdoc/>
-        public async Task StopLeadershipMaintenanceAsync(string serviceName)
-        {
-            if (string.IsNullOrWhiteSpace(serviceName))
-                throw new ArgumentException("Service name cannot be null or empty", nameof(serviceName));
-
-            if (_maintenanceStates.TryRemove(serviceName, out var state))
-            {
-                state.CancellationTokenSource.Cancel();
-
-                // Wait for the maintenance task to complete
-                if (state.MaintenanceTask != null)
-                {
-                    try
-                    {
-                        await state.MaintenanceTask.WaitAsync(TimeSpan.FromSeconds(5));
-                    }
-                    catch (TimeoutException)
-                    {
-                        _logger.LogWarning("Maintenance task for service {ServiceName} did not complete in time", serviceName);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        // Expected
-                    }
-                }
-
-                state.Dispose();
-                _logger.LogDebug("Stopped leadership maintenance for service {ServiceName}", serviceName);
-            }
-        }
-
-        private void StopMaintenanceInternal(string serviceName)
-        {
-            if (_maintenanceStates.TryRemove(serviceName, out var state))
-            {
+                _generations.Remove(state);
                 state.Dispose();
             }
-        }
+    }
 
-        private async Task RunMaintenanceLoopAsync(string serviceName, CancellationToken cancellationToken, CancellationTokenSource linkedCts)
+    private async Task RunMaintenanceLoopAsync(string serviceName, MaintenanceState state)
+    {
+        var cancellationToken = state.Cancellation.Token;
+        try
         {
-            try
+            using var timer = new PeriodicTimer(_renewalInterval);
+            while (await timer.WaitForNextTickAsync(cancellationToken))
             {
-                using var timer = new PeriodicTimer(_renewalInterval);
-
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    try
-                    {
-                        if (!await timer.WaitForNextTickAsync(cancellationToken))
-                        {
-                            break;
-                        }
-
-                        await RenewLeadershipAsync(serviceName, cancellationToken);
-                    }
-                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                    {
-                        break;
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected during shutdown
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error in maintenance loop for service {ServiceName}", serviceName);
-            }
-            finally
-            {
-                linkedCts.Dispose();
+                cancellationToken.ThrowIfCancellationRequested();
+                await RenewLeadershipAsync(serviceName, state, cancellationToken);
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception exception) { _logger.LogError(exception, "Error maintaining leadership for {ServiceName}", serviceName); }
+    }
 
-        private async Task RenewLeadershipAsync(string serviceName, CancellationToken cancellationToken)
+    private async Task RenewLeadershipAsync(string serviceName, MaintenanceState generation, CancellationToken cancellationToken)
+    {
+        try
         {
-            var lockKey = GetLockKey(serviceName);
-
-            try
+            cancellationToken.ThrowIfCancellationRequested();
+            var database = _redis.GetDatabase();
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await database.ScriptEvaluateAsync(@"
+                if redis.call('GET', KEYS[1]) == ARGV[1] then
+                    return redis.call('EXPIRE', KEYS[1], ARGV[2])
+                else return 0 end", [GetLockKey(serviceName)], [_instanceId, (int)_leadershipTtl.TotalSeconds]);
+            cancellationToken.ThrowIfCancellationRequested();
+            if ((long)result == 1)
             {
-                var db = _redis.GetDatabase();
-
-                // Atomic check and extend TTL
-                var script = @"
-                    if redis.call('GET', KEYS[1]) == ARGV[1] then
-                        return redis.call('EXPIRE', KEYS[1], ARGV[2])
-                    else
-                        return 0
-                    end";
-
-                var result = await db.ScriptEvaluateAsync(
-                    script,
-                    new RedisKey[] { lockKey },
-                    new RedisValue[] { _instanceId, (int)_leadershipTtl.TotalSeconds });
-
-                if ((long)result == 1)
-                {
-                    if (_leadershipStates.TryGetValue(serviceName, out var state))
-                    {
-                        state.LastRenewal = DateTime.UtcNow;
-                    }
-
-                    _logger.LogTrace(
-                        "Leadership renewed for service {ServiceName} by instance {InstanceId}",
-                        serviceName, _instanceId);
-                }
-                else
-                {
-                    // Lost leadership
-                    await HandleLeadershipLostAsync(serviceName);
-                }
+                if (_leadershipStates.TryGetValue(serviceName, out var state)) state.LastRenewal = DateTime.UtcNow;
             }
-            catch (RedisConnectionException ex)
-            {
-                _logger.LogError(ex, "Redis connection error renewing leadership for service {ServiceName}", serviceName);
-                // On connection error, we can't confirm we still hold the lock
-                // Mark as not leader for safety
-                await HandleLeadershipLostAsync(serviceName);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error renewing leadership for service {ServiceName}", serviceName);
-
-                // On error, check if we're still the leader
-                try
-                {
-                    if (!await IsLeaderAsync(serviceName, cancellationToken))
-                    {
-                        await HandleLeadershipLostAsync(serviceName);
-                    }
-                }
-                catch
-                {
-                    // If we can't check, assume we lost leadership
-                    await HandleLeadershipLostAsync(serviceName);
-                }
-            }
+            else RetireLostLeadership(serviceName, generation);
         }
-
-        private async Task HandleLeadershipLostAsync(string serviceName)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (RedisConnectionException exception)
         {
-            _logger.LogWarning("Lost leadership for service {ServiceName}. Stopping renewal.", serviceName);
-
-            if (_leadershipStates.TryGetValue(serviceName, out var state))
+            cancellationToken.ThrowIfCancellationRequested();
+            _logger.LogError(exception, "Redis error renewing leadership for {ServiceName}", serviceName);
+            RetireLostLeadership(serviceName, generation);
+        }
+        catch (Exception exception)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _logger.LogError(exception, "Error renewing leadership for {ServiceName}", serviceName);
+            if (!await IsLeaderAsync(serviceName, cancellationToken))
             {
-                state.IsLeader = false;
+                cancellationToken.ThrowIfCancellationRequested();
+                RetireLostLeadership(serviceName, generation);
             }
-
-            // Stop maintenance to prevent further renewal attempts
-            StopMaintenanceInternal(serviceName);
         }
+    }
 
-        private string GetLockKey(string serviceName)
+    private void RetireLostLeadership(string serviceName, MaintenanceState generation)
+    {
+        lock (_lifecycleSync)
         {
-            return $"leader:{serviceName}";
+            if (_maintenanceStates.TryGetValue(serviceName, out var active) && active == generation)
+            {
+                _maintenanceStates.TryRemove(serviceName, out _);
+                if (_leadershipStates.TryGetValue(serviceName, out var leader)) leader.IsLeader = false;
+            }
+            generation.Cancellation.Cancel();
+            // This callback runs inside its generation. A later transition joins it.
         }
+    }
 
-        private string GetFencingKey(string serviceName)
+    public Task ShutdownAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_lifecycleSync)
         {
-            return $"leader:{serviceName}:fence";
+            _stopping = true;
+            return _shutdownTask ??= ShutdownCoreAsync(cancellationToken);
         }
+    }
 
-        public async ValueTask DisposeAsync()
+    private async Task ShutdownCoreAsync(CancellationToken cancellationToken)
+    {
+        await _shutdown.CancelAsync();
+        await _transition.WaitAsync();
+        try
+        {
+            await JoinGenerationsAsync(null, retireActive: true);
+            string[] leases;
+            lock (_lifecycleSync) leases = _leases.ToArray();
+            foreach (var name in leases)
+            {
+                if (cancellationToken.IsCancellationRequested || _disposed) break;
+                try { await ReleaseLeaseAsync(name, cancellationToken); }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
+            }
+        }
+        finally { _transition.Release(); }
+    }
+
+    private static string GetLockKey(string serviceName) => $"leader:{serviceName}";
+    private static string GetFencingKey(string serviceName) => $"leader:{serviceName}:fence";
+
+    public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+
+    public void Dispose()
+    {
+        lock (_lifecycleSync)
         {
             if (_disposed) return;
-
-            await _disposeLock.WaitAsync();
-            try
-            {
-                if (_disposed) return;
-                _disposed = true;
-
-                // Release all active leaderships
-                var releaseTasks = new List<Task>();
-                foreach (var serviceName in _leadershipStates.Keys.ToList())
-                {
-                    releaseTasks.Add(ReleaseLeadershipAsync(serviceName));
-                }
-
-                try
-                {
-                    await Task.WhenAll(releaseTasks).WaitAsync(TimeSpan.FromSeconds(10));
-                }
-                catch (TimeoutException)
-                {
-                    _logger.LogWarning("Timed out waiting for leadership releases during disposal");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error releasing leaderships during disposal");
-                }
-
-                // Dispose all maintenance states
-                foreach (var state in _maintenanceStates.Values)
-                {
-                    state.Dispose();
-                }
-
-                _maintenanceStates.Clear();
-                _leadershipStates.Clear();
-            }
-            finally
-            {
-                _disposeLock.Release();
-                _disposeLock.Dispose();
-            }
+            _disposed = true;
+            _stopping = true;
+            _shutdown.Cancel();
+            foreach (var state in _generations.Keys)
+                state.Cancellation.Cancel();
+            // No Redis calls belong in disposal. Hosted ShutdownAsync owns dependency work.
+            if (_shutdownTask is { IsCompleted: true }) _shutdown.Dispose();
         }
-
-        public void Dispose()
-        {
-            if (_disposed) return;
-
-            // Synchronously dispose - this is a fallback, prefer DisposeAsync
-            _disposeLock.Wait();
-            try
-            {
-                if (_disposed) return;
-                _disposed = true;
-
-                // Cancel all maintenance tasks
-                foreach (var state in _maintenanceStates.Values)
-                {
-                    state.Dispose();
-                }
-
-                // Best-effort release of leaderships
-                var db = _redis.GetDatabase();
-                foreach (var serviceName in _leadershipStates.Keys)
-                {
-                    try
-                    {
-                        var lockKey = GetLockKey(serviceName);
-                        var script = @"
-                            if redis.call('GET', KEYS[1]) == ARGV[1] then
-                                return redis.call('DEL', KEYS[1])
-                            else
-                                return 0
-                            end";
-
-                        db.ScriptEvaluate(script, new RedisKey[] { lockKey }, new RedisValue[] { _instanceId });
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error releasing leadership for service {ServiceName} during disposal", serviceName);
-                    }
-                }
-
-                _maintenanceStates.Clear();
-                _leadershipStates.Clear();
-            }
-            finally
-            {
-                _disposeLock.Release();
-                _disposeLock.Dispose();
-            }
-        }
+        GC.SuppressFinalize(this);
     }
 }

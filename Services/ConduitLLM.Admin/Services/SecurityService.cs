@@ -42,7 +42,8 @@ namespace ConduitLLM.Admin.Services
             IServiceScopeFactory? serviceScopeFactory = null,
             IServiceProvider? serviceProvider = null)
             : base(logger, memoryCache, distributedCache,
-                BuildRateLimitCounter(options.Value, serviceProvider, logger))
+                BuildRateLimitCounter(options.Value, serviceProvider, logger),
+                FailedAuthTrackerFactory.Create(options.Value, serviceProvider, memoryCache, logger))
         {
             _options = options.Value;
             _configuration = configuration;
