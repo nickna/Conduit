@@ -36,19 +36,30 @@ public sealed class GlobalSettingRepository : IGlobalSettingRepository
     /// <inheritdoc />
     public async Task<IReadOnlyList<GlobalSetting>> ListAsync(CancellationToken cancellationToken = default) =>
         await ExecuteAsync(
-            context => context.GlobalSettings
-                .AsNoTracking()
-                .OrderBy(setting => setting.Key)
-                .ToListAsync(cancellationToken),
+            context =>
+            {
+                var queryCancellationToken = cancellationToken;
+                var queryContext = context;
+                return queryContext.GlobalSettings
+                    .AsNoTracking()
+                    .OrderBy(setting => setting.Key)
+                    .ToListAsync(queryCancellationToken);
+            },
             "listing all settings",
             cancellationToken);
 
     /// <inheritdoc />
     public async Task<GlobalSetting?> GetByIdAsync(int id, CancellationToken cancellationToken = default) =>
         await ExecuteAsync(
-            context => context.GlobalSettings
-                .AsNoTracking()
-                .FirstOrDefaultAsync(setting => setting.Id == id, cancellationToken),
+            context =>
+            {
+                var queryId = id;
+                var queryCancellationToken = cancellationToken;
+                var queryContext = context;
+                return queryContext.GlobalSettings
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(setting => setting.Id == queryId, queryCancellationToken);
+            },
             $"getting by ID {id}",
             cancellationToken);
 
@@ -60,9 +71,15 @@ public sealed class GlobalSettingRepository : IGlobalSettingRepository
         ValidateKey(key);
 
         return await ExecuteAsync(
-            context => context.GlobalSettings
-                .AsNoTracking()
-                .FirstOrDefaultAsync(setting => setting.Key == key, cancellationToken),
+            context =>
+            {
+                var queryKey = key;
+                var queryCancellationToken = cancellationToken;
+                var queryContext = context;
+                return queryContext.GlobalSettings
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(setting => setting.Key == queryKey, queryCancellationToken);
+            },
             $"getting by key {LoggingSanitizer.S(key)}",
             cancellationToken);
     }
@@ -86,7 +103,8 @@ public sealed class GlobalSettingRepository : IGlobalSettingRepository
 
             setting.UpdatedAt = now;
             context.GlobalSettings.Add(setting);
-            await context.SaveChangesAsync(cancellationToken);
+            var saveCancellationToken = cancellationToken;
+            await context.SaveChangesAsync(saveCancellationToken);
             return setting.Id;
         }, $"creating key {LoggingSanitizer.S(setting.Key)}", cancellationToken);
     }
@@ -104,7 +122,8 @@ public sealed class GlobalSettingRepository : IGlobalSettingRepository
         {
             setting.UpdatedAt = DateTime.UtcNow;
             context.GlobalSettings.Update(setting);
-            return await context.SaveChangesAsync(cancellationToken) > 0;
+            var saveCancellationToken = cancellationToken;
+            return await context.SaveChangesAsync(saveCancellationToken) > 0;
         }, $"updating ID {setting.Id}", cancellationToken);
     }
 
@@ -120,8 +139,11 @@ public sealed class GlobalSettingRepository : IGlobalSettingRepository
 
         return await ExecuteAsync(async context =>
         {
-            var existingSetting = await context.GlobalSettings
-                .FirstOrDefaultAsync(setting => setting.Key == key, cancellationToken);
+            var queryKey = key;
+            var queryCancellationToken = cancellationToken;
+            var queryContext = context;
+            var existingSetting = await queryContext.GlobalSettings
+                .FirstOrDefaultAsync(setting => setting.Key == queryKey, queryCancellationToken);
             var now = DateTime.UtcNow;
 
             if (existingSetting is null)
@@ -145,7 +167,8 @@ public sealed class GlobalSettingRepository : IGlobalSettingRepository
                 }
             }
 
-            return await context.SaveChangesAsync(cancellationToken) > 0;
+            var saveCancellationToken = cancellationToken;
+            return await context.SaveChangesAsync(saveCancellationToken) > 0;
         }, $"upserting by key {LoggingSanitizer.S(key)}", cancellationToken);
     }
 
@@ -153,14 +176,18 @@ public sealed class GlobalSettingRepository : IGlobalSettingRepository
     public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default) =>
         await ExecuteAsync(async context =>
         {
-            var setting = await context.GlobalSettings.FindAsync([id], cancellationToken);
+            var queryId = id;
+            var queryCancellationToken = cancellationToken;
+            var queryContext = context;
+            var setting = await queryContext.GlobalSettings.FindAsync([queryId], queryCancellationToken);
             if (setting is null)
             {
                 return false;
             }
 
             context.GlobalSettings.Remove(setting);
-            return await context.SaveChangesAsync(cancellationToken) > 0;
+            var saveCancellationToken = cancellationToken;
+            return await context.SaveChangesAsync(saveCancellationToken) > 0;
         }, $"deleting by ID {id}", cancellationToken);
 
     /// <inheritdoc />
@@ -172,15 +199,19 @@ public sealed class GlobalSettingRepository : IGlobalSettingRepository
 
         return await ExecuteAsync(async context =>
         {
-            var setting = await context.GlobalSettings
-                .FirstOrDefaultAsync(candidate => candidate.Key == key, cancellationToken);
+            var queryKey = key;
+            var queryCancellationToken = cancellationToken;
+            var queryContext = context;
+            var setting = await queryContext.GlobalSettings
+                .FirstOrDefaultAsync(candidate => candidate.Key == queryKey, queryCancellationToken);
             if (setting is null)
             {
                 return false;
             }
 
             context.GlobalSettings.Remove(setting);
-            return await context.SaveChangesAsync(cancellationToken) > 0;
+            var saveCancellationToken = cancellationToken;
+            return await context.SaveChangesAsync(saveCancellationToken) > 0;
         }, $"deleting by key {LoggingSanitizer.S(key)}", cancellationToken);
     }
 
