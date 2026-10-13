@@ -127,9 +127,9 @@ internal static partial class NativeFunctionExecutionProbe
         var metrics = root.GetProperty("agentic_metrics");
         Properties(metrics, "total_iterations", "total_function_calls", "total_function_cost", "total_llm_cost", "total_cost", "function_calls");
         Require(metrics.GetProperty("total_iterations").GetInt32() == 2 && metrics.GetProperty("total_function_calls").GetInt32() == 1 &&
-            metrics.GetProperty("total_function_cost").GetDecimal() == Price && metrics.GetProperty("total_llm_cost").GetDecimal() == 0m &&
-            metrics.GetProperty("total_cost").GetDecimal() == Price,
-            "agentic metrics retain current function-only total and zero LLM cost");
+            metrics.GetProperty("total_function_cost").GetDecimal() == Price && metrics.GetProperty("total_llm_cost").GetDecimal() == 0.000150m &&
+            metrics.GetProperty("total_cost").GetDecimal() == AgenticRequestPrice,
+            "agentic metrics include both configured provider-call costs and the function cost");
         var calls = metrics.GetProperty("function_calls");
         Require(calls.ValueKind == JsonValueKind.Array && calls.GetArrayLength() == 1, "one configured function summary");
         var call = calls[0];
