@@ -301,11 +301,7 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
 
             if (events.Count > 0)
             {
-                using var scope = _serviceProvider.CreateScope();
-                var context = scope.ServiceProvider.GetRequiredService<ConduitDbContext>();
-
-                await GetDbSet(context).AddRangeAsync(events, cancellationToken);
-                await context.SaveChangesAsync(cancellationToken);
+                await PersistEventsAsync(events, cancellationToken);
 
                 _logger.LogDebug("Final flush of {Count} {EntityName} audit events to database", events.Count, EntityName);
                 AuditEventsFlushed.WithLabels(EntityName, "success").Inc(events.Count);
@@ -360,6 +356,19 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
     #endregion
 
     #region Protected Methods (Can be overridden by derived classes)
+
+    /// <summary>
+    /// Persists one complete batch using the supplied persistence cancellation token.
+    /// </summary>
+    protected virtual async Task PersistEventsAsync(
+        IReadOnlyList<TEvent> events,
+        CancellationToken cancellationToken = default)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ConduitDbContext>();
+        await GetDbSet(context).AddRangeAsync(events, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+    }
 
     /// <summary>
     /// Schedules periodic data retention cleanup.
@@ -520,11 +529,7 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
             if (events.Count == 0)
                 return;
 
-            using var scope = _serviceProvider.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ConduitDbContext>();
-
-            await GetDbSet(context).AddRangeAsync(events);
-            await context.SaveChangesAsync();
+            await PersistEventsAsync(events);
 
             _logger.LogDebug("Flushed {Count} {EntityName} audit events to database", events.Count, EntityName);
             AuditEventsFlushed.WithLabels(EntityName, "success").Inc(events.Count);

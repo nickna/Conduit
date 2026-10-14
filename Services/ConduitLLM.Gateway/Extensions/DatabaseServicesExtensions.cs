@@ -1,10 +1,10 @@
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Interceptors;
 using ConduitLLM.Core.Data;
+using ConduitLLM.Persistence.Interfaces;
+using ConduitLLM.Persistence.Npgsql;
 using Microsoft.EntityFrameworkCore;
-#if CONDUIT_NATIVE_AOT
 using Npgsql;
-#endif
 
 namespace ConduitLLM.Gateway.Extensions;
 
@@ -29,18 +29,15 @@ public static class DatabaseServicesExtensions
             throw new InvalidOperationException($"Only PostgreSQL is supported. Invalid provider: {dbProvider}");
         }
 
-#if CONDUIT_NATIVE_AOT
-        // Native request paths use fixed-shape Npgsql repositories rather than EF query
-        // composition. Other Gateway slices still register EF while their boundaries are
-        // extracted incrementally, so keep this data source independent for now.
+        // EF, schema readiness, fixed-shape repositories, and warmup share the host pool.
         services.AddSingleton(_ => NpgsqlDataSource.Create(dbConnectionString));
-#endif
+        services.AddSingleton<IConnectionPoolWarmup, NpgsqlConnectionPoolWarmup>();
 
         // Register DbContext Factory with query monitoring interceptor
         services.AddDbContextFactory<ConduitDbContext>((sp, options) =>
         {
             var interceptor = sp.GetRequiredService<QueryMonitoringInterceptor>();
-            options.UseNpgsql(dbConnectionString, npgsql =>
+            options.UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>(), npgsql =>
                        // Transient-failure resilience. Explicit BeginTransaction calls are
                        // incompatible with a retrying strategy — use
                        // ExecuteInTransactionAsync (ExecutionStrategyExtensions) instead.

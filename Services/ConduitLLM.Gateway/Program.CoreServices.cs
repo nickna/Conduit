@@ -139,8 +139,10 @@ public partial class Program
         // Register Discovery Cache service for model discovery endpoint caching
         builder.Services.AddDiscoveryCache(builder.Configuration);
 
+#if !CONDUIT_NATIVE_AOT
         // Register Discovery Cache warming as a hosted service (runs on startup)
         builder.Services.AddLeaderElectedHostedService<DiscoveryCacheWarmingService>("DiscoveryCacheWarmingService");
+#endif
 
         // Register Function Discovery Cache service for function tool definition caching
         builder.Services.AddFunctionDiscoveryCache(builder.Configuration);

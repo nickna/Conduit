@@ -23,4 +23,6 @@ namespace ConduitLLM.Functions.Serialization;
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(bool))]
 [JsonSerializable(typeof(int))]
+[JsonSerializable(typeof(long))]
+[JsonSerializable(typeof(List<object>))]
 internal partial class FunctionProviderJsonContext : JsonSerializerContext;

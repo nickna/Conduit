@@ -18,6 +18,7 @@ using ConduitLLM.Gateway.Options;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Gateway.UsageTracking;
 using ConduitLLM.Gateway.Utilities;
+using ConduitLLM.Persistence.Interfaces;
 using ConduitLLM.Tests.TestInfrastructure;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,7 +49,26 @@ public class ChatAgenticCostSummaryTests
 
     [Theory]
     [MemberData(nameof(Scenarios))]
-    public async Task Serialized_summary_matches_settlement_without_repricing(string path, string scenario, bool streaming)
+    public Task Serialized_summary_matches_settlement_without_repricing(string path, string scenario, bool streaming) =>
+        VerifySummaryAsync(path, scenario, streaming, runtime: false);
+
+    [Theory]
+    [InlineData("/v1/chat/completions", "success")]
+    [InlineData("/v1/conduit/chat/completions", "success")]
+    [InlineData("/v1/chat/completions", "hosted-tools")]
+    [InlineData("/v1/conduit/chat/completions", "hosted-tools")]
+    [InlineData("/v1/chat/completions", "tool-pricing-failure")]
+    [InlineData("/v1/conduit/chat/completions", "tool-pricing-failure")]
+    [InlineData("/v1/chat/completions", "pricing-failure")]
+    [InlineData("/v1/conduit/chat/completions", "pricing-failure")]
+    [InlineData("/v1/chat/completions", "partial-provider")]
+    [InlineData("/v1/conduit/chat/completions", "partial-provider")]
+    [InlineData("/v1/chat/completions", "partial-hosted-tools")]
+    [InlineData("/v1/conduit/chat/completions", "partial-hosted-tools")]
+    public Task Runtime_factory_summary_matches_settlement_without_repricing(string path, string scenario) =>
+        VerifySummaryAsync(path, scenario, streaming: false, runtime: true);
+
+    private static async Task VerifySummaryAsync(string path, string scenario, bool streaming, bool runtime)
     {
         var missingCases = scenario is "missing-second" or "missing-first" or "all-missing" or "failed-provider" or
             "throw-provider" or "fallback-missing" or "forced-final-missing" or "fallback-limit-gap" or "failed-provider-route-unavailable" or
@@ -234,9 +254,14 @@ public class ChatAgenticCostSummaryTests
         maximumSpend.Setup(service => service.EstimateMaximumCostAsync(
             It.IsAny<ChatCompletionRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ChatSpendEstimate(true, 0.25m, 10, 128, null));
-        var configs = new Mock<IFunctionConfigurationRepository>();
+        IReadOnlyList<FunctionConfiguration> configurations =
+            [new FunctionConfiguration { Id = 1, ConfigurationName = "lookup", IsEnabled = true }];
+        var configs = new Mock<IFunctionConfigurationRepository>(MockBehavior.Strict);
         configs.Setup(service => service.GetByIdsAsync(It.IsAny<List<int>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new FunctionConfiguration { Id = 1, ConfigurationName = "lookup", IsEnabled = true }]);
+            .ReturnsAsync(configurations.ToList());
+        var configurationStore = new Mock<IFunctionExecutionConfigurationStore>(MockBehavior.Strict);
+        configurationStore.Setup(service => service.GetConfigurationsAsync(It.IsAny<IReadOnlyList<int>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(configurations);
         var settings = new Mock<IGlobalSettingsCacheService>();
         settings.Setup(service => service.GetMinAgenticIterationsAsync()).ReturnsAsync(1);
         settings.Setup(service => service.GetMaxAgenticIterationsAsync()).ReturnsAsync(5);
@@ -244,14 +269,23 @@ public class ChatAgenticCostSummaryTests
         estimation.Setup(service => service.EstimateUsageFromStreamingResponseAsync(
                 It.IsAny<string>(), It.IsAny<List<Message>>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<Tool>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Usage { PromptTokens = 10, CompletionTokens = 5, TotalTokens = 15 });
-        var endpoints = new ChatEndpoints(new Conduit(factory.Object, NullLogger<Conduit>.Instance,
-            functionDiscoveryService: discovery.Object, agenticOrchestrationService: orchestration.Object),
-            NullLogger<ChatEndpoints>.Instance, mappings.Object, GatewayJsonOptions.Create(), Mock.Of<IEventPublisher>(),
-            settings.Object, estimation.Object, configs.Object,
-            chatSpendEstimator: maximumSpend.Object, spendReservationService: reservations.Object,
-            billingAdmissionOptions: Options.Create(new BillingAdmissionOptions { Mode = BillingAdmissionMode.Enforce }),
-            httpContextAccessor: new HttpContextAccessor { HttpContext = context }, costCalculationService: pricing,
-            toolCostCalculationService: toolPricing);
+        var conduit = new Conduit(factory.Object, NullLogger<Conduit>.Instance,
+            functionDiscoveryService: discovery.Object, agenticOrchestrationService: orchestration.Object);
+        var billingOptions = Options.Create(new BillingAdmissionOptions { Mode = BillingAdmissionMode.Enforce });
+        var accessor = new HttpContextAccessor { HttpContext = context };
+        var endpoints = runtime
+            ? ChatEndpoints.CreateWithRuntimePersistence(conduit,
+                NullLogger<ChatEndpoints>.Instance, mappings.Object, GatewayJsonOptions.Create(), Mock.Of<IEventPublisher>(),
+                settings.Object, estimation.Object, configurationStore.Object,
+                chatSpendEstimator: maximumSpend.Object, spendReservationService: reservations.Object,
+                billingAdmissionOptions: billingOptions, httpContextAccessor: accessor,
+                costCalculationService: pricing, toolCostCalculationService: toolPricing)
+            : new ChatEndpoints(conduit,
+                NullLogger<ChatEndpoints>.Instance, mappings.Object, GatewayJsonOptions.Create(), Mock.Of<IEventPublisher>(),
+                settings.Object, estimation.Object, configs.Object,
+                chatSpendEstimator: maximumSpend.Object, spendReservationService: reservations.Object,
+                billingAdmissionOptions: billingOptions, httpContextAccessor: accessor,
+                costCalculationService: pricing, toolCostCalculationService: toolPricing);
         var logs = new List<LogRequestDto>();
         var writer = new Mock<IRequestLogRuntimeWriter>();
         writer.Setup(service => service.LogRequestAsync(It.IsAny<LogRequestDto>()))
@@ -289,6 +323,19 @@ public class ChatAgenticCostSummaryTests
         else if (scenario == "cancel-after-functions" && !streaming)
             await Assert.ThrowsAnyAsync<OperationCanceledException>(Invoke);
         else await Invoke();
+
+        if (runtime)
+        {
+            configurationStore.Verify(service => service.GetConfigurationsAsync(
+                It.Is<IReadOnlyList<int>>(ids => ids.SequenceEqual(new[] { 1 })), cancellation.Token), Times.Once());
+            Assert.Empty(configs.Invocations);
+        }
+        else
+        {
+            configs.Verify(service => service.GetByIdsAsync(
+                It.Is<List<int>>(ids => ids.SequenceEqual(new[] { 1 })), cancellation.Token), Times.Once());
+            Assert.Empty(configurationStore.Invocations);
+        }
 
         if (observerCase)
         {

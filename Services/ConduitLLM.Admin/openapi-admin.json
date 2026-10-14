@@ -40684,7 +40684,7 @@
           {
             "name": "purpose",
             "in": "path",
-            "description": "The purpose (e.g., \"Search\", \"Answer\", \"Enrich\")",
+            "description": "The purpose (e.g., \"Search\", \"Answer\", \"ContentRetrieval\", \"RAG\")",
             "required": true,
             "schema": {
               "type": "string"

@@ -37,12 +37,15 @@ namespace ConduitLLM.Core.Consumers
                 message.SettingId,
                 message.ChangeType);
 
-            await _cacheService.InvalidateSettingAsync(message.SettingKey);
+            // Instances compete for the service queue, so the receiving instance must
+            // broadcast to every process-local cache. Reuse the event ID so delayed
+            // copies delivered to another service do not reload the same change again.
+            await _cacheService.PublishReloadAsync(message.EventId);
             if (message.SettingKey == "Functions.DiscoveryCacheEnabled" && _functions is not null)
                 await _functions.InvalidateAllFunctionDiscoveryAsync(context.CancellationToken);
 
             _logger.LogInformation(
-                "Successfully invalidated cache for setting '{SettingKey}'",
+                "Published cluster cache reload for setting '{SettingKey}'",
                 message.SettingKey);
         }
     }

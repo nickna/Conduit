@@ -1,4 +1,8 @@
+using System.Text.Json;
+
+using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Endpoints;
+using ConduitLLM.Admin.Serialization;
 using ConduitLLM.Configuration.Messaging.Wolverine;
 using ConduitLLM.Core.Interfaces;
 
@@ -28,6 +32,8 @@ public class HealthMonitoringDependencyTests
         status.Status.Should().Be("degraded");
         status.Id.Should().Be("redis");
         status.Details.Should().NotBeNull();
+        Details(status, "configured", "mode", "description")
+            .GetProperty("configured").GetBoolean().Should().BeFalse();
     }
 
     [Fact]
@@ -39,6 +45,8 @@ public class HealthMonitoringDependencyTests
             configuredOverride: true);
 
         status.Status.Should().Be("unhealthy");
+        Details(status, "configured", "error")
+            .GetProperty("error").GetString().Should().Be("Redis connection is unavailable");
     }
 
     [Fact]
@@ -66,6 +74,8 @@ public class HealthMonitoringDependencyTests
         status.Status.Should().Be("healthy");
         status.Version.Should().Be("8.0.1");
         status.ResponseTime.Should().BeGreaterThanOrEqualTo(0);
+        Details(status, "configured", "pingMilliseconds")
+            .GetProperty("pingMilliseconds").GetDouble().Should().Be(2);
     }
 
     [Theory]
@@ -92,6 +102,8 @@ public class HealthMonitoringDependencyTests
 
         status.Status.Should().Be(expectedStatus);
         status.Id.Should().Be("messaging");
+        Details(status, "backend", "transport", "durable", "description")
+            .GetProperty("durable").GetBoolean().Should().BeFalse();
     }
 
     [Fact]
@@ -116,6 +128,9 @@ public class HealthMonitoringDependencyTests
             CancellationToken.None);
 
         status.Status.Should().Be("healthy");
+        var details = Details(status, "backend", "transport", "durable", "checks", "error");
+        details.GetProperty("error").ValueKind.Should().Be(JsonValueKind.Null);
+        details.GetProperty("checks")[0].GetProperty("description").GetString().Should().Be("ready");
     }
 
     [Fact]
@@ -135,6 +150,9 @@ public class HealthMonitoringDependencyTests
 
         status.Status.Should().Be("degraded");
         status.Id.Should().Be("media-storage");
+        var details = Details(status, "mode", "description", "ephemeral", "bucket", "endpoint");
+        details.GetProperty("bucket").ValueKind.Should().Be(JsonValueKind.Null);
+        details.GetProperty("endpoint").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
     [Fact]
@@ -149,6 +167,66 @@ public class HealthMonitoringDependencyTests
             CancellationToken.None);
 
         status.Status.Should().Be("unhealthy");
+        Details(status, "mode", "error")
+            .GetProperty("error").GetString().Should().Be("bucket unavailable");
+    }
+
+    [Fact]
+    public async Task FailedRedisPing_SerializesOnlyFailureDetails()
+    {
+        var database = new Mock<IDatabase>();
+        database.Setup(item => item.PingAsync(It.IsAny<CommandFlags>()))
+            .ThrowsAsync(new InvalidOperationException("redis unreachable"));
+        var redis = new Mock<IConnectionMultiplexer>();
+        redis.Setup(item => item.GetDatabase(It.IsAny<int>(), It.IsAny<object>()))
+            .Returns(database.Object);
+
+        var status = await HealthMonitoringEndpoints.BuildRedisStatusAsync(
+            redis.Object, CancellationToken.None, configuredOverride: true);
+
+        status.Status.Should().Be("unhealthy");
+        Details(status, "configured", "error")
+            .GetProperty("error").GetString().Should().Be("redis unreachable");
+    }
+
+    [Fact]
+    public async Task DurableMessagingWithoutChecks_SerializesEmptyChecksAndError()
+    {
+        var status = await HealthMonitoringEndpoints.BuildMessagingStatusAsync(
+            CreateHealthCheckService(), new ConfigurationBuilder().Build(),
+            Mock.Of<IHostEnvironment>(item => item.EnvironmentName == Environments.Production),
+            CancellationToken.None);
+
+        status.Status.Should().Be("unhealthy");
+        var details = Details(status, "backend", "transport", "durable", "checks", "error");
+        details.GetProperty("checks").GetArrayLength().Should().Be(0);
+        details.GetProperty("error").GetString().Should().Be("No messaging readiness check is registered");
+    }
+
+    [Fact]
+    public async Task FailedMessagingProbe_SerializesOnlyFailureDetails()
+    {
+        var healthChecks = new Mock<HealthCheckService>();
+        healthChecks.Setup(item => item.CheckHealthAsync(
+                It.IsAny<Func<HealthCheckRegistration, bool>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("messaging unavailable"));
+
+        var status = await HealthMonitoringEndpoints.BuildMessagingStatusAsync(
+            healthChecks.Object, new ConfigurationBuilder().Build(),
+            Mock.Of<IHostEnvironment>(item => item.EnvironmentName == Environments.Production),
+            CancellationToken.None);
+
+        status.Status.Should().Be("unhealthy");
+        Details(status, "backend", "error")
+            .GetProperty("error").GetString().Should().Be("messaging unavailable");
+    }
+
+    private static JsonElement Details(ServiceStatusDto status, params string[] expectedProperties)
+    {
+        var details = JsonSerializer.SerializeToElement(status, AdminJsonOptions.Create())
+            .GetProperty("details");
+        Assert.Equal(expectedProperties.Order(), details.EnumerateObject().Select(item => item.Name).Order());
+        return details;
     }
 
     private static HealthCheckService CreateHealthCheckService()

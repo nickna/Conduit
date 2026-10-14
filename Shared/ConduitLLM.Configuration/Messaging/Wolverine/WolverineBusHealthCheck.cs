@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Wolverine.Persistence.Durability;
@@ -26,6 +27,7 @@ namespace ConduitLLM.Configuration.Messaging.Wolverine
         private readonly IMessageStore _messageStore;
         private readonly ILogger<WolverineBusHealthCheck> _logger;
         private readonly int _deadLetterDegradedThreshold;
+        private readonly WolverineRuntimeStartupState? _startup;
 
         /// <summary>
         /// Configuration key for the dead-letter Degraded threshold (default 1 — any
@@ -43,11 +45,22 @@ namespace ConduitLLM.Configuration.Messaging.Wolverine
         public WolverineBusHealthCheck(
             IMessageStore messageStore,
             ILogger<WolverineBusHealthCheck> logger,
-            int deadLetterDegradedThreshold = 1)
+            int deadLetterDegradedThreshold)
+            : this(messageStore, logger, deadLetterDegradedThreshold, null)
+        {
+        }
+
+        [ActivatorUtilitiesConstructor]
+        public WolverineBusHealthCheck(
+            IMessageStore messageStore,
+            ILogger<WolverineBusHealthCheck> logger,
+            int deadLetterDegradedThreshold = 1,
+            WolverineRuntimeStartupState? startup = null)
         {
             _messageStore = messageStore ?? throw new ArgumentNullException(nameof(messageStore));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _deadLetterDegradedThreshold = deadLetterDegradedThreshold;
+            _startup = startup;
         }
 
         /// <inheritdoc />
@@ -55,6 +68,8 @@ namespace ConduitLLM.Configuration.Messaging.Wolverine
             HealthCheckContext context,
             CancellationToken cancellationToken = default)
         {
+            if (_startup is { IsReady: false })
+                return HealthCheckResult.Unhealthy("Wolverine runtime has not completed schema-gated startup");
             try
             {
                 var counts = await _messageStore.Admin.FetchCountsAsync();

@@ -21,8 +21,6 @@ namespace ConduitLLM.Migrator;
 /// <summary>The release-owned schema mutation entry point.</summary>
 public static class MigrationRunner
 {
-    private const long ReleaseJobLockId = 7_891_099;
-
     public static async Task<int> RunAsync(CancellationToken cancellationToken = default)
     {
         using var loggerFactory = LoggerFactory.Create(builder => builder
@@ -36,7 +34,7 @@ public static class MigrationRunner
             var connectionString = ConfigurationDbContextFactory.ResolveNpgsqlConnectionString();
             await using var releaseLock = new NpgsqlConnection(connectionString);
             await releaseLock.OpenAsync(cancellationToken);
-            await using (var acquire = new NpgsqlCommand($"SELECT pg_advisory_lock({ReleaseJobLockId})", releaseLock))
+            await using (var acquire = new NpgsqlCommand($"SELECT pg_advisory_lock({ReleaseMigrationLock.Id})", releaseLock))
             {
                 acquire.CommandTimeout = options.LockTimeoutSeconds;
                 await acquire.ExecuteNonQueryAsync(cancellationToken);
@@ -63,7 +61,7 @@ public static class MigrationRunner
             }
             finally
             {
-                await using var release = new NpgsqlCommand($"SELECT pg_advisory_unlock({ReleaseJobLockId})", releaseLock);
+                await using var release = new NpgsqlCommand($"SELECT pg_advisory_unlock({ReleaseMigrationLock.Id})", releaseLock);
                 await release.ExecuteNonQueryAsync(CancellationToken.None);
             }
             logger.LogInformation("Migration completed successfully");

@@ -5,6 +5,7 @@ using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Serialization;
 using ConduitLLM.Functions.Enums;
 using ConduitLLM.Functions.Interfaces;
+using ConduitLLM.Persistence.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace ConduitLLM.Core.Services;
@@ -15,7 +16,8 @@ namespace ConduitLLM.Core.Services;
 /// </summary>
 public class FunctionDiscoveryService : IFunctionDiscoveryService
 {
-    private readonly IFunctionConfigurationRepository _functionConfigRepository;
+    private readonly IFunctionConfigurationRepository? _functionConfigRepository;
+    private readonly IFunctionExecutionConfigurationStore? _runtimeConfigurationStore;
     private readonly IFunctionClientFactory _clientFactory;
     private readonly IFunctionDiscoveryCacheService? _cacheService;
     private readonly ILogger<FunctionDiscoveryService> _logger;
@@ -29,6 +31,26 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
         _functionConfigRepository = functionConfigRepository ?? throw new ArgumentNullException(nameof(functionConfigRepository));
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         _cacheService = cacheService; // Nullable - caching is optional
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    /// <summary>Creates discovery using fixed-shape scalar configuration reads.</summary>
+    public static FunctionDiscoveryService CreateWithRuntimePersistence(
+        IFunctionExecutionConfigurationStore configurationStore,
+        IFunctionClientFactory clientFactory,
+        IFunctionDiscoveryCacheService? cacheService,
+        ILogger<FunctionDiscoveryService> logger)
+        => new(configurationStore, clientFactory, cacheService, logger);
+
+    private FunctionDiscoveryService(
+        IFunctionExecutionConfigurationStore configurationStore,
+        IFunctionClientFactory clientFactory,
+        IFunctionDiscoveryCacheService? cacheService,
+        ILogger<FunctionDiscoveryService> logger)
+    {
+        _runtimeConfigurationStore = configurationStore ?? throw new ArgumentNullException(nameof(configurationStore));
+        _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
+        _cacheService = cacheService;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -56,7 +78,7 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
         CancellationToken cancellationToken)
     {
         // Load all configurations from database
-        var configurations = await _functionConfigRepository.GetByIdsAsync(functionConfigurationIds, cancellationToken);
+        var configurations = await GetConfigurationsAsync(functionConfigurationIds, cancellationToken);
 
         // Validate all requested configurations were found
         if (configurations.Count != functionConfigurationIds.Count)
@@ -114,7 +136,7 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
             return new Dictionary<string, FunctionRoute>();
         }
 
-        var configurations = await _functionConfigRepository.GetByIdsAsync(functionConfigurationIds, cancellationToken);
+        var configurations = await GetConfigurationsAsync(functionConfigurationIds, cancellationToken);
 
         var mapping = new Dictionary<string, FunctionRoute>();
         foreach (var config in configurations)
@@ -141,6 +163,12 @@ public class FunctionDiscoveryService : IFunctionDiscoveryService
 
         return mapping;
     }
+
+    private async Task<IReadOnlyList<ConduitLLM.Functions.Entities.FunctionConfiguration>> GetConfigurationsAsync(
+        List<int> functionConfigurationIds, CancellationToken cancellationToken)
+        => _runtimeConfigurationStore is not null
+            ? await _runtimeConfigurationStore.GetConfigurationsAsync(functionConfigurationIds, cancellationToken)
+            : await _functionConfigRepository!.GetByIdsAsync(functionConfigurationIds, cancellationToken);
 
     /// <summary>
     /// Whether a configuration's provider discovers its tools dynamically at runtime (MCP) rather

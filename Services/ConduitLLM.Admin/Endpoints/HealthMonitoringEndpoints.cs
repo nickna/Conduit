@@ -122,11 +122,7 @@ namespace ConduitLLM.Admin.Endpoints
                 Uptime = dbUptime,
                 LastCheck = DateTime.UtcNow,
                 ResponseTime = dbHealthCheck.ResponseTime,
-                Details = new
-                {
-                    ConnectionPooling = true,
-                    Provider = dbContext.Database.ProviderName ?? "unknown"
-                }
+                Details = new DatabaseHealthDetails(true, dbContext.Database.ProviderName ?? "unknown")
             });
 
             services.Add(await BuildRedisStatusAsync(
@@ -436,13 +432,8 @@ namespace ConduitLLM.Admin.Endpoints
                     Name = name,
                     Status = "unknown",
                     LastCheck = now,
-                    Details = new
-                    {
-                        Source = "heartbeat",
-                        HealthyInstances = 0,
-                        TotalInstances = 0,
-                        Reason = "No instance heartbeat has been received"
-                    }
+                    Details = new HeartbeatHealthDetails(
+                        "heartbeat", 0, 0, "No instance heartbeat has been received")
                 };
             }
 
@@ -485,12 +476,7 @@ namespace ConduitLLM.Admin.Endpoints
                 Uptime = instances.Max(instance => instance.Uptime),
                 LastCheck = instances.Max(instance => instance.LastHeartbeat),
                 ResponseTime = null,
-                Details = new
-                {
-                    Source = "heartbeat",
-                    HealthyInstances = healthy,
-                    TotalInstances = instances.Count
-                }
+                Details = new HeartbeatHealthDetails("heartbeat", healthy, instances.Count)
             };
         }
 
@@ -509,12 +495,9 @@ namespace ConduitLLM.Admin.Endpoints
                     Name = "Redis",
                     Status = "degraded",
                     LastCheck = DateTime.UtcNow,
-                    Details = new
-                    {
-                        Configured = false,
-                        Mode = "in-memory fallback",
-                        Description = "Redis is not configured; cluster-wide ephemeral state is unavailable"
-                    }
+                    Details = new RedisFallbackHealthDetails(
+                        false, "in-memory fallback",
+                        "Redis is not configured; cluster-wide ephemeral state is unavailable")
                 };
             }
 
@@ -526,7 +509,7 @@ namespace ConduitLLM.Admin.Endpoints
                     Name = "Redis",
                     Status = "unhealthy",
                     LastCheck = DateTime.UtcNow,
-                    Details = new { Configured = true, Error = "Redis connection is unavailable" }
+                    Details = new RedisErrorHealthDetails(true, "Redis connection is unavailable")
                 };
             }
 
@@ -546,11 +529,7 @@ namespace ConduitLLM.Admin.Endpoints
                     Version = version,
                     LastCheck = DateTime.UtcNow,
                     ResponseTime = (int)stopwatch.ElapsedMilliseconds,
-                    Details = new
-                    {
-                        Configured = true,
-                        PingMilliseconds = Math.Round(ping.TotalMilliseconds, 1)
-                    }
+                    Details = new RedisHealthDetails(true, Math.Round(ping.TotalMilliseconds, 1))
                 };
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -563,7 +542,7 @@ namespace ConduitLLM.Admin.Endpoints
                     Status = "unhealthy",
                     LastCheck = DateTime.UtcNow,
                     ResponseTime = (int)stopwatch.ElapsedMilliseconds,
-                    Details = new { Configured = true, Error = ex.Message }
+                    Details = new RedisErrorHealthDetails(true, ex.Message)
                 };
             }
         }
@@ -582,15 +561,11 @@ namespace ConduitLLM.Admin.Endpoints
                     Name = "Messaging",
                     Status = hostEnvironment.IsDevelopment() ? "healthy" : "degraded",
                     LastCheck = DateTime.UtcNow,
-                    Details = new
-                    {
-                        Backend = "Wolverine",
-                        Transport = "in-memory",
-                        Durable = false,
-                        Description = hostEnvironment.IsDevelopment()
+                    Details = new InMemoryMessagingHealthDetails(
+                        "Wolverine", "in-memory", false,
+                        hostEnvironment.IsDevelopment()
                             ? "In-memory transport is expected in Development"
-                            : "In-memory transport is non-durable outside Development"
-                    }
+                            : "In-memory transport is non-durable outside Development")
                 };
             }
 
@@ -607,19 +582,11 @@ namespace ConduitLLM.Admin.Endpoints
                     Status = hasChecks ? MapHealthStatus(report.Status) : "unhealthy",
                     LastCheck = DateTime.UtcNow,
                     ResponseTime = (int)report.TotalDuration.TotalMilliseconds,
-                    Details = new
-                    {
-                        Backend = "Wolverine",
-                        Transport = "PostgreSQL",
-                        Durable = true,
-                        Checks = report.Entries.Select(entry => new
-                        {
-                            Name = entry.Key,
-                            Status = entry.Value.Status.ToString(),
-                            entry.Value.Description
-                        }).ToArray(),
-                        Error = hasChecks ? null : "No messaging readiness check is registered"
-                    }
+                    Details = new DurableMessagingHealthDetails(
+                        "Wolverine", "PostgreSQL", true,
+                        report.Entries.Select(entry => new MessagingHealthCheckDetails(
+                            entry.Key, entry.Value.Status.ToString(), entry.Value.Description)).ToArray(),
+                        hasChecks ? null : "No messaging readiness check is registered")
                 };
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -630,7 +597,7 @@ namespace ConduitLLM.Admin.Endpoints
                     Name = "Messaging",
                     Status = "unhealthy",
                     LastCheck = DateTime.UtcNow,
-                    Details = new { Backend = "Wolverine", Error = ex.Message }
+                    Details = new MessagingErrorHealthDetails("Wolverine", ex.Message)
                 };
             }
         }
@@ -653,14 +620,8 @@ namespace ConduitLLM.Admin.Endpoints
                     Status = result.Status,
                     LastCheck = DateTime.UtcNow,
                     ResponseTime = (int)stopwatch.ElapsedMilliseconds,
-                    Details = new
-                    {
-                        result.Mode,
-                        result.Description,
-                        result.Ephemeral,
-                        result.Bucket,
-                        result.Endpoint
-                    }
+                    Details = new StorageHealthDetails(
+                        result.Mode, result.Description, result.Ephemeral, result.Bucket, result.Endpoint)
                 };
             }
             catch (Exception ex) when (ex is not OperationCanceledException
@@ -674,13 +635,10 @@ namespace ConduitLLM.Admin.Endpoints
                     Status = "unhealthy",
                     LastCheck = DateTime.UtcNow,
                     ResponseTime = (int)stopwatch.ElapsedMilliseconds,
-                    Details = new
-                    {
-                        Mode = "s3",
-                        Error = timeout.IsCancellationRequested
+                    Details = new StorageErrorHealthDetails(
+                        "s3", timeout.IsCancellationRequested
                             ? "S3 bucket probe timed out after 3 seconds"
-                            : ex.Message
-                    }
+                            : ex.Message)
                 };
             }
         }

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "kind": "conduit-native-benchmark-qualification",
+  "qualificationId": null,
+  "status": "pending",
+  "windowStartedAt": null,
+  "windowEndsAt": null,
+  "services": {
+    "admin": null,
+    "gateway": null
+  }
+}

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Options;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Persistence.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -26,6 +27,7 @@ namespace ConduitLLM.Tests.Core.Services
         private readonly ConnectionPoolWarmingOptions _options;
         private readonly ServiceCollection _services;
         private readonly IServiceProvider _serviceProvider;
+        private readonly Mock<IConnectionPoolWarmup> _warmupMock;
 
         public CoordinatedConnectionPoolWarmerTests()
         {
@@ -33,6 +35,13 @@ namespace ConduitLLM.Tests.Core.Services
             _redisMock = new Mock<IConnectionMultiplexer>();
             _subscriberMock = new Mock<ISubscriber>();
             _loggerMock = new Mock<ILogger<CoordinatedConnectionPoolWarmer>>();
+            _warmupMock = new Mock<IConnectionPoolWarmup>();
+            _warmupMock.Setup(value => value.WarmConnectionAsync(It.IsAny<CancellationToken>()))
+                .Returns<CancellationToken>(token =>
+                {
+                    token.ThrowIfCancellationRequested();
+                    return Task.CompletedTask;
+                });
             _options = new ConnectionPoolWarmingOptions
             {
                 EnableCoordinatedWarming = true,
@@ -47,6 +56,7 @@ namespace ConduitLLM.Tests.Core.Services
             // Create a real service provider for tests that need scoping
             _services = new ServiceCollection();
             _services.AddLogging();
+            _services.AddSingleton(_warmupMock.Object);
             _serviceProvider = _services.BuildServiceProvider();
         }
 
@@ -82,15 +92,16 @@ namespace ConduitLLM.Tests.Core.Services
         [Fact]
         public async Task StartAsync_WarmingFailure_DoesNotPublishSuccessSignal()
         {
-            var factory = new Mock<Microsoft.EntityFrameworkCore.IDbContextFactory<ConduitLLM.Configuration.ConduitDbContext>>();
-            factory.Setup(value => value.CreateDbContextAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("isolated DB outage"));
-            using var services = new ServiceCollection().AddSingleton(factory.Object).BuildServiceProvider();
+            var warmup = new Mock<IConnectionPoolWarmup>();
+            warmup.Setup(value => value.WarmConnectionAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("isolated DB outage"));
+            using var services = new ServiceCollection().AddSingleton(warmup.Object).BuildServiceProvider();
             var ownership = new Mock<IDistributedLockOwnership>();
             _lockServiceMock.Setup(value => value.TryAcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>())).ReturnsAsync(ownership.Object);
             using var warmer = new CoordinatedConnectionPoolWarmer(services, _lockServiceMock.Object, _redisMock.Object, _loggerMock.Object, _options, "CoreAPI");
             await warmer.StartAsync(CancellationToken.None);
             _subscriberMock.Verify(value => value.PublishAsync(It.IsAny<RedisChannel>(), It.IsAny<RedisValue>(), It.IsAny<CommandFlags>()), Times.Never);
             ownership.Verify(value => value.DisposeAsync(), Times.Once);
+            warmup.Verify(value => value.WarmConnectionAsync(It.IsAny<CancellationToken>()), Times.Exactly(10));
         }
 
         [Fact]
@@ -322,8 +333,8 @@ namespace ConduitLLM.Tests.Core.Services
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(lockMock.Object);
 
-            // The warmer will try to warm connections but DbContextFactory won't be available
-            // This simulates a failure during warming
+            _warmupMock.Setup(value => value.WarmConnectionAsync(It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("isolated DB outage"));
             var warmer = CreateWarmer("CoreAPI");
 
             // Act - Warming will log warnings but not throw
@@ -331,6 +342,7 @@ namespace ConduitLLM.Tests.Core.Services
 
             // Assert - Lock should still be released
             lockMock.Verify(l => l.DisposeAsync(), Times.Once);
+            _subscriberMock.Verify(value => value.PublishAsync(It.IsAny<RedisChannel>(), It.IsAny<RedisValue>(), It.IsAny<CommandFlags>()), Times.Never);
         }
 
         [Fact]
@@ -414,6 +426,66 @@ namespace ConduitLLM.Tests.Core.Services
                     It.IsAny<RedisValue>(),
                     It.IsAny<CommandFlags>()),
                 Times.Once);
+        }
+
+        [Theory]
+        [InlineData("CoreAPI", 10)]
+        [InlineData("AdminAPI", 5)]
+        [InlineData("WebAdmin", 0)]
+        [InlineData("Other", 5)]
+        public async Task StartAsync_WarmsConfiguredNumberOfOperations(string serviceType, int expected)
+        {
+            using var warmer = new CoordinatedConnectionPoolWarmer(
+                _serviceProvider, null, null, _loggerMock.Object, _options, serviceType);
+            await warmer.StartAsync(CancellationToken.None);
+            _warmupMock.Verify(value => value.WarmConnectionAsync(It.IsAny<CancellationToken>()), Times.Exactly(expected));
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task Cancellation_AwaitsAllOperationsBeforeReleasingOwnership(bool loseOwnership)
+        {
+            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var active = 0;
+            var completed = 0;
+            _warmupMock.Setup(value => value.WarmConnectionAsync(It.IsAny<CancellationToken>()))
+                .Returns(async (CancellationToken token) =>
+                {
+                    if (Interlocked.Increment(ref active) == 10) started.TrySetResult();
+                    try { await Task.Delay(Timeout.Infinite, token); }
+                    finally
+                    {
+                        Interlocked.Decrement(ref active);
+                        Interlocked.Increment(ref completed);
+                    }
+                });
+            using var lost = new CancellationTokenSource();
+            var ownership = new Mock<IDistributedLockOwnership>();
+            ownership.SetupGet(value => value.HandleLostToken).Returns(lost.Token);
+            ownership.Setup(value => value.DisposeAsync())
+                .Callback(() => Assert.Equal(0, Volatile.Read(ref active)))
+                .Returns(ValueTask.CompletedTask);
+            _lockServiceMock.Setup(value => value.TryAcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(ownership.Object);
+            using var warmer = CreateWarmer("CoreAPI");
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var warming = warmer.StartAsync(deadline.Token);
+            try
+            {
+                await started.Task.WaitAsync(deadline.Token);
+                if (loseOwnership) lost.Cancel();
+                else await warmer.StopAsync(deadline.Token);
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => warming);
+                Assert.Equal(10, completed);
+                ownership.Verify(value => value.DisposeAsync(), Times.Once);
+                _subscriberMock.Verify(value => value.PublishAsync(It.IsAny<RedisChannel>(), It.IsAny<RedisValue>(), It.IsAny<CommandFlags>()), Times.Never);
+            }
+            finally
+            {
+                deadline.Cancel();
+                try { await warming; } catch (OperationCanceledException) { }
+            }
         }
 
         #region Helper Methods

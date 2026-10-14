@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Conduit compiler callsite inventory",
+  "type": "object",
+  "required": ["schemaVersion", "kind", "status", "source", "tool", "graphs", "commands", "captureSeals", "failure", "countingUnit", "runtimeReachability", "completeRuntimeQueryScope", "nativePublication", "nativeRepositorySuiteQualified", "unresolvedScope"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "conduit-ef-compiled-callsite-inventory" },
+    "status": { "enum": ["collecting", "captured", "failed"] },
+    "source": {
+      "type": ["object", "null"],
+      "properties": {
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "tree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "archive": { "$ref": "#/$defs/fileEvidence" },
+        "excludesWorkingTreeEdits": { "const": true }
+      }
+    },
+    "tool": { "type": ["object", "null"] },
+    "graphs": { "type": "array", "items": { "$ref": "#/$defs/graph" } },
+    "commands": { "type": "array", "items": { "type": "object" } },
+    "captureSeals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["phase", "file"],
+        "properties": { "phase": { "type": "string" }, "file": { "$ref": "#/$defs/fileEvidence" } }
+      }
+    },
+    "failure": { "type": ["object", "null"] },
+    "countingUnit": { "const": "resolved compiler callsite, not SQL query or runtime query shape" },
+    "runtimeReachability": { "const": "UNKNOWN" },
+    "completeRuntimeQueryScope": { "const": false },
+    "nativePublication": { "const": false },
+    "nativeRepositorySuiteQualified": { "const": false },
+    "unresolvedScope": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "fileEvidence": {
+      "type": "object",
+      "required": ["path", "sha256", "bytes"],
+      "properties": {
+        "path": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "graph": {
+      "type": "object",
+      "required": ["profile", "serviceGraph", "sourceDirectory", "complete", "compilations", "callsites", "conditionalExcludedLexicalCandidates"],
+      "properties": {
+        "profile": { "enum": ["normal", "native"] },
+        "serviceGraph": { "enum": ["admin", "gateway"] },
+        "sourceDirectory": { "type": "string" },
+        "complete": { "const": true, "description": "Compiler receipts reconciled for this requested graph; does not imply runtime query coverage." },
+        "compilations": { "type": "array", "items": { "$ref": "#/$defs/compilation" } },
+        "callsites": { "type": "array", "items": { "$ref": "#/$defs/callsite" } },
+        "conditionalExcludedLexicalCandidates": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "compilation": {
+      "type": "object",
+      "required": ["project", "sourceRelativeProject", "sdk", "configuration", "publishAot", "runtimeIdentifier", "defines", "sentinel", "sources", "referenceAssemblies", "projectReferences", "compilerInputs", "originalSarif", "existingSuppressedDiagnostics"],
+      "properties": {
+        "project": { "type": "string" },
+        "sourceRelativeProject": { "type": "string" },
+        "sdk": { "type": "string" },
+        "configuration": { "const": "Release" },
+        "publishAot": { "enum": ["true", "false"] },
+        "runtimeIdentifier": { "type": "string" },
+        "defines": { "type": "array", "items": { "type": "string" } },
+        "sentinel": { "type": "object" },
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/fileEvidence" } },
+        "referenceAssemblies": { "type": "array", "items": { "$ref": "#/$defs/fileEvidence" } },
+        "projectReferences": { "type": "array", "items": { "type": "string" } },
+        "compilerInputs": { "$ref": "#/$defs/fileEvidence" },
+        "originalSarif": { "$ref": "#/$defs/fileEvidence" },
+        "existingSuppressedDiagnostics": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "callsite": {
+      "type": "object",
+      "required": ["profile", "serviceGraph", "project", "classification", "evidence"],
+      "properties": {
+        "classification": { "type": "string" },
+        "evidence": {
+          "type": "object",
+          "required": ["targetMethod", "originalMethod", "targetAssembly", "caller", "file", "span", "sourceChecksum", "generated", "compilation", "queryRoot", "expressionDependencies"],
+          "properties": {
+            "queryRoot": {
+              "type": "object",
+              "required": ["status", "roots", "dependencies"],
+              "properties": { "status": { "enum": ["proven", "unknown", "none"] } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsAotCompatible>true</IsAotCompatible>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <DefineConstants Condition="'$(PublishAot)' == 'true'">$(DefineConstants);CONDUIT_CONVERTER_COMPILED_MODEL</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Shared/ConduitLLM.Configuration/ConduitLLM.Configuration.csproj" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+</Project>

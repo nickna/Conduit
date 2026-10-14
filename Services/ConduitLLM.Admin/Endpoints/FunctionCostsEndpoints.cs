@@ -119,7 +119,10 @@ public static class FunctionCostsEndpoints
     {
         await service.ClearCacheAsync();
         AdminAudit.Log(httpContext, Logger(loggerFactory), "Cleared", "FunctionCostCache");
-        return Results.Ok(new { message = "Function cost cache cleared successfully" });
+        return Results.Ok(new FunctionCostCacheClearResultDto
+        {
+            Message = "Function cost cache cleared successfully"
+        });
     }
 
     private static void Audit(

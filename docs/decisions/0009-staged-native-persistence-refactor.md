@@ -67,7 +67,8 @@ primary survives the transaction rollback.
 
 Native Gateway builds now select the typed-Npgsql global-setting, IP-filter, provider,
 and provider-credential repositories after the normal service graph is assembled. JIT
-Gateway and all Admin builds retain EF. Replacing the descriptors as one host-level set
+Gateway and JIT Admin builds retain EF; native Admin now selects the proven settings
+and IP-filter slices described below. Replacing the descriptors as one host-level set
 ensures request authentication, security policy, and provider credential resolution do
 not silently fall back to an earlier EF registration.
 
@@ -89,8 +90,14 @@ first lands independently of host selection. Native Gateway then selects a read-
 compatibility adapter over the runtime store and resolves persisted route policy through
 the same boundary. Native request billing also resolves model costs by fixed ID or
 provider identifier through this store. JIT and Admin retain the full EF repository and
-model-cost management service. Authenticated model discovery and provider pricing are
-covered by the native process gate.
+model-cost management service. The native process gate covers authenticated alias
+listing at `GET /v1/models`, retrieval at `GET /v1/models/{model}`, effective
+capability metadata at `GET /v1/conduit/models/{modelId}/metadata`, and request-time
+provider model pricing through the typed routing graph. The enriched model catalog
+at `GET /v1/conduit/discovery/models` and UI parameters at
+`GET /v1/conduit/discovery/models/{model}/parameters` retain their EF/JIT boundary.
+Native requests to those two resources return an explicit 501 before resolving the
+EF-backed discovery handler; authentication remains required.
 
 Request accounting is the next downstream boundary. Request-time middleware now
 depends on `IRequestLogRuntimeWriter`, which maps the existing DTO onto a complete,
@@ -147,6 +154,177 @@ fixed typed-Npgsql queries. Both implementations pass the same real-PostgreSQL
 aggregate contract. Broader Admin reporting and retention queries remain on EF and
 outside ADR 0006's supported NativeAOT data plane.
 
+Function discovery is the next read-only boundary.
+`IFunctionDiscoveryRuntimeStore` lists enabled configurations with exact optional
+purpose/provider filters and reads an enabled configuration by ID. It materializes
+scalar configurations without cost/execution navigation graphs. EF and typed Npgsql
+share a real-PostgreSQL contract covering nulls, JSONB, unknown numeric enum values,
+detached reads and cancellation with a single connection slot. The standalone
+persistence probe includes these operations. The published native persistence check
+passed in run 38122760993 before Gateway runtime selection. Gateway's function
+catalog and parameter loaders now use this store; their two-host process gate checks
+authentication, filters and structured cached payloads. The enriched model catalog
+and UI parameters retain their EF/JIT boundary and return 501 in the native profile.
+Function CRUD, credential resolution,
+cost selection and execution workers still require their own operation boundaries.
+
+Execution configuration and credential reads follow as a separate boundary.
+`IFunctionExecutionConfigurationStore` reads scalar configurations by ID or ID set,
+including disabled rows, and returns every credential for a provider in the existing
+primary/key-name database order. Null/empty ID sets retain their immediate-return
+behavior even when cancelled. Credential scope selection and secret protection stay
+with the current services; the persistence adapters preserve stored secrets unchanged.
+The EF/Npgsql PostgreSQL contract compares legacy credential ordering, disabled and
+unknown enum values, scoped/global selection, detached reads and cancellation while
+the only connection slot is occupied. The published persistence probe includes this
+boundary before runtime service wiring or native selection. Pricing and execution
+record writes remain separate slices.
+
+`FunctionClientFactory` now uses this proven store in native Gateway, selected by an
+explicit scoped factory registration. Its original public repository constructor is
+preserved for JIT Gateway and Admin. Tests compare both paths through actual Exa and
+Tavily clients with fake HTTP handlers: credential scope, selected-secret decryption,
+URLs, headers, timeouts and fresh reads are unchanged. Credential lookup still uses
+the stored provider, while client selection uses the caller's provider; disabled
+configurations retain their existing factory behavior. MCP allowlist rejection occurs
+before transport creation. Host composition tests run in both JIT and native build
+profiles and assert the native factory holds the exact singleton typed store. This
+selects only client construction; inline execution, execution reads and broader
+function workflows retain separate persistence boundaries.
+
+`IFunctionPricingRuntimeStore` adds uncached scalar pricing selection at a supplied
+UTC instant. Active mappings use the canonical `FunctionCostId`; cost eligibility
+is applied before priority/effective-date ordering. Provider, purpose and configuration
+enabled state do not filter billing selection. The PostgreSQL contract compares the
+existing pricing service and both adapters, including invalid high-priority fallback,
+canonical/shadow relationship isolation, exact date boundaries, all pricing fields,
+detached reads, and cancellation of both pool and observed SQL lock waits. The native
+persistence probe exercises the same bounded read before runtime selection. Caching,
+Admin management/invalidation and execution writes remain with their existing services.
+
+`StoreBackedFunctionCostService` preserves the configuration-pricing cache cascade
+over the scalar pricing port: the existing `FunctionCost:Config:{id}` key, generated
+JSON payload, 15-minute memory/one-hour distributed TTLs, uncached nulls, Redis-failure
+fallback and caller cancellation behavior. Cached payloads retain the existing direct
+return semantics. Tests consume payloads emitted by the legacy service and prove
+Admin update invalidation against the shared key. Published Linux run 38124571584
+passes the typed pricing-store probe before runtime selection. Native Gateway now
+selects this scoped adapter over the singleton typed pricing store; host composition
+tests run both build profiles and exercise estimate/actual billing through the resolved
+calculator. JIT Gateway and Admin retain the legacy service, and calculator constructors
+are unchanged. Cost management methods are outside this adapter. Both implementations
+retain the inherited list-only explicit cache clear, tracked separately in
+[#1570](https://github.com/nickna/Conduit/issues/1570).
+
+`IFunctionExecutionRuntimeWriter` adds scalar execution inserts and full snapshot
+updates guarded by ID and the caller's original version. It preserves all 24 fields,
+empty-ID generation, unchecked integer version increments and caller mutations before
+database attempts, including cancellation and concurrency misses. Navigation graphs
+are explicitly outside this new port; the full legacy repository remains unchanged.
+Real PostgreSQL tests compare the actual repository with both adapters, including
+three-way concurrent writes, invalid JSON/FK/duplicate failures, occupied pools and
+observed SQL lock cancellation. The native persistence probe independently reads all
+24 fields and checks scalar writes, CAS, failure atomicity and single-slot recovery.
+Published Linux run 38126684370 proves this writer before Gateway selection.
+Lease/retry/retention operations and audit writes remain separate boundaries. The
+inherited stale-snapshot retry behavior is tracked in
+[#1569](https://github.com/nickna/Conduit/issues/1569).
+
+`IFunctionExecutionRuntimeReader` follows with exact-ID and virtual-key execution
+reads. It includes all 24 execution scalars and the 15 configuration scalars through
+the required configuration relationship. Lists retain their unbounded size,
+`RequestedAt` descending order with unspecified ties, and disabled configurations.
+Each no-tracking row owns a separate configuration instance whose `Executions`
+collection points back to that exact row; audits and cost mappings remain unloaded.
+The real-PostgreSQL suite compares the actual legacy repository and both adapters,
+including 105-row lists, detached mutations, graph identity, cancelled pool/observed
+SQL waits, and successful reuse. Included graphs retain the scalar writer's rejection
+before caller mutation. Published Linux run 38128502143 proves this reader before
+runtime selection; no broader lease, audit, worker or Admin support is implied.
+
+`FunctionExecutionService.CreateWithRuntimePersistence` prepares the inline service
+to consume the configuration/credential store, scalar writer and included-snapshot
+reader together. Native Gateway now selects the named scoped factory and singleton
+Npgsql writer/reader after their published persistence proofs. Its original public
+repository constructor and JIT/Admin registrations remain unchanged. The path
+preserves provider invocation, credential selection,
+generated request/cost JSON, optional MCP pricing/tool arguments, cancellation and
+post-provider billable failure behavior. Paired tests exercise both constructions;
+read and list results retain the existing public return types. Complete host
+composition verifies exact port/calculator/client identities and empty legacy
+repository fields on native, while JIT/Admin retain their scoped repositories.
+Published Linux run 38133326127 proves the bounded inline Exa path on two native
+Gateways: successful and failed execution, opposite-host status retrieval,
+ownership denial and settled accounting. Configured non-streaming Exa agentic chat
+is qualified below. Execution-list HTTP, stateful/agentic MCP and function
+audit/retention remain separate workload proofs.
+The inherited ignored concurrency-update result remains tracked separately in
+[#1572](https://github.com/nickna/Conduit/issues/1572).
+
+`FunctionsEndpoints.CreateWithRuntimePersistence` follows with the HTTP handler's
+single configuration preflight read. Native Gateway constructs it explicitly over
+the already-proven configuration singleton; the original public constructor and JIT
+registration remain unchanged. Missing/disabled configuration, authentication,
+parameter validation, execution forwarding, direct-cost evidence and response/error
+contracts retain their existing behavior. Paired handler tests use production JSON
+metadata, and the native two-host probe exercises requests rejected before provider
+invocation. The preflight cases alone do not establish native execution or chat
+workflow support; the complete selected Exa workload below supplies that proof.
+Inherited validation of JSON-bound primitive parameters is preserved and tracked in
+[#1573](https://github.com/nickna/Conduit/issues/1573).
+
+`FunctionDiscoveryService.CreateWithRuntimePersistence` reuses the proven scalar
+configuration store for Core's tool and routing-map reads. Native Gateway selects
+the named factory explicitly; the sole public repository constructor and JIT
+registration remain unchanged. Tools retain sorted distinct IDs, optional caching,
+the cache loader's cancellation token, minimum configured TTL, missing/disabled
+validation, generated schemas and MCP expansion. Routing maps retain their original
+ID input and existing validation/error behavior. Paired tests cover both service
+constructions, while complete host composition verifies the exact scoped service
+and shared store identity. This removes Core discovery's configuration-query
+boundary. ChatEndpoints' separate preflight is selected below, and the published
+configured Exa workflow proves these Core tool and routing-map reads.
+
+`ChatEndpoints.CreateWithRuntimePersistence` prepares the separate chat preflight
+over that same scalar configuration store. The sole public 14-parameter repository
+constructor, its guards and optional defaults remain unchanged. The prepared path
+forwards the original configuration-ID list and cancellation token without sorting
+or deduplication. Validation retains missing IDs before disabled configurations,
+then explicit iteration limits, and preserves the existing error/cancellation
+contract and accounting order. Empty IDs retain the caller's fast path.
+Native Gateway selects the named scoped factory over the proven configuration
+singleton; JIT retains the repository constructor. Host composition verifies both
+scope identities and all optional billing, usage and error-translation dependencies.
+The native HTTP gate checks both chat aliases on both Gateways using an owned key,
+including authentication, missing/disabled IDs before iteration limits, unchanged
+provider counters and pristine accounting through several spend flush windows.
+Guarded preflight does not establish a successful agentic workload.
+Paired HTTP tests preserve explicit-null global defaults and the inherited omitted
+flag initializers; the latter bypass the documented global defaults and are tracked
+in [#1576](https://github.com/nickna/Conduit/issues/1576).
+
+The published process proof carries a non-streaming OpenAI-compatible chat through one
+configured Exa call and a final LLM reply on both aliases and both Gateway hosts.
+It uses the selected configuration, discovery, credential, pricing and execution
+stores without provider-hosted tool usage. Four chats verify generated schemas,
+matching tool results, complete persisted executions, opposite-host ownership,
+aggregate token usage and settled combined charges. Managed native-profile HTTP
+verification passes; the
+[published Linux process job at d13e7deb](https://github.com/nickna/Conduit/actions/runs/38137532017/job/114465334583)
+also passed this mandatory probe with zero first-party linker diagnostics.
+Cost-summary, iteration and chat-log attribution quirks remain unchanged and are
+tracked in #1577, #1578 and #1579. Provider-hosted tool pricing, stateful/agentic
+MCP, agentic SSE, parallel/dependent calls and audit/retention require separate
+workload proofs.
+
+Stateless inline MCP has a separate published proof in
+[Linux run 38147134135](https://github.com/nickna/Conduit/actions/runs/38147134135).
+Both native Gateways execute configured tools with production-protected scoped
+credentials, modern request metadata, generated structured/Unicode results,
+all 24 persisted fields, opposite-host ownership and exact configured accounting.
+That proof does not qualify stateful sessions, agentic MCP or broader server
+interoperability.
+
 ## Options considered
 
 1. **Wait for production-supported EF NativeAOT.** Rejected as the only plan: it
@@ -176,12 +354,64 @@ Each slice must provide:
 
 The extracted global-settings, IP-filter, provider/credential, virtual-key runtime,
 model-routing, request-accounting, async-task, media, and Gateway-metrics slices are
-selected only by a native Gateway build. Model routing is selected behind a read-only
+selected by a native Gateway build. Native Admin selects typed global-setting and
+IP-filter repositories, with typed version reads for the IP branch. Authenticated
+settings CRUD/validation is proven in
+[Linux run 38147134135](https://github.com/nickna/Conduit/actions/runs/38147134135),
+and IP CRUD/ETags/source-socket enforcement in
+[Linux run 38152552344](https://github.com/nickna/Conduit/actions/runs/38152552344).
+Native Admin and Gateway also select the typed billing-audit writer/host; Gateway
+timers and graceful drains are proven, while controlled Admin HTTP billing enqueue
+remains outside that proof. The later local unit 96 process gate proves healthy
+ordinary setting-change propagation to both Gateway caches, with explicit source
+and generation limits in the feature matrices. Model routing is
+selected behind a read-only
 compatibility adapter, while request-log writes use a narrow runtime writer and
-authenticated hubs share the virtual-key runtime snapshot. JIT Gateway and Admin
-registrations retain their existing EF-backed services.
+authenticated hubs share the virtual-key runtime snapshot. JIT Gateway and JIT
+Admin registrations retain their existing EF-backed services, as do the remaining
+unextracted Admin management registrations.
 Rollback is therefore the JIT artifact, whose request-time and management contracts
 continue to resolve to the legacy services.
+
+The selected native profile omits five Gateway and seven Admin EF-backed hosted
+workers and advertises their exclusions through runtime capabilities. JIT retains
+those workers. Their removal from startup is not proof of native reporting,
+retention, reconciliation or broad management execution. The
+[Gateway](../operations/gateway-native-aot-feature-matrix.md) and
+[Admin](../operations/native-aot-admin-feature-matrix.md) matrices define the
+supported operations and the evidence required before restoring excluded workloads.
+
+Dependency extraction follows required consumers. Configuration no longer references
+the Functions implementation; function entities and ports live in the neutral
+persistence leaf with compatibility forwarding. Admin still requires Functions for
+its credential-test client factory and AWS through the media adapter for storage
+and cleanup consumers. Keeping these explicit dependencies does not qualify those
+remaining EF management APIs. Package ownership and architecture checks keep unused
+SignalR, MessagePack, tokenizer and build tooling out of Admin and unused AWS
+Bedrock SDKs out of Providers. Resolved dependency guards keep MCP implementation
+packages out of Configuration, EF/Npgsql/build tooling out of Functions, and the
+optional MessagePack client protocol out of the native SignalR adapter. No wholesale
+removal of a required consumer is authorized by this ADR.
+
+## Controlled performance checkpoint
+
+The controlled [Admin](../operations/native-aot-admin-controlled-benchmark.md) and
+[Gateway](../operations/native-aot-gateway-controlled-benchmark.md) comparisons
+record mixed results. Native Admin setting-read median throughput is 53.53% lower.
+Native Gateway JSON throughput is 9.08% higher, while complete-SSE throughput is
+4.18% lower and median per-run SSE p99 latency is 7.70% higher. Startup and sampled
+memory improve in both comparisons.
+
+These are whole-profile measurements with explicit source and fixture roles, not
+causal persistence microbenchmarks. Selected typed-Npgsql slices and the remaining
+EF implementations continue to coexist under this accepted decision. Production
+remains on JIT and native promotion is deferred; the existing parity, canary,
+rollback and approval gates remain unchanged. Phase #1373 assesses the staged
+representative persistence contract, including the complete persisted-converter
+inventory; it does not require native enablement of every excluded JIT domain.
+The query inventory records the evidence required before any later expansion.
+Final committed-source CI and acceptance reconciliation remain required;
+operational acceptance remains in #1375.
 
 ## Consequences
 

@@ -3,17 +3,18 @@ using ConduitLLM.Functions.Entities;
 namespace ConduitLLM.Functions.Interfaces;
 
 /// <summary>
-/// Service interface for executing functions with reserve-then-commit billing.
+/// Executes provider functions inline and records their results and calculated costs.
 /// </summary>
 public interface IFunctionExecutionService
 {
     /// <summary>
-    /// Executes a function with reserve-then-commit billing.
+    /// Awaits a provider function and records its result and calculated cost.
+    /// Gateway middleware settles billing when this service is invoked through the HTTP endpoint.
     /// </summary>
     /// <param name="functionConfigurationId">The function configuration to use.</param>
     /// <param name="virtualKeyId">The virtual key for billing.</param>
     /// <param name="parameters">Function-specific parameters.</param>
-    /// <param name="idempotencyKey">Optional idempotency key to prevent duplicate executions.</param>
+    /// <param name="idempotencyKey">Optional key recorded with the request metadata.</param>
     /// <param name="metadata">Optional metadata for tracking.</param>
     /// <param name="providerToolName">
     /// For dynamic multi-tool providers (MCP), the provider-native tool name to invoke. Null for
@@ -21,7 +22,7 @@ public interface IFunctionExecutionService
     /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The function execution result with billing details.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when configuration is invalid or balance is insufficient.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when configuration or credentials are unavailable or invalid.</exception>
     /// <exception cref="ArgumentException">Thrown when required parameters are missing or invalid.</exception>
     Task<FunctionExecution> ExecuteAsync(
         int functionConfigurationId,

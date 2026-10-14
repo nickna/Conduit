@@ -44,14 +44,9 @@ namespace ConduitLLM.Gateway.EventHandlers
             var taskStatus = await _asyncTaskService.GetTaskStatusAsync(message.RequestId, context.CancellationToken);
             if (taskStatus != null)
             {
-                var errorDetails = new
-                {
-                    Error = message.Error,
-                    ErrorCode = message.ErrorCode,
-                    Provider = message.Provider,
-                    IsRetryable = message.IsRetryable,
-                    FailedAt = message.FailedAt
-                };
+                var errorDetails = new VideoGenerationFailureResult(
+                    message.Error, message.ErrorCode, message.Provider,
+                    message.IsRetryable, message.FailedAt);
 
                 await _asyncTaskService.UpdateTaskStatusAsync(
                     message.RequestId,

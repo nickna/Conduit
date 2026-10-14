@@ -113,10 +113,10 @@ public static class FunctionExecutionsEndpoints
             "Cleanup",
             "FunctionExecution",
             detail: $"OlderThanDays: {olderThanDays}, DeletedCount: {deletedCount}");
-        return Results.Ok(new
+        return Results.Ok(new FunctionExecutionCleanupResultDto
         {
-            deletedCount,
-            message = $"Deleted {deletedCount} executions older than {olderThanDays} days"
+            DeletedCount = deletedCount,
+            Message = $"Deleted {deletedCount} executions older than {olderThanDays} days"
         });
     }
 }

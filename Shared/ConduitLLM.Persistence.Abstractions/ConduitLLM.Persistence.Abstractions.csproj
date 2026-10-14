@@ -2,4 +2,22 @@
   <PropertyGroup>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
+
+  <!-- These unchanged public contracts retain their Functions namespaces.
+       Ownership belongs to this neutral leaf; provider clients and services
+       remain in Functions and are not dependencies of persistence. -->
+  <ItemGroup>
+    <Compile Include="..\ConduitLLM.Functions\Entities\**\*.cs"
+             Link="Functions\Entities\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\ConduitLLM.Functions\Enums\*.cs"
+             Link="Functions\Enums\%(Filename)%(Extension)" />
+    <Compile Include="..\ConduitLLM.Functions\Interfaces\IAuditEvent.cs;
+                      ..\ConduitLLM.Functions\Interfaces\IFunctionCallAuditService.cs;
+                      ..\ConduitLLM.Functions\Interfaces\IFunctionConfigurationRepository.cs;
+                      ..\ConduitLLM.Functions\Interfaces\IFunctionCredentialRepository.cs;
+                      ..\ConduitLLM.Functions\Interfaces\IFunctionCostRepository.cs;
+                      ..\ConduitLLM.Functions\Interfaces\IFunctionCostMappingRepository.cs;
+                      ..\ConduitLLM.Functions\Interfaces\IFunctionExecutionRepository.cs"
+             Link="Functions\Interfaces\%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

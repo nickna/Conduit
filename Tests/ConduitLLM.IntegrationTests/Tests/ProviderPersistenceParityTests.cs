@@ -42,12 +42,13 @@ public sealed class ProviderPersistenceParityTests
             await CreateSchemaAsync(npgsqlSchema);
 
             var efConnectionString = WithSearchPath(efSchema);
+            await using var efSource = NpgsqlDataSource.Create(efConnectionString);
             await ExerciseContractAsync(
                 new ProviderRepository(
-                    new TestDbContextFactory(efConnectionString),
+                    new TestDbContextFactory(efSource),
                     NullLogger<ProviderRepository>.Instance),
                 new ProviderKeyCredentialRepository(
-                    new TestDbContextFactory(efConnectionString),
+                    new TestDbContextFactory(efSource),
                     NullLogger<ProviderKeyCredentialRepository>.Instance));
 
             var npgsqlConnectionString = WithSearchPath(npgsqlSchema);
@@ -318,12 +319,12 @@ public sealed class ProviderPersistenceParityTests
         return builder.ConnectionString;
     }
 
-    private sealed class TestDbContextFactory(string connectionString) :
+    private sealed class TestDbContextFactory(NpgsqlDataSource source) :
         IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
             new DbContextOptionsBuilder<ConduitDbContext>()
-                .UseNpgsql(connectionString)
+                .UseNpgsql(source)
                 .Options;
 
         public ConduitDbContext CreateDbContext() => new(_options);

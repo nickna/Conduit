@@ -13,6 +13,11 @@ using ConduitLLM.Gateway.DTOs;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Functions.Utilities;
 using ConduitLLM.Functions.DTOs;
+using ConduitLLM.Functions.Enums;
+using ConduitLLM.Persistence.Interfaces;
+#if !CONDUIT_NATIVE_AOT
+using ConduitLLM.Configuration.Repositories;
+#endif
 using GatewayDiscoveredModelDto = ConduitLLM.Configuration.DTOs.DiscoveredModelDto;
 
 namespace ConduitLLM.Gateway.Endpoints
@@ -30,6 +35,7 @@ namespace ConduitLLM.Gateway.Endpoints
         private readonly JsonSerializerOptions _wireJsonOptions;
         private readonly DiscoveryCacheOptions _discoveryOptions;
         private readonly TimeProvider _clock;
+        private readonly IFunctionDiscoveryRuntimeStore? _functionDiscoveryStore;
 
         /// <summary>
         /// Initializes the Discovery endpoint handler.
@@ -52,7 +58,30 @@ namespace ConduitLLM.Gateway.Endpoints
             _clock = clock ?? TimeProvider.System;
             _wireJsonOptions = wireJsonOptions ?? throw new ArgumentNullException(nameof(wireJsonOptions));
             _discoveryOptions = (discoveryOptions ?? throw new ArgumentNullException(nameof(discoveryOptions))).Value;
+#if !CONDUIT_NATIVE_AOT
+            _functionDiscoveryStore = new EfFunctionDiscoveryRuntimeStore(_dbContextFactory);
+#endif
         }
+
+        /// <summary>Initializes discovery with the selected function persistence backend.</summary>
+        public DiscoveryEndpoints(
+            IFunctionDiscoveryRuntimeStore functionDiscoveryStore,
+            IDbContextFactory<ConduitDbContext> dbContextFactory,
+            IModelCapabilityService modelCapabilityService,
+            IVirtualKeyRuntimeService virtualKeyService,
+            IDiscoveryCacheService discoveryCacheService,
+            JsonSerializerOptions wireJsonOptions,
+            IOptions<DiscoveryCacheOptions> discoveryOptions,
+            IHttpContextAccessor httpContextAccessor,
+            ILogger<DiscoveryEndpoints> logger, TimeProvider? clock = null)
+            : this(dbContextFactory, modelCapabilityService, virtualKeyService, discoveryCacheService,
+                wireJsonOptions, discoveryOptions, httpContextAccessor, logger, clock)
+        {
+            _functionDiscoveryStore = functionDiscoveryStore ?? throw new ArgumentNullException(nameof(functionDiscoveryStore));
+        }
+
+        private IFunctionDiscoveryRuntimeStore FunctionDiscoveryStore => _functionDiscoveryStore
+            ?? throw new InvalidOperationException("Native function discovery requires its runtime persistence store.");
 
         /// <summary>
         /// Discovery is authentication-protected but not balance-protected. A valid key may
@@ -210,7 +239,7 @@ namespace ConduitLLM.Gateway.Endpoints
         /// <summary>
         /// Gets all available function configurations for authenticated virtual keys.
         /// </summary>
-        /// <param name="purpose">Optional purpose filter (e.g., "Search", "Answer", "RAG_Search")</param>
+        /// <param name="purpose">Optional purpose filter (e.g., "Search", "Answer", "RAG")</param>
         /// <param name="providerType">Optional provider type filter (e.g., "Exa", "Perplexity")</param>
         /// <returns>List of available function configurations</returns>
         public async Task<IResult> GetFunctions(
@@ -233,30 +262,11 @@ namespace ConduitLLM.Gateway.Endpoints
         private async Task<DiscoveryModelsResult> LoadFunctionCatalogAsync(string? purpose, string? providerType,
             CancellationToken token)
         {
-            using var context = await _dbContextFactory.CreateDbContextAsync(token);
-
-            // Get all enabled function configurations
-            var query = context.FunctionConfigurations
-                .Where(fc => fc.IsEnabled);
-
-            // Apply filters
-            if (!string.IsNullOrEmpty(purpose))
-            {
-                if (Enum.TryParse<ConduitLLM.Functions.Enums.FunctionPurpose>(purpose, true, out var purposeEnum))
-                {
-                    query = query.Where(fc => fc.Purpose == purposeEnum);
-                }
-            }
-
-            if (!string.IsNullOrEmpty(providerType))
-            {
-                if (Enum.TryParse<ConduitLLM.Functions.Enums.FunctionProviderType>(providerType, true, out var providerEnum))
-                {
-                    query = query.Where(fc => fc.ProviderType == providerEnum);
-                }
-            }
-
-            var configurations = await query.AsNoTracking().ToListAsync(token);
+            FunctionPurpose? purposeFilter = Enum.TryParse<FunctionPurpose>(purpose, true, out var parsedPurpose)
+                ? parsedPurpose : null;
+            FunctionProviderType? providerFilter = Enum.TryParse<FunctionProviderType>(providerType, true, out var parsedProvider)
+                ? parsedProvider : null;
+            var configurations = await FunctionDiscoveryStore.ListEnabledAsync(purposeFilter, providerFilter, token);
 
             var result = new ConduitLLM.Functions.DTOs.FunctionDiscoveryResponse
             {
@@ -322,13 +332,7 @@ namespace ConduitLLM.Gateway.Endpoints
         private sealed class FunctionConfigurationNotFoundException : Exception;
         private async Task<DiscoveryModelsResult> LoadFunctionParametersAsync(int functionConfigurationId, CancellationToken token)
         {
-            using var context = await _dbContextFactory.CreateDbContextAsync(token);
-
-            // Find the function configuration
-            var configuration = await context.FunctionConfigurations
-                .AsNoTracking()
-                .Where(fc => fc.Id == functionConfigurationId && fc.IsEnabled)
-                .FirstOrDefaultAsync(token);
+            var configuration = await FunctionDiscoveryStore.GetEnabledByIdAsync(functionConfigurationId, token);
 
             if (configuration == null)
             {

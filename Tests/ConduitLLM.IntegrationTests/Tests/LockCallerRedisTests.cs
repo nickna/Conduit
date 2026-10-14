@@ -1,15 +1,16 @@
-using ConduitLLM.Configuration;
 using ConduitLLM.Core.Constants;
 using ConduitLLM.Core.Options;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Hubs;
 using ConduitLLM.Gateway.Services.SpendNotification;
 using ConduitLLM.IntegrationTests.Infrastructure;
+using ConduitLLM.Persistence.Interfaces;
+using ConduitLLM.Persistence.Npgsql;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Npgsql;
 using StackExchange.Redis;
 using Xunit;
 
@@ -60,8 +61,12 @@ public sealed class LockCallerRedisTests(PostgresLockTestContainerFixture fixtur
     {
         using var redis = await ConnectionMultiplexer.ConnectAsync(fixture.RedisConnectionString);
         using var observer = await ConnectionMultiplexer.ConnectAsync(fixture.RedisConnectionString);
-        var factory = new GatedFactory(fixture.ConnectionString);
-        await using var services = new ServiceCollection().AddSingleton<IDbContextFactory<ConduitDbContext>>(factory).BuildServiceProvider();
+        await using var dataSource = NpgsqlDataSource.Create(fixture.ConnectionString);
+        var factory = new GatedWarmup(new NpgsqlConnectionPoolWarmup(dataSource));
+        await using var services = new ServiceCollection().AddSingleton<IConnectionPoolWarmup>(factory).BuildServiceProvider();
+        await using var followerDataSource = NpgsqlDataSource.Create(fixture.ConnectionString);
+        var followerWarmup = new GatedWarmup(new NpgsqlConnectionPoolWarmup(followerDataSource));
+        await using var followerServices = new ServiceCollection().AddSingleton<IConnectionPoolWarmup>(followerWarmup).BuildServiceProvider();
         var serviceType = $"LockFixture-{Guid.NewGuid():N}";
         var options = new ConnectionPoolWarmingOptions { SignalTimeout = TimeSpan.FromSeconds(5), StaggerDelay = TimeSpan.Zero };
         var channel = RedisChannel.Literal($"{options.WarmingSignalChannel}:{serviceType}");
@@ -70,7 +75,7 @@ public sealed class LockCallerRedisTests(PostgresLockTestContainerFixture fixtur
         await subscriber.SubscribeAsync(channel, (_, _) => Interlocked.Increment(ref signals));
         using var leader = new CoordinatedConnectionPoolWarmer(services, Provider(), redis,
             NullLogger<CoordinatedConnectionPoolWarmer>.Instance, options, serviceType);
-        using var follower = new CoordinatedConnectionPoolWarmer(services, Provider(), redis,
+        using var follower = new CoordinatedConnectionPoolWarmer(followerServices, Provider(), redis,
             NullLogger<CoordinatedConnectionPoolWarmer>.Instance, options, serviceType);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var lead = leader.StartAsync(timeout.Token);
@@ -81,8 +86,10 @@ public sealed class LockCallerRedisTests(PostgresLockTestContainerFixture fixtur
             follow = follower.StartAsync(timeout.Token);
             await WaitForSubscriptionsAsync(redis, channel, 2);
             factory.Continue.TrySetResult();
+            followerWarmup.Continue.TrySetResult();
             await Task.WhenAll(lead, follow).WaitAsync(TimeSpan.FromSeconds(10));
-            Assert.Equal(10, factory.Calls); // Five real EF connections per instance.
+            Assert.Equal(5, factory.Calls);
+            Assert.Equal(5, followerWarmup.Calls); // Each instance warms its independently owned pool.
             await WaitForAsync(() => Volatile.Read(ref signals) == 1);
             await leader.StopAsync(CancellationToken.None);
             await follower.StopAsync(CancellationToken.None);
@@ -90,6 +97,7 @@ public sealed class LockCallerRedisTests(PostgresLockTestContainerFixture fixtur
         finally
         {
             factory.Continue.TrySetResult();
+            followerWarmup.Continue.TrySetResult();
             timeout.Cancel();
             try { await Task.WhenAll(lead, follow); } catch (OperationCanceledException) { }
             await subscriber.UnsubscribeAsync(channel);
@@ -101,8 +109,9 @@ public sealed class LockCallerRedisTests(PostgresLockTestContainerFixture fixtur
     public async Task WarmingOwnershipLoss_CancelsAllStartedWork_WithoutPublishingSuccess()
     {
         using var redis = await ConnectionMultiplexer.ConnectAsync(fixture.RedisConnectionString);
-        var factory = new GatedFactory(fixture.ConnectionString);
-        await using var services = new ServiceCollection().AddSingleton<IDbContextFactory<ConduitDbContext>>(factory).BuildServiceProvider();
+        await using var dataSource = NpgsqlDataSource.Create(fixture.ConnectionString);
+        var factory = new GatedWarmup(new NpgsqlConnectionPoolWarmup(dataSource));
+        await using var services = new ServiceCollection().AddSingleton<IConnectionPoolWarmup>(factory).BuildServiceProvider();
         var serviceType = $"LockFixture-{Guid.NewGuid():N}";
         var options = new ConnectionPoolWarmingOptions();
         var channel = RedisChannel.Literal($"{options.WarmingSignalChannel}:{serviceType}");
@@ -147,18 +156,17 @@ public sealed class LockCallerRedisTests(PostgresLockTestContainerFixture fixtur
         while (!condition()) { await Task.Delay(10, bound.Token); }
     }
 
-    private sealed class GatedFactory(string connectionString) : IDbContextFactory<ConduitDbContext>
+    private sealed class GatedWarmup(IConnectionPoolWarmup inner) : IConnectionPoolWarmup
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Continue { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int Calls;
-        public ConduitDbContext CreateDbContext() => new(new DbContextOptionsBuilder<ConduitDbContext>().UseNpgsql(connectionString).Options);
-        public async Task<ConduitDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
+        public async Task WarmConnectionAsync(CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref Calls);
             Started.TrySetResult();
             await Continue.Task.WaitAsync(cancellationToken);
-            return CreateDbContext();
+            await inner.WarmConnectionAsync(cancellationToken);
         }
     }
 }

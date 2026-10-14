@@ -6,6 +6,7 @@ using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Security;
 using ConduitLLM.Functions.Serialization;
+using ConduitLLM.Persistence.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace ConduitLLM.Functions.Services;
@@ -25,9 +26,12 @@ namespace ConduitLLM.Functions.Services;
 /// </remarks>
 public class FunctionExecutionService : IFunctionExecutionService
 {
-    private readonly IFunctionConfigurationRepository _functionConfigurationRepository;
-    private readonly IFunctionCredentialRepository _credentialRepository;
-    private readonly IFunctionExecutionRepository _executionRepository;
+    private readonly IFunctionConfigurationRepository? _functionConfigurationRepository;
+    private readonly IFunctionCredentialRepository? _credentialRepository;
+    private readonly IFunctionExecutionRepository? _executionRepository;
+    private readonly IFunctionExecutionConfigurationStore? _runtimeConfigurationStore;
+    private readonly IFunctionExecutionRuntimeWriter? _runtimeWriter;
+    private readonly IFunctionExecutionRuntimeReader? _runtimeReader;
     private readonly IFunctionCostCalculationService _costCalculationService;
     private readonly IFunctionClientFactory _clientFactory;
     private readonly IFunctionCredentialProtector _credentialProtector;
@@ -45,6 +49,38 @@ public class FunctionExecutionService : IFunctionExecutionService
         _functionConfigurationRepository = functionConfigurationRepository ?? throw new ArgumentNullException(nameof(functionConfigurationRepository));
         _credentialRepository = credentialRepository ?? throw new ArgumentNullException(nameof(credentialRepository));
         _executionRepository = executionRepository ?? throw new ArgumentNullException(nameof(executionRepository));
+        _costCalculationService = costCalculationService ?? throw new ArgumentNullException(nameof(costCalculationService));
+        _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
+        _credentialProtector = credentialProtector ?? throw new ArgumentNullException(nameof(credentialProtector));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    /// <summary>
+    /// Creates an execution service over the extracted persistence operations. The
+    /// named factory preserves the public repository constructor and its DI behavior.
+    /// </summary>
+    public static FunctionExecutionService CreateWithRuntimePersistence(
+        IFunctionExecutionConfigurationStore configurationStore,
+        IFunctionExecutionRuntimeWriter writer,
+        IFunctionExecutionRuntimeReader reader,
+        IFunctionCostCalculationService costCalculationService,
+        IFunctionClientFactory clientFactory,
+        IFunctionCredentialProtector credentialProtector,
+        ILogger<FunctionExecutionService> logger) =>
+        new(configurationStore, writer, reader, costCalculationService, clientFactory, credentialProtector, logger);
+
+    private FunctionExecutionService(
+        IFunctionExecutionConfigurationStore configurationStore,
+        IFunctionExecutionRuntimeWriter writer,
+        IFunctionExecutionRuntimeReader reader,
+        IFunctionCostCalculationService costCalculationService,
+        IFunctionClientFactory clientFactory,
+        IFunctionCredentialProtector credentialProtector,
+        ILogger<FunctionExecutionService> logger)
+    {
+        _runtimeConfigurationStore = configurationStore ?? throw new ArgumentNullException(nameof(configurationStore));
+        _runtimeWriter = writer ?? throw new ArgumentNullException(nameof(writer));
+        _runtimeReader = reader ?? throw new ArgumentNullException(nameof(reader));
         _costCalculationService = costCalculationService ?? throw new ArgumentNullException(nameof(costCalculationService));
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         _credentialProtector = credentialProtector ?? throw new ArgumentNullException(nameof(credentialProtector));
@@ -71,7 +107,9 @@ public class FunctionExecutionService : IFunctionExecutionService
         try
         {
             // 1. Load function configuration
-            var configuration = await _functionConfigurationRepository.GetByIdAsync(functionConfigurationId, cancellationToken);
+            var configuration = _runtimeConfigurationStore is not null
+                ? await _runtimeConfigurationStore.GetConfigurationAsync(functionConfigurationId, cancellationToken)
+                : await _functionConfigurationRepository!.GetByIdAsync(functionConfigurationId, cancellationToken);
             if (configuration == null)
             {
                 throw new InvalidOperationException($"Function configuration {functionConfigurationId} not found");
@@ -117,14 +155,15 @@ public class FunctionExecutionService : IFunctionExecutionService
                 WebhookDelivered = false
             };
 
-            await _executionRepository.CreateAsync(execution, cancellationToken);
+            await CreateExecutionAsync(execution, cancellationToken);
 
             _logger.LogInformation("Created execution record {ExecutionId} for function {ConfigName}",
                 execution.Id, configuration.ConfigurationName);
 
             // 4. Get credentials for this provider type
-            var credentials = await _credentialRepository.GetByProviderTypeAsync(
-                configuration.ProviderType, cancellationToken);
+            IReadOnlyList<FunctionCredential> credentials = _runtimeConfigurationStore is not null
+                ? await _runtimeConfigurationStore.ListCredentialsForProviderAsync(configuration.ProviderType, cancellationToken)
+                : await _credentialRepository!.GetByProviderTypeAsync(configuration.ProviderType, cancellationToken);
 
             if (!credentials.Any())
             {
@@ -198,7 +237,7 @@ public class FunctionExecutionService : IFunctionExecutionService
                 FunctionsJsonContext.Default.FunctionExecutionCostDetails);
             execution.ActualCost = actualCost;
 
-            await _executionRepository.UpdateAsync(execution, cancellationToken);
+            await UpdateExecutionAsync(execution, cancellationToken);
 
             return execution;
         }
@@ -248,7 +287,7 @@ public class FunctionExecutionService : IFunctionExecutionService
                             new FunctionExecutionCostDetails { Usage = new(), HttpStatusCode = (int)communicationError.StatusCode },
                             FunctionsJsonContext.Default.FunctionExecutionCostDetails);
                     }
-                    await _executionRepository.CreateAsync(execution, cancellationToken);
+                    await CreateExecutionAsync(execution, cancellationToken);
                 }
                 else
                 {
@@ -268,7 +307,7 @@ public class FunctionExecutionService : IFunctionExecutionService
                             FunctionsJsonContext.Default.FunctionExecutionCostDetails);
                     }
 
-                    await _executionRepository.UpdateAsync(execution, cancellationToken);
+                    await UpdateExecutionAsync(execution, cancellationToken);
                 }
             }
             catch (Exception recordEx)
@@ -338,7 +377,9 @@ public class FunctionExecutionService : IFunctionExecutionService
         Guid executionId,
         CancellationToken cancellationToken = default)
     {
-        return await _executionRepository.GetByIdAsync(executionId, cancellationToken);
+        return _runtimeReader is not null
+            ? await _runtimeReader.GetByIdAsync(executionId, cancellationToken)
+            : await _executionRepository!.GetByIdAsync(executionId, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -346,6 +387,18 @@ public class FunctionExecutionService : IFunctionExecutionService
         int virtualKeyId,
         CancellationToken cancellationToken = default)
     {
-        return await _executionRepository.GetByVirtualKeyIdAsync(virtualKeyId, cancellationToken);
+        return _runtimeReader is not null
+            ? (await _runtimeReader.ListByVirtualKeyAsync(virtualKeyId, cancellationToken)).ToList()
+            : await _executionRepository!.GetByVirtualKeyIdAsync(virtualKeyId, cancellationToken);
     }
+
+    private Task<Guid> CreateExecutionAsync(FunctionExecution execution, CancellationToken cancellationToken) =>
+        _runtimeWriter is not null
+            ? _runtimeWriter.CreateAsync(execution, cancellationToken)
+            : _executionRepository!.CreateAsync(execution, cancellationToken);
+
+    private Task<bool> UpdateExecutionAsync(FunctionExecution execution, CancellationToken cancellationToken) =>
+        _runtimeWriter is not null
+            ? _runtimeWriter.UpdateAsync(execution, cancellationToken)
+            : _executionRepository!.UpdateAsync(execution, cancellationToken);
 }

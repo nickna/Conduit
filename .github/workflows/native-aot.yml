@@ -18,13 +18,23 @@ on:
       - 'Services/**/NativeAot.rd.xml'
       - 'Tests/Directory.Build.props'
       - 'Tests/ConduitLLM.GatewayNativeAotTests/**'
-      - 'Tests/ConduitLLM.PersistenceAotTests/**'
+      - 'Tests/ConduitLLM.SerializationTests/**'
+      - 'Tests/ConduitLLM.Tests/Admin/Filters/**'
+      - 'Tests/ConduitLLM.Tests/Admin/Middleware/NativeAdminRuntimeProfile*Tests.cs'
+      - 'Tests/ConduitLLM.Tests/Core/Consumers/GlobalSetting*Tests.cs'
+      - 'Tests/ConduitLLM.Tests/Configuration/Services/GlobalSettingsCacheServiceTests.cs'
+      - 'Tests/ConduitLLM.Tests/Core/Caching/FusionFunctionDiscoveryCacheTests.cs'
+      - 'Tests/ConduitLLM.Tests/HostCompositionTests.cs'
       - 'Tests/ConduitLLM.IntegrationTests/**'
-      - 'tools/ConduitLLM.HealthProbe/**'
+      - 'Tests/ConduitLLM.PersistenceAotTests/**'
+      - 'Tests/ConduitLLM.PersistenceConverterAotTests/**'
+      - 'Tests/ConduitLLM.SchemaStartupFixtures/**'
       - 'tools/ConduitLLM.MediaDispatchProbe/**'
       - 'tools/ConduitLLM.Migrator/**'
+      - 'tools/ConduitLLM.HealthProbe/**'
       - 'tools/WolverineSmokePublisher/**'
       - 'scripts/aot/**'
+      - 'deploy/native-canary/**'
       - 'scripts/db/providers/*.json'
       - 'scripts/ci/run-tests.ps1'
       - 'scripts/ci/test-evidence.py'
@@ -98,10 +108,83 @@ jobs:
         shell: pwsh
         run: ./scripts/aot/test-native-promotion.ps1
 
+      - name: Verify native benchmark collector contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-benchmark-collector.ps1
+
+      - name: Verify native publish manifest contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-publish-evidence.ps1
+
+      - name: Verify assembled native image publish contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-image-publish.ps1
+
+      - name: Verify native runtime archive contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-image-runtime-archive.ps1
+
+      - name: Verify native image packaging contracts
+        shell: pwsh
+        run: ./scripts/aot/test-native-image-verification.ps1
+
+      - name: Verify native image entrypoint contracts
+        shell: pwsh
+        run: ./scripts/aot/test-native-image-runtime-evidence.ps1
+
+      - name: Verify native OCI archive association contracts
+        shell: pwsh
+        run: ./scripts/aot/test-native-image-oci-association.ps1
+
+      - name: Verify Gateway fixture process ownership
+        shell: pwsh
+        run: ./scripts/aot/test-gateway-fixture-process.ps1
+
       - name: Install NativeAOT toolchain
         run: |
           sudo apt-get update
           sudo apt-get install --yes clang zlib1g-dev
+
+      - name: Admin conditional requests, JIT composition and settings cache contracts
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests
+          suite: admin-conditional-requests-jit
+          filter: FullyQualifiedName~AdminContractEndpointFilterTests|FullyQualifiedName~IpFilterVersionEndpointFilterTests|FullyQualifiedName~IpFilterConditionalRequestHttpTests|FullyQualifiedName~HostCompositionTests|FullyQualifiedName~GlobalSettingCacheInvalidationHandlerTests|FullyQualifiedName~GlobalSettingsReloadHandlerTests|FullyQualifiedName~GlobalSettingsCacheServiceTests|FullyQualifiedName~FusionFunctionDiscoveryCacheTests.DisabledReadsBypassAndReenableEventRejectsOldCombinations|FullyQualifiedName~NativeAdminRuntimeProfileMiddlewareTests|FullyQualifiedName~NativeAdminRuntimeProfileRouteInventoryTests
+          minimum: '189'
+        env:
+          CONDUIT_CACHE_TEST_REDIS: 127.0.0.1:6379
+
+      - name: Native-profile host composition
+        shell: pwsh
+        run: |
+          $results = 'artifacts/tests/native-host-composition'
+          New-Item -ItemType Directory -Force $results | Out-Null
+          dotnet test Tests/ConduitLLM.Tests --configuration Release -p:DefineConstants=CONDUIT_NATIVE_AOT `
+            --filter 'FullyQualifiedName~HostCompositionTests|FullyQualifiedName~NativeAdminRuntimeProfileMiddlewareTests|FullyQualifiedName~NativeAdminRuntimeProfileRouteInventoryTests' `
+            --logger 'trx;LogFileName=native-host-composition.trx' --results-directory $results
+          $testExit = $LASTEXITCODE
+          python scripts/ci/test-evidence.py "$results/native-host-composition.trx" --minimum 44 --maximum-skips 0
+          if ($LASTEXITCODE -ne 0 -or $testExit -ne 0) { throw 'Native host composition validation failed.' }
+        env:
+          CONDUIT_CACHE_TEST_REDIS: 127.0.0.1:6379
+
+      - name: Reflection-disabled Admin capability contract
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.SerializationTests
+          suite: admin-runtime-capabilities-json
+          filter: FullyQualifiedName~AdminRuntimeCapabilitySerializationTests
+          minimum: '2'
+
+      - name: Retain native-profile composition diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tests-native-host-composition
+          path: artifacts/tests/native-host-composition
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Publish both native services
         shell: pwsh
@@ -118,21 +201,37 @@ jobs:
         env:
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
 
+      - name: Native persisted converters PostgreSQL proof
+        shell: pwsh
+        run: ./scripts/aot/persistence-converter-native-smoke.ps1
+        env:
+          DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
+
+      - name: Upload native converter probe
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: conduit-persistence-converters-linux-x64-native
+          path: artifacts/native-aot/runtime/persistence-converters
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Shared EF and Npgsql persistence parity
         uses: ./.github/actions/run-tests
         with:
           project: Tests/ConduitLLM.IntegrationTests
           suite: native-persistence-parity
-          filter: FullyQualifiedName~PersistenceParityTests|FullyQualifiedName~GlobalSettingRepositoryParityTests|FullyQualifiedName~IpFilterRepositoryParityTests|FullyQualifiedName~ProviderPersistenceParityTests
-          minimum: '9'
+          filter: FullyQualifiedName~PersistenceParityTests|FullyQualifiedName~BillingAuditServicePersistenceTests|FullyQualifiedName~NativePersistenceCleanupParityTests|FullyQualifiedName~GlobalSettingRepositoryParityTests|FullyQualifiedName~IpFilterRepositoryParityTests|FullyQualifiedName~ProviderPersistenceParityTests|FullyQualifiedName~SchemaVersionProbeTests|FullyQualifiedName~NpgsqlConnectionPoolWarmupTests|FullyQualifiedName~FunctionCredentialFixtureTests|FullyQualifiedName~NativeFunctionProviderTests|FullyQualifiedName~NativeAgenticProviderTests|FullyQualifiedName~NativeMcpFunctionProviderTests|FullyQualifiedName~NativeFunctionFixtureRedisCleanupTests|FullyQualifiedName~NativeBenchmarkWorkloadProbeTests|FullyQualifiedName~PersistedValueConverterParityTests
+          minimum: '267'
         env:
           CONDUIT_LOCK_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
           CONDUIT_LOCK_TEST_REDIS: 127.0.0.1:6379
+          CONDUIT_PERSISTENCE_PROBE_PATH: ${{ github.workspace }}/artifacts/native-aot/persistence/ConduitLLM.PersistenceAotTests
 
       - name: Build release-owned migration and message probes
         run: |
           dotnet build tools/ConduitLLM.Migrator --configuration Release
           dotnet build tools/WolverineSmokePublisher --configuration Release
+          dotnet build Tests/ConduitLLM.SchemaStartupFixtures --configuration Release
 
       - name: Native two-host PostgreSQL and Wolverine proof
         shell: pwsh
@@ -223,13 +322,23 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Enable containerd image inspection evidence
+        uses: docker/setup-docker-action@2bf61fb9464cc67f0cbdeabed6aa0380accd1c70 # v5.5.0
+        with:
+          daemon-config: |
+            {
+              "features": {
+                "containerd-snapshotter": true
+              }
+            }
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build linux-x64 native image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: .
+          context: https://github.com/${{ github.repository }}.git?ref=${{ github.sha }}&checksum=${{ github.sha }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           load: true
@@ -237,6 +346,8 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}-native
           cache-to: type=gha,scope=${{ matrix.service }}-native,mode=max
           build-args: |
+            BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
+            NATIVE_SOURCE_POLICY=require-clean-git
             VERSION=0.0.0-ci
             COMMIT_SHA=${{ github.sha }}
             BUILD_TIMESTAMP=1970-01-01T00:00:00Z
@@ -244,6 +355,38 @@ jobs:
       - name: Verify minimal native runtime image
         shell: pwsh
         run: ./scripts/aot/verify-native-image.ps1 -Image conduit-${{ matrix.service }}-native:ci -Service ${{ matrix.service }}
+
+      - name: Require sealed payload and local OCI descriptor association
+        shell: pwsh
+        env:
+          CONDUIT_NATIVE_CI_SERVICE: ${{ matrix.service }}
+          CONDUIT_NATIVE_CI_IMAGE: conduit-${{ matrix.service }}-native:ci
+        run: |
+          $ErrorActionPreference = 'Stop'
+          . ./scripts/aot/native-image-runtime-evidence.ps1
+          $service = switch -CaseSensitive ($env:CONDUIT_NATIVE_CI_SERVICE) {
+            'admin' { 'admin' }
+            'http' { 'gateway' }
+            default { throw 'Unexpected native image CI service.' }
+          }
+          $root = Join-Path 'artifacts/native-containers' $service
+          $reports = @(Get-ChildItem -LiteralPath $root -File -Recurse -Filter 'packaging-evidence.json')
+          if ($reports.Count -ne 1) { throw 'CI requires exactly one completed native image package.' }
+          $package = Get-NativeImageRuntimePackaging -Directory $reports[0].DirectoryName
+          $report = $package.report
+          $association = $package.ociAssociation
+          if ($report.schemaVersion -ne 2 -or $report.service -cne $service -or $report.rid -cne 'linux-x64' -or
+              $report.requestedImage -cne $env:CONDUIT_NATIVE_CI_IMAGE -or $report.source.status -cne 'git' -or
+              $report.source.dirty -isnot [bool] -or $report.source.dirty -or $report.source.revision -cne $env:GITHUB_SHA) {
+            throw 'CI native image package differs from the requested service, image or clean source revision.'
+          }
+          if ($association.associationStatus -cne 'verified' -or $association.descriptorChainVerified -isnot [bool] -or
+              -not $association.descriptorChainVerified -or @($association.holdReasons).Count -ne 0 -or
+              $null -eq $association.selectedManifestDescriptor -or $association.registryDigestQualification -isnot [bool] -or
+              $association.registryDigestQualification) {
+            throw 'CI native image OCI descriptor association is not verified.'
+          }
+          Write-Host "PASS: CI $service exact-source payload and local OCI descriptor chain verified; registry digest qualification remains false."
 
       - name: Retain packaged native entrypoint evidence
         if: always()

@@ -3,6 +3,7 @@ using ConduitLLM.Gateway.Hubs;
 using ConduitLLM.Gateway.Interfaces;
 using ConduitLLM.Core.Constants;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Contracts.SignalR;
 
 namespace ConduitLLM.Gateway.Services
 {
@@ -25,15 +26,8 @@ namespace ConduitLLM.Gateway.Services
         {
             var groupName = SignalRConstants.Groups.ImageTask(taskId);
 
-            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.ImageGenerationStarted, new
-            {
-                taskId,
-                prompt,
-                numberOfImages,
-                size,
-                style,
-                startedAt = DateTime.UtcNow
-            });
+            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.ImageGenerationStarted,
+                new ImageGenerationStartedNotification(taskId, prompt, numberOfImages, size, style, DateTime.UtcNow));
 
             Logger.LogInformation(
                 "[SignalR:ImageGenerationStarted] Sent notification - TaskId: {TaskId}, NumberOfImages: {NumberOfImages}, Size: {Size}, Group: {Group}",
@@ -44,16 +38,9 @@ namespace ConduitLLM.Gateway.Services
         {
             var groupName = SignalRConstants.Groups.ImageTask(taskId);
 
-            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.ImageGenerationProgress, new
-            {
-                taskId,
-                progressPercentage,
-                status,
-                imagesCompleted,
-                totalImages,
-                message,
-                timestamp = DateTime.UtcNow
-            });
+            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.ImageGenerationProgress,
+                new ImageGenerationProgressNotification(taskId, progressPercentage, status, imagesCompleted,
+                    totalImages, message, DateTime.UtcNow));
 
             Logger.LogDebug("Sent ImageGenerationProgress notification for task {TaskId}: {Progress}% ({ImagesCompleted}/{TotalImages})",
                 taskId, progressPercentage, imagesCompleted, totalImages);
@@ -63,14 +50,8 @@ namespace ConduitLLM.Gateway.Services
         {
             var groupName = SignalRConstants.Groups.ImageTask(taskId);
 
-            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.ImageGenerationCompleted, new
-            {
-                taskId,
-                imageUrls,
-                durationSeconds = duration.TotalSeconds,
-                cost,
-                completedAt = DateTime.UtcNow
-            });
+            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.ImageGenerationCompleted,
+                new ImageGenerationCompletedNotification(taskId, imageUrls, duration.TotalSeconds, cost, DateTime.UtcNow));
 
             Logger.LogInformation("Sent ImageGenerationCompleted notification for task {TaskId} with {ImageCount} images to group {GroupName}",
                 taskId, imageUrls.Length, groupName);
@@ -80,13 +61,8 @@ namespace ConduitLLM.Gateway.Services
         {
             var groupName = SignalRConstants.Groups.ImageTask(taskId);
 
-            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.ImageGenerationFailed, new
-            {
-                taskId,
-                error,
-                isRetryable,
-                failedAt = DateTime.UtcNow
-            });
+            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.ImageGenerationFailed,
+                new ImageGenerationFailedNotification(taskId, error, isRetryable, DateTime.UtcNow));
 
             Logger.LogDebug("Sent ImageGenerationFailed notification for task {TaskId}", taskId);
         }
@@ -95,12 +71,8 @@ namespace ConduitLLM.Gateway.Services
         {
             var groupName = SignalRConstants.Groups.ImageTask(taskId);
 
-            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.ImageGenerationCancelled, new
-            {
-                taskId,
-                reason,
-                cancelledAt = DateTime.UtcNow
-            });
+            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.ImageGenerationCancelled,
+                new ImageGenerationCancelledNotification(taskId, reason, DateTime.UtcNow));
 
             Logger.LogDebug("Sent ImageGenerationCancelled notification for task {TaskId}", taskId);
         }

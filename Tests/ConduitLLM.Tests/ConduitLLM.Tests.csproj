@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ConduitLLM.SchemaStartupFixtures\ConduitLLM.SchemaStartupFixtures.csproj" />
     <PackageReference Include="AngleSharp" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="coverlet.msbuild">
@@ -20,6 +21,8 @@
     <PackageReference Include="System.Security.Cryptography.Xml" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- JIT protocol tests own this dependency; native service graphs exclude it. -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" PrivateAssets="all" />
     <PackageReference Include="Moq" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Moq.Contrib.HttpClient" />
@@ -47,6 +50,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\ConduitLLM.GatewayNativeAotTests\NativeMetricSamples.cs" Link="Gateway\NativeMetricSamples.cs" />
+    <Compile Include="..\ConduitLLM.GatewayNativeAotTests\SwitchableTcpProxy.cs" Link="Gateway\SwitchableTcpProxy.cs" />
+    <Compile Include="..\ConduitLLM.GatewayNativeAotTests\NativeProviderHttpRequestReader.cs" Link="Gateway\NativeProviderHttpRequestReader.cs" />
+    <Compile Include="..\ConduitLLM.GatewayNativeAotTests\NativeDependencyRoutes.cs" Link="Gateway\NativeDependencyRoutes.cs" />
+    <Compile Include="..\ConduitLLM.GatewayNativeAotTests\NativeDependencyRecoveryProbe.cs" Link="Gateway\NativeDependencyRecoveryProbe.cs" />
     <None Update="xunit.runner.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

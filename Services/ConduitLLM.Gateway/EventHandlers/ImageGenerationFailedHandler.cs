@@ -40,14 +40,9 @@ namespace ConduitLLM.Gateway.EventHandlers
             var taskStatus = await _asyncTaskService.GetTaskStatusAsync(message.TaskId, context.CancellationToken);
             if (taskStatus != null)
             {
-                var errorDetails = new
-                {
-                    Error = message.Error,
-                    ErrorCode = message.ErrorCode,
-                    Provider = message.Provider,
-                    IsRetryable = message.IsRetryable,
-                    AttemptCount = message.AttemptCount
-                };
+                var errorDetails = new ImageGenerationFailureResult(
+                    message.Error, message.ErrorCode, message.Provider,
+                    message.IsRetryable, message.AttemptCount);
 
                 await _asyncTaskService.UpdateTaskStatusAsync(
                     message.TaskId,

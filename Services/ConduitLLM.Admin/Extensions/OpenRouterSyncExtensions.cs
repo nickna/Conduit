@@ -23,7 +23,9 @@ namespace ConduitLLM.Admin.Extensions
             services.AddHttpClient("OpenRouterSync");
             services.AddScoped<IOpenRouterDriftDetectionService, OpenRouterDriftDetectionService>();
             services.AddScoped<IAdminProviderSyncService, AdminProviderSyncService>();
+#if !CONDUIT_NATIVE_AOT
             services.AddHostedService<OpenRouterMetadataSyncService>();
+#endif
             return services;
         }
     }

@@ -76,6 +76,10 @@ public partial class Program
             }
         });
 
+#if !CONDUIT_WOLVERINE_CODEGEN
+        builder.Host.DeferWolverineStartupUntilSchemaReady(builder.Configuration, "conduit-admin");
+#endif
+
         startupLogger.LogInformation(
             postgresTransport
                 ? "Event bus configured with the Wolverine backend (PostgreSQL transport, durable persistence, " +

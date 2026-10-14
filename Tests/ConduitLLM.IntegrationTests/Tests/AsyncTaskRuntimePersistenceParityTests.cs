@@ -39,8 +39,10 @@ public sealed class AsyncTaskRuntimePersistenceParityTests
             await CreateSchemaAsync(efSchema);
             await CreateSchemaAsync(npgsqlSchema);
 
+            await using var efSource = NpgsqlDataSource.Create(WithSearchPath(efSchema));
+
             var efRepository = new AsyncTaskRepository(
-                new TestDbContextFactory(WithSearchPath(efSchema)),
+                new TestDbContextFactory(efSource),
                 NullLogger<AsyncTaskRepository>.Instance);
             await ExerciseContractAsync(new EfAsyncTaskRuntimeStore(efRepository));
 
@@ -252,12 +254,12 @@ public sealed class AsyncTaskRuntimePersistenceParityTests
         return builder.ConnectionString;
     }
 
-    private sealed class TestDbContextFactory(string connectionString) :
+    private sealed class TestDbContextFactory(NpgsqlDataSource source) :
         IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
             new DbContextOptionsBuilder<ConduitDbContext>()
-                .UseNpgsql(connectionString)
+                .UseNpgsql(source)
                 .Options;
 
         public ConduitDbContext CreateDbContext() => new(_options);

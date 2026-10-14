@@ -35,11 +35,13 @@ namespace ConduitLLM.Tests.Core.Consumers
         #region Basic Consumption Tests
 
         [Fact]
-        public async Task Consume_WithValidEvent_CallsInvalidateSettingAsync()
+        public async Task Consume_WithValidEvent_CallsPublishReloadAsync()
         {
             // Arrange
             var @event = new GlobalSettingChanged
             {
+                EventId = "setting-change-1",
+                CorrelationId = "shared-admin-request",
                 SettingId = 1,
                 SettingKey = "max_agentic_iterations",
                 ChangeType = "Updated",
@@ -47,7 +49,7 @@ namespace ConduitLLM.Tests.Core.Consumers
             };
 
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             // Act
@@ -55,8 +57,31 @@ namespace ConduitLLM.Tests.Core.Consumers
 
             // Assert
             _mockCacheService.Verify(
-                x => x.InvalidateSettingAsync("max_agentic_iterations"),
+                x => x.PublishReloadAsync(@event.EventId),
                 Times.Once);
+            _mockCacheService.Verify(x => x.InvalidateSettingAsync(It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task Consume_DuplicateEvent_PublishesTheSameReloadIdentifier()
+        {
+            var @event = new GlobalSettingChanged
+            {
+                EventId = "replayed-setting-change",
+                CorrelationId = "admin-request",
+                SettingId = 1,
+                SettingKey = "Agentic.MaxIterations",
+                ChangeType = "Created"
+            };
+            _mockCacheService.Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
+                .Returns(Task.CompletedTask);
+
+            await _consumer.HandleAsync(@event, new TestEventContext());
+            await _consumer.HandleAsync(@event, new TestEventContext());
+
+            _mockCacheService.Verify(x => x.PublishReloadAsync(@event.EventId), Times.Exactly(2));
+            _mockCacheService.Verify(x => x.PublishReloadAsync(It.IsAny<string>()), Times.Exactly(2));
+            _mockCacheService.Verify(x => x.InvalidateSettingAsync(It.IsAny<string>()), Times.Never);
         }
 
         [Fact]
@@ -71,7 +96,7 @@ namespace ConduitLLM.Tests.Core.Consumers
             };
 
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             // Act
@@ -92,7 +117,7 @@ namespace ConduitLLM.Tests.Core.Consumers
         }
 
         [Fact]
-        public async Task Consume_AfterSuccessfulInvalidation_LogsSuccessMessage()
+        public async Task Consume_AfterSuccessfulPublication_LogsAcknowledgement()
         {
             // Arrange
             var @event = new GlobalSettingChanged
@@ -103,7 +128,7 @@ namespace ConduitLLM.Tests.Core.Consumers
             };
 
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             // Act
@@ -115,7 +140,7 @@ namespace ConduitLLM.Tests.Core.Consumers
                     LogLevel.Information,
                     It.IsAny<EventId>(),
                     It.Is<It.IsAnyType>((o, t) =>
-                        o.ToString()!.Contains("Successfully invalidated cache") &&
+                        o.ToString()!.Contains("Published cluster cache reload") &&
                         o.ToString()!.Contains("test_setting")),
                     It.IsAny<Exception>(),
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
@@ -130,7 +155,7 @@ namespace ConduitLLM.Tests.Core.Consumers
         [InlineData("Created")]
         [InlineData("Updated")]
         [InlineData("Deleted")]
-        public async Task Consume_WithDifferentChangeTypes_InvalidatesCache(string changeType)
+        public async Task Consume_WithDifferentChangeTypes_PublishesReload(string changeType)
         {
             // Arrange
             var @event = new GlobalSettingChanged
@@ -141,7 +166,7 @@ namespace ConduitLLM.Tests.Core.Consumers
             };
 
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             // Act
@@ -149,7 +174,7 @@ namespace ConduitLLM.Tests.Core.Consumers
 
             // Assert
             _mockCacheService.Verify(
-                x => x.InvalidateSettingAsync("dynamic_setting"),
+                x => x.PublishReloadAsync(@event.EventId),
                 Times.Once);
         }
 
@@ -165,7 +190,7 @@ namespace ConduitLLM.Tests.Core.Consumers
             };
 
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             // Act
@@ -187,7 +212,7 @@ namespace ConduitLLM.Tests.Core.Consumers
         #region Error Handling Tests
 
         [Fact]
-        public async Task Consume_WhenInvalidationFails_DefersErrorLoggingToMessagingBoundary()
+        public async Task Consume_WhenPublicationFails_DefersErrorLoggingToMessagingBoundary()
         {
             // Arrange
             var @event = new GlobalSettingChanged
@@ -199,7 +224,7 @@ namespace ConduitLLM.Tests.Core.Consumers
 
             var exception = new InvalidOperationException("Cache service unavailable");
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .ThrowsAsync(exception);
 
             // Act & Assert
@@ -217,7 +242,7 @@ namespace ConduitLLM.Tests.Core.Consumers
         }
 
         [Fact]
-        public async Task Consume_WhenInvalidationFails_RethrowsExceptionForBusRetry()
+        public async Task Consume_WhenPublicationFails_RethrowsExceptionForBusRetry()
         {
             // Arrange
             var @event = new GlobalSettingChanged
@@ -229,7 +254,7 @@ namespace ConduitLLM.Tests.Core.Consumers
 
             var exception = new InvalidOperationException("Database connection lost");
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .ThrowsAsync(exception);
 
             // Act & Assert
@@ -240,7 +265,7 @@ namespace ConduitLLM.Tests.Core.Consumers
         }
 
         [Fact]
-        public async Task Consume_WhenInvalidationThrowsNullReferenceException_StillRethrows()
+        public async Task Consume_WhenPublicationThrowsNullReferenceException_StillRethrows()
         {
             // Arrange
             var @event = new GlobalSettingChanged
@@ -252,7 +277,7 @@ namespace ConduitLLM.Tests.Core.Consumers
 
             var exception = new NullReferenceException("Cache service is null");
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .ThrowsAsync(exception);
 
             // Act & Assert
@@ -265,11 +290,13 @@ namespace ConduitLLM.Tests.Core.Consumers
         #region Concurrent Operations Tests
 
         [Fact]
-        public async Task Consume_MultipleEventsForSameSetting_InvalidatesCacheMultipleTimes()
+        public async Task Consume_MultipleEventsForSameSetting_PublishesDistinctReloads()
         {
             // Arrange
             var event1 = new GlobalSettingChanged
             {
+                EventId = "setting-update-1",
+                CorrelationId = "shared-admin-request",
                 SettingId = 1,
                 SettingKey = "concurrent_setting",
                 ChangeType = "Updated"
@@ -277,13 +304,15 @@ namespace ConduitLLM.Tests.Core.Consumers
 
             var event2 = new GlobalSettingChanged
             {
+                EventId = "setting-update-2",
+                CorrelationId = "shared-admin-request",
                 SettingId = 1,
                 SettingKey = "concurrent_setting",
                 ChangeType = "Updated"
             };
 
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             // Act
@@ -292,12 +321,12 @@ namespace ConduitLLM.Tests.Core.Consumers
 
             // Assert
             _mockCacheService.Verify(
-                x => x.InvalidateSettingAsync("concurrent_setting"),
-                Times.Exactly(2));
+                x => x.PublishReloadAsync(event1.EventId), Times.Once);
+            _mockCacheService.Verify(x => x.PublishReloadAsync(event2.EventId), Times.Once);
         }
 
         [Fact]
-        public async Task Consume_MultipleEventsForDifferentSettings_InvalidatesEachSettingIndependently()
+        public async Task Consume_MultipleEventsForDifferentSettings_PublishesEachEventIndependently()
         {
             // Arrange
             var event1 = new GlobalSettingChanged
@@ -315,7 +344,7 @@ namespace ConduitLLM.Tests.Core.Consumers
             };
 
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             // Act
@@ -323,8 +352,8 @@ namespace ConduitLLM.Tests.Core.Consumers
             await _consumer.HandleAsync(event2, new TestEventContext());
 
             // Assert
-            _mockCacheService.Verify(x => x.InvalidateSettingAsync("setting_a"), Times.Once);
-            _mockCacheService.Verify(x => x.InvalidateSettingAsync("setting_b"), Times.Once);
+            _mockCacheService.Verify(x => x.PublishReloadAsync(event1.EventId), Times.Once);
+            _mockCacheService.Verify(x => x.PublishReloadAsync(event2.EventId), Times.Once);
         }
 
         #endregion
@@ -332,7 +361,7 @@ namespace ConduitLLM.Tests.Core.Consumers
         #region Edge Cases
 
         [Fact]
-        public async Task Consume_WithEmptySettingKey_StillCallsInvalidate()
+        public async Task Consume_WithEmptySettingKey_StillPublishesReload()
         {
             // Arrange
             var @event = new GlobalSettingChanged
@@ -343,7 +372,7 @@ namespace ConduitLLM.Tests.Core.Consumers
             };
 
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             // Act
@@ -351,7 +380,7 @@ namespace ConduitLLM.Tests.Core.Consumers
 
             // Assert
             _mockCacheService.Verify(
-                x => x.InvalidateSettingAsync(""),
+                x => x.PublishReloadAsync(@event.EventId),
                 Times.Once);
         }
 
@@ -368,7 +397,7 @@ namespace ConduitLLM.Tests.Core.Consumers
             };
 
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             // Act
@@ -376,7 +405,7 @@ namespace ConduitLLM.Tests.Core.Consumers
 
             // Assert
             _mockCacheService.Verify(
-                x => x.InvalidateSettingAsync("test_setting"),
+                x => x.PublishReloadAsync(@event.EventId),
                 Times.Once);
         }
 
@@ -392,7 +421,7 @@ namespace ConduitLLM.Tests.Core.Consumers
             };
 
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             // Act
@@ -433,7 +462,7 @@ namespace ConduitLLM.Tests.Core.Consumers
             };
 
             _mockCacheService
-                .Setup(x => x.InvalidateSettingAsync(It.IsAny<string>()))
+                .Setup(x => x.PublishReloadAsync(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             // Act
@@ -443,8 +472,9 @@ namespace ConduitLLM.Tests.Core.Consumers
 
             // Assert
             _mockCacheService.Verify(
-                x => x.InvalidateSettingAsync("lifecycle_setting"),
-                Times.Exactly(3));
+                x => x.PublishReloadAsync(createEvent.EventId), Times.Once);
+            _mockCacheService.Verify(x => x.PublishReloadAsync(updateEvent.EventId), Times.Once);
+            _mockCacheService.Verify(x => x.PublishReloadAsync(deleteEvent.EventId), Times.Once);
         }
 
         #endregion

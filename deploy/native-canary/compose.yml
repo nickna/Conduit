@@ -7,7 +7,7 @@ x-common: &common
   environment: &common-environment
     DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the migrated canary database}
     REDIS_URL: ${REDIS_URL:?Set REDIS_URL to the canary Redis instance}
-    CONDUIT_MIGRATION_MODE: Skip
+    CONDUIT_MIGRATION_MODE: Wait
     ConduitLLM__Messaging__Wolverine__AutoProvision: "false"
 
 services:
