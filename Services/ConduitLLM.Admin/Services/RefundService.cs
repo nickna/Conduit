@@ -53,8 +53,9 @@ public class RefundService : IRefundService
             "Conditional refunds require a database context.");
         db.ChangeTracker.Clear();
         RefundResult? result = null;
+        var keyCount = 0;
         return await ResourceMutationGuard.ExecuteAsync<VirtualKeyGroup, RefundResult>(db, virtualKeyGroupId, precondition,
-            async (_, lockedGroup, ct) =>
+            async (context, lockedGroup, ct) =>
             {
                 // Lock the group before replay and cumulative-refund checks. All debits and
                 // refunds checked below belong to this group, so competing conditional refunds
@@ -62,9 +63,11 @@ public class RefundService : IRefundService
                 result = await ProcessRefundCoreAsync(virtualKeyGroupId, modelId, originalUsage, refundUsage,
                     refundReason, originalTransactionId, idempotencyKey, initiatedBy, initiatedByUserId,
                     requestLogId, ct, lockedGroup);
+                keyCount = await context.VirtualKeys.CountAsync(key => key.VirtualKeyGroupId == virtualKeyGroupId, ct);
             }, group =>
             {
-                result!.ResourceETag = new ResourceVersion(group.RowVersion, group.UpdatedAt).ETag;
+                result!.ResourceETag = new ResourceVersion(group.RowVersion, group.UpdatedAt)
+                    { VirtualKeyCount = keyCount }.ETag;
                 return result;
             }, cancellationToken) ?? throw new KeyNotFoundException($"Virtual key group {virtualKeyGroupId} not found");
     }

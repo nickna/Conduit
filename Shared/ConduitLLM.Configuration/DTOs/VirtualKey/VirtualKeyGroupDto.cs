@@ -83,7 +83,11 @@ namespace ConduitLLM.Configuration.DTOs.VirtualKey
         /// same shape — the rate-limit fields were previously set only by the update
         /// endpoint, so a PUT reported ceilings that the following GET omitted.
         /// </summary>
-        public static VirtualKeyGroupDto FromEntity(Entities.VirtualKeyGroup group) => new()
+        public static VirtualKeyGroupDto FromEntity(Entities.VirtualKeyGroup group) =>
+            FromEntity(group, group.VirtualKeys?.Count ?? 0);
+
+        /// <summary>Maps a group snapshot with its explicitly queried member count.</summary>
+        public static VirtualKeyGroupDto FromEntity(Entities.VirtualKeyGroup group, int virtualKeyCount) => new()
         {
             Id = group.Id,
             ExternalGroupId = group.ExternalGroupId,
@@ -93,8 +97,9 @@ namespace ConduitLLM.Configuration.DTOs.VirtualKey
             LifetimeSpent = group.LifetimeSpent,
             CreatedAt = group.CreatedAt,
             UpdatedAt = group.UpdatedAt,
-            ResourceETag = new ResourceVersion(group.RowVersion, group.UpdatedAt).ETag,
-            VirtualKeyCount = group.VirtualKeys?.Count ?? 0,
+            ResourceETag = new ResourceVersion(group.RowVersion, group.UpdatedAt)
+                { VirtualKeyCount = virtualKeyCount }.ETag,
+            VirtualKeyCount = virtualKeyCount,
             RateLimitRpm = group.RateLimitRpm,
             RateLimitRpd = group.RateLimitRpd,
             RateLimitTpm = group.RateLimitTpm,

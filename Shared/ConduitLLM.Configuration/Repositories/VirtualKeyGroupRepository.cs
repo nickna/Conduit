@@ -37,7 +37,8 @@ public class VirtualKeyGroupRepository : RepositoryBase<VirtualKeyGroup, int>, I
     /// <inheritdoc/>
     protected override IQueryable<VirtualKeyGroup> ApplyDefaultIncludes(IQueryable<VirtualKeyGroup> query)
     {
-        return query.Include(g => g.VirtualKeys);
+        // The response version includes the member count; keep both in one SQL snapshot.
+        return query.Include(g => g.VirtualKeys).AsSingleQuery();
     }
 
     /// <inheritdoc/>
@@ -130,6 +131,7 @@ public class VirtualKeyGroupRepository : RepositoryBase<VirtualKeyGroup, int>, I
         return await ExecuteAsync(async context =>
             await GetDbSet(context)
                 .Include(g => g.VirtualKeys)
+                .AsSingleQuery()
                 .AsNoTracking()
                 .FirstOrDefaultAsync(g => g.Id == id),
             operationName: $"getting by ID {id} with keys");
@@ -147,6 +149,17 @@ public class VirtualKeyGroupRepository : RepositoryBase<VirtualKeyGroup, int>, I
 
             return key?.VirtualKeyGroup;
         }, operationName: $"getting by key ID {virtualKeyId}");
+    }
+
+    /// <inheritdoc />
+    public async Task<VirtualKeyGroup?> GetByKeyIdWithKeysAsync(int virtualKeyId)
+    {
+        return await ExecuteAsync(async context =>
+            await context.VirtualKeyGroups.AsNoTracking()
+                .Include(group => group.VirtualKeys)
+                .AsSingleQuery()
+                .FirstOrDefaultAsync(group => group.VirtualKeys.Any(key => key.Id == virtualKeyId)),
+            operationName: $"getting by key ID {virtualKeyId} with keys");
     }
 
     /// <inheritdoc />

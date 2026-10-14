@@ -78,7 +78,7 @@ namespace ConduitLLM.Admin.Services
         /// <inheritdoc />
         public async Task<VirtualKeyGroupDto?> GetKeyGroupAsync(int id)
         {
-            var group = await _groupRepository.GetByKeyIdAsync(id);
+            var group = await _groupRepository.GetByKeyIdWithKeysAsync(id);
             if (group == null)
             {
                 return null;

@@ -24,6 +24,9 @@ public interface IVirtualKeyGroupRepository : IRepositoryBase<VirtualKeyGroup, i
     /// <returns>The virtual key group or null if not found</returns>
     Task<VirtualKeyGroup?> GetByKeyIdAsync(int virtualKeyId);
 
+    /// <summary>Gets a key's group and all members in one snapshot for a group representation.</summary>
+    Task<VirtualKeyGroup?> GetByKeyIdWithKeysAsync(int virtualKeyId);
+
     /// <summary>
     /// Adjusts the balance of a virtual key group
     /// </summary>
