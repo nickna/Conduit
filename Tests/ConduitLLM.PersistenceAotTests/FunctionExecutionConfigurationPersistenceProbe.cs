@@ -90,7 +90,7 @@ internal static class FunctionExecutionConfigurationPersistenceProbe
         Require((await store.ListCredentialsForProviderAsync(FunctionProviderType.Tavily, deadline.Token)).Count == 0,
             "missing credential provider");
 
-        await using (var held = await source.OpenConnectionAsync(deadline.Token))
+        await using (await source.OpenConnectionAsync(deadline.Token))
         {
             using var cancelled = new CancellationTokenSource();
             var read = store.ListCredentialsForProviderAsync(FunctionProviderType.Exa, cancelled.Token);

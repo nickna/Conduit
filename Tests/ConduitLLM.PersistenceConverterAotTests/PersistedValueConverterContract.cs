@@ -126,10 +126,9 @@ internal static class PersistedValueConverterContract
         var actual = new HashSet<string>(StringComparer.Ordinal);
         foreach (var entity in model.GetEntityTypes())
         {
-            foreach (var property in entity.GetProperties())
+            foreach (var property in entity.GetProperties().Where(property => property.GetTypeMapping().Converter is not null))
             {
-                if (property.GetTypeMapping().Converter is not null)
-                    Ensure(actual.Add(entity.ClrType.Name + "." + property.Name), "duplicate converted property");
+                Ensure(actual.Add(entity.ClrType.Name + "." + property.Name), "duplicate converted property");
             }
         }
         Ensure(Descriptors.Count == DescriptorCount && actual.Count == DescriptorCount,

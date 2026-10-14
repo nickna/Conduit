@@ -413,11 +413,30 @@ public sealed class NativeBenchmarkWorkloadProbeTests
 
     private static string Chunk(string? content, bool role, bool stop = false) => Json(writer =>
     {
-        Envelope(writer, "chat.completion.chunk"); writer.WriteStartArray("choices"); writer.WriteStartObject(); writer.WriteNumber("index", 0);
-        writer.WriteStartObject("delta"); if (role) writer.WriteString("role", "assistant");
-        if (content is not null) writer.WriteString("content", content); writer.WriteEndObject();
-        if (stop) writer.WriteString("finish_reason", "stop"); else writer.WriteNull("finish_reason");
-        writer.WriteEndObject(); writer.WriteEndArray();
+        Envelope(writer, "chat.completion.chunk");
+        writer.WriteStartArray("choices");
+        writer.WriteStartObject();
+        writer.WriteNumber("index", 0);
+        writer.WriteStartObject("delta");
+        if (role)
+        {
+            writer.WriteString("role", "assistant");
+        }
+        if (content is not null)
+        {
+            writer.WriteString("content", content);
+        }
+        writer.WriteEndObject();
+        if (stop)
+        {
+            writer.WriteString("finish_reason", "stop");
+        }
+        else
+        {
+            writer.WriteNull("finish_reason");
+        }
+        writer.WriteEndObject();
+        writer.WriteEndArray();
     });
 
     private static void Envelope(Utf8JsonWriter writer, string objectName)

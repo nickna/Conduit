@@ -30,15 +30,16 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
         await InSchemaAsync(async (connectionString, efSource, source) =>
         {
             foreach (var writer in Writers(efSource, source))
-            foreach (var populated in new[] { false, true })
             {
-                var row = Snapshot(populated);
-                var originalId = row.Id;
-                var id = await writer.CreateAsync(row);
-                id.Should().Be(row.Id).And.NotBeEmpty();
-                if (originalId != Guid.Empty) id.Should().Be(originalId);
-                else id.Version.Should().Be(4);
-                await AssertRowAsync(connectionString, row);
+                foreach (var row in new[] { false, true }.Select(Snapshot))
+                {
+                    var originalId = row.Id;
+                    var id = await writer.CreateAsync(row);
+                    id.Should().Be(row.Id).And.NotBeEmpty();
+                    if (originalId != Guid.Empty) id.Should().Be(originalId);
+                    else id.Version.Should().Be(4);
+                    await AssertRowAsync(connectionString, row);
+                }
             }
         });
     }

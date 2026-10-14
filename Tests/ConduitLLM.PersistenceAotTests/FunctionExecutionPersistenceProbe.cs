@@ -105,7 +105,7 @@ internal static class FunctionExecutionPersistenceProbe
         }
 
         var cancelledInsertIds = new List<Guid>();
-        await using (var held = await source.OpenConnectionAsync(token))
+        await using (await source.OpenConnectionAsync(token))
         {
             foreach (var create in new[] { true, false })
             {

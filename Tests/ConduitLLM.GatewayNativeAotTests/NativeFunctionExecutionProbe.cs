@@ -125,54 +125,58 @@ internal static partial class NativeFunctionExecutionProbe
             providerBefore = await ReadCompleteProviderStateAsync(provider, ct);
         }
         foreach (var gateway in gateways)
-        foreach (var path in new[] { "v1/chat/completions", "v1/conduit/chat/completions" })
         {
-            using (var anonymous = new HttpRequestMessage(HttpMethod.Post, path))
+            foreach (var path in new[] { "v1/chat/completions", "v1/conduit/chat/completions" })
             {
-                anonymous.Content = JsonContent.Create(ChatPreflightBody([fixture.ConfigurationId]),
-                    NativeProbeJsonContext.Default.JsonElement);
-                using var response = await gateway.SendAsync(anonymous, ct);
-                Require(response.StatusCode == HttpStatusCode.Unauthorized, "unauthenticated chat preflight challenge");
-            }
-
-            foreach (var (ids, code, expectedMessage) in new (int[], string, string?)[]
-                     {
-                         ([int.MinValue, NativeParityFixture.DisabledFunctionId, int.MinValue],
-                             "invalid_function_configuration_ids", $"Function configuration IDs not found: {int.MinValue}"),
-                         ([fixture.ConfigurationId, NativeParityFixture.DisabledFunctionId, fixture.ConfigurationId],
-                             "disabled_function_configurations", $"Function configurations are disabled: {NativeParityFixture.DisabledFunctionId}"),
-                         ([fixture.ConfigurationId, fixture.ConfigurationId], "invalid_max_agentic_iterations", null)
-                     })
-            {
-                var correlationId = Guid.NewGuid().ToString("N");
-                using var request = new HttpRequestMessage(HttpMethod.Post, path);
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", fixture.VirtualKey);
-                request.Headers.Add("x-request-id", correlationId);
-                request.Content = JsonContent.Create(ChatPreflightBody(ids), NativeProbeJsonContext.Default.JsonElement);
-                using var response = await gateway.SendAsync(request, ct);
-                Require(response.StatusCode == HttpStatusCode.BadRequest,
-                    $"native chat configuration rejection on {gateway.BaseAddress!.Authority}/{path} " +
-                    $"for {code}: expected 400, received {(int)response.StatusCode}");
-                Require(response.Headers.TryGetValues("x-request-id", out var responseIds) &&
-                    responseIds.SequenceEqual([correlationId]), "chat preflight retains middleware correlation ID before billing setup");
-                var root = await JsonAsync(response, ct);
-                Properties(root, "error");
-                var error = root.GetProperty("error");
-                Properties(error, "message", "type", "code");
-                Require(error.GetProperty("code").GetString() == code &&
-                    error.GetProperty("type").GetString() == "invalid_request_error", "chat preflight error classification");
-                var message = error.GetProperty("message").GetString();
-                if (expectedMessage is not null)
-                    Require(message == expectedMessage, "missing IDs precede disabled rows, then iteration limits");
-                else
+                using (var anonymous = new HttpRequestMessage(HttpMethod.Post, path))
                 {
-                    var parts = message?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    Require(parts is { Length: 7 } && parts[0] == "MaxAgenticIterations" && parts[1] == "must" &&
-                        parts[2] == "be" && parts[3] == "between" && parts[5] == "and" &&
-                        int.TryParse(parts[4], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var minimum) &&
-                        int.TryParse(parts[6], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var maximum) &&
-                        minimum is >= 1 and <= 100 && maximum is >= 1 and <= 100,
-                        "explicit zero iterations use the clamped configured limits after enabled configuration reads");
+                    anonymous.Content = JsonContent.Create(ChatPreflightBody([fixture.ConfigurationId]),
+                        NativeProbeJsonContext.Default.JsonElement);
+                    using var response = await gateway.SendAsync(anonymous, ct);
+                    Require(response.StatusCode == HttpStatusCode.Unauthorized, "unauthenticated chat preflight challenge");
+                }
+
+                foreach (var (ids, code, expectedMessage) in new (int[], string, string?)[]
+                         {
+                             ([int.MinValue, NativeParityFixture.DisabledFunctionId, int.MinValue],
+                                 "invalid_function_configuration_ids", $"Function configuration IDs not found: {int.MinValue}"),
+                             ([fixture.ConfigurationId, NativeParityFixture.DisabledFunctionId, fixture.ConfigurationId],
+                                 "disabled_function_configurations", $"Function configurations are disabled: {NativeParityFixture.DisabledFunctionId}"),
+                             ([fixture.ConfigurationId, fixture.ConfigurationId], "invalid_max_agentic_iterations", null)
+                         })
+                {
+                    var correlationId = Guid.NewGuid().ToString("N");
+                    using var request = new HttpRequestMessage(HttpMethod.Post, path);
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", fixture.VirtualKey);
+                    request.Headers.Add("x-request-id", correlationId);
+                    request.Content = JsonContent.Create(ChatPreflightBody(ids), NativeProbeJsonContext.Default.JsonElement);
+                    using var response = await gateway.SendAsync(request, ct);
+                    Require(response.StatusCode == HttpStatusCode.BadRequest,
+                        $"native chat configuration rejection on {gateway.BaseAddress!.Authority}/{path} " +
+                        $"for {code}: expected 400, received {(int)response.StatusCode}");
+                    Require(response.Headers.TryGetValues("x-request-id", out var responseIds) &&
+                        responseIds.SequenceEqual([correlationId]), "chat preflight retains middleware correlation ID before billing setup");
+                    var root = await JsonAsync(response, ct);
+                    Properties(root, "error");
+                    var error = root.GetProperty("error");
+                    Properties(error, "message", "type", "code");
+                    Require(error.GetProperty("code").GetString() == code &&
+                        error.GetProperty("type").GetString() == "invalid_request_error", "chat preflight error classification");
+                    var message = error.GetProperty("message").GetString();
+                    if (expectedMessage is not null)
+                    {
+                        Require(message == expectedMessage, "missing IDs precede disabled rows, then iteration limits");
+                    }
+                    else
+                    {
+                        var parts = message?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        Require(parts is { Length: 7 } && parts[0] == "MaxAgenticIterations" && parts[1] == "must" &&
+                            parts[2] == "be" && parts[3] == "between" && parts[5] == "and" &&
+                            int.TryParse(parts[4], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var minimum) &&
+                            int.TryParse(parts[6], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var maximum) &&
+                            minimum is >= 1 and <= 100 && maximum is >= 1 and <= 100,
+                            "explicit zero iterations use the clamped configured limits after enabled configuration reads");
+                    }
                 }
             }
         }

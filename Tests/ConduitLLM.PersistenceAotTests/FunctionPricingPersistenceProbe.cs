@@ -113,7 +113,7 @@ internal static class FunctionPricingPersistenceProbe
             nullable.PricingConfiguration is null && nullable.ExpiryDate is null,
             "expiry equality excludes cost, canonical shadow isolation and null fields");
 
-        await using (var held = await source.OpenConnectionAsync(deadline.Token))
+        await using (await source.OpenConnectionAsync(deadline.Token))
         {
             using var cancelled = new CancellationTokenSource();
             var read = store.FindEligibleCostAsync(11, asOf, cancelled.Token);

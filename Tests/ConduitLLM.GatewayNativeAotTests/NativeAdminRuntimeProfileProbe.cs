@@ -38,11 +38,10 @@ internal static class NativeAdminRuntimeProfileProbe
         ConnectionMultiplexer? redis = null;
         RedisKey? ownedTokenKey = null;
         Exception? primary = null;
-        var stage = "preflight";
+        var stage = "redis-connection";
         var budget = new RequestBudget();
         try
         {
-            stage = "redis-connection";
             var options = ConfigurationOptions.Parse(redisConnectionString);
             options.ConnectTimeout = options.SyncTimeout = options.AsyncTimeout = 5000;
             options.ConnectRetry = 0;
