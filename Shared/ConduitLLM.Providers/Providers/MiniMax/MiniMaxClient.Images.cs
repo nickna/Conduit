@@ -46,7 +46,7 @@ namespace ConduitLLM.Providers.MiniMax
                     httpClient,
                     endpoint,
                     miniMaxRequest,
-                    DefaultJsonOptions,
+                    MediaJsonOptions,
                     cancellationToken);
                 
                 // Check for MiniMax error response

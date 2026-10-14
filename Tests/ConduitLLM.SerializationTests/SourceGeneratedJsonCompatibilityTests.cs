@@ -14,6 +14,7 @@ using ConduitLLM.Configuration.DTOs.SignalR;
 using ConduitLLM.Configuration.Serialization;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Models.Responses;
 using ConduitLLM.Core.Serialization;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.DTOs;
@@ -28,6 +29,76 @@ namespace ConduitLLM.SerializationTests;
 
 public sealed class SourceGeneratedJsonCompatibilityTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Gateway_response_completion_details_resolve_inside_stream_envelopes(bool failed)
+    {
+        var response = new ResponseObject
+        {
+            CreatedAt = 1, Id = "resp-fixture", Object = "response", Model = "fixture",
+            Status = failed ? "failed" : "incomplete",
+            Error = failed ? new ResponseFailureDetails("provider_response_error", "unavailable") : null,
+            IncompleteDetails = failed ? null : new ResponseIncompleteDetails("max_output_tokens"),
+            Instructions = null, Metadata = [], Output = [], ParallelToolCalls = true,
+            Temperature = null, ToolChoice = "auto", Tools = [], TopP = null
+        };
+        var envelope = new ResponseStreamEvent
+        {
+            Type = failed ? "response.failed" : "response.incomplete",
+            SequenceNumber = 1, Response = response
+        };
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(envelope, GatewayJsonOptions.Create()));
+        var result = document.RootElement.GetProperty("response");
+        AssertJsonEqual(failed
+                ? """{"code":"provider_response_error","message":"unavailable"}"""
+                : """{"reason":"max_output_tokens"}""",
+            result.GetProperty(failed ? "error" : "incomplete_details").GetRawText());
+    }
+
+    [Fact]
+    public void Admin_health_details_preserve_branch_shapes_without_reflection()
+    {
+        (object Details, string Json)[] cases =
+        [
+            (new DatabaseHealthDetails(true, "Npgsql"),
+                """{"connectionPooling":true,"provider":"Npgsql"}"""),
+            (new HeartbeatHealthDetails("heartbeat", 0, 0, "waiting"),
+                """{"source":"heartbeat","healthyInstances":0,"totalInstances":0,"reason":"waiting"}"""),
+            (new HeartbeatHealthDetails("heartbeat", 1, 2),
+                """{"source":"heartbeat","healthyInstances":1,"totalInstances":2}"""),
+            (new RedisFallbackHealthDetails(false, "in-memory fallback", "unavailable"),
+                """{"configured":false,"mode":"in-memory fallback","description":"unavailable"}"""),
+            (new RedisHealthDetails(true, 0),
+                """{"configured":true,"pingMilliseconds":0}"""),
+            (new RedisErrorHealthDetails(true, "unavailable"),
+                """{"configured":true,"error":"unavailable"}"""),
+            (new InMemoryMessagingHealthDetails("Wolverine", "in-memory", false, "local"),
+                """{"backend":"Wolverine","transport":"in-memory","durable":false,"description":"local"}"""),
+            (new DurableMessagingHealthDetails("Wolverine", "PostgreSQL", true,
+                    [new MessagingHealthCheckDetails("bus", "Healthy", null)], null),
+                """{"backend":"Wolverine","transport":"PostgreSQL","durable":true,"checks":[{"name":"bus","status":"Healthy","description":null}],"error":null}"""),
+            (new MessagingErrorHealthDetails("Wolverine", "unavailable"),
+                """{"backend":"Wolverine","error":"unavailable"}"""),
+            (new StorageHealthDetails("memory", "local", true, null, null),
+                """{"mode":"memory","description":"local","ephemeral":true,"bucket":null,"endpoint":null}"""),
+            (new StorageErrorHealthDetails("s3", "unavailable"),
+                """{"mode":"s3","error":"unavailable"}""")
+        ];
+        var response = new ServiceHealthResponse
+        {
+            Services = cases.Select(value => new ServiceStatusDto { Details = value.Details }).ToList()
+        };
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(response, AdminJsonOptions.Create()));
+        var services = document.RootElement.GetProperty("services");
+        for (var index = 0; index < cases.Length; index++)
+        {
+            AssertJsonEqual(cases[index].Json, services[index].GetProperty("details").GetRawText());
+        }
+    }
+
     [Fact]
     public void Named_tool_choice_round_trips_without_reflection()
     {

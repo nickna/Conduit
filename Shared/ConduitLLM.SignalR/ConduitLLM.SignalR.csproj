@@ -5,7 +5,8 @@
 
   <ItemGroup>
     <PackageReference Include="MessagePack" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack"
+      Condition="'$(PublishAot)' != 'true' and '$(ConduitAotAudit)' != 'true'" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" />
     <PackageReference Include="Polly" />
   </ItemGroup>
@@ -20,4 +21,14 @@
     <Compile Include="..\ConduitLLM.Core\Services\SignalRNotificationServiceBase.cs"
              Link="Services\SignalRNotificationServiceBase.cs" />
   </ItemGroup>
+
+  <Target Name="VerifyNativeSignalRDependencyBoundary" AfterTargets="ResolvePackageAssets"
+    Condition="'$(PublishAot)' == 'true' or '$(ConduitAotAudit)' == 'true'">
+    <ItemGroup>
+      <_ForbiddenNativeSignalRPackage Include="@(PackageDependencies)"
+        Condition="'%(PackageDependencies.Identity)' == 'Microsoft.AspNetCore.SignalR.Protocols.MessagePack'" />
+    </ItemGroup>
+    <Error Condition="'@(_ForbiddenNativeSignalRPackage)' != ''"
+      Text="Native SignalR client protocols support JSON only. Resolved forbidden protocol packages: @(_ForbiddenNativeSignalRPackage)." />
+  </Target>
 </Project>

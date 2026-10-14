@@ -77,8 +77,19 @@ namespace ConduitLLM.Admin.Services
         /// <inheritdoc/>
         public override async Task<SecurityCheckResult> IsRequestAllowedAsync(HttpContext context)
         {
-            var clientIp = GetClientIpAddress(context);
             var path = context.Request.Path.Value ?? "";
+            var probePath = path.EndsWith('/') ? path[..^1] : path;
+            if ((HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method)) &&
+                (probePath.Equals("/health", StringComparison.OrdinalIgnoreCase) ||
+                 probePath.Equals("/health/live", StringComparison.OrdinalIgnoreCase) ||
+                 probePath.Equals("/health/ready", StringComparison.OrdinalIgnoreCase)))
+            {
+                // The dedicated health authorization middleware still enforces
+                // private-network/health-key access. Ban tracking must not make
+                // these probes depend on Redis or hide database readiness.
+                return SecurityCheckResult.Allowed();
+            }
+            var clientIp = GetClientIpAddress(context);
 
             // Check API key authentication (unless excluded path)
             if (!IsPathExcluded(path, new List<string> { "/health", "/swagger", "/scalar", "/openapi" }))

@@ -5,6 +5,7 @@ using ConduitLLM.Functions.Providers.Exa;
 using ConduitLLM.Functions.Providers.Mcp;
 using ConduitLLM.Functions.Providers.Tavily;
 using ConduitLLM.Functions.Security;
+using ConduitLLM.Persistence.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace ConduitLLM.Functions.Services;
@@ -18,8 +19,9 @@ namespace ConduitLLM.Functions.Services;
 /// </remarks>
 public class FunctionClientFactory : IFunctionClientFactory
 {
-    private readonly IFunctionConfigurationRepository _configurationRepository;
-    private readonly IFunctionCredentialRepository _credentialRepository;
+    private readonly IFunctionConfigurationRepository? _configurationRepository;
+    private readonly IFunctionCredentialRepository? _credentialRepository;
+    private readonly IFunctionExecutionConfigurationStore? _runtimeStore;
     private readonly IFunctionCredentialProtector _credentialProtector;
     private readonly IHttpClientFactory? _httpClientFactory;
     private readonly ILoggerFactory _loggerFactory;
@@ -38,6 +40,19 @@ public class FunctionClientFactory : IFunctionClientFactory
         _httpClientFactory = httpClientFactory;
     }
 
+    /// <summary>Creates provider clients using detached scalar runtime persistence.</summary>
+    public FunctionClientFactory(
+        IFunctionExecutionConfigurationStore runtimeStore,
+        IFunctionCredentialProtector credentialProtector,
+        ILoggerFactory loggerFactory,
+        IHttpClientFactory? httpClientFactory = null)
+    {
+        _runtimeStore = runtimeStore ?? throw new ArgumentNullException(nameof(runtimeStore));
+        _credentialProtector = credentialProtector ?? throw new ArgumentNullException(nameof(credentialProtector));
+        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+        _httpClientFactory = httpClientFactory;
+    }
+
     /// <summary>
     /// Gets a function client asynchronously.
     /// </summary>
@@ -48,14 +63,18 @@ public class FunctionClientFactory : IFunctionClientFactory
     /// <exception cref="NotSupportedException">Thrown when the provider type is not supported.</exception>
     public async Task<IFunctionClient> GetClientAsync(FunctionProviderType providerType, int functionConfigurationId)
     {
-        var configuration = await _configurationRepository.GetByIdAsync(functionConfigurationId);
+        var configuration = _runtimeStore is not null
+            ? await _runtimeStore.GetConfigurationAsync(functionConfigurationId)
+            : await _configurationRepository!.GetByIdAsync(functionConfigurationId);
         if (configuration == null)
         {
             throw new InvalidOperationException($"Function configuration {functionConfigurationId} not found");
         }
 
         // Get credentials for this provider type
-        var credentials = await _credentialRepository.GetByProviderTypeAsync(configuration.ProviderType);
+        IReadOnlyList<FunctionCredential> credentials = _runtimeStore is not null
+            ? await _runtimeStore.ListCredentialsForProviderAsync(configuration.ProviderType)
+            : await _credentialRepository!.GetByProviderTypeAsync(configuration.ProviderType);
 
         var credential = CredentialSelector.SelectForConfiguration(credentials, functionConfigurationId);
         if (credential == null)

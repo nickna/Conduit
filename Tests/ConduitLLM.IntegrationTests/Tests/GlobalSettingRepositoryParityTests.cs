@@ -8,6 +8,7 @@ using ConduitLLM.IntegrationTests.Infrastructure;
 using ConduitLLM.Persistence.Npgsql;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Npgsql;
@@ -42,8 +43,9 @@ public sealed class GlobalSettingRepositoryParityTests
             await CreateSchemaAsync(npgsqlSchema);
 
             var efConnectionString = WithSearchPath(efSchema);
+            await using var efSource = NpgsqlDataSource.Create(efConnectionString);
             var efRepository = new GlobalSettingRepository(
-                new TestDbContextFactory(efConnectionString),
+                new TestDbContextFactory(efSource),
                 NullLogger<GlobalSettingRepository>.Instance);
             await ExerciseContractAsync(efRepository);
 
@@ -145,12 +147,12 @@ public sealed class GlobalSettingRepositoryParityTests
         return builder.ConnectionString;
     }
 
-    private sealed class TestDbContextFactory(string connectionString) :
+    private sealed class TestDbContextFactory(NpgsqlDataSource source) :
         IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
             new DbContextOptionsBuilder<ConduitDbContext>()
-                .UseNpgsql(connectionString)
+                .UseNpgsql(source)
                 .Options;
 
         public ConduitDbContext CreateDbContext() => new(_options);
@@ -162,4 +164,766 @@ public sealed class GlobalSettingRepositoryParityTests
             return Task.FromResult(CreateDbContext());
         }
     }
+    private static readonly DateTime StoredInstant = new(2022, 4, 5, 6, 7, 8, DateTimeKind.Utc);
+    private static readonly TimeSpan TestLimit = TimeSpan.FromSeconds(90);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AllFieldsAndSuccessfulMutationBoundariesHaveIndependentOracles(bool typed)
+    {
+        var schema = SettingSchema("fields", typed);
+        using var deadline = new CancellationTokenSource(TestLimit);
+        try
+        {
+            await CreateSchemaAsync(schema);
+            using var sql = new SettingsCommandGate();
+            await using var source = SettingsSource(schema, typed, "fields", 1, sql);
+            var factory = new SettingsContextFactory(source);
+            var repository = SettingsRepository(typed, source, factory);
+            (await repository.ListAsync(deadline.Token)).Should().BeEmpty();
+            Assert.Null(await repository.GetByIdAsync(-1, deadline.Token));
+            Assert.Null(await repository.GetByKeyAsync("missing", deadline.Token));
+
+            var before = DateTime.UtcNow;
+            var zulu = new GlobalSetting { Key = "zulu", Value = "first", Description = null,
+                CreatedAt = default, UpdatedAt = StoredInstant };
+            var id = await repository.CreateAsync(zulu, deadline.Token);
+            var after = DateTime.UtcNow;
+            Assert.True(id > 0);
+            Assert.Equal(id, zulu.Id);
+            Assert.Equal(zulu.CreatedAt, zulu.UpdatedAt);
+            AssertUtcBetween(zulu.CreatedAt, before, after);
+            var created = (await IndependentRowsAsync(schema, deadline.Token)).Single();
+            AssertRow(created, id, "zulu", "first", null, zulu.CreatedAt, zulu.UpdatedAt);
+
+            var suppliedCreated = StoredInstant.AddDays(-7);
+            var alpha = new GlobalSetting { Key = "alpha", Value = "", Description = "",
+                CreatedAt = suppliedCreated, UpdatedAt = StoredInstant.AddYears(20) };
+            before = DateTime.UtcNow;
+            await repository.CreateAsync(alpha, deadline.Token);
+            after = DateTime.UtcNow;
+            Assert.Equal(suppliedCreated, alpha.CreatedAt);
+            AssertUtcBetween(alpha.UpdatedAt, before, after);
+            AssertRow((await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Key == "alpha"),
+                alpha.Id, "alpha", "", "", suppliedCreated, alpha.UpdatedAt);
+            var ordered = await repository.ListAsync(deadline.Token);
+            Assert.Equal(new[] { "alpha", "zulu" }, ordered.Select(row => row.Key).ToArray());
+            foreach (var setting in ordered)
+                AssertEntityMatchesIndependentRow(setting,
+                    (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Id == setting.Id));
+
+            // Returned entities are detached snapshots: editing one is not a persistence operation.
+            var detached = await repository.GetByIdAsync(id, deadline.Token);
+            Assert.NotNull(detached);
+            detached!.Value = "unpersisted";
+            detached.Description = "unpersisted";
+            Assert.Equal("first", (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Id == id).Value);
+            detached.Key = "renamed";
+            detached.Value = "updated";
+            detached.Description = null;
+            detached.CreatedAt = StoredInstant.AddDays(-20);
+            before = DateTime.UtcNow;
+            Assert.True(await repository.UpdateAsync(detached, deadline.Token));
+            after = DateTime.UtcNow;
+            AssertUtcBetween(detached.UpdatedAt, before, after);
+            AssertRow((await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Id == id),
+                id, "renamed", "updated", null, detached.CreatedAt, detached.UpdatedAt);
+            Assert.Null(await repository.GetByKeyAsync("zulu", deadline.Token));
+            AssertEntityMatchesIndependentRow((await repository.GetByKeyAsync("renamed", deadline.Token))!,
+                (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Id == id));
+
+            var lower = typed ? await ServerClockAsync(schema, deadline.Token) : DateTime.UtcNow;
+            Assert.True(await repository.UpsertAsync("inserted", "upsert-one", null, deadline.Token));
+            var upper = typed ? await ServerClockAsync(schema, deadline.Token) : DateTime.UtcNow;
+            var inserted = (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Key == "inserted");
+            Assert.True(inserted.Id > 0);
+            Assert.Equal("upsert-one", inserted.Value);
+            Assert.Null(inserted.Description);
+            Assert.Equal(inserted.CreatedAt, inserted.UpdatedAt);
+            AssertUtcBetween(inserted.CreatedAt, lower, upper);
+            Assert.True(await repository.UpsertAsync("inserted", "upsert-two", "kept", deadline.Token));
+            var previous = (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Key == "inserted");
+            lower = typed ? await ServerClockAsync(schema, deadline.Token) : DateTime.UtcNow;
+            Assert.True(await repository.UpsertAsync("inserted", "upsert-three", null, deadline.Token));
+            upper = typed ? await ServerClockAsync(schema, deadline.Token) : DateTime.UtcNow;
+            var preserved = (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Key == "inserted");
+            Assert.Equal(previous.Id, preserved.Id);
+            Assert.Equal(previous.CreatedAt, preserved.CreatedAt);
+            Assert.Equal("upsert-three", preserved.Value);
+            Assert.Equal("kept", preserved.Description);
+            AssertUtcBetween(preserved.UpdatedAt, lower, upper);
+            Assert.True(await repository.UpsertAsync("inserted", "upsert-four", "", deadline.Token));
+            Assert.Equal("", (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Key == "inserted").Description);
+
+            var boundary = new GlobalSetting { Key = new string('k', 100), Value = new string('v', 2000),
+                Description = new string('d', 500), CreatedAt = StoredInstant };
+            await repository.CreateAsync(boundary, deadline.Token);
+            AssertRow((await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Id == boundary.Id),
+                boundary.Id, boundary.Key, boundary.Value, boundary.Description, StoredInstant, boundary.UpdatedAt);
+            var whitespace = new GlobalSetting { Key = " ", Value = "whitespace key", CreatedAt = StoredInstant };
+            await repository.CreateAsync(whitespace, deadline.Token);
+            Assert.Equal(" ", (await repository.GetByKeyAsync(" ", deadline.Token))!.Key);
+            Assert.Null(await repository.GetByKeyAsync("ALPHA", deadline.Token));
+            Assert.False(await repository.DeleteAsync(-1, deadline.Token));
+            Assert.False(await repository.DeleteByKeyAsync("absent", deadline.Token));
+            Assert.True(await repository.DeleteAsync(id, deadline.Token));
+            Assert.Null(await repository.GetByIdAsync(id, deadline.Token));
+            Assert.True(await repository.DeleteByKeyAsync("alpha", deadline.Token));
+            foreach (var remaining in await IndependentRowsAsync(schema, deadline.Token))
+                Assert.True(await repository.DeleteByKeyAsync(remaining.Key, deadline.Token));
+            Assert.Empty(await IndependentRowsAsync(schema, deadline.Token));
+            Assert.Empty(await repository.ListAsync(deadline.Token));
+            if (!typed) Assert.Equal(factory.Created, factory.AsyncDisposed);
+            await SettingsPoolUsableAsync(source, deadline.Token);
+        }
+        finally { await DropSchemaAsync(schema); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ValidationPreCancellationAndBackendSpecificWritesRemainCharacterized(bool typed)
+    {
+        var schema = SettingSchema("backend", typed);
+        using var deadline = new CancellationTokenSource(TestLimit);
+        try
+        {
+            await CreateSchemaAsync(schema);
+            await SeedSettingAsync(schema, deadline.Token);
+            using var sql = new SettingsCommandGate();
+            await using var source = SettingsSource(schema, typed, "backend", 1, sql);
+            var factory = new SettingsContextFactory(source);
+            var repository = SettingsRepository(typed, source, factory);
+            if (typed)
+                Assert.Equal("dataSource", Assert.Throws<ArgumentNullException>(() => new NpgsqlGlobalSettingRepository(null!)).ParamName);
+            else
+            {
+                Assert.Equal("dbContextFactory", Assert.Throws<ArgumentNullException>(() => new GlobalSettingRepository(null!, NullLogger<GlobalSettingRepository>.Instance)).ParamName);
+                Assert.Equal("logger", Assert.Throws<ArgumentNullException>(() => new GlobalSettingRepository(factory, null!)).ParamName);
+            }
+            using var cancelled = new CancellationTokenSource();
+            cancelled.Cancel();
+            var invalid = new (Func<Task> Call, Type Type, string Parameter)[]
+            {
+                (() => repository.GetByKeyAsync(null!, cancelled.Token), typeof(ArgumentException), "key"),
+                (() => repository.GetByKeyAsync("", cancelled.Token), typeof(ArgumentException), "key"),
+                (() => repository.DeleteByKeyAsync(null!, cancelled.Token), typeof(ArgumentException), "key"),
+                (() => repository.DeleteByKeyAsync("", cancelled.Token), typeof(ArgumentException), "key"),
+                (() => repository.UpsertAsync(null!, "v", cancellationToken: cancelled.Token), typeof(ArgumentException), "key"),
+                (() => repository.UpsertAsync("", "v", cancellationToken: cancelled.Token), typeof(ArgumentException), "key"),
+                (() => repository.UpsertAsync("valid", null!, cancellationToken: cancelled.Token), typeof(ArgumentNullException), "value"),
+                (() => repository.CreateAsync(null!, cancelled.Token), typeof(ArgumentNullException), "setting"),
+                (() => repository.CreateAsync(new GlobalSetting { Key = null! }, cancelled.Token), typeof(ArgumentException), "key"),
+                (() => repository.CreateAsync(new GlobalSetting { Key = "" }, cancelled.Token), typeof(ArgumentException), "key"),
+                (() => repository.CreateAsync(new GlobalSetting { Key = "valid", Value = null! }, cancelled.Token), typeof(ArgumentNullException), "setting.Value"),
+                (() => repository.UpdateAsync(null!, cancelled.Token), typeof(ArgumentNullException), "setting"),
+                (() => repository.UpdateAsync(new GlobalSetting { Key = null! }, cancelled.Token), typeof(ArgumentException), "key"),
+                (() => repository.UpdateAsync(new GlobalSetting { Key = "" }, cancelled.Token), typeof(ArgumentException), "key"),
+                (() => repository.UpdateAsync(new GlobalSetting { Key = "valid", Value = null! }, cancelled.Token), typeof(ArgumentNullException), "setting.Value")
+            };
+            foreach (var target in invalid)
+            {
+                var error = await Record.ExceptionAsync(target.Call);
+                Assert.NotNull(error);
+                Assert.Equal(target.Type, error!.GetType());
+                Assert.Equal(target.Parameter, ((ArgumentException)error).ParamName);
+            }
+            Assert.Equal(0, factory.Attempts);
+            Assert.Equal(0, sql.Started);
+            foreach (var operation in SettingOperations)
+            {
+                var entity = OperationEntity(operation);
+                var before = DateTime.UtcNow;
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                    InvokeSettingOperationAsync(repository, operation, entity, cancelled.Token));
+                var after = DateTime.UtcNow;
+                if (operation == SettingOperation.Create)
+                {
+                    Assert.Equal(0, entity.Id);
+                    if (typed) { Assert.Equal(entity.CreatedAt, entity.UpdatedAt); AssertUtcBetween(entity.CreatedAt, before, after); }
+                    else { Assert.Equal(default, entity.CreatedAt); Assert.Equal(StoredInstant, entity.UpdatedAt); }
+                }
+                if (operation == SettingOperation.Update)
+                {
+                    Assert.Equal(StoredInstant.AddDays(-1), entity.CreatedAt);
+                    if (typed) AssertUtcBetween(entity.UpdatedAt, before, after);
+                    else Assert.Equal(StoredInstant, entity.UpdatedAt);
+                }
+                if (!typed) Assert.Equal(cancelled.Token, factory.LastToken);
+                await AssertSeedUnchangedAsync(schema, deadline.Token);
+            }
+            Assert.Equal(0, factory.Created);
+            Assert.Equal(0, factory.AsyncDisposed);
+            Assert.Equal(0, sql.Started);
+
+            // These are independent backend outcomes, not invented parity assertions.
+            var explicitId = new GlobalSetting { Id = 90, Key = "explicit-id", Value = "value", CreatedAt = StoredInstant };
+            var actualId = await repository.CreateAsync(explicitId, deadline.Token);
+            if (typed) Assert.NotEqual(90, actualId); else Assert.Equal(90, actualId);
+            Assert.Equal(actualId, explicitId.Id);
+            Assert.Equal(actualId, (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Key == "explicit-id").Id);
+            var zero = new GlobalSetting { Key = "zero-update", Value = "zero", CreatedAt = StoredInstant };
+            var zeroResult = await repository.UpdateAsync(zero, deadline.Token);
+            Assert.Equal(!typed, zeroResult);
+            if (typed) { Assert.Equal(0, zero.Id); Assert.DoesNotContain(await IndependentRowsAsync(schema, deadline.Token), row => row.Key == "zero-update"); }
+            else { Assert.True(zero.Id > 0); Assert.Equal("zero", (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Id == zero.Id).Value); }
+            var missingBefore = DateTime.UtcNow;
+            var missing = new GlobalSetting { Id = 900000, Key = "missing-update", Value = "missing", CreatedAt = StoredInstant, UpdatedAt = StoredInstant };
+            if (typed) Assert.False(await repository.UpdateAsync(missing, deadline.Token));
+            else await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repository.UpdateAsync(missing, deadline.Token));
+            AssertUtcBetween(missing.UpdatedAt, missingBefore, DateTime.UtcNow);
+            Assert.Equal(900000, missing.Id);
+            Assert.Equal(StoredInstant, missing.CreatedAt);
+            Assert.DoesNotContain(await IndependentRowsAsync(schema, deadline.Token), row => row.Key == "missing-update");
+
+            foreach (var oversized in new[]
+            {
+                new GlobalSetting { Key = new string('k', 101), Value = "v", CreatedAt = StoredInstant },
+                new GlobalSetting { Key = "long-value", Value = new string('v', 2001), CreatedAt = StoredInstant },
+                new GlobalSetting { Key = "long-description", Value = "v", Description = new string('d', 501), CreatedAt = StoredInstant },
+                new GlobalSetting { Key = "seed", Value = "duplicate", CreatedAt = StoredInstant }
+            })
+            {
+                var error = await Record.ExceptionAsync(() => repository.CreateAsync(oversized, deadline.Token));
+                Assert.NotNull(error);
+                var postgres = FindPostgresException(error!);
+                Assert.NotNull(postgres);
+                Assert.Equal(oversized.Key == "seed" ? "23505" : "22001", postgres!.SqlState);
+            }
+            await SettingsPoolUsableAsync(source, deadline.Token);
+            if (!typed) Assert.Equal(factory.Created, factory.AsyncDisposed);
+        }
+        finally { await DropSchemaAsync(schema); }
+    }
+
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 1)]
+    [InlineData(false, 2)]
+    [InlineData(true, 2)]
+    public async Task EveryOperationCancelsAtAnOccupiedPoolAndRecovers(bool typed, int capacity)
+    {
+        var schema = SettingSchema("pool", typed);
+        using var deadline = new CancellationTokenSource(TestLimit);
+        try
+        {
+            await CreateSchemaAsync(schema);
+            using var sql = new SettingsCommandGate();
+            await using var source = SettingsSource(schema, typed, $"pool_{capacity}", capacity, sql);
+            var factory = new SettingsContextFactory(source);
+            var repository = SettingsRepository(typed, source, factory);
+            foreach (var operation in SettingOperations)
+            {
+                await SeedSettingAsync(schema, deadline.Token);
+                var holds = new List<NpgsqlConnection>();
+                using var cancelled = new CancellationTokenSource();
+                Task<object?>? pending = null;
+                try
+                {
+                    for (var slot = 0; slot < capacity; slot++) holds.Add(await source.OpenConnectionAsync(deadline.Token));
+                    Assert.Equal(capacity, holds.Select(connection => connection.ProcessID).Distinct().Count());
+                    var beforeSql = sql.Started;
+                    var beforeDisposed = factory.AsyncDisposed;
+                    pending = InvokeSettingOperationAsync(repository, operation, OperationEntity(operation), cancelled.Token);
+                    Assert.False(pending.IsCompleted);
+                    Assert.Equal(beforeSql, sql.Started);
+                    cancelled.Cancel();
+                    await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+                    if (!typed) { Assert.Equal(cancelled.Token, factory.LastToken); Assert.Equal(beforeDisposed + 1, factory.AsyncDisposed); }
+                }
+                finally
+                {
+                    cancelled.Cancel();
+                    try { if (pending is not null) await ReapSettingOperationAsync(pending, cancelled); }
+                    finally { foreach (var hold in holds) await hold.DisposeAsync(); }
+                }
+                await AssertSeedUnchangedAsync(schema, deadline.Token);
+                await SettingsPoolUsableAsync(source, deadline.Token);
+                await AssertSettingRecoveryAsync(repository, operation, schema, deadline.Token);
+                if (!typed) Assert.Equal(factory.Created, factory.AsyncDisposed);
+            }
+        }
+        finally { await DropSchemaAsync(schema); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EveryQueryAndMutationStatementCancelsAtAnObservedServerWait(bool typed)
+    {
+        var schema = SettingSchema("sql", typed);
+        using var deadline = new CancellationTokenSource(TestLimit);
+        try
+        {
+            await CreateSchemaAsync(schema);
+            foreach (var target in SettingSqlTargets(typed))
+            {
+                await SeedSettingAsync(schema, deadline.Token);
+                using var gate = new SettingsCommandGate(target);
+                await using var source = SettingsSource(schema, typed, $"sql_{target.Operation}_{target.Ordinal}", 1, gate);
+                var factory = new SettingsContextFactory(source);
+                var repository = SettingsRepository(typed, source, factory);
+                var readerPid = await SettingsPoolUsableAsync(source, deadline.Token);
+                var connectionString = gate.SourceConnectionString;
+                await using var blocker = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(connectionString)
+                    { Pooling = false, ApplicationName = "global_settings_blocker" }.ConnectionString);
+                await blocker.OpenAsync(deadline.Token);
+                await using var transaction = await blocker.BeginTransactionAsync(deadline.Token);
+                using var cancelled = new CancellationTokenSource();
+                gate.Arm();
+                // Synchronous before-send logging never blocks the test's orchestration thread.
+                var pending = Task.Run(() => InvokeSettingOperationAsync(repository, target.Operation,
+                    OperationEntity(target.Operation), cancelled.Token));
+                try
+                {
+                    var entry = await gate.Entered.WaitAsync(deadline.Token);
+                    Assert.Equal(target.Ordinal, entry.Ordinal);
+                    Assert.Equal(target.Ordinal - 1, entry.CompletedBefore);
+                    Assert.StartsWith(target.SqlKind, entry.Sql.TrimStart(), StringComparison.OrdinalIgnoreCase);
+                    await using (var command = blocker.CreateCommand())
+                    {
+                        command.Transaction = transaction;
+                        command.CommandText = $"LOCK TABLE \"{schema}\".\"GlobalSettings\" IN ACCESS EXCLUSIVE MODE";
+                        await command.ExecuteNonQueryAsync(deadline.Token);
+                    }
+                    gate.Release();
+                    await WaitForSettingRelationWaitAsync(connectionString, readerPid, blocker.ProcessID,
+                        schema, target.SqlKind == "SELECT" ? "AccessShareLock" : "RowExclusiveLock", pending, deadline.Token);
+                    cancelled.Cancel();
+                    await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+                    if (!typed) { Assert.Equal(cancelled.Token, factory.LastToken); Assert.Equal(1, factory.Created); Assert.Equal(1, factory.AsyncDisposed); }
+                }
+                finally
+                {
+                    gate.Release();
+                    try { await ReapSettingOperationAsync(pending, cancelled); }
+                    finally { await transaction.RollbackAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)); }
+                }
+                await AssertSeedUnchangedAsync(schema, deadline.Token);
+                await SettingsPoolUsableAsync(source, deadline.Token);
+                await AssertSettingRecoveryAsync(repository, target.Operation, schema, deadline.Token);
+                if (!typed) { Assert.Equal(2, factory.Created); Assert.Equal(2, factory.AsyncDisposed); }
+            }
+        }
+        finally { await DropSchemaAsync(schema); }
+    }
+
+    [Fact]
+    public async Task EfFactoryTokenTimestampLoggingAndAsyncDisposalBoundariesRemainObservable()
+    {
+        var schema = SettingSchema("lifetime", false);
+        using var deadline = new CancellationTokenSource(TestLimit);
+        try
+        {
+            await CreateSchemaAsync(schema);
+            using var sql = new SettingsCommandGate();
+            await using var source = SettingsSource(schema, false, "lifetime", 1, sql);
+            var factory = new SettingsContextFactory(source);
+            var logger = new SettingsWarningLogger();
+            var repository = new GlobalSettingRepository(factory, logger);
+            using var caller = new CancellationTokenSource();
+            for (var iteration = 0; iteration < 2; iteration++)
+            {
+                var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                factory.BeforeCreate = async token => { entered.TrySetResult(true); await release.Task.WaitAsync(token); };
+                var entity = new GlobalSetting { Id = iteration == 0 ? 0 : 900000,
+                    Key = "line\r\nnext", Value = "value", CreatedAt = iteration == 0 ? default : StoredInstant, UpdatedAt = StoredInstant };
+                var pending = iteration == 0 ? repository.CreateAsync(entity, caller.Token) :
+                    ObserveMissingUpdateAsync(repository, entity, caller.Token);
+                try
+                {
+                    await entered.Task.WaitAsync(deadline.Token);
+                    Assert.Equal(caller.Token, factory.LastToken);
+                    Assert.Equal(iteration, factory.Created);
+                    Assert.Equal(iteration == 0 ? default : StoredInstant, entity.CreatedAt);
+                    Assert.Equal(StoredInstant, entity.UpdatedAt);
+                    // This delay tests the production 500ms threshold and inclusion of factory time.
+                    await Task.Delay(TimeSpan.FromMilliseconds(600), deadline.Token);
+                    var releasedAt = DateTime.UtcNow;
+                    release.TrySetResult(true);
+                    await pending.WaitAsync(deadline.Token);
+                    Assert.True(entity.UpdatedAt >= releasedAt);
+                    if (iteration == 0) { Assert.True(entity.CreatedAt >= releasedAt); Assert.Equal(entity.CreatedAt, entity.UpdatedAt); }
+                    else Assert.Equal(StoredInstant, entity.CreatedAt);
+                    Assert.Equal(iteration + 1, factory.Created);
+                    Assert.Equal(iteration + 1, factory.AsyncDisposed);
+                    Assert.Single(logger.Warnings); // Slow failing operation never emits the success warning.
+                    Assert.Equal("creating key line  next", logger.Warnings[0].OperationName);
+                    Assert.True(logger.Warnings[0].ElapsedMs > 500);
+                }
+                finally
+                {
+                    release.TrySetResult(true);
+                    if (!pending.IsCompleted) caller.Cancel();
+                    try { await pending.WaitAsync(TimeSpan.FromSeconds(5)); }
+                    catch (OperationCanceledException) when (caller.IsCancellationRequested) { }
+                }
+            }
+            Assert.Single(await IndependentRowsAsync(schema, deadline.Token));
+            await SettingsPoolUsableAsync(source, deadline.Token);
+        }
+        finally { await DropSchemaAsync(schema); }
+    }
+
+    private static async Task<int> ObserveMissingUpdateAsync(IGlobalSettingRepository repository,
+        GlobalSetting entity, CancellationToken token)
+    {
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repository.UpdateAsync(entity, token));
+        return 0;
+    }
+
+    private enum SettingOperation { List, Id, Key, Create, Update, UpsertInsert, UpsertUpdate, DeleteId, DeleteKey }
+    private static readonly SettingOperation[] SettingOperations = Enum.GetValues<SettingOperation>();
+    private sealed record SettingSqlTarget(SettingOperation Operation, int Ordinal, string SqlKind);
+    private sealed record SettingGateEntry(string Sql, int Ordinal, int CompletedBefore);
+    private sealed record SettingRow(int Id, string Key, string Value, string? Description,
+        DateTime CreatedAt, DateTime UpdatedAt);
+
+    private static string SettingSchema(string purpose, bool typed) =>
+        $"global_settings_{purpose}_{(typed ? "typed" : "ef")}_{Guid.NewGuid():N}";
+
+    private NpgsqlDataSource SettingsSource(string schema, bool typed, string purpose, int capacity,
+        SettingsCommandGate gate)
+    {
+        var connection = new NpgsqlConnectionStringBuilder(WithSearchPath(schema))
+        {
+            ApplicationName = $"gs_{(typed ? "t" : "e")}_{Guid.NewGuid():N}",
+            MaxPoolSize = capacity, MinPoolSize = 0, Multiplexing = false,
+            Timeout = 5, CommandTimeout = 15
+        };
+        Assert.InRange(connection.ApplicationName.Length, 1, 63);
+        gate.SourceConnectionString = connection.ConnectionString;
+        return new NpgsqlDataSourceBuilder(connection.ConnectionString).UseLoggerFactory(gate)
+            .EnableParameterLogging(false).Build();
+    }
+
+    private static IGlobalSettingRepository SettingsRepository(bool typed, NpgsqlDataSource source,
+        SettingsContextFactory factory) => typed ? new NpgsqlGlobalSettingRepository(source) :
+        new GlobalSettingRepository(factory, NullLogger<GlobalSettingRepository>.Instance);
+
+    private static GlobalSetting OperationEntity(SettingOperation operation) => operation == SettingOperation.Create
+        ? new GlobalSetting { Key = "created", Value = "new", Description = null,
+            CreatedAt = default, UpdatedAt = StoredInstant }
+        : new GlobalSetting { Id = 100, Key = "seed", Value = "after", Description = "updated-description",
+            CreatedAt = StoredInstant.AddDays(-1), UpdatedAt = StoredInstant };
+
+    private static async Task<object?> InvokeSettingOperationAsync(IGlobalSettingRepository repository,
+        SettingOperation operation, GlobalSetting entity, CancellationToken token) => operation switch
+    {
+        SettingOperation.List => await repository.ListAsync(token),
+        SettingOperation.Id => await repository.GetByIdAsync(100, token),
+        SettingOperation.Key => await repository.GetByKeyAsync("seed", token),
+        SettingOperation.Create => await repository.CreateAsync(entity, token),
+        SettingOperation.Update => await repository.UpdateAsync(entity, token),
+        SettingOperation.UpsertInsert => await repository.UpsertAsync("upsert-new", "new-upsert", null, token),
+        SettingOperation.UpsertUpdate => await repository.UpsertAsync("seed", "upserted", null, token),
+        SettingOperation.DeleteId => await repository.DeleteAsync(100, token),
+        SettingOperation.DeleteKey => await repository.DeleteByKeyAsync("seed", token),
+        _ => throw new ArgumentOutOfRangeException(nameof(operation))
+    };
+
+    private static SettingSqlTarget[] SettingSqlTargets(bool typed) => typed
+        ? new[]
+        {
+            new SettingSqlTarget(SettingOperation.List, 1, "SELECT"),
+            new SettingSqlTarget(SettingOperation.Id, 1, "SELECT"),
+            new SettingSqlTarget(SettingOperation.Key, 1, "SELECT"),
+            new SettingSqlTarget(SettingOperation.Create, 1, "INSERT"),
+            new SettingSqlTarget(SettingOperation.Update, 1, "UPDATE"),
+            new SettingSqlTarget(SettingOperation.UpsertInsert, 1, "INSERT"),
+            new SettingSqlTarget(SettingOperation.UpsertUpdate, 1, "INSERT"),
+            new SettingSqlTarget(SettingOperation.DeleteId, 1, "DELETE"),
+            new SettingSqlTarget(SettingOperation.DeleteKey, 1, "DELETE")
+        }
+        : new[]
+        {
+            new SettingSqlTarget(SettingOperation.List, 1, "SELECT"),
+            new SettingSqlTarget(SettingOperation.Id, 1, "SELECT"),
+            new SettingSqlTarget(SettingOperation.Key, 1, "SELECT"),
+            new SettingSqlTarget(SettingOperation.Create, 1, "INSERT"),
+            new SettingSqlTarget(SettingOperation.Update, 1, "UPDATE"),
+            new SettingSqlTarget(SettingOperation.UpsertUpdate, 1, "SELECT"),
+            new SettingSqlTarget(SettingOperation.UpsertInsert, 2, "INSERT"),
+            new SettingSqlTarget(SettingOperation.UpsertUpdate, 2, "UPDATE"),
+            new SettingSqlTarget(SettingOperation.DeleteId, 1, "SELECT"),
+            new SettingSqlTarget(SettingOperation.DeleteId, 2, "DELETE"),
+            new SettingSqlTarget(SettingOperation.DeleteKey, 1, "SELECT"),
+            new SettingSqlTarget(SettingOperation.DeleteKey, 2, "DELETE")
+        };
+
+    private async Task SeedSettingAsync(string schema, CancellationToken token)
+    {
+        await using var connection = new NpgsqlConnection(_fixture.ConnectionString);
+        await connection.OpenAsync(token);
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            TRUNCATE TABLE "{schema}"."GlobalSettings" RESTART IDENTITY;
+            INSERT INTO "{schema}"."GlobalSettings"
+                ("Id", "Key", "Value", "Description", "CreatedAt", "UpdatedAt")
+            VALUES (100, 'seed', 'before', 'before-description', @instant, @instant)
+            """;
+        command.Parameters.AddWithValue("instant", StoredInstant);
+        await command.ExecuteNonQueryAsync(token);
+    }
+
+    private async Task<SettingRow[]> IndependentRowsAsync(string schema, CancellationToken token)
+    {
+        await using var connection = new NpgsqlConnection(_fixture.ConnectionString);
+        await connection.OpenAsync(token);
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT \"Id\", \"Key\", \"Value\", \"Description\", \"CreatedAt\", \"UpdatedAt\" FROM \"{schema}\".\"GlobalSettings\"";
+        await using var reader = await command.ExecuteReaderAsync(token);
+        var rows = new List<SettingRow>();
+        while (await reader.ReadAsync(token)) rows.Add(new(reader.GetInt32(0), reader.GetString(1), reader.GetString(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetDateTime(4), reader.GetDateTime(5)));
+        return rows.ToArray();
+    }
+
+    private async Task<DateTime> ServerClockAsync(string schema, CancellationToken token)
+    {
+        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(WithSearchPath(schema)) { Pooling = false }.ConnectionString);
+        await connection.OpenAsync(token);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT clock_timestamp()";
+        return (DateTime)(await command.ExecuteScalarAsync(token))!;
+    }
+
+    private async Task AssertSeedUnchangedAsync(string schema, CancellationToken token)
+    {
+        var row = Assert.Single(await IndependentRowsAsync(schema, token));
+        AssertRow(row, 100, "seed", "before", "before-description", StoredInstant, StoredInstant);
+    }
+
+    private async Task AssertSettingRecoveryAsync(IGlobalSettingRepository repository, SettingOperation operation,
+        string schema, CancellationToken token)
+    {
+        var entity = OperationEntity(operation);
+        var result = await InvokeSettingOperationAsync(repository, operation, entity, token);
+        var rows = await IndependentRowsAsync(schema, token);
+        switch (operation)
+        {
+            case SettingOperation.List:
+                var list = Assert.IsAssignableFrom<IReadOnlyList<GlobalSetting>>(result);
+                AssertEntityMatchesIndependentRow(Assert.Single(list), Assert.Single(rows));
+                await AssertSeedUnchangedAsync(schema, token);
+                break;
+            case SettingOperation.Id:
+            case SettingOperation.Key:
+                AssertEntityMatchesIndependentRow(Assert.IsType<GlobalSetting>(result), Assert.Single(rows));
+                await AssertSeedUnchangedAsync(schema, token);
+                break;
+            case SettingOperation.Create:
+                Assert.Equal(2, rows.Length);
+                Assert.True(Assert.IsType<int>(result) > 0);
+                AssertRow(rows.Single(row => row.Key == "created"), entity.Id, "created", "new", null,
+                    entity.CreatedAt, entity.UpdatedAt);
+                break;
+            case SettingOperation.Update:
+                Assert.True(Assert.IsType<bool>(result));
+                AssertRow(Assert.Single(rows), 100, "seed", "after", "updated-description",
+                    entity.CreatedAt, entity.UpdatedAt);
+                break;
+            case SettingOperation.UpsertInsert:
+                Assert.True(Assert.IsType<bool>(result));
+                Assert.Equal(2, rows.Length);
+                var inserted = rows.Single(row => row.Key == "upsert-new");
+                Assert.Equal("new-upsert", inserted.Value);
+                Assert.Null(inserted.Description);
+                Assert.Equal(inserted.CreatedAt, inserted.UpdatedAt);
+                Assert.Equal(DateTimeKind.Utc, inserted.CreatedAt.Kind);
+                break;
+            case SettingOperation.UpsertUpdate:
+                Assert.True(Assert.IsType<bool>(result));
+                var updated = Assert.Single(rows);
+                Assert.Equal(100, updated.Id);
+                Assert.Equal("seed", updated.Key);
+                Assert.Equal("upserted", updated.Value);
+                Assert.Equal("before-description", updated.Description);
+                Assert.Equal(StoredInstant, updated.CreatedAt);
+                Assert.Equal(DateTimeKind.Utc, updated.UpdatedAt.Kind);
+                Assert.True(updated.UpdatedAt > StoredInstant);
+                break;
+            case SettingOperation.DeleteId:
+            case SettingOperation.DeleteKey:
+                Assert.True(Assert.IsType<bool>(result));
+                Assert.Empty(rows);
+                break;
+        }
+    }
+
+    private static void AssertRow(SettingRow row, int id, string key, string value, string? description,
+        DateTime created, DateTime updated)
+    {
+        Assert.Equal(id, row.Id);
+        Assert.Equal(key, row.Key);
+        Assert.Equal(value, row.Value);
+        Assert.Equal(description, row.Description);
+        Assert.Equal(DateTimeKind.Utc, row.CreatedAt.Kind);
+        Assert.Equal(DateTimeKind.Utc, row.UpdatedAt.Kind);
+        Assert.True((row.CreatedAt - created).Duration() <= TimeSpan.FromMicroseconds(1));
+        Assert.True((row.UpdatedAt - updated).Duration() <= TimeSpan.FromMicroseconds(1));
+    }
+
+    private static void AssertEntityMatchesIndependentRow(GlobalSetting actual, SettingRow expected)
+    {
+        Assert.Equal(DateTimeKind.Utc, actual.CreatedAt.Kind);
+        Assert.Equal(DateTimeKind.Utc, actual.UpdatedAt.Kind);
+        AssertRow(expected, actual.Id, actual.Key, actual.Value, actual.Description, actual.CreatedAt, actual.UpdatedAt);
+    }
+
+    private static void AssertUtcBetween(DateTime value, DateTime before, DateTime after)
+    {
+        Assert.Equal(DateTimeKind.Utc, value.Kind);
+        Assert.True(value >= before.AddTicks(-10) && value <= after.AddTicks(10));
+    }
+
+    private static PostgresException? FindPostgresException(Exception error)
+    {
+        for (Exception? current = error; current is not null; current = current.InnerException)
+            if (current is PostgresException postgres) return postgres;
+        return null;
+    }
+
+    private static async Task<int> SettingsPoolUsableAsync(NpgsqlDataSource source, CancellationToken token)
+    {
+        await using var connection = await source.OpenConnectionAsync(token);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1";
+        Assert.Equal(1, await command.ExecuteScalarAsync(token));
+        return connection.ProcessID;
+    }
+
+    private static async Task ReapSettingOperationAsync(Task pending, CancellationTokenSource cancelled)
+    {
+        cancelled.Cancel();
+        try { await pending.WaitAsync(TimeSpan.FromSeconds(5)); }
+        catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+    }
+
+    private static async Task WaitForSettingRelationWaitAsync(string connectionString, int readerPid,
+        int blockerPid, string schema, string mode, Task pending, CancellationToken token)
+    {
+        var application = new NpgsqlConnectionStringBuilder(connectionString).ApplicationName;
+        await using var observer = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(connectionString)
+            { Pooling = false, ApplicationName = "global_settings_observer" }.ConnectionString);
+        await observer.OpenAsync(token);
+        await using var command = observer.CreateCommand();
+        command.CommandText = """
+            SELECT activity.pid
+            FROM pg_catalog.pg_stat_activity activity
+            JOIN pg_catalog.pg_locks waiting ON waiting.pid = activity.pid
+            JOIN pg_catalog.pg_class relation ON relation.oid = waiting.relation
+            JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+            JOIN pg_catalog.pg_locks blocking ON blocking.relation = waiting.relation
+                AND blocking.pid = @blocker AND blocking.granted
+                AND blocking.mode = 'AccessExclusiveLock'
+            WHERE activity.pid = @reader AND activity.application_name = @application
+                AND activity.datname = current_database() AND activity.wait_event_type = 'Lock'
+                AND @blocker = ANY(pg_catalog.pg_blocking_pids(activity.pid))
+                AND waiting.locktype = 'relation' AND NOT waiting.granted AND waiting.mode = @mode
+                AND waiting.relation = pg_catalog.to_regclass(@relation)
+                AND namespace.nspname = @schema AND relation.relname = 'GlobalSettings'
+            """;
+        command.Parameters.AddWithValue("reader", readerPid);
+        command.Parameters.AddWithValue("blocker", blockerPid);
+        command.Parameters.AddWithValue("application", application);
+        command.Parameters.AddWithValue("mode", mode);
+        command.Parameters.AddWithValue("relation", $"\"{schema}\".\"GlobalSettings\"");
+        command.Parameters.AddWithValue("schema", schema);
+        while (true)
+        {
+            if (pending.IsCompleted) { await pending; throw new InvalidOperationException("Setting operation completed before its target SQL relation wait was observed."); }
+            if (await command.ExecuteScalarAsync(token) is int observed) { Assert.Equal(readerPid, observed); return; }
+            await Task.Delay(25, token);
+        }
+    }
+
+    private sealed class SettingsContextFactory(NpgsqlDataSource source) : IDbContextFactory<ConduitDbContext>
+    {
+        private readonly DbContextOptions<ConduitDbContext> _options =
+            new DbContextOptionsBuilder<ConduitDbContext>().UseNpgsql(source).Options;
+        private int _attempts, _created, _disposed;
+        public int Attempts => Volatile.Read(ref _attempts);
+        public int Created => Volatile.Read(ref _created);
+        public int AsyncDisposed => Volatile.Read(ref _disposed);
+        public CancellationToken LastToken { get; private set; }
+        public Func<CancellationToken, Task>? BeforeCreate { get; set; }
+        public ConduitDbContext CreateDbContext() => throw new InvalidOperationException("The repository contract uses the asynchronous factory.");
+        public async Task<ConduitDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _attempts);
+            LastToken = cancellationToken;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (BeforeCreate is not null) await BeforeCreate(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            Interlocked.Increment(ref _created);
+            return new SettingsTrackedContext(_options, () => Interlocked.Increment(ref _disposed));
+        }
+    }
+
+    private sealed class SettingsTrackedContext(DbContextOptions<ConduitDbContext> options, Action disposed)
+        : ConduitDbContext(options)
+    {
+        public override async ValueTask DisposeAsync()
+        {
+            try { await base.DisposeAsync(); }
+            finally { disposed(); }
+        }
+    }
+
+    private sealed record SettingsWarning(string OperationName, long ElapsedMs);
+    private sealed class SettingsWarningLogger : ILogger<GlobalSettingRepository>
+    {
+        public List<SettingsWarning> Warnings { get; } = new();
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public void Log<TState>(LogLevel level, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (level != LogLevel.Warning) return;
+            var fields = ((IEnumerable<KeyValuePair<string, object?>>)state!).ToArray();
+            var name = (string)fields.Single(field => field.Key == "OperationName").Value!;
+            var elapsed = Convert.ToInt64(fields.Single(field => field.Key == "ElapsedMs").Value);
+            Warnings.Add(new(name, elapsed));
+        }
+    }
+
+    private sealed class SettingsCommandGate(SettingSqlTarget? target = null) : ILoggerFactory, ILogger
+    {
+        private readonly ManualResetEventSlim _release = new(false);
+        private readonly TaskCompletionSource<SettingGateEntry> _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _armed, _claimed, _started, _completed;
+        // Used only to open private observer/blocker connections; never logged.
+        public string SourceConnectionString { get; set; } = string.Empty;
+        public int Started => Volatile.Read(ref _started);
+        public Task<SettingGateEntry> Entered => _entered.Task;
+        public void Arm() { Volatile.Write(ref _started, 0); Volatile.Write(ref _completed, 0); Volatile.Write(ref _armed, 1); }
+        public void Release() => _release.Set();
+        public ILogger CreateLogger(string categoryName) => categoryName == "Npgsql.Command" ? this : NullLogger.Instance;
+        public void AddProvider(ILoggerProvider provider) { }
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Debug;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public void Log<TState>(LogLevel level, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (state is not IEnumerable<KeyValuePair<string, object?>> fields) return;
+            var values = fields.ToArray();
+            if (values.Any(field => field.Key == "Parameters")) throw new InvalidOperationException("Setting SQL diagnostics must not receive parameter values.");
+            var sql = values.FirstOrDefault(field => field.Key == "CommandText").Value as string;
+            if (sql is null || !sql.Contains("\"GlobalSettings\"", StringComparison.Ordinal)) return;
+            if (eventId.Id == NpgsqlEventId.CommandExecutionCompleted) { Interlocked.Increment(ref _completed); return; }
+            if (eventId.Id != NpgsqlEventId.ExecutingCommand) return;
+            var ordinal = Interlocked.Increment(ref _started);
+            if (Volatile.Read(ref _armed) == 0 || target is null || ordinal != target.Ordinal) return;
+            if (!sql.TrimStart().StartsWith(target.SqlKind, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The intended setting SQL phase differs from the logged command.");
+            if (Interlocked.CompareExchange(ref _claimed, 1, 0) != 0) return;
+            _entered.TrySetResult(new(sql, ordinal, Volatile.Read(ref _completed)));
+            if (!_release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("Setting SQL before-send gate was not released within its bound.");
+        }
+        public void Dispose() { Release(); _release.Dispose(); }
+    }
+
+
 }

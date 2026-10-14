@@ -24,9 +24,11 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var querySince = since;
+        var queryCancellationToken = cancellationToken;
         return await context.RequestLogs
             .AsNoTracking()
-            .Where(request => request.Timestamp >= since)
+            .Where(request => request.Timestamp >= querySince)
             .GroupBy(request => new
             {
                 Model = request.ModelName,
@@ -36,7 +38,7 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
                 group.Key.Model,
                 group.Key.Provider,
                 group.Average(request => request.ResponseTimeMs)))
-            .ToListAsync(cancellationToken);
+            .ToListAsync(queryCancellationToken);
     }
 
     public async Task<IReadOnlyList<GatewayProviderCostMetric>> GetProviderCostsAsync(
@@ -44,14 +46,16 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var querySince = since;
+        var queryCancellationToken = cancellationToken;
         return await context.RequestLogs
             .AsNoTracking()
-            .Where(request => (request.BilledAtUtc ?? request.Timestamp) >= since && request.Cost > 0)
+            .Where(request => (request.BilledAtUtc ?? request.Timestamp) >= querySince && request.Cost > 0m)
             .GroupBy(request => request.ProviderType ?? "unknown")
             .Select(group => new GatewayProviderCostMetric(
                 group.Key,
                 group.Sum(request => request.Cost)))
-            .ToListAsync(cancellationToken);
+            .ToListAsync(queryCancellationToken);
     }
 
     public async Task<GatewayActiveEntityMetrics> GetActiveEntitiesAsync(
@@ -59,17 +63,20 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var keyQueryNow = now;
+        var keyQueryCancellationToken = cancellationToken;
         var activeVirtualKeyCount = await context.VirtualKeys
             .AsNoTracking()
             .CountAsync(
-                key => key.IsEnabled && (key.ExpiresAt == null || key.ExpiresAt > now),
-                cancellationToken);
+                key => key.IsEnabled && (key.ExpiresAt == null || key.ExpiresAt > keyQueryNow),
+                keyQueryCancellationToken);
+        var mappingsQueryCancellationToken = cancellationToken;
         var mappingsByProvider = await context.ModelProviderMappings
             .AsNoTracking()
             .Where(mapping => mapping.IsEnabled && mapping.Provider.IsEnabled)
             .GroupBy(mapping => mapping.ProviderId)
             .Select(group => new GatewayProviderMappingMetric(group.Key, group.Count()))
-            .ToListAsync(cancellationToken);
+            .ToListAsync(mappingsQueryCancellationToken);
         return new GatewayActiveEntityMetrics(activeVirtualKeyCount, mappingsByProvider);
     }
 
@@ -77,6 +84,7 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queueQueryCancellationToken = cancellationToken;
         var queueDepths = await context.AsyncTasks
             .AsNoTracking()
             .Where(task => !task.IsArchived && (task.State == 0 || task.State == 1))
@@ -85,7 +93,8 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
                 group.Key.Type,
                 group.Key.State,
                 group.Count()))
-            .ToListAsync(cancellationToken);
+            .ToListAsync(queueQueryCancellationToken);
+        var pendingQueryCancellationToken = cancellationToken;
         var oldestPendingTasks = await context.AsyncTasks
             .AsNoTracking()
             .Where(task => !task.IsArchived && task.State == 0)
@@ -93,7 +102,7 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
             .Select(group => new GatewayPendingTaskMetric(
                 group.Key,
                 group.Min(task => task.CreatedAt)))
-            .ToListAsync(cancellationToken);
+            .ToListAsync(pendingQueryCancellationToken);
         return new GatewayTaskQueueMetrics(queueDepths, oldestPendingTasks);
     }
 
@@ -103,18 +112,21 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryTaskType = taskType;
+        var querySince = since;
+        var queryCancellationToken = cancellationToken;
         return await context.AsyncTasks
             .AsNoTracking()
-            .Where(task => task.Type == taskType && task.CreatedAt >= since)
+            .Where(task => task.Type == queryTaskType && task.CreatedAt >= querySince)
             .GroupBy(task => task.State)
             .Select(group => new GatewayGenerationTaskMetric(
                 group.Key,
                 group.Count(),
                 group.Where(task => task.CompletedAt.HasValue).Any()
-                    ? group.Where(task => task.CompletedAt.HasValue)
+                    ? (double?)group.Where(task => task.CompletedAt.HasValue)
                         .Average(task => (task.CompletedAt!.Value - task.CreatedAt).TotalSeconds)
                     : null))
-            .ToListAsync(cancellationToken);
+            .ToListAsync(queryCancellationToken);
     }
 
     public async Task<IReadOnlyList<GatewayVirtualKeySpendMetric>> GetTopVirtualKeySpendAsync(
@@ -124,9 +136,13 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryFrom = from;
+        var queryBefore = before;
+        var queryLimit = limit;
+        var queryCancellationToken = cancellationToken;
         var spendByKey = await context.VirtualKeySpendHistory
             .AsNoTracking()
-            .Where(spend => spend.Timestamp >= from && spend.Timestamp < before)
+            .Where(spend => spend.Timestamp >= queryFrom && spend.Timestamp < queryBefore)
             .GroupBy(spend => spend.VirtualKeyId)
             .Select(group => new
             {
@@ -134,8 +150,8 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
                 TotalSpend = group.Sum(spend => spend.Amount)
             })
             .OrderByDescending(spend => spend.TotalSpend)
-            .Take(limit)
-            .ToListAsync(cancellationToken);
+            .Take(queryLimit)
+            .ToListAsync(queryCancellationToken);
         return spendByKey
             .Select(spend => new GatewayVirtualKeySpendMetric(
                 spend.VirtualKeyId,

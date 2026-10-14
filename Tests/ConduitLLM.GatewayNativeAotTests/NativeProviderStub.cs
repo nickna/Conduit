@@ -1,9 +1,10 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 
 /// <summary>
-/// Minimal OpenAI-compatible upstream used by the native process gate. Keeping the
+/// Minimal OpenAI-compatible and Exa upstream used by the native process gate. Keeping the
 /// provider in a separate process proves the real HTTP and SSE transport rather than
 /// replacing the production client with an in-memory test double.
 /// </summary>
@@ -13,6 +14,15 @@ internal static class NativeProviderStub
     public const string ImageBase64 =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
     public static byte[] ImageBytes => Convert.FromBase64String(ImageBase64);
+    internal const string AgenticPromptPrefix = "native-agentic-proof:";
+    internal const string AgenticQueryPrefix = "native-agentic-query:";
+    internal const string AgenticFinalContent = "Native agentic result café 雪 🔎";
+    internal const string FunctionSuccessResponse = """
+        {"requestId":"native-function-search","resolvedSearchType":"neural","results":[{"title":"Native search 雪 🔎","url":"https://example.test/native-function","publishedDate":"2026-10-11T00:00:00Z","author":"Native fixture","score":0.875,"text":"Unicode text café 雪","highlights":["snow 雪","café"],"highlightScores":[0.875,0.75],"summary":"Native summary","subpages":[{"title":"Nested 雪","url":"https://example.test/native-function/child","text":"Nested content"}],"extras":{"links":["https://example.test/link"],"imageLinks":["https://example.test/image.png"]}}]}
+        """;
+    private const string AgenticContractError = """
+        {"error":{"message":"Native agentic provider contract rejected.","type":"invalid_request_error","code":"native_agentic_contract_error"}}
+        """;
 
     private static int _nonStreamingRequests;
     private static int _streamingRequests;
@@ -21,8 +31,15 @@ internal static class NativeProviderStub
     private static int _authorizationFailures;
     private static int _activeCancellationRequests;
     private static int _cancellationsObserved;
+    private static int _functionRequests;
+    private static int _functionErrorRequests;
+    private static int _functionAuthorizationFailures;
+    private static int _functionChunkedRequests;
+    private static int _agenticToolCallRequests;
+    private static int _agenticFinalRequests;
+    private static int _agenticContractFailures;
 
-    public static async Task RunAsync(Uri baseAddress)
+    public static async Task RunAsync(Uri baseAddress, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(baseAddress);
         if (!baseAddress.IsLoopback || baseAddress.Scheme != Uri.UriSchemeHttp)
@@ -37,8 +54,8 @@ internal static class NativeProviderStub
 
         while (true)
         {
-            var client = await listener.AcceptTcpClientAsync();
-            _ = HandleClientAsync(client).ContinueWith(
+            var client = await listener.AcceptTcpClientAsync(cancellationToken);
+            _ = HandleClientAsync(client, cancellationToken).ContinueWith(
                 static task => Console.Error.WriteLine(task.Exception),
                 CancellationToken.None,
                 TaskContinuationOptions.OnlyOnFaulted,
@@ -46,12 +63,17 @@ internal static class NativeProviderStub
         }
     }
 
-    private static async Task HandleClientAsync(TcpClient client)
+    private static async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
     {
         using (client)
         await using (var stream = client.GetStream())
         {
-            var request = await ReadRequestAsync(stream);
+            NativeProviderHttpRequest? request;
+            using (var requestDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                requestDeadline.CancelAfter(TimeSpan.FromSeconds(10));
+                request = await NativeProviderHttpRequestReader.ReadAsync(stream, requestDeadline.Token);
+            }
             if (request is null)
             {
                 return;
@@ -66,9 +88,15 @@ internal static class NativeProviderStub
             if (request.Method == "GET" && request.Path == "/probe/state")
             {
                 var state = $$"""
-                    {"non_stream_requests":{{Volatile.Read(ref _nonStreamingRequests)}},"stream_requests":{{Volatile.Read(ref _streamingRequests)}},"image_requests":{{Volatile.Read(ref _imageRequests)}},"error_requests":{{Volatile.Read(ref _errorRequests)}},"authorization_failures":{{Volatile.Read(ref _authorizationFailures)}},"active_cancellation_requests":{{Volatile.Read(ref _activeCancellationRequests)}},"cancellations_observed":{{Volatile.Read(ref _cancellationsObserved)}}}
+                    {"non_stream_requests":{{Volatile.Read(ref _nonStreamingRequests)}},"stream_requests":{{Volatile.Read(ref _streamingRequests)}},"image_requests":{{Volatile.Read(ref _imageRequests)}},"error_requests":{{Volatile.Read(ref _errorRequests)}},"authorization_failures":{{Volatile.Read(ref _authorizationFailures)}},"active_cancellation_requests":{{Volatile.Read(ref _activeCancellationRequests)}},"cancellations_observed":{{Volatile.Read(ref _cancellationsObserved)}},"function_requests":{{Volatile.Read(ref _functionRequests)}},"function_error_requests":{{Volatile.Read(ref _functionErrorRequests)}},"function_authorization_failures":{{Volatile.Read(ref _functionAuthorizationFailures)}},"function_chunked_requests":{{Volatile.Read(ref _functionChunkedRequests)}},"agentic_tool_call_requests":{{Volatile.Read(ref _agenticToolCallRequests)}},"agentic_final_requests":{{Volatile.Read(ref _agenticFinalRequests)}},"agentic_contract_failures":{{Volatile.Read(ref _agenticContractFailures)}}}
                     """;
                 await WriteJsonAsync(stream, HttpStatusCode.OK, state);
+                return;
+            }
+
+            if (request.Method == "POST" && request.Path == "/search")
+            {
+                await WriteFunctionSearchAsync(stream, request);
                 return;
             }
 
@@ -103,6 +131,18 @@ internal static class NativeProviderStub
                 return;
             }
 
+            if (TryCreateAgenticResponse(request.Body, out var agentic))
+            {
+                if (agentic.Phase == AgenticPhase.ToolCall)
+                    Interlocked.Increment(ref _agenticToolCallRequests);
+                else if (agentic.Phase == AgenticPhase.Final)
+                    Interlocked.Increment(ref _agenticFinalRequests);
+                else
+                    Interlocked.Increment(ref _agenticContractFailures);
+                await WriteJsonAsync(stream, agentic.Status, agentic.Body);
+                return;
+            }
+
             if (request.Body.Contains("native-error", StringComparison.Ordinal))
             {
                 Interlocked.Increment(ref _errorRequests);
@@ -132,6 +172,234 @@ internal static class NativeProviderStub
                 """);
         }
     }
+
+    private static async Task WriteFunctionSearchAsync(NetworkStream stream, NativeProviderHttpRequest request)
+    {
+        if (request.Headers.TryGetValue("Transfer-Encoding", out var encoding) && encoding == "chunked")
+            Interlocked.Increment(ref _functionChunkedRequests);
+        if (!request.Headers.TryGetValue("x-api-key", out var apiKey) || apiKey != NativeFunctionFixture.ApiKey)
+        {
+            Interlocked.Increment(ref _functionAuthorizationFailures);
+            await WriteJsonAsync(stream, HttpStatusCode.Unauthorized,
+                """{"error":{"message":"native function credential rejected","type":"authentication_error"}}""");
+            return;
+        }
+
+        string? query = null;
+        try
+        {
+            using var body = JsonDocument.Parse(request.Body);
+            if (body.RootElement.ValueKind == JsonValueKind.Object &&
+                body.RootElement.TryGetProperty("query", out var value) && value.ValueKind == JsonValueKind.String)
+                query = value.GetString();
+        }
+        catch (JsonException) { }
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            Interlocked.Increment(ref _functionErrorRequests);
+            await WriteJsonAsync(stream, HttpStatusCode.BadRequest,
+                """{"error":{"message":"native function query is required","type":"invalid_request_error"}}""");
+            return;
+        }
+
+        if (query.Contains("native-function-error", StringComparison.Ordinal))
+        {
+            Interlocked.Increment(ref _functionErrorRequests);
+            await WriteJsonAsync(stream, HttpStatusCode.BadRequest,
+                """{"error":{"message":"native function upstream private diagnostic","type":"invalid_request_error","code":"native_bad_query"}}""");
+            return;
+        }
+
+        Interlocked.Increment(ref _functionRequests);
+        // Deliberately omit costDollars so execution must use configured pricing.
+        await WriteJsonAsync(stream, HttpStatusCode.OK, FunctionSuccessResponse);
+    }
+
+    private static bool TryCreateAgenticResponse(string body, out AgenticResponse response)
+    {
+        response = new AgenticResponse(AgenticPhase.Rejected, HttpStatusCode.BadRequest, AgenticContractError);
+        JsonDocument document;
+        try { document = JsonDocument.Parse(body); }
+        catch (JsonException) { return body.Contains(AgenticPromptPrefix, StringComparison.Ordinal); }
+        using (document)
+        {
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("messages", out var messages) ||
+                messages.ValueKind != JsonValueKind.Array)
+                return body.Contains(AgenticPromptPrefix, StringComparison.Ordinal);
+            var list = messages.EnumerateArray().ToArray();
+            var markerIndex = -1;
+            string? marker = null;
+            for (var index = 0; index < list.Length; index++)
+            {
+                if (!StringEquals(list[index], "role", "user") ||
+                    !TryString(list[index], "content", out var content) ||
+                    !content.StartsWith(AgenticPromptPrefix, StringComparison.Ordinal))
+                    continue;
+                if (markerIndex >= 0) return true;
+                markerIndex = index;
+                marker = content[AgenticPromptPrefix.Length..];
+            }
+            if (markerIndex < 0) return body.Contains(AgenticPromptPrefix, StringComparison.Ordinal);
+            if (!Guid.TryParseExact(marker, "N", out var markerId) || markerId == Guid.Empty ||
+                marker != markerId.ToString("N") || !TryString(root, "model", out var model) ||
+                string.IsNullOrWhiteSpace(model) ||
+                root.TryGetProperty("stream", out var stream) && stream.ValueKind != JsonValueKind.False ||
+                root.TryGetProperty("x_groq", out _) || root.TryGetProperty("provider_tool_usage", out _) ||
+                !TryAdvertisedFunction(root, out var functionName))
+                return true;
+            for (var index = 0; index < markerIndex; index++)
+                if (!StringEquals(list[index], "role", "system") ||
+                    !TryString(list[index], "content", out _))
+                    return true;
+
+            var callId = "call_native_" + marker;
+            var query = AgenticQueryPrefix + marker + " café 雪 🔎";
+            var arguments = WriteJson(writer =>
+            {
+                writer.WriteStartObject();
+                writer.WriteString("query", query);
+                writer.WriteEndObject();
+            });
+            if (list.Length == markerIndex + 1)
+            {
+                response = new AgenticResponse(AgenticPhase.ToolCall, HttpStatusCode.OK,
+                    WriteAgenticResponse(model, marker!, functionName, callId, arguments, final: false));
+                return true;
+            }
+            if (list.Length != markerIndex + 3 ||
+                !ValidAssistantCall(list[markerIndex + 1], functionName, callId, arguments) ||
+                !ValidToolResult(list[markerIndex + 2], callId))
+                return true;
+            response = new AgenticResponse(AgenticPhase.Final, HttpStatusCode.OK,
+                WriteAgenticResponse(model, marker!, functionName, callId, arguments, final: true));
+            return true;
+        }
+    }
+
+    private static bool TryAdvertisedFunction(JsonElement root, out string name)
+    {
+        name = string.Empty;
+        if (!root.TryGetProperty("tools", out var tools) || tools.ValueKind != JsonValueKind.Array ||
+            tools.GetArrayLength() != 1)
+            return false;
+        var tool = tools[0];
+        if (!PropertiesAre(tool, "type", "function") || !StringEquals(tool, "type", "function") ||
+            !tool.TryGetProperty("function", out var function) || function.ValueKind != JsonValueKind.Object ||
+            !TryString(function, "name", out name) || name.Length is < 1 or > 64 ||
+            !char.IsAsciiLetter(name[0]) || name.Any(character => !char.IsAsciiLetterOrDigit(character) && character != '_') ||
+            !function.TryGetProperty("parameters", out var parameters) ||
+            !PropertiesAre(parameters, "type", "properties", "required") ||
+            !StringEquals(parameters, "type", "object") ||
+            !parameters.TryGetProperty("properties", out var properties) || !PropertiesAre(properties, "query") ||
+            !properties.TryGetProperty("query", out var query) || !PropertiesAre(query, "type") ||
+            !StringEquals(query, "type", "string") ||
+            !parameters.TryGetProperty("required", out var required) || required.ValueKind != JsonValueKind.Array ||
+            required.GetArrayLength() != 1 || required[0].ValueKind != JsonValueKind.String || required[0].GetString() != "query")
+            return false;
+        return function.EnumerateObject().All(property => property.Name is "name" or "parameters" ||
+            property.Name == "description" &&
+            (property.Value.ValueKind is JsonValueKind.String or JsonValueKind.Null));
+    }
+
+    private static bool ValidAssistantCall(JsonElement assistant, string name, string id, string arguments)
+    {
+        if (!StringEquals(assistant, "role", "assistant") ||
+            assistant.TryGetProperty("content", out var content) &&
+            content.ValueKind != JsonValueKind.Null &&
+            (content.ValueKind != JsonValueKind.String || content.GetString() != string.Empty) ||
+            !assistant.TryGetProperty("tool_calls", out var calls) || calls.ValueKind != JsonValueKind.Array ||
+            calls.GetArrayLength() != 1)
+            return false;
+        var call = calls[0];
+        return PropertiesAre(call, "id", "type", "function") && StringEquals(call, "id", id) &&
+            StringEquals(call, "type", "function") && call.TryGetProperty("function", out var function) &&
+            PropertiesAre(function, "name", "arguments") && StringEquals(function, "name", name) &&
+            TryString(function, "arguments", out var actualArguments) && JsonEquals(actualArguments, arguments);
+    }
+
+    private static bool ValidToolResult(JsonElement tool, string id) =>
+        StringEquals(tool, "role", "tool") && StringEquals(tool, "tool_call_id", id) &&
+        TryString(tool, "content", out var content) && JsonEquals(content, FunctionSuccessResponse);
+
+    private static bool JsonEquals(string actual, string expected)
+    {
+        try
+        {
+            using var left = JsonDocument.Parse(actual);
+            using var right = JsonDocument.Parse(expected);
+            return JsonElement.DeepEquals(left.RootElement, right.RootElement);
+        }
+        catch (JsonException) { return false; }
+    }
+
+    private static bool TryString(JsonElement value, string propertyName, out string text)
+    {
+        text = string.Empty;
+        if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(propertyName, out var property) ||
+            property.ValueKind != JsonValueKind.String)
+            return false;
+        text = property.GetString()!;
+        return true;
+    }
+
+    private static bool StringEquals(JsonElement value, string name, string expected) =>
+        TryString(value, name, out var actual) && actual == expected;
+
+    private static bool PropertiesAre(JsonElement value, params string[] names) =>
+        value.ValueKind == JsonValueKind.Object && value.EnumerateObject().Count() == names.Length &&
+        names.All(name => value.TryGetProperty(name, out _));
+
+    private static string WriteAgenticResponse(string model, string marker, string functionName,
+        string callId, string arguments, bool final) => WriteJson(writer =>
+    {
+        writer.WriteStartObject();
+        writer.WriteString("id", "chatcmpl-native-agentic-" + marker + (final ? "-final" : "-tool"));
+        writer.WriteString("object", "chat.completion");
+        writer.WriteNumber("created", 1787800010);
+        writer.WriteString("model", model);
+        writer.WriteStartArray("choices");
+        writer.WriteStartObject();
+        writer.WriteNumber("index", 0);
+        writer.WriteStartObject("message");
+        writer.WriteString("role", "assistant");
+        if (final)
+            writer.WriteString("content", AgenticFinalContent);
+        else
+        {
+            writer.WriteNull("content");
+            writer.WriteStartArray("tool_calls");
+            writer.WriteStartObject();
+            writer.WriteString("id", callId);
+            writer.WriteString("type", "function");
+            writer.WriteStartObject("function");
+            writer.WriteString("name", functionName);
+            writer.WriteString("arguments", arguments);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+            writer.WriteEndArray();
+        }
+        writer.WriteEndObject();
+        writer.WriteString("finish_reason", final ? "stop" : "tool_calls");
+        writer.WriteEndObject();
+        writer.WriteEndArray();
+        writer.WriteStartObject("usage");
+        writer.WriteNumber("prompt_tokens", 10);
+        writer.WriteNumber("completion_tokens", 5);
+        writer.WriteNumber("total_tokens", 15);
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+    });
+
+    private static string WriteJson(Action<Utf8JsonWriter> write)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer)) write(writer);
+        return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    private enum AgenticPhase { Rejected, ToolCall, Final }
+    private sealed record AgenticResponse(AgenticPhase Phase, HttpStatusCode Status, string Body);
 
     private static async Task WriteStreamingResponseAsync(NetworkStream stream)
     {
@@ -219,68 +487,4 @@ internal static class NativeProviderStub
         await stream.FlushAsync();
     }
 
-    private static async Task<ProviderHttpRequest?> ReadRequestAsync(NetworkStream stream)
-    {
-        var headerBytes = new List<byte>(1024);
-        var singleByte = new byte[1];
-        while (headerBytes.Count < 64 * 1024)
-        {
-            var bytesRead = await stream.ReadAsync(singleByte);
-            if (bytesRead == 0)
-            {
-                return null;
-            }
-
-            headerBytes.Add(singleByte[0]);
-            var count = headerBytes.Count;
-            if (count >= 4 &&
-                headerBytes[count - 4] == '\r' &&
-                headerBytes[count - 3] == '\n' &&
-                headerBytes[count - 2] == '\r' &&
-                headerBytes[count - 1] == '\n')
-            {
-                break;
-            }
-        }
-
-        if (headerBytes.Count >= 64 * 1024)
-        {
-            throw new InvalidOperationException("Native provider request headers exceeded 64 KiB.");
-        }
-
-        var headerText = Encoding.ASCII.GetString(headerBytes.ToArray());
-        var lines = headerText.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
-        var requestLine = lines[0].Split(' ', 3);
-        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var line in lines.Skip(1))
-        {
-            var separator = line.IndexOf(':');
-            if (separator > 0)
-            {
-                headers[line[..separator]] = line[(separator + 1)..].Trim();
-            }
-        }
-
-        var contentLength = headers.TryGetValue("Content-Length", out var lengthValue)
-            ? int.Parse(lengthValue, System.Globalization.CultureInfo.InvariantCulture)
-            : 0;
-        if (contentLength > 1024 * 1024)
-        {
-            throw new InvalidOperationException("Native provider request body exceeded 1 MiB.");
-        }
-
-        var body = new byte[contentLength];
-        await stream.ReadExactlyAsync(body);
-        return new ProviderHttpRequest(
-            requestLine[0],
-            requestLine[1].Split('?', 2)[0],
-            headers,
-            Encoding.UTF8.GetString(body));
-    }
-
-    private sealed record ProviderHttpRequest(
-        string Method,
-        string Path,
-        IReadOnlyDictionary<string, string> Headers,
-        string Body);
 }

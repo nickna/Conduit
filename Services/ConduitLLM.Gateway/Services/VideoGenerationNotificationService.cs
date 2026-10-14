@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR;
 using ConduitLLM.Gateway.Hubs;
 using ConduitLLM.Core.Constants;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Contracts.SignalR;
 using ConduitLLM.Gateway.Interfaces;
 
 namespace ConduitLLM.Gateway.Services
@@ -29,22 +30,11 @@ namespace ConduitLLM.Gateway.Services
         {
             var groupName = SignalRConstants.Groups.VideoTask(requestId);
 
-            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.VideoGenerationStarted, new
-            {
-                taskId = requestId,
-                provider,
-                startedAt,
-                estimatedSeconds
-            });
-            await SendToPublicGroupAsync(groupName, SignalRConstants.ClientMethods.TaskProgress, new
-            {
-                taskId = requestId,
-                status = "started",
-                progress = 0,
-                message = $"Video generation started with {provider}",
-                startedAt,
-                estimatedSeconds
-            });
+            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.VideoGenerationStarted,
+                new VideoGenerationStartedNotification(requestId, provider, startedAt, estimatedSeconds));
+            await SendToPublicGroupAsync(groupName, SignalRConstants.ClientMethods.TaskProgress,
+                new PublicVideoGenerationStartedNotification(requestId, "started", 0,
+                    $"Video generation started with {provider}", startedAt, estimatedSeconds));
 
             Logger.LogDebug("Sent VideoGenerationStarted notification for task {TaskId}", requestId);
         }
@@ -53,26 +43,12 @@ namespace ConduitLLM.Gateway.Services
         {
             var groupName = SignalRConstants.Groups.VideoTask(requestId);
 
-            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.VideoGenerationProgress, new
-            {
-                taskId = requestId,
-                progressPercentage,
-                status,
-                message,
-                framesCompleted,
-                totalFrames,
-                timestamp = DateTime.UtcNow
-            });
-            await SendToPublicGroupAsync(groupName, SignalRConstants.ClientMethods.TaskProgress, new
-            {
-                taskId = requestId,
-                status,
-                progress = progressPercentage,
-                message,
-                framesCompleted,
-                totalFrames,
-                timestamp = DateTime.UtcNow
-            });
+            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.VideoGenerationProgress,
+                new VideoGenerationProgressNotification(requestId, progressPercentage, status, message,
+                    framesCompleted, totalFrames, DateTime.UtcNow));
+            await SendToPublicGroupAsync(groupName, SignalRConstants.ClientMethods.TaskProgress,
+                new PublicVideoGenerationProgressNotification(requestId, status, progressPercentage, message,
+                    framesCompleted, totalFrames, DateTime.UtcNow));
 
             Logger.LogDebug("Sent VideoGenerationProgress notification for task {TaskId}: {Progress}%",
                 requestId, progressPercentage);
@@ -82,26 +58,12 @@ namespace ConduitLLM.Gateway.Services
         {
             var groupName = SignalRConstants.Groups.VideoTask(requestId);
 
-            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.VideoGenerationCompleted, new
-            {
-                taskId = requestId,
-                status = "completed",
-                videoUrl,
-                previewUrl,
-                duration = duration.TotalSeconds,
-                resolution,
-                fileSize,
-                cost,
-                provider,
-                model,
-                completedAt = completedAt ?? DateTime.UtcNow,
-                generationDuration = generationDurationSeconds
-            });
-            await SendToPublicGroupAsync(groupName, SignalRConstants.ClientMethods.TaskCompleted, new
-            {
-                taskId = requestId,
-                videoUrl
-            });
+            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.VideoGenerationCompleted,
+                new VideoGenerationCompletedNotification(requestId, "completed", videoUrl, previewUrl,
+                    duration.TotalSeconds, resolution, fileSize, cost, provider, model,
+                    completedAt ?? DateTime.UtcNow, generationDurationSeconds));
+            await SendToPublicGroupAsync(groupName, SignalRConstants.ClientMethods.TaskCompleted,
+                new PublicVideoGenerationCompletedNotification(requestId, videoUrl));
 
             Logger.LogDebug("Sent VideoGenerationCompleted notification for task {TaskId}", requestId);
         }
@@ -110,23 +72,11 @@ namespace ConduitLLM.Gateway.Services
         {
             var groupName = SignalRConstants.Groups.VideoTask(requestId);
 
-            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.VideoGenerationFailed, new
-            {
-                taskId = requestId,
-                status = "failed",
-                error,
-                errorCode,
-                isRetryable,
-                retryCount,
-                maxRetries,
-                nextRetryAt,
-                failedAt = failedAt ?? DateTime.UtcNow
-            });
-            await SendToPublicGroupAsync(groupName, SignalRConstants.ClientMethods.TaskFailed, new
-            {
-                taskId = requestId,
-                error
-            });
+            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.VideoGenerationFailed,
+                new VideoGenerationFailedNotification(requestId, "failed", error, errorCode, isRetryable,
+                    retryCount, maxRetries, nextRetryAt, failedAt ?? DateTime.UtcNow));
+            await SendToPublicGroupAsync(groupName, SignalRConstants.ClientMethods.TaskFailed,
+                new PublicVideoGenerationFailedNotification(requestId, error));
 
             Logger.LogDebug("Sent VideoGenerationFailed notification for task {TaskId}", requestId);
         }
@@ -135,17 +85,10 @@ namespace ConduitLLM.Gateway.Services
         {
             var groupName = SignalRConstants.Groups.VideoTask(requestId);
 
-            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.VideoGenerationCancelled, new
-            {
-                taskId = requestId,
-                reason,
-                cancelledAt = DateTime.UtcNow
-            });
-            await SendToPublicGroupAsync(groupName, SignalRConstants.ClientMethods.TaskFailed, new
-            {
-                taskId = requestId,
-                error = reason ?? "Video generation was cancelled."
-            });
+            await SendToGroupAsync(groupName, SignalRConstants.ClientMethods.VideoGenerationCancelled,
+                new VideoGenerationCancelledNotification(requestId, reason, DateTime.UtcNow));
+            await SendToPublicGroupAsync(groupName, SignalRConstants.ClientMethods.TaskFailed,
+                new PublicVideoGenerationFailedNotification(requestId, reason ?? "Video generation was cancelled."));
 
             Logger.LogDebug("Sent VideoGenerationCancelled notification for task {TaskId}", requestId);
         }

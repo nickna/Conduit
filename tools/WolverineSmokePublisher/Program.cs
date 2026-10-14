@@ -14,9 +14,11 @@ using Wolverine;
 using Wolverine.Postgresql;
 
 var probeId = args.FirstOrDefault();
-if (string.IsNullOrWhiteSpace(probeId))
+var mediaNotifications = args is [_, "--media-notifications", var imageTaskId, var videoTaskId] &&
+                         !string.IsNullOrWhiteSpace(imageTaskId) && !string.IsNullOrWhiteSpace(videoTaskId);
+if (string.IsNullOrWhiteSpace(probeId) || (args.Length != 1 && !mediaNotifications))
 {
-    Console.Error.WriteLine("Usage: WolverineSmokePublisher <probe-id>");
+    Console.Error.WriteLine("Usage: WolverineSmokePublisher <probe-id> [--media-notifications <image-task-id> <video-task-id>]");
     return 2;
 }
 
@@ -44,6 +46,43 @@ await host.StartAsync();
 try
 {
     var bus = host.Services.GetRequiredService<IMessageBus>();
+
+    if (mediaNotifications)
+    {
+        var timestamp = new DateTime(2026, 10, 10, 1, 2, 3, DateTimeKind.Utc);
+        await bus.PublishAsync(new ImageGenerationProgress
+        {
+            TaskId = args[2],
+            ImagesCompleted = 1,
+            TotalImages = 2,
+            Status = "processing",
+            Message = $"native-progress-{probeId}",
+            CorrelationId = probeId,
+        });
+        await bus.PublishAsync(new VideoGenerationStarted
+        {
+            RequestId = args[3],
+            Provider = $"native-provider-{probeId}",
+            StartedAt = timestamp,
+            EstimatedSeconds = null,
+            CorrelationId = probeId,
+        });
+        await bus.PublishAsync(new VideoGenerationFailed
+        {
+            RequestId = args[3],
+            Error = $"native-failure-{probeId}",
+            Provider = $"native-provider-{probeId}",
+            ErrorCode = null,
+            IsRetryable = false,
+            RetryCount = 0,
+            MaxRetries = 3,
+            FailedAt = timestamp,
+            NextRetryAt = null,
+            CorrelationId = probeId,
+        });
+        Console.WriteLine($"Published Wolverine media notifications with id {probeId}.");
+        return 0;
+    }
 
     await bus.PublishAsync(new SpendUpdateRequested
     {

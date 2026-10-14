@@ -52,14 +52,18 @@ namespace ConduitLLM.Admin.Extensions
             services.AddSingleton<MediaStorageConfigurationGuard>();
             services.AddSingleton<IMediaStorageConfigurationGuard>(
                 provider => provider.GetRequiredService<MediaStorageConfigurationGuard>());
+#if !CONDUIT_NATIVE_AOT
             services.AddHostedService<MediaStorageConfigurationGuard>(
                 provider => provider.GetRequiredService<MediaStorageConfigurationGuard>());
+#endif
 
             // Register the unified cleanup service - it will check IsSchedulerEnabled internally
             // Uses distributed locking to ensure only one instance runs across a cluster
             services.AddSingleton<MediaCleanupService>();
+#if !CONDUIT_NATIVE_AOT
             services.AddHostedService(
                 provider => provider.GetRequiredService<MediaCleanupService>());
+#endif
 
             return services;
         }

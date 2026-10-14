@@ -74,8 +74,10 @@ public sealed class RequestLogRuntimePersistenceParityTests
             await CreateSchemaAsync(efSchema);
             await CreateSchemaAsync(npgsqlSchema);
 
+            await using var efSource = NpgsqlDataSource.Create(WithSearchPath(efSchema));
+
             var efId = await ExerciseContractAsync(
-                new EfRequestLogRuntimeStore(new TestDbContextFactory(WithSearchPath(efSchema))),
+                new EfRequestLogRuntimeStore(new TestDbContextFactory(efSource)),
                 record);
             await using var dataSource = NpgsqlDataSource.Create(WithSearchPath(npgsqlSchema));
             var npgsqlId = await ExerciseContractAsync(
@@ -172,12 +174,12 @@ public sealed class RequestLogRuntimePersistenceParityTests
         }.ConnectionString;
     }
 
-    private sealed class TestDbContextFactory(string connectionString) :
+    private sealed class TestDbContextFactory(NpgsqlDataSource source) :
         IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
             new DbContextOptionsBuilder<ConduitDbContext>()
-                .UseNpgsql(connectionString)
+                .UseNpgsql(source)
                 .Options;
 
         public ConduitDbContext CreateDbContext() => new(_options);

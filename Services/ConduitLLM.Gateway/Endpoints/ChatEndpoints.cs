@@ -31,6 +31,7 @@ namespace ConduitLLM.Gateway.Endpoints
         private readonly JsonSerializerOptions _jsonSerializerOptions;
         private readonly ConduitLLM.Core.Interfaces.IUsageEstimationService _usageEstimationService;
         private readonly ConduitLLM.Functions.Interfaces.IFunctionConfigurationRepository? _functionConfigRepository;
+        private readonly ConduitLLM.Persistence.Interfaces.IFunctionExecutionConfigurationStore? _runtimeConfigurationStore;
         private readonly ConduitLLM.Configuration.Interfaces.IGlobalSettingsCacheService _globalSettingsCacheService;
         private readonly UsageTrackingOptions _usageTrackingOptions;
         private readonly IChatSpendEstimator? _chatSpendEstimator;
@@ -74,6 +75,57 @@ namespace ConduitLLM.Gateway.Endpoints
             // Default to External so an unwired construction sanitizes rather than leaks.
             _providerErrorTranslator = providerErrorTranslator
                 ?? new ProviderErrorTranslator(new ConduitLLM.Core.Configuration.CustomerErrorOptions());
+        }
+
+        /// <summary>
+        /// Creates a chat handler over scalar function configuration reads while
+        /// preserving the public repository constructor and its optional defaults.
+        /// </summary>
+        public static ChatEndpoints CreateWithRuntimePersistence(
+            Conduit conduit,
+            ILogger<ChatEndpoints> logger,
+            ConduitLLM.Configuration.Interfaces.IModelProviderMappingService modelMappingService,
+            JsonSerializerOptions jsonSerializerOptions,
+            IEventPublisher eventPublisher,
+            ConduitLLM.Configuration.Interfaces.IGlobalSettingsCacheService globalSettingsCacheService,
+            ConduitLLM.Core.Interfaces.IUsageEstimationService usageEstimationService,
+            ConduitLLM.Persistence.Interfaces.IFunctionExecutionConfigurationStore configurationStore,
+            IOptions<UsageTrackingOptions>? usageTrackingOptions = null,
+            IChatSpendEstimator? chatSpendEstimator = null,
+            ISpendReservationService? spendReservationService = null,
+            IOptions<BillingAdmissionOptions>? billingAdmissionOptions = null,
+            IHttpContextAccessor? httpContextAccessor = null,
+            ConduitLLM.Core.Interfaces.IProviderErrorTranslator? providerErrorTranslator = null,
+            ConduitLLM.Core.Interfaces.ICostCalculationService? costCalculationService = null,
+            ConduitLLM.Gateway.Services.IToolCostCalculationService? toolCostCalculationService = null) =>
+            new(conduit, logger, modelMappingService, jsonSerializerOptions, eventPublisher,
+                globalSettingsCacheService, usageEstimationService, configurationStore, usageTrackingOptions,
+                chatSpendEstimator, spendReservationService, billingAdmissionOptions, httpContextAccessor,
+                providerErrorTranslator, costCalculationService, toolCostCalculationService);
+
+        private ChatEndpoints(
+            Conduit conduit,
+            ILogger<ChatEndpoints> logger,
+            ConduitLLM.Configuration.Interfaces.IModelProviderMappingService modelMappingService,
+            JsonSerializerOptions jsonSerializerOptions,
+            IEventPublisher eventPublisher,
+            ConduitLLM.Configuration.Interfaces.IGlobalSettingsCacheService globalSettingsCacheService,
+            ConduitLLM.Core.Interfaces.IUsageEstimationService usageEstimationService,
+            ConduitLLM.Persistence.Interfaces.IFunctionExecutionConfigurationStore configurationStore,
+            IOptions<UsageTrackingOptions>? usageTrackingOptions,
+            IChatSpendEstimator? chatSpendEstimator,
+            ISpendReservationService? spendReservationService,
+            IOptions<BillingAdmissionOptions>? billingAdmissionOptions,
+            IHttpContextAccessor? httpContextAccessor,
+            ConduitLLM.Core.Interfaces.IProviderErrorTranslator? providerErrorTranslator,
+            ConduitLLM.Core.Interfaces.ICostCalculationService? costCalculationService,
+            ConduitLLM.Gateway.Services.IToolCostCalculationService? toolCostCalculationService)
+            : this(conduit, logger, modelMappingService, jsonSerializerOptions, eventPublisher,
+                globalSettingsCacheService, usageEstimationService, functionConfigRepository: null,
+                usageTrackingOptions, chatSpendEstimator, spendReservationService, billingAdmissionOptions,
+                httpContextAccessor, providerErrorTranslator, costCalculationService, toolCostCalculationService)
+        {
+            _runtimeConfigurationStore = configurationStore ?? throw new ArgumentNullException(nameof(configurationStore));
         }
 
         /// <summary>

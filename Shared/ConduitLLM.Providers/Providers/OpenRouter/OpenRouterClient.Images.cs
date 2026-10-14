@@ -46,7 +46,7 @@ namespace ConduitLLM.Providers.OpenRouter
 
                 // Image-to-image: map the base64 input image to OpenRouter's input_references.
                 if (!string.IsNullOrEmpty(request.Image))
-                    body["input_references"] = new[] { $"data:image/png;base64,{request.Image}" };
+                    body["input_references"] = new List<string> { $"data:image/png;base64,{request.Image}" };
 
                 // Pass through extension data, excluding parameters OpenRouter's image endpoint does not
                 // use (stream / response_format) and anything already mapped above.

@@ -30,9 +30,11 @@ public sealed class ProviderKeyCredentialValidator
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryProviderId = providerId;
+        var queryToken = cancellationToken;
         var currentCount = await context.ProviderKeyCredentials.CountAsync(
-            credential => credential.ProviderId == providerId,
-            cancellationToken);
+            credential => credential.ProviderId == queryProviderId,
+            queryToken);
         if (currentCount < MaxKeysPerProvider)
         {
             return ConduitValidationResult.Success();
@@ -55,9 +57,11 @@ public sealed class ProviderKeyCredentialValidator
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryId = id;
+        var queryToken = cancellationToken;
         var credential = await context.ProviderKeyCredentials
             .AsNoTracking()
-            .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(candidate => candidate.Id == queryId, queryToken);
         if (credential is null)
         {
             _logger.LogWarning("Set-primary rejected: key {KeyId} not found", id);
@@ -81,9 +85,11 @@ public sealed class ProviderKeyCredentialValidator
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryId = id;
+        var queryToken = cancellationToken;
         var credential = await context.ProviderKeyCredentials
             .AsNoTracking()
-            .FirstOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(candidate => candidate.Id == queryId, queryToken);
         if (credential is null)
         {
             _logger.LogWarning("Disable rejected: key {KeyId} not found", id);
@@ -108,9 +114,11 @@ public sealed class ProviderKeyCredentialValidator
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryProviderId = providerId;
+        var queryToken = cancellationToken;
         var hasEnabled = await context.ProviderKeyCredentials.AnyAsync(
-            credential => credential.ProviderId == providerId && credential.IsEnabled,
-            cancellationToken);
+            credential => credential.ProviderId == queryProviderId && credential.IsEnabled,
+            queryToken);
         if (hasEnabled)
         {
             return ConduitValidationResult.Success();

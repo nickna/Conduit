@@ -106,19 +106,38 @@ public class MediaRecordRepository : RepositoryBase<MediaRecord, Guid>, IMediaRe
         bool includeDeleted = false,
         CancellationToken cancellationToken = default)
     {
-        return await ExecuteAsync(async context =>
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        await using var context = await DbContextFactory.CreateDbContextAsync(cancellationToken);
+        var ownerId = virtualKeyId;
+        var queryCancellationToken = cancellationToken;
+        List<MediaRecord> records;
+        if (includeDeleted)
         {
-            var query = GetDbSet(context).AsNoTracking();
-            if (includeDeleted)
-            {
-                query = query.IgnoreQueryFilters();
-            }
-
-            return await query
-                .Where(m => m.VirtualKeyId == virtualKeyId)
+            records = await context.MediaRecords
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(m => m.VirtualKeyId == ownerId)
                 .OrderByDescending(m => m.CreatedAt)
-                .ToListAsync(cancellationToken);
-        }, cancellationToken, $"getting by virtual key ID {virtualKeyId}");
+                .ToListAsync(queryCancellationToken);
+        }
+        else
+        {
+            // The experimental compiled model omits global query filters.
+            records = await context.MediaRecords
+                .AsNoTracking()
+                .Where(m => m.VirtualKeyId == ownerId && m.DeletedAt == null)
+                .OrderByDescending(m => m.CreatedAt)
+                .ToListAsync(queryCancellationToken);
+        }
+
+        stopwatch.Stop();
+        if (stopwatch.ElapsedMilliseconds > SlowQueryThresholdMs)
+        {
+            Logger.LogWarning("Slow repository operation: {OperationName} {EntityType} took {ElapsedMs}ms",
+                $"getting by virtual key ID {virtualKeyId}", EntityTypeName, stopwatch.ElapsedMilliseconds);
+        }
+
+        return records;
     }
 
     /// <inheritdoc/>

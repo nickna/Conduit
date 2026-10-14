@@ -7,6 +7,8 @@ using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Gateway.Billing;
 using ConduitLLM.Gateway.UsageTracking;
+using ConduitLLM.Persistence.Interfaces;
+using ConduitLLM.Persistence.Npgsql;
 using Microsoft.EntityFrameworkCore;
 
 namespace ConduitLLM.Gateway.Extensions;
@@ -48,11 +50,20 @@ public static class BillingServicesExtensions
         // Ephemeral key service for direct browser-to-API authentication (used for all direct access including SignalR)
         services.AddScoped<IEphemeralKeyService, EphemeralKeyService>();
 
-        // Billing audit service for comprehensive billing event tracking - with leader election
+        // Each native host flushes its own in-memory billing audit queue.
+#if CONDUIT_NATIVE_AOT
+        services.AddSingleton<IBillingAuditRuntimeWriter, NpgsqlBillingAuditRuntimeWriter>();
+        services.AddSingleton<IBillingAuditService>(provider => BillingAuditService.CreateWithRuntimePersistence(
+            provider,
+            provider.GetRequiredService<IBillingAuditRuntimeWriter>(),
+            provider.GetRequiredService<ILogger<BillingAuditService>>()));
+        services.AddSingleton<IHostedService>(provider => (BillingAuditService)provider.GetRequiredService<IBillingAuditService>());
+#else
         services.AddSingleton<IBillingAuditService, BillingAuditService>();
         services.AddLeaderElectedHostedService<BillingAuditService>(
             provider => (BillingAuditService)provider.GetRequiredService<IBillingAuditService>(),
             "BillingAuditService", ownsInnerService: false);
+#endif
 
         services.AddOptions<ConduitLLM.Configuration.Options.BillingReconciliationOptions>()
             .BindConfiguration(ConduitLLM.Configuration.Options.BillingReconciliationOptions.SectionName)
@@ -64,10 +75,12 @@ public static class BillingServicesExtensions
                     options.MaxCatchUpWindowsPerRun is >= 1 and <= 168,
                 "BillingReconciliation settings are outside their supported ranges.")
             .ValidateOnStart();
+#if !CONDUIT_NATIVE_AOT
         services.AddSingleton<BillingReconciliationService>();
         services.AddLeaderElectedHostedService<BillingReconciliationService>(
             provider => provider.GetRequiredService<BillingReconciliationService>(),
             "BillingReconciliationService", ownsInnerService: false);
+#endif
 
         // Pricing rules engine services for flexible rules-based pricing
         services.AddScoped<IPricingRulesEvaluator, PricingRulesEvaluator>();
@@ -76,11 +89,13 @@ public static class BillingServicesExtensions
         // Cached pricing rules service for parsed configuration caching (uses the shared application FusionCache)
         services.AddPricingRulesCache();
 
+#if !CONDUIT_NATIVE_AOT
         // Pricing audit service for rules-based pricing evaluation tracking - with leader election
         services.AddSingleton<IPricingAuditService, PricingAuditService>();
         services.AddLeaderElectedHostedService<PricingAuditService>(
             provider => (PricingAuditService)provider.GetRequiredService<IPricingAuditService>(),
             "PricingAuditService", ownsInnerService: false);
+#endif
 
         return services;
     }

@@ -89,7 +89,8 @@ public sealed class ReleaseMigrationCommandTests
 
         Assert.Equal(1, await MigrationRunner.RunAsync());
         Assert.Equal(0, await GetAppliedMigrationCountAsync(database.ConnectionString));
-        var probe = new SchemaVersionProbe(new TestContextFactory(database.ConnectionString));
+        await using var dataSource = NpgsqlDataSource.Create(database.ConnectionString);
+        var probe = new SchemaVersionProbe(dataSource);
         Assert.False((await probe.GetStatusAsync()).IsCurrent);
         foreach (var schema in new[] { "wolverine_conduit_gateway", "wolverine_conduit_admin", "wolverine_queues" })
         {
@@ -223,15 +224,11 @@ public sealed class ReleaseMigrationCommandTests
         await using var context = CreateContext(connectionString);
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
 
-        var probe = new SchemaVersionProbe(new TestContextFactory(connectionString));
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        var probe = new SchemaVersionProbe(dataSource);
         var status = await probe.GetStatusAsync();
         Assert.True(status.IsCurrent);
         Assert.Equal(ConduitSchemaVersion.Current, status.AppliedVersion);
-    }
-
-    private sealed class TestContextFactory(string connectionString) : IDbContextFactory<ConduitDbContext>
-    {
-        public ConduitDbContext CreateDbContext() => ReleaseMigrationCommandTests.CreateContext(connectionString);
     }
 
     private static async Task<int> GetAppliedMigrationCountAsync(string connectionString)

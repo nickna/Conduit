@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using ConduitLLM.Configuration.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace ConduitLLM.Core.Extensions
 {
@@ -52,6 +53,7 @@ namespace ConduitLLM.Core.Extensions
         /// <param name="redisDatabase">Redis database number for this service's SignalR backplane.</param>
         /// <param name="serviceName">Display name for console logging (e.g., "Conduit", "ConduitLLM.Admin").</param>
         /// <param name="configureHubOptions">Optional callback to add service-specific hub options (e.g., filters).</param>
+        /// <param name="additionalPayloadResolver">Generated metadata for service-specific hub payloads.</param>
         /// <returns>The configured SignalR server builder for further customization.</returns>
         public static ISignalRServerBuilder AddConduitSignalR(
             this IServiceCollection services,
@@ -60,7 +62,8 @@ namespace ConduitLLM.Core.Extensions
             string redisChannelPrefix,
             int redisDatabase,
             string serviceName,
-            Action<HubOptions>? configureHubOptions = null)
+            Action<HubOptions>? configureHubOptions = null,
+            IJsonTypeInfoResolver? additionalPayloadResolver = null)
         {
             var signalRBuilder = services.AddSignalR(options =>
             {
@@ -76,14 +79,18 @@ namespace ConduitLLM.Core.Extensions
             signalRBuilder.AddJsonProtocol(options =>
             {
                 var resolverChain = options.PayloadSerializerOptions.TypeInfoResolverChain;
-                resolverChain.Insert(
-                    0,
-                    ConfigurationSignalRJsonContext.Default);
+                resolverChain.Clear();
+                resolverChain.Add(ConfigurationSignalRJsonContext.Default);
+                if (additionalPayloadResolver is not null)
+                {
+                    resolverChain.Add(additionalPayloadResolver);
+                }
             });
 
             // The JIT service retains its existing MessagePack wire contract. The first
             // NativeAOT variant is compile-time JSON-only so the reflection-oriented
-            // contractless resolver and its package are absent from the native graph.
+            // contractless client protocol and its package are absent from the native
+            // graph. The Redis backplane retains its internal MessagePack transport.
 #if !CONDUIT_NATIVE_AOT
             if (ConduitSignalRProtocolPolicy.IsMessagePackEnabled)
             {

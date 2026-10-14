@@ -14,14 +14,117 @@ param(
 
     [string] $AdminCanaryEvidencePath,
 
+    [string] $AdminBenchmarkPath,
+
+    [string] $QualificationEvidencePath,
+
+    [string] $NativePackagingDirectory,
+
     [switch] $ReportOnly
 )
 
+$Service = $Service.ToLowerInvariant()
 $ErrorActionPreference = 'Stop'
-$policy = Get-Content -LiteralPath $PolicyPath -Raw | ConvertFrom-Json
-$benchmark = Get-Content -LiteralPath $BenchmarkPath -Raw | ConvertFrom-Json
-$evidence = Get-Content -LiteralPath $CanaryEvidencePath -Raw | ConvertFrom-Json
+. (Join-Path $PSScriptRoot 'native-benchmark-image-evidence.ps1')
+. (Join-Path $PSScriptRoot 'native-benchmark-attempt-evidence.ps1')
+. (Join-Path $PSScriptRoot 'native-benchmark-qualification-evidence.ps1')
 $failures = [System.Collections.Generic.List[string]]::new()
+$policyDocument = $null
+$canaryDocument = $null
+$adminCanaryDocument = $null
+$qualificationEvidence = $null
+$adminQualificationEvidence = $null
+$adminBenchmarkAttemptEvidence = $null
+$benchmarkDocument = $null
+$benchmarkAttemptEvidence = $null
+
+function ConvertTo-NativePromotionObject($Value) {
+    return (Get-NativeEvidenceObject $Value) | ConvertTo-Json -Depth 64 -Compress | ConvertFrom-Json -DateKind String
+}
+function Read-NativePromotionSelectedAttempt([string] $OutputPath, [string] $ExpectedService, $Qualification) {
+    if ($null -ne $Qualification -and $Qualification['approval']['selection'] -ceq 'historical') {
+        if ($policy.historicalEvidencePolicy -isnot [string] -or $policy.historicalEvidencePolicy -cne 'approved-archive') {
+            throw 'Historical benchmark selection is not permitted by the policy.'
+        }
+        return ,(Read-NativeBenchmarkAttemptArchiveEvidence -OutputPath $OutputPath -Service $ExpectedService -AttemptId $Qualification['approval']['attemptId'])
+    }
+    return ,(Read-NativeBenchmarkAttemptEvidence -OutputPath $OutputPath -Service $ExpectedService)
+}
+function Assert-NativePromotionAttemptUnchanged($Before, $After) {
+    foreach ($field in 'latestSha256', 'attemptSha256', 'reportSha256', 'reportPath') {
+        if ($After[$field] -cne $Before[$field]) { throw 'Benchmark attempt evidence changed during evaluation.' }
+    }
+    foreach ($field in 'attemptId', 'service') {
+        if ($After['attempt'][$field] -cne $Before['attempt'][$field]) { throw 'Benchmark attempt identity changed during evaluation.' }
+    }
+    if ($Before.Contains('latestAttemptSha256') -and $After['latestAttemptSha256'] -cne $Before['latestAttemptSha256']) {
+        throw 'Acknowledged failed benchmark attempt changed during evaluation.'
+    }
+}
+
+try {
+    $policyDocument = Read-NativeBenchmarkAttemptDocument -Path $PolicyPath
+    $policy = ConvertTo-NativePromotionObject $policyDocument['value']
+}
+catch {
+    $policy = [pscustomobject]@{}
+    $failures.Add('promotion policy document is malformed or exceeds its bounded JSON contract')
+}
+try {
+    $canaryDocument = Read-NativeBenchmarkAttemptDocument -Path $CanaryEvidencePath
+    $evidence = ConvertTo-NativePromotionObject $canaryDocument['value']
+}
+catch {
+    $evidence = [pscustomobject]@{}
+    $failures.Add('canary evidence document is malformed or exceeds its bounded JSON contract')
+}
+if ([string]::IsNullOrWhiteSpace($QualificationEvidencePath)) {
+    $failures.Add('accepted benchmark qualification evidence is required')
+}
+else {
+    try { $qualificationEvidence = Read-NativeBenchmarkQualificationEvidence -Path $QualificationEvidencePath -Service $Service }
+    catch { $failures.Add('accepted benchmark qualification evidence could not be verified') }
+}
+
+$historicalSelection = $null -ne $qualificationEvidence -and $qualificationEvidence['approval']['selection'] -ceq 'historical'
+$selectedBenchmarkPath = $BenchmarkPath
+if ($historicalSelection) {
+    try {
+        $benchmarkAttemptEvidence = Read-NativePromotionSelectedAttempt $BenchmarkPath $Service $qualificationEvidence
+        $selectedBenchmarkPath = $benchmarkAttemptEvidence['reportPath']
+    }
+    catch {
+        $selectedBenchmarkPath = $null
+        $failures.Add('benchmark approved historical collection attempt could not be verified against the original archive')
+    }
+}
+try {
+    # Preserve integer and finite fractional metrics, while rejecting duplicate
+    # JSON keys before PowerShell object conversion can discard them.
+    if ($null -eq $selectedBenchmarkPath) { throw 'No approved historical benchmark was selected.' }
+    $benchmarkDocument = Read-NativeImageOciEvidenceDocument -Path $selectedBenchmarkPath
+    $benchmarkValue = Get-NativeEvidenceObject $benchmarkDocument['value']
+    $benchmark = ConvertTo-NativePromotionObject $benchmarkValue
+}
+catch {
+    $benchmark = [pscustomobject]@{}
+    $failures.Add('benchmark document is malformed or exceeds its bounded JSON contract')
+}
+if ($null -ne $benchmarkDocument) {
+    try {
+        if (-not $historicalSelection) {
+            $benchmarkAttemptEvidence = Read-NativePromotionSelectedAttempt $BenchmarkPath $Service $qualificationEvidence
+        }
+        if ($benchmarkAttemptEvidence['reportSha256'] -cne $benchmarkDocument['sha256']) {
+            throw 'Benchmark original report changed before its attempt was read.'
+        }
+    }
+    catch {
+        $benchmarkAttemptEvidence = $null
+        if ($historicalSelection) { $failures.Add('benchmark approved historical collection attempt could not be verified against the original archive') }
+        else { $failures.Add('benchmark latest successful collection attempt could not be verified against the original report') }
+    }
+}
 
 function Test-FiniteNumber($Value) {
     if ($null -eq $Value -or $Value -is [string] -or $Value -is [bool]) { return $false }
@@ -89,7 +192,8 @@ function Test-AbsoluteUrl([string] $Value) {
 }
 
 function Test-CanaryEvidence($Candidate, [string] $ExpectedService, [string] $Description) {
-    if ($Candidate.schemaVersion -ne 1) { $failures.Add("$Description schema version is not supported") }
+    $schemaVersion = Get-RequiredPositiveInteger $Candidate 'schemaVersion' "$Description schema version"
+    if ($schemaVersion -ne 1) { $failures.Add("$Description schema version is not supported") }
     if ($Candidate.service -ne $ExpectedService) { $failures.Add("$Description service is not '$ExpectedService'") }
 
     foreach ($digestProperty in 'candidateDigest', 'correspondingJitDigest') {
@@ -175,153 +279,396 @@ if ($policy.status -ne 'open') {
 elseif (@($policy.blockedBy).Count -ne 0) {
     $failures.Add('promotion policy is open but still records blockers')
 }
-if ($policy.schemaVersion -ne 1) { $failures.Add('promotion policy schema version is not supported') }
+$policySchema = Get-RequiredPositiveInteger $policy 'schemaVersion' 'promotion policy schema version'
+if ($policySchema -ne 1) { $failures.Add('promotion policy schema version is not supported') }
+if ($policy.historicalEvidencePolicy -isnot [string] -or $policy.historicalEvidencePolicy -cnotin @('latest-only', 'approved-archive')) {
+    $failures.Add('promotion historical evidence policy must be latest-only or approved-archive')
+}
 if (@($policy.sequence).Count -ne 2 -or $policy.sequence[0] -ne 'admin' -or $policy.sequence[1] -ne 'gateway') {
     $failures.Add('promotion policy sequence must be Admin followed by Gateway')
 }
-if ($benchmark.schemaVersion -ne 1) { $failures.Add('benchmark schema version is not supported') }
+$benchmarkSchema = Get-RequiredPositiveInteger $benchmark 'schemaVersion' 'benchmark schema version'
+if ($benchmarkSchema -notin @(2, 3, 4)) { $failures.Add('benchmark schema version 4 with authenticated workload samples is required') }
+if ($benchmarkSchema -ne 4) { $failures.Add('benchmark schema version 4 with retained native image binding and collection attempt is required') }
+elseif ($benchmark.schemaVersion.GetType() -notin @([sbyte], [byte], [int16], [uint16], [int32], [uint32], [int64], [uint64])) {
+    $failures.Add('benchmark schema version 4 must be an integer')
+}
 if ($benchmark.service -ne $Service) { $failures.Add('benchmark service does not match the requested promotion') }
 if ($benchmark.platform -ne 'linux-x64') { $failures.Add('benchmark platform is not linux-x64') }
-if ($benchmark.endpoint -ne '/health/ready') { $failures.Add('benchmark endpoint is not /health/ready') }
-$benchmarkGeneratedAt = [DateTimeOffset]::MinValue
-if (-not [DateTimeOffset]::TryParse([string]$benchmark.generatedAt, [ref]$benchmarkGeneratedAt)) {
-    $failures.Add('benchmark generation time is invalid')
-}
-elseif ($benchmarkGeneratedAt -gt [DateTimeOffset]::UtcNow.AddMinutes(5)) {
-    $failures.Add('benchmark generation time is in the future')
+$generatedAt = [DateTimeOffset]::MinValue
+if (-not [DateTimeOffset]::TryParse([string]$benchmark.generatedAt, [ref]$generatedAt)) { $failures.Add('benchmark generation time is invalid') }
+elseif ($generatedAt -gt [DateTimeOffset]::UtcNow.AddMinutes(5)) { $failures.Add('benchmark generation time is in the future') }
+
+$nativeImageEvidence = $null
+$boundNativeImage = $null
+if ($benchmarkSchema -eq 4) {
+    if ([string]::IsNullOrWhiteSpace($NativePackagingDirectory)) {
+        $failures.Add('native image binding requires retained packaging evidence')
+    }
+    elseif ($benchmark.native.image -isnot [string]) {
+        $failures.Add('native image binding requires a digest-pinned benchmark image')
+    }
+    else {
+        try {
+            $boundNativeImage = $benchmark.native.image
+            $nativeImageEvidence = Read-NativeBenchmarkImageEvidence -Directory $NativePackagingDirectory -Service $Service -NativeImage $boundNativeImage
+            Assert-NativeBenchmarkImageEvidenceEqual -Expected $nativeImageEvidence['identity'] -Actual $benchmark.nativeEvidence
+            if ($evidence.candidateDigest -isnot [string] -or $evidence.candidateDigest -cne $nativeImageEvidence['identity']['requestedDigest']) {
+                $failures.Add('native image binding digest does not match canary evidence')
+            }
+        }
+        catch { $failures.Add('native image binding could not be verified from retained packaging evidence') }
+    }
 }
 
 $canaryTimes = Test-CanaryEvidence $evidence $Service 'canary evidence'
+if ($null -ne $qualificationEvidence -and $null -ne $benchmarkAttemptEvidence -and $null -ne $canaryDocument) {
+    try {
+        Assert-NativeBenchmarkQualificationTimeline -QualificationEvidence $qualificationEvidence -AttemptEvidence $benchmarkAttemptEvidence `
+            -CanaryDocument $canaryDocument -HistoricalEvidencePolicy $policy.historicalEvidencePolicy -Now ([DateTimeOffset]::UtcNow)
+    }
+    catch { $failures.Add('benchmark collection attempt does not match the accepted qualification window or selection') }
+}
 if ($Service -eq 'gateway') {
-    if ([string]::IsNullOrWhiteSpace($AdminCanaryEvidencePath)) {
-        $failures.Add('Gateway promotion requires accepted Admin canary evidence')
-    }
+    if ([string]::IsNullOrWhiteSpace($AdminCanaryEvidencePath)) { $failures.Add('Gateway promotion requires accepted Admin canary evidence') }
     else {
-        $adminEvidence = Get-Content -LiteralPath $AdminCanaryEvidencePath -Raw | ConvertFrom-Json
+        try {
+            $adminCanaryDocument = Read-NativeBenchmarkAttemptDocument -Path $AdminCanaryEvidencePath
+            $adminEvidence = ConvertTo-NativePromotionObject $adminCanaryDocument['value']
+        }
+        catch {
+            $adminEvidence = [pscustomobject]@{}
+            $failures.Add('Admin canary evidence document is malformed or exceeds its bounded JSON contract')
+        }
         $adminTimes = Test-CanaryEvidence $adminEvidence 'admin' 'Admin canary evidence'
-        if ($adminTimes.completedAt -ne [DateTimeOffset]::MinValue -and
-            $canaryTimes.startedAt -ne [DateTimeOffset]::MinValue -and
-            $adminTimes.completedAt -gt $canaryTimes.startedAt) {
-            $failures.Add('Gateway canary started before the Admin canary completed')
+        if ($adminTimes.completedAt -ne [DateTimeOffset]::MinValue -and $canaryTimes.startedAt -ne [DateTimeOffset]::MinValue -and
+            $adminTimes.completedAt -gt $canaryTimes.startedAt) { $failures.Add('Gateway canary started before the Admin canary completed') }
+    }
+    if ($null -ne $qualificationEvidence) {
+        try {
+            $adminQualificationEvidence = Read-NativeBenchmarkQualificationEvidence -Path $QualificationEvidencePath -Service 'admin'
+            if ($adminQualificationEvidence['sha256'] -cne $qualificationEvidence['sha256']) { throw 'Qualification changed before Admin approval was read.' }
+            $adminAcceptedAt = Get-NativeBenchmarkAttemptUtc $adminQualificationEvidence['approval']['acceptedAt']
+            if ($canaryTimes.startedAt -ne [DateTimeOffset]::MinValue -and $adminAcceptedAt -gt $canaryTimes.startedAt) {
+                $failures.Add('Gateway canary started before the Admin qualification was accepted')
+            }
         }
+        catch {
+            $adminQualificationEvidence = $null
+            $failures.Add('Gateway promotion requires an accepted Admin qualification')
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($AdminBenchmarkPath)) {
+        $failures.Add('Gateway promotion requires accepted Admin benchmark collection evidence')
+    }
+    elseif ($null -ne $adminQualificationEvidence) {
+        try { $adminBenchmarkAttemptEvidence = Read-NativePromotionSelectedAttempt $AdminBenchmarkPath 'admin' $adminQualificationEvidence }
+        catch { $failures.Add('Admin benchmark collection attempt could not be verified against its accepted qualification') }
+    }
+    if ($null -ne $adminQualificationEvidence -and $null -ne $adminBenchmarkAttemptEvidence -and $null -ne $adminCanaryDocument) {
+        try {
+            Assert-NativeBenchmarkQualificationTimeline -QualificationEvidence $adminQualificationEvidence -AttemptEvidence $adminBenchmarkAttemptEvidence `
+                -CanaryDocument $adminCanaryDocument -HistoricalEvidencePolicy $policy.historicalEvidencePolicy -Now ([DateTimeOffset]::UtcNow)
+        }
+        catch { $failures.Add('Admin benchmark collection attempt does not match the accepted qualification window or selection') }
     }
 }
 
-$variantMetrics = @{}
-foreach ($variantName in 'jit', 'native') {
-    $variant = $benchmark.$variantName
-    $expectedRuntime = if ($variantName -eq 'jit') { 'jit' } else { 'native-aot' }
-    if ($null -eq $variant) {
-        $failures.Add("$variantName benchmark result is missing")
-        continue
+function Get-RequiredNonNegativeInteger($Object, [string] $Name, [string] $Description) {
+    $value = Get-RequiredNonNegativeNumber $Object $Name $Description
+    if ($null -ne $value -and $value -ne [Math]::Floor($value)) { $failures.Add("$Description must be a whole number") }
+    return $value
+}
+function Test-RequiredText($Object, [string] $Name, [string] $Description) {
+    $value = if ($null -ne $Object) { $Object.$Name } else { $null }
+    if ($value -isnot [string] -or [string]::IsNullOrWhiteSpace($value) -or $value -eq 'replace-me') { $failures.Add("$Description is missing or invalid") }
+}
+function Test-NearlyEqual([double] $Actual, [double] $Expected, [double] $AbsoluteTolerance = 0.001001) {
+    return [Math]::Abs($Actual - $Expected) -le [Math]::Max($AbsoluteTolerance, [Math]::Abs($Expected) * 0.000001)
+}
+$requiredIds = if ($Service -eq 'admin') { @('admin-setting-read') } else { @('gateway-chat-nonstream', 'gateway-chat-sse') }
+$minimumRuns = Get-RequiredPositiveInteger $policy 'minimumBenchmarkRuns' 'minimum benchmark run count'
+if ($null -ne $minimumRuns -and ($minimumRuns -lt 5 -or $minimumRuns -gt 21)) { $failures.Add('minimum benchmark run count must be between 5 and 21') }
+foreach ($policyService in 'admin', 'gateway') {
+    $expectedIds = if ($policyService -eq 'admin') { @('admin-setting-read') } else { @('gateway-chat-nonstream', 'gateway-chat-sse') }
+    $configuredIds = $policy.requiredWorkloads.$policyService
+    if ($configuredIds -isnot [array] -or @($configuredIds).Count -ne $expectedIds.Count -or
+        (@($configuredIds | Sort-Object) -join '|') -cne (@($expectedIds | Sort-Object) -join '|')) {
+        $failures.Add("$policyService policy required workloads must match the supported authenticated workload set")
     }
-    if ($variant.runtime -ne $expectedRuntime) { $failures.Add("$variantName benchmark runtime is invalid") }
-    $requests = Get-RequiredPositiveInteger $variant 'requests' "$variantName benchmark request count"
-    $concurrency = Get-RequiredPositiveInteger $variant 'concurrency' "$variantName benchmark concurrency"
-    $benchmarkFailures = Get-RequiredNonNegativeNumber $variant 'failures' "$variantName benchmark failure count"
-    if ($null -ne $benchmarkFailures -and $benchmarkFailures -ne 0) { $failures.Add("$variantName benchmark contains failed requests") }
+}
+$pairedRuns = Get-RequiredPositiveInteger $benchmark 'pairedRuns' 'paired benchmark run count'
+if ($null -ne $pairedRuns -and ($pairedRuns -lt 5 -or $pairedRuns -gt 21 -or $pairedRuns % 2 -ne 1)) { $failures.Add('paired benchmark run count must be an odd number between 5 and 21') }
+if ($null -ne $pairedRuns -and $null -ne $minimumRuns -and $pairedRuns -lt $minimumRuns) { $failures.Add('paired benchmark run count is below the policy minimum') }
+if ($benchmark.samples -isnot [array] -or @($benchmark.samples).Count -ne $pairedRuns) { $failures.Add('retained raw samples must contain every recorded benchmark pair') }
 
-    $variantMetrics[$variantName] = [pscustomobject]@{
-        requests = $requests
-        concurrency = $concurrency
-        imageBytes = Get-RequiredPositiveNumber $variant 'imageBytes' "$variantName image size"
-        pullBytes = Get-RequiredPositiveNumber $variant 'pullBytes' "$variantName compressed pull size"
-        coldReadinessMilliseconds = Get-RequiredPositiveNumber $variant 'coldReadinessMilliseconds' "$variantName cold-readiness duration"
-        idleMemoryBytes = Get-RequiredPositiveNumber $variant 'idleMemoryBytes' "$variantName idle memory"
-        steadyStateMemoryBytes = Get-RequiredPositiveNumber $variant 'steadyStateMemoryBytes' "$variantName steady-state memory"
-        peakMemoryBytes = Get-RequiredPositiveNumber $variant 'peakMemoryBytes' "$variantName peak memory"
-        throughputPerSecond = Get-RequiredPositiveNumber $variant 'throughputPerSecond' "$variantName throughput"
-        p50Milliseconds = Get-RequiredNonNegativeNumber $variant 'p50Milliseconds' "$variantName p50 latency"
-        p95Milliseconds = Get-RequiredNonNegativeNumber $variant 'p95Milliseconds' "$variantName p95 latency"
-        p99Milliseconds = Get-RequiredNonNegativeNumber $variant 'p99Milliseconds' "$variantName p99 latency"
-    }
+$environment = $benchmark.environment
+$environmentSchema = Get-RequiredPositiveInteger $environment 'schemaVersion' 'benchmark environment evidence schema version'
+if ($environmentSchema -ne 1) { $failures.Add('benchmark environment evidence schema version is not supported') }
+Test-RequiredText $environment 'environmentId' 'benchmark environment identifier'
+foreach ($name in 'os', 'architecture', 'cpu', 'dockerVersion', 'kernelVersion') { Test-RequiredText $environment.host $name "benchmark host $name" }
+if ($environment.host.os -cne 'linux' -or $environment.host.architecture -cne 'x64') { $failures.Add('benchmark host must describe a Linux x64 environment') }
+Get-RequiredPositiveInteger $environment.host 'logicalProcessors' 'benchmark host logical processor count' | Out-Null
+Get-RequiredPositiveInteger $environment.host 'memoryBytes' 'benchmark host memory' | Out-Null
+foreach ($name in 'postgresqlVersion', 'redisVersion', 'wolverineVersion', 'configurationId', 'providerFixtureId') { Test-RequiredText $environment.backingServices $name "benchmark backing services $name" }
+if ($Service -eq 'gateway' -and $environment.backingServices.providerFixtureId -ieq 'not-applicable') {
+    $failures.Add('Gateway benchmark provider fixture evidence must identify its deterministic provider')
+}
 
-    $image = [string]$variant.image
-    if ($image -notmatch '@(sha256:[0-9a-fA-F]{64})$') {
-        $failures.Add("$variantName benchmark image is not pinned by digest")
+$commonNames = @('imageBytes', 'pullBytes', 'coldReadinessMilliseconds', 'idleMemoryBytes', 'steadyStateMemoryBytes', 'peakMemoryBytes')
+$workloadMetricNames = @('elapsedMilliseconds', 'throughputPerSecond', 'p50Milliseconds', 'p95Milliseconds', 'p99Milliseconds')
+$identityNames = @('id', 'method', 'path', 'authenticated', 'inputFingerprint', 'requested', 'executed', 'completed', 'failures', 'warmupRequests', 'concurrency', 'timeoutSeconds')
+
+function Get-WorkloadMap($Rows, [string] $Description, [bool] $RawSample) {
+    $map = @{}
+    if ($Rows -isnot [array]) { $failures.Add("$Description workloads must be an array with the exact required workload set"); return $map }
+    if (@($Rows).Count -ne $requiredIds.Count) { $failures.Add("$Description workload set has missing, duplicate, or unexpected entries") }
+    foreach ($row in $Rows) {
+        $id = if ($null -ne $row) { [string]$row.id } else { '' }
+        if ($id -cnotin $requiredIds) { $failures.Add("$Description workload set contains an unexpected workload"); continue }
+        if ($map.ContainsKey($id)) { $failures.Add("$Description workload set contains duplicate '$id'"); continue }
+        $method = if ($id -eq 'admin-setting-read') { 'GET' } else { 'POST' }
+        $path = if ($id -eq 'admin-setting-read') { '/v1/admin/global-settings/by-key/{key}' } else { '/v1/chat/completions' }
+        if ($row.method -cne $method -or $row.path -cne $path) { $failures.Add("$Description $id method or path does not match its authenticated workload") }
+        Test-RequiredBoolean $row 'authenticated' "$Description $id authenticated workload"
+        if ($row.inputFingerprint -isnot [string] -or $row.inputFingerprint -cnotmatch '^[0-9a-f]{64}$') { $failures.Add("$Description $id input fingerprint is missing or invalid") }
+        $numbers = @{}
+        foreach ($name in 'requested', 'executed', 'completed', 'concurrency', 'timeoutSeconds') { $numbers[$name] = Get-RequiredPositiveInteger $row $name "$Description $id $name" }
+        foreach ($name in 'failures', 'warmupRequests') { $numbers[$name] = Get-RequiredNonNegativeInteger $row $name "$Description $id $name" }
+        if ($numbers.failures -ne 0 -or $numbers.executed -ne $numbers.requested -or $numbers.completed -ne $numbers.requested) {
+            $failures.Add("$Description $id must complete every requested request without failures")
+        }
+        if ($null -ne $numbers.requested -and $numbers.requested -gt 100000) { $failures.Add("$Description $id requested count exceeds the workload limit") }
+        if ($null -ne $numbers.concurrency -and ($numbers.concurrency -gt 256 -or $numbers.concurrency -gt $numbers.requested)) { $failures.Add("$Description $id concurrency exceeds the workload limit") }
+        if (($null -ne $numbers.warmupRequests -and $numbers.warmupRequests -gt 10000) -or
+            ($null -ne $numbers.timeoutSeconds -and $numbers.timeoutSeconds -gt 120)) { $failures.Add("$Description $id warm-up or timeout exceeds the workload limit") }
+        $metrics = @{}
+        foreach ($name in 'elapsedMilliseconds', 'throughputPerSecond') { $metrics[$name] = Get-RequiredPositiveNumber $row $name "$Description $id $name" }
+        foreach ($name in 'p50Milliseconds', 'p95Milliseconds', 'p99Milliseconds') { $metrics[$name] = Get-RequiredNonNegativeNumber $row $name "$Description $id $name" }
+        if ($metrics.p50Milliseconds -gt $metrics.p95Milliseconds -or $metrics.p95Milliseconds -gt $metrics.p99Milliseconds) { $failures.Add("$Description $id latency percentiles must be ordered p50 <= p95 <= p99") }
+        if ($RawSample -and $null -ne $metrics.elapsedMilliseconds -and $metrics.elapsedMilliseconds -gt 0 -and
+            $null -ne $numbers.completed -and $null -ne $metrics.throughputPerSecond) {
+            $expectedThroughput = $numbers.completed * 1000 / $metrics.elapsedMilliseconds
+            if (-not (Test-NearlyEqual $metrics.throughputPerSecond $expectedThroughput 0.000001)) { $failures.Add("$Description $id throughput does not match completed requests and elapsed time") }
+        }
+        $map[$id] = [pscustomobject]@{ row = $row; metrics = $metrics }
     }
+    foreach ($id in $requiredIds) { if (-not $map.ContainsKey($id)) { $failures.Add("$Description workload set is missing '$id'") } }
+    return $map
+}
+
+function Get-Variant($Variant, [string] $Name, [string] $Description, [bool] $RawSample) {
+    $expectedRuntime = if ($Name -eq 'jit') { 'jit' } else { 'native-aot' }
+    if ($null -eq $Variant) { $failures.Add("$Description benchmark result is missing") }
+    if ($Variant.runtime -cne $expectedRuntime) { $failures.Add("$Description benchmark runtime is invalid") }
+    Test-RequiredText $Variant 'imageRevision' "$Description image revision"
+    $image = [string]$Variant.image
+    if ($image -notmatch '@(sha256:[0-9a-fA-F]{64})$') { $failures.Add("$Description benchmark image is not pinned by digest") }
     else {
-        $recordedDigest = if ($variantName -eq 'jit') { $evidence.correspondingJitDigest } else { $evidence.candidateDigest }
-        if ($Matches[1] -ne $recordedDigest) {
-            $failures.Add("$variantName benchmark image digest does not match canary evidence")
+        $recordedDigest = if ($Name -eq 'jit') { $evidence.correspondingJitDigest } else { $evidence.candidateDigest }
+        if ($Matches[1] -ne $recordedDigest) { $failures.Add("$Description benchmark image digest does not match canary evidence") }
+    }
+    $metrics = @{}
+    foreach ($metric in $commonNames) {
+        $metrics[$metric] = if ($metric -eq 'coldReadinessMilliseconds') { Get-RequiredPositiveNumber $Variant $metric "$Description $metric" }
+            else { Get-RequiredPositiveInteger $Variant $metric "$Description $metric" }
+    }
+    if ($Name -eq 'native' -and $benchmarkSchema -eq 4) {
+        if ($RawSample -and ($Variant.nativeContainerId -isnot [string] -or $Variant.nativeContainerId -cnotmatch '\A[0-9a-f]{64}\z')) {
+            $failures.Add("$Description native container binding is missing or invalid")
+        }
+        if ($null -ne $nativeImageEvidence) {
+            try { Assert-NativeBenchmarkImageEvidenceEqual -Expected $nativeImageEvidence['binding'] -Actual $Variant.imageBinding }
+            catch { $failures.Add("$Description native image binding differs from retained packaging evidence") }
+            if ($Variant.image -isnot [string] -or $Variant.image -cne $boundNativeImage -or
+                $Variant.imageRevision -isnot [string] -or $Variant.imageRevision -cne $nativeImageEvidence['identity']['source']['revision']) {
+                $failures.Add("$Description native image binding has a different image or source revision")
+            }
+            if ($null -ne $metrics.pullBytes -and $metrics.pullBytes -ne $nativeImageEvidence['pullBytes']) {
+                $failures.Add("$Description native image binding pull size differs from verified selected layers")
+            }
+        }
+    }
+    if ($metrics.peakMemoryBytes -lt $metrics.idleMemoryBytes -or $metrics.peakMemoryBytes -lt $metrics.steadyStateMemoryBytes) { $failures.Add("$Description peak memory is below its recorded idle or steady-state memory") }
+    return [pscustomobject]@{ image = $image; imageRevision = $Variant.imageRevision; metrics = $metrics; workloads = Get-WorkloadMap $Variant.workloads $Description $RawSample }
+}
+$variants = @{}
+foreach ($name in 'jit', 'native') { $variants[$name] = Get-Variant $benchmark.$name $name "$name median" $false }
+if ($variants.jit.imageRevision -cne $variants.native.imageRevision) { $failures.Add('JIT and native image revisions must match') }
+$rawVariants = @{ jit = [System.Collections.Generic.List[object]]::new(); native = [System.Collections.Generic.List[object]]::new() }
+$nativeContainerIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+$baseline = $null
+$index = 0
+foreach ($sample in @($benchmark.samples | Select-Object -First 21)) {
+    $index++
+    $pair = Get-RequiredPositiveInteger $sample 'pair' "sample $index pair number"
+    if ($pair -ne $index) { $failures.Add('retained raw sample pair numbers must be complete, unique, and ordered') }
+    $order = if ($index % 2 -eq 1) { @('jit', 'native-aot') } else { @('native-aot', 'jit') }
+    if ($sample.order -isnot [array] -or @($sample.order).Count -ne 2 -or (@($sample.order) -join '|') -cne ($order -join '|')) { $failures.Add("sample $index runtime order must alternate across recorded pairs") }
+    foreach ($name in 'jit', 'native') {
+        $raw = Get-Variant $sample.$name $name "sample $index $name" $true
+        if ($name -eq 'native' -and $benchmarkSchema -eq 4 -and $sample.native.nativeContainerId -is [string] -and
+            $sample.native.nativeContainerId -cmatch '\A[0-9a-f]{64}\z' -and
+            -not $nativeContainerIds.Add($sample.native.nativeContainerId)) {
+            $failures.Add("sample $index native container binding repeats a recorded cold-start container")
+        }
+        $rawVariants[$name].Add($raw)
+        if ($raw.image -cne $variants[$name].image) { $failures.Add("sample $index $name image differs from its median variant") }
+        if ($raw.imageRevision -cne $variants[$name].imageRevision) { $failures.Add("sample $index $name image revision differs from its median variant") }
+        if ($null -eq $baseline) { $baseline = $raw.workloads }
+        foreach ($id in $requiredIds) {
+            if ($raw.workloads.ContainsKey($id) -and $baseline.ContainsKey($id)) {
+                foreach ($property in $identityNames) {
+                    if ($raw.workloads[$id].row.$property -cne $baseline[$id].row.$property) { $failures.Add("sample $index $name $id workload metadata $property differs across JIT/native pairs") }
+                }
+            }
         }
     }
 }
-
-foreach ($workloadProperty in 'requests', 'concurrency') {
-    $jitWorkload = $variantMetrics.jit.$workloadProperty
-    $nativeWorkload = $variantMetrics.native.$workloadProperty
-    if ($null -ne $jitWorkload -and $null -ne $nativeWorkload -and $jitWorkload -ne $nativeWorkload) {
-        $failures.Add("JIT and native benchmark values for $workloadProperty do not match")
+function Get-Median($Values, [string] $Description) {
+    $ordered = @($Values | Where-Object { $null -ne $_ } | Sort-Object)
+    if ($ordered.Count -eq 0) { $failures.Add("$Description cannot be recomputed without raw samples"); return $null }
+    if ($ordered.Count % 2 -eq 0) { return ($ordered[$ordered.Count / 2 - 1] + $ordered[$ordered.Count / 2]) / 2 }
+    return $ordered[[int][Math]::Floor($ordered.Count / 2)]
+}
+foreach ($name in 'jit', 'native') {
+    foreach ($metric in $commonNames) {
+        $median = Get-Median @($rawVariants[$name] | ForEach-Object { $_.metrics[$metric] }) "$name $metric median"
+        $recorded = $variants[$name].metrics[$metric]
+        if ($null -ne $median -and $null -ne $recorded -and -not (Test-NearlyEqual $recorded $median)) { $failures.Add("$name $metric median does not match retained raw samples") }
+    }
+    foreach ($id in $requiredIds) {
+        if (-not $variants[$name].workloads.ContainsKey($id)) { continue }
+        if ($null -ne $baseline -and $baseline.ContainsKey($id)) {
+            foreach ($property in $identityNames) {
+                if ($variants[$name].workloads[$id].row.$property -cne $baseline[$id].row.$property) { $failures.Add("$name median $id workload metadata $property differs from retained raw samples") }
+            }
+        }
+        foreach ($metric in $workloadMetricNames) {
+            $values = @($rawVariants[$name] | ForEach-Object { if ($_.workloads.ContainsKey($id)) { $_.workloads[$id].metrics[$metric] } })
+            $median = Get-Median $values "$name $id $metric median"
+            $recorded = $variants[$name].workloads[$id].metrics[$metric]
+            if ($null -ne $median -and $null -ne $recorded -and -not (Test-NearlyEqual $recorded $median)) { $failures.Add("$name $id $metric median does not match retained raw samples") }
+        }
     }
 }
 
 $nativePublish = $benchmark.nativePublish
-if ($null -eq $nativePublish) {
-    $failures.Add('native publish baseline is missing')
-}
+if ($null -eq $nativePublish) { $failures.Add('native publish baseline is missing') }
 else {
-    $expectedPublishService = if ($Service -eq 'admin') { 'Admin' } else { 'Gateway' }
-    if ($nativePublish.service -ne $expectedPublishService) { $failures.Add('native publish baseline service is invalid') }
+    $publishService = if ($Service -eq 'admin') { 'Admin' } else { 'Gateway' }
+    if ($nativePublish.service -ne $publishService) { $failures.Add('native publish baseline service is invalid') }
     if ($nativePublish.rid -ne 'linux-x64') { $failures.Add('native publish baseline RID is not linux-x64') }
     Get-RequiredPositiveNumber $nativePublish 'publishDurationMilliseconds' 'native publish duration' | Out-Null
     Get-RequiredPositiveNumber $nativePublish 'executableBytes' 'native executable size' | Out-Null
     Get-RequiredPositiveNumber $nativePublish 'runtimeArtifactBytes' 'native runtime artifact size' | Out-Null
 }
-
-$comparison = $benchmark.comparison
-$imageReduction = Get-RequiredNumber $comparison 'imageSizeReductionPercent' 'image-size comparison'
-$pullReduction = Get-RequiredNumber $comparison 'pullSizeReductionPercent' 'pull-size comparison'
-$coldStartReduction = Get-RequiredNumber $comparison 'coldStartReductionPercent' 'cold-start comparison'
-$idleMemoryReduction = Get-RequiredNumber $comparison 'idleMemoryReductionPercent' 'idle-memory comparison'
-$steadyStateMemoryReduction = Get-RequiredNumber $comparison 'steadyStateMemoryReductionPercent' 'steady-state-memory comparison'
-$peakMemoryReduction = Get-RequiredNumber $comparison 'peakMemoryReductionPercent' 'peak-memory comparison'
-$p50Regression = Get-RequiredNumber $comparison 'p50LatencyRegressionPercent' 'p50 latency comparison'
-$p95Regression = Get-RequiredNumber $comparison 'p95LatencyRegressionPercent' 'p95 latency comparison'
-$p99Regression = Get-RequiredNumber $comparison 'p99LatencyRegressionPercent' 'p99 latency comparison'
-$throughputImprovement = Get-RequiredNumber $comparison 'throughputImprovementPercent' 'throughput comparison'
-$minimumImageReduction = Get-RequiredNumber $policy.thresholds 'minimumImageSizeReductionPercent' 'minimum image-size reduction threshold'
-$minimumColdStartReduction = Get-RequiredNumber $policy.thresholds 'minimumColdStartReductionPercent' 'minimum cold-start reduction threshold'
-$minimumIdleMemoryReduction = Get-RequiredNumber $policy.thresholds 'minimumIdleMemoryReductionPercent' 'minimum idle-memory reduction threshold'
-$maximumP99Regression = Get-RequiredNumber $policy.thresholds 'maximumP99LatencyRegressionPercent' 'maximum p99 latency regression threshold'
-$minimumThroughputImprovement = Get-RequiredNumber $policy.thresholds 'minimumThroughputImprovementPercent' 'minimum throughput improvement threshold'
-if ($null -ne $imageReduction -and $null -ne $minimumImageReduction -and $imageReduction -lt $minimumImageReduction) { $failures.Add('image-size improvement is below threshold') }
-if ($null -ne $coldStartReduction -and $null -ne $minimumColdStartReduction -and $coldStartReduction -lt $minimumColdStartReduction) { $failures.Add('cold-start improvement is below threshold') }
-if ($null -ne $idleMemoryReduction -and $null -ne $minimumIdleMemoryReduction -and $idleMemoryReduction -lt $minimumIdleMemoryReduction) { $failures.Add('idle-memory improvement is below threshold') }
-if ($null -ne $p99Regression -and $null -ne $maximumP99Regression -and $p99Regression -gt $maximumP99Regression) { $failures.Add('p99 latency regression exceeds threshold') }
-if ($null -ne $throughputImprovement -and $null -ne $minimumThroughputImprovement -and $throughputImprovement -lt $minimumThroughputImprovement) { $failures.Add('throughput improvement is below threshold') }
-
-function Test-CalculatedComparison(
-    [string] $PropertyName,
-    [Nullable[double]] $Recorded,
-    [Nullable[double]] $JitValue,
-    [Nullable[double]] $NativeValue,
-    [bool] $IsIncrease
-) {
-    if ($null -eq $Recorded -or $null -eq $JitValue -or $null -eq $NativeValue -or $JitValue -eq 0) { return }
-    $expected = if ($IsIncrease) {
-        (($NativeValue - $JitValue) / $JitValue) * 100
+if ($benchmarkSchema -eq 4 -and $null -ne $nativeImageEvidence) {
+    try { Assert-NativeBenchmarkImageEvidenceEqual -Expected $nativeImageEvidence['nativePublish'] -Actual $nativePublish }
+    catch { $failures.Add('native publish binding differs from retained image packaging evidence') }
+}
+function Test-CalculatedComparison([string] $Description, $Object, [string] $PropertyName, $JitValue, $NativeValue, [bool] $IsIncrease) {
+    $recorded = Get-RequiredNumber $Object $PropertyName $Description
+    if ($null -eq $recorded -or $null -eq $JitValue -or $null -eq $NativeValue) { return $recorded }
+    if ($JitValue -le 0) { $failures.Add("$Description cannot be recomputed from a nonpositive JIT measurement"); return $recorded }
+    $expected = if ($IsIncrease) { (($NativeValue - $JitValue) / $JitValue) * 100 } else { (($JitValue - $NativeValue) / $JitValue) * 100 }
+    if ([Math]::Abs($recorded - $expected) -gt 0.01) { $failures.Add("$Description does not match independently recomputed benchmark medians") }
+    return $recorded
+}
+$comparisonNames = [ordered]@{
+    imageBytes = 'imageSizeReductionPercent'; pullBytes = 'pullSizeReductionPercent'; coldReadinessMilliseconds = 'coldStartReductionPercent'
+    idleMemoryBytes = 'idleMemoryReductionPercent'; steadyStateMemoryBytes = 'steadyStateMemoryReductionPercent'; peakMemoryBytes = 'peakMemoryReductionPercent'
+}
+$common = @{}
+foreach ($metric in $comparisonNames.Keys) {
+    $common[$metric] = Test-CalculatedComparison "$metric comparison" $benchmark.comparison.common $comparisonNames[$metric] ($variants.jit.metrics[$metric]) ($variants.native.metrics[$metric]) $false
+}
+$minimumImage = Get-RequiredNumber $policy.thresholds 'minimumImageSizeReductionPercent' 'minimum image-size reduction threshold'
+$minimumCold = Get-RequiredNumber $policy.thresholds 'minimumColdStartReductionPercent' 'minimum cold-start reduction threshold'
+$minimumIdle = Get-RequiredNumber $policy.thresholds 'minimumIdleMemoryReductionPercent' 'minimum idle-memory reduction threshold'
+$maximumP99 = Get-RequiredNumber $policy.thresholds 'maximumP99LatencyRegressionPercent' 'maximum p99 latency regression threshold'
+$minimumThroughput = Get-RequiredNumber $policy.thresholds 'minimumThroughputImprovementPercent' 'minimum throughput improvement threshold'
+if ($null -ne $common.imageBytes -and $null -ne $minimumImage -and $common.imageBytes -lt $minimumImage) { $failures.Add('image-size improvement is below threshold') }
+if ($null -ne $common.coldReadinessMilliseconds -and $null -ne $minimumCold -and $common.coldReadinessMilliseconds -lt $minimumCold) { $failures.Add('cold-start improvement is below threshold') }
+if ($null -ne $common.idleMemoryBytes -and $null -ne $minimumIdle -and $common.idleMemoryBytes -lt $minimumIdle) { $failures.Add('idle-memory improvement is below threshold') }
+$comparisons = @{}
+if ($benchmark.comparison.workloads -isnot [array] -or @($benchmark.comparison.workloads).Count -ne $requiredIds.Count) { $failures.Add('workload comparisons must contain the exact required workload set') }
+foreach ($row in @($benchmark.comparison.workloads)) {
+    $id = [string]$row.id
+    if ($id -cnotin $requiredIds -or $comparisons.ContainsKey($id)) { $failures.Add('workload comparisons contain a duplicate or unexpected workload'); continue }
+    $comparisons[$id] = $row
+}
+foreach ($id in $requiredIds) {
+    if (-not $comparisons.ContainsKey($id)) { $failures.Add("workload comparison is missing '$id'"); continue }
+    if (-not $variants.jit.workloads.ContainsKey($id) -or -not $variants.native.workloads.ContainsKey($id)) { continue }
+    $jitMetrics = $variants.jit.workloads[$id].metrics
+    $nativeMetrics = $variants.native.workloads[$id].metrics
+    $throughput = Test-CalculatedComparison "$id throughput comparison" $comparisons[$id] 'throughputImprovementPercent' $jitMetrics.throughputPerSecond $nativeMetrics.throughputPerSecond $true
+    foreach ($metric in 'p50', 'p95', 'p99') {
+        $regression = Test-CalculatedComparison "$id $metric latency comparison" $comparisons[$id] ($metric + 'LatencyRegressionPercent') $jitMetrics[($metric + 'Milliseconds')] $nativeMetrics[($metric + 'Milliseconds')] $true
+        if ($metric -eq 'p99' -and $null -ne $regression -and $null -ne $maximumP99 -and $regression -gt $maximumP99) { $failures.Add("$id p99 latency regression exceeds threshold") }
     }
-    else {
-        (($JitValue - $NativeValue) / $JitValue) * 100
-    }
-    if ([Math]::Abs($Recorded - $expected) -gt 0.01) {
-        $failures.Add("$PropertyName does not match the raw benchmark measurements")
-    }
+    if ($null -ne $throughput -and $null -ne $minimumThroughput -and $throughput -lt $minimumThroughput) { $failures.Add("$id throughput improvement is below threshold") }
 }
 
-$jitMetrics = $variantMetrics.jit
-$nativeMetrics = $variantMetrics.native
-Test-CalculatedComparison 'image-size comparison' $imageReduction $jitMetrics.imageBytes $nativeMetrics.imageBytes $false
-Test-CalculatedComparison 'pull-size comparison' $pullReduction $jitMetrics.pullBytes $nativeMetrics.pullBytes $false
-Test-CalculatedComparison 'cold-start comparison' $coldStartReduction $jitMetrics.coldReadinessMilliseconds $nativeMetrics.coldReadinessMilliseconds $false
-Test-CalculatedComparison 'idle-memory comparison' $idleMemoryReduction $jitMetrics.idleMemoryBytes $nativeMetrics.idleMemoryBytes $false
-Test-CalculatedComparison 'steady-state-memory comparison' $steadyStateMemoryReduction $jitMetrics.steadyStateMemoryBytes $nativeMetrics.steadyStateMemoryBytes $false
-Test-CalculatedComparison 'peak-memory comparison' $peakMemoryReduction $jitMetrics.peakMemoryBytes $nativeMetrics.peakMemoryBytes $false
-Test-CalculatedComparison 'throughput comparison' $throughputImprovement $jitMetrics.throughputPerSecond $nativeMetrics.throughputPerSecond $true
-Test-CalculatedComparison 'p50 latency comparison' $p50Regression $jitMetrics.p50Milliseconds $nativeMetrics.p50Milliseconds $true
-Test-CalculatedComparison 'p95 latency comparison' $p95Regression $jitMetrics.p95Milliseconds $nativeMetrics.p95Milliseconds $true
-Test-CalculatedComparison 'p99 latency comparison' $p99Regression $jitMetrics.p99Milliseconds $nativeMetrics.p99Milliseconds $true
+if ($benchmarkSchema -eq 4 -and $null -ne $nativeImageEvidence) {
+    try {
+        $finalNativeImageEvidence = Read-NativeBenchmarkImageEvidence -Directory $NativePackagingDirectory -Service $Service -NativeImage $boundNativeImage
+        foreach ($field in 'identity', 'binding', 'nativePublish', 'pullBytes') {
+            Assert-NativeBenchmarkImageEvidenceEqual -Expected $nativeImageEvidence[$field] -Actual $finalNativeImageEvidence[$field]
+        }
+    }
+    catch { $failures.Add('native image binding changed or could not be reverified after evaluation') }
+}
+if ($null -ne $benchmarkAttemptEvidence) {
+    try {
+        $finalBenchmarkAttemptEvidence = Read-NativePromotionSelectedAttempt $BenchmarkPath $Service $qualificationEvidence
+        Assert-NativePromotionAttemptUnchanged $benchmarkAttemptEvidence $finalBenchmarkAttemptEvidence
+    }
+    catch {
+        if ($historicalSelection) { $failures.Add('benchmark approved historical collection attempt changed or could not be reverified after evaluation') }
+        else { $failures.Add('benchmark latest successful collection attempt changed or could not be reverified after evaluation') }
+    }
+}
+if ($null -ne $adminBenchmarkAttemptEvidence) {
+    try {
+        $finalAdminBenchmarkAttemptEvidence = Read-NativePromotionSelectedAttempt $AdminBenchmarkPath 'admin' $adminQualificationEvidence
+        Assert-NativePromotionAttemptUnchanged $adminBenchmarkAttemptEvidence $finalAdminBenchmarkAttemptEvidence
+    }
+    catch { $failures.Add('Admin benchmark collection attempt changed or could not be reverified after evaluation') }
+}
+foreach ($entry in @(
+    @{ original = $policyDocument; path = $PolicyPath; description = 'promotion policy' },
+    @{ original = $canaryDocument; path = $CanaryEvidencePath; description = 'canary evidence' },
+    @{ original = $adminCanaryDocument; path = $AdminCanaryEvidencePath; description = 'Admin canary evidence' }
+)) {
+    if ($null -eq $entry.original) { continue }
+    try {
+        $finalDocument = Read-NativeBenchmarkAttemptDocument -Path $entry.path
+        if ($finalDocument['sha256'] -cne $entry.original['sha256']) { throw 'Original promotion evidence bytes changed.' }
+    }
+    catch { $failures.Add($entry.description + ' changed or could not be reverified after evaluation') }
+}
+if ($null -ne $qualificationEvidence) {
+    try {
+        $finalQualificationEvidence = Read-NativeBenchmarkQualificationEvidence -Path $QualificationEvidencePath -Service $Service
+        if ($finalQualificationEvidence['sha256'] -cne $qualificationEvidence['sha256']) { throw 'Accepted qualification bytes changed.' }
+    }
+    catch { $failures.Add('accepted benchmark qualification evidence changed or could not be reverified after evaluation') }
+    # Check expiry last, including time spent replaying original OCI/report bytes.
+    try {
+        $finalNow = [DateTimeOffset]::UtcNow
+        if ($null -ne $benchmarkAttemptEvidence -and $null -ne $canaryDocument) {
+            Assert-NativeBenchmarkQualificationTimeline -QualificationEvidence $qualificationEvidence -AttemptEvidence $benchmarkAttemptEvidence `
+                -CanaryDocument $canaryDocument -HistoricalEvidencePolicy $policy.historicalEvidencePolicy -Now $finalNow
+        }
+        if ($null -ne $adminQualificationEvidence -and $null -ne $adminBenchmarkAttemptEvidence -and $null -ne $adminCanaryDocument) {
+            Assert-NativeBenchmarkQualificationTimeline -QualificationEvidence $adminQualificationEvidence -AttemptEvidence $adminBenchmarkAttemptEvidence `
+                -CanaryDocument $adminCanaryDocument -HistoricalEvidencePolicy $policy.historicalEvidencePolicy -Now $finalNow
+        }
+    }
+    catch { $failures.Add('accepted benchmark qualification window or selection changed or expired during evaluation') }
+}
 
 $decision = if ($failures.Count -eq 0) { 'promote' } else { 'hold' }
 [pscustomobject]@{

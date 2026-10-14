@@ -1,3 +1,5 @@
+using ConduitLLM.Admin.DTOs;
+using ConduitLLM.Admin.Serialization;
 using ConduitLLM.Core.Extensions;
 
 using OpenTelemetry.Resources;
@@ -90,7 +92,9 @@ public partial class Program
         }
 
         // Add monitoring services - with leader election
+#if !CONDUIT_NATIVE_AOT
         builder.Services.AddLeaderElectedHostedService<ConduitLLM.Admin.Services.AdminOperationsMetricsService>("AdminOperationsMetricsService");
+#endif
     }
 
     /// <summary>
@@ -108,6 +112,66 @@ public partial class Program
         {
             Predicate = check => check.Tags.Contains("ready") || check.Tags.Count == 0
         });
+
+#if CONDUIT_NATIVE_AOT
+        var runtimeCapabilities = new AdminRuntimeCapabilitiesResponse(
+            "native-aot", [], "typed-npgsql-selected-runtime-slices",
+            [
+                "postgresql-wolverine-persistence",
+                "master-key-and-bearer-fallback-authentication",
+                "typed-global-settings-http",
+                "typed-ip-filter-http-and-enforcement",
+                "typed-global-settings-cache",
+                "typed-billing-audit-host",
+                "release-owned-schema-wait",
+                "readiness-and-database-health",
+                "liveness-metrics-opentelemetry"
+            ],
+            [
+                "ef-backed-admin-management",
+                "pricing-tools-and-audit",
+                "model-cost-canary",
+                "startup-pricing-configuration-audit",
+                "media-cleanup-and-reconciliation",
+                "media-storage-startup-guard",
+                "openrouter-metadata-sync",
+                "database-count-operations-metrics",
+                "billing-audit-reads-and-retention"
+            ]);
+#else
+        var runtimeCapabilities = new AdminRuntimeCapabilitiesResponse(
+            "jit", [], "ef-core-supported",
+            [
+                "postgresql-wolverine-persistence",
+                "master-key-and-bearer-fallback-authentication",
+                "global-settings-http",
+                "ip-filter-http-and-enforcement",
+                "global-settings-cache",
+                "billing-audit-host",
+                "release-owned-schema-wait",
+                "readiness-and-database-health",
+                "liveness-metrics-opentelemetry",
+                "ef-backed-admin-management",
+                "pricing-tools-and-audit",
+                "model-cost-canary",
+                "startup-pricing-configuration-audit",
+                "media-cleanup-and-reconciliation",
+                "media-storage-startup-guard",
+                "openrouter-metadata-sync",
+                "database-count-operations-metrics",
+                "billing-audit-reads-and-retention"
+            ], []);
+#endif
+        app.MapGet("/health/runtime-capabilities", () =>
+                Results.Json(runtimeCapabilities, AdminHttpJsonContext.Default.AdminRuntimeCapabilitiesResponse))
+            .ExcludeFromDescription();
+        app.Logger.LogInformation(
+            "Admin runtime mode {RuntimeMode}; persistence: {PersistenceStatus}; excluded features: {ExcludedFeatures}",
+            runtimeCapabilities.RuntimeMode,
+            runtimeCapabilities.PersistenceStatus,
+            runtimeCapabilities.ExcludedFeatures.Length == 0
+                ? "none"
+                : string.Join(',', runtimeCapabilities.ExcludedFeatures));
 
         app.Logger.LogInformation("Health check endpoints registered: /health, /health/live, /health/ready");
 

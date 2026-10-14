@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Models.Pricing;
+using ConduitLLM.Functions.Providers.Exa.Models;
 using ConduitLLM.Functions.Providers.Mcp;
 
 namespace ConduitLLM.Functions.Serialization;
@@ -20,6 +21,7 @@ namespace ConduitLLM.Functions.Serialization;
 [JsonSerializable(typeof(List<FunctionCost>))]
 [JsonSerializable(typeof(FunctionExecutionRequestData))]
 [JsonSerializable(typeof(FunctionExecutionCostDetails))]
+[JsonSerializable(typeof(ExaCostBreakdown))]
 [JsonSerializable(typeof(TieredPricingConfig))]
 [JsonSerializable(typeof(ExaHybridPricingConfig))]
 [JsonSerializable(typeof(TavilySearchPricingConfig))]

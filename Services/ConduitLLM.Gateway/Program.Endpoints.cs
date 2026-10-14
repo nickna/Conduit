@@ -14,7 +14,7 @@ public partial class Program
         var runtimeCapabilities = new RuntimeCapabilitiesResponse(
             nativeRuntime ? "native-aot" : "jit",
             ConduitSignalRProtocolPolicy.SupportedProtocols,
-            nativeRuntime ? "compiled-model-query-precompilation-required" : "ef-core-supported",
+            nativeRuntime ? "typed-npgsql-selected-runtime-slices" : "ef-core-supported",
             nativeRuntime
                 ? [
                     "postgresql-wolverine-persistence",
@@ -25,14 +25,20 @@ public partial class Program
                     "redis-ephemeral-key-cache",
                     "unauthenticated-request-rejection",
                     "authenticated-model-discovery",
+                    "function-metadata-discovery",
+                    "inline-exa-search",
+                    "inline-stateless-mcp-tools",
+                    "nonstreaming-configured-exa-agentic-chat",
                     "provider-http",
                     "sse-streaming",
                     "provider-error-translation",
                     "provider-cancellation",
                     "request-accounting-and-spend-settlement",
+                    "billing-audit-batch-writes",
                     "async-task-persistence",
                     "s3-media-api-workflows",
                     "forwarded-headers",
+                    "readiness-and-database-health",
                     "liveness-metrics-opentelemetry"
                 ]
                 : [
@@ -54,7 +60,16 @@ public partial class Program
                     "signalr-messagepack",
                     "ef-core-query-data-plane",
                     "redis-virtual-key-authentication-cache",
-                    "readiness-and-database-health"
+                    "inline-functions-beyond-exa-search-and-stateless-mcp",
+                    "agentic-workflows-beyond-nonstreaming-configured-exa-chat",
+                    "function-execution-list-http",
+                    "function-audit-and-retention",
+                    "billing-reconciliation",
+                    "request-log-reporting-and-retention",
+                    "pricing-rule-audit-and-retention",
+                    "model-discovery-catalog-and-warming",
+                    "billing-audit-reads-and-retention",
+                    "provider-hosted-tool-pricing"
                 ]
                 : []);
 

@@ -271,7 +271,7 @@ jobs:
     needs: [select]
     if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['aot-analyzers'] }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Verify generated compiled-model normalization
@@ -370,6 +370,7 @@ jobs:
           DATABASE_URL: postgresql://conduit:conduitpass@localhost:5432/conduitdb
           CONDUIT_CACHE_TEST_REDIS: localhost:6379
           CONDUIT_CACHE_TEST_POSTGRES: Host=localhost;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
+          CONDUIT_LOCK_TEST_POSTGRES: Host=localhost;Port=5432;Database=conduitdb;Username=conduit;Password=conduitpass
 
       - name: Reflection-disabled serialization suite
         uses: ./.github/actions/run-tests

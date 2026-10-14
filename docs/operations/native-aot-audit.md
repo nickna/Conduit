@@ -2,6 +2,40 @@
 
 Gateway runtime feature support, exclusions, process gates, and the third-party risk ledger are defined in [gateway-native-aot-feature-matrix.md](gateway-native-aot-feature-matrix.md). A successful publish alone is not a claim that the full JIT data plane is supported.
 
+## Current selected-profile disposition: 2026-10-12
+
+The dated assessments and tables below retain their original source and evidence
+scope. Current support is defined by the [Gateway matrix](gateway-native-aot-feature-matrix.md),
+[Admin matrix](native-aot-admin-feature-matrix.md) and
+[ADR 0009](../decisions/0009-staged-native-persistence-refactor.md). Their selected
+operations, rather than every JIT management/reporting workload, define the staged
+native implementation contract. The separate converter proof executes all 31 mapped
+properties through the actual compiled-model converters and property comparers;
+it does not establish native EF query/update support.
+
+The local unit 118 proof passed the published two-Gateway catalog boundary:
+the excluded enriched catalog and parameter routes return authenticated generated
+501 before handler DI, while selected model metadata and JIT behavior remain
+unchanged. Its frozen uncommitted source snapshot was later committed as
+[99a3488e](https://github.com/nickna/Conduit/commit/99a3488e3146806bbe4e3144258852582f287ae0).
+The local unit 119 proof passed the Admin matched-route boundary before
+body/filter/handler binding, preserving the 23 selected operation triples,
+security ordering and sequential ephemeral authentication. Its frozen uncommitted
+source snapshot was later committed as
+[37ab6431](https://github.com/nickna/Conduit/commit/37ab6431abf304102978227dd7d204b0b3600f33).
+Unit 119 passed 189 JIT and 44 native-profile managed cases without skips,
+three fresh native publications with zero first-party linker diagnostics, the
+full gate including eight Gateway and ten Admin boundary requests, and exact
+owned cleanup. These local snapshot proofs do not provide clean committed-source
+CI provenance.
+
+At this documentation commit, final exact committed-source Main and Native CI is
+still **PENDING**. Its later original run/artifact readback must qualify the final
+pushed source. Local proofs and controlled benchmarks do not replace that
+readback or the release-candidate/security evidence, approved qualification window,
+rollback rehearsals and ordered Admin/Gateway soaks. JIT remains the production
+default; the blocked promotion policy is unchanged. #1375 and #1368 remain open.
+
 NativeAOT readiness is measured separately from the normal JIT developer loop. The
 production services remain framework-dependent until the persistence and runtime
 parity phases are complete.
@@ -37,6 +71,55 @@ inventory, regenerate it with:
 
 Do not update the baseline to hide a regression. The later NativeAOT phases should
 normally only reduce it.
+
+## Implementation closeout checkpoint: 2026-10-11
+
+The dated assessments below preserve their original evidence. The selected native
+support contract has since advanced through typed Admin settings/IP HTTP,
+stateless inline MCP, billing-audit timers and shutdown drains, and explicit
+omission of five Gateway/seven Admin EF-backed hosted workers. The
+[Gateway matrix](gateway-native-aot-feature-matrix.md),
+[Admin matrix](native-aot-admin-feature-matrix.md) and
+[current persistence inventory](persistence-aot-query-inventory.md) define those
+operations and exclusions; the reproducible inventory remains 72 files/1,355 sites.
+No supported-profile serialization root or mandatory additional boundary extraction
+was found in the final contract/dependency review. Unextracted management, reporting,
+retention and reconciliation remain explicit separate workloads.
+
+[Linux run 38175668349](https://github.com/nickna/Conduit/actions/runs/38175668349)
+at `e0f9f9904df187460ab338bd86619d912f653d60` passes all three jobs, 219 selected
+persistence and integration cases with no skips, zero first-party linker diagnostics,
+the complete native process gate and both packaged entrypoints. Original retained
+manifests identify clean Git source and the actual SDK/compiler/runtime inventory.
+Both image packages pass payload/non-root/OpenAPI checks but retain classic-store
+OCI descriptor HOLD. The newer required hosted containerd gate and exact-step
+offline policy cases are described in [native publish evidence](native-publish-evidence.md).
+Its actual hosted integration must pass on the final committed source.
+
+The later unit 96 local Linux proof separately reproduces and fixes ordinary
+Admin setting-change propagation: both fresh native Gateways consume 5→7 before
+manual reload, hold 7 after direct SQL becomes 9, consume 9 after reload, and
+restore 5 after deletion/reload. Twelve authenticated validation requests make no
+provider dispatch or accounting changes; the complete host gate and owned cleanup
+pass. Its retained Admin and fresh Gateway/probe generations and unavailable Git
+provenance remain explicit. Failed-reload retry and completed-ID retention are
+tracked in [#1623](https://github.com/nickna/Conduit/issues/1623) and
+[#1627](https://github.com/nickna/Conduit/issues/1627).
+
+Configuration's function contracts are neutral and its resolved graph excludes the
+MCP implementation. Admin's retained Functions credential-test factory and AWS
+media/storage consumers are explicit required dependencies. Package ownership and
+architecture checks exclude unused Admin protocols, tokenizer and build tooling;
+resolved guards separately protect Configuration, Functions and native SignalR
+adapter boundaries. See
+[ADR 0009](../decisions/0009-staged-native-persistence-refactor.md) for the incremental
+boundary decision and evidence limits.
+
+Implementation closeout does not complete #1368/#1375. Production remains JIT under
+ADR 0006; digest-pinned authenticated comparative benchmarks, release security/
+SBOM/provenance, dashboards/alerts, real rollback and an accepted 168-hour Admin
+soak followed by a separate 168-hour Gateway soak remain required. A successor
+promotion ADR and the policy gate must be approved before production-native use.
 
 ## Epic #1368 assessment: 2026-10-09
 
@@ -87,7 +170,7 @@ workload readiness.
 | [#1369](https://github.com/nickna/Conduit/issues/1369), analyzer/publish gates | Implemented and verified. Empty analyzer/linker ratchets, SDK checks, Linux process/image gates, symbols separation, and retained baselines exist. | Reconcile the issue checklist with the linked run; retain the gates for subsequent slices. |
 | [#1370](https://github.com/nickna/Conduit/issues/1370), serialization/validation | Original reflection fallbacks, enum boot failure, and validation warnings are resolved. [ADR 0004](../decisions/0004-json-source-generation-contract-inventory.md) now distinguishes its historical scope from current generated contracts. | Exercise the remaining endpoint/provider graphs with reflection disabled; representative fixtures and OpenAPI materialization are insufficient for every runtime payload. |
 | [#1371](https://github.com/nickna/Conduit/issues/1371), reflection/discovery | Static handler bridges/registries, provider capabilities, decorator traversal, and production `RunAsync` replace the original application discovery paths. | Review and retain bounded third-party Wolverine/EF metadata exceptions; remove them only with upstream support and passing native tests. |
-| [#1372](https://github.com/nickna/Conduit/issues/1372), dependency boundaries | Neutral Contracts and Persistence.Abstractions plus optional adapter projects are extracted; generation tooling is opt-in. | Configuration still owns EF and references Functions, and Core/Providers still depend on it. Guard transitive publish dependencies as well as direct assembly references. Native MessagePack registration is excluded, but its package reference remains unconditional. |
+| [#1372](https://github.com/nickna/Conduit/issues/1372), dependency boundaries | Neutral Contracts and Persistence.Abstractions plus optional adapter projects are extracted; generation tooling is opt-in. Functions excludes unused EF/Npgsql/build-tool packages with a resolved dependency guard. Native SignalR excludes the optional MessagePack client protocol package with a resolved dependency guard. | Configuration still owns EF and references Functions, and Core/Providers still depend on it. Continue checking transitive publish dependencies as well as direct assembly references. The Redis backplane still requires MessagePack for its internal transport. |
 | [#1373](https://github.com/nickna/Conduit/issues/1373), persistence | Standalone migrator, schema-version seam, two accepted ADRs, typed stores, and real database/native probes exist. | Complete the [remaining operation inventory](persistence-aot-query-inventory.md), including Admin workloads and Gateway workers/new discovery consumers. The 25 method-scoped query exceptions remain unsupported work, not completed queries. |
 | [#1374](https://github.com/nickna/Conduit/issues/1374), runtime parity | OpenAI-compatible chat/SSE/accounting/image storage, authenticated JSON hubs, Redis backplane, and bounded Wolverine delivery pass natively. | Prove normal readiness, invalidation, tools/functions, additional providers/media, durable recovery and failures, and native aggregate values. See the [feature matrix](gateway-native-aot-feature-matrix.md) for exact evidence limits. |
 | [#1375](https://github.com/nickna/Conduit/issues/1375), rollout | Minimal candidate-image, scan/attestation, benchmark and promotion-policy machinery exists. No release-workflow runs or production canary evidence were found during this audit. | Representative digest-pinned benchmarks, successor persistence approval, release evidence, dashboards/alerts, rollback rehearsals, then ordered 168-hour Admin and Gateway soaks. Keep `promotion-policy.json` blocked and JIT deployable. |
@@ -209,6 +292,12 @@ merges to `master`, on a weekly schedule, and on manual dispatch. The workflow:
 5. Retains publish time, executable and runtime size, OpenAPI readiness time, peak
    working set, generated OpenAPI documents, and process logs.
 
+The publisher also records immutable per-directory file and resolved-toolchain
+manifests, with shallow references in the mutable baseline summary. Every invocation
+requires fresh output. See [native-publish-evidence.md](native-publish-evidence.md)
+for the file-set definition and ownership/failure contract. These manifests do not
+associate separately rebuilt Docker images or clear production promotion.
+
 Native smoke failures fail the job. Diagnostics and measurements are retained even
 on failure. The supported Gateway gate includes PostgreSQL, Redis, MinIO, provider
 HTTP/SSE, request accounting, task state, and real JSON SignalR connections. JIT
@@ -230,6 +319,35 @@ APIs annotated for arbitrary runtime types. The 22 affected generated `Create`
 methods carry exact `IL3050` exceptions with an owner, upstream issue, and removal
 condition. `scripts/aot/normalize-compiled-model.ps1` reapplies and verifies that
 bounded generated-file set after regeneration.
+
+The separate [persisted-converter contract](../../Tests/ConduitLLM.PersistenceConverterAotTests/PersistedValueConverterContract.cs)
+checks all 31 converted properties in the current model, spanning 20 enum types:
+27 integer-enum mappings, two string-enum mappings and two dictionary/JSONB
+mappings. Independent expectations cover CLR/provider types, relational names,
+store types and nullability. Tests invoke each actual model property's converter
+delegates and dictionary tracking comparer.
+
+The [34 conventional-model integration cases](../../Tests/ConduitLLM.IntegrationTests/Tests/PersistedValueConverterParityTests.cs)
+passed against real PostgreSQL. Coverage includes unknown enum values, invalid
+inputs, nullable CLR enums with required database columns, SQL NULL versus JSON
+null, Unicode/case-distinct dictionary keys, tracked mutation, persisted readback
+and detached changes. JSONB readback compares contents independently of member
+order. Comparer tests preserve existing insertion-order-sensitive equality while
+checking cloned snapshots and mutation detection.
+Order-independent comparer equality is tracked in
+[#1648](https://github.com/nickna/Conduit/issues/1648).
+
+The [isolated native probe](../../Tests/ConduitLLM.PersistenceConverterAotTests/ConduitLLM.PersistenceConverterAotTests.csproj)
+and [smoke script](../../scripts/aot/persistence-converter-native-smoke.ps1) passed
+on Linux with the checked-in compiled model: 31 converted properties, 126
+PostgreSQL checks, two dictionary comparers, dynamic code disabled and zero
+first-party linker diagnostics. The original TRX, publish/runtime manifests,
+executable hashes and logs were retained; independent SQL readback found no
+leftover test schemas and exact owned fixture cleanup passed. This local proof
+used a frozen uncommitted source snapshot. Final committed-source CI remains a
+separate requirement. Native EF query/update execution, complete persistence
+support and production qualification remain outside this proof under
+[ADR 0009](../decisions/0009-staged-native-persistence-refactor.md).
 
 The 2026-08-28 `win-x64` native publish contains **0** first-party linker diagnostics.
 The checked-in linker baseline is therefore empty: any new first-party `IL2026`,
@@ -270,7 +388,14 @@ also pass. Offline OpenAPI and client types match the checked-in contracts acros
 two isolated generations; committed Wolverine adapters have no drift. The
 `linux-x64` workflow remains the platform-specific release gate.
 
-The parent epic remains open. Remaining work is:
+The remaining-work list below records the **2026-10-07 historical checkpoint**.
+Current selected native support and exclusions are defined by the
+[Admin matrix](native-aot-admin-feature-matrix.md),
+[Gateway matrix](gateway-native-aot-feature-matrix.md) and
+[ADR 0009](../decisions/0009-staged-native-persistence-refactor.md).
+Later cache-convergence, selected function and billing-audit proofs do not qualify
+the broader EF management, reporting, retention or reconciliation workloads.
+The parent epic and #1373/#1375 remain open; production promotion remains blocked.
 
 - **Persistence (#1373):** replace or independently prove the 25 excepted Admin
   query methods and the remaining management/reporting/retention workload. Refresh
@@ -278,8 +403,9 @@ The parent epic remains open. Remaining work is:
   audit/retention and billing reconciliation still execute unextracted EF queries;
   native host startup logs expose those failures even when the bounded protocol
   probe passes. They require typed stores and process tests before production use.
-- **Runtime parity (#1374):** prove database readiness, authentication-cache
-  invalidation, tool/function providers, and provider/video/audio flows beyond the
+- **Runtime parity (#1374):** retain the now-proven database/dependency readiness
+  gates, then prove authentication-cache invalidation, tool/function providers,
+  and provider/video/audio flows beyond the
   documented OpenAI-compatible chat/image matrix. JSON-only SignalR remains an
   explicit first-image limitation. Full native Admin management coverage remains
   outstanding. A passing bounded probe is insufficient for these workloads.
@@ -293,3 +419,138 @@ persistence probe, and retains Gateway/Wolverine process logs with the native
 reports. Source changes to shared libraries and service code trigger the native
 lane. Compiled-model normalization checks the exact exception code, justification,
 and placement on `Create`, including rejection of an altered exception.
+
+## Integration checkpoint: 2026-10-11
+
+[Linux NativeAOT run 38121134709](https://github.com/nickna/Conduit/actions/runs/38121134709)
+passed its publish/process job with **0** first-party linker diagnostics. It proves
+Wait-mode startup against two owned databases: an empty schema and the real prior
+release migration. Native Admin and two Gateways stay live with readiness503 across
+two observations, then become ready on the original processes after the standalone
+migrator provisions the application and Wolverine schemas. The same run passes the
+future-history mismatch and PostgreSQL/Redis outage/recovery gates, exact seeded
+metric aggregates and the existing authenticated protocol workload.
+
+The runtime capability contract now includes `readiness-and-database-health` rather
+than excluding it. This is a schema/dependency health claim, not completion of the
+background-worker or Admin-management workload. The retained logs still expose
+unextracted EF work; the parent epic and production promotion remain incomplete.
+
+Function entities and persistence interfaces now compile in the neutral persistence
+leaf with binary forwarding from Functions, so Configuration no longer references
+the function provider implementation assembly. Function discovery and execution
+configuration/credential read ports have EF/Npgsql parity suites and standalone
+persistence probes. [Linux run 38122760993](https://github.com/nickna/Conduit/actions/runs/38122760993)
+proves both typed read ports. [Linux run 38124571584](https://github.com/nickna/Conduit/actions/runs/38124571584)
+also passes authenticated function catalog and parameter HTTP on both Gateways,
+typed pricing reads and cleanup fault contracts. The metadata proof includes
+enabled rows, named/numeric filters, structured/non-object/null schemas, unknown
+enum strings, private-field omission, repeated JSON shape and missing/disabled
+parameter resources. The runtime now advertises `function-metadata-discovery` for
+these reads.
+
+[Linux run 38126684370](https://github.com/nickna/Conduit/actions/runs/38126684370)
+passes the standalone scalar execution writer proof. Run
+[38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143) at commit
+`09365e16` has also passed the complete publish/process job: both native service
+publishes, native PostgreSQL contracts, shared EF/Npgsql parity, two-host Wolverine
+and Gateway protocol gates. This includes the execution reader's 39 scalar fields,
+included configuration/inverse graph and 105-row list, plus native HTTP execution
+preflight on both Gateways for authentication, missing/disabled configurations and
+missing required parameters. Both image jobs were still running at this checkpoint.
+Reader and writer persistence proof and early-return HTTP preflight do not establish
+Gateway provider execution or execution status/list HTTP behavior.
+
+Native Gateway selects the catalog, scalar configuration/credential, pricing and
+execution writer/reader stores. Its scoped execution service consumes the named
+typed factory after the writer/reader persistence proofs; JIT/Admin retain their
+repository construction. Host composition verifies exact native port identities
+and empty legacy repository fields. Core's `FunctionDiscoveryService` selects scalar reads through an
+explicit factory while retaining the sole public repository constructor for JIT.
+Commit `f6fd3100` passes 99 JIT and 100 native-profile managed cases without skips,
+including paired Core discovery behavior and exact host composition. Its Gateway
+analyzer build emits zero first-party IL diagnostics; its 14 known warnings comprise
+12 cached NuGet vulnerability-metadata warnings and two nullable compiler warnings.
+The selected Core LLM tool discovery and chat preflight now have published Exa
+workflow proof below. Broader agentic workflows remain outside that bounded proof.
+
+Chat's separate function-configuration preflight now selects a scalar-store
+factory. It retains the sole public 14-parameter constructor and the original ID
+input, validation/error ordering, cancellation behavior and accounting boundary.
+JIT retains the repository registration. Commit `56d660d8` passed 90 JIT and 91
+native-profile managed cases without skips, including 47 paired preflight/default
+and constructor cases; its full enabled Gateway analyzer build emitted zero IL
+warnings. The subsequent native composition and HTTP gate exercises missing IDs,
+disabled rows and invalid iteration limits on both chat routes and both Gateways.
+It checks unchanged provider counters and owned SQL accounting, and preserves the
+middleware correlation ID before the handler creates a billing identity. These
+guarded requests alone do not establish successful agentic execution. The complete
+published Exa workload below also passes this selected preflight.
+
+[Linux run 38133326127](https://github.com/nickna/Conduit/actions/runs/38133326127)
+at `5396be8a` passed its complete native publish/process job with zero first-party
+linker diagnostics and 96 real persistence/credential/transport parity cases without
+skips. The published two-Gateway probe executes two successful Exa searches and two
+provider rejections with a production-protected scoped credential. It independently
+checks all 24 execution fields, opposite-host retrieval and ownership denial,
+configured prices, success-only logs and settled ledger/group balances. Its bounded
+process and owned Redis/SQL cleanup gate passes too. This proves that selected inline
+Exa path. Successful configured Exa agentic chat is qualified below; MCP and the
+excluded workers remain separate work.
+Both native image jobs also passed their packaged-entrypoint checks. The inherited
+financial precision and External-mode provider diagnostics are tracked in
+[#1574](https://github.com/nickna/Conduit/issues/1574) and
+[#1575](https://github.com/nickna/Conduit/issues/1575).
+
+The configured-function agentic probe now follows the complete inline proof. Four
+non-streaming chats cover both aliases on both Gateway hosts, with two actual LLM
+calls and one Exa execution per chat. It checks schema discovery and the matching
+rich tool-result handoff, aggregate 20/10-token usage, all 24 persisted execution
+fields, opposite-host GET/ownership and all 28 chat-log scalars. Independent SQL
+requires the combined per-chat charge `0.12515001`, six total success logs and
+stable final group spend `0.75060006` alongside log/ledger sums `0.750600`.
+OpenAI's wildcard capability makes prompt caching eligible; no policy is applied
+without caching intent. The real two-host managed native-profile HTTP probe and
+fully enabled Gateway/probe analyzer builds pass with zero IL diagnostics. The
+published Linux process job in
+[run 38137532017](https://github.com/nickna/Conduit/actions/runs/38137532017/job/114465334583)
+at `d13e7deb` passed this phase, configuration preflight, inline execution and owned
+cleanup with zero first-party linker diagnostics. Its strict parity report records
+137 discovered, executed and passed cases with zero failures/skips, including 27
+production MCP-client transport cases. Those managed MCP cases do not establish
+the Gateway's published MCP execution path. Response
+cost summaries, summary iteration and omitted chat-log function metadata are
+preserved and tracked in [#1577](https://github.com/nickna/Conduit/issues/1577),
+[#1578](https://github.com/nickna/Conduit/issues/1578) and
+[#1579](https://github.com/nickna/Conduit/issues/1579). Provider-hosted tool pricing,
+MCP, agentic SSE, parallel/dependent tools and excluded workers remain separate work.
+
+The expanded published gate at `eea32722` reached the inherited IP limiter's
+100-request default and returned 429 before completing the new preflight phase.
+The harness now explicitly applies the declared 1,000-request Gateway limit to
+its owned hosts, retaining both IP and per-key limiting. A local managed native
+profile rerun passed 101 authenticated validation rejections in under a second,
+then the complete inline/agentic proof and repeated owned cleanup. The options
+divergence is tracked in [#1580](https://github.com/nickna/Conduit/issues/1580);
+the corrected complete published process gate passed in the run linked above.
+
+The native Gateway capability endpoint includes `inline-exa-search`,
+`inline-stateless-mcp-tools`, `billing-audit-batch-writes` and
+`nonstreaming-configured-exa-agentic-chat`. It explicitly names
+`inline-functions-beyond-exa-search-and-stateless-mcp`,
+`agentic-workflows-beyond-nonstreaming-configured-exa-chat`,
+`function-execution-list-http`, `function-audit-and-retention`, and
+`billing-reconciliation` alongside the existing EF, authentication-cache and
+MessagePack exclusions. The native worker profile now omits five Gateway and
+seven Admin EF hosted workers, and removes optional pricing-audit injection and
+the Admin pricing-tools routes. JIT retains these workers and routes. Other EF
+management services remain registered for their existing JIT contracts and are
+unsupported native operations. Admin now exposes its own generated capability
+response; both native hosts report `typed-npgsql-selected-runtime-slices`.
+See the [Admin profile](native-aot-admin-feature-matrix.md) and
+[Gateway profile](gateway-native-aot-feature-matrix.md) for retained workers,
+exact exclusions and bounded evidence. Full Admin management, representative
+digest-pinned benchmarks, rollback and ordered actual
+soaks remain required before production promotion or epic completion. The current
+lexical query inventory is 72 candidate files and 1,355 sites; it includes retained
+JIT reference adapters and is not a count of unsupported native operations.

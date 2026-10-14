@@ -12,6 +12,17 @@ using ConduitLLM.Gateway.DTOs;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services.Strategies;
 using ConduitLLM.Gateway.RateLimiting;
+#if CONDUIT_NATIVE_AOT
+using System.Text.Json;
+using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Core;
+using ConduitLLM.Core.Services;
+using ConduitLLM.Functions.Interfaces;
+using ConduitLLM.Gateway.Billing;
+using ConduitLLM.Gateway.Options;
+using ConduitLLM.Persistence.Interfaces;
+using Microsoft.Extensions.Options;
+#endif
 
 namespace ConduitLLM.Gateway.Endpoints;
 
@@ -25,7 +36,18 @@ public static class GatewayApiEndpoints
         services.AddScoped<CompletionsEndpoints>();
         services.AddScoped<DiscoveryEndpoints>();
         services.AddScoped<TasksEndpoints>();
+#if CONDUIT_NATIVE_AOT
+        services.AddScoped(provider => FunctionsEndpoints.CreateWithRuntimePersistence(
+            provider.GetRequiredService<IFunctionExecutionService>(),
+            provider.GetRequiredService<IFunctionExecutionConfigurationStore>(),
+            provider.GetRequiredService<ConduitLLM.Functions.Services.FunctionParameterValidationService>(),
+            provider.GetRequiredService<IEventPublisher>(),
+            provider.GetRequiredService<IHttpContextAccessor>(),
+            provider.GetRequiredService<ILogger<FunctionsEndpoints>>(),
+            provider.GetRequiredService<IProviderErrorTranslator>()));
+#else
         services.AddScoped<FunctionsEndpoints>();
+#endif
         services.AddScoped<RerankEndpoints>();
         services.AddScoped<EmbeddingsEndpoints>();
         services.AddScoped<AudioEndpoints>();
@@ -35,7 +57,27 @@ public static class GatewayApiEndpoints
         services.AddScoped<Base64MediaProcessor>();
         services.AddScoped<UrlMediaProcessor>();
         services.AddScoped<VideosEndpoints>();
+#if CONDUIT_NATIVE_AOT
+        services.AddScoped(provider => ChatEndpoints.CreateWithRuntimePersistence(
+            provider.GetRequiredService<Conduit>(),
+            provider.GetRequiredService<ILogger<ChatEndpoints>>(),
+            provider.GetRequiredService<IModelProviderMappingService>(),
+            provider.GetRequiredService<JsonSerializerOptions>(),
+            provider.GetRequiredService<IEventPublisher>(),
+            provider.GetRequiredService<IGlobalSettingsCacheService>(),
+            provider.GetRequiredService<IUsageEstimationService>(),
+            provider.GetRequiredService<IFunctionExecutionConfigurationStore>(),
+            provider.GetService<IOptions<UsageTrackingOptions>>(),
+            provider.GetService<IChatSpendEstimator>(),
+            provider.GetService<ISpendReservationService>(),
+            provider.GetService<IOptions<BillingAdmissionOptions>>(),
+            provider.GetService<IHttpContextAccessor>(),
+            provider.GetService<IProviderErrorTranslator>(),
+            provider.GetService<ICostCalculationService>(),
+            provider.GetService<IToolCostCalculationService>()));
+#else
         services.AddScoped<ChatEndpoints>();
+#endif
         services.AddScoped<IResponsesChatExecutor, ResponsesChatExecutor>();
         services.AddScoped<ResponsesEndpoints>();
         return services;
@@ -63,14 +105,28 @@ public static class GatewayApiEndpoints
             .RequireAuthorization("VirtualKeyAuthentication")
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Discovery");
+#if CONDUIT_NATIVE_AOT
+        discovery.MapGet("/models", (string? capability) => GatewayResults.OpenAIError(
+                StatusCodes.Status501NotImplemented,
+                "Model catalog discovery is not supported by the native-aot runtime profile.",
+                "not_implemented"))
+#else
         discovery.MapGet("/models", ([FromServices] DiscoveryEndpoints endpoints, string? capability) => endpoints.GetModels(capability))
+#endif
             .WithName("Discovery_GetModels")
             .WithSummary("Gets all discovered models and their capabilities for authenticated virtual keys.")
             .WithParameterDescription("capability", "Optional capability filter (e.g., \"video_generation\", \"vision\")").Produces<DiscoveryModelsResponse>();
         discovery.MapGet("/capabilities", ([FromServices] DiscoveryEndpoints endpoints) => endpoints.GetCapabilities())
             .WithName("Discovery_GetCapabilities")
             .WithSummary("Gets all available capabilities in the system.").Produces<DiscoveryCapabilitiesResponse>();
+#if CONDUIT_NATIVE_AOT
+        discovery.MapGet("/models/{model}/parameters", (string model) => GatewayResults.OpenAIError(
+                StatusCodes.Status501NotImplemented,
+                "Model catalog discovery is not supported by the native-aot runtime profile.",
+                "not_implemented"))
+#else
         discovery.MapGet("/models/{model}/parameters", ([FromServices] DiscoveryEndpoints endpoints, string model) => endpoints.GetModelParameters(model))
+#endif
             .WithName("Discovery_GetModelParameters")
             .WithSummary("Gets UI parameters for a specific model to enable dynamic UI generation.")
             .WithParameterDescription("model", "The model alias or identifier to get parameters for").Produces<ModelParametersResponse>()
@@ -78,7 +134,7 @@ public static class GatewayApiEndpoints
         discovery.MapGet("/functions", ([FromServices] DiscoveryEndpoints endpoints, string? purpose, string? providerType) => endpoints.GetFunctions(purpose, providerType))
             .WithName("Discovery_GetFunctions")
             .WithSummary("Gets all available function configurations for authenticated virtual keys.")
-            .WithParameterDescription("purpose", "Optional purpose filter (e.g., \"Search\", \"Answer\", \"RAG_Search\")")
+            .WithParameterDescription("purpose", "Optional purpose filter (e.g., \"Search\", \"Answer\", \"RAG\")")
             .WithParameterDescription("providerType", "Optional provider type filter (e.g., \"Exa\", \"Perplexity\")").Produces<FunctionDiscoveryResponse>();
         discovery.MapGet("/functions/{functionConfigurationId}/parameters", ([FromServices] DiscoveryEndpoints endpoints, int functionConfigurationId) => endpoints.GetFunctionParameters(functionConfigurationId))
             .WithName("Discovery_GetFunctionParameters")

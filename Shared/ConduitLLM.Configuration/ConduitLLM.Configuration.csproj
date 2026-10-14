@@ -18,6 +18,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Npgsql" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
     <PackageReference Include="AspNetCore.HealthChecks.Redis" />
@@ -31,10 +32,20 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!-- Function entities and ports come from Persistence.Abstractions. Optional
+       function-provider implementations must not enter the persistence graph. -->
+  <Target Name="VerifyFunctionImplementationBoundary" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <_ForbiddenPersistenceFunctionPackage Include="@(PackageDependencies)"
+        Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(PackageDependencies.Identity)', '^ModelContextProtocol(\.|$)'))" />
+    </ItemGroup>
+    <Error Condition="'@(_ForbiddenPersistenceFunctionPackage)' != ''"
+      Text="Configuration must not own function-provider implementations. Resolved forbidden packages: @(_ForbiddenPersistenceFunctionPackage)." />
+  </Target>
+
 
   <ItemGroup>
     <ProjectReference Include="..\ConduitLLM.Contracts\ConduitLLM.Contracts.csproj" />
-    <ProjectReference Include="..\ConduitLLM.Functions\ConduitLLM.Functions.csproj" />
     <ProjectReference Include="..\ConduitLLM.Persistence.Abstractions\ConduitLLM.Persistence.Abstractions.csproj" />
   </ItemGroup>
 

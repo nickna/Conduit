@@ -4,6 +4,7 @@ using ConduitLLM.Functions.Enums;
 using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Services;
+using ConduitLLM.Functions.Serialization;
 using ConduitLLM.Tests.TestHelpers;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -281,5 +282,5 @@ public class FunctionCostCalculationServiceHybridTests
     };
 
     private static Dictionary<string, object> DeserializeParameters(string json) =>
-        JsonSerializer.Deserialize<Dictionary<string, object>>(json)!;
+        JsonSerializer.Deserialize(json, FunctionsJsonContext.Default.DictionaryStringObject)!;
 }

@@ -12,4 +12,11 @@
     <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Abstractions\ConduitLLM.Persistence.Abstractions.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Npgsql\ConduitLLM.Persistence.Npgsql.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Exercise the production leaf without pulling EF into the native probe. -->
+    <Compile Include="..\..\Shared\ConduitLLM.Configuration\Data\SchemaVersionProbe.cs" Link="SchemaVersionProbe.cs" />
+    <Compile Include="..\..\Shared\ConduitLLM.Configuration\Data\ReleaseMigrationStartupProbe.cs" Link="ReleaseMigrationStartupProbe.cs" />
+    <Compile Include="..\..\Shared\ConduitLLM.Configuration\Data\WolverineStorageStartupProbe.cs" Link="WolverineStorageStartupProbe.cs" />
+  </ItemGroup>
 </Project>

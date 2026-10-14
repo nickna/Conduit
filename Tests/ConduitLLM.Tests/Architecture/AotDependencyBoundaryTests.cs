@@ -13,6 +13,7 @@ using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Gateway.Authentication;
 using ConduitLLM.Gateway.Endpoints;
 using ConduitLLM.Gateway.EventHandlers;
@@ -23,6 +24,7 @@ using ConduitLLM.Persistence.Npgsql;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 using AdminConfigurationEndpoints = ConduitLLM.Admin.Endpoints.ConfigurationEndpoints;
 
@@ -126,6 +128,17 @@ public sealed class AotDependencyBoundaryTests
     }
 
     [Fact]
+    public void FunctionsDoNotOwnPersistenceOrBuildTooling()
+    {
+        AssertDoesNotReference(
+            typeof(ConduitLLM.Functions.Security.FunctionCredentialProtector).Assembly,
+            "ConduitLLM.Configuration",
+            "Microsoft.EntityFrameworkCore",
+            "Npgsql",
+            "Microsoft.Build");
+    }
+
+    [Fact]
     public void CoreDoesNotOwnOptionalRuntimeAdapters()
     {
         AssertDoesNotReference(
@@ -176,15 +189,15 @@ public sealed class AotDependencyBoundaryTests
             "Wolverine");
     }
 
-#if !CONDUIT_NATIVE_AOT
     [Fact]
-    public void JitGatewayDoesNotRootTypedNpgsqlRuntimeAdapter()
+    public void ConnectionPoolWarmupDependsOnlyOnTheHostDataSource()
     {
-        AssertDoesNotReference(
-            Assembly.Load("ConduitLLM.Gateway"),
-            "ConduitLLM.Persistence.Npgsql");
+        var parameters = typeof(NpgsqlConnectionPoolWarmup).GetConstructors()
+            .Single().GetParameters().Select(parameter => parameter.ParameterType).ToArray();
+        Assert.Equal([typeof(NpgsqlDataSource)], parameters);
     }
 
+#if !CONDUIT_NATIVE_AOT
     [Fact]
     public void JitRepositoryGraphRegistersTheEfVirtualKeyRuntimeStore()
     {
@@ -253,11 +266,15 @@ public sealed class AotDependencyBoundaryTests
         services.AddScoped<IMediaRuntimeStore>(_ => null!);
         services.AddScoped<IRequestLogRuntimeStore>(_ => null!);
         services.AddScoped<IRequestLogRuntimeWriter>(_ => null!);
+        services.AddScoped<IFunctionExecutionRuntimeWriter>(_ => null!);
+        services.AddScoped<IFunctionExecutionRuntimeReader>(_ => null!);
         services.AddScoped<IModelProviderMappingRuntimeStore>(_ => null!);
         services.AddScoped<IModelProviderMappingRepository>(_ => null!);
 
         services.AddBillingAndPricingServices();
         services.UseNativeRuntimePersistence();
+        services.AddFunctionServices();
+        services.AddGatewayEndpointHandlers();
 
         AssertNativeSingleton<IGlobalSettingRepository, NpgsqlGlobalSettingRepository>(services);
         AssertNativeSingleton<IIpFilterRepository, NpgsqlIpFilterRepository>(services);
@@ -271,6 +288,39 @@ public sealed class AotDependencyBoundaryTests
         AssertNativeSingleton<IRequestLogRuntimeWriter, StoreBackedRequestLogRuntimeWriter>(services);
         AssertNativeSingleton<IModelProviderMappingRuntimeStore, NpgsqlModelProviderMappingRuntimeStore>(services);
         AssertNativeSingleton<IModelProviderMappingRepository, StoreBackedModelProviderMappingRepository>(services);
+        AssertNativeSingleton<IFunctionDiscoveryRuntimeStore, NpgsqlFunctionDiscoveryRuntimeStore>(services);
+        AssertNativeSingleton<IFunctionExecutionConfigurationStore, NpgsqlFunctionExecutionConfigurationStore>(services);
+        AssertNativeSingleton<IFunctionExecutionRuntimeWriter, NpgsqlFunctionExecutionRuntimeWriter>(services);
+        AssertNativeSingleton<IFunctionExecutionRuntimeReader, NpgsqlFunctionExecutionRuntimeReader>(services);
+        AssertNativeSingleton<IFunctionPricingRuntimeStore, NpgsqlFunctionPricingRuntimeStore>(services);
+        var functionCost = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(IFunctionCostService));
+        Assert.Equal(ServiceLifetime.Scoped, functionCost.Lifetime);
+        Assert.Equal(typeof(ConduitLLM.Functions.Services.StoreBackedFunctionCostService), functionCost.ImplementationType);
+        var functionClient = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(IFunctionClientFactory));
+        Assert.Equal(ServiceLifetime.Scoped, functionClient.Lifetime);
+        Assert.NotNull(functionClient.ImplementationFactory);
+        var functionExecution = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(IFunctionExecutionService));
+        Assert.Equal(ServiceLifetime.Scoped, functionExecution.Lifetime);
+        Assert.NotNull(functionExecution.ImplementationFactory);
+        Assert.Null(functionExecution.ImplementationType);
+        var functionDiscovery = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(ConduitLLM.Core.Interfaces.IFunctionDiscoveryService));
+        Assert.Equal(ServiceLifetime.Scoped, functionDiscovery.Lifetime);
+        Assert.NotNull(functionDiscovery.ImplementationFactory);
+        Assert.Null(functionDiscovery.ImplementationType);
+        var functionsEndpoint = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(FunctionsEndpoints));
+        Assert.Equal(ServiceLifetime.Scoped, functionsEndpoint.Lifetime);
+        Assert.NotNull(functionsEndpoint.ImplementationFactory);
+        Assert.Null(functionsEndpoint.ImplementationType);
+        var chatEndpoint = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(ChatEndpoints));
+        Assert.Equal(ServiceLifetime.Scoped, chatEndpoint.Lifetime);
+        Assert.NotNull(chatEndpoint.ImplementationFactory);
+        Assert.Null(chatEndpoint.ImplementationType);
         var modelCost = Assert.Single(
             services,
             candidate => candidate.ServiceType == typeof(IModelCostService));
@@ -278,6 +328,24 @@ public sealed class AotDependencyBoundaryTests
         Assert.Equal(typeof(StoreBackedModelCostService), modelCost.ImplementationType);
     }
 #endif
+
+    [Fact]
+    public void SignalRProtocolReferencesMatchTheRuntimeVariant()
+    {
+        var references = typeof(SignalRConfigurationExtensions).Assembly
+            .GetReferencedAssemblies()
+            .Select(reference => reference.Name)
+            .ToArray();
+        if (ConduitSignalRProtocolPolicy.IsNativeAot)
+        {
+            Assert.DoesNotContain(references, name => name?.Contains("MessagePack", StringComparison.Ordinal) == true);
+        }
+        else
+        {
+            Assert.Contains("Microsoft.AspNetCore.SignalR.Protocols.MessagePack", references);
+            Assert.Contains("MessagePack", references);
+        }
+    }
 
     [Fact]
     public void AdminDoesNotDirectlyOwnGatewayOnlyAdapters()
@@ -504,6 +572,7 @@ public sealed class AotDependencyBoundaryTests
             "ConduitLLM.Core",
             "ConduitLLM.Functions",
             "ConduitLLM.Gateway",
+            "ConduitLLM.Persistence.Abstractions",
             "ConduitLLM.Providers",
             "ConduitLLM.Security"
         };

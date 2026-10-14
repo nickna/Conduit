@@ -27,8 +27,14 @@ public sealed class EfModelProviderMappingRuntimeStore : IModelProviderMappingRu
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var mapping = await RuntimeGraph(context)
-            .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        var queryId = id;
+        var queryCancellationToken = cancellationToken;
+        var mapping = await context.ModelProviderMappings
+            .AsNoTracking()
+            .Include(mapping => mapping.Provider)
+            .Include(mapping => mapping.ModelProviderTypeAssociation.ModelCost)
+            .Include(mapping => mapping.ModelProviderTypeAssociation.Model.Series)
+            .SingleOrDefaultAsync(candidate => candidate.Id == queryId, queryCancellationToken);
         return mapping is null ? null : Map(mapping);
     }
 
@@ -40,11 +46,16 @@ public sealed class EfModelProviderMappingRuntimeStore : IModelProviderMappingRu
         ArgumentException.ThrowIfNullOrWhiteSpace(modelAlias);
         var normalizedAlias = modelAlias.ToLower();
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var mappings = await RuntimeGraph(context)
+        var queryCancellationToken = cancellationToken;
+        var mappings = await context.ModelProviderMappings
+            .AsNoTracking()
+            .Include(mapping => mapping.Provider)
+            .Include(mapping => mapping.ModelProviderTypeAssociation.ModelCost)
+            .Include(mapping => mapping.ModelProviderTypeAssociation.Model.Series)
             .Where(mapping => mapping.ModelAlias.ToLower() == normalizedAlias)
             .OrderBy(mapping => mapping.RoutingPriority)
             .ThenBy(mapping => mapping.Id)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(queryCancellationToken);
         return mappings.Select(Map).ToArray();
     }
 
@@ -56,13 +67,21 @@ public sealed class EfModelProviderMappingRuntimeStore : IModelProviderMappingRu
     {
         (page, pageSize) = NormalizePagination(page, pageSize);
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var totalCount = await context.ModelProviderMappings.CountAsync(cancellationToken);
-        var mappings = await RuntimeGraph(context)
+        var countCancellationToken = cancellationToken;
+        var totalCount = await context.ModelProviderMappings.CountAsync(countCancellationToken);
+        var queryOffset = (page - 1) * pageSize;
+        var queryPageSize = pageSize;
+        var queryCancellationToken = cancellationToken;
+        var mappings = await context.ModelProviderMappings
+            .AsNoTracking()
+            .Include(mapping => mapping.Provider)
+            .Include(mapping => mapping.ModelProviderTypeAssociation.ModelCost)
+            .Include(mapping => mapping.ModelProviderTypeAssociation.Model.Series)
             .OrderBy(mapping => mapping.ModelAlias)
             .ThenBy(mapping => mapping.Id)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
+            .Skip(queryOffset)
+            .Take(queryPageSize)
+            .ToListAsync(queryCancellationToken);
         return new ModelProviderMappingRuntimePage(mappings.Select(Map).ToArray(), totalCount);
     }
 
@@ -75,15 +94,25 @@ public sealed class EfModelProviderMappingRuntimeStore : IModelProviderMappingRu
     {
         (page, pageSize) = NormalizePagination(page, pageSize);
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var countProviderId = providerId;
+        var countCancellationToken = cancellationToken;
         var totalCount = await context.ModelProviderMappings
-            .CountAsync(mapping => mapping.ProviderId == providerId, cancellationToken);
-        var mappings = await RuntimeGraph(context)
-            .Where(mapping => mapping.ProviderId == providerId)
+            .CountAsync(mapping => mapping.ProviderId == countProviderId, countCancellationToken);
+        var queryProviderId = providerId;
+        var queryOffset = (page - 1) * pageSize;
+        var queryPageSize = pageSize;
+        var queryCancellationToken = cancellationToken;
+        var mappings = await context.ModelProviderMappings
+            .AsNoTracking()
+            .Include(mapping => mapping.Provider)
+            .Include(mapping => mapping.ModelProviderTypeAssociation.ModelCost)
+            .Include(mapping => mapping.ModelProviderTypeAssociation.Model.Series)
+            .Where(mapping => mapping.ProviderId == queryProviderId)
             .OrderBy(mapping => mapping.ModelAlias)
             .ThenBy(mapping => mapping.Id)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
+            .Skip(queryOffset)
+            .Take(queryPageSize)
+            .ToListAsync(queryCancellationToken);
         return new ModelProviderMappingRuntimePage(mappings.Select(Map).ToArray(), totalCount);
     }
 
@@ -93,11 +122,17 @@ public sealed class EfModelProviderMappingRuntimeStore : IModelProviderMappingRu
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var mappings = await RuntimeGraph(context)
-            .Where(mapping => mapping.ModelProviderTypeAssociation.ModelId == modelId)
+        var queryModelId = modelId;
+        var queryCancellationToken = cancellationToken;
+        var mappings = await context.ModelProviderMappings
+            .AsNoTracking()
+            .Include(mapping => mapping.Provider)
+            .Include(mapping => mapping.ModelProviderTypeAssociation.ModelCost)
+            .Include(mapping => mapping.ModelProviderTypeAssociation.Model.Series)
+            .Where(mapping => mapping.ModelProviderTypeAssociation.ModelId == queryModelId)
             .OrderBy(mapping => mapping.ModelAlias)
             .ThenBy(mapping => mapping.Id)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(queryCancellationToken);
         return mappings.Select(Map).ToArray();
     }
 
@@ -107,11 +142,13 @@ public sealed class EfModelProviderMappingRuntimeStore : IModelProviderMappingRu
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryAssociationId = associationId;
+        var queryCancellationToken = cancellationToken;
         return await context.ModelProviderTypeAssociations
             .AsNoTracking()
-            .Where(association => association.Id == associationId)
+            .Where(association => association.Id == queryAssociationId)
             .Select(association => (int?)association.ModelId)
-            .SingleOrDefaultAsync(cancellationToken);
+            .SingleOrDefaultAsync(queryCancellationToken);
     }
 
     /// <inheritdoc />
@@ -121,9 +158,11 @@ public sealed class EfModelProviderMappingRuntimeStore : IModelProviderMappingRu
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelAlias);
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryModelAlias = modelAlias;
+        var queryCancellationToken = cancellationToken;
         return await context.ModelRoutePolicies
             .AsNoTracking()
-            .Where(policy => policy.ModelAlias == modelAlias)
+            .Where(policy => policy.ModelAlias == queryModelAlias)
             .Select(policy => new ModelRoutePolicyRuntimeRecord
             {
                 Id = policy.Id,
@@ -139,7 +178,7 @@ public sealed class EfModelProviderMappingRuntimeStore : IModelProviderMappingRu
                 CreatedAt = policy.CreatedAt,
                 UpdatedAt = policy.UpdatedAt
             })
-            .SingleOrDefaultAsync(cancellationToken);
+            .SingleOrDefaultAsync(queryCancellationToken);
     }
 
     /// <inheritdoc />
@@ -148,9 +187,11 @@ public sealed class EfModelProviderMappingRuntimeStore : IModelProviderMappingRu
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryModelCostId = modelCostId;
+        var queryCancellationToken = cancellationToken;
         var cost = await context.ModelCosts
             .AsNoTracking()
-            .SingleOrDefaultAsync(candidate => candidate.Id == modelCostId, cancellationToken);
+            .SingleOrDefaultAsync(candidate => candidate.Id == queryModelCostId, queryCancellationToken);
         return cost is null ? null : MapCost(cost);
     }
 
@@ -162,27 +203,19 @@ public sealed class EfModelProviderMappingRuntimeStore : IModelProviderMappingRu
         ArgumentException.ThrowIfNullOrWhiteSpace(modelIdentifier);
         var now = DateTime.UtcNow;
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryModelIdentifier = modelIdentifier;
+        var queryCancellationToken = cancellationToken;
         var cost = await context.ModelCosts
             .AsNoTracking()
             .Where(candidate => candidate.IsActive && candidate.EffectiveDate <= now)
             .Where(candidate => !candidate.ExpiryDate.HasValue || candidate.ExpiryDate > now)
             .Where(candidate => candidate.ModelProviderTypeAssociations.Any(association =>
-                association.Identifier == modelIdentifier && association.IsEnabled))
+                association.Identifier == queryModelIdentifier && association.IsEnabled))
             .OrderByDescending(candidate => candidate.Priority)
             .ThenByDescending(candidate => candidate.EffectiveDate)
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(queryCancellationToken);
         return cost is null ? null : MapCost(cost);
     }
-
-    private static IQueryable<ModelProviderMapping> RuntimeGraph(ConduitDbContext context) =>
-        context.ModelProviderMappings
-            .AsNoTracking()
-            .Include(mapping => mapping.Provider)
-            .Include(mapping => mapping.ModelProviderTypeAssociation)
-                .ThenInclude(association => association.ModelCost)
-            .Include(mapping => mapping.ModelProviderTypeAssociation)
-                .ThenInclude(association => association.Model)
-                    .ThenInclude(model => model.Series);
 
     private static ModelProviderMappingRuntimeRecord Map(ModelProviderMapping mapping) => new()
     {

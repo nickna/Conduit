@@ -1,14 +1,33 @@
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Npgsql;
 using NpgsqlTypes;
 
 using StackExchange.Redis;
+
+if (args.Length > 0 && args[0] == "--benchmark-workload")
+{
+    try
+    {
+        if (args.Length != 2) { throw new InvalidOperationException(); }
+        Environment.ExitCode = await NativeBenchmarkWorkloadProbe.RunAsync(
+            args[1], Console.OpenStandardOutput());
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Benchmark workload failed.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
 
 if (args is ["--seed"])
 {
@@ -16,6 +35,174 @@ if (args is ["--seed"])
         ProbeSettings.DatabaseConnectionStringFromEnvironment(),
         ProbeSettings.ProviderUriFromEnvironment(),
         ProbeSettings.RedisConnectionStringFromEnvironment());
+    if (Environment.GetEnvironmentVariable("CONDUIT_NATIVE_FUNCTION_FIXTURE_OWNER") is not null)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        await NativeFunctionFixture.CreateAsync(source, ProbeSettings.FunctionFixtureOwnerFromEnvironment(),
+            ProbeSettings.ProviderUriFromEnvironment(),
+            Environment.GetEnvironmentVariable("CONDUIT_NATIVE_FUNCTION_PROTECTED_KEY")
+                ?? throw new InvalidOperationException("A protected function fixture credential is required."),
+            deadline.Token);
+    }
+    return;
+}
+
+if (args is ["--cleanup-function-fixture"] or ["--cleanup-mcp-function-fixture"])
+{
+    var mcp = args[0] == "--cleanup-mcp-function-fixture";
+    var profile = mcp ? NativeFunctionFixtureProfile.Mcp : NativeFunctionFixtureProfile.Exa;
+    var label = mcp ? "Owned MCP function fixture cleanup" : "Owned function fixture cleanup";
+    try
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        var owner = mcp ? ProbeSettings.McpFixtureOwnerFromEnvironment() : ProbeSettings.FunctionFixtureOwnerFromEnvironment();
+        var snapshot = await NativeFunctionFixture.ReadAsync(source, owner, profile, deadline.Token);
+        if (snapshot is not null)
+        {
+            // Hosts have already stopped. Keep the ownership rows until Redis
+            // cleanup succeeds, so a failed cleanup can be retried safely.
+            await NativeFunctionFixtureRedisCleanup.DeleteAsync(
+                ProbeSettings.RedisConnectionStringFromEnvironment(), snapshot, deadline.Token);
+            await NativeFunctionFixture.DeleteAsync(source, owner, profile, deadline.Token);
+        }
+        Console.WriteLine(label + ": PASS");
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine(label + " failed.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
+if (args is ["--admin-ip-filters"] or ["--cleanup-admin-ip-filters"])
+{
+    try
+    {
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        if (args[0] == "--admin-ip-filters")
+            await NativeAdminIpFilterProbe.RunAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_ADMIN_URL"), source,
+                ProbeSettings.AdminIpOwnerFromEnvironment(), ProbeSettings.FunctionFixtureOwnerFromEnvironment(),
+                ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
+        else
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            await NativeAdminIpFilterProbe.CleanupAsync(source, ProbeSettings.AdminIpOwnerFromEnvironment(), deadline.Token);
+            Console.WriteLine("Owned Admin IP-filter fixture cleanup: PASS");
+        }
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Native Admin IP-filter operation failed.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
+if (args is ["--global-settings-cache-convergence"] or ["--cleanup-global-settings-cache-convergence"])
+{
+    try
+    {
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        if (args[0] == "--global-settings-cache-convergence")
+            await NativeGlobalSettingsCacheConvergenceProbe.RunAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_ADMIN_URL"),
+                ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_URL"), ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"),
+                ProbeSettings.ProviderUriFromEnvironment(), source, ProbeSettings.AdminSettingsOwnerFromEnvironment(),
+                ProbeSettings.FunctionFixtureOwnerFromEnvironment(), ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
+        else
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            await NativeGlobalSettingsCacheConvergenceProbe.CleanupAsync(source,
+                ProbeSettings.AdminSettingsOwnerFromEnvironment(), deadline.Token);
+            Console.WriteLine("Owned global settings cache-convergence fixture cleanup: PASS");
+        }
+    }
+    catch (InvalidOperationException error) when (error.Message.StartsWith(
+        "Native global settings cache convergence failed at ", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine(error.Message);
+        Environment.ExitCode = 1;
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Native global settings cache-convergence operation failed.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
+if (args is ["--cleanup-admin-global-settings"])
+{
+    try
+    {
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        var owner = ProbeSettings.AdminSettingsOwnerFromEnvironment();
+        var failures = new List<Exception>();
+        try
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await NativeGlobalSettingsCacheConvergenceProbe.CleanupAsync(source, owner, deadline.Token);
+        }
+        catch (Exception error) { failures.Add(error); }
+        try
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await NativeAdminGlobalSettingProbe.CleanupAsync(source, owner, deadline.Token);
+        }
+        catch (Exception error) { failures.Add(error); }
+        if (failures.Count != 0) throw new AggregateException("Owned Admin setting cleanup failed.", failures);
+        Console.WriteLine("Owned Admin global-setting fixture cleanup: PASS");
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Owned Admin global-setting fixture cleanup failed.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
+if (args is ["--admin-global-settings"])
+{
+    try
+    {
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        await NativeAdminGlobalSettingProbe.RunAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_ADMIN_URL"), source,
+            ProbeSettings.AdminSettingsOwnerFromEnvironment(), ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine("Admin global-settings HTTP proof failed: " + exception.Message);
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
+if (args is ["--proxy-routes"])
+{
+    var database = Environment.GetEnvironmentVariable("DATABASE_URL")
+        ?? throw new InvalidOperationException("DATABASE_URL is required.");
+    var redis = NativeDependencyRoutes.ParseRedis(Environment.GetEnvironmentVariable("REDIS_URL"),
+        Environment.GetEnvironmentVariable("CONDUIT_REDIS_CONNECTION_STRING"));
+    var routes = new JsonObject
+    {
+        ["database"] = NativeDependencyRoutes.RedirectDatabaseUrl(database,
+            int.Parse(Environment.GetEnvironmentVariable("CONDUIT_NATIVE_PROXY_POSTGRES_PORT")
+                ?? throw new InvalidOperationException("CONDUIT_NATIVE_PROXY_POSTGRES_PORT is required."))),
+        ["redis"] = NativeDependencyRoutes.RedirectRedis(redis,
+            int.Parse(Environment.GetEnvironmentVariable("CONDUIT_NATIVE_PROXY_REDIS_PORT")
+                ?? throw new InvalidOperationException("CONDUIT_NATIVE_PROXY_REDIS_PORT is required."))),
+        ["directDatabase"] = NativeDependencyRoutes.ParseDatabase(database).ConnectionString,
+        ["directRedis"] = redis.ToString(includePassword: true)
+    };
+    Console.WriteLine(routes.ToJsonString());
+    return;
+}
+
+if (args is ["--dependency-proxies"])
+{
+    await NativeDependencyProxyHost.RunAsync();
     return;
 }
 
@@ -25,11 +212,86 @@ if (args is ["--mock-provider"])
     return;
 }
 
+if (args.Length > 0 && args[0] is "--billing-audit-timer" or "--billing-audit-drain" or "--billing-audit-prepare" or
+    "--billing-audit-tail" or "--billing-audit-verify-host" or "--billing-audit-verify" or "--cleanup-billing-audit-fixture")
+{
+    try
+    {
+        var perHost = args[0] is "--billing-audit-prepare" or "--billing-audit-tail" or "--billing-audit-verify-host";
+        if (perHost ? args is not [_, "primary" or "secondary"] : args.Length != 1)
+            throw new ArgumentException("Invalid native BillingAudit lifecycle arguments.");
+        var host = perHost ? args[1] : null;
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        var owner = ProbeSettings.BillingAuditOwnerFromEnvironment();
+        switch (args[0])
+        {
+            case "--billing-audit-timer":
+                await NativeBillingAuditLifecycleProbe.TimerAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_URL"),
+                    ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"), ProbeSettings.ProviderUriFromEnvironment(),
+                    source, owner, ProbeSettings.ProtectedFunctionKeyFromEnvironment());
+                break;
+            case "--billing-audit-prepare":
+                await NativeBillingAuditLifecycleProbe.PrepareAsync(ProbeSettings.RequiredUri(host == "primary"
+                    ? "CONDUIT_NATIVE_GATEWAY_URL" : "CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"),
+                    ProbeSettings.ProviderUriFromEnvironment(), source, owner, host!);
+                break;
+            case "--billing-audit-tail":
+                await NativeBillingAuditLifecycleProbe.ArmTailAsync(ProbeSettings.RequiredUri(host == "primary"
+                    ? "CONDUIT_NATIVE_GATEWAY_URL" : "CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"),
+                    ProbeSettings.ProviderUriFromEnvironment(), source, owner, host!);
+                break;
+            case "--billing-audit-verify-host":
+                await NativeBillingAuditLifecycleProbe.VerifyHostAsync(source, owner, host!);
+                break;
+            case "--billing-audit-drain":
+                await NativeBillingAuditLifecycleProbe.DrainAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_URL"),
+                    ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"));
+                break;
+            case "--billing-audit-verify":
+                await NativeBillingAuditLifecycleProbe.VerifyTailAsync(source, owner);
+                break;
+            case "--cleanup-billing-audit-fixture":
+                await NativeBillingAuditLifecycleProbe.CleanupAsync(source, owner, ProbeSettings.RedisConnectionStringFromEnvironment());
+                break;
+        }
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Native BillingAudit lifecycle operation failed.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
+if (args is ["--function-execution"])
+{
+    try
+    {
+        await using var source = NpgsqlDataSource.Create(ProbeSettings.DatabaseConnectionStringFromEnvironment());
+        await NativeFunctionExecutionProbe.RunAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_URL"),
+            ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"), ProbeSettings.ProviderUriFromEnvironment(),
+            source, ProbeSettings.FunctionFixtureOwnerFromEnvironment(), NativeParityFixture.VirtualKey, CancellationToken.None);
+        await NativeFunctionExecutionProbe.RunMcpAsync(ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_URL"),
+            ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"), source,
+            ProbeSettings.McpFixtureOwnerFromEnvironment(), ProbeSettings.ProtectedFunctionKeyFromEnvironment(),
+            ProbeSettings.FunctionFixtureOwnerFromEnvironment(), NativeParityFixture.VirtualKey, CancellationToken.None);
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine("Function HTTP proof failed: " + exception.Message);
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
 var settings = ProbeSettings.FromEnvironment();
 var probe = new GatewayNativeParityProbe(settings);
-if (args is ["--verify-shutdown"])
+if (args is ["--verify-shutdown"] or ["--verify-shutdown", _])
 {
-    await probe.AssertShutdownAccountingAsync();
+    var measuredRequests = 5;
+    if (args.Length == 2 && (!int.TryParse(args[1], out measuredRequests) || measuredRequests < 5))
+        throw new ArgumentException("Shutdown accounting requires at least five measured requests.");
+    await probe.AssertShutdownAccountingAsync(measuredRequests);
     return;
 }
 await probe.RunAsync();
@@ -40,7 +302,9 @@ internal sealed record ProbeSettings(
     Uri SecondaryGateway,
     Uri Provider,
     string DatabaseConnectionString,
-    string RedisConnectionString)
+    string RedisConnectionString,
+    Uri DependencyControl,
+    string DependencyControlToken)
 {
     public static ProbeSettings FromEnvironment() => new(
         RequiredUri("CONDUIT_NATIVE_ADMIN_URL"),
@@ -48,36 +312,47 @@ internal sealed record ProbeSettings(
         RequiredUri("CONDUIT_NATIVE_GATEWAY_SECONDARY_URL"),
         ProviderUriFromEnvironment(),
         DatabaseConnectionStringFromEnvironment(),
-        RedisConnectionStringFromEnvironment());
+        RedisConnectionStringFromEnvironment(),
+        RequiredUri("CONDUIT_NATIVE_PROXY_CONTROL_URL"),
+        Required("CONDUIT_NATIVE_PROXY_TOKEN"));
 
     public static Uri ProviderUriFromEnvironment() =>
         RequiredUri("CONDUIT_NATIVE_PROVIDER_URL");
 
+    public static Guid FunctionFixtureOwnerFromEnvironment() =>
+        FixtureOwner("CONDUIT_NATIVE_FUNCTION_FIXTURE_OWNER");
+
+    public static Guid McpFixtureOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_MCP_FIXTURE_OWNER");
+
+    public static Guid AdminSettingsOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_ADMIN_SETTINGS_OWNER");
+
+    public static Guid AdminIpOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_ADMIN_IP_OWNER");
+
+    public static Guid BillingAuditOwnerFromEnvironment() => FixtureOwner("CONDUIT_NATIVE_BILLING_AUDIT_FIXTURE_OWNER");
+
+    public static string AdminMasterKeyFromEnvironment() => Required("CONDUIT_API_TO_API_BACKEND_AUTH_KEY");
+
+    public static string ProtectedFunctionKeyFromEnvironment() => Required("CONDUIT_NATIVE_FUNCTION_PROTECTED_KEY");
+
+    private static Guid FixtureOwner(string name) =>
+        Guid.TryParseExact(Required(name), "N", out var owner)
+            && owner != Guid.Empty
+                ? owner
+                : throw new InvalidOperationException("A nonempty function fixture owner GUID is required.");
+
     public static string RedisConnectionStringFromEnvironment() =>
-        Required("REDIS_URL").Replace("redis://", string.Empty, StringComparison.OrdinalIgnoreCase);
+        Environment.GetEnvironmentVariable("CONDUIT_NATIVE_DIRECT_REDIS_CONNECTION_STRING") is { Length: > 0 } direct
+            ? direct
+            : NativeDependencyRoutes.ParseRedis(Environment.GetEnvironmentVariable("REDIS_URL"),
+                Environment.GetEnvironmentVariable("CONDUIT_REDIS_CONNECTION_STRING")).ToString(includePassword: true);
 
     public static string DatabaseConnectionStringFromEnvironment()
     {
-        var value = Required("DATABASE_URL");
-        if (!value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase) &&
-            !value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase))
-        {
-            return value;
-        }
-
-        var uri = new Uri(value);
-        var userInfo = uri.UserInfo.Split(':', 2);
-        return new NpgsqlConnectionStringBuilder
-        {
-            Host = uri.Host,
-            Port = uri.Port > 0 ? uri.Port : 5432,
-            Database = uri.AbsolutePath.TrimStart('/'),
-            Username = Uri.UnescapeDataString(userInfo[0]),
-            Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty
-        }.ConnectionString;
+        return Environment.GetEnvironmentVariable("CONDUIT_NATIVE_DIRECT_DATABASE_CONNECTION_STRING") is { Length: > 0 } direct
+            ? direct : NativeDependencyRoutes.ParseDatabase(Required("DATABASE_URL")).ConnectionString;
     }
 
-    private static Uri RequiredUri(string name) =>
+    public static Uri RequiredUri(string name) =>
         new($"{Required(name).TrimEnd('/')}/", UriKind.Absolute);
 
     private static string Required(string name) =>
@@ -108,64 +383,293 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
     public async Task RunAsync()
     {
         await AssertRuntimeAndOperationsAsync();
+        await AssertModelDiscoveryBoundaryAsync();
+        await using (var source = NpgsqlDataSource.Create(settings.DatabaseConnectionString))
+            await NativeAdminRuntimeProfileProbe.RunAsync(settings.Admin, settings.Provider, source,
+                ProbeSettings.FunctionFixtureOwnerFromEnvironment(), settings.RedisConnectionString,
+                ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
+        await AssertFunctionDiscoveryAsync();
+        await AssertFunctionExecutionPreflightAsync();
+        await AssertSchemaReadinessAsync();
+        await AssertMetricAggregatesAsync();
+        using (var control = CreateClient(settings.DependencyControl))
+            await new NativeDependencyRecoveryProbe(_admin, _gateway, _secondaryGateway,
+                control, settings.DependencyControlToken).RunAsync();
         await AssertAsyncTaskPersistenceAsync();
         await AssertProviderTransportAsync();
+        await AssertChunkedProviderRequestAsync();
         await AssertS3MediaWorkflowAsync();
         await AssertSignalRAndRedisAsync();
+        await using (var source = NpgsqlDataSource.Create(settings.DatabaseConnectionString))
+        {
+            await NativeGlobalSettingsCacheConvergenceProbe.RunAsync(settings.Admin, settings.Gateway, settings.SecondaryGateway,
+                settings.Provider, source, ProbeSettings.AdminSettingsOwnerFromEnvironment(),
+                ProbeSettings.FunctionFixtureOwnerFromEnvironment(), ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
+            await NativeAdminGlobalSettingProbe.RunAsync(settings.Admin, source,
+                ProbeSettings.AdminSettingsOwnerFromEnvironment(), ProbeSettings.AdminMasterKeyFromEnvironment(), CancellationToken.None);
+            await NativeFunctionExecutionProbe.RunAsync(settings.Gateway, settings.SecondaryGateway,
+                settings.Provider, source, ProbeSettings.FunctionFixtureOwnerFromEnvironment(),
+                NativeParityFixture.VirtualKey, CancellationToken.None);
+            await NativeFunctionExecutionProbe.RunMcpAsync(settings.Gateway, settings.SecondaryGateway, source,
+                ProbeSettings.McpFixtureOwnerFromEnvironment(), ProbeSettings.ProtectedFunctionKeyFromEnvironment(),
+                ProbeSettings.FunctionFixtureOwnerFromEnvironment(), NativeParityFixture.VirtualKey, CancellationToken.None);
+        }
         Console.WriteLine("Gateway NativeAOT supported protocol/infrastructure probe: PASS");
+    }
+
+    private async Task AssertMetricAggregatesAsync()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(150));
+        var owner = Guid.NewGuid().ToString("N");
+        var model = $"native_metric_model_{owner}";
+        var provider = $"native_metrics_{owner}";
+        Exception? assertionFailure = null;
+        try
+        {
+            var inserted = await SetMetricRowsAsync(model, provider, present: true, deadline.Token);
+            True(inserted == 2, $"two owned native metric request rows (inserted {inserted})");
+            while (true)
+            {
+                var primary = await ReadMetricsAsync(_gateway, deadline.Token);
+                var secondary = await ReadMetricsAsync(_secondaryGateway, deadline.Token);
+                // Business collection is leader-elected; task collection runs on
+                // every host. Never require one particular Gateway to win election.
+                if ((NativeMetricSamples.HasBusinessAggregates(primary, model, provider) ||
+                     NativeMetricSamples.HasBusinessAggregates(secondary, model, provider)) &&
+                    NativeMetricSamples.HasPendingNotificationTasks(primary) &&
+                    NativeMetricSamples.HasPendingNotificationTasks(secondary))
+                    break;
+                await Task.Delay(TimeSpan.FromSeconds(1), deadline.Token);
+            }
+        }
+        catch (Exception exception)
+        {
+            assertionFailure = exception;
+            throw;
+        }
+        finally
+        {
+            using var cleanupDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            try
+            {
+                await SetMetricRowsAsync(model, provider, present: false, cleanupDeadline.Token);
+            }
+            catch (Exception cleanupFailure)
+            {
+                var message = $"Could not remove owned metric fixture {owner}.";
+                if (assertionFailure is not null)
+                    throw new AggregateException(message, assertionFailure, cleanupFailure);
+                throw new InvalidOperationException(message, cleanupFailure);
+            }
+        }
+        Console.WriteLine("Native exact cost, latency, active-model and task-queue aggregates: PASS");
+    }
+
+    private static async Task<string> ReadMetricsAsync(HttpClient client, CancellationToken cancellationToken)
+    {
+        using var response = await client.GetAsync("metrics", cancellationToken);
+        await ExpectAsync(response, HttpStatusCode.OK, "native metric aggregates");
+        return await response.Content.ReadAsStringAsync(cancellationToken);
+    }
+
+    private async Task<int> SetMetricRowsAsync(
+        string model, string provider, bool present, CancellationToken cancellationToken)
+    {
+        await using var dataSource = NpgsqlDataSource.Create(settings.DatabaseConnectionString);
+        await using var command = dataSource.CreateCommand(present
+            ? """
+              INSERT INTO "RequestLogs" (
+                  "VirtualKeyId", "ModelName", "ProviderType", "RequestType",
+                  "InputTokens", "OutputTokens", "Cost", "ResponseTimeMs", "Timestamp", "BilledAtUtc",
+                  "PromptCachingEligible", "PromptCachingPolicyApplied", "CachedReadSavings",
+                  "CacheWritePremium", "RoutingAffinityUsed", "RoutingFailoverCount")
+              SELECT key."Id", @model, @provider, 'native_metrics_probe',
+                  0, 0, sample.cost, sample.latency, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                  false, false, 0, 0, false, 0
+              FROM "VirtualKeys" key
+              JOIN "VirtualKeyGroups" group_row ON group_row."Id" = key."VirtualKeyGroupId"
+              CROSS JOIN (VALUES (1.25, 100.0), (0.75, 300.0)) sample(cost, latency)
+              WHERE key."KeyHash" = @keyHash AND group_row."ExternalGroupId" = @keyOwner
+              """
+            : """
+              DELETE FROM "RequestLogs" log
+              USING "VirtualKeys" key, "VirtualKeyGroups" group_row
+              WHERE log."VirtualKeyId" = key."Id"
+                  AND group_row."Id" = key."VirtualKeyGroupId"
+                  AND key."KeyHash" = @keyHash AND group_row."ExternalGroupId" = @keyOwner
+                  AND log."ModelName" = @model AND log."ProviderType" = @provider
+                  AND log."RequestType" = 'native_metrics_probe'
+              """);
+        command.CommandTimeout = 10;
+        command.Parameters.Add(new NpgsqlParameter<string>("model", NpgsqlDbType.Varchar) { TypedValue = model });
+        command.Parameters.Add(new NpgsqlParameter<string>("provider", NpgsqlDbType.Varchar) { TypedValue = provider });
+        command.Parameters.Add(new NpgsqlParameter<string>("keyHash", NpgsqlDbType.Varchar)
+        { TypedValue = NativeParityFixture.VirtualKeyHash });
+        command.Parameters.Add(new NpgsqlParameter<string>("keyOwner", NpgsqlDbType.Varchar)
+        { TypedValue = NativeParityFixture.FixtureOwner });
+        return await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task AssertSchemaReadinessAsync()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        await AssertHostHealthAsync(HttpStatusCode.OK, "current schema", deadline.Token);
+
+        // This gate owns a disposable database. A committed, uniquely named future
+        // version makes every host observe a mismatch without changing the schema.
+        var marker = $"99991231235959_NativeAotReadiness_{Guid.NewGuid():N}";
+        Exception? assertionFailure = null;
+        try
+        {
+            await SetSchemaMarkerAsync(marker, present: true, deadline.Token);
+            await AssertHostHealthAsync(HttpStatusCode.ServiceUnavailable,
+                "future schema", deadline.Token);
+        }
+        catch (Exception exception)
+        {
+            assertionFailure = exception;
+            throw;
+        }
+        finally
+        {
+            // Cleanup also runs after a timeout or a failed insert acknowledgement;
+            // its fresh token allows removal even when the assertion was cancelled.
+            using var cleanupDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            try
+            {
+                await SetSchemaMarkerAsync(marker, present: false, cleanupDeadline.Token);
+            }
+            catch (Exception cleanupFailure)
+            {
+                var message = $"Could not remove owned readiness fixture {marker}.";
+                if (assertionFailure is not null)
+                    throw new AggregateException(message, assertionFailure, cleanupFailure);
+                throw new InvalidOperationException(message, cleanupFailure);
+            }
+        }
+
+        await AssertHostHealthAsync(HttpStatusCode.OK, "restored schema", deadline.Token);
+        Console.WriteLine("Native live schema readiness and recovery: PASS");
+    }
+
+    private async Task SetSchemaMarkerAsync(string marker, bool present, CancellationToken cancellationToken)
+    {
+        await using var dataSource = NpgsqlDataSource.Create(settings.DatabaseConnectionString);
+        await using var command = dataSource.CreateCommand(present
+            ? """
+              INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+              VALUES (@marker, 'native-readiness-probe')
+              """
+            : """
+              DELETE FROM "__EFMigrationsHistory" WHERE "MigrationId" = @marker
+              """);
+        command.CommandTimeout = 10;
+        command.Parameters.Add(new NpgsqlParameter<string>("marker", NpgsqlDbType.Varchar)
+        {
+            TypedValue = marker
+        });
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task AssertHostHealthAsync(
+        HttpStatusCode readiness, string stage, CancellationToken cancellationToken)
+    {
+        foreach (var (client, name) in new[]
+                 { (_admin, "Admin"), (_gateway, "primary Gateway"), (_secondaryGateway, "secondary Gateway") })
+        {
+            using var ready = await client.GetAsync("health/ready", cancellationToken);
+            await ExpectAsync(ready, readiness, $"{name} readiness with {stage}");
+            using var live = await client.GetAsync("health/live", cancellationToken);
+            await ExpectAsync(live, HttpStatusCode.OK, $"{name} liveness with {stage}");
+        }
     }
 
     private async Task AssertRuntimeAndOperationsAsync()
     {
-        using var capabilitiesResponse = await _gateway.GetAsync("health/runtime-capabilities");
-        await ExpectAsync(capabilitiesResponse, HttpStatusCode.OK, "runtime capabilities");
-        using var capabilities = JsonDocument.Parse(await capabilitiesResponse.Content.ReadAsStringAsync());
-
-        Equal("native-aot", GetString(capabilities.RootElement, "runtime_mode"), "native runtime mode");
-        var protocols = GetProperty(capabilities.RootElement, "signal_r_protocols")
-            .EnumerateArray().Select(value => value.GetString()).ToArray();
-        True(protocols.SequenceEqual(["json"]), "native SignalR protocol is JSON-only");
-
-        var supported = GetProperty(capabilities.RootElement, "included_features")
-            .EnumerateArray().Select(value => value.GetString()).ToHashSet();
-        True(supported.Contains("authenticated-model-discovery"),
-            "authenticated model discovery is advertised");
-        foreach (var feature in new[]
-                 {
-                     "provider-http",
-                     "sse-streaming",
-                     "provider-error-translation",
-                     "provider-cancellation",
-                     "request-accounting-and-spend-settlement",
-                     "async-task-persistence",
-                     "s3-media-api-workflows",
-                     "authenticated-signalr-json-connections",
-                     "redis-signalr-backplane-and-rate-limits",
-                     "redis-ephemeral-key-cache"
-                 })
+        string[] gatewayIncluded =
+        [
+            "postgresql-wolverine-persistence",
+            "redis-signalr-backplane-and-rate-limits",
+            "redis-data-protection",
+            "json-signalr-negotiate-routing",
+            "authenticated-signalr-json-connections",
+            "redis-ephemeral-key-cache",
+            "unauthenticated-request-rejection",
+            "authenticated-model-discovery",
+            "function-metadata-discovery",
+            "inline-exa-search",
+            "inline-stateless-mcp-tools",
+            "nonstreaming-configured-exa-agentic-chat",
+            "provider-http",
+            "sse-streaming",
+            "provider-error-translation",
+            "provider-cancellation",
+            "request-accounting-and-spend-settlement",
+            "billing-audit-batch-writes",
+            "async-task-persistence",
+            "s3-media-api-workflows",
+            "forwarded-headers",
+            "readiness-and-database-health",
+            "liveness-metrics-opentelemetry"
+        ];
+        string[] gatewayExcluded =
+        [
+            "signalr-messagepack",
+            "ef-core-query-data-plane",
+            "redis-virtual-key-authentication-cache",
+            "inline-functions-beyond-exa-search-and-stateless-mcp",
+            "agentic-workflows-beyond-nonstreaming-configured-exa-chat",
+            "function-execution-list-http",
+            "function-audit-and-retention",
+            "billing-reconciliation",
+            "request-log-reporting-and-retention",
+            "pricing-rule-audit-and-retention",
+            "model-discovery-catalog-and-warming",
+            "billing-audit-reads-and-retention",
+            "provider-hosted-tool-pricing"
+        ];
+        using var capabilityDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        foreach (var (client, name) in new[]
+                 { (_gateway, "primary Gateway"), (_secondaryGateway, "secondary Gateway") })
         {
-            True(supported.Contains(feature), $"{feature} is advertised");
+            using var response = await client.GetAsync("health/runtime-capabilities", capabilityDeadline.Token);
+            await ExpectAsync(response, HttpStatusCode.OK, $"{name} runtime capabilities");
+            True(response.Content.Headers.ContentType?.MediaType == "application/json", $"{name} capability JSON content type");
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(capabilityDeadline.Token));
+            AssertCapabilityMetadata(body.RootElement, name, ["json"], gatewayIncluded, gatewayExcluded);
         }
-
-        var exclusions = GetProperty(capabilities.RootElement, "excluded_features")
-            .EnumerateArray().Select(value => value.GetString()).ToHashSet();
-        True(exclusions.Contains("signalr-messagepack"), "MessagePack exclusion is observable");
-        True(exclusions.Contains("ef-core-query-data-plane"), "EF query data-plane exclusion is observable");
-        True(exclusions.Contains("redis-virtual-key-authentication-cache"),
-            "Redis virtual-key authentication cache exclusion is observable");
-        True(!exclusions.Contains("authenticated-signalr-connections"),
-            "process-tested authenticated SignalR is no longer excluded");
-        True(!exclusions.Contains("authenticated-http-data-plane"),
-            "authenticated HTTP is no longer excluded as one undifferentiated boundary");
-        True(!exclusions.Contains("provider-routing-and-streaming"),
-            "process-tested provider routing and streaming are no longer excluded");
-        True(!exclusions.Contains("s3-media-api-workflows"),
-            "process-tested S3 media workflows are no longer excluded");
+        using (var response = await _admin.GetAsync("health/runtime-capabilities", capabilityDeadline.Token))
+        {
+            await ExpectAsync(response, HttpStatusCode.OK, "Admin runtime capabilities");
+            True(response.Content.Headers.ContentType?.MediaType == "application/json", "Admin capability JSON content type");
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(capabilityDeadline.Token));
+            AssertCapabilityMetadata(body.RootElement, "Admin", [],
+            [
+                "postgresql-wolverine-persistence",
+                "master-key-and-bearer-fallback-authentication",
+                "typed-global-settings-http",
+                "typed-ip-filter-http-and-enforcement",
+                "typed-global-settings-cache",
+                "typed-billing-audit-host",
+                "release-owned-schema-wait",
+                "readiness-and-database-health",
+                "liveness-metrics-opentelemetry"
+            ],
+            [
+                "ef-backed-admin-management",
+                "pricing-tools-and-audit",
+                "model-cost-canary",
+                "startup-pricing-configuration-audit",
+                "media-cleanup-and-reconciliation",
+                "media-storage-startup-guard",
+                "openrouter-metadata-sync",
+                "database-count-operations-metrics",
+                "billing-audit-reads-and-retention"
+            ]);
+        }
 
         await ExpectAsync(await _admin.GetAsync("health/live"), HttpStatusCode.OK, "Admin liveness");
         await ExpectAsync(await _gateway.GetAsync("health/live"), HttpStatusCode.OK, "Gateway liveness");
-        await ExpectAsync(await _secondaryGateway.GetAsync("health/runtime-capabilities"),
-            HttpStatusCode.OK, "secondary native Gateway");
 
         using var metrics = await _gateway.GetAsync("metrics");
         await ExpectAsync(metrics, HttpStatusCode.OK, "Prometheus metrics");
@@ -202,6 +706,235 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         var capabilitiesGraph = GetProperty(metadata, "capabilities");
         True(GetProperty(capabilitiesGraph, "chat").GetBoolean(),
             "model metadata contains effective chat capability");
+    }
+
+    private async Task AssertModelDiscoveryBoundaryAsync()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var paths = new[]
+        {
+            "v1/conduit/discovery/models",
+            $"v1/conduit/discovery/models/{Uri.EscapeDataString(NativeParityFixture.ModelAlias)}/parameters"
+        };
+        const string expectedBody = """
+            {"error":{"message":"Model catalog discovery is not supported by the native-aot runtime profile.","type":"invalid_request_error","code":"not_implemented"}}
+            """;
+        var expectedBytes = Encoding.UTF8.GetBytes(expectedBody);
+        var requests = 0;
+        foreach (var gateway in new[] { _gateway, _secondaryGateway })
+        {
+            foreach (var path in paths)
+            {
+                using (var unauthenticated = new HttpRequestMessage(HttpMethod.Get, path))
+                using (var response = await gateway.SendAsync(unauthenticated, deadline.Token))
+                {
+                    requests++;
+                    await ExpectAsync(response, HttpStatusCode.Unauthorized,
+                        "native model catalog rejects unauthenticated requests");
+                }
+
+                using var request = AuthorizedRequest(HttpMethod.Get, path);
+                using var result = await gateway.SendAsync(request, deadline.Token);
+                requests++;
+                await ExpectAsync(result, HttpStatusCode.NotImplemented,
+                    "native model catalog rejects the excluded EF resource");
+                Equal("application/json", result.Content.Headers.ContentType?.MediaType ?? string.Empty,
+                    "native model catalog generated error media type");
+                Equal("utf-8", result.Content.Headers.ContentType?.CharSet ?? string.Empty,
+                    "native model catalog generated error encoding");
+                var bytes = await result.Content.ReadAsByteArrayAsync(deadline.Token);
+                True(bytes.AsSpan().SequenceEqual(expectedBytes),
+                    "native model catalog exact generated error bytes on both hosts and routes");
+                using var document = JsonDocument.Parse(bytes);
+                var body = document.RootElement;
+                True(body.EnumerateObject().Select(property => property.Name).SequenceEqual(new[] { "error" }),
+                    "native model catalog exact error root fields");
+                var error = body.GetProperty("error");
+                True(error.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal)
+                        .SequenceEqual(new[] { "code", "message", "type" }),
+                    "native model catalog exact generated error fields");
+                Equal("not_implemented", error.GetProperty("code").GetString()!,
+                    "native model catalog error code");
+                Equal("invalid_request_error", error.GetProperty("type").GetString()!,
+                    "native model catalog error type");
+                Equal("Model catalog discovery is not supported by the native-aot runtime profile.",
+                    error.GetProperty("message").GetString()!, "native model catalog error message");
+            }
+        }
+        True(requests == 8, "native model catalog exact eight-request boundary proof");
+        Console.WriteLine("Native model catalog boundary on both Gateways: PASS");
+    }
+
+    private static void AssertCapabilityMetadata(JsonElement body, string host, string[] expectedProtocols,
+        string[] expectedIncluded, string[] expectedExcluded)
+    {
+        True(body.ValueKind == JsonValueKind.Object, $"{host} capability object");
+        True(body.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal).SequenceEqual(
+                new[] { "excluded_features", "included_features", "persistence_status", "runtime_mode", "signal_r_protocols" }),
+            $"{host} exact five snake_case capability fields");
+        Equal("native-aot", body.GetProperty("runtime_mode").GetString()!, $"{host} native runtime mode");
+        Equal("typed-npgsql-selected-runtime-slices", body.GetProperty("persistence_status").GetString()!,
+            $"{host} selected typed persistence status");
+        var protocols = CapabilityStrings(body, "signal_r_protocols", host);
+        True(protocols.SequenceEqual(expectedProtocols), $"{host} exact SignalR protocols");
+        var included = CapabilityStrings(body, "included_features", host).ToHashSet(StringComparer.Ordinal);
+        var excluded = CapabilityStrings(body, "excluded_features", host).ToHashSet(StringComparer.Ordinal);
+        True(included.SetEquals(expectedIncluded), $"{host} complete included capability set");
+        True(excluded.SetEquals(expectedExcluded), $"{host} complete excluded capability set");
+        True(!included.Overlaps(excluded), $"{host} capability sets do not overlap");
+    }
+
+    private static string[] CapabilityStrings(JsonElement body, string property, string host)
+    {
+        var values = body.GetProperty(property);
+        True(values.ValueKind == JsonValueKind.Array, $"{host} {property} array");
+        var entries = values.EnumerateArray().ToArray();
+        True(entries.All(value => value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString())),
+            $"{host} {property} contains only nonempty strings");
+        var result = entries.Select(value => value.GetString()!).ToArray();
+        True(result.Distinct(StringComparer.Ordinal).Count() == result.Length, $"{host} {property} contains no duplicates");
+        return result;
+    }
+
+    private async Task AssertFunctionDiscoveryAsync()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        int[]? primaryIds = null;
+        const string catalogPath = "v1/conduit/discovery/functions";
+        foreach (var client in new[] { _gateway, _secondaryGateway })
+        {
+            using (var unauthenticated = await client.GetAsync(catalogPath, deadline.Token))
+                await ExpectAsync(unauthenticated, HttpStatusCode.Unauthorized, "unauthenticated function catalog");
+            using (var unauthenticated = await client.GetAsync(
+                       $"{catalogPath}/{NativeParityFixture.SearchFunctionId}/parameters", deadline.Token))
+                await ExpectAsync(unauthenticated, HttpStatusCode.Unauthorized, "unauthenticated function parameters");
+            var (raw, catalog) = await ReadFunctionDiscoveryAsync(client, catalogPath, deadline.Token);
+            var (repeated, _) = await ReadFunctionDiscoveryAsync(client, catalogPath, deadline.Token);
+            Equal(raw, repeated, "function catalog repeated wire shape");
+            var functions = catalog.GetProperty("functions").EnumerateArray().ToArray();
+            True(catalog.GetProperty("count").GetInt32() == functions.Length, "function catalog count");
+            var ids = functions.Select(function => function.GetProperty("id").GetInt32()).Order().ToArray();
+            True(new[] { NativeParityFixture.SearchFunctionId, NativeParityFixture.AnswerFunctionId,
+                NativeParityFixture.UnknownFunctionId }.All(ids.Contains), "enabled seeded functions discovered");
+            True(!ids.Contains(NativeParityFixture.DisabledFunctionId) &&
+                functions.All(function => function.GetProperty("is_enabled").GetBoolean()), "disabled functions omitted");
+            True(!raw.Contains("native-private-settings", StringComparison.Ordinal) &&
+                !raw.Contains("https://private.example.test", StringComparison.Ordinal), "private function fields omitted");
+            var search = functions.Single(function => function.GetProperty("id").GetInt32() == NativeParityFixture.SearchFunctionId);
+            True(search.GetProperty("configuration_name").GetString() == "Native Search 雪" &&
+                search.GetProperty("provider_type").GetString() == "Exa" && search.GetProperty("purpose").GetString() == "Search" &&
+                search.GetProperty("default_execution_mode").GetString() == "Synchronous" &&
+                search.GetProperty("timeout_seconds").GetInt32() == 41 && search.GetProperty("description").GetString() == "" &&
+                search.GetProperty("parameter_schema").GetProperty("example").GetProperty("query").GetString() == "雪",
+                "catalog scalar and structured-schema wire contract");
+            True(functions.Single(function => function.GetProperty("id").GetInt32() == NativeParityFixture.UnknownFunctionId)
+                .GetProperty("default_execution_mode").GetString() == "123", "unknown execution-mode wire string");
+            if (primaryIds is null) primaryIds = ids;
+            else True(primaryIds.SequenceEqual(ids), "cross-host function catalog set");
+            foreach (var filter in new[]
+                     {
+                         ("?purpose=search&providerType=exa", "Search", "Exa"),
+                         ("?purpose=1&providerType=1", "Search", "Exa"),
+                         ("?purpose=-9&providerType=197", "-9", "197"),
+                         ("?purpose=999&providerType=999", "999", "999")
+                     })
+            {
+                var (_, filtered) = await ReadFunctionDiscoveryAsync(client, catalogPath + filter.Item1, deadline.Token);
+                var filteredFunctions = filtered.GetProperty("functions").EnumerateArray().ToArray();
+                var expected = functions.Where(function => function.GetProperty("purpose").GetString() == filter.Item2 &&
+                        function.GetProperty("provider_type").GetString() == filter.Item3)
+                    .Select(function => function.GetProperty("id").GetInt32()).Order();
+                True(expected.SequenceEqual(filteredFunctions.Select(function => function.GetProperty("id").GetInt32()).Order()),
+                    "named/numeric function filters");
+                True(filtered.GetProperty("count").GetInt32() == filteredFunctions.Length, "filtered catalog count");
+            }
+            var (_, ignored) = await ReadFunctionDiscoveryAsync(client,
+                catalogPath + "?purpose=not-a-purpose&providerType=not-a-provider", deadline.Token);
+            True(ids.SequenceEqual(ignored.GetProperty("functions").EnumerateArray()
+                .Select(function => function.GetProperty("id").GetInt32()).Order()), "invalid textual filters ignored");
+            var parameterPath = $"{catalogPath}/{NativeParityFixture.SearchFunctionId}/parameters";
+            var (parameterRaw, parameters) = await ReadFunctionDiscoveryAsync(client, parameterPath, deadline.Token);
+            var (parameterHit, _) = await ReadFunctionDiscoveryAsync(client, parameterPath, deadline.Token);
+            Equal(parameterRaw, parameterHit, "function parameters repeated wire shape");
+            True(parameters.GetProperty("function_id").GetInt32() == NativeParityFixture.SearchFunctionId &&
+                parameters.GetProperty("parameter_schema").ValueKind == JsonValueKind.Object &&
+                parameters.GetProperty("parameter_schema").GetProperty("properties").GetProperty("query")
+                    .GetProperty("type").GetString() == "string" &&
+                parameters.GetProperty("example_request").GetProperty("query").GetString() == "雪",
+                "structured schema and example");
+            var (_, arraySchema) = await ReadFunctionDiscoveryAsync(client,
+                $"{catalogPath}/{NativeParityFixture.AnswerFunctionId}/parameters", deadline.Token);
+            var value = arraySchema.GetProperty("parameter_schema").GetProperty("value");
+            True(value.ValueKind == JsonValueKind.Array && value[0].GetInt32() == 0 &&
+                !value[1].GetBoolean() && value[2].GetProperty("snow").GetString() == "雪", "non-object schema wrapping");
+            var (_, unknown) = await ReadFunctionDiscoveryAsync(client,
+                $"{catalogPath}/{NativeParityFixture.UnknownFunctionId}/parameters", deadline.Token);
+            True(unknown.GetProperty("provider_type").GetString() == "197" &&
+                unknown.GetProperty("purpose").GetString() == "-9" &&
+                !unknown.GetProperty("parameter_schema").EnumerateObject().Any(), "unknown enum strings and null schema");
+            foreach (var missing in new[] { NativeParityFixture.DisabledFunctionId, int.MinValue })
+            {
+                using var request = AuthorizedRequest(HttpMethod.Get, $"{catalogPath}/{missing}/parameters");
+                using var response = await client.SendAsync(request, deadline.Token);
+                await ExpectAsync(response, HttpStatusCode.NotFound, "disabled/missing function parameters");
+                using var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync(deadline.Token));
+                Equal("not_found", error.RootElement.GetProperty("error").GetProperty("code").GetString()!,
+                    "function parameter error contract");
+            }
+        }
+        Console.WriteLine("Native authenticated function discovery: PASS");
+    }
+
+    private async Task AssertFunctionExecutionPreflightAsync()
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        const string path = "v1/conduit/functions/execute";
+        foreach (var client in new[] { _gateway, _secondaryGateway })
+        {
+            using (var request = new HttpRequestMessage(HttpMethod.Post, path))
+            {
+                request.Content = new StringContent(
+                    $$$"""{"function_configuration_id":{{{NativeParityFixture.SearchFunctionId}}},"parameters":{}}""",
+                    Encoding.UTF8, "application/json");
+                using var response = await client.SendAsync(request, deadline.Token);
+                await ExpectAsync(response, HttpStatusCode.Unauthorized, "unauthenticated function execution");
+            }
+
+            foreach (var (id, status, code, type, message) in new[]
+                     {
+                         (int.MinValue, HttpStatusCode.NotFound, "not_found", "not_found_error",
+                             $"Function configuration {int.MinValue} not found"),
+                         (NativeParityFixture.DisabledFunctionId, HttpStatusCode.BadRequest, "invalid_request",
+                             "invalid_request_error", $"Function configuration {NativeParityFixture.DisabledFunctionId} is disabled"),
+                         (NativeParityFixture.SearchFunctionId, HttpStatusCode.BadRequest, "invalid_request",
+                             "invalid_request_error", "Parameter validation failed: Missing required parameter: 'query'")
+                     })
+            {
+                using var request = AuthorizedRequest(HttpMethod.Post, path);
+                request.Content = new StringContent(
+                    $$$"""{"function_configuration_id":{{{id}}},"parameters":{}}""",
+                    Encoding.UTF8, "application/json");
+                using var response = await client.SendAsync(request, deadline.Token);
+                await ExpectAsync(response, status, $"native function execution preflight ({id})");
+                using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(deadline.Token));
+                var error = document.RootElement.GetProperty("error");
+                Equal(code, error.GetProperty("code").GetString()!, "function execution preflight error code");
+                Equal(type, error.GetProperty("type").GetString()!, "function execution preflight error type");
+                Equal(message, error.GetProperty("message").GetString()!, "function execution preflight error message");
+            }
+        }
+        Console.WriteLine("Native function execution preflight on both Gateways: PASS");
+    }
+
+    private static async Task<(string Raw, JsonElement Payload)> ReadFunctionDiscoveryAsync(
+        HttpClient client, string path, CancellationToken token)
+    {
+        using var request = AuthorizedRequest(HttpMethod.Get, path);
+        using var response = await client.SendAsync(request, token);
+        await ExpectAsync(response, HttpStatusCode.OK, "authenticated function discovery");
+        var raw = await response.Content.ReadAsStringAsync(token);
+        using var document = JsonDocument.Parse(raw);
+        return (raw, document.RootElement.Clone());
     }
 
     private async Task AssertAsyncTaskPersistenceAsync()
@@ -301,6 +1034,32 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         True(providerState.ErrorRequests == 1, "mock provider observed translated error request");
         True(providerState.AuthorizationFailures == 0, "provider credential was supplied correctly");
         True(providerState.CancellationsObserved >= 1, "provider observed upstream cancellation");
+    }
+
+    private async Task AssertChunkedProviderRequestAsync()
+    {
+        // Run after the Gateway transport counters have been checked. This direct
+        // fixture request adds an error request without generating Gateway usage.
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var payload = JsonDocument.Parse("""
+            {"model":"native-aot-provider-model","messages":[{"role":"user","content":"native-error chunked fixture"}],"stream":false}
+            """);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            Content = JsonContent.Create(payload.RootElement, NativeProbeJsonContext.Default.JsonElement)
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", NativeProviderStub.ApiKey);
+        request.Headers.TransferEncodingChunked = true;
+        using var response = await _provider.SendAsync(request, deadline.Token);
+        await ExpectAsync(response, HttpStatusCode.BadRequest, "native provider fixture reads chunked HTTP/1.1 JSON");
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync(deadline.Token));
+        var error = GetProperty(result.RootElement, "error");
+        Equal("native upstream private diagnostic", GetString(error, "message"),
+            "chunked provider fixture preserves the request body");
+        Equal("native_bad_prompt", GetString(error, "code"),
+            "chunked provider fixture selects the expected error branch");
     }
 
     private async Task AssertProviderStreamAsync(bool includeUsage, bool enhancedStream)
@@ -513,14 +1272,15 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             $"Latest state: {latest}");
     }
 
-    public async Task AssertShutdownAccountingAsync()
+    public async Task AssertShutdownAccountingAsync(int measuredRequests = 5)
     {
         // This mode runs after both Gateway processes have gracefully exited.
         // An exit code alone cannot establish that accepted spend was preserved.
         // The four completed requests and canceled stream each report the same
         // deterministic raw usage. Interrupted usage must survive cancellation
         // and shutdown as a fifth measured debit, without estimating this fixture.
-        await AssertDurableAccountingAsync(measuredRequests: 5);
+        // The harness also counts completed benchmark requests and their warmups.
+        await AssertDurableAccountingAsync(measuredRequests);
         Console.WriteLine("Gateway NativeAOT accounting after graceful shutdown: PASS");
     }
 
@@ -637,6 +1397,7 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
 
         await AssertAuthenticatedSignalRConnectionsAsync();
         await AssertPublicSignalRConnectionAsync();
+        await AssertWolverineMediaNotificationsAsync();
 
         await using var redis = await ConnectionMultiplexer.ConnectAsync(settings.RedisConnectionString);
         var database = redis.GetDatabase();
@@ -687,8 +1448,15 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             var notification = await secondary.WaitForTargetAsync(
                 "Onsystem_announcement",
                 timeout.Token);
-            True(notification.Contains("native cross-host notification", StringComparison.Ordinal),
+            var announcement = GetHubArguments(notification, "Onsystem_announcement", 1)[0];
+            AssertJsonFields(announcement, "id", "timestamp", "type", "priority", "message", "category");
+            Equal("native cross-host notification", announcement.GetProperty("message").GetString()!,
                 "Redis backplane delivers a JSON hub message across native Gateways");
+            True(announcement.GetProperty("priority").ValueKind == JsonValueKind.Number &&
+                 announcement.GetProperty("priority").GetInt32() == 1,
+                "native SignalR priority preserves its numeric enum contract");
+            Equal("system_announcement", announcement.GetProperty("type").GetString()!, "native announcement type");
+            Equal("general", announcement.GetProperty("category").GetString()!, "native announcement category");
         }
 
         await using (var video = await NativeSignalRClient.ConnectAsync(
@@ -720,6 +1488,24 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             await tasks.InvokeAsync("SubscribeToTaskType", """["native-probe"]""", timeout.Token);
             await tasks.InvokeAsync("UnsubscribeFromTaskType", """["native-probe"]""", timeout.Token);
             True(true, "authenticated TaskHub JSON group invocations");
+            await tasks.InvokeAsync("SubscribeToTask", $$"""["{{NativeParityFixture.TaskId}}"]""", timeout.Token);
+            await tasks.InvokeAsync("TaskCompleted",
+                $$$"""["{{{NativeParityFixture.TaskId}}}",{"Mixed_KEY":null,"zero":0,"done":false,"values":["fixture",0,null,false],"nested":{"UPPER_key":"preserved"}}]""",
+                timeout.Token);
+            var completion = GetHubArguments(await tasks.WaitForTargetAsync("TaskCompleted", timeout.Token), "TaskCompleted", 2);
+            Equal(NativeParityFixture.TaskId, completion[0].GetString()!, "native dynamic task completion ID");
+            var result = completion[1];
+            AssertJsonFields(result, "Mixed_KEY", "zero", "done", "values", "nested");
+            True(result.GetProperty("Mixed_KEY").ValueKind == JsonValueKind.Null,
+                "native dynamic task result retains null and exact property casing");
+            True(result.GetProperty("zero").GetInt32() == 0 && !result.GetProperty("done").GetBoolean(),
+                "native dynamic task result retains default scalar values");
+            var values = result.GetProperty("values");
+            True(values.GetArrayLength() == 4 && values[0].GetString() == "fixture" &&
+                 values[1].GetInt32() == 0 && values[2].ValueKind == JsonValueKind.Null && !values[3].GetBoolean(),
+                "native dynamic task result retains nested array values");
+            Equal("preserved", result.GetProperty("nested").GetProperty("UPPER_key").GetString()!,
+                "native dynamic task result retains nested property casing");
         }
 
         await using (await NativeSignalRClient.ConnectAsync(
@@ -739,6 +1525,20 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         {
             const string webhookArguments = """[["https://native.invalid/hook"]]""";
             await webhooks.InvokeAsync("SubscribeToWebhooks", webhookArguments, timeout.Token);
+            await webhooks.InvokeAsync("BroadcastDeliveryAttempt",
+                $$"""["https://native.invalid/hook",{"WEBHOOKID":"native-webhook","DELIVERYID":"native-delivery","URL":"https://native.invalid/hook","EVENTTYPE":"fixture","ATTEMPTNUMBER":0,"TIMESTAMP":"2026-10-10T01:02:03Z","TASKID":"{{NativeParityFixture.TaskId}}","TASKTYPE":"native-probe"}]""",
+                timeout.Token);
+            var attempt = GetHubArguments(await webhooks.WaitForTargetAsync("DeliveryAttempted", timeout.Token), "DeliveryAttempted", 1)[0];
+            AssertJsonFields(attempt, "webhookId", "deliveryId", "url", "eventType", "attemptNumber", "timestamp", "taskId", "taskType");
+            Equal("native-webhook", attempt.GetProperty("webhookId").GetString()!, "native webhook DTO case-insensitive binding");
+            Equal("native-delivery", attempt.GetProperty("deliveryId").GetString()!, "native webhook delivery ID");
+            Equal("https://native.invalid/hook", attempt.GetProperty("url").GetString()!, "native webhook URL");
+            Equal("fixture", attempt.GetProperty("eventType").GetString()!, "native webhook event type");
+            True(attempt.GetProperty("attemptNumber").GetInt32() == 0, "native webhook DTO retains zero attempt count");
+            True(attempt.GetProperty("timestamp").GetDateTime() == new DateTime(2026, 10, 10, 1, 2, 3, DateTimeKind.Utc),
+                "native webhook DTO retains supplied UTC timestamp");
+            Equal(NativeParityFixture.TaskId, attempt.GetProperty("taskId").GetString()!, "native webhook task ID");
+            Equal("native-probe", attempt.GetProperty("taskType").GetString()!, "native webhook task type");
             await webhooks.InvokeAsync("UnsubscribeFromWebhooks", webhookArguments, timeout.Token);
             True(true, "authenticated WebhookDeliveryHub Redis-backed invocations");
         }
@@ -804,6 +1604,140 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             """["native-public-video-task"]""",
             timeout.Token);
     }
+
+    private async Task AssertWolverineMediaNotificationsAsync()
+    {
+        await using var redis = await ConnectionMultiplexer.ConnectAsync(settings.RedisConnectionString);
+        await WaitForSignalRConnectionCountAsync(redis.GetDatabase(), 0,
+            "previous native hub connections are released before media subscriptions");
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        await using var image = await NativeSignalRClient.ConnectAsync(settings.Gateway,
+            "/hubs/image-generation", NativeParityFixture.VirtualKey, timeout.Token);
+        await using var video = await NativeSignalRClient.ConnectAsync(settings.SecondaryGateway,
+            "/hubs/video-generation", NativeParityFixture.VirtualKey, timeout.Token);
+        await image.InvokeAsync("SubscribeToTask", $$"""["{{NativeParityFixture.ImageNotificationTaskId}}"]""", timeout.Token);
+        await video.InvokeAsync("SubscribeToTask", $$"""["{{NativeParityFixture.VideoNotificationTaskId}}"]""", timeout.Token);
+
+        using var request = AuthorizedRequest(HttpMethod.Post, "v1/conduit/auth/ephemeral-key");
+        request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+        using var response = await _gateway.SendAsync(request, timeout.Token);
+        await ExpectAsync(response, HttpStatusCode.OK, "media subscription ephemeral key creation");
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
+        var ephemeralKey = GetString(document.RootElement, "ephemeral_key");
+        await using var publicVideo = await NativeSignalRClient.ConnectAsync(settings.Gateway,
+            "/hubs/public/video-generation", bearerToken: null, timeout.Token);
+        await publicVideo.InvokeAsync("SubscribeToTask",
+            $$"""["{{NativeParityFixture.VideoNotificationTaskId}}","{{ephemeralKey}}"]""", timeout.Token);
+        await publicVideo.WaitForTargetAsync("taskSubscribed", timeout.Token);
+
+        var probeId = Guid.NewGuid().ToString("N");
+        var publishedAt = DateTime.UtcNow;
+        await PublishMediaNotificationsAsync(probeId, timeout.Token);
+        var progress = GetHubArguments(await image.WaitForTargetAsync("ImageGenerationProgress", timeout.Token),
+            "ImageGenerationProgress", 1)[0];
+        AssertJsonFields(progress, "taskId", "progressPercentage", "status", "imagesCompleted", "totalImages", "message", "timestamp");
+        Equal(NativeParityFixture.ImageNotificationTaskId, progress.GetProperty("taskId").GetString()!, "native image progress task");
+        Equal($"native-progress-{probeId}", progress.GetProperty("message").GetString()!, "Wolverine native image progress delivery");
+        Equal("processing", progress.GetProperty("status").GetString()!, "native image progress status");
+        True(progress.GetProperty("progressPercentage").GetInt32() == 50 &&
+             progress.GetProperty("imagesCompleted").GetInt32() == 1 && progress.GetProperty("totalImages").GetInt32() == 2,
+            "native image progress preserves computed percentage and counts");
+        var progressTimestamp = progress.GetProperty("timestamp").GetDateTime();
+        True(progressTimestamp.Kind == DateTimeKind.Utc && progressTimestamp >= publishedAt && progressTimestamp <= DateTime.UtcNow,
+            "native image progress includes the handler UTC timestamp");
+
+        var timestamp = new DateTime(2026, 10, 10, 1, 2, 3, DateTimeKind.Utc);
+        var started = GetHubArguments(await video.WaitForTargetAsync("VideoGenerationStarted", timeout.Token), "VideoGenerationStarted", 1)[0];
+        AssertJsonFields(started, "taskId", "provider", "startedAt", "estimatedSeconds");
+        Equal(NativeParityFixture.VideoNotificationTaskId, started.GetProperty("taskId").GetString()!, "native video started task");
+        Equal($"native-provider-{probeId}", started.GetProperty("provider").GetString()!, "Wolverine native video started delivery");
+        True(started.GetProperty("startedAt").GetDateTime() is { Kind: DateTimeKind.Utc } startedAt && startedAt == timestamp &&
+             started.GetProperty("estimatedSeconds").ValueKind == JsonValueKind.Null,
+            "native private video started preserves timestamp and null estimate");
+        var publicStarted = GetHubArguments(await publicVideo.WaitForTargetAsync("TaskProgress", timeout.Token), "TaskProgress", 1)[0];
+        AssertJsonFields(publicStarted, "taskId", "status", "progress", "message", "startedAt", "estimatedSeconds");
+        Equal(NativeParityFixture.VideoNotificationTaskId, publicStarted.GetProperty("taskId").GetString()!, "native public started task");
+        Equal("started", publicStarted.GetProperty("status").GetString()!, "native public started status");
+        Equal($"Video generation started with native-provider-{probeId}", publicStarted.GetProperty("message").GetString()!,
+            "Wolverine native public started delivery");
+        True(publicStarted.GetProperty("progress").GetInt32() == 0 &&
+             publicStarted.GetProperty("startedAt").GetDateTime() is { Kind: DateTimeKind.Utc } publicStartedAt && publicStartedAt == timestamp &&
+             publicStarted.GetProperty("estimatedSeconds").ValueKind == JsonValueKind.Null,
+            "native public video started preserves zero, timestamp and null estimate");
+
+        var failed = GetHubArguments(await video.WaitForTargetAsync("VideoGenerationFailed", timeout.Token), "VideoGenerationFailed", 1)[0];
+        AssertJsonFields(failed, "taskId", "status", "error", "errorCode", "isRetryable", "retryCount", "maxRetries", "nextRetryAt", "failedAt");
+        Equal(NativeParityFixture.VideoNotificationTaskId, failed.GetProperty("taskId").GetString()!, "native video failure task");
+        Equal("failed", failed.GetProperty("status").GetString()!, "native video failure status");
+        Equal($"native-failure-{probeId}", failed.GetProperty("error").GetString()!, "Wolverine native video failure delivery");
+        True(!failed.GetProperty("isRetryable").GetBoolean() && failed.GetProperty("retryCount").GetInt32() == 0 &&
+             failed.GetProperty("maxRetries").GetInt32() == 3 && failed.GetProperty("errorCode").ValueKind == JsonValueKind.Null &&
+             failed.GetProperty("nextRetryAt").ValueKind == JsonValueKind.Null &&
+             failed.GetProperty("failedAt").GetDateTime() is { Kind: DateTimeKind.Utc } failedAt && failedAt == timestamp,
+            "native private video failure preserves false, zero, nulls and UTC timestamp");
+        var publicFailed = GetHubArguments(await publicVideo.WaitForTargetAsync("TaskFailed", timeout.Token), "TaskFailed", 1)[0];
+        AssertJsonFields(publicFailed, "taskId", "error");
+        Equal(NativeParityFixture.VideoNotificationTaskId, publicFailed.GetProperty("taskId").GetString()!, "native public failure task");
+        Equal($"native-failure-{probeId}", publicFailed.GetProperty("error").GetString()!, "Wolverine native public video failure delivery");
+    }
+
+    private static async Task PublishMediaNotificationsAsync(string probeId, CancellationToken cancellationToken)
+    {
+        var publisherPath = Environment.GetEnvironmentVariable("CONDUIT_NATIVE_MESSAGE_PUBLISHER_PATH");
+        if (string.IsNullOrWhiteSpace(publisherPath) || !File.Exists(publisherPath))
+        {
+            throw new InvalidOperationException("CONDUIT_NATIVE_MESSAGE_PUBLISHER_PATH must identify the built WolverineSmokePublisher DLL.");
+        }
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (var argument in new[] { publisherPath, probeId, "--media-notifications",
+                     NativeParityFixture.ImageNotificationTaskId, NativeParityFixture.VideoNotificationTaskId })
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start the Wolverine media publisher.");
+        var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+            var output = await stdout;
+            var errors = await stderr;
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"Wolverine media publisher exited with {process.ExitCode}: {output}\n{errors}");
+            }
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync();
+            }
+        }
+    }
+
+    private static JsonElement GetHubArguments(string frame, string target, int count)
+    {
+        using var document = JsonDocument.Parse(frame);
+        var root = document.RootElement;
+        True(root.GetProperty("type").GetInt32() == 1, $"native {target} invocation frame");
+        Equal(target, root.GetProperty("target").GetString()!, $"native {target} target");
+        var arguments = root.GetProperty("arguments");
+        True(arguments.GetArrayLength() == count, $"native {target} argument count");
+        return arguments.Clone();
+    }
+
+    private static void AssertJsonFields(JsonElement payload, params string[] fields) =>
+        True(fields.Order(StringComparer.Ordinal).SequenceEqual(
+                payload.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal)),
+            "native SignalR payload preserves exact field set and casing");
 
     private static async Task WaitForSignalRConnectionCountAsync(
         IDatabase database,
@@ -930,9 +1864,15 @@ internal static class NativeParityFixture
     public const string VirtualKey = "condt_native_aot_parity";
     public const string ModelAlias = "native-aot-model";
     public const string TaskId = "task_native_aot_parity";
+    public const string ImageNotificationTaskId = "task_native_aot_image_notification";
+    public const string VideoNotificationTaskId = "task_native_aot_video_notification";
     public const string MediaPrompt = "native-s3-media-persistence";
     public const string FixtureOwner = "native-aot-parity";
     private const int MediaPolicyId = -9010;
+    public const int SearchFunctionId = -9020;
+    public const int AnswerFunctionId = -9021;
+    public const int DisabledFunctionId = -9022;
+    public const int UnknownFunctionId = -9023;
     public static string VirtualKeyHash => Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(VirtualKey)))
         .ToLowerInvariant();
@@ -960,11 +1900,51 @@ internal static class NativeParityFixture
             now);
         await ResetAccountingAsync(connection, transaction, groupId, keyId);
         await UpsertAsyncTaskAsync(connection, transaction, keyId, now);
+        await UpsertAsyncTaskAsync(connection, transaction, keyId, now, ImageNotificationTaskId, "native_signalr_probe");
+        await UpsertAsyncTaskAsync(connection, transaction, keyId, now, VideoNotificationTaskId, "native_signalr_probe");
+        await UpsertFunctionDiscoveryAsync(connection, transaction, now);
 
         await transaction.CommitAsync();
         await ResetRedisAsync(redisConnectionString, groupId);
         Console.WriteLine(
-            "Seeded native Gateway virtual-key, IP-filter, model-routing, provider, accounting, async-task, and media parity fixture.");
+            "Seeded native Gateway virtual-key, IP-filter, model-routing, function-discovery, provider, accounting, async-task, and media parity fixture.");
+    }
+
+    private static async Task UpsertFunctionDiscoveryAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, DateTime now)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            INSERT INTO "FunctionConfigurations" (
+                "Id", "ProviderType", "ConfigurationName", "Purpose", "DefaultExecutionMode",
+                "BaseUrl", "IsEnabled", "TimeoutSeconds", "CacheTtlMinutes", "MaxRetries",
+                "ProviderSettings", "ParameterSchema", "Description", "CreatedAt", "UpdatedAt")
+            VALUES
+                (@searchId, 1, 'Native Search 雪', 1, 1, 'https://private.example.test', TRUE, 41, 7, 0,
+                    '{"private":"native-private-settings"}', @schema, '', @now, @now),
+                (@answerId, 4, 'Native Array Schema', 2, 2, NULL, TRUE, NULL, NULL, NULL,
+                    NULL, '[0,false,{"snow":"雪"}]', NULL, @now, @now),
+                (@disabledId, 1, 'Native Disabled', 1, 1, NULL, FALSE, NULL, NULL, NULL,
+                    NULL, NULL, NULL, @now, @now),
+                (@unknownId, 197, 'Native Unknown Enums', -9, 123, NULL, TRUE, NULL, NULL, NULL,
+                    NULL, NULL, NULL, @now, @now)
+            ON CONFLICT ("Id") DO UPDATE SET
+                "ProviderType" = EXCLUDED."ProviderType", "ConfigurationName" = EXCLUDED."ConfigurationName",
+                "Purpose" = EXCLUDED."Purpose", "DefaultExecutionMode" = EXCLUDED."DefaultExecutionMode",
+                "BaseUrl" = EXCLUDED."BaseUrl", "IsEnabled" = EXCLUDED."IsEnabled",
+                "TimeoutSeconds" = EXCLUDED."TimeoutSeconds", "CacheTtlMinutes" = EXCLUDED."CacheTtlMinutes",
+                "MaxRetries" = EXCLUDED."MaxRetries", "ProviderSettings" = EXCLUDED."ProviderSettings",
+                "ParameterSchema" = EXCLUDED."ParameterSchema", "Description" = EXCLUDED."Description",
+                "UpdatedAt" = EXCLUDED."UpdatedAt";
+            """;
+        command.Parameters.AddWithValue("searchId", NpgsqlDbType.Integer, SearchFunctionId);
+        command.Parameters.AddWithValue("answerId", NpgsqlDbType.Integer, AnswerFunctionId);
+        command.Parameters.AddWithValue("disabledId", NpgsqlDbType.Integer, DisabledFunctionId);
+        command.Parameters.AddWithValue("unknownId", NpgsqlDbType.Integer, UnknownFunctionId);
+        command.Parameters.AddWithValue("schema", NpgsqlDbType.Jsonb,
+            """{"properties":{"query":{"type":"string"}},"required":["query"],"example":{"query":"雪"}}""");
+        command.Parameters.AddWithValue("now", NpgsqlDbType.TimestampTz, now);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task UpsertModelRoutingAsync(
@@ -1166,7 +2146,9 @@ internal static class NativeParityFixture
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         int keyId,
-        DateTime now)
+        DateTime now,
+        string taskId = TaskId,
+        string type = "image_generation")
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -1176,7 +2158,7 @@ internal static class NativeParityFixture
                 "VirtualKeyId", "Metadata", "IsArchived", "Version", "RetryCount",
                 "MaxRetries", "IsRetryable")
             VALUES (
-                @taskId, 'image_generation', 0, 0, @now, @now,
+                @taskId, @type, 0, 0, @now, @now,
                 @keyId, @metadata, false, 0, 0, 3, true)
             ON CONFLICT ("Id") DO UPDATE SET
                 "Type" = EXCLUDED."Type",
@@ -1204,7 +2186,8 @@ internal static class NativeParityFixture
                 "IsRetryable" = true,
                 "NextRetryAt" = NULL
             """;
-        command.Parameters.AddWithValue("taskId", NpgsqlDbType.Varchar, TaskId);
+        command.Parameters.AddWithValue("taskId", NpgsqlDbType.Varchar, taskId);
+        command.Parameters.AddWithValue("type", NpgsqlDbType.Varchar, type);
         command.Parameters.AddWithValue("keyId", NpgsqlDbType.Integer, keyId);
         command.Parameters.AddWithValue(
             "metadata",
@@ -1224,7 +2207,9 @@ internal static class NativeParityFixture
             {
                 $"*group:{groupId}*",
                 $"signalr:vk:{VirtualKeyHash}:*",
-                $"async:task:{TaskId}"
+                $"async:task:{TaskId}",
+                $"async:task:{ImageNotificationTaskId}",
+                $"async:task:{VideoNotificationTaskId}"
             }
             .SelectMany(pattern => server.Keys(database.Database, pattern: pattern))
             .Distinct()

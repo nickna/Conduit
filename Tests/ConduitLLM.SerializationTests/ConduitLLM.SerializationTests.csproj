@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+    <!-- Contractless JIT wire compatibility checks are independent of native hosts. -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" PrivateAssets="all" />
     <None Update="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

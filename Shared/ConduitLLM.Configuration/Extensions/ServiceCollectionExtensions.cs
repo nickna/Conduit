@@ -34,6 +34,7 @@ namespace ConduitLLM.Configuration.Extensions
 #if !CONDUIT_NATIVE_AOT
             services.AddSingleton<IVirtualKeyRuntimeStore, EfVirtualKeyRuntimeStore>();
             services.AddScoped<IGatewayMetricsStore, EfGatewayMetricsStore>();
+            services.AddScoped<IFunctionDiscoveryRuntimeStore, EfFunctionDiscoveryRuntimeStore>();
 #endif
             services.AddScoped<IProviderRepository, ProviderRepository>();
             services.AddScoped<IProviderKeyCredentialRepository, ProviderKeyCredentialRepository>();

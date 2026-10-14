@@ -3,9 +3,13 @@ using ConduitLLM.Core.Data.Extensions;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services;
+using ConduitLLM.Persistence.Interfaces;
+using ConduitLLM.Persistence.Npgsql;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+
+using Npgsql;
 
 namespace ConduitLLM.Admin.Extensions
 {
@@ -49,6 +53,9 @@ namespace ConduitLLM.Admin.Extensions
                 throw new InvalidOperationException($"Only PostgreSQL is supported. Invalid provider: {dbProvider}");
             }
 
+            services.AddSingleton(_ => NpgsqlDataSource.Create(dbConnectionString));
+            services.AddSingleton<IConnectionPoolWarmup, NpgsqlConnectionPoolWarmup>();
+
             // Configure query monitoring for performance tracking
             services.Configure<ConduitLLM.Configuration.Interceptors.QueryMonitoringOptions>(
                 configuration.GetSection(ConduitLLM.Configuration.Interceptors.QueryMonitoringOptions.SectionName));
@@ -57,7 +64,7 @@ namespace ConduitLLM.Admin.Extensions
             services.AddDbContextFactory<ConduitLLM.Configuration.ConduitDbContext>((sp, options) =>
             {
                 var interceptor = sp.GetRequiredService<ConduitLLM.Configuration.Interceptors.QueryMonitoringInterceptor>();
-                options.UseNpgsql(dbConnectionString, npgsql =>
+                options.UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>(), npgsql =>
                            // Transient-failure resilience. Explicit BeginTransaction calls are
                            // incompatible with a retrying strategy — use
                            // ExecuteInTransactionAsync (ExecutionStrategyExtensions) instead.

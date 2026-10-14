@@ -69,14 +69,18 @@ public class ToolChoice
             throw new ArgumentNullException(nameof(functionName), "Function name cannot be null or empty");
         }
 
-        return new(new
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
         {
-            type = "function",
-            function = new
-            {
-                name = functionName
-            }
-        }, functionName);
+            writer.WriteStartObject();
+            writer.WriteString("type", "function");
+            writer.WriteStartObject("function");
+            writer.WriteString("name", functionName);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+        using var document = JsonDocument.Parse(buffer.ToArray());
+        return new(document.RootElement.Clone(), functionName);
     }
 
     /// <summary>
@@ -151,13 +155,17 @@ public class ToolChoiceConverter : JsonConverter<ToolChoice>
         }
         else if (value.TryGetFunctionName(out var functionName))
         {
-            // Avoid reflection over the anonymous object on NativeAOT paths.
+            // Write the selected function directly through the static wire contract.
             writer.WriteStartObject();
             writer.WriteString("type", "function");
             writer.WriteStartObject("function");
             writer.WriteString("name", functionName);
             writer.WriteEndObject();
             writer.WriteEndObject();
+        }
+        else if (serializedValue is JsonElement element)
+        {
+            element.WriteTo(writer);
         }
         else
         {

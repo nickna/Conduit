@@ -43,7 +43,7 @@ namespace ConduitLLM.Providers.MiniMax
             {
                 var requestJson = System.Text.Json.JsonSerializer.Serialize(
                     miniMaxRequest,
-                    MiniMaxStreamJsonContext.Default.MiniMaxChatCompletionRequest);
+                    GetRequiredJsonTypeInfo<MiniMaxChatCompletionRequest>(StreamingJsonOptions));
                 Logger.LogDebug(
                     "MiniMax Streaming Request to {Endpoint}: {Request}",
                     endpoint,
@@ -55,7 +55,7 @@ namespace ConduitLLM.Providers.MiniMax
                 HttpMethod.Post,
                 endpoint,
                 miniMaxRequest,
-                MiniMaxStreamJsonContext.Default.MiniMaxChatCompletionRequest,
+                GetRequiredJsonTypeInfo<MiniMaxChatCompletionRequest>(StreamingJsonOptions),
                 null,
                 Logger,
                 cancellationToken);

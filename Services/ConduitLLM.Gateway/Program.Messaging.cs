@@ -99,6 +99,10 @@ public partial class Program
             }
         });
 
+#if !CONDUIT_WOLVERINE_CODEGEN
+        builder.Host.DeferWolverineStartupUntilSchemaReady(builder.Configuration, "conduit-gateway");
+#endif
+
         // Gateway liveness heartbeat (#1067): every instance publishes a GatewayHeartbeat via
         // IEventBus so the Admin health dashboard reports the Gateway's real status from
         // staleness (keeps Admin↔Gateway event-only — no synchronous HTTP probe). Registered

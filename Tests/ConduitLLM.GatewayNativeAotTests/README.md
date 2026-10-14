@@ -1,0 +1,245 @@
+# Native Gateway process fixtures
+
+This BCL-based probe and its HTTP provider are published with NativeAOT by the
+Linux gate. Production credential protection is prepared separately by the
+managed `ConduitLLM.SchemaStartupFixtures` utility.
+
+`NativeFunctionFixture` prepares a GUID-owned Exa configuration with generated
+positive IDs, a separate virtual key and group, a scoped encrypted credential,
+an IP whitelist, and an active flat execution price of `0.12500001`. It uses the
+canonical cost mapping and leaves the existing shadow mapping null. Real
+PostgreSQL tests use the production EF schema in an isolated namespace to verify
+the stored values, rollback, cancellation, and independent-owner preservation.
+
+The closed MCP fixture profile uses the same owned graph and generated positive
+IDs with provider type `Mcp`, an exact loopback HTTP `/mcp` endpoint, and explicit
+settings allowing only `native_search` and the fixture's private network. Exa
+keeps its original null settings and authority-only endpoint. Reads and cleanup
+reject the wrong profile, altered settings, invalid MCP endpoints and cross-owner
+references before deleting rows. Real PostgreSQL and Redis tests cover both
+profiles, transactional rollback, cancellation and preservation of unrelated
+state. This fixture profile prepares data for a subsequent Gateway proof.
+
+Stop the fixture's hosts before deleting its rows. Cleanup verifies the complete
+owned graph and rejects unrelated references through canonical or shadow foreign
+keys, including unsupported virtual-key cascade children. It deletes only that
+owner's rows and is safe to repeat after successful deletion.
+
+The parity harness generates the owner before seeding and passes a production-
+protected credential to `--seed`. After all owned processes stop and are reaped,
+`--cleanup-function-fixture` validates the graph, deletes its exact Redis keys and
+delimited key families, then removes SQL rows. A Redis failure leaves SQL ownership
+available for retry. Shared key rings, catalog keys, streams, and unrelated owner
+state are preserved. Cleanup failure fails the gate and parent environment values
+are restored in all cases.
+
+The BillingAudit lifecycle phase owns a third, independent fixture. Before any
+protocol or provider workload, one authenticated configuration rejection on each
+quiet Gateway queues exactly one local audit event. The gate requires both
+10-second timers to persist these queues while each stays below the 100-event
+batch threshold, then checks all 17 audit columns and unchanged provider,
+execution and financial state. After the other workloads, it checks each Gateway
+in turn: one fresh marker must pass through that host's periodic timer before a
+single pending tail is armed. SIGTERM must follow the observed timer flush within
+three seconds. Captured Linux process start identities protect the signal, both
+hosts must exit successfully, and each log must contain an exclusive one-event
+final flush. A racing normal timer flush fails the proof. SQL checks the exact
+six owned events across the timer, marker and shutdown phases, and independent
+owner-checked cleanup runs after all remaining producers stop. This establishes
+the Gateway lifecycle boundary; Admin uses the same native hosted writer but
+has no controlled billing-enqueue HTTP case in this gate.
+
+Native billing queues run on every host with typed atomic batch persistence;
+scheduled EF retention is disabled. JIT keeps its original constructor and
+leader-elected lifecycle. The inherited JIT follower queue issue is tracked in
+[#1581](https://github.com/nickna/Conduit/issues/1581), and shutdown metric accounting
+is tracked in [#1584](https://github.com/nickna/Conduit/issues/1584). Audit reads,
+retention, reconciliation and abrupt-termination durability are separate work.
+
+The provider's `/search` route validates `x-api-key`, accepts generated chunked
+JSON from the production Exa client, returns a structured Unicode result, and
+has separate function counters. It omits `costDollars` so the execution proof must
+use configured pricing. A query containing `native-function-error` returns a real
+provider 400 for failure-path verification.
+
+The provider also has a stateless, non-streaming agentic fixture selected by a
+GUID-marked prompt. Its first reply derives the function name from the actual
+advertised query schema and requests one search. A final reply requires the
+matching assistant tool call, exact arguments and the complete rich Exa result.
+Separate phase and rejection counters leave ordinary chat and SSE counters
+unchanged. Real HTTP tests exercise production OpenAI-compatible and Exa clients;
+this provider fixture alone does not prove the Gateway agentic workflow.
+
+`NativeMcpProviderStub` is an instance-owned loopback TCP fixture for the pinned
+MCP client's stateless `2026-07-28` discovery, listing and tool-call transport. It
+checks actual authentication, protocol headers and request metadata, and returns
+Unicode schema/text with structured results. Received-request latches make
+cancellation checks independent of timing; disposal stops the listener, closes
+owned sockets and joins its handlers within a fresh deadline. Production-client
+tests also cover filtering, routing arguments, endpoint selection and bounded
+large responses. This fixture does not establish the Gateway's native MCP
+workflow, legacy session negotiation or streaming transport support.
+
+The PostgreSQL precision test records the existing six-decimal request-log,
+spend-history, and ledger columns alongside eight-decimal function costs and group
+balances. Billing verification must compare each persisted value at its actual
+column precision.
+
+The complete harness explicitly sets `CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS=1000`
+for its owned hosts because every phase shares one loopback IP. IP limiting stays
+enabled, and the fixture keys retain their separate RPM/RPD limits. The tracked
+environment setting is restored during cleanup.
+The inherited base/derived option mismatch is tracked in
+[#1580](https://github.com/nickna/Conduit/issues/1580).
+
+The full process gate reads `/health/runtime-capabilities` from Admin and both
+Gateways. It checks exactly five snake_case fields, native mode, the selected
+typed-Npgsql persistence status, each complete included/excluded feature set,
+and protocol arrays (empty for Admin, JSON for Gateway). Duplicate labels,
+overlapping sets and unexpected fields fail. Native hosts omit the unsupported
+EF background workers described in the
+[Admin profile](../../docs/operations/native-aot-admin-feature-matrix.md) and
+[Gateway profile](../../docs/operations/gateway-native-aot-feature-matrix.md).
+Composition tests separately verify the retained native workers and the full JIT
+worker graph. The Admin capability DTO also has reflection-disabled generated
+serialization tests; this health response does not qualify other Admin routes.
+
+`NativeFunctionExecutionProbe` runs after the existing protocol checks. It sends
+guarded chat requests through both aliases on both Gateways before any execution,
+using the separate owned key. Authentication and missing/disabled IDs precede
+iteration validation. The complete provider counter snapshot and owned accounting
+stay unchanged through several spend flush windows, and the full host's correlation
+header remains the caller's value before billing setup. These guarded requests
+check preflight before the successful workloads.
+
+The probe then sends
+one successful search and one real provider rejection through each Gateway, reads
+all four executions through the opposite host, and compares the HTTP contracts
+against an independent 24-column SQL oracle. A separate key/group isolates the
+proof's pricing, two successful request logs, balance, and settled ledger totals.
+Ownership denial, missing executions, unauthenticated reads, and unbilled failures
+are checked too. The published two-host process gate passed this bounded inline Exa
+path in Linux run 38133326127 and again in the complete process job linked below.
+
+The final phase runs one automatic Exa search followed by a final LLM reply on
+both chat aliases and both Gateways. Each request carries its own GUID-marked
+prompt. The provider requires the advertised schema and matching assistant/tool
+messages; the probe checks aggregate token usage, execution summaries, all 24
+persisted execution fields, opposite-host reads and ownership denial. Four chats
+produce four combined LLM/function charges alongside the two inline charges.
+Independent SQL checks preserve the distinct execution/group and log/ledger
+precision and require stable accounting through multiple spend flushes. Response
+cost summaries and iteration values retain their inherited behavior; the SQL
+charge is checked separately. These cost summaries, zero iteration and omitted
+chat-log function metadata are tracked in
+[#1577](https://github.com/nickna/Conduit/issues/1577),
+[#1578](https://github.com/nickna/Conduit/issues/1578) and
+[#1579](https://github.com/nickna/Conduit/issues/1579). This bounded non-streaming Exa workflow does not
+establish MCP, provider-hosted tools, agentic SSE, parallel/dependent calls or
+function audit/retention support. The
+[published Linux process job at d13e7deb](https://github.com/nickna/Conduit/actions/runs/38137532017/job/114465334583)
+passed the configuration preflight, inline Exa and four complete Exa agentic loops,
+including owned cleanup. It qualifies `inline-exa-search` and
+`nonstreaming-configured-exa-agentic-chat`; broader function workflows stay excluded.
+
+A separate inline MCP phase binds its TCP upstream inside the probe process on
+port zero, then creates a distinct GUID-owned configuration using the protected
+credential. Each Gateway executes `native_search` once; the probe checks all 24
+execution fields and 28 request-log fields against SQL, opposite-host reads,
+ownership denial, exact configured charges and stable settlement. The caller's
+reserved routing parameter remains in stored input and is removed from outbound
+tool arguments. Unicode text, nested structured content and omission of binary
+content are checked independently, including the original compact response size
+before JSONB normalization. The complete upstream counters and Exa accounting
+remain unchanged during reads. After producer shutdown, cleanup attempts both
+profiles independently and retains SQL ownership if Redis deletion fails. The
+Linux gate publishes this in-process upstream as part of the native probe; a
+passing published run is required to qualify this positive stateless MCP path.
+MCP agentic workflows, legacy sessions, SSE and failure billing remain separate.
+
+The native Admin selects the typed Npgsql global-setting repository; JIT retains
+the scoped EF repository. `NativeAdminGlobalSettingProbe` checks the authenticated
+HTTP surface using `X-Master-Key` and its Bearer fallback against an independent
+six-column SQL oracle. Two GUID-owned keys cover create/read/update/delete,
+duplicate and missing resources, Unicode values, description preservation and
+clearing, empty merge patches, pagination, and protected/typed validation without
+mutating existing settings. Cache invalidation and reload checks establish their
+HTTP acknowledgements only. Unrelated rows must retain their complete fingerprint.
+The probe uses bounded cleanup, and the parent repeats
+`--cleanup-admin-global-settings` after stopping all producers so late writes
+cannot escape fixture cleanup. Published Linux execution is required before this
+Admin path qualifies for native promotion.
+
+`NativeGlobalSettingsCacheConvergenceProbe` separately observes both Gateway
+caches through authenticated chat validation before the settings CRUD probe can
+issue a reload. Its disposable database must initially lack both fixed iteration
+settings. It warms the default maximum 5, creates an exactly owned
+`Agentic.MaxIterations=7` through ordinary Admin HTTP, and requires both Gateways
+to consume 7 without a manual reload. A conditional SQL update to 9 must leave
+both caches at 7; an explicit cluster reload must make both consume 9. Owned SQL
+deletion followed by another reload must restore the default 5 on both hosts.
+Every Gateway request must reach the exact iteration-range error, with no provider
+dispatch, executions, logs, spend or ledger changes. All unrelated setting fields
+remain unchanged. The phase allows at most 46 authenticated Gateway requests under
+a hard aggregate 50-request cap and a 90-second deadline; authentication and
+rate-limit errors fail immediately. It exercises `v1/chat/completions`; the existing function preflight
+continues to cover both chat aliases.
+
+The optional `--global-settings-cache-convergence` CLI runs that phase alone.
+`--cleanup-global-settings-cache-convergence` conditionally removes only the
+fixed key with its exact GUID description and current positive ID. The shared
+`--cleanup-admin-global-settings` CLI attempts this cleanup and the two settings
+CRUD keys independently. Parent cleanup repeats both after stopping all producers
+to handle an unknown or late Admin write outcome. Healthy reload consumption does
+not prove failed-reload retry or bounded completed-ID retention; those remain
+[#1623](https://github.com/nickna/Conduit/issues/1623) and
+[#1627](https://github.com/nickna/Conduit/issues/1627).
+
+`--admin-ip-filters` exercises native Admin's typed IP repository and its
+conditional-request filter. Three exact GUID-owned names cover global allow/deny
+rules and an enabled per-key deny rule. The probe independently reads all 12 SQL
+columns and compares all 11 HTTP DTO fields, paginated global/enabled/per-key
+selections, strong persisted ETags, missing/stale/weak preconditions, empty and
+matching/wildcard merge patches, deletion and missing-resource 404s. The control
+client binds `127.0.0.1`; the candidate client binds a real `127.0.0.2` socket and
+checks deny/allow transitions as the global rules change. It sends no forwarding
+headers. Security overrides apply only to the owned Admin child, including
+disabling the private-IP bypass. The probe reads settings and `/check` without
+mutating existing settings. Every unrelated IP and global-setting scalar must
+retain its fingerprint. The parent repeats `--cleanup-admin-ip-filters` after
+reaping producers and before deleting the per-key fixture; each cleanup has a
+fresh deadline and deletes only the three exact owned names. Other Admin
+versioned resources keep their EF reader. Their missing rows now reach their
+handlers without synthetic version headers or precondition failures.
+
+`--benchmark-workload <configuration.json>` runs one closed authenticated workload
+against an existing fixture: `admin-setting-read`, `gateway-chat-nonstream`, or
+`gateway-chat-sse`. The strict configuration contains `workload`, `baseUrl`,
+`requests`, `concurrency`, `warmupRequests` and `timeoutSeconds`. Admin also requires
+`settingKey` and `expectedValue`; chat requires `model`, `prompt`, `expectedContent`,
+`expectedPromptTokens` and `expectedCompletionTokens`. The credential comes only
+from `CONDUIT_NATIVE_BENCHMARK_API_KEY` and is omitted from configurations, reports
+and failure diagnostics. Duplicate, unknown or missing fields are rejected before
+HTTP. The driver creates no database or setting fixtures.
+
+Each response must match its complete contract. Admin checks the setting's six
+fields, key/value and coherent UTC timestamps; chat checks assistant content,
+completion and token usage. SSE must deliver consistent chunks, complete content,
+stop/usage events and `[DONE]` before EOF. Latency includes response completion and
+validation. Failed warm-ups and caller cancellation produce no report; measured
+failures produce a failure count and a nonzero exit. Responses are capped at 1 MiB,
+configuration at 64 KiB, and the whole operation at 15 minutes.
+
+The schema-2 report contains one workload with requested, executed and completed
+counts, failures, warm-up/concurrency/deadline settings, complete-response latency
+percentiles and throughput. A SHA-256 input fingerprint covers the closed workload
+and expected content without exposing those values or the credential. Endpoint
+origins and load settings are separate from that fingerprint so comparable JIT and
+native processes can use different local ports. The published process gate runs
+small correctness samples for all three workloads after its accounting assertions;
+these samples do not establish operational benefit or replace canary measurements.
+
+The probe preserves the current provider-error diagnostics in failed POST/GET
+responses; parity does not establish that these diagnostics are suitable for
+External error mode. The six-versus-eight decimal reporting discrepancy is tracked
+in [#1574](https://github.com/nickna/Conduit/issues/1574).

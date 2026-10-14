@@ -267,6 +267,10 @@ public sealed class FinancialAmountPrecisionPersistenceParityTests(PostgresLockT
 
     private async Task DropSchemaAsync(string schema)
     {
+        // EF and direct connections use a separate string-keyed pool from the
+        // disposable data source. Release only this generated schema's pool.
+        using (var ownedPool = new NpgsqlConnection(WithSearchPath(schema)))
+            NpgsqlConnection.ClearPool(ownedPool);
         await using var connection = new NpgsqlConnection(fixture.ConnectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();

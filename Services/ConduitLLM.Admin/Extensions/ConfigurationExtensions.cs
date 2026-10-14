@@ -2,6 +2,11 @@ using ConduitLLM.Configuration.Data;
 using ConduitLLM.Configuration.Extensions;
 using ConduitLLM.Configuration.ModelCatalogs;
 using ConduitLLM.Core.Extensions;
+#if CONDUIT_NATIVE_AOT
+using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Persistence.Npgsql;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+#endif
 
 namespace ConduitLLM.Admin.Extensions
 {
@@ -20,6 +25,14 @@ namespace ConduitLLM.Admin.Extensions
         {
             // Add repositories
             services.AddRepositories();
+#if CONDUIT_NATIVE_AOT
+            // Use the parity-tested fixed-query stores for native settings and
+            // IP-filter administration, including their shared runtime caches.
+            services.RemoveAll<IGlobalSettingRepository>();
+            services.AddSingleton<IGlobalSettingRepository, NpgsqlGlobalSettingRepository>();
+            services.RemoveAll<IIpFilterRepository>();
+            services.AddSingleton<IIpFilterRepository, NpgsqlIpFilterRepository>();
+#endif
 
             // Add caching services
             services.AddCachingServices(configuration);

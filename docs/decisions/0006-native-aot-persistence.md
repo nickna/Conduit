@@ -64,3 +64,17 @@ package swap. A new ADR is required before any production-native promotion.
 
 The parallel candidate-image and deferred-promotion procedure is documented in
 `docs/operations/native-aot-canary.md`; it does not supersede this decision.
+
+## Query-precompilation reassessment: 2026-10-12
+
+The [isolated EF query spike](../operations/ef-native-query-spike.md) aligned EF
+runtime, Design, Tasks, and CLI at 10.0.12 and attempted query precompilation in
+all five current query-owning projects. Every pass failed. Both attempted native
+repository dispatcher publishes also failed before execution; zero native
+repository cases ran. Generated workload size, startup, throughput, and memory
+therefore remain unavailable for this EF path. Selected typed-Npgsql service
+evidence does not complete the full repository-suite requirement in #1373.
+
+These measurements retain the production-JIT decision and the existing rollback
+strategy. A full semantic inventory, native PostgreSQL suite, deleted-row parity,
+and workload measurements remain necessary before revisiting that decision.

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 
@@ -301,11 +300,10 @@ public sealed class ChatEndpointErrorStatusTests
     {
         await using var host = await StartHostAsync(routingFailure);
 
-        return await host.Client.PostAsJsonAsync("/v1/chat/completions", new
-        {
-            model = "test-model",
-            messages = new[] { new { role = "user", content = "Hello" } }
-        });
+        using var content = new StringContent(
+            """{"model":"test-model","messages":[{"role":"user","content":"Hello"}]}""",
+            Encoding.UTF8, "application/json");
+        return await host.Client.PostAsync("/v1/chat/completions", content);
     }
 
     /// <summary>
@@ -342,13 +340,18 @@ public sealed class ChatEndpointErrorStatusTests
 
         return GatewayEndpointTestHost.StartAsync(services =>
         {
-            services.ConfigureHttpJsonOptions(options => GatewayJsonOptions.Configure(options.SerializerOptions));
+            services.ConfigureHttpJsonOptions(options =>
+            {
+                options.SerializerOptions.TypeInfoResolverChain.Clear();
+                GatewayJsonOptions.Configure(options.SerializerOptions);
+            });
             services.AddSingleton(clientFactory.Object);
             services.AddSingleton(mappingService.Object);
             services.AddSingleton(GatewayJsonOptions.Create());
             services.AddSingleton(Mock.Of<IEventBus>());
             services.AddSingleton(Mock.Of<IGlobalSettingsCacheService>());
             services.AddSingleton(Mock.Of<IUsageEstimationService>());
+            services.AddSingleton(new Mock<ConduitLLM.Persistence.Interfaces.IFunctionExecutionConfigurationStore>(MockBehavior.Strict).Object);
             services.AddSingleton<IVirtualKeyRuntimeService>(virtualKeyService.Object);
             services.AddScoped<Conduit>();
         });
@@ -360,7 +363,7 @@ public sealed class ChatEndpointErrorStatusTests
         payload.Should().NotBeEmpty("every Gateway error must carry an OpenAI error envelope");
 
         var envelope = JsonSerializer.Deserialize<OpenAIErrorResponse>(
-            payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            payload, GatewayJsonOptions.Create());
         envelope.Should().NotBeNull();
         return envelope!.Error;
     }

@@ -21,7 +21,7 @@ namespace ConduitLLM.IntegrationTests.Tests;
 /// the NativeAOT-oriented typed-Npgsql adapter on real PostgreSQL.
 /// </summary>
 [Collection("Postgres advisory locks")]
-public sealed class IpFilterRepositoryParityTests
+public sealed partial class IpFilterRepositoryParityTests
 {
     private readonly PostgresLockTestContainerFixture _fixture;
 
@@ -42,8 +42,9 @@ public sealed class IpFilterRepositoryParityTests
             await CreateSchemaAsync(npgsqlSchema);
 
             var efConnectionString = WithSearchPath(efSchema);
+            await using var efSource = NpgsqlDataSource.Create(efConnectionString);
             var efRepository = new IpFilterRepository(
-                new TestDbContextFactory(efConnectionString),
+                new TestDbContextFactory(efSource),
                 NullLogger<IpFilterRepository>.Instance);
             await ExerciseContractAsync(efRepository, efConnectionString);
 
@@ -162,7 +163,7 @@ public sealed class IpFilterRepositoryParityTests
         int id,
         byte[] rowVersion)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "UPDATE \"IpFilters\" SET \"RowVersion\" = @rowVersion WHERE \"Id\" = @id";
@@ -218,12 +219,12 @@ public sealed class IpFilterRepositoryParityTests
         return builder.ConnectionString;
     }
 
-    private sealed class TestDbContextFactory(string connectionString) :
+    private sealed class TestDbContextFactory(NpgsqlDataSource source) :
         IDbContextFactory<ConduitDbContext>
     {
         private readonly DbContextOptions<ConduitDbContext> _options =
             new DbContextOptionsBuilder<ConduitDbContext>()
-                .UseNpgsql(connectionString)
+                .UseNpgsql(source)
                 .Options;
 
         public ConduitDbContext CreateDbContext() => new(_options);

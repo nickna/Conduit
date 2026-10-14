@@ -10,6 +10,7 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Functions.Entities;
 using ConduitLLM.Gateway.UsageTracking;
 using ConduitLLM.Gateway.Serialization;
+using ConduitLLM.Persistence.Interfaces;
 
 namespace ConduitLLM.Gateway.Endpoints;
 
@@ -19,7 +20,8 @@ namespace ConduitLLM.Gateway.Endpoints;
 public class FunctionsEndpoints : GatewayEndpointHandlerBase
 {
     private readonly IFunctionExecutionService _executionService;
-    private readonly IFunctionConfigurationRepository _configurationRepository;
+    private readonly IFunctionConfigurationRepository? _configurationRepository;
+    private readonly IFunctionExecutionConfigurationStore? _runtimeConfigurationStore;
     private readonly ConduitLLM.Functions.Services.FunctionParameterValidationService _validationService;
     private readonly ILogger<FunctionsEndpoints> _logger;
     private readonly IProviderErrorTranslator _errorTranslator;
@@ -39,6 +41,37 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
     {
         _executionService = executionService ?? throw new ArgumentNullException(nameof(executionService));
         _configurationRepository = configurationRepository ?? throw new ArgumentNullException(nameof(configurationRepository));
+        _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _errorTranslator = errorTranslator ?? throw new ArgumentNullException(nameof(errorTranslator));
+    }
+
+    /// <summary>
+    /// Creates a handler over the extracted configuration read while preserving
+    /// the public repository constructor and its existing DI behavior.
+    /// </summary>
+    public static FunctionsEndpoints CreateWithRuntimePersistence(
+        IFunctionExecutionService executionService,
+        IFunctionExecutionConfigurationStore configurationStore,
+        ConduitLLM.Functions.Services.FunctionParameterValidationService validationService,
+        IEventPublisher eventPublisher,
+        IHttpContextAccessor httpContextAccessor,
+        ILogger<FunctionsEndpoints> logger,
+        IProviderErrorTranslator errorTranslator) =>
+        new(executionService, configurationStore, validationService, eventPublisher, httpContextAccessor, logger, errorTranslator);
+
+    private FunctionsEndpoints(
+        IFunctionExecutionService executionService,
+        IFunctionExecutionConfigurationStore configurationStore,
+        ConduitLLM.Functions.Services.FunctionParameterValidationService validationService,
+        IEventPublisher eventPublisher,
+        IHttpContextAccessor httpContextAccessor,
+        ILogger<FunctionsEndpoints> logger,
+        IProviderErrorTranslator errorTranslator)
+        : base(eventPublisher, httpContextAccessor, logger)
+    {
+        _executionService = executionService ?? throw new ArgumentNullException(nameof(executionService));
+        _runtimeConfigurationStore = configurationStore ?? throw new ArgumentNullException(nameof(configurationStore));
         _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _errorTranslator = errorTranslator ?? throw new ArgumentNullException(nameof(errorTranslator));
@@ -72,7 +105,9 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
             }
 
             // Validate function configuration exists and is enabled
-            var configuration = await _configurationRepository.GetByIdAsync(request.FunctionConfigurationId, cancellationToken);
+            var configuration = _runtimeConfigurationStore is not null
+                ? await _runtimeConfigurationStore.GetConfigurationAsync(request.FunctionConfigurationId, cancellationToken)
+                : await _configurationRepository!.GetByIdAsync(request.FunctionConfigurationId, cancellationToken);
             if (configuration == null)
             {
                 return OpenAIError(404, $"Function configuration {request.FunctionConfigurationId} not found", "not_found", "not_found_error");

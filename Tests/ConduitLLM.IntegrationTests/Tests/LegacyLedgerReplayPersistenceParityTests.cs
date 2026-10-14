@@ -485,7 +485,14 @@ public sealed class LegacyLedgerReplayPersistenceParityTests(PostgresLockTestCon
 
     private sealed record TestSchema(string Name, string ConnectionString, string RootConnectionString, int GroupId, string ClaimId) : IAsyncDisposable
     {
-        public ValueTask DisposeAsync() => new(ExecuteAsync(RootConnectionString, $"DROP SCHEMA IF EXISTS \"{Name}\" CASCADE"));
+        public async ValueTask DisposeAsync()
+        {
+            // Clear only the implicit pool belonging to this GUID-owned schema;
+            // the explicit data source and test operations have already finished.
+            using (var ownedPool = new NpgsqlConnection(ConnectionString))
+                NpgsqlConnection.ClearPool(ownedPool);
+            await ExecuteAsync(RootConnectionString, $"DROP SCHEMA IF EXISTS \"{Name}\" CASCADE");
+        }
     }
 
     private sealed class TestDbContextFactory(string connectionString) : IDbContextFactory<ConduitDbContext>

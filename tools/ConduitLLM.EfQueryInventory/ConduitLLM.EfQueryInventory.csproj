@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsAotCompatible>false</IsAotCompatible>
+    <Description>Developer-only compiler-symbol inventory of EF query callsites.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The isolated collector loads this into the same SDK compiler host.
+         No application project references this analyzer or its dependencies. -->
+    <Reference Include="Microsoft.CodeAnalysis">
+      <HintPath>$(MSBuildBinPath)/Roslyn/bincore/Microsoft.CodeAnalysis.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp">
+      <HintPath>$(MSBuildBinPath)/Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

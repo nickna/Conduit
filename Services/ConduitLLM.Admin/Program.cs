@@ -1,6 +1,7 @@
 using ConduitLLM.Admin.Endpoints;
 using ConduitLLM.Admin.DTOs;
 using ConduitLLM.Admin.Extensions;
+using ConduitLLM.Admin.Middleware;
 using ConduitLLM.Admin.Serialization;
 using ConduitLLM.Configuration.Extensions;
 using ConduitLLM.Core.Extensions;
@@ -155,8 +156,41 @@ public partial class Program
         // authenticated JSON API route at /metrics/.
         app.UseConduitPrometheusMetricsEndpoint();
         app.UseAuthorization();
+        ConfigureRuntimeProfileBoundary(app);
 
 
+        MapRuntimeEndpoints(app);
+
+        // app.Urls throws when no server is present (e.g. under build-time OpenAPI
+        // document generation, which builds the host without Kestrel) — read the
+        // address feature null-safely instead.
+        var serverAddresses = ((Microsoft.AspNetCore.Builder.IApplicationBuilder)app).ServerFeatures
+            .Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()?.Addresses;
+        app.Logger.LogInformation(
+            "Admin API started — Environment: {Environment}, URLs: {Urls}",
+            app.Environment.EnvironmentName,
+            string.Join(", ", serverAddresses ?? Array.Empty<string>()));
+
+#if CONDUIT_WOLVERINE_CODEGEN
+        // Generation-only command path, enabled by scripts/generate-wolverine-code.ps1.
+        return await app.RunJasperFxCommands(args);
+#else
+        await app.RunAsync();
+        return 0;
+#endif
+    }
+
+    /// <summary>Installs the native boundary after authentication and authorization.</summary>
+    internal static void ConfigureRuntimeProfileBoundary(WebApplication app)
+    {
+#if CONDUIT_NATIVE_AOT
+        app.UseMiddleware<NativeAdminRuntimeProfileMiddleware>();
+#endif
+    }
+
+    /// <summary>Maps the unchanged runtime endpoint graph for the host and inventory tests.</summary>
+    internal static void MapRuntimeEndpoints(WebApplication app)
+    {
         // ModelAuthor is served by Minimal API endpoints.
         app.MapModelAuthorEndpoints();
         app.MapModelSeriesEndpoints();
@@ -187,30 +221,14 @@ public partial class Program
         ProviderErrorsEndpoints.MapProviderErrorsEndpoints(app);
         MediaRetentionEndpoints.MapMediaRetentionEndpoints(app);
         ProviderToolsEndpoints.MapProviderToolsEndpoints(app);
+#if !CONDUIT_NATIVE_AOT
         PricingEndpoints.MapPricingEndpoints(app);
+#endif
         ModelProviderMappingEndpoints.MapModelProviderMappingEndpoints(app);
         ModelCostsEndpoints.MapModelCostsEndpoints(app);
 
         // Map monitoring endpoints (health, metrics, Prometheus)
         MapMonitoringEndpoints(app);
-
-        // app.Urls throws when no server is present (e.g. under build-time OpenAPI
-        // document generation, which builds the host without Kestrel) — read the
-        // address feature null-safely instead.
-        var serverAddresses = ((Microsoft.AspNetCore.Builder.IApplicationBuilder)app).ServerFeatures
-            .Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()?.Addresses;
-        app.Logger.LogInformation(
-            "Admin API started — Environment: {Environment}, URLs: {Urls}",
-            app.Environment.EnvironmentName,
-            string.Join(", ", serverAddresses ?? Array.Empty<string>()));
-
-#if CONDUIT_WOLVERINE_CODEGEN
-        // Generation-only command path, enabled by scripts/generate-wolverine-code.ps1.
-        return await app.RunJasperFxCommands(args);
-#else
-        await app.RunAsync();
-        return 0;
-#endif
     }
 
 }

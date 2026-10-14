@@ -1,0 +1,66 @@
+<Project>
+  <!-- This task runs in MSBuild only; it is never linked into a published host. -->
+  <UsingTask TaskName="ConduitEncodeNativeToolchain" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll"
+             Condition="'$(ConduitNativeToolchainEvidencePath)' != ''">
+    <ParameterGroup>
+      <Entries ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <Lines ParameterType="System.String[]" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.Text" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        Lines = new string[Entries.Length];
+        for (int i = 0; i < Entries.Length; i++)
+        {
+            Lines[i] = Entries[i].ItemSpec + "=" + Convert.ToBase64String(
+                Encoding.UTF8.GetBytes(Entries[i].GetMetadata("Value")));
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <!-- LinkNative follows SetupOSSpecificProps, which resolves the actual driver.
+       The root assembly filter prevents referenced projects sharing this path. -->
+  <Target Name="ConduitCaptureNativeToolchain" AfterTargets="LinkNative"
+          Condition="'$(PublishAot)' == 'true' and '$(ConduitNativeToolchainEvidencePath)' != '' and '$(AssemblyName)' == '$(ConduitNativeToolchainEvidenceAssemblyName)'">
+    <ItemGroup>
+      <_ConduitNativeToolchain Include="NETCoreSdkVersion"><Value>$(NETCoreSdkVersion)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="RuntimeIdentifier"><Value>$(RuntimeIdentifier)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="PublishAot"><Value>$(PublishAot)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="Configuration"><Value>$(Configuration)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="IlcHostPackagePath"><Value>$(IlcHostPackagePath)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="RuntimePackagePath"><Value>$(RuntimePackagePath)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="IlcToolsPath"><Value>$(IlcToolsPath)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="ILCompilerTargetsPath"><Value>$(ILCompilerTargetsPath)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="CppCompilerAndLinker"><Value>$(CppCompilerAndLinker)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="CppLinker"><Value>$(CppLinker)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="LinkerFlavor"><Value>$(LinkerFlavor)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="ObjCopyName"><Value>$(ObjCopyName)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="IlcUseEnvironmentalTools"><Value>$(IlcUseEnvironmentalTools)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="_hostOS"><Value>$(_hostOS)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="_hostArchitecture"><Value>$(_hostArchitecture)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="_targetOS"><Value>$(_targetOS)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="_targetArchitecture"><Value>$(_targetArchitecture)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="NativeIntermediateOutputPath"><Value>$(NativeIntermediateOutputPath)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="NativeOutputPath"><Value>$(NativeOutputPath)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="NativeObject"><Value>$(NativeObject)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="NativeBinary"><Value>$(NativeBinary)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="AssemblyName"><Value>$(AssemblyName)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="SelfContained"><Value>$(SelfContained)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="StripSymbols"><Value>$(StripSymbols)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="ConduitAotAudit"><Value>$(ConduitAotAudit)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="UseSharedCompilation"><Value>$(UseSharedCompilation)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="Version"><Value>$(Version)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="InformationalVersion"><Value>$(InformationalVersion)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="ConduitCommitSha"><Value>$(ConduitCommitSha)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="ConduitBuildTimestamp"><Value>$(ConduitBuildTimestamp)</Value></_ConduitNativeToolchain>
+    </ItemGroup>
+    <ConduitEncodeNativeToolchain Entries="@(_ConduitNativeToolchain)">
+      <Output TaskParameter="Lines" ItemName="_ConduitNativeToolchainLines" />
+    </ConduitEncodeNativeToolchain>
+    <WriteLinesToFile File="$(ConduitNativeToolchainEvidencePath)"
+                      Lines="@(_ConduitNativeToolchainLines)" Encoding="UTF-8" Overwrite="true" />
+  </Target>
+</Project>

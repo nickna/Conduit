@@ -27,10 +27,12 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(keyHash);
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        return await context.VirtualKeys
+        var queryKeyHash = keyHash;
+        var queryCancellationToken = cancellationToken;
+        var snapshot = await context.VirtualKeys
             .AsNoTracking()
-            .Where(key => key.KeyHash == keyHash)
-            .Select(key => new VirtualKeyRuntimeRecord
+            .Where(key => key.KeyHash == queryKeyHash)
+            .Select(key => new
             {
                 Id = key.Id,
                 KeyName = key.KeyName,
@@ -50,25 +52,62 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
                 RateLimitPriority = key.RateLimitPriority,
                 ModelRateLimits = key.ModelRateLimits,
                 RowVersion = key.RowVersion,
+                GroupId = key.VirtualKeyGroup.Id,
+                GroupExternalGroupId = key.VirtualKeyGroup.ExternalGroupId,
+                GroupName = key.VirtualKeyGroup.GroupName,
+                GroupBalance = key.VirtualKeyGroup.Balance,
+                GroupLifetimeCreditsAdded = key.VirtualKeyGroup.LifetimeCreditsAdded,
+                GroupLifetimeSpent = key.VirtualKeyGroup.LifetimeSpent,
+                GroupCreatedAt = key.VirtualKeyGroup.CreatedAt,
+                GroupUpdatedAt = key.VirtualKeyGroup.UpdatedAt,
+                GroupMediaRetentionPolicyId = key.VirtualKeyGroup.MediaRetentionPolicyId,
+                GroupRateLimitRpm = key.VirtualKeyGroup.RateLimitRpm,
+                GroupRateLimitRpd = key.VirtualKeyGroup.RateLimitRpd,
+                GroupRateLimitTpm = key.VirtualKeyGroup.RateLimitTpm,
+                GroupMaxParallelRequests = key.VirtualKeyGroup.MaxParallelRequests,
+                GroupRowVersion = key.VirtualKeyGroup.RowVersion
+            })
+            .SingleOrDefaultAsync(queryCancellationToken);
+        return snapshot is null
+            ? null
+            : new VirtualKeyRuntimeRecord
+            {
+                Id = snapshot.Id,
+                KeyName = snapshot.KeyName,
+                KeyHash = snapshot.KeyHash,
+                Description = snapshot.Description,
+                IsEnabled = snapshot.IsEnabled,
+                VirtualKeyGroupId = snapshot.VirtualKeyGroupId,
+                ExpiresAt = snapshot.ExpiresAt,
+                CreatedAt = snapshot.CreatedAt,
+                UpdatedAt = snapshot.UpdatedAt,
+                Metadata = snapshot.Metadata,
+                AllowedModels = snapshot.AllowedModels,
+                RateLimitRpm = snapshot.RateLimitRpm,
+                RateLimitRpd = snapshot.RateLimitRpd,
+                RateLimitTpm = snapshot.RateLimitTpm,
+                MaxParallelRequests = snapshot.MaxParallelRequests,
+                RateLimitPriority = snapshot.RateLimitPriority,
+                ModelRateLimits = snapshot.ModelRateLimits,
+                RowVersion = snapshot.RowVersion,
                 Group = new VirtualKeyGroupRuntimeRecord
                 {
-                    Id = key.VirtualKeyGroup.Id,
-                    ExternalGroupId = key.VirtualKeyGroup.ExternalGroupId,
-                    GroupName = key.VirtualKeyGroup.GroupName,
-                    Balance = key.VirtualKeyGroup.Balance,
-                    LifetimeCreditsAdded = key.VirtualKeyGroup.LifetimeCreditsAdded,
-                    LifetimeSpent = key.VirtualKeyGroup.LifetimeSpent,
-                    CreatedAt = key.VirtualKeyGroup.CreatedAt,
-                    UpdatedAt = key.VirtualKeyGroup.UpdatedAt,
-                    MediaRetentionPolicyId = key.VirtualKeyGroup.MediaRetentionPolicyId,
-                    RateLimitRpm = key.VirtualKeyGroup.RateLimitRpm,
-                    RateLimitRpd = key.VirtualKeyGroup.RateLimitRpd,
-                    RateLimitTpm = key.VirtualKeyGroup.RateLimitTpm,
-                    MaxParallelRequests = key.VirtualKeyGroup.MaxParallelRequests,
-                    RowVersion = key.VirtualKeyGroup.RowVersion
+                    Id = snapshot.GroupId,
+                    ExternalGroupId = snapshot.GroupExternalGroupId,
+                    GroupName = snapshot.GroupName,
+                    Balance = snapshot.GroupBalance,
+                    LifetimeCreditsAdded = snapshot.GroupLifetimeCreditsAdded,
+                    LifetimeSpent = snapshot.GroupLifetimeSpent,
+                    CreatedAt = snapshot.GroupCreatedAt,
+                    UpdatedAt = snapshot.GroupUpdatedAt,
+                    MediaRetentionPolicyId = snapshot.GroupMediaRetentionPolicyId,
+                    RateLimitRpm = snapshot.GroupRateLimitRpm,
+                    RateLimitRpd = snapshot.GroupRateLimitRpd,
+                    RateLimitTpm = snapshot.GroupRateLimitTpm,
+                    MaxParallelRequests = snapshot.GroupMaxParallelRequests,
+                    RowVersion = snapshot.GroupRowVersion
                 }
-            })
-            .SingleOrDefaultAsync(cancellationToken);
+            };
     }
 
     /// <inheritdoc />
@@ -77,10 +116,12 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        return await context.VirtualKeys
+        var queryKeyId = id;
+        var queryCancellationToken = cancellationToken;
+        var snapshot = await context.VirtualKeys
             .AsNoTracking()
-            .Where(key => key.Id == id)
-            .Select(key => new VirtualKeyRuntimeRecord
+            .Where(key => key.Id == queryKeyId)
+            .Select(key => new
             {
                 Id = key.Id,
                 KeyName = key.KeyName,
@@ -100,25 +141,62 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
                 RateLimitPriority = key.RateLimitPriority,
                 ModelRateLimits = key.ModelRateLimits,
                 RowVersion = key.RowVersion,
+                GroupId = key.VirtualKeyGroup.Id,
+                GroupExternalGroupId = key.VirtualKeyGroup.ExternalGroupId,
+                GroupName = key.VirtualKeyGroup.GroupName,
+                GroupBalance = key.VirtualKeyGroup.Balance,
+                GroupLifetimeCreditsAdded = key.VirtualKeyGroup.LifetimeCreditsAdded,
+                GroupLifetimeSpent = key.VirtualKeyGroup.LifetimeSpent,
+                GroupCreatedAt = key.VirtualKeyGroup.CreatedAt,
+                GroupUpdatedAt = key.VirtualKeyGroup.UpdatedAt,
+                GroupMediaRetentionPolicyId = key.VirtualKeyGroup.MediaRetentionPolicyId,
+                GroupRateLimitRpm = key.VirtualKeyGroup.RateLimitRpm,
+                GroupRateLimitRpd = key.VirtualKeyGroup.RateLimitRpd,
+                GroupRateLimitTpm = key.VirtualKeyGroup.RateLimitTpm,
+                GroupMaxParallelRequests = key.VirtualKeyGroup.MaxParallelRequests,
+                GroupRowVersion = key.VirtualKeyGroup.RowVersion
+            })
+            .SingleOrDefaultAsync(queryCancellationToken);
+        return snapshot is null
+            ? null
+            : new VirtualKeyRuntimeRecord
+            {
+                Id = snapshot.Id,
+                KeyName = snapshot.KeyName,
+                KeyHash = snapshot.KeyHash,
+                Description = snapshot.Description,
+                IsEnabled = snapshot.IsEnabled,
+                VirtualKeyGroupId = snapshot.VirtualKeyGroupId,
+                ExpiresAt = snapshot.ExpiresAt,
+                CreatedAt = snapshot.CreatedAt,
+                UpdatedAt = snapshot.UpdatedAt,
+                Metadata = snapshot.Metadata,
+                AllowedModels = snapshot.AllowedModels,
+                RateLimitRpm = snapshot.RateLimitRpm,
+                RateLimitRpd = snapshot.RateLimitRpd,
+                RateLimitTpm = snapshot.RateLimitTpm,
+                MaxParallelRequests = snapshot.MaxParallelRequests,
+                RateLimitPriority = snapshot.RateLimitPriority,
+                ModelRateLimits = snapshot.ModelRateLimits,
+                RowVersion = snapshot.RowVersion,
                 Group = new VirtualKeyGroupRuntimeRecord
                 {
-                    Id = key.VirtualKeyGroup.Id,
-                    ExternalGroupId = key.VirtualKeyGroup.ExternalGroupId,
-                    GroupName = key.VirtualKeyGroup.GroupName,
-                    Balance = key.VirtualKeyGroup.Balance,
-                    LifetimeCreditsAdded = key.VirtualKeyGroup.LifetimeCreditsAdded,
-                    LifetimeSpent = key.VirtualKeyGroup.LifetimeSpent,
-                    CreatedAt = key.VirtualKeyGroup.CreatedAt,
-                    UpdatedAt = key.VirtualKeyGroup.UpdatedAt,
-                    MediaRetentionPolicyId = key.VirtualKeyGroup.MediaRetentionPolicyId,
-                    RateLimitRpm = key.VirtualKeyGroup.RateLimitRpm,
-                    RateLimitRpd = key.VirtualKeyGroup.RateLimitRpd,
-                    RateLimitTpm = key.VirtualKeyGroup.RateLimitTpm,
-                    MaxParallelRequests = key.VirtualKeyGroup.MaxParallelRequests,
-                    RowVersion = key.VirtualKeyGroup.RowVersion
+                    Id = snapshot.GroupId,
+                    ExternalGroupId = snapshot.GroupExternalGroupId,
+                    GroupName = snapshot.GroupName,
+                    Balance = snapshot.GroupBalance,
+                    LifetimeCreditsAdded = snapshot.GroupLifetimeCreditsAdded,
+                    LifetimeSpent = snapshot.GroupLifetimeSpent,
+                    CreatedAt = snapshot.GroupCreatedAt,
+                    UpdatedAt = snapshot.GroupUpdatedAt,
+                    MediaRetentionPolicyId = snapshot.GroupMediaRetentionPolicyId,
+                    RateLimitRpm = snapshot.GroupRateLimitRpm,
+                    RateLimitRpd = snapshot.GroupRateLimitRpd,
+                    RateLimitTpm = snapshot.GroupRateLimitTpm,
+                    MaxParallelRequests = snapshot.GroupMaxParallelRequests,
+                    RowVersion = snapshot.GroupRowVersion
                 }
-            })
-            .SingleOrDefaultAsync(cancellationToken);
+            };
     }
 
     /// <inheritdoc />
@@ -140,51 +218,72 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
 
                 if (adjustment.IdempotencyKey is not null)
                 {
+                    var duplicateIdempotencyKey = adjustment.IdempotencyKey;
+                    var duplicateCancellationToken = cancellationToken;
                     var duplicate = await context.VirtualKeyGroupTransactions
                         .IgnoreQueryFilters()
                         .AsNoTracking()
                         .SingleOrDefaultAsync(
-                            row => row.IdempotencyKey == adjustment.IdempotencyKey,
-                            cancellationToken);
+                            row => row.IdempotencyKey == duplicateIdempotencyKey,
+                            duplicateCancellationToken);
                     if (duplicate is not null)
                     {
                         ValidateDuplicate(duplicate, adjustment);
-                        var current = await ReadCurrentStateAsync(
-                            context,
-                            adjustment.GroupId,
-                            applied: false,
-                            cancellationToken);
+                        var duplicateStateGroupId = adjustment.GroupId;
+                        var duplicateStateCancellationToken = cancellationToken;
+                        var duplicateStateSnapshot = await context.VirtualKeyGroups
+                            .AsNoTracking()
+                            .Where(group => group.Id == duplicateStateGroupId)
+                            .Select(group => new { group.Balance, group.LifetimeSpent })
+                            .SingleOrDefaultAsync(duplicateStateCancellationToken);
+                        var current = duplicateStateSnapshot is null
+                            ? throw new InvalidOperationException($"Virtual key group {duplicateStateGroupId} not found")
+                            : new VirtualKeyBalanceAdjustmentResult(
+                                duplicateStateSnapshot.Balance,
+                                duplicateStateSnapshot.LifetimeSpent,
+                                false);
                         await transaction.CommitAsync(cancellationToken);
                         return current;
                     }
                 }
 
                 var updatedAt = DateTime.UtcNow;
+                var updateGroupId = adjustment.GroupId;
+                var updateAmount = adjustment.Amount;
+                var updateCancellationToken = cancellationToken;
                 var rowsAffected = await context.VirtualKeyGroups
-                    .Where(group => group.Id == adjustment.GroupId)
+                    .Where(group => group.Id == updateGroupId)
                     .ExecuteUpdateAsync(setters => setters
-                        .SetProperty(group => group.Balance, group => group.Balance + adjustment.Amount)
+                        .SetProperty(group => group.Balance, group => group.Balance + updateAmount)
                         .SetProperty(
                             group => group.LifetimeCreditsAdded,
                             group => group.LifetimeCreditsAdded +
-                                (adjustment.Amount > 0 ? adjustment.Amount : 0m))
+                                (updateAmount > 0m ? updateAmount : 0m))
                         .SetProperty(
                             group => group.LifetimeSpent,
                             group => group.LifetimeSpent +
-                                (adjustment.Amount <= 0 ? Math.Abs(adjustment.Amount) : 0m))
-                        .SetProperty(group => group.UpdatedAt, updatedAt),
-                        cancellationToken);
+                                (updateAmount <= 0m ? Math.Abs(updateAmount) : 0m))
+                        .SetProperty(group => group.UpdatedAt, group => updatedAt),
+                        updateCancellationToken);
                 if (rowsAffected == 0)
                 {
                     throw new InvalidOperationException(
                         $"Virtual key group {adjustment.GroupId} not found");
                 }
 
-                var state = await ReadCurrentStateAsync(
-                    context,
-                    adjustment.GroupId,
-                    applied: true,
-                    cancellationToken);
+                var updatedStateGroupId = adjustment.GroupId;
+                var updatedStateCancellationToken = cancellationToken;
+                var updatedStateSnapshot = await context.VirtualKeyGroups
+                    .AsNoTracking()
+                    .Where(group => group.Id == updatedStateGroupId)
+                    .Select(group => new { group.Balance, group.LifetimeSpent })
+                    .SingleOrDefaultAsync(updatedStateCancellationToken);
+                var state = updatedStateSnapshot is null
+                    ? throw new InvalidOperationException($"Virtual key group {updatedStateGroupId} not found")
+                    : new VirtualKeyBalanceAdjustmentResult(
+                        updatedStateSnapshot.Balance,
+                        updatedStateSnapshot.LifetimeSpent,
+                        true);
                 context.VirtualKeyGroupTransactions.Add(CreateLedgerEntry(adjustment, state.NewBalance));
                 await context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -196,18 +295,28 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
             DbUpdateExceptions.IsUniqueViolation(exception, "IdempotencyKey"))
         {
             await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+            var winnerIdempotencyKey = adjustment.IdempotencyKey;
+            var winnerCancellationToken = cancellationToken;
             var winner = await context.VirtualKeyGroupTransactions
                 .IgnoreQueryFilters()
                 .AsNoTracking()
                 .SingleAsync(
-                    row => row.IdempotencyKey == adjustment.IdempotencyKey,
-                    cancellationToken);
+                    row => row.IdempotencyKey == winnerIdempotencyKey,
+                    winnerCancellationToken);
             ValidateDuplicate(winner, adjustment);
-            return await ReadCurrentStateAsync(
-                context,
-                adjustment.GroupId,
-                applied: false,
-                cancellationToken);
+            var winnerStateGroupId = adjustment.GroupId;
+            var winnerStateCancellationToken = cancellationToken;
+            var winnerStateSnapshot = await context.VirtualKeyGroups
+                .AsNoTracking()
+                .Where(group => group.Id == winnerStateGroupId)
+                .Select(group => new { group.Balance, group.LifetimeSpent })
+                .SingleOrDefaultAsync(winnerStateCancellationToken);
+            return winnerStateSnapshot is null
+                ? throw new InvalidOperationException($"Virtual key group {winnerStateGroupId} not found")
+                : new VirtualKeyBalanceAdjustmentResult(
+                    winnerStateSnapshot.Balance,
+                    winnerStateSnapshot.LifetimeSpent,
+                    false);
         }
     }
 
@@ -217,12 +326,14 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryGroupId = groupId;
+        var queryCancellationToken = cancellationToken;
         return await context.VirtualKeys
             .AsNoTracking()
-            .Where(key => key.VirtualKeyGroupId == groupId)
+            .Where(key => key.VirtualKeyGroupId == queryGroupId)
             .OrderBy(key => key.Id)
             .Select(key => key.KeyHash)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(queryCancellationToken);
     }
 
     /// <inheritdoc />
@@ -232,30 +343,14 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var queryKeyId = id;
+        var queryUpdatedAt = updatedAt;
+        var queryCancellationToken = cancellationToken;
         return await context.VirtualKeys
-            .Where(key => key.Id == id)
+            .Where(key => key.Id == queryKeyId)
             .ExecuteUpdateAsync(
-                setters => setters.SetProperty(key => key.UpdatedAt, updatedAt),
-                cancellationToken) > 0;
-    }
-
-    private static async Task<VirtualKeyBalanceAdjustmentResult> ReadCurrentStateAsync(
-        ConduitDbContext context,
-        int groupId,
-        bool applied,
-        CancellationToken cancellationToken)
-    {
-        var state = await context.VirtualKeyGroups
-            .AsNoTracking()
-            .Where(group => group.Id == groupId)
-            .Select(group => new { group.Balance, group.LifetimeSpent })
-            .SingleOrDefaultAsync(cancellationToken);
-        return state is null
-            ? throw new InvalidOperationException($"Virtual key group {groupId} not found")
-            : new VirtualKeyBalanceAdjustmentResult(
-                state.Balance,
-                state.LifetimeSpent,
-                applied);
+                setters => setters.SetProperty(key => key.UpdatedAt, key => queryUpdatedAt),
+                queryCancellationToken) > 0;
     }
 
     private static VirtualKeyGroupTransaction CreateLedgerEntry(
