@@ -112,15 +112,16 @@ internal static class NativeAdminRuntimeProfileProbe
             Require(JsonElement.DeepEquals(providerBefore, await ProviderStateAsync(upstream, token)),
                 "all fourteen actual provider counters remain unchanged");
         }
-        catch
+        catch (Exception error)
         {
-            // Only a closed stage is retained; credential-bearing bodies and infrastructure exceptions are private.
-            primary = new InvalidOperationException($"Native Admin runtime profile proof failed; stage={stage}.");
+            // Keep the closed stage plus type/frame diagnostics, while excluding
+            // credential-bearing bodies, exception messages and exception data.
+            primary = NativeFixtureDiagnostics.Failure($"Native Admin runtime profile proof failed; stage={stage}.", error);
             throw primary;
         }
         finally
         {
-            var cleanupFailed = false;
+            var cleanupFailures = new List<Exception>();
             using var cleanupDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             try
             {
@@ -132,24 +133,35 @@ internal static class NativeAdminRuntimeProfileProbe
                         "cleanup leaves only the exact privately owned credential absent");
                 }
             }
-            catch { cleanupFailed = true; }
+            catch (Exception error)
+            {
+                cleanupFailures.Add(NativeFixtureDiagnostics.Failure("Owned Admin credential removal failed.", error));
+            }
             if (redis is not null)
             {
                 // Connection shutdown is attempted independently even when exact-key cleanup failed.
                 try { await redis.CloseAsync(allowCommandsToComplete: false).WaitAsync(TimeSpan.FromSeconds(5)); }
-                catch { cleanupFailed = true; }
+                catch (Exception error)
+                {
+                    cleanupFailures.Add(NativeFixtureDiagnostics.Failure("Admin Redis connection shutdown failed.", error));
+                }
                 finally
                 {
                     try { redis.Dispose(); }
-                    catch { cleanupFailed = true; }
+                    catch (Exception error)
+                    {
+                        cleanupFailures.Add(NativeFixtureDiagnostics.Failure("Admin Redis connection disposal failed.", error));
+                    }
                 }
             }
-            if (cleanupFailed)
+            if (cleanupFailures.Count > 0)
             {
-                var failure = new InvalidOperationException("Native Admin runtime profile owned credential cleanup failed.");
                 if (primary is not null)
-                    throw new AggregateException("Native Admin runtime profile proof and cleanup failed.", primary, failure);
-                throw failure;
+                {
+                    cleanupFailures.Insert(0, primary);
+                    throw new AggregateException("Native Admin runtime profile proof and cleanup failed.", cleanupFailures);
+                }
+                throw new AggregateException("Native Admin runtime profile owned credential cleanup failed.", cleanupFailures);
             }
         }
         Console.WriteLine("Native Admin runtime profile boundary and ephemeral authentication: PASS");

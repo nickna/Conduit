@@ -22,9 +22,10 @@ internal static class StartupFixtureProgram
                 Console.WriteLine(FunctionCredentialFixture.ProtectApiKey(provider, plaintext));
                 return 0;
             }
-            catch (Exception)
+            catch (Exception failure)
             {
-                Console.Error.WriteLine("Function credential protection failed.");
+                // Classify the failure without exposing credential-bearing messages.
+                Console.Error.WriteLine($"Function credential protection failed ({failure.GetType().Name}).");
                 return 1;
             }
         }

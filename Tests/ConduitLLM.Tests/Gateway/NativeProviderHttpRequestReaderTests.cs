@@ -10,14 +10,18 @@ namespace ConduitLLM.Tests.Gateway;
 
 public sealed class NativeProviderHttpRequestReaderTests
 {
-    [Fact]
-    public async Task RealHttpClientChunkedJsonContentPreservesTheCompleteGeneratedJsonPayload()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RealHttpClientChunkedJsonContentPreservesTheCompleteGeneratedJsonPayload(bool failReceive)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         using var handler = new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false };
-        using var http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+        using var observer = new ResponseObserver(handler);
+        using var http = new HttpClient(observer) { Timeout = Timeout.InfiniteTimeSpan };
+        var receiverFailure = new IOException("Controlled receiver failure after valid response headers.");
         using var payload = JsonDocument.Parse(
             """{"model":"native-fixture","messages":[{"role":"user","content":"雪 😀 café"}],"stream":true,"nested":{"enabled":false,"values":[1,null,{"name":"雪"}]},"optional":null}""");
         using var request = new HttpRequestMessage(HttpMethod.Post,
@@ -39,35 +43,75 @@ public sealed class NativeProviderHttpRequestReaderTests
             Assert.NotNull(parsed);
             await stream.WriteAsync(Encoding.ASCII.GetBytes(
                 "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"), deadline.Token);
+            if (failReceive) throw receiverFailure;
             return parsed;
         }
 
         var receive = ReceiveAsync();
         var send = http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
-        try
+        var responseOwnershipTransferred = false;
+        Exception? primary = null;
+        async Task ExchangeAsync()
         {
-            await Task.WhenAll(receive, send);
-            using var response = await send;
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            var parsed = await receive;
-            Assert.Equal("POST", parsed.Method);
-            Assert.Equal("/chat/completions", parsed.Path);
-            Assert.Equal("chunked", parsed.Headers["transfer-encoding"]);
-            Assert.False(parsed.Headers.ContainsKey("Content-Length"));
-            Assert.Equal("Bearer fixture-secret", parsed.Headers["authorization"]);
-            using var actual = JsonDocument.Parse(parsed.Body);
-            Assert.True(JsonElement.DeepEquals(payload.RootElement, actual.RootElement));
-            Assert.True(actual.RootElement.GetProperty("stream").GetBoolean());
-            Assert.Equal("雪 😀 café", actual.RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
-            Assert.False(deadline.IsCancellationRequested);
+            try
+            {
+                await Task.WhenAll(receive, send);
+                using var response = await send;
+                responseOwnershipTransferred = true;
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                var parsed = await receive;
+                Assert.Equal("POST", parsed.Method);
+                Assert.Equal("/chat/completions", parsed.Path);
+                Assert.Equal("chunked", parsed.Headers["transfer-encoding"]);
+                Assert.False(parsed.Headers.ContainsKey("Content-Length"));
+                Assert.Equal("Bearer fixture-secret", parsed.Headers["authorization"]);
+                using var actual = JsonDocument.Parse(parsed.Body);
+                Assert.True(JsonElement.DeepEquals(payload.RootElement, actual.RootElement));
+                Assert.True(actual.RootElement.GetProperty("stream").GetBoolean());
+                Assert.Equal("雪 😀 café", actual.RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
+                Assert.False(deadline.IsCancellationRequested);
+            }
+            catch (Exception failure)
+            {
+                primary = failure;
+                throw;
+            }
+            finally
+            {
+                listener.Stop();
+                http.Dispose();
+                try
+                {
+                    try { await DrainAsync(receive); }
+                    finally
+                    {
+                        try { await DrainAsync(send); }
+                        finally
+                        {
+                            // When receive fails, WhenAll can throw before the
+                            // successful send result reaches its using declaration.
+                            if (!responseOwnershipTransferred && send.IsCompletedSuccessfully)
+                                send.Result.Dispose();
+                        }
+                    }
+                }
+                catch (Exception cleanup) when (primary is not null)
+                {
+                    throw new AggregateException("HTTP fixture failed and cleanup could not complete.", primary, cleanup);
+                }
+            }
         }
-        finally
+        if (failReceive)
         {
-            listener.Stop();
-            http.Dispose();
-            await DrainAsync(receive);
-            await DrainAsync(send);
+            var failure = await Assert.ThrowsAsync<IOException>(ExchangeAsync);
+            Assert.Same(receiverFailure, failure);
         }
+        else
+        {
+            await ExchangeAsync();
+        }
+        Assert.NotNull(observer.Response);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => observer.Response.Content.ReadAsStringAsync());
     }
 
     [Theory]
@@ -287,6 +331,16 @@ public sealed class NativeProviderHttpRequestReaderTests
         {
             // The primary assertion observes failures; cleanup only drains a task
             // after its listener/client has been disposed. A timeout still fails.
+        }
+    }
+
+    private sealed class ResponseObserver(HttpMessageHandler inner) : DelegatingHandler(inner)
+    {
+        public HttpResponseMessage? Response { get; private set; }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            Response = await base.SendAsync(request, token);
+            return Response;
         }
     }
 

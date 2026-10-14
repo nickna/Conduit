@@ -99,3 +99,71 @@ service/build inputs, both executable hashes and their original publication
 manifests. Those original manifests were preserved; they do not claim new
 service publication. Original current-probe publications, execution evidence,
 reuse bindings and cleanup results are retained under `artifacts/issues/1659`.
+
+## Issue 1657: ownership, cancellation and diagnostic review
+
+[The complete 106-site inventory](codeql/issue-1657.csv) records the reviewed
+symbol, disposable owner or catch contract, cancellation handling, unexpected
+error diagnostics, disposition and validation for every scoped alert: 47 empty
+catches, 34 generic catches, 21 manual-lifetime suggestions, three returned
+disposable reports and one nullable dereference. Original reported locations
+may precede later ownership fixes on the NativeAOT branch.
+
+Caller-owned HTTP responses are deliberately returned without disposal by the
+handler. Real provider and dependency-probe tests now verify response disposal
+on success and failed health checks. The real HTTP reader fixture also disposes
+a completed send response if the receiving task fails before its using
+declaration; its controlled receiver-failure row checks disposal and preserves
+the original error. The host test guards deferred startup state explicitly and
+retains async/sync disposal of its original host.
+
+Actual lost diagnostics were corrected at Gateway terminal boundaries, proxy
+forwarding, Admin credential cleanup, benchmark request parsing, and integration
+process/billing/Redis cleanup. Bounded native diagnostics report exception types,
+HResults and method symbols with ordered causes, excluding messages, data, file
+paths and credential values. Primary failures remain first when cleanup also
+fails. Cleanup deadlines are independent of expired workload tokens; original
+process handles and exact schema/database/Redis ownership checks remain intact.
+Proxy connection refusal and request framing errors remain observable, while
+owned socket shutdown and scoped cancellation retain their intended contracts.
+Constructor-failure paths close their newly allocated listeners and tokens.
+
+Safe diagnostic projections privately associate their original cause and trusted
+stage, so another terminal projection cannot erase the original classification.
+Traversal remains bounded, and raw causes stay outside the public inner-exception
+graph. Single/repeated projection and deep-chain regressions verify distinct
+primary/cleanup types, frames and ordering without secret values.
+
+Intentional reports retain per-site explanations. Listener Stop/Dispose and
+task joins are ordered explicitly; owned source lifetimes can span methods;
+constraint/cancellation catches consume only the expected result; fail-closed
+probe and fixture boundaries preserve diagnostics and unsuccessful exit codes.
+The three reviewed production notes (schema-gated cancellation, readiness to
+Unhealthy conversion and whole billing-result validation) and PowerShell issue
+1642 remain outside this C# fixture scope. No query is disabled or dismissed.
+
+Final Release managed verification passed 134 distinct unit cases and 239
+integration/provider/cleanup cases with zero failures or outstanding skips.
+The 133-case final unit selection excludes the database-dependent startup case;
+all 11 startup rows were separately rerun against owned PostgreSQL on the same
+final assembly, including that case (ten rows overlap). Final integration
+verification passed 238 selected cases plus the new MCP partial-client shutdown
+case. The helper CLI failure proof returned 1 with empty stdout, the expected
+exception type and no supplied plaintext. Original TRX, assembly hashes,
+controlled CLI streams and owned-container cleanup evidence are retained under
+`artifacts/issues/1657`.
+
+The final repaired Gateway native probe published with zero first-party linker
+diagnostics and passed the full two-host parity gate, exact BillingAudit tails,
+post-shutdown accounting and all owned fixture cleanup. Its final source archive
+digest is `0c9ffda8e90b1d63938c9c84d3ac6da1c565636924d6573a9b973d600d091164`;
+all 31 changed/new C# files were independently matched to that snapshot.
+The earlier Gateway result is explicitly retained as pre-repair evidence, not
+the final proof. Earlier successful native persistence/converter publications
+bind to the final source through 2,405/2,398 unchanged inputs, respectively;
+the converter retains all 31 properties, 126 PostgreSQL checks and two comparers.
+The rebuilt schema fixture also matches its prior binary and all 2,400 inputs.
+Original Admin/Gateway reuse still binds all 2,394 service/build inputs and
+original executable/publication hashes. No original manifest was rewritten.
+Separate snapshots, original publications, exact bindings, final run and cleanup
+evidence are retained under `artifacts/issues/1657` and its `final` directory.

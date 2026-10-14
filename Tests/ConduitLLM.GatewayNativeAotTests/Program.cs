@@ -21,9 +21,9 @@ if (args.Length > 0 && args[0] == "--benchmark-workload")
         Environment.ExitCode = await NativeBenchmarkWorkloadProbe.RunAsync(
             args[1], Console.OpenStandardOutput());
     }
-    catch (Exception)
+    catch (Exception error)
     {
-        Console.Error.WriteLine("Benchmark workload failed.");
+        Console.Error.WriteLine("Benchmark workload failed. " + NativeFixtureDiagnostics.Describe(error));
         Environment.ExitCode = 1;
     }
     return;
@@ -69,9 +69,9 @@ if (args is ["--cleanup-function-fixture"] or ["--cleanup-mcp-function-fixture"]
         }
         Console.WriteLine(label + ": PASS");
     }
-    catch (Exception)
+    catch (Exception error)
     {
-        Console.Error.WriteLine(label + " failed.");
+        Console.Error.WriteLine(label + " failed. " + NativeFixtureDiagnostics.Describe(error));
         Environment.ExitCode = 1;
     }
     return;
@@ -93,9 +93,9 @@ if (args is ["--admin-ip-filters"] or ["--cleanup-admin-ip-filters"])
             Console.WriteLine("Owned Admin IP-filter fixture cleanup: PASS");
         }
     }
-    catch (Exception)
+    catch (Exception error)
     {
-        Console.Error.WriteLine("Native Admin IP-filter operation failed.");
+        Console.Error.WriteLine("Native Admin IP-filter operation failed. " + NativeFixtureDiagnostics.Describe(error));
         Environment.ExitCode = 1;
     }
     return;
@@ -125,9 +125,9 @@ if (args is ["--global-settings-cache-convergence"] or ["--cleanup-global-settin
         Console.Error.WriteLine(error.Message);
         Environment.ExitCode = 1;
     }
-    catch (Exception)
+    catch (Exception error)
     {
-        Console.Error.WriteLine("Native global settings cache-convergence operation failed.");
+        Console.Error.WriteLine("Native global settings cache-convergence operation failed. " + NativeFixtureDiagnostics.Describe(error));
         Environment.ExitCode = 1;
     }
     return;
@@ -155,9 +155,9 @@ if (args is ["--cleanup-admin-global-settings"])
         if (failures.Count != 0) throw new AggregateException("Owned Admin setting cleanup failed.", failures);
         Console.WriteLine("Owned Admin global-setting fixture cleanup: PASS");
     }
-    catch (Exception)
+    catch (Exception error)
     {
-        Console.Error.WriteLine("Owned Admin global-setting fixture cleanup failed.");
+        Console.Error.WriteLine("Owned Admin global-setting fixture cleanup failed. " + NativeFixtureDiagnostics.Describe(error));
         Environment.ExitCode = 1;
     }
     return;
@@ -173,7 +173,7 @@ if (args is ["--admin-global-settings"])
     }
     catch (Exception exception)
     {
-        Console.Error.WriteLine("Admin global-settings HTTP proof failed: " + exception.Message);
+        Console.Error.WriteLine("Admin global-settings HTTP proof failed. " + NativeFixtureDiagnostics.Describe(exception));
         Environment.ExitCode = 1;
     }
     return;
@@ -255,9 +255,9 @@ if (args.Length > 0 && args[0] is "--billing-audit-timer" or "--billing-audit-dr
                 break;
         }
     }
-    catch (Exception)
+    catch (Exception error)
     {
-        Console.Error.WriteLine("Native BillingAudit lifecycle operation failed.");
+        Console.Error.WriteLine("Native BillingAudit lifecycle operation failed. " + NativeFixtureDiagnostics.Describe(error));
         Environment.ExitCode = 1;
     }
     return;
@@ -278,7 +278,7 @@ if (args is ["--function-execution"])
     }
     catch (Exception exception)
     {
-        Console.Error.WriteLine("Function HTTP proof failed: " + exception.Message);
+        Console.Error.WriteLine("Function HTTP proof failed. " + NativeFixtureDiagnostics.Describe(exception));
         Environment.ExitCode = 1;
     }
     return;

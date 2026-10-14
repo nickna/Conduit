@@ -124,7 +124,7 @@ internal static class FunctionExecutionPersistenceProbe
                 {
                     cancelled.Cancel();
                     try { await write.WaitAsync(TimeSpan.FromSeconds(5)); }
-                    catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+                    catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
                 }
             }
         }

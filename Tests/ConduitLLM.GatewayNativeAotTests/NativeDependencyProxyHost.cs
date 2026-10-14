@@ -41,9 +41,18 @@ internal static class NativeDependencyProxyHost
                 var response = Encoding.ASCII.GetBytes($"HTTP/1.1 {status} Control\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                 await stream.WriteAsync(response, deadline.Token);
             }
-            catch (OperationCanceledException) when (deadline.IsCancellationRequested) { }
-            catch (IOException) { }
-            catch (SocketException) { }
+            catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+            {
+                Console.Error.WriteLine("Native dependency control client exceeded its owned five-second deadline.");
+            }
+            catch (IOException)
+            {
+                Console.Error.WriteLine("Native dependency control client disconnected during HTTP framing or response.");
+            }
+            catch (SocketException)
+            {
+                Console.Error.WriteLine("Native dependency control client disconnected at the socket transport.");
+            }
         }
     }
 

@@ -321,7 +321,7 @@ internal static class BillingAuditPersistenceProbe
     {
         cancellation.Cancel();
         try { await write.WaitAsync(TimeSpan.FromSeconds(5)); }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
     }
 
     private static void Require(bool condition, string description)

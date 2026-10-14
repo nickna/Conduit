@@ -126,13 +126,13 @@ internal static class FunctionPricingPersistenceProbe
                     await read.WaitAsync(TimeSpan.FromSeconds(5));
                     throw new InvalidOperationException("Native pricing ignored cancelled pool acquisition.");
                 }
-                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
             }
             finally
             {
                 cancelled.Cancel();
                 try { await read.WaitAsync(TimeSpan.FromSeconds(5)); }
-                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
             }
         }
         Require((await store.FindEligibleCostAsync(11, asOf, deadline.Token))?.Id == 102, "single-slot cancellation recovery");

@@ -6,8 +6,10 @@ internal sealed class SwitchableTcpProxy : IAsyncDisposable
     private readonly TcpListener _listener;
     private readonly string _upstreamHost;
     private readonly int _upstreamPort;
-    private readonly CancellationTokenSource _stopping = new();
-    private CancellationTokenSource _acceptGeneration = new();
+    // These sources span accept/forward tasks and are disposed by DisposeCoreAsync
+    // only after the instance has closed its registered sockets and drained tasks.
+    private readonly CancellationTokenSource _stopping;
+    private CancellationTokenSource _acceptGeneration;
     private readonly object _gate = new();
     private readonly HashSet<Connection> _connections = [];
     private readonly Task _accepting;
@@ -21,7 +23,17 @@ internal sealed class SwitchableTcpProxy : IAsyncDisposable
         _upstreamHost = upstreamHost;
         _upstreamPort = upstreamPort;
         _listener = new TcpListener(IPAddress.Loopback, listenPort);
-        _listener.Start();
+        _stopping = new CancellationTokenSource();
+        _acceptGeneration = new CancellationTokenSource();
+        try { _listener.Start(); }
+        catch
+        {
+            // A failed constructor has no instance available for DisposeAsync.
+            _listener.Dispose();
+            _stopping.Dispose();
+            _acceptGeneration.Dispose();
+            throw;
+        }
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
         _accepting = AcceptAsync();
     }
@@ -85,9 +97,9 @@ internal sealed class SwitchableTcpProxy : IAsyncDisposable
                 }
             }
         }
-        catch (OperationCanceledException) when (_stopping.IsCancellationRequested) { }
-        catch (SocketException) when (_stopping.IsCancellationRequested) { }
-        catch (ObjectDisposedException) when (_stopping.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (_stopping.IsCancellationRequested) { return; }
+        catch (SocketException) when (_stopping.IsCancellationRequested) { return; }
+        catch (ObjectDisposedException) when (_stopping.IsCancellationRequested) { return; }
         catch (Exception exception) { RecordFailure(exception); }
     }
 
@@ -106,11 +118,13 @@ internal sealed class SwitchableTcpProxy : IAsyncDisposable
             connection.Close();
             await Task.WhenAll(requests, responses);
         }
-        catch (OperationCanceledException) { }
-        catch (IOException) { }
-        catch (SocketException) { }
-        catch (ObjectDisposedException) { }
-        catch (InvalidOperationException) when (connection.IsClosed) { }
+        // Blocking, shutdown and the first completed pump close both sockets.
+        // Failures before that owned close (including upstream refusal) remain visible.
+        catch (OperationCanceledException) when (_stopping.IsCancellationRequested || connection.IsClosed) { return; }
+        catch (IOException) when (_stopping.IsCancellationRequested || connection.IsClosed) { return; }
+        catch (SocketException) when (_stopping.IsCancellationRequested || connection.IsClosed) { return; }
+        catch (ObjectDisposedException) when (_stopping.IsCancellationRequested || connection.IsClosed) { return; }
+        catch (InvalidOperationException) when (connection.IsClosed) { return; }
         catch (Exception exception) { RecordFailure(exception); }
         finally
         {
@@ -159,7 +173,7 @@ internal sealed class SwitchableTcpProxy : IAsyncDisposable
     private void RecordFailure(Exception exception)
     {
         Interlocked.CompareExchange(ref _unexpectedFailure, exception, null);
-        Console.Error.WriteLine($"Native dependency proxy failed: {exception}");
+        Console.Error.WriteLine("Native dependency proxy failed. " + NativeFixtureDiagnostics.Describe(exception));
     }
 
     private sealed class Connection(TcpClient client)

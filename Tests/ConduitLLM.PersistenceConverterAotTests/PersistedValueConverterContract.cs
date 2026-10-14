@@ -236,7 +236,11 @@ internal static class PersistedValueConverterContract
                         await insert.ExecuteNonQueryAsync(cancellationToken);
                         throw new InvalidOperationException("Required converter column accepted SQL NULL.");
                     }
-                    catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.NotNullViolation) { }
+                    catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.NotNullViolation)
+                    {
+                        // This case proves the required column rejects SQL NULL.
+                        // Every other SQL state, cancellation or unexpected success fails.
+                    }
                     checks++;
                     continue;
                 }

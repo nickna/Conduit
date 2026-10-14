@@ -88,7 +88,7 @@ internal static class FunctionExecutionReaderPersistenceProbe
                 {
                     cancelled.Cancel();
                     try { await read.WaitAsync(TimeSpan.FromSeconds(5)); }
-                    catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+                    catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
                 }
             }
         }

@@ -61,7 +61,7 @@ internal static class FunctionExecutionConfigurationPersistenceProbe
                 await store.GetConfigurationsAsync(new[] { 11 }, cancelled.Token);
                 throw new InvalidOperationException("Native execution configuration read ignored cancellation.");
             }
-            catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+            catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
         }
 
         var credentials = await store.ListCredentialsForProviderAsync(FunctionProviderType.Exa, deadline.Token);
@@ -103,13 +103,13 @@ internal static class FunctionExecutionConfigurationPersistenceProbe
                     await read.WaitAsync(TimeSpan.FromSeconds(5));
                     throw new InvalidOperationException("Native credential pool wait ignored cancellation.");
                 }
-                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
             }
             finally
             {
                 cancelled.Cancel();
                 try { await read.WaitAsync(TimeSpan.FromSeconds(5)); }
-                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
             }
         }
         Require((await store.ListCredentialsForProviderAsync(FunctionProviderType.Exa, deadline.Token)).Count == 4,

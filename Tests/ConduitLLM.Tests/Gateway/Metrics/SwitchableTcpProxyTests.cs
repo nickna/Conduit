@@ -94,6 +94,10 @@ public sealed class SwitchableTcpProxyTests
         {
             Assert.Equal(0, await client.GetStream().ReadAsync(new byte[1], token));
         }
-        catch (IOException exception) when (exception.InnerException is SocketException) { }
+        catch (IOException exception) when (exception.InnerException is SocketException)
+        {
+            // A peer reset is the other valid closed-socket result. Cancellation,
+            // assertion failures and non-socket IO errors remain observable.
+        }
     }
 }

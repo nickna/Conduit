@@ -484,7 +484,10 @@ namespace ConduitLLM.Tests.Core.Services
             finally
             {
                 deadline.Cancel();
-                try { await warming; } catch (OperationCanceledException) { }
+                // The assertion above observes cancellation and lock release;
+                // this second await joins the same task after canceling our deadline.
+                try { await warming; }
+                catch (OperationCanceledException) when (deadline.IsCancellationRequested) { }
             }
         }
 

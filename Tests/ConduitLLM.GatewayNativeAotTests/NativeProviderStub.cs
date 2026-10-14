@@ -193,7 +193,15 @@ internal static class NativeProviderStub
                 body.RootElement.TryGetProperty("query", out var value) && value.ValueKind == JsonValueKind.String)
                 query = value.GetString();
         }
-        catch (JsonException) { }
+        catch (JsonException)
+        {
+            // Malformed JSON is a counted, controlled rejection. Its private
+            // body is never included in diagnostics.
+            Interlocked.Increment(ref _functionErrorRequests);
+            await WriteJsonAsync(stream, HttpStatusCode.BadRequest,
+                """{"error":{"message":"native function query is required","type":"invalid_request_error"}}""");
+            return;
+        }
         if (string.IsNullOrWhiteSpace(query))
         {
             Interlocked.Increment(ref _functionErrorRequests);
