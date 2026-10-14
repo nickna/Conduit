@@ -9,7 +9,7 @@ namespace ConduitLLM.Persistence.Npgsql;
 /// <summary>
 /// NativeAOT-compatible typed Npgsql implementation of IP-filter persistence.
 /// </summary>
-public sealed class NpgsqlIpFilterRepository : IIpFilterRepository
+public sealed partial class NpgsqlIpFilterRepository : IIpFilterRepository, IConditionalIpFilterRepository
 {
     private const string SelectColumns =
         "\"Id\", \"FilterType\", \"IpAddressOrCidr\", \"Name\", \"Description\", " +

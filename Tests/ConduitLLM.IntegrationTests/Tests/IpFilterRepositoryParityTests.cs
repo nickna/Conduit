@@ -21,7 +21,7 @@ namespace ConduitLLM.IntegrationTests.Tests;
 /// the NativeAOT-oriented typed-Npgsql adapter on real PostgreSQL.
 /// </summary>
 [Collection("Postgres advisory locks")]
-public sealed class IpFilterRepositoryParityTests
+public sealed partial class IpFilterRepositoryParityTests
 {
     private readonly PostgresLockTestContainerFixture _fixture;
 
