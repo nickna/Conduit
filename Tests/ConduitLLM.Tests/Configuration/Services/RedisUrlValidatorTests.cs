@@ -17,12 +17,16 @@ public class RedisUrlValidatorTests
     [InlineData("redis://synthetic-test-user:synthetic-test-password@localhost:bad-port")]
     [InlineData("rediss://synthetic-test-user:synthetic-test-password@localhost:bad-port")]
     [InlineData("redis://:synthetic-test-password@")]
+    [InlineData("redis://synthetic-test-user@")]
+    [InlineData("rediss://synthetic-test-user@")]
     [InlineData("redis://synthetic-test-user@localhost:bad-port")]
     [InlineData("rediss:/synthetic-test-user@")]
     [InlineData("rediss://synthetic-test-user:synthetic-test-password@localhost:")]
     [InlineData("redis://synthetic-test-user:synthetic-test-password@local host:6379")]
     [InlineData("rediss://synthetic-test-user:synthetic-test-password@localhost:6379/path")]
     [InlineData("synthetic-test-user:synthetic-test-password@localhost:6379")]
+    [InlineData("redis://?query")]
+    [InlineData("rediss://#fragment")]
     public void ValidateAndLog_InvalidCredentialBearingUrl_OmitsInputFromCapturedLogs(string url)
     {
         var logger = new RecordingLogger();
