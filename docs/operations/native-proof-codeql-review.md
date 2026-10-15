@@ -226,3 +226,41 @@ handshake and verifies that both `ThrowIfFaulted` and disposal retain the origin
 request-reader cases passed after it, including existing block/restore and owned
 shutdown cases. The Release native Gateway harness build also passed. This
 additional fixture change requires a new hosted native proof on its final SHA.
+
+Fresh publication on `5e1d794c9` exposed one first-party IL2026 in the group-version
+query's expression-tree member initializer. Commit `c2b2323b3` replaces that
+reflection-based property binding with a constructor projection of the same
+three scalar values. The two-argument API, ETag format and single SQL snapshot
+remain intact. The matching constructor repair passed 207 SQLite/PostgreSQL,
+conditional mutation, post-lock membership and IP-filter fallback cases with
+zero failures or skips. An isolated Linux Admin NativeAOT publication also
+produced its executable and passed the unchanged warning baseline with zero
+first-party diagnostics. Source identities, linker output and exact owned-runner
+cleanup evidence are retained under
+`artifacts/issues/1680/resource-version-native-constructor`; owned PostgreSQL
+cleanup and relational TRX are under `artifacts/issues/1680/constructor-projection`.
+
+The next hosted main suite exposed two fixed-delay test races: the cancelled
+registry entry was checked before its cleanup timer completed, and batch-spend
+health was checked before its background worker started. Both tests now await
+their existing post-transition log events with asynchronous continuations and
+independent ten-second limits. All original assertions remain. The complete
+changed classes, existing startup-helper suite and all 23 timing-inventory
+methods passed (78 rows, zero failures or skips). Broader evidence also retains
+the existing permitted performance-test skip; no skip, exclusion or threshold
+changed. Logs, inventory and assembly identities are under
+`artifacts/issues/1680/timing-sync`.
+
+CodeRabbit review `5527467014` identifies a stronger-isolation limitation:
+membership can commit after the guard's final count check and before its callback.
+The group row remains CAS/lock protected, and changes visible at the final
+membership check reject an exact stale tag. This is check-time validation of
+membership, not a serializable compare-and-swap of the entire group-plus-membership
+representation. Issue 1638's GET/snapshot collision is repaired while existing
+group-row write protections are retained. The HTTP specification describes
+[pre-action condition evaluation](https://www.rfc-editor.org/rfc/rfc9110.html#section-13.2.1);
+it does not establish application database isolation. This review is retained as
+an explicit design limitation, not dismissed as a false timing observation.
+Stronger isolation would require coordinated locking across every membership
+writer, stable lock ordering and handling of external side effects; callbacks
+must never be replayed after execution.
