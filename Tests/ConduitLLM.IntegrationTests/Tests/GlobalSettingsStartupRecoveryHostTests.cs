@@ -80,7 +80,9 @@ public sealed class GlobalSettingsStartupRecoveryHostTests(PostgresLockTestConta
         Assert.Same(cache, Assert.Single(factory.Services.GetServices<IHostedService>().OfType<GlobalSettingsCacheService>()));
         await fault.RecoveryStarted.Task.WaitAsync(TimeSpan.FromSeconds(15));
 
-        await factory.RunningHost.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15));
+        // The factory owns the real host's stop/disposal sequence. Stopping the
+        // captured host separately can race entrypoint disposal with its cleanup.
+        await factory.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(15));
 
         await fault.RecoveryCancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.False(fault.DatabaseReadCompleted.Task.IsCompleted);
