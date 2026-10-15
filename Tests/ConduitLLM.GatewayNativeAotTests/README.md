@@ -7,7 +7,7 @@ managed `ConduitLLM.SchemaStartupFixtures` utility.
 `NativeFunctionFixture` prepares a GUID-owned Exa configuration with generated
 positive IDs, a separate virtual key and group, a scoped encrypted credential,
 an IP whitelist, and an active flat execution price of `0.12500001`. It uses the
-canonical cost mapping and leaves the existing shadow mapping null. Real
+paired cost mapping through the explicit `FunctionCostId` foreign key. Real
 PostgreSQL tests use the production EF schema in an isolated namespace to verify
 the stored values, rollback, cancellation, and independent-owner preservation.
 
@@ -21,9 +21,9 @@ profiles, transactional rollback, cancellation and preservation of unrelated
 state. This fixture profile prepares data for a subsequent Gateway proof.
 
 Stop the fixture's hosts before deleting its rows. Cleanup verifies the complete
-owned graph and rejects unrelated references through canonical or shadow foreign
-keys, including unsupported virtual-key cascade children. It deletes only that
-owner's rows and is safe to repeat after successful deletion.
+owned graph and rejects unrelated references through the canonical foreign keys
+and audit virtual-key ownership, including unsupported cascade children. It deletes
+only that owner's rows and is safe to repeat after successful deletion.
 
 The parity harness generates the owner before seeding and passes a production-
 protected credential to `--seed`. After all owned processes stop and are reaped,

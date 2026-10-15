@@ -13,10 +13,14 @@ $env:DATABASE_URL = 'postgresql://conduit:conduitpass@localhost:5432/conduitdb'
 Remove `ConduitEfTooling` from the shell environment when finished.
 
 When adding a migration, update `ConduitSchemaVersion.Current` in
-`Shared/ConduitLLM.Configuration/Data/MigrationWaitService.cs` to its full migration
+`Shared/ConduitLLM.Configuration/Data/SchemaVersionProbe.cs` to its full migration
 ID. The runtime schema probe and startup gate use this value. Verify
 `CompiledSchemaVersionMatchesLatestMigration` and the `Component=ReleaseMigration`
 tests against a disposable PostgreSQL database before committing.
+
+The [function inverse relationship migration guide](../../docs/operations/function-inverse-relationship-migration.md)
+describes the conflict checks and operator reconciliation required before removing
+the legacy function shadow foreign keys.
 
 ## Validate migrations
 

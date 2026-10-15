@@ -119,7 +119,7 @@ public static class FunctionEntityConfiguration
 
             // Relationship with FunctionCost
             entity.HasOne(e => e.FunctionCost)
-                .WithMany()
+                .WithMany(e => e.FunctionMappings)
                 .HasForeignKey(e => e.FunctionCostId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -162,7 +162,7 @@ public static class FunctionEntityConfiguration
 
             // Relationship with FunctionExecution
             entity.HasOne(e => e.FunctionExecution)
-                .WithMany()
+                .WithMany(e => e.AuditEvents)
                 .HasForeignKey(e => e.FunctionExecutionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
