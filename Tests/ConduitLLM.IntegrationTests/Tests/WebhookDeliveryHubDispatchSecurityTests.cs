@@ -184,7 +184,7 @@ public sealed class WebhookDeliveryHubDispatchSecurityTests
     }
 
     private static Task SubscribeAsync(HubConnection connection, params string[] urls) =>
-        GatewaySignalRDispatchHost.InvokeAsync(connection, "SubscribeToWebhooks", (object)urls);
+        GatewaySignalRDispatchHost.InvokeAsync(connection, "SubscribeToWebhooks", urls);
 
     private static async Task<DateTime> SendNotificationsAsync(WebhookDeliveryNotificationService broadcaster,
         int owner, string url, string taskId)
