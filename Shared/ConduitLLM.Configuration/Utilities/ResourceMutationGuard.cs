@@ -8,6 +8,13 @@ namespace ConduitLLM.Configuration.Utilities;
 /// <summary>The database values used to identify one resource snapshot.</summary>
 public sealed record ResourceVersion(byte[]? RowVersion, DateTime UpdatedAt)
 {
+    /// <summary>Creates a group version that includes its member count.</summary>
+    public ResourceVersion(byte[]? rowVersion, DateTime updatedAt, int virtualKeyCount)
+        : this(rowVersion, updatedAt)
+    {
+        VirtualKeyCount = virtualKeyCount;
+    }
+
     /// <summary>Member count when the represented resource is a virtual key group.</summary>
     public int? VirtualKeyCount { get; init; }
 
@@ -64,11 +71,10 @@ public static class ResourceMutationGuard
         if (typeof(TEntity) == typeof(VirtualKeyGroup))
         {
             // One statement pairs the row metadata with the count in the same snapshot.
+            // Constructor projection avoids reflection-based property binding under NativeAOT.
             return db.VirtualKeyGroups.AsNoTracking().Where(group => group.Id == id)
-                .Select(group => new ResourceVersion(group.RowVersion, group.UpdatedAt)
-                {
-                    VirtualKeyCount = group.VirtualKeys.Count
-                }).SingleOrDefaultAsync(cancellationToken);
+                .Select(group => new ResourceVersion(group.RowVersion, group.UpdatedAt, group.VirtualKeys.Count))
+                .SingleOrDefaultAsync(cancellationToken);
         }
 
         return db.Set<TEntity>().AsNoTracking().Where(entity => EF.Property<int>(entity, "Id") == id)
