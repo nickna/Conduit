@@ -135,6 +135,8 @@ internal static class NativeAdminRuntimeProfileProbe
             }
             catch (Exception error)
             {
+                // Any removal failure must remain visible without preventing
+                // independent shutdown/disposal of this owned connection.
                 cleanupFailures.Add(NativeFixtureDiagnostics.Failure("Owned Admin credential removal failed.", error));
             }
             if (redis is not null)
@@ -143,6 +145,8 @@ internal static class NativeAdminRuntimeProfileProbe
                 try { await redis.CloseAsync(allowCommandsToComplete: false).WaitAsync(TimeSpan.FromSeconds(5)); }
                 catch (Exception error)
                 {
+                    // Preserve every shutdown cause; disposal still runs in
+                    // finally, and the proof failure keeps its first position.
                     cleanupFailures.Add(NativeFixtureDiagnostics.Failure("Admin Redis connection shutdown failed.", error));
                 }
                 finally
@@ -150,6 +154,8 @@ internal static class NativeAdminRuntimeProfileProbe
                     try { redis.Dispose(); }
                     catch (Exception error)
                     {
+                        // Disposer failures are distinct cleanup failures; an
+                        // unexpected type must not replace the primary proof.
                         cleanupFailures.Add(NativeFixtureDiagnostics.Failure("Admin Redis connection disposal failed.", error));
                     }
                 }

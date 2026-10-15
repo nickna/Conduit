@@ -79,7 +79,9 @@ public sealed class NativeProviderHttpRequestReaderTests
             finally
             {
                 listener.Stop();
-                http.Dispose();
+                // Abort transport work before joining; the using declaration
+                // remains the single owner of the HttpClient lifetime.
+                http.CancelPendingRequests();
                 try
                 {
                     try { await DrainAsync(receive); }

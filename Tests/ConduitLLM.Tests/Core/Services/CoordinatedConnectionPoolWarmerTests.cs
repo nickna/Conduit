@@ -484,10 +484,11 @@ namespace ConduitLLM.Tests.Core.Services
             finally
             {
                 deadline.Cancel();
-                // The assertion above observes cancellation and lock release;
-                // this second await joins the same task after canceling our deadline.
-                try { await warming; }
-                catch (OperationCanceledException) when (deadline.IsCancellationRequested) { }
+                // Join the cancelled owner operation before releasing its scope;
+                // a different failure or a worker that cannot drain must fail.
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                    warming.WaitAsync(TimeSpan.FromSeconds(5)));
+                Assert.Equal(0, Volatile.Read(ref active));
             }
         }
 

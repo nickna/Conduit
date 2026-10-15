@@ -557,6 +557,8 @@ public sealed class NativeBenchmarkWorkloadProbeTests
             catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
             catch (SocketException) when (_stop.IsCancellationRequested) { }
             catch (ObjectDisposedException) when (_stop.IsCancellationRequested) { }
+            // Supervise the owned background accept task: teardown must still join
+            // every handler, then fail with this unexpected fault rather than hide it.
             catch (Exception exception) { RecordFailure(exception); }
         }
 
@@ -605,6 +607,8 @@ public sealed class NativeBenchmarkWorkloadProbeTests
                 // A cancelled or size-limited client may close its response socket.
                 // Request framing failures must remain visible in fixture teardown.
             }
+            // Preserve every unexpected handler failure for the teardown assertion
+            // and release FailureObserved waiters; expected client closures are above.
             catch (Exception exception) { RecordFailure(exception); }
             finally
             {

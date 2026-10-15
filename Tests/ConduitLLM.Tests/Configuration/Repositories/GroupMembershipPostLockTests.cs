@@ -181,6 +181,8 @@ public sealed class GroupMembershipPostLockTests
             }
             catch (Exception primary)
             {
+                // Any partial setup failure must release this fixture's exact
+                // generated database, retaining both errors if cleanup also fails.
                 try { await fixture.DisposeAsync(); }
                 catch (Exception cleanup)
                 {

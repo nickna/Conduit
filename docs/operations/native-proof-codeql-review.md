@@ -167,3 +167,50 @@ Original Admin/Gateway reuse still binds all 2,394 service/build inputs and
 original executable/publication hashes. No original manifest was rewritten.
 Separate snapshots, original publications, exact bindings, final run and cleanup
 evidence are retained under `artifacts/issues/1657` and its `final` directory.
+
+## PR 1680 follow-up
+
+The first hosted main correctness and NativeAOT jobs both failed the existing
+`RuntimeFactoryKeepsBothNonIpResourcesOnTheRealEfReader` group case. That fixture
+still supplied a row-only tag after issue 1638 added membership to group tags;
+the key case passed. The original two-case Release assembly reproduced the
+same failure locally. The corrected fixture retains the empty-group case, adds
+nonempty group/key cases, uses the proper response DTOs, and independently
+checks that stale-count, omitted-count and weak tags are rejected before the
+handler runs. The strict runtime IP repository remains untouched on these paths.
+
+All fourteen inline CodeQL comments on the first PR revision were reviewed.
+The alert IDs below identify that analysis, whose line numbers may move. None
+was dismissed and no query or source suppression was added.
+
+| Alert | Disposition and verification contract |
+| --- | --- |
+| 11708 | Intentional HTTP response transfer from `RecordingHandler.SendAsync` to the real provider caller. Disposing before return would break that caller. All eight `ClientCreationPreservesCredentialScopeProviderChoiceAndHttpConfiguration` cases assert that both returned response contents are disposed exactly once by their callers. |
+| 11725 | Replaced the reader test's early manual client disposal with `CancelPendingRequests`; its using declaration remains the lifetime owner through bounded joins. The controlled receiver-failure case still verifies disposal of a completed send response before its using declaration can be reached. |
+| 11730 | Replaced the warmer test's empty cancellation catch with an explicit bounded cancellation assertion and a zero-active-worker assertion after joining the owner task. |
+| 11724 | Intentional partial-construction boundary in the PostgreSQL fixture: remove the exact generated database with an independent deadline, preserve the primary exception, and retain ordered primary/cleanup causes if cleanup also fails. Narrowing to a transport exception would skip cleanup for other initialization failures. |
+| 11722 | Intentional benchmark handler supervision: retain any unexpected fault, signal failure waiters and report it during teardown; scoped shutdown/client closures are handled separately. The truncated real TCP request regression requires framing faults to remain observable. |
+| 11721 | Intentional benchmark accept supervision: retain any unexpected fault while still allowing teardown to join all owned handlers and assert the collected failures. |
+| 11720 | Intentional independent drain collection: every remaining owner receives its own deadline even when a prior owner fails. All errors are propagated after those attempts. Cancellation and unexpected-error regressions verify continued cleanup and ordered causes. |
+| 11719 | Intentional work/cleanup boundary: always run independent cleanup, then rethrow the original work exception with its identity, stack and cancellation token. Dual failures retain the original work failure first. Both synchronous and asynchronous unexpected work failures are covered. |
+| 11728, 11727 | Transferred the proxy's final accept-generation and stopping sources into terminal using scopes covering shutdown and awaited task drain. Capturing the generation under the existing gate preserves replacement/stop ordering; constructor-failure cleanup remains explicit. Proxy refusal, unblock and disposal regressions retain the failure and resource oracles. |
+| 11726 | Transferred the MCP stop source into a terminal using scope spanning listener shutdown and accept/handler drain, including failures before the former finally block. The partial-client shutdown regression verifies bounded cleanup of the owned listener and clients. |
+| 11712, 11711, 11710 | Intentional independent Admin credential cleanup boundaries for connection disposal, close and exact token removal. Each records its distinct bounded, private-safe cause, continues remaining cleanup and retains the primary failure first. Restricting exception types would mask unexpected cleanup failures or skip later ownership release. |
+
+The added integration cleanup cases inject unrelated exception types into work
+and successive drains, verify that the final owner is still reached, and assert
+the identity and ordering of every cause. These are error-propagation boundaries,
+not recovery that converts an unexpected exception into success.
+
+Follow-up logs, before/after TRX and source/assembly identities are retained
+separately under `artifacts/issues/1680`. The earlier native publications above
+remain historical frozen-source evidence; changes to the proxy and MCP fixture
+ownership require verification on this PR revision.
+
+The follow-up Release main suite passed 5,277 cases with zero failures and the
+same three skips allowed by CI (5,280 discovered on Windows). The measured
+component coverage ratchet, all 233 lock-policy ownership cases, restored
+functional suite ownership and all 23 formerly excluded timing methods passed.
+The integration selection passed all 78 MCP, benchmark and cleanup cases with
+zero failures or skips. The original failing test, full TRX, coverage and final
+assembly hashes remain under the follow-up evidence directory above.

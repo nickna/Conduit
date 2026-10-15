@@ -451,6 +451,9 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
 
     private async Task DisposeOwnedAsync()
     {
+        // The source belongs to this terminal async scope through accept/handler
+        // drain, including any earlier failure while stopping owned resources.
+        using var stop = _stop;
         TcpClient[] clients;
         lock (_gate)
         {
@@ -458,7 +461,7 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
             clients = _clients.Values.ToArray();
         }
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        _stop.Cancel();
+        stop.Cancel();
         _listener.Stop();
         ReleaseHeldRequests();
         foreach (var client in clients) client.Dispose();
@@ -478,7 +481,6 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
         {
             throw new TimeoutException("Native MCP fixture cleanup exceeded its ten-second deadline.");
         }
-        finally { _stop.Dispose(); }
     }
 }
 

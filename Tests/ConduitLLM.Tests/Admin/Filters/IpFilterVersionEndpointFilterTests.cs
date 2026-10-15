@@ -3,6 +3,7 @@ using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.DTOs.IpFilter;
+using ConduitLLM.Configuration.DTOs.VirtualKey;
 using ConduitLLM.Tests.TestInfrastructure;
 
 using Microsoft.AspNetCore.Http;
@@ -296,38 +297,102 @@ public sealed class IpFilterVersionEndpointFilterTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task RuntimeFactoryKeepsBothNonIpResourcesOnTheRealEfReader(bool virtualKey)
+    [InlineData(false, 0)]
+    [InlineData(false, 2)]
+    [InlineData(true, 2)]
+    public async Task RuntimeFactoryKeepsBothNonIpResourcesOnTheRealEfReader(bool virtualKey, int memberCount)
     {
         await using var database = new SqliteTestDatabase();
-        await database.SeedAsync(async db =>
-        {
-            db.VirtualKeyGroups.Add(new VirtualKeyGroup
-            {
-                Id = FilterId, GroupName = "non-IP version", UpdatedAt = OriginalTime
-            });
-            if (virtualKey)
-                db.VirtualKeys.Add(new VirtualKey
-                {
-                    Id = FilterId, KeyName = "non-IP version", KeyHash = "non-IP hash",
-                    VirtualKeyGroupId = FilterId, UpdatedAt = OriginalTime
-                });
-            await db.SaveChangesAsync();
-        });
+        await SeedNonIpResourcesAsync(database, memberCount);
         var repository = new Mock<IIpFilterRepository>(MockBehavior.Strict);
         var filter = VersionedResourceEndpointFilter.CreateWithRuntimePersistence(repository.Object);
         await using var services = new ServiceCollection()
             .AddSingleton(database.CreateDbContextFactory()).BuildServiceProvider();
         var path = virtualKey ? $"/v1/admin/virtual-keys/{FilterId}" : $"/v1/admin/virtual-key-groups/{FilterId}";
         var context = Context("PATCH", services, path: path);
-        context.HttpContext.Request.Headers.IfMatch = ExpectedTag(null, OriginalTime);
+        var expected = virtualKey ? ExpectedTag(null, OriginalTime) : ExpectedGroupTag(null, OriginalTime, memberCount);
+        context.HttpContext.Request.Headers.IfMatch = expected;
+        IResult handlerResult = virtualKey
+            ? Results.Ok(new VirtualKeyDto { Id = FilterId, UpdatedAt = OriginalTime, ResourceETag = expected })
+            : Results.Ok(new VirtualKeyGroupDto
+                { Id = FilterId, UpdatedAt = OriginalTime, ResourceETag = expected, VirtualKeyCount = memberCount });
+        var handlerCalls = 0;
 
-        var result = await filter.InvokeAsync(context,
-            _ => ValueTask.FromResult<object?>(Results.Ok(new IpFilterDto { ResourceETag = ExpectedTag(null, OriginalTime) })));
+        var result = await filter.InvokeAsync(context, _ =>
+        {
+            handlerCalls++;
+            return ValueTask.FromResult<object?>(handlerResult);
+        });
 
+        Assert.Same(handlerResult, result);
+        Assert.Equal(1, handlerCalls);
         Assert.Equal(StatusCodes.Status200OK, Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
-        Assert.Equal(ExpectedTag(null, OriginalTime), context.HttpContext.Response.Headers.ETag.ToString());
+        Assert.Equal(expected, context.HttpContext.Response.Headers.ETag.ToString());
+        repository.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task RuntimeGroupMembershipChangeRejectsOldCountTagsWithoutUsingTheIpRepository()
+    {
+        await using var database = new SqliteTestDatabase();
+        await SeedNonIpResourcesAsync(database, 0);
+        var repository = new Mock<IIpFilterRepository>(MockBehavior.Strict);
+        var filter = VersionedResourceEndpointFilter.CreateWithRuntimePersistence(repository.Object);
+        await using var services = new ServiceCollection()
+            .AddSingleton(database.CreateDbContextFactory()).BuildServiceProvider();
+        var path = $"/v1/admin/virtual-key-groups/{FilterId}";
+        var before = ExpectedGroupTag(null, OriginalTime, 0);
+        var initialGet = Context("GET", services, path: path);
+        await filter.InvokeAsync(initialGet, _ => ValueTask.FromResult<object?>(
+            Results.Ok(new VirtualKeyGroupDto
+                { Id = FilterId, UpdatedAt = OriginalTime, ResourceETag = before, VirtualKeyCount = 0 })));
+        Assert.Equal(before, initialGet.HttpContext.Response.Headers.ETag.ToString());
+
+        await database.SeedAsync(async db =>
+        {
+            db.VirtualKeys.AddRange(Enumerable.Range(0, 2).Select(index => new VirtualKey
+            {
+                Id = FilterId + index, KeyName = $"new member {index}", KeyHash = $"new member hash {index}",
+                VirtualKeyGroupId = FilterId, UpdatedAt = OriginalTime
+            }));
+            await db.SaveChangesAsync();
+        });
+        var current = ExpectedGroupTag(null, OriginalTime, 2);
+        var handlerCalls = 0;
+        foreach (var candidate in new[] { before, ExpectedTag(null, OriginalTime),
+                     ExpectedGroupTag(null, OriginalTime, 1), "W/" + current })
+        {
+            var stale = Context("PATCH", services, path: path);
+            stale.HttpContext.Request.Headers.IfMatch = candidate;
+            var result = await filter.InvokeAsync(stale, _ =>
+            {
+                handlerCalls++;
+                return ValueTask.FromResult<object?>(Results.Ok());
+            });
+            Assert.Equal(StatusCodes.Status412PreconditionFailed,
+                Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+            Assert.False(stale.HttpContext.Response.Headers.ContainsKey("ETag"));
+        }
+        Assert.Equal(0, handlerCalls);
+
+        var fresh = Context("PATCH", services, path: path);
+        fresh.HttpContext.Request.Headers.IfMatch = current;
+        var accepted = await filter.InvokeAsync(fresh, _ =>
+        {
+            handlerCalls++;
+            return ValueTask.FromResult<object?>(Results.Ok(
+                new VirtualKeyGroupDto
+                    { Id = FilterId, UpdatedAt = OriginalTime, ResourceETag = current, VirtualKeyCount = 2 }));
+        });
+        Assert.Equal(1, handlerCalls);
+        Assert.Equal(StatusCodes.Status200OK, Assert.IsAssignableFrom<IStatusCodeHttpResult>(accepted).StatusCode);
+        Assert.Equal(current, fresh.HttpContext.Response.Headers.ETag.ToString());
+        await using var verify = database.CreateContext();
+        var group = await verify.VirtualKeyGroups.AsNoTracking().SingleAsync(value => value.Id == FilterId);
+        Assert.Equal(OriginalTime, group.UpdatedAt);
+        Assert.Null(group.RowVersion);
+        Assert.Equal("non-IP version", group.GroupName);
+        Assert.Equal(2, await verify.VirtualKeys.CountAsync(value => value.VirtualKeyGroupId == FilterId));
         repository.VerifyNoOtherCalls();
     }
 
@@ -351,6 +416,24 @@ public sealed class IpFilterVersionEndpointFilterTests
 
     private static string ExpectedTag(byte[]? version, DateTime time) =>
         $"\"{Convert.ToBase64String(version ?? [])}.{time.Ticks:x}\"";
+
+    private static string ExpectedGroupTag(byte[]? version, DateTime time, int memberCount) =>
+        $"\"{Convert.ToBase64String(version ?? [])}.{time.Ticks:x}.{memberCount:x}\"";
+
+    private static Task SeedNonIpResourcesAsync(SqliteTestDatabase database, int memberCount) =>
+        database.SeedAsync(async db =>
+        {
+            db.VirtualKeyGroups.Add(new VirtualKeyGroup
+            {
+                Id = FilterId, GroupName = "non-IP version", UpdatedAt = OriginalTime
+            });
+            db.VirtualKeys.AddRange(Enumerable.Range(0, memberCount).Select(index => new VirtualKey
+            {
+                Id = FilterId + index, KeyName = $"non-IP version {index}", KeyHash = $"non-IP hash {index}",
+                VirtualKeyGroupId = FilterId, UpdatedAt = OriginalTime
+            }));
+            await db.SaveChangesAsync();
+        });
 
     private static IpFilterEntity Row(byte[]? version) => new()
     {
