@@ -20,6 +20,19 @@ without closing the host pool. `DatabaseHealthCheck` disposes its connection aft
 executing `SELECT 1`. Host shutdown closes the data source after its consumers
 finish.
 
+The asynchronous factory retains ownership until opening succeeds. A failed or
+canceled open disposes the allocated connection asynchronously before returning
+the error; cleanup failures are logged without replacing the original failure.
+An already canceled caller token prevents allocation. Caller cancellation
+propagates as `OperationCanceledException`, while other open failures retain their
+original exception inside the factory's `InvalidOperationException`.
+
+The raw health check asynchronously disposes its command and successful connection
+lease on every path. It propagates caller cancellation instead of reporting it as
+an unhealthy database. Other connection, query, and cleanup failures produce an
+unhealthy result; cleanup failures cannot replace an earlier query failure or
+caller cancellation.
+
 The shared `AddDatabaseConnectionFactory` registration and public two-argument
 `DatabaseConnectionFactory` constructor retain the existing string-based behavior
 for callers that have not selected a host-owned source. Generic PostgreSQL URL

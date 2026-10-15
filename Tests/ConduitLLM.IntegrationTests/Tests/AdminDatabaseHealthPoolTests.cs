@@ -10,6 +10,7 @@ using ConduitLLM.Persistence.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 
 using Npgsql;
 
@@ -143,6 +144,111 @@ public sealed class AdminDatabaseHealthPoolTests(PostgresLockTestContainerFixtur
         await ownership.DisposeAsync();
         await using var successor = await locks.TryAcquireAsync(key);
         Assert.NotNull(successor);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CancelledRawOpensPreserveCancellationAndReuseTheHostPool(bool alreadyCancelled)
+    {
+        await using var admin = AdminServices.Create(fixture.ConnectionString, singleConnection: true);
+        var factory = admin.Provider.GetRequiredService<IDatabaseConnectionFactory>();
+        await using var occupied = await factory.CreateConnectionAsync();
+        var occupiedPid = Assert.IsType<NpgsqlConnection>(occupied).ProcessID;
+
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            using var cancellation = new CancellationTokenSource();
+            if (alreadyCancelled) cancellation.Cancel();
+            var opening = factory.CreateConnectionAsync(cancellation.Token);
+            if (!alreadyCancelled)
+            {
+                // CreateConnectionAsync runs synchronously until the real max-one
+                // pool has to wait for the connection retained above.
+                Assert.False(opening.IsCompleted);
+                cancellation.Cancel();
+            }
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => opening.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal(ConnectionState.Open, occupied.State);
+            await using var command = occupied.CreateCommand();
+            command.CommandText = "SELECT 1";
+            Assert.Equal(1, await command.ExecuteScalarAsync());
+        }
+
+        await occupied.DisposeAsync();
+        await using (var recovered = await factory.CreateConnectionAsync())
+            Assert.Equal(occupiedPid, Assert.IsType<NpgsqlConnection>(recovered).ProcessID);
+        await using (var reused = await factory.CreateConnectionAsync())
+            Assert.Equal(occupiedPid, Assert.IsType<NpgsqlConnection>(reused).ProcessID);
+        await AssertSourceUsableAsync(admin.Source);
+        AssertHealthy(await admin.CheckHealthAsync());
+    }
+
+    [Fact]
+    public async Task RegisteredHealthCheckPropagatesCallerCancellationAndLeavesTheHostPoolUsable()
+    {
+        await using var admin = AdminServices.Create(fixture.ConnectionString, singleConnection: true);
+        var factory = admin.Provider.GetRequiredService<IDatabaseConnectionFactory>();
+        await using var occupied = await factory.CreateConnectionAsync();
+        var occupiedPid = Assert.IsType<NpgsqlConnection>(occupied).ProcessID;
+        var registration = Assert.Single(admin.Provider.GetRequiredService<IOptions<HealthCheckServiceOptions>>()
+            .Value.Registrations, value => value.Name == "database_health");
+        var check = registration.Factory(admin.Provider);
+        using var cancellation = new CancellationTokenSource();
+
+        // Invoke the production registration directly so cancellation happens
+        // after its factory has entered the occupied pool, rather than before
+        // HealthCheckService schedules the check's work.
+        var checking = check.CheckHealthAsync(new HealthCheckContext { Registration = registration }, cancellation.Token);
+        Assert.False(checking.IsCompleted);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => checking.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        await occupied.DisposeAsync();
+        AssertHealthy(await admin.CheckHealthAsync());
+        await using (var recovered = await factory.CreateConnectionAsync())
+            Assert.Equal(occupiedPid, Assert.IsType<NpgsqlConnection>(recovered).ProcessID);
+        await AssertSourceUsableAsync(admin.Source);
+    }
+
+    [Fact]
+    public async Task FailedRawOpensKeepPostgresDiagnosticsAndRecoverOnTheSameHostSource()
+    {
+        var databaseName = "conduit_admin_open_" + Guid.NewGuid().ToString("N");
+        await using var observer = await OpenObserverAsync();
+        await ExecuteAsync(observer, $"CREATE DATABASE \"{databaseName}\"");
+        try
+        {
+            var settings = new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Database = databaseName };
+            await using var admin = AdminServices.Create(settings.ConnectionString, singleConnection: true);
+            var source = admin.Source;
+            var factory = admin.Provider.GetRequiredService<IDatabaseConnectionFactory>();
+            await ExecuteAsync(observer, $"ALTER DATABASE \"{databaseName}\" ALLOW_CONNECTIONS false");
+
+            for (var attempt = 0; attempt < 4; attempt++)
+            {
+                var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    factory.CreateConnectionAsync().WaitAsync(TimeSpan.FromSeconds(5)));
+                var postgres = Assert.IsType<PostgresException>(failure.InnerException);
+                Assert.Equal("55000", postgres.SqlState);
+            }
+
+            await ExecuteAsync(observer, $"ALTER DATABASE \"{databaseName}\" ALLOW_CONNECTIONS true");
+            await using (var recovered = await factory.CreateConnectionAsync())
+            {
+                await using var command = recovered.CreateCommand();
+                command.CommandText = "SELECT 1";
+                Assert.Equal(1, await command.ExecuteScalarAsync());
+            }
+            Assert.Same(source, admin.Source);
+            await AssertSourceUsableAsync(source);
+            AssertHealthy(await admin.CheckHealthAsync());
+        }
+        finally
+        {
+            // The identifier comes only from this test's fixed prefix and GUID.
+            await ExecuteAsync(observer, $"DROP DATABASE \"{databaseName}\" WITH (FORCE)");
+        }
     }
 
     private async Task<NpgsqlConnection> OpenObserverAsync()

@@ -75,7 +75,7 @@ namespace ConduitLLM.Core.Data
         }
 
         /// <inheritdoc/>
-        public DbConnection CreateConnection()
+        public virtual DbConnection CreateConnection()
         {
             if (_providerName.ToLowerInvariant() != DatabaseConstants.POSTGRES_PROVIDER)
             {
@@ -92,14 +92,36 @@ namespace ConduitLLM.Core.Data
         /// <inheritdoc/>
         public async Task<DbConnection> CreateConnectionAsync(CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            DbConnection? connection = null;
             try
             {
-                var connection = CreateConnection();
-                await connection.OpenAsync(cancellationToken);
+                connection = CreateConnection();
+                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
                 return connection;
             }
             catch (Exception ex)
             {
+                // Ownership transfers only after OpenAsync succeeds. A failed or
+                // canceled open still leaves the allocated connection with us.
+                if (connection is not null)
+                {
+                    try
+                    {
+                        await connection.DisposeAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception cleanupException)
+                    {
+                        _logger.LogWarning(cleanupException,
+                            "Failed to dispose unopened connection for provider: {Provider}", _providerName);
+                    }
+                }
+
+                if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+
                 _logger.LogError(ex, "Failed to create connection for provider: {Provider}", _providerName);
                 throw new InvalidOperationException($"Failed to create connection for provider: {_providerName}", ex);
             }

@@ -54,11 +54,13 @@ namespace ConduitLLM.Core.Data.Interfaces
         DbConnection CreateConnection();
 
         /// <summary>
-        /// Creates a new database connection asynchronously.
+        /// Creates and opens a new database connection asynchronously.
         /// </summary>
         /// <param name="cancellationToken">A cancellation token to observe while waiting for the task to complete.</param>
-        /// <returns>A task that represents the asynchronous operation. The task result contains a DbConnection instance.</returns>
+        /// <returns>A task containing an open connection owned by the caller, which must dispose it after use.</returns>
+        /// <remarks>If opening fails or is canceled, the factory disposes the connection before propagating the failure.</remarks>
         /// <exception cref="InvalidOperationException">Thrown when the connection cannot be created.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the caller cancels the operation.</exception>
         Task<DbConnection> CreateConnectionAsync(CancellationToken cancellationToken = default);
     }
 }
