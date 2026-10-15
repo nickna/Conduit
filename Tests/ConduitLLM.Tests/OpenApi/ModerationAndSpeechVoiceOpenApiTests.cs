@@ -90,10 +90,16 @@ public sealed class ModerationAndSpeechVoiceOpenApiTests
 
     private static bool AllowsNull(JsonElement schema, JsonElement schemas)
     {
-        if (schema.TryGetProperty("type", out var type) &&
-            (type.ValueKind == JsonValueKind.String && type.GetString() == "null" ||
-             type.ValueKind == JsonValueKind.Array && type.EnumerateArray().Any(value => value.GetString() == "null")))
-            return true;
+        if (schema.TryGetProperty("type", out var type))
+        {
+            var isNullStringType = type.ValueKind == JsonValueKind.String && type.GetString() == "null";
+            var isNullInTypeArray = type.ValueKind == JsonValueKind.Array &&
+                                    type.EnumerateArray().Any(value => value.GetString() == "null");
+
+            if (isNullStringType || isNullInTypeArray)
+                return true;
+        }
+
         if (schema.TryGetProperty("$ref", out var reference))
             return AllowsNull(schemas.GetProperty(reference.GetString()!.Split('/')[^1]), schemas);
         foreach (var union in new[] { "anyOf", "oneOf" })
