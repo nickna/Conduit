@@ -186,6 +186,14 @@ namespace ConduitLLM.Tests.Core.Services
         public async Task NonCancelledTasks_AreNotRemovedByCleanupTimer()
         {
             // Arrange
+            var cancelledTaskRemoved = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _loggerMock.Setup(logger => logger.Log(
+                    LogLevel.Debug,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((state, _) => state.ToString() == "Removed cancelled task cancelled-task after grace period"),
+                    It.IsAny<Exception>(),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()))
+                .Callback(() => cancelledTaskRemoved.TrySetResult(true));
             var shortGracePeriod = TimeSpan.FromMilliseconds(50);
             using var registry = new CancellableTaskRegistry(_loggerMock.Object, shortGracePeriod);
             
@@ -198,10 +206,8 @@ namespace ConduitLLM.Tests.Core.Services
             // Cancel only one task
             cancelledCts.Cancel();
             
-            // Wait beyond grace period and for cleanup timer to run (runs every 1 second)
-            // Adding extra buffer to ensure cleanup timer has definitely run on slower CI machines
-            // CI environments may have unpredictable thread scheduling, so we need a larger buffer
-            await Task.Delay(TimeSpan.FromMilliseconds(2100));
+            // The cleanup log follows removal, so observe a completed timer pass before asserting.
+            await cancelledTaskRemoved.Task.WaitAsync(TimeSpan.FromSeconds(10));
             
             // Assert
             registry.TryGetCancellationToken("active-task", out _).Should().BeTrue();

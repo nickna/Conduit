@@ -20,8 +20,10 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
     private const string Image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
     private readonly object _gate = new();
+    // The instance owns this listener through DisposeOwnedAsync, which stops
+    // accepts and drains every registered client/handler before disposing _stop.
     private readonly TcpListener _listener;
-    private readonly CancellationTokenSource _stop = new();
+    private readonly CancellationTokenSource _stop;
     private readonly Dictionary<long, TcpClient> _clients = new();
     private readonly HashSet<Task> _handlers = new();
     private readonly List<Exception> _faults = new();
@@ -59,7 +61,15 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
         _authHeader = authHeader;
         _authValue = authValue ?? "Bearer " + ApiKey;
         _listener = new TcpListener(IPAddress.Loopback, 0);
-        _listener.Start();
+        _stop = new CancellationTokenSource();
+        try { _listener.Start(); }
+        catch
+        {
+            // Construction failure cannot reach the instance's async disposer.
+            _listener.Dispose();
+            _stop.Dispose();
+            throw;
+        }
         Endpoint = new Uri($"http://127.0.0.1:{((IPEndPoint)_listener.LocalEndpoint).Port}/mcp");
         _acceptLoop = AcceptAsync(_stop.Token);
     }
@@ -123,9 +133,9 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
                 }
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-        catch (SocketException) when (cancellationToken.IsCancellationRequested) { }
-        catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
+        catch (SocketException) when (cancellationToken.IsCancellationRequested) { return; }
+        catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested) { return; }
         catch (Exception exception)
         {
             RecordFault(exception);
@@ -135,6 +145,8 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
 
     private async Task HandleAsync(long identity, TcpClient client, CancellationToken cancellationToken)
     {
+        CancellationToken readToken = default;
+        CancellationToken responseToken = default;
         try
         {
             using (client)
@@ -144,14 +156,16 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
                 using (var readDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
                 {
                     readDeadline.CancelAfter(TimeSpan.FromSeconds(10));
-                    request = await NativeProviderHttpRequestReader.ReadAsync(stream, readDeadline.Token);
+                    readToken = readDeadline.Token;
+                    request = await NativeProviderHttpRequestReader.ReadAsync(stream, readToken);
                 }
                 if (request is null) return;
                 if (request.Headers.TryGetValue("Transfer-Encoding", out var encoding) &&
                     encoding.Equals("chunked", StringComparison.OrdinalIgnoreCase)) Interlocked.Increment(ref _chunkedRequests);
                 using var responseDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 responseDeadline.CancelAfter(TimeSpan.FromSeconds(10));
-                var token = responseDeadline.Token;
+                responseToken = responseDeadline.Token;
+                var token = responseToken;
                 if (request.Path != "/mcp")
                 {
                     Interlocked.Increment(ref _protocolFailures);
@@ -248,10 +262,13 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
             }
         }
         catch (InvalidDataException) { Interlocked.Increment(ref _protocolFailures); }
-        catch (OperationCanceledException) { }
-        catch (IOException) { }
-        catch (SocketException) { }
-        catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested ||
+            readToken.IsCancellationRequested || responseToken.IsCancellationRequested) { return; }
+        // HTTP clients may disconnect on cancellation without sending a protocol
+        // notification. Both exceptions come from the owned client network stream.
+        catch (IOException) { return; }
+        catch (SocketException) { return; }
+        catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested) { return; }
         catch (Exception exception) { RecordFault(exception); }
         finally
         {
@@ -419,6 +436,8 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
         await stream.WriteAsync(bytes, cancellationToken);
     }
 
+    // Unexpected failures are retained and rethrown by Counters, WaitForIdleAsync
+    // and disposal, rather than escaping an unobserved handler task.
     private void RecordFault(Exception exception) { lock (_gate) _faults.Add(exception); }
     private void ThrowIfFaultedLocked()
     {
@@ -432,6 +451,9 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
 
     private async Task DisposeOwnedAsync()
     {
+        // The source belongs to this terminal async scope through accept/handler
+        // drain, including any earlier failure while stopping owned resources.
+        using var stop = _stop;
         TcpClient[] clients;
         lock (_gate)
         {
@@ -439,7 +461,7 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
             clients = _clients.Values.ToArray();
         }
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        _stop.Cancel();
+        stop.Cancel();
         _listener.Stop();
         ReleaseHeldRequests();
         foreach (var client in clients) client.Dispose();
@@ -459,7 +481,6 @@ internal sealed class NativeMcpProviderStub : IAsyncDisposable
         {
             throw new TimeoutException("Native MCP fixture cleanup exceeded its ten-second deadline.");
         }
-        finally { _stop.Dispose(); }
     }
 }
 

@@ -35,7 +35,7 @@ public sealed class NpgsqlConnectionPoolWarmupTests(PostgresLockTestContainerFix
         await using var dataSource = CreateSingleConnectionPool();
         var warmup = new NpgsqlConnectionPoolWarmup(dataSource);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await using (var holder = await dataSource.OpenConnectionAsync(deadline.Token))
+        await using (await dataSource.OpenConnectionAsync(deadline.Token))
         {
             using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token);
             var waiting = warmup.WarmConnectionAsync(cancellation.Token);

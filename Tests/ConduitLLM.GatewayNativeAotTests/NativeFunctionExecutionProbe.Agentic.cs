@@ -27,38 +27,42 @@ internal static partial class NativeFunctionExecutionProbe
         var paths = new[] { "v1/chat/completions", "v1/conduit/chat/completions" };
 
         for (var host = 0; host < gateways.Length; host++)
-        foreach (var path in paths)
         {
-            var marker = Guid.NewGuid();
-            var callerId = Guid.NewGuid();
-            Require(identities.Add(marker) && identities.Add(callerId), "unique agentic prompt and caller identities");
-            var body = AgenticChatBody(fixture, marker);
-            using var request = Authorized(HttpMethod.Post, path, fixture.VirtualKey);
-            request.Headers.Add("x-request-id", callerId.ToString("N"));
-            request.Headers.Add("Idempotency-Key", $"native-agentic-{fixture.Owner:N}-{marker:N}");
-            request.Content = JsonContent.Create(body, NativeProbeJsonContext.Default.JsonElement);
-            using var response = await gateways[host].SendAsync(request, ct);
-            Require(response.StatusCode == HttpStatusCode.OK,
-                $"agentic chat on host {host} route {path} returned {(int)response.StatusCode}");
-            Require(response.Headers.TryGetValues("x-request-id", out var headerIds), "agentic response billing identity");
-            var headerId = headerIds!.Single();
-            Require(Guid.TryParseExact(headerId, "N", out var billingId) && billingId != Guid.Empty && identities.Add(billingId),
-                "fresh HTTP billing GUID differs from owner, prompt and caller identities");
-            var root = await JsonAsync(response, ct);
-            var (executionId, summaryDuration) = AssertAgenticChatResponse(root, fixture, marker);
-            Require(executionId != Guid.Empty && identities.Add(executionId), "unique execution ID for each agentic chat");
-            var row = await ReadExecutionAsync(source, fixture, executionId, ct);
-            var test = AssertAgenticInput(row, body, marker, billingId, identities);
-            AssertStoredExecution(row, fixture, test, started);
-            Require(row.Duration!.Value.TotalMilliseconds <= summaryDuration + 1 && summaryDuration is >= 0 and <= 90000,
-                "function summary duration includes the persisted successful execution");
-            var opposite = await GetExecutionAsync(gateways[1 - host], fixture.VirtualKey,
-                executionId, HttpStatusCode.OK, ct);
-            AssertResource(opposite, row, test, fromPersistence: true);
-            foreach (var gateway in gateways)
-                AssertNotFound(await GetExecutionAsync(gateway, otherVirtualKey, executionId,
-                    HttpStatusCode.NotFound, ct), executionId);
-            observed.Add(new AgenticObservedExecution(executionId, path, marker, billingId, callerId));
+            foreach (var path in paths)
+            {
+                var marker = Guid.NewGuid();
+                var callerId = Guid.NewGuid();
+                Require(identities.Add(marker) && identities.Add(callerId), "unique agentic prompt and caller identities");
+                var body = AgenticChatBody(fixture, marker);
+                using var request = Authorized(HttpMethod.Post, path, fixture.VirtualKey);
+                request.Headers.Add("x-request-id", callerId.ToString("N"));
+                request.Headers.Add("Idempotency-Key", $"native-agentic-{fixture.Owner:N}-{marker:N}");
+                request.Content = JsonContent.Create(body, NativeProbeJsonContext.Default.JsonElement);
+                using var response = await gateways[host].SendAsync(request, ct);
+                Require(response.StatusCode == HttpStatusCode.OK,
+                    $"agentic chat on host {host} route {path} returned {(int)response.StatusCode}");
+                Require(response.Headers.TryGetValues("x-request-id", out var headerIds), "agentic response billing identity");
+                var headerId = headerIds!.Single();
+                Require(Guid.TryParseExact(headerId, "N", out var billingId) && billingId != Guid.Empty && identities.Add(billingId),
+                    "fresh HTTP billing GUID differs from owner, prompt and caller identities");
+                var root = await JsonAsync(response, ct);
+                var (executionId, summaryDuration) = AssertAgenticChatResponse(root, fixture, marker);
+                Require(executionId != Guid.Empty && identities.Add(executionId), "unique execution ID for each agentic chat");
+                var row = await ReadExecutionAsync(source, fixture, executionId, ct);
+                var test = AssertAgenticInput(row, body, marker, billingId, identities);
+                AssertStoredExecution(row, fixture, test, started);
+                Require(row.Duration!.Value.TotalMilliseconds <= summaryDuration + 1 && summaryDuration is >= 0 and <= 90000,
+                    "function summary duration includes the persisted successful execution");
+                var opposite = await GetExecutionAsync(gateways[1 - host], fixture.VirtualKey,
+                    executionId, HttpStatusCode.OK, ct);
+                AssertResource(opposite, row, test, fromPersistence: true);
+                foreach (var gateway in gateways)
+                {
+                    AssertNotFound(await GetExecutionAsync(gateway, otherVirtualKey, executionId,
+                        HttpStatusCode.NotFound, ct), executionId);
+                }
+                observed.Add(new AgenticObservedExecution(executionId, path, marker, billingId, callerId));
+            }
         }
 
         var settled = await WaitForAgenticSettlementAsync(source, fixture, ct);

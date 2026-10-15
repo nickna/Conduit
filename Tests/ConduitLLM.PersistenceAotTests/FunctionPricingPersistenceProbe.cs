@@ -113,7 +113,7 @@ internal static class FunctionPricingPersistenceProbe
             nullable.PricingConfiguration is null && nullable.ExpiryDate is null,
             "expiry equality excludes cost, canonical shadow isolation and null fields");
 
-        await using (var held = await source.OpenConnectionAsync(deadline.Token))
+        await using (await source.OpenConnectionAsync(deadline.Token))
         {
             using var cancelled = new CancellationTokenSource();
             var read = store.FindEligibleCostAsync(11, asOf, cancelled.Token);
@@ -126,13 +126,13 @@ internal static class FunctionPricingPersistenceProbe
                     await read.WaitAsync(TimeSpan.FromSeconds(5));
                     throw new InvalidOperationException("Native pricing ignored cancelled pool acquisition.");
                 }
-                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
             }
             finally
             {
                 cancelled.Cancel();
                 try { await read.WaitAsync(TimeSpan.FromSeconds(5)); }
-                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
             }
         }
         Require((await store.FindEligibleCostAsync(11, asOf, deadline.Token))?.Id == 102, "single-slot cancellation recovery");

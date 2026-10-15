@@ -177,7 +177,7 @@ public sealed class BillingAuditRuntimeServiceTests
         {
             cancellation.Cancel();
             try { await stop.WaitAsync(TimeSpan.FromSeconds(3)); }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
         }
         Assert.Equal(Guid.Empty, row.Id);
         Assert.Equal(default, row.Timestamp);

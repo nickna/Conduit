@@ -134,15 +134,16 @@ public sealed class WolverineStartupCompositionTests
             Assert.Equal(1, factoryCalls);
             if (deferred)
             {
+                var startupState = state ?? throw new InvalidOperationException("Deferred Wolverine startup state was not registered.");
                 Assert.Single(hosted.OfType<SchemaGatedWolverineHostedService>());
                 Assert.DoesNotContain(hosted, service => ReferenceEquals(service, runtime));
                 using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 await host.StartAsync(deadline.Token);
-                Assert.False(state!.IsReady);
+                Assert.False(startupState.IsReady);
                 Assert.Equal(1, instance.Starts);
                 Assert.Equal(1, factory.Starts);
                 await host.StopAsync(deadline.Token);
-                Assert.False(state.IsReady);
+                Assert.False(startupState.IsReady);
             }
             else
             {
@@ -152,6 +153,8 @@ public sealed class WolverineStartupCompositionTests
         }
         finally
         {
+            // Own this exact host; its async path joins/disposes hosted services
+            // before the assertions inspect factory-created sentinel ownership.
             if (host is IAsyncDisposable asyncHost) await asyncHost.DisposeAsync();
             else host.Dispose();
         }

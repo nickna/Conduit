@@ -236,24 +236,25 @@ public sealed class FunctionCredentialFixtureTests(FunctionCredentialRedisFixtur
         options.ConnectRetry = 0;
         options.AbortOnConnectFail = true;
         ConnectionMultiplexer? redis = null;
-        try
+        await IntegrationProofCleanup.RunAsync(async () =>
         {
+            // Synchronous acquisition cannot abandon an eventual ConnectAsync result.
             redis = ConnectionMultiplexer.Connect(options);
             await redis.GetDatabase().KeyDeleteAsync(ownedRing).WaitAsync(deadline.Token);
             Assert.False(await redis.GetDatabase().KeyExistsAsync(ownedRing).WaitAsync(deadline.Token));
-        }
-        finally
+        }, async () =>
         {
-            try
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await IntegrationProofCleanup.RunAsync(async () =>
             {
                 if (redis is not null)
-                    await redis.CloseAsync(allowCommandsToComplete: false).WaitAsync(deadline.Token);
-            }
-            finally
+                    await redis.CloseAsync(allowCommandsToComplete: false).WaitAsync(cleanup.Token);
+            }, () =>
             {
                 redis?.Dispose();
-            }
-        }
+                return Task.CompletedTask;
+            }, "Owned credential connection close and disposal failed.");
+        }, "Owned credential ring cleanup and connection close failed.");
     }
 
     private sealed class UnavailableServices : IServiceProvider

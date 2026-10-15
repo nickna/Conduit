@@ -157,6 +157,32 @@ public sealed class NativeBenchmarkWorkloadProbeTests
     }
 
     [Fact]
+    public async Task TruncatedRequestRemainsObservableDuringOwnedServerCleanupWithoutLeakingCredentials()
+    {
+        var server = new LoopbackServer(ValidResponse("gateway-chat-nonstream"));
+        Exception? cleanupFailure = null;
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync(IPAddress.Loopback, server.Endpoint.Port, server.Token);
+            using var stream = client.GetStream();
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(
+                "POST /v1/chat/completions HTTP/1.1\r\nContent-Length: 4\r\nAuthorization: Bearer " + Secret + "\r\n\r\nx"), server.Token);
+            client.Client.Shutdown(SocketShutdown.Send);
+            await server.FailureObserved.WaitAsync(server.Token);
+        }
+        finally
+        {
+            cleanupFailure = await Record.ExceptionAsync(() => server.DisposeAsync().AsTask());
+        }
+        Assert.NotNull(cleanupFailure);
+        Assert.Contains(nameof(EndOfStreamException), cleanupFailure.ToString());
+        Assert.DoesNotContain(Secret, cleanupFailure.ToString());
+        Assert.Empty(server.Requests);
+        Assert.False(Directory.Exists(Path.GetDirectoryName(server.ConfigurationPath)));
+    }
+
+    [Fact]
     public async Task FailedWarmupStopsBeforeMeasurementAndEmitsNoReport()
     {
         using var secret = new EnvironmentSecret(Secret);
@@ -413,11 +439,30 @@ public sealed class NativeBenchmarkWorkloadProbeTests
 
     private static string Chunk(string? content, bool role, bool stop = false) => Json(writer =>
     {
-        Envelope(writer, "chat.completion.chunk"); writer.WriteStartArray("choices"); writer.WriteStartObject(); writer.WriteNumber("index", 0);
-        writer.WriteStartObject("delta"); if (role) writer.WriteString("role", "assistant");
-        if (content is not null) writer.WriteString("content", content); writer.WriteEndObject();
-        if (stop) writer.WriteString("finish_reason", "stop"); else writer.WriteNull("finish_reason");
-        writer.WriteEndObject(); writer.WriteEndArray();
+        Envelope(writer, "chat.completion.chunk");
+        writer.WriteStartArray("choices");
+        writer.WriteStartObject();
+        writer.WriteNumber("index", 0);
+        writer.WriteStartObject("delta");
+        if (role)
+        {
+            writer.WriteString("role", "assistant");
+        }
+        if (content is not null)
+        {
+            writer.WriteString("content", content);
+        }
+        writer.WriteEndObject();
+        if (stop)
+        {
+            writer.WriteString("finish_reason", "stop");
+        }
+        else
+        {
+            writer.WriteNull("finish_reason");
+        }
+        writer.WriteEndObject();
+        writer.WriteEndArray();
     });
 
     private static void Envelope(Utf8JsonWriter writer, string objectName)
@@ -460,6 +505,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
         private readonly ConcurrentBag<Task> _handlers = [];
         private readonly ConcurrentQueue<Exception> _failures = new();
         private readonly TaskCompletionSource _received = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _failed = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Task _accept;
         private readonly string _directory;
         private int _accepted;
@@ -480,6 +526,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
         public Response Response { get; set; }
         public ConcurrentQueue<NativeProviderHttpRequest> Requests { get; } = new();
         public Task RequestReceived => _received.Task;
+        public Task FailureObserved => _failed.Task;
         public CancellationToken Token => _deadline.Token;
         public int AcceptedConnections => Volatile.Read(ref _accepted);
 
@@ -510,11 +557,14 @@ public sealed class NativeBenchmarkWorkloadProbeTests
             catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
             catch (SocketException) when (_stop.IsCancellationRequested) { }
             catch (ObjectDisposedException) when (_stop.IsCancellationRequested) { }
-            catch (Exception exception) { _failures.Enqueue(exception); }
+            // Supervise the owned background accept task: teardown must still join
+            // every handler, then fail with this unexpected fault rather than hide it.
+            catch (Exception exception) { RecordFailure(exception); }
         }
 
         private async Task HandleAsync(int id, TcpClient client)
         {
+            var writingResponse = false;
             try
             {
                 using var stream = client.GetStream();
@@ -529,6 +579,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
                     : "Content-Length: " + body.Length.ToString(CultureInfo.InvariantCulture) + "\r\n";
                 var header = Encoding.ASCII.GetBytes("HTTP/1.1 " + response.StatusCode.ToString(CultureInfo.InvariantCulture)
                     + " fixture\r\nContent-Type: " + response.ContentType + "; charset=utf-8\r\n" + framing + "Connection: close\r\n\r\n");
+                writingResponse = true;
                 await stream.WriteAsync(header, _stop.Token);
                 if (response.Chunked)
                 {
@@ -551,13 +602,25 @@ public sealed class NativeBenchmarkWorkloadProbeTests
             }
             catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
             catch (ObjectDisposedException) when (_stop.IsCancellationRequested) { }
-            catch (IOException) { /* A cancelled or size-limited client may close its owned response socket. */ }
-            catch (Exception exception) { _failures.Enqueue(exception); }
+            catch (IOException) when (writingResponse)
+            {
+                // A cancelled or size-limited client may close its response socket.
+                // Request framing failures must remain visible in fixture teardown.
+            }
+            // Preserve every unexpected handler failure for the teardown assertion
+            // and release FailureObserved waiters; expected client closures are above.
+            catch (Exception exception) { RecordFailure(exception); }
             finally
             {
                 _clients.TryRemove(id, out _);
                 client.Dispose();
             }
+        }
+
+        private void RecordFailure(Exception exception)
+        {
+            _failures.Enqueue(exception);
+            _failed.TrySetResult();
         }
 
         public async ValueTask DisposeAsync()
@@ -575,6 +638,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
             }
             finally
             {
+                _listener.Dispose();
                 _deadline.Dispose(); _stop.Dispose();
                 if (File.Exists(ConfigurationPath)) File.Delete(ConfigurationPath);
                 Directory.Delete(_directory);

@@ -83,7 +83,7 @@ internal static class FunctionDiscoveryPersistenceProbe
                 await store.ListEnabledAsync(cancellationToken: cancelled.Token);
                 throw new InvalidOperationException("Native function discovery ignored cancellation.");
             }
-            catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+            catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
         }
         Require((await store.GetEnabledByIdAsync(11, deadline.Token))?.Id == 11, "single-slot reuse after cancellation");
         Console.WriteLine("Function discovery persistence passed: enabled/filter/ID reads, JSONB/null/enum scalars, detached graphs, cancellation and single-slot reuse.");

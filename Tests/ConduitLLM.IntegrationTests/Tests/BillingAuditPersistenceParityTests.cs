@@ -294,7 +294,7 @@ public sealed class BillingAuditPersistenceParityTests(PostgresLockTestContainer
         await using var database = await OwnedDatabase.CreateAsync(fixture.ConnectionString);
         var writer = database.Writer(true);
         var row = Populated() with { Id = Guid.Empty, Timestamp = default };
-        await using (var held = await database.Source.OpenConnectionAsync(database.Token))
+        await using (await database.Source.OpenConnectionAsync(database.Token))
         {
             using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(database.Token);
             var pending = writer.WriteBatchAsync([row], cancellation.Token);

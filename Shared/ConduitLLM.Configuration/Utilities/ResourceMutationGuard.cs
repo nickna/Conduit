@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using ConduitLLM.Configuration.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -7,8 +8,20 @@ namespace ConduitLLM.Configuration.Utilities;
 /// <summary>The database values used to identify one resource snapshot.</summary>
 public sealed record ResourceVersion(byte[]? RowVersion, DateTime UpdatedAt)
 {
+    /// <summary>Creates a group version that includes its member count.</summary>
+    public ResourceVersion(byte[]? rowVersion, DateTime updatedAt, int virtualKeyCount)
+        : this(rowVersion, updatedAt)
+    {
+        VirtualKeyCount = virtualKeyCount;
+    }
+
+    /// <summary>Member count when the represented resource is a virtual key group.</summary>
+    public int? VirtualKeyCount { get; init; }
+
     // Some supported stores do not generate RowVersion. Always include the stored timestamp.
-    public string ETag => $"\"{Convert.ToBase64String(RowVersion ?? [])}.{UpdatedAt.Ticks:x}\"";
+    public string ETag => VirtualKeyCount is { } count
+        ? $"\"{Convert.ToBase64String(RowVersion ?? [])}.{UpdatedAt.Ticks:x}.{count:x}\""
+        : $"\"{Convert.ToBase64String(RowVersion ?? [])}.{UpdatedAt.Ticks:x}\"";
 }
 
 /// <summary>A strong If-Match condition passed explicitly to the persistence boundary.</summary>
@@ -53,11 +66,22 @@ public static class ResourceMutationGuard
         DynamicallyAccessedMemberTypes.Interfaces;
 
     public static Task<ResourceVersion?> ReadVersionAsync<[DynamicallyAccessedMembers(EntityMembers)] TEntity>(ConduitDbContext db, int id,
-        CancellationToken cancellationToken = default) where TEntity : class => db.Set<TEntity>()
-        .AsNoTracking().Where(entity => EF.Property<int>(entity, "Id") == id)
-        .Select(entity => new ResourceVersion(EF.Property<byte[]?>(entity, "RowVersion"),
-            EF.Property<DateTime>(entity, "UpdatedAt")))
-        .SingleOrDefaultAsync(cancellationToken);
+        CancellationToken cancellationToken = default) where TEntity : class
+    {
+        if (typeof(TEntity) == typeof(VirtualKeyGroup))
+        {
+            // One statement pairs the row metadata with the count in the same snapshot.
+            // Constructor projection avoids reflection-based property binding under NativeAOT.
+            return db.VirtualKeyGroups.AsNoTracking().Where(group => group.Id == id)
+                .Select(group => new ResourceVersion(group.RowVersion, group.UpdatedAt, group.VirtualKeys.Count))
+                .SingleOrDefaultAsync(cancellationToken);
+        }
+
+        return db.Set<TEntity>().AsNoTracking().Where(entity => EF.Property<int>(entity, "Id") == id)
+            .Select(entity => new ResourceVersion(EF.Property<byte[]?>(entity, "RowVersion"),
+                EF.Property<DateTime>(entity, "UpdatedAt")))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
 
     public static Task<TResult?> ExecuteAsync<[DynamicallyAccessedMembers(EntityMembers)] TEntity, TResult>(ConduitDbContext db, int id,
         ResourcePrecondition precondition,
@@ -95,11 +119,16 @@ public static class ResourceMutationGuard
             if (!precondition.Matches(version)) throw new ResourcePreconditionFailedException();
 
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-            var rows = await db.Set<TEntity>()
+            var candidates = db.Set<TEntity>()
                 .Where(entity => EF.Property<int>(entity, "Id") == id &&
                     EF.Property<DateTime>(entity, "UpdatedAt") == version.UpdatedAt &&
-                    EF.Property<byte[]?>(entity, "RowVersion") == version.RowVersion)
-                .ExecuteUpdateAsync(setters => setters.SetProperty(
+                    EF.Property<byte[]?>(entity, "RowVersion") == version.RowVersion);
+            if (typeof(TEntity) == typeof(VirtualKeyGroup))
+            {
+                candidates = candidates.Where(entity => db.VirtualKeys.Count(key =>
+                    key.VirtualKeyGroupId == EF.Property<int>(entity, "Id")) == version.VirtualKeyCount);
+            }
+            var rows = await candidates.ExecuteUpdateAsync(setters => setters.SetProperty(
                     entity => EF.Property<DateTime>(entity, "UpdatedAt"),
                     entity => EF.Property<DateTime>(entity, "UpdatedAt")), cancellationToken);
             if (rows == 0)
@@ -115,6 +144,15 @@ public static class ResourceMutationGuard
             // A scoped context may already track an older copy. Identity resolution must
             // not substitute that copy for the row whose current version we just locked.
             await db.Entry(entity).ReloadAsync(cancellationToken);
+            if (typeof(TEntity) == typeof(VirtualKeyGroup))
+            {
+                // Membership writers need not update the group row. Check again after any
+                // wait for its lock, before executing the mutation or external side effects.
+                // This evaluates If-Match; it does not lock membership for the transaction.
+                var lockedVersion = await ReadVersionAsync<TEntity>(db, id, cancellationToken);
+                if (lockedVersion is null || !precondition.Matches(lockedVersion))
+                    throw new ResourcePreconditionFailedException();
+            }
             await mutation(db, entity, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
             if (db.Entry(entity).State != EntityState.Detached)

@@ -148,7 +148,7 @@ internal static class BillingAuditPersistenceProbe
             await ExpectCancelledAsync(writer.WriteBatchAsync([cancelledRow], cancellation.Token), cancellation);
         }
         Require(fingerprint == await FingerprintAsync(source, token), "validation and precancellation write no rows");
-        await using (var held = await source.OpenConnectionAsync(token))
+        await using (await source.OpenConnectionAsync(token))
         {
             using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
             var pending = writer.WriteBatchAsync([cancelledRow], cancellation.Token);
@@ -321,7 +321,7 @@ internal static class BillingAuditPersistenceProbe
     {
         cancellation.Cancel();
         try { await write.WaitAsync(TimeSpan.FromSeconds(5)); }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
     }
 
     private static void Require(bool condition, string description)

@@ -51,6 +51,7 @@
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeFunctionFixture.cs" Link="Infrastructure/NativeFunctionFixture.cs" />
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeFunctionFixtureRedisCleanup.cs" Link="Infrastructure/NativeFunctionFixtureRedisCleanup.cs" />
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeProviderStub.cs" Link="Infrastructure/NativeProviderStub.cs" />
+    <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeFixtureDiagnostics.cs" Link="Infrastructure/NativeFixtureDiagnostics.cs" />
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeMcpProviderStub.cs" Link="Infrastructure/NativeMcpProviderStub.cs" />
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeProviderHttpRequestReader.cs" Link="Infrastructure/NativeProviderHttpRequestReader.cs" />
     <Compile Include="../ConduitLLM.GatewayNativeAotTests/NativeBenchmarkWorkloadProbe.cs" Link="Infrastructure/NativeBenchmarkWorkloadProbe.cs" />

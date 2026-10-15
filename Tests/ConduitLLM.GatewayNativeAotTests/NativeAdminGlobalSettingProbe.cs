@@ -315,9 +315,8 @@ internal static class NativeAdminGlobalSettingProbe
     {
         var rows = await ReadRowsAsync(source, names, Selection.Public, ct);
         var pages = new HashSet<(int Page, int Size)> { (1, 50) };
-        foreach (var key in new[] { names.First, names.Second })
+        foreach (var index in new[] { names.First, names.Second }.Select(key => rows.FindIndex(row => row.Key == key)))
         {
-            var index = rows.FindIndex(row => row.Key == key);
             Require(index >= 0, "owned setting is present in the independent public list");
             pages.Add((index + 1, 1));
         }

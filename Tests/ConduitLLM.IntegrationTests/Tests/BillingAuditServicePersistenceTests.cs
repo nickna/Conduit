@@ -121,10 +121,10 @@ public sealed class BillingAuditServicePersistenceTests(PostgresLockTestContaine
         var secondRow = Event("second host timer");
         await first.LogBillingEventAsync(firstRow);
         await second.LogBillingEventAsync(secondRow);
-        await first.StartAsync(database.Token);
-        await second.StartAsync(database.Token);
-        try
+        await IntegrationProofCleanup.RunAsync(async () =>
         {
+            await first.StartAsync(database.Token);
+            await second.StartAsync(database.Token);
             await Task.WhenAll(firstWriter.Committed.Task, secondWriter.Committed.Task)
                 .WaitAsync(TimeSpan.FromSeconds(20), database.Token);
             // A completed writer precedes the service's validated copyback.
@@ -138,17 +138,10 @@ public sealed class BillingAuditServicePersistenceTests(PostgresLockTestContaine
             Assert.Equal(1, secondWriter.Calls);
             Assert.Equal(0, firstProvider.Accesses);
             Assert.Equal(0, secondProvider.Accesses);
-        }
-        finally
-        {
-            // Attempt both drains independently if an assertion or timer fails.
-            var failures = new List<Exception>();
-            try { await first.StopAsync(database.Token); }
-            catch (Exception exception) { failures.Add(exception); }
-            try { await second.StopAsync(database.Token); }
-            catch (Exception exception) { failures.Add(exception); }
-            if (failures.Count > 0) throw new AggregateException("Owned billing timer services failed to drain.", failures);
-        }
+        }, () => IntegrationProofCleanup.DrainIndependentlyAsync(
+            [first.StopAsync, second.StopAsync], TimeSpan.FromSeconds(15),
+            "Owned billing timer services failed to drain."),
+            "Owned billing timer work and cleanup failed.");
     }
 
     private static BillingAuditService Create(IServiceProvider provider, IBillingAuditRuntimeWriter writer) =>

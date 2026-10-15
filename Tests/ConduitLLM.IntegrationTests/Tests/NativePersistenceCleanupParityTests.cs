@@ -31,7 +31,7 @@ public sealed class NativePersistenceCleanupParityTests(PostgresLockTestContaine
         Process? process = null;
         Task<string>? error = null;
         NpgsqlTransaction? blocker = null;
-        try
+        await IntegrationProofCleanup.RunAsync(async () =>
         {
             await ExecuteAsync(observer, $"CREATE SCHEMA \"{sentinel}\"", deadline.Token);
             process = StartProbe(failWork);
@@ -70,8 +70,7 @@ public sealed class NativePersistenceCleanupParityTests(PostgresLockTestContaine
             if (blocker is not null) { await blocker.DisposeAsync(); blocker = null; }
             (await SchemaExistsAsync(observer, schema, deadline.Token)).Should().Be(blockedDrop);
             (await SchemaExistsAsync(observer, sentinel, deadline.Token)).Should().BeTrue();
-        }
-        finally
+        }, async () =>
         {
             var cleanupFailures = new List<Exception>();
             async Task AttemptAsync(Func<Task> cleanup)
@@ -100,15 +99,15 @@ public sealed class NativePersistenceCleanupParityTests(PostgresLockTestContaine
                 await connection.OpenAsync(cleanup.Token);
                 await ExecuteAsync(connection, $"DROP SCHEMA IF EXISTS \"{sentinel}\" CASCADE", cleanup.Token);
             });
-            process?.Dispose();
+            await AttemptAsync(() => { process?.Dispose(); return Task.CompletedTask; });
             if (cleanupFailures.Count > 0) throw new AggregateException("Owned cleanup fixture cleanup failed.", cleanupFailures);
-        }
+        }, "Owned cleanup fixture work and cleanup failed.");
     }
 
     [Fact]
     public async Task CleanupOpeningCancellationIsBoundedDespiteUnlimitedDriverTimeouts()
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         TcpClient? accepted = null;
         var schema = $"{PersistenceProbeLifecycle.SchemaPrefix}{Guid.NewGuid():N}";
@@ -118,28 +117,28 @@ public sealed class NativePersistenceCleanupParityTests(PostgresLockTestContaine
             Database = "owned_fixture", Username = "fixture", Password = "opaque_cleanup_secret",
             Timeout = 0, CommandTimeout = 0, CancellationTimeout = 0, Pooling = false
         }.ConnectionString;
-        var accept = listener.AcceptTcpClientAsync();
+        using var acceptDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var accept = listener.AcceptTcpClientAsync(acceptDeadline.Token);
         var passed = false;
         using var diagnostics = new StringWriter();
         var elapsed = Stopwatch.StartNew();
         var run = PersistenceProbeLifecycle.RunAsync(schema, () => Task.CompletedTask,
             () => PersistenceProbeLifecycle.CleanupOwnedSchemaAsync(connectionString, schema, TimeSpan.FromMilliseconds(250)),
             () => passed = true, diagnostics);
-        try
+        await IntegrationProofCleanup.RunAsync(async () =>
         {
-            accepted = await accept.WaitAsync(TimeSpan.FromSeconds(5));
+            accepted = await accept;
             (await run.WaitAsync(TimeSpan.FromSeconds(5))).Should().Be(1);
             elapsed.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5));
             passed.Should().BeFalse();
             diagnostics.ToString().Should().Contain($"Cleanup failed for owned schema '{schema}'");
             diagnostics.ToString().Should().NotContain("opaque_cleanup_secret");
-        }
-        finally
+        }, async () =>
         {
             accepted?.Dispose();
             listener.Stop();
             await run.WaitAsync(TimeSpan.FromSeconds(5));
-        }
+        }, "Cleanup opening proof and loopback release failed.");
     }
 
     [Fact]
