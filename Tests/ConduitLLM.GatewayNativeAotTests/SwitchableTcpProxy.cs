@@ -113,7 +113,14 @@ internal sealed class SwitchableTcpProxy : IAsyncDisposable
             var upstream = connection.Upstream.GetStream();
             var requests = downstream.CopyToAsync(upstream, pumping.Token);
             var responses = upstream.CopyToAsync(downstream, pumping.Token);
-            await Task.WhenAny(requests, responses);
+            var completed = await Task.WhenAny(requests, responses);
+            // WhenAny does not observe a failed copy. Record that failure before
+            // our cancellation/close can make it look like expected shutdown.
+            if (completed.Exception is { } failure && !_stopping.IsCancellationRequested && !connection.IsClosed)
+            {
+                foreach (var exception in failure.InnerExceptions)
+                    RecordFailure(exception);
+            }
             pumping.Cancel();
             connection.Close();
             await Task.WhenAll(requests, responses);

@@ -214,3 +214,15 @@ functional suite ownership and all 23 formerly excluded timing methods passed.
 The integration selection passed all 78 MCP, benchmark and cleanup cases with
 zero failures or skips. The original failing test, full TRX, coverage and final
 assembly hashes remain under the follow-up evidence directory above.
+
+CodeRabbit's subsequent outside-diff review identified a distinct forwarding
+failure: `Task.WhenAny` returned a faulted copy without observing its exception,
+and the proxy's ensuing socket close caused that original error to be classified
+as expected shutdown. The proxy now records the completed task's original
+exceptions before cancellation and close, then still drains both copy tasks.
+The regression resets a live TCP peer in each direction after a bidirectional
+handshake and verifies that both `ThrowIfFaulted` and disposal retain the original
+`IOException`. Both rows failed before the repair; all 53 proxy, diagnostics and
+request-reader cases passed after it, including existing block/restore and owned
+shutdown cases. The Release native Gateway harness build also passed. This
+additional fixture change requires a new hosted native proof on its final SHA.
