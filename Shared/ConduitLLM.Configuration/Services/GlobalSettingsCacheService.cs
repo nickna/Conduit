@@ -182,7 +182,15 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (RedisException ex)
+            {
+                _logger.LogWarning(ex, "Failed to unsubscribe from global settings reloads during shutdown");
+            }
+            catch (TimeoutException ex)
+            {
+                _logger.LogWarning(ex, "Failed to unsubscribe from global settings reloads during shutdown");
+            }
+            catch (TaskCanceledException ex)
             {
                 _logger.LogWarning(ex, "Failed to unsubscribe from global settings reloads during shutdown");
             }
