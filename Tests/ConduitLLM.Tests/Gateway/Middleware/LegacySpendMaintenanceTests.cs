@@ -91,7 +91,7 @@ public sealed class LegacySpendMaintenanceTests
         else
         {
             fixture.Groups.Setup(repository => repository.GetByIdAsync(GroupId, It.IsAny<CancellationToken>()))
-                .ReturnsAsync((VirtualKeyGroup)null);
+                .ReturnsAsync(null);
             fixture.Groups.Setup(repository => repository.GetByKeyIdAsync(KeyId))
                 .ReturnsAsync(null);
         }
