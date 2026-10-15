@@ -27,6 +27,11 @@ public class RedisUrlValidatorTests
     [InlineData("synthetic-test-user:synthetic-test-password@localhost:6379")]
     [InlineData("redis://?query")]
     [InlineData("rediss://#fragment")]
+    [InlineData("redis://synthetic-test-user:synthetic-test-password%2Cssl%3Dfalse@localhost:6379")]
+    [InlineData("redis://synthetic-test-user:synthetic-test-password@localhost:6379?unknownOption=synthetic-test-password")]
+    [InlineData("redis://synthetic-test-user:synthetic-test-password@localhost:6379/1?defaultDatabase=2")]
+    [InlineData("redis://synthetic-test-user:synthetic-test-password%0A@localhost:6379")]
+    [InlineData("localhost:6379,password=synthetic-test-password,user=synthetic-test-user,unknownOption=value")]
     public void ValidateAndLog_InvalidCredentialBearingUrl_OmitsInputFromCapturedLogs(string url)
     {
         var logger = new RecordingLogger();
@@ -41,6 +46,9 @@ public class RedisUrlValidatorTests
     [Theory]
     [InlineData("redis://synthetic-test-user:synthetic-test-password@localhost:6379")]
     [InlineData("rediss://:synthetic-test-password@localhost:6380")]
+    [InlineData("redis://synthetic-test-user:synthetic-test-password@localhost:6379/2?syncTimeout=2345")]
+    [InlineData("rediss://synthetic-test-user:synthetic-test-password@[::1]:6380/3?sslHost=cache.internal")]
+    [InlineData("localhost:6379,user=synthetic-test-user,password=synthetic-test-password,ssl=true,defaultDatabase=2")]
     public void ValidateAndLog_ValidCredentialBearingUrl_OmitsInputFromCapturedLogs(string url)
     {
         var logger = new RecordingLogger();

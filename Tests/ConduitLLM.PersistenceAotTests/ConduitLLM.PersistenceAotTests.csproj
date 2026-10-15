@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <!-- Exercise the production leaf without pulling EF into the native probe. -->
+    <Compile Include="..\..\Shared\ConduitLLM.Configuration\Utilities\PostgresConnectionStringParser.cs" Link="PostgresConnectionStringParser.cs" />
     <Compile Include="..\..\Shared\ConduitLLM.Configuration\Data\SchemaVersionProbe.cs" Link="SchemaVersionProbe.cs" />
     <Compile Include="..\..\Shared\ConduitLLM.Configuration\Data\ReleaseMigrationStartupProbe.cs" Link="ReleaseMigrationStartupProbe.cs" />
     <Compile Include="..\..\Shared\ConduitLLM.Configuration\Data\WolverineStorageStartupProbe.cs" Link="WolverineStorageStartupProbe.cs" />

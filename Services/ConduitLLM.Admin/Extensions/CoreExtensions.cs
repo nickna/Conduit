@@ -38,15 +38,12 @@ namespace ConduitLLM.Admin.Extensions
             var (dbProvider, dbConnectionString) = connectionStringManager.GetProviderAndConnectionString("AdminAPI", msg => startupLogger?.LogInformation("{Message}", msg));
 
             // Log the connection pool settings for verification
-            if (dbProvider == "postgres" && dbConnectionString.Contains("MaxPoolSize"))
+            if (dbProvider == "postgres")
             {
-                var match = System.Text.RegularExpressions.Regex.Match(dbConnectionString, @"MinPoolSize=(\d+);MaxPoolSize=(\d+)");
-                if (match.Success)
-                {
-                    startupLogger?.LogInformation(
-                        "Admin API database connection pool configured — MinPoolSize: {MinPoolSize}, MaxPoolSize: {MaxPoolSize}",
-                        match.Groups[1].Value, match.Groups[2].Value);
-                }
+                var poolSettings = new NpgsqlConnectionStringBuilder(dbConnectionString);
+                startupLogger?.LogInformation(
+                    "Admin API database connection pool configured — Pooling: {Pooling}, MinPoolSize: {MinPoolSize}, MaxPoolSize: {MaxPoolSize}",
+                    poolSettings.Pooling, poolSettings.MinPoolSize, poolSettings.MaxPoolSize);
             }
 
             // Only PostgreSQL is supported

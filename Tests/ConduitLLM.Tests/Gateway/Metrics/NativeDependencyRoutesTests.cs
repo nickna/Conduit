@@ -31,6 +31,52 @@ public sealed class NativeDependencyRoutesTests
         Assert.Equal("native test", parsed.ApplicationName);
     }
 
+    [Fact]
+    public void PostgresRouteParser_UsesTheSharedKeyValueAndQuotedPasswordContract()
+    {
+        var parsed = NativeDependencyRoutes.ParseDatabase(
+            "Host=db.example;Port=5544;Database=db-name;Username=user;Password=\"p;word\";Pooling=false;Timeout=9");
+
+        Assert.Equal("db.example", parsed.Host);
+        Assert.Equal(5544, parsed.Port);
+        Assert.Equal("p;word", parsed.Password);
+        Assert.False(parsed.Pooling);
+        Assert.Equal(9, parsed.Timeout);
+    }
+
+    [Theory]
+    [InlineData("postgres://user:p%2540ss@db.example/db%252Fname")]
+    [InlineData("postgresql://user:p%2540ss@db.example/db%252Fname")]
+    public void PostgresRouteParser_DecodesEscapesOnlyOnce(string value)
+    {
+        var parsed = NativeDependencyRoutes.ParseDatabase(value);
+        Assert.Equal("p%40ss", parsed.Password);
+        Assert.Equal("db%2Fname", parsed.Database);
+    }
+
+    [Theory]
+    [InlineData("%2E", ".")]
+    [InlineData("name/../db", "name/../db")]
+    [InlineData("db%2Fpart", "db/part")]
+    [InlineData("%252E", "%2E")]
+    public void PostgresRouteRedirect_PreservesRawDatabasePathWithoutUriNormalization(string path, string database)
+    {
+        var suffix = "/" + path + "?Pooling=false&Application%20Name=native%20test";
+        var original = "postgresql://user:p%40ss@db.example:5544" + suffix;
+
+        var redirected = NativeDependencyRoutes.RedirectDatabaseUrl(original, 15105);
+        var parsed = NativeDependencyRoutes.ParseDatabase(redirected);
+
+        Assert.EndsWith(suffix, redirected);
+        Assert.StartsWith("postgresql://user:p%40ss@127.0.0.1:15105/", redirected);
+        Assert.Equal(database, parsed.Database);
+        Assert.Equal(NativeDependencyRoutes.ParseDatabase(original).Database, parsed.Database);
+        Assert.Equal("127.0.0.1", parsed.Host);
+        Assert.Equal(15105, parsed.Port);
+        Assert.Equal("p@ss", parsed.Password);
+        Assert.Equal("native test", parsed.ApplicationName);
+    }
+
     [Theory]
     [InlineData("postgresql://u:p@db.example/db?SSL%20Mode=VerifyFull")]
     [InlineData("postgresql://u:p@db.example/db?Host=other.example")]
@@ -74,6 +120,28 @@ public sealed class NativeDependencyRoutesTests
         Assert.Equal(7, redirected.ConnectRetry);
         Assert.Equal("acl", redirected.User);
         Assert.Equal("secret", redirected.Password);
+    }
+
+    [Fact]
+    public void RedisPrimaryOptions_UseTheSameSharedContractAsFallbackOptions()
+    {
+        var parsed = NativeDependencyRoutes.ParseRedis(
+            "redis.example:6380,user=acl,password=secret,ssl=true,sslHost=certificate.example,defaultDatabase=4,connectTimeout=4321", null);
+
+        Assert.Equal(("redis.example", 6380), NativeDependencyRoutes.RedisTarget(parsed));
+        Assert.Equal(4, parsed.DefaultDatabase);
+        Assert.Equal(4321, parsed.ConnectTimeout);
+        Assert.Equal("certificate.example", parsed.SslHost);
+        Assert.Equal("secret", parsed.Password);
+    }
+
+    [Fact]
+    public void RedisInvalidPrimary_DoesNotSilentlySelectTheFallback()
+    {
+        var failure = Assert.Throws<InvalidOperationException>(() => NativeDependencyRoutes.ParseRedis(
+            "redis://user:dummy%2Cssl%3Dfalse@redis.example", "other.example:6379"));
+
+        Assert.DoesNotContain("dummy", failure.ToString());
     }
 
     [Theory]

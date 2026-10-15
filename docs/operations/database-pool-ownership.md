@@ -38,6 +38,8 @@ The shared `AddDatabaseConnectionFactory` registration and public two-argument
 for callers that have not selected a host-owned source. Generic PostgreSQL URL
 pool defaults remain a minimum of 1 and maximum of 100. Admin overrides only its
 `IDatabaseConnectionFactory` registration; it does not change those generic callers.
+The [PostgreSQL configuration contract](postgresql-connection-configuration.md)
+defines accepted URI/key-value forms and how explicit settings override defaults.
 
 Advisory locks continue to use their independently owned lock pool. Long-lived
 lock sessions must not compete with routine database queries or health probes for

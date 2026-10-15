@@ -1,5 +1,6 @@
-using System.Globalization;
 using System.Net;
+
+using ConduitLLM.Configuration.Utilities;
 
 using Npgsql;
 
@@ -7,36 +8,30 @@ using StackExchange.Redis;
 
 internal static class NativeDependencyRoutes
 {
-    public static NpgsqlConnectionStringBuilder ParseDatabase(string value)
-    {
-        if (!value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
-            !value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
-            return new NpgsqlConnectionStringBuilder(value);
-        var uri = new Uri(value);
-        var userInfo = uri.UserInfo.Split(':', 2);
-        var result = new NpgsqlConnectionStringBuilder
-        {
-            Host = uri.Host,
-            Port = uri.Port > 0 ? uri.Port : 5432,
-            Database = Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')),
-            Username = Uri.UnescapeDataString(userInfo[0]),
-            Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty
-        };
-        foreach (var (key, option) in QueryOptions(uri))
-            result[key] = option;
-        return result;
-    }
+    public static NpgsqlConnectionStringBuilder ParseDatabase(string value) =>
+        PostgresConnectionStringParser.Parse(value);
 
     public static string RedirectDatabaseUrl(string value, int port)
     {
-        var uri = new Uri(value, UriKind.Absolute);
-        if (uri.Scheme is not ("postgres" or "postgresql"))
-            throw new InvalidOperationException("Native host proxy routing requires a PostgreSQL DATABASE_URL URI.");
         var target = ParseDatabase(value);
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("postgres" or "postgresql"))
+            throw new InvalidOperationException("Native host proxy routing requires a PostgreSQL DATABASE_URL URI.");
+        if (port is < 1 or > 65535)
+            throw new InvalidOperationException("The PostgreSQL proxy requires a valid TCP port.");
         ValidateDatabaseTarget(target);
         if (QueryOptions(uri).Any(IsEndpointOption))
             throw new InvalidOperationException("Host/Port query overrides can bypass the owned PostgreSQL proxy.");
-        return new UriBuilder(uri) { Host = "127.0.0.1", Port = port }.Uri.AbsoluteUri;
+
+        // UriBuilder normalizes dot segments, including escaped database names.
+        // Replace only the transport authority and preserve the supplied values.
+        var authorityStart = value.IndexOf("://", StringComparison.Ordinal) + 3;
+        var authorityEnd = value.IndexOfAny(['/', '?', '#'], authorityStart);
+        if (authorityEnd < 0) authorityEnd = value.Length;
+        var authority = value[authorityStart..authorityEnd];
+        var userInfoEnd = authority.LastIndexOf('@');
+        var userInfo = userInfoEnd >= 0 ? authority[..(userInfoEnd + 1)] : string.Empty;
+        return FormattableString.Invariant($"{uri.Scheme}://{userInfo}127.0.0.1:{port}{value[authorityEnd..]}");
     }
 
     private static bool IsEndpointOption(KeyValuePair<string, string> pair)
@@ -58,41 +53,15 @@ internal static class NativeDependencyRoutes
 
     public static ConfigurationOptions ParseRedis(string? url, string? connectionString)
     {
-        if (string.IsNullOrWhiteSpace(url))
-            return ConfigurationOptions.Parse(connectionString is { Length: > 0 } value
-                ? value : throw new InvalidOperationException("REDIS_URL or CONDUIT_REDIS_CONNECTION_STRING is required."));
-        if (!url.StartsWith("redis://", StringComparison.OrdinalIgnoreCase) &&
-            !url.StartsWith("rediss://", StringComparison.OrdinalIgnoreCase))
-            return ConfigurationOptions.Parse(url);
-        var uri = new Uri(url);
-        var result = new ConfigurationOptions
+        try
         {
-            AbortOnConnectFail = false,
-            ConnectTimeout = 10000,
-            SyncTimeout = 10000,
-            Ssl = uri.Scheme == "rediss"
-        };
-        result.EndPoints.Add(uri.Host, uri.Port > 0 ? uri.Port : 6379);
-        if (uri.UserInfo.Length > 0)
-        {
-            var userInfo = uri.UserInfo.Split(':', 2);
-            if (userInfo.Length != 2)
-                throw new InvalidOperationException("Redis URI credentials must use username:password or :password.");
-            if (userInfo[0].Length > 0) result.User = Uri.UnescapeDataString(userInfo[0]);
-            result.Password = Uri.UnescapeDataString(userInfo[1]);
-            ValidateRedisCredential(result.User);
-            ValidateRedisCredential(result.Password);
+            return RedisUrlParser.ResolveConfiguration(url, connectionString)
+                ?? throw new InvalidOperationException("REDIS_URL or CONDUIT_REDIS_CONNECTION_STRING is required.");
         }
-        var database = uri.AbsolutePath.Trim('/');
-        if (database.Length > 0)
-            result.DefaultDatabase = int.Parse(database, CultureInfo.InvariantCulture);
-        var query = QueryOptions(uri).Select(pair =>
+        catch (Exception exception) when (exception is ArgumentException or FormatException)
         {
-            ValidateRedisValue(pair.Key);
-            ValidateRedisValue(pair.Value);
-            return $"{pair.Key}={pair.Value}";
-        }).ToArray();
-        return query.Length == 0 ? result : ConfigurationOptions.Parse(result.ToString(includePassword: true) + "," + string.Join(',', query));
+            throw new InvalidOperationException("Redis dependency configuration is invalid.");
+        }
     }
 
     public static string RedirectRedis(ConfigurationOptions original, int port)
@@ -120,8 +89,8 @@ internal static class NativeDependencyRoutes
 
     private static void ValidateRedisValue(string? value)
     {
-        if (value?.Contains(',') == true)
-            throw new InvalidOperationException("Comma-containing Redis URI credentials/options cannot be represented by this proxy fixture.");
+        if (value is not null && (value.Contains(',') || value.Any(char.IsControl)))
+            throw new InvalidOperationException("Redis credentials/options cannot be represented by this proxy fixture.");
     }
 
     private static void ValidateRedisCredential(string? value)
