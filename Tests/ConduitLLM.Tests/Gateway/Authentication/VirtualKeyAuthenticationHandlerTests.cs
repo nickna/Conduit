@@ -212,6 +212,11 @@ namespace ConduitLLM.Tests.Http.Authentication
         [InlineData("/health/ready")]
         [InlineData("/health/live")]
         [InlineData("/v1/conduit/media/public")]
+        [InlineData("/health/")]
+        [InlineData("/HEALTH/READY/")]
+        [InlineData("/health/deep/path")]
+        [InlineData("/v1/conduit/media/public/")]
+        [InlineData("/V1/CONDUIT/MEDIA/PUBLIC/file")]
         public async Task HandleAuthenticateAsync_WithExcludedPaths_SkipsAuthentication(string path)
         {
             // Arrange
@@ -227,6 +232,48 @@ namespace ConduitLLM.Tests.Http.Authentication
             Assert.False(result.Principal.Identity.IsAuthenticated);
             
             _virtualKeyServiceMock.Verify(s => s.ValidateVirtualKeyForAuthenticationAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        }
+
+        [Theory]
+        [InlineData("/healthy")]
+        [InlineData("/HEALTH-attacker-controlled")]
+        [InlineData("/health.json")]
+        [InlineData("/v1/conduit/media/publicity")]
+        [InlineData("/v1/conduit/media/public-attacker")]
+        [InlineData("/v1/conduit/media/public.json")]
+        public async Task HandleAuthenticateAsync_PrefixCollisions_RequireOrdinaryVirtualKeyAuthentication(string path)
+        {
+            const string keyValue = "condt_boundary";
+            var virtualKey = CreateValidVirtualKey();
+            _httpContext.Request.Path = path;
+            _httpContext.Request.Headers.Authorization = "Bearer " + keyValue;
+            _virtualKeyServiceMock.Setup(service => service.ValidateVirtualKeyForAuthenticationAsync(keyValue, null))
+                .ReturnsAsync(VirtualKeyValidationOutcome.Success(virtualKey));
+            await InitializeHandler();
+
+            var result = await _handler.AuthenticateAsync();
+
+            Assert.True(result.Succeeded);
+            Assert.True(result.Principal.Identity.IsAuthenticated);
+            Assert.Same(virtualKey, _httpContext.Items["VirtualKeyEntity"]);
+            _virtualKeyServiceMock.Verify(service => service.ValidateVirtualKeyForAuthenticationAsync(keyValue, null), Times.Once);
+        }
+
+        [Theory]
+        [InlineData("/healthy")]
+        [InlineData("/health-attacker-controlled")]
+        [InlineData("/v1/conduit/media/publicity")]
+        [InlineData("/v1/conduit/media/public-attacker")]
+        public async Task HandleAuthenticateAsync_PrefixCollisionsWithoutCredentials_DoNotGetAnonymousSuccess(string path)
+        {
+            _httpContext.Request.Path = path;
+            await InitializeHandler();
+
+            var result = await _handler.AuthenticateAsync();
+
+            Assert.True(result.None);
+            Assert.False(result.Succeeded);
+            Assert.Null(result.Principal);
         }
 
         [Fact]

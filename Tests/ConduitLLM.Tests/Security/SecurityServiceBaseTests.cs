@@ -13,6 +13,39 @@ namespace ConduitLLM.Tests.Security;
 public sealed class SecurityServiceBaseTests
 {
     [Theory]
+    [InlineData("/api", "/api", true)]
+    [InlineData("/api", "/api/", true)]
+    [InlineData("/api", "/API/child", true)]
+    [InlineData("/api", "/api/child/grandchild", true)]
+    [InlineData("/api", "/api-attacker", false)]
+    [InlineData("/api", "/apis", false)]
+    [InlineData("/api", "/api.json", false)]
+    [InlineData("/api/", "/api", false)]
+    [InlineData("/api/", "/api/", true)]
+    [InlineData("/api/", "/API/child", true)]
+    [InlineData("/api/", "/api-attacker", false)]
+    [InlineData("/api//", "/api/child", false)]
+    [InlineData("/api//", "/api//child", true)]
+    [InlineData("/", "/", true)]
+    [InlineData("/", "/anything", true)]
+    [InlineData("/", "", false)]
+    public void PathExclusions_RequireSegmentBoundariesAndPreserveConfiguredTrailingSlashScope(
+        string excluded, string path, bool expected)
+    {
+        Assert.Equal(expected, TestSecurityService.Excludes(path, [excluded]));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("/health-attacker")]
+    [InlineData("/swagger-ui")]
+    public void BlankExclusions_DoNotAccidentallyExemptEveryRequest(string path)
+    {
+        Assert.False(TestSecurityService.Excludes(path, [null!, "", " "]));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task RecordFailedAuthAsync_ReachesBanThreshold(bool useDistributedTracking)
@@ -106,5 +139,7 @@ public sealed class SecurityServiceBaseTests
         {
             return CheckIpRateLimitAsync(ipAddress);
         }
+
+        public static bool Excludes(string path, List<string> roots) => IsPathExcluded(path, roots);
     }
 }

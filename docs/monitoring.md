@@ -32,6 +32,13 @@ in-cluster probes work with no configuration. **External** callers must present 
 endpoint's existence rather than returning a `401`. Point external uptime monitors (BetterStack,
 Pingdom, and the like) at these endpoints with the key configured.
 
+Health path checks are case-insensitive and match complete route segments.
+`/health`, `/health/`, and `/health/ready` receive the health policy; unrelated
+names such as `/healthy` and `/health-attacker-controlled` follow their normal
+endpoint authentication and security checks. Configured security exclusions use
+the same segment boundary: `/api` includes that root and slash descendants, while
+`/api/` retains its narrower slash-and-descendants scope.
+
 ## Metrics and tracing
 
 Conduit instruments requests, streaming, billing, caching, and more, and exports them via

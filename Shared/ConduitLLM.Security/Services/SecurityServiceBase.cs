@@ -210,11 +210,16 @@ namespace ConduitLLM.Security.Services
         }
 
         /// <summary>
-        /// Checks if a path is excluded from security checks
+        /// Checks route segment exclusions without matching unrelated names.
         /// </summary>
         protected static bool IsPathExcluded(string path, List<string> excludedPaths)
         {
-            return excludedPaths.Any(excluded => path.StartsWith(excluded, StringComparison.OrdinalIgnoreCase));
+            return excludedPaths.Any(excluded =>
+                !string.IsNullOrWhiteSpace(excluded) &&
+                path.StartsWith(excluded, StringComparison.OrdinalIgnoreCase) &&
+                // Keep a configured trailing slash descendants-only: '/api/'
+                // must not newly exempt the separate '/api' route.
+                (excluded.EndsWith('/') || path.Length == excluded.Length || path[excluded.Length] == '/'));
         }
 
         /// <summary>

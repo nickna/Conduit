@@ -58,14 +58,26 @@ namespace ConduitLLM.Tests.Http.Middleware
         [InlineData("/metrics")]
         [InlineData("/v1/conduit/media/public/foo")]
         [InlineData("/hubs/images")]
+        [InlineData("/health/")]
+        [InlineData("/HEALTH/READY/")]
+        [InlineData("/metrics/")]
+        [InlineData("/METRICS/details")]
+        [InlineData("/v1/conduit/media/public")]
+        [InlineData("/V1/CONDUIT/MEDIA/PUBLIC/file")]
+        [InlineData("/hubs")]
+        [InlineData("/HUBS/images/")]
         public async Task Skips_excluded_paths_without_calling_service(string path)
         {
             var ctx = NewContext(path);
+            ctx.Items["VirtualKey.KeyHash"] = "hash-abc";
+            ctx.Items["VirtualKey.RateLimitRpm"] = 10;
+            ctx.Items["VirtualKey.MaxParallelRequests"] = 4;
             await CreateMiddleware().InvokeAsync(ctx);
 
             _nextCalled.Should().BeTrue();
             _mockService.Verify(s => s.CheckRateLimitAsync(It.IsAny<string>(), It.IsAny<RequestRateLimits>(), It.IsAny<int?>(), It.IsAny<RequestRateLimits>()),
                 Times.Never);
+            _mockConcurrency.Verify(service => service.TryAcquireAsync(It.IsAny<HttpContext>()), Times.Never);
         }
 
         [Fact]
@@ -145,6 +157,15 @@ namespace ConduitLLM.Tests.Http.Middleware
         [InlineData("/v1/models")]
         [InlineData("/v1/models/")]
         [InlineData("/v1/models/example")]
+        [InlineData("/healthy")]
+        [InlineData("/HEALTH-attacker-controlled")]
+        [InlineData("/health.json")]
+        [InlineData("/metrics-admin")]
+        [InlineData("/metrics.json")]
+        [InlineData("/v1/conduit/media/publicity")]
+        [InlineData("/v1/conduit/media/public-attacker")]
+        [InlineData("/hubspot")]
+        [InlineData("/hubs-attacker-controlled")]
         public async Task Returns_429_with_Retry_After_when_service_rejects(string path)
         {
             var ctx = NewContext(path);
@@ -303,10 +324,15 @@ namespace ConduitLLM.Tests.Http.Middleware
             _mockConcurrency.Verify(s => s.ReleaseAsync(slot), Times.Once);
         }
 
-        [Fact]
-        public async Task Returns_429_with_concurrency_scope_when_the_cap_is_reached()
+        [Theory]
+        [InlineData("/v1/chat/completions")]
+        [InlineData("/healthy")]
+        [InlineData("/metrics-admin")]
+        [InlineData("/v1/conduit/media/publicity")]
+        [InlineData("/hubspot")]
+        public async Task Returns_429_with_concurrency_scope_when_the_cap_is_reached(string path)
         {
-            var ctx = NewContext();
+            var ctx = NewContext(path);
             ctx.Items["VirtualKey.KeyHash"] = "hash-abc";
             ctx.Items["VirtualKey.MaxParallelRequests"] = 4;
 
