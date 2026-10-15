@@ -18,6 +18,7 @@ namespace ConduitLLM.Core.Data
         private readonly ILogger<DatabaseConnectionFactory> _logger;
         private readonly string _providerName;
         private readonly string _connectionString;
+        private readonly NpgsqlDataSource? _dataSource;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DatabaseConnectionFactory"/> class.
@@ -40,6 +41,30 @@ namespace ConduitLLM.Core.Data
             _connectionStringManager.ValidateConnectionString(_providerName, _connectionString);
         }
 
+        private DatabaseConnectionFactory(
+            NpgsqlDataSource dataSource,
+            IConnectionStringManager connectionStringManager,
+            ILogger<DatabaseConnectionFactory> logger)
+        {
+            _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+            _connectionStringManager = connectionStringManager ?? throw new ArgumentNullException(nameof(connectionStringManager));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _providerName = DatabaseConstants.POSTGRES_PROVIDER;
+            // The host already resolved and validated its service-specific configuration.
+            // Re-resolving DATABASE_URL here would select the generic pool defaults.
+            _connectionString = dataSource.ConnectionString;
+        }
+
+        /// <summary>
+        /// Creates a factory that borrows a host-owned PostgreSQL data source.
+        /// Disposing returned connections releases leases without disposing the shared pool.
+        /// </summary>
+        public static DatabaseConnectionFactory FromDataSource(
+            NpgsqlDataSource dataSource,
+            IConnectionStringManager connectionStringManager,
+            ILogger<DatabaseConnectionFactory> logger) =>
+            new(dataSource, connectionStringManager, logger);
+
         /// <inheritdoc/>
         public string ProviderName => _providerName;
 
@@ -57,7 +82,9 @@ namespace ConduitLLM.Core.Data
                 throw new InvalidOperationException($"Only PostgreSQL is supported. Invalid provider: {_providerName}");
             }
 
-            var connection = new NpgsqlConnection(_connectionString);
+            var connection = _dataSource is null
+                ? new NpgsqlConnection(_connectionString)
+                : _dataSource.CreateConnection();
             _logger.LogDebug("Created PostgreSQL connection");
             return connection;
         }
