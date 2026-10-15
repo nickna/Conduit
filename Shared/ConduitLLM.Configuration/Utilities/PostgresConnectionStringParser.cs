@@ -110,7 +110,8 @@ public static class PostgresConnectionStringParser
         if (userInfo.Length == 2)
             result.Password = Uri.UnescapeDataString(userInfo[1]);
 
-        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        var query = uri.Query.Length > 0 ? uri.Query[1..] : string.Empty;
+        foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
         {
             var parts = pair.Split('=', 2);
             if (parts.Length != 2)

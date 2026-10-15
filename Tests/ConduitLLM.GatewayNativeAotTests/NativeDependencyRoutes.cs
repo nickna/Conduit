@@ -114,7 +114,8 @@ internal static class NativeDependencyRoutes
 
     private static IEnumerable<KeyValuePair<string, string>> QueryOptions(Uri uri)
     {
-        foreach (var parts in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+        var query = uri.Query.Length > 0 ? uri.Query[1..] : string.Empty;
+        foreach (var parts in query.Split('&', StringSplitOptions.RemoveEmptyEntries)
                      .Select(pair => pair.Split('=', 2)))
         {
             if (parts.Length != 2)

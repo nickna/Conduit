@@ -86,6 +86,15 @@ public sealed class NativeDependencyRoutesTests
         Assert.Throws<InvalidOperationException>(() => NativeDependencyRoutes.RedirectDatabaseUrl(original, 15105));
 
     [Theory]
+    [InlineData("postgres://user:password@db.example/database??Pooling=false")]
+    [InlineData("postgres://user:password@db.example/database?%3FPooling=false")]
+    public void PostgresRoute_PreservesQuestionMarksInOptionNamesForValidation(string original)
+    {
+        Assert.Throws<InvalidOperationException>(() => NativeDependencyRoutes.ParseDatabase(original));
+        Assert.Throws<InvalidOperationException>(() => NativeDependencyRoutes.RedirectDatabaseUrl(original, 15105));
+    }
+
+    [Theory]
     [InlineData("Host=first,second;Database=db;Username=u;Password=p")]
     [InlineData("Host=/tmp;Database=db;Username=u;Password=p")]
     public void PostgresProxy_RejectsNonSingleTcpTargets(string original) =>

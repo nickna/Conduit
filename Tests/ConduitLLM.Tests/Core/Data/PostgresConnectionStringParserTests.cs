@@ -221,6 +221,8 @@ public sealed class PostgresConnectionStringParserTests
     [InlineData("postgres://user:dummy-password@db.invalid/database?UnknownOption=dummy-password")]
     [InlineData("postgres://user:dummy-password@db.invalid/database?Timeout=not-a-number")]
     [InlineData("postgres://user:dummy-password@db.invalid/database?Pooling=not-a-boolean")]
+    [InlineData("postgres://user:dummy-password@db.invalid/database??Pooling=false")]
+    [InlineData("postgres://user:dummy-password@db.invalid/database?%3FPooling=false")]
     [InlineData("postgres://user:dummy-password@db.invalid/database?application_name")]
     [InlineData("postgres://user:dummy-password@db.invalid/database?Password=%GG")]
     [InlineData("postgres://user:dummy-password%2@db.invalid/database")]
