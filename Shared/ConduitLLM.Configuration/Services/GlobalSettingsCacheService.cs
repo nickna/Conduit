@@ -19,9 +19,22 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<GlobalSettingsCacheService> _logger;
     private readonly IConnectionMultiplexer? _redis;
-    private readonly ConcurrentDictionary<string, string> _cache = new();
+    private readonly TimeProvider _timeProvider;
+    private readonly CancellationTokenSource _stopping = new();
+    private readonly object _lifecycleGate = new();
     private readonly ConcurrentDictionary<string, byte> _processedReloads = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private CacheSnapshot _snapshot = CacheSnapshot.Empty;
+    private Task _recoveryTask = Task.CompletedTask;
+    private Task _subscriptionTask = Task.CompletedTask;
+    private ISubscriber? _subscriber;
+    private bool _stopRequested;
+    private bool _hasLoaded;
+
+    private sealed record CacheSnapshot(IReadOnlyDictionary<string, string> Values, DateTime LastLoadTime)
+    {
+        public static CacheSnapshot Empty { get; } = new(new Dictionary<string, string>(), DateTime.MinValue);
+    }
 
     // Setting keys
     private const string KEY_MAX_AGENTIC_ITERATIONS = "Agentic.MaxIterations";
@@ -41,16 +54,24 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
     private long _cacheHits = 0;
     private long _cacheMisses = 0;
     private long _invalidations = 0;
-    private DateTime _lastLoadTime = DateTime.MinValue;
-
     public GlobalSettingsCacheService(
         IServiceScopeFactory scopeFactory,
         ILogger<GlobalSettingsCacheService> logger,
         IConnectionMultiplexer? redis = null)
+        : this(scopeFactory, logger, redis, TimeProvider.System)
     {
-        _scopeFactory = scopeFactory;
-        _logger = logger;
+    }
+
+    internal GlobalSettingsCacheService(
+        IServiceScopeFactory scopeFactory,
+        ILogger<GlobalSettingsCacheService> logger,
+        IConnectionMultiplexer? redis,
+        TimeProvider timeProvider)
+    {
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _redis = redis;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     /// <summary>
@@ -59,27 +80,62 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
     /// </summary>
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var startup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopping.Token);
         _logger.LogInformation("GlobalSettingsCacheService starting - loading settings from database");
 
         try
         {
             if (_redis != null)
             {
-                await _redis.GetSubscriber().SubscribeAsync(
-                    RedisChannel.Literal(ReloadChannelName),
-                    (channel, value) =>
-                    {
-                        _ = channel;
-                        _ = HandleReloadBroadcastAsync(value.ToString());
-                    });
+                lock (_lifecycleGate)
+                {
+                    startup.Token.ThrowIfCancellationRequested();
+                    if (_stopRequested)
+                        throw new OperationCanceledException(_stopping.Token);
+                    _subscriber = _redis.GetSubscriber();
+                    _subscriptionTask = _subscriber.SubscribeAsync(
+                        RedisChannel.Literal(ReloadChannelName),
+                        (channel, value) =>
+                        {
+                            _ = channel;
+                            _ = HandleReloadBroadcastAsync(value.ToString());
+                        });
+                }
+                await _subscriptionTask.WaitAsync(startup.Token);
             }
-            await LoadAllSettingsAsync(cancellationToken);
-            _logger.LogInformation("GlobalSettingsCacheService started successfully - {Count} settings loaded", _cache.Count);
+        }
+        catch (OperationCanceledException) when (startup.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load global settings on startup - service will use defaults");
-            // Don't throw - allow service to start with defaults
+            _logger.LogWarning(ex, "Failed to subscribe to global settings reloads - continuing with local database loading");
+        }
+
+        try
+        {
+            await LoadAllSettingsAsync(startup.Token);
+            _logger.LogInformation("GlobalSettingsCacheService started successfully - {Count} settings loaded",
+                Volatile.Read(ref _snapshot).Values.Count);
+        }
+        catch (OperationCanceledException) when (startup.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            startup.Token.ThrowIfCancellationRequested();
+            _logger.LogError(ex, "Failed to load global settings on startup - service will use defaults while recovery retries");
+            lock (_lifecycleGate)
+            {
+                if (!_stopRequested)
+                {
+                    startup.Token.ThrowIfCancellationRequested();
+                    _recoveryTask = RecoverInitialLoadAsync();
+                }
+            }
         }
     }
 
@@ -90,11 +146,47 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("GlobalSettingsCacheService stopping");
-        if (_redis != null)
+        Task recovery;
+        Task subscription;
+        lock (_lifecycleGate)
         {
-            await _redis.GetSubscriber().UnsubscribeAsync(RedisChannel.Literal(ReloadChannelName));
+            _stopRequested = true;
+            recovery = _recoveryTask;
+            subscription = _subscriptionTask;
         }
-        _cache.Clear();
+        _stopping.Cancel();
+        await recovery.WaitAsync(cancellationToken);
+        // Every repository operation owns this lock. Drain the active operation
+        // before clearing; canceled waiters cannot enter and publish after stop.
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            Volatile.Write(ref _snapshot, CacheSnapshot.Empty);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+
+        if (_subscriber != null)
+        {
+            try
+            {
+                // A subscription canceled during startup can complete later.
+                // Await it before unsubscribing so shutdown cannot leave it behind.
+                try { await subscription.WaitAsync(cancellationToken); }
+                catch (Exception) when (!cancellationToken.IsCancellationRequested) { }
+                await _subscriber.UnsubscribeAsync(RedisChannel.Literal(ReloadChannelName)).WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to unsubscribe from global settings reloads during shutdown");
+            }
+        }
     }
 
     public async Task<int> GetMaxAgenticIterationsAsync()
@@ -183,32 +275,41 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
 
     public async Task InvalidateSettingAsync(string settingKey)
     {
-        if (string.IsNullOrWhiteSpace(settingKey))
+        if (string.IsNullOrWhiteSpace(settingKey) || Volatile.Read(ref _stopRequested))
         {
             return;
         }
 
-        await _lock.WaitAsync();
+        var entered = false;
         try
         {
-            var wasCached = _cache.TryRemove(settingKey, out var oldValue);
+            await _lock.WaitAsync(_stopping.Token);
+            entered = true;
+            var snapshot = Volatile.Read(ref _snapshot);
+            var wasCached = snapshot.Values.TryGetValue(settingKey, out var oldValue);
             Interlocked.Increment(ref _invalidations);
-            if (wasCached)
-            {
-                _logger.LogInformation("Invalidated cached setting '{Key}' (old value: '{Value}')", settingKey, oldValue);
-            }
 
             // Always reload: a newly created setting was never present in this process's cache.
             using (var scope = _scopeFactory.CreateScope())
             {
                 var repository = scope.ServiceProvider.GetRequiredService<IGlobalSettingRepository>();
-                var newSetting = await repository.GetByKeyAsync(settingKey);
+                var newSetting = await repository.GetByKeyAsync(settingKey, _stopping.Token);
+                _stopping.Token.ThrowIfCancellationRequested();
+                var updated = new Dictionary<string, string>(snapshot.Values);
+                updated.Remove(settingKey);
                 if (newSetting != null)
                 {
-                    _cache[settingKey] = newSetting.Value;
+                    updated[settingKey] = newSetting.Value;
                     _logger.LogInformation("Reloaded setting '{Key}' with new value: '{Value}'", settingKey, newSetting.Value);
                 }
+                Volatile.Write(ref _snapshot, new CacheSnapshot(updated, snapshot.LastLoadTime));
+                if (wasCached)
+                    _logger.LogInformation("Invalidated cached setting '{Key}' (old value: '{Value}')", settingKey, oldValue);
             }
+        }
+        catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
+        {
+            // Shutdown owns cancellation; no stale repository result is published.
         }
         catch (Exception ex)
         {
@@ -216,30 +317,24 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
         }
         finally
         {
-            _lock.Release();
+            if (entered)
+                _lock.Release();
         }
     }
 
     public async Task ReloadAllSettingsAsync()
     {
+        if (Volatile.Read(ref _stopRequested))
+            return;
         _logger.LogInformation("Reloading all global settings from database");
-
-        await _lock.WaitAsync();
-        try
-        {
-            _cache.Clear();
-            await LoadAllSettingsAsync(CancellationToken.None);
-            _logger.LogInformation("Reloaded {Count} settings from database", _cache.Count);
-        }
-
-        finally
-        {
-            _lock.Release();
-        }
+        await LoadAllSettingsAsync(_stopping.Token);
+        _logger.LogInformation("Reloaded {Count} settings from database", Volatile.Read(ref _snapshot).Values.Count);
     }
 
     public async Task PublishReloadAsync(string requestId)
     {
+        if (Volatile.Read(ref _stopRequested))
+            return;
         var id = string.IsNullOrWhiteSpace(requestId)
             ? Guid.NewGuid().ToString("N")
             : requestId;
@@ -259,7 +354,7 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
 
     private async Task HandleReloadBroadcastAsync(string requestId)
     {
-        if (string.IsNullOrWhiteSpace(requestId) || !_processedReloads.TryAdd(requestId, 0))
+        if (Volatile.Read(ref _stopRequested) || string.IsNullOrWhiteSpace(requestId) || !_processedReloads.TryAdd(requestId, 0))
         {
             return;
         }
@@ -267,6 +362,9 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
         try
         {
             await ReloadAllSettingsAsync();
+        }
+        catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
+        {
         }
         catch (Exception ex)
         {
@@ -278,14 +376,15 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
 
     public Task<CacheStats> GetCacheStatsAsync()
     {
+        var snapshot = Volatile.Read(ref _snapshot);
         var stats = new CacheStats
         {
-            EntryCount = _cache.Count,
+            EntryCount = snapshot.Values.Count,
             HitCount = Interlocked.Read(ref _cacheHits),
             MissCount = Interlocked.Read(ref _cacheMisses),
             InvalidationCount = Interlocked.Read(ref _invalidations),
-            LastResetTime = _lastLoadTime,
-            CachedKeys = _cache.Keys.OrderBy(key => key).ToArray()
+            LastResetTime = snapshot.LastLoadTime,
+            CachedKeys = snapshot.Values.Keys.OrderBy(key => key).ToArray()
         };
 
         return Task.FromResult(stats);
@@ -296,7 +395,7 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
     /// </summary>
     private Task<string?> GetSettingAsync(string key)
     {
-        if (_cache.TryGetValue(key, out var value))
+        if (Volatile.Read(ref _snapshot).Values.TryGetValue(key, out var value))
         {
             Interlocked.Increment(ref _cacheHits);
             return Task.FromResult<string?>(value);
@@ -309,25 +408,55 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
     /// <summary>
     /// Loads all settings from database into the cache.
     /// </summary>
-    private async Task LoadAllSettingsAsync(CancellationToken cancellationToken)
+    private async Task LoadAllSettingsAsync(CancellationToken cancellationToken, bool recoveryOnly = false)
     {
-        using (var scope = _scopeFactory.CreateScope())
+        await _lock.WaitAsync(cancellationToken);
+        try
         {
+            if (recoveryOnly && _hasLoaded)
+                return;
+            using var scope = _scopeFactory.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IGlobalSettingRepository>();
             var settings = await repository.ListAsync(cancellationToken);
-
+            var updated = new Dictionary<string, string>();
             foreach (var setting in settings)
             {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-
-                _cache.TryAdd(setting.Key, setting.Value);
+                cancellationToken.ThrowIfCancellationRequested();
+                updated.TryAdd(setting.Key, setting.Value);
             }
+            cancellationToken.ThrowIfCancellationRequested();
+            Volatile.Write(ref _snapshot, new CacheSnapshot(updated, _timeProvider.GetUtcNow().UtcDateTime));
+            _hasLoaded = true;
+            _logger.LogDebug("Loaded {Count} settings into cache", updated.Count);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
 
-            _lastLoadTime = DateTime.UtcNow;
-            _logger.LogDebug("Loaded {Count} settings into cache", _cache.Count);
+    private async Task RecoverInitialLoadAsync()
+    {
+        var delay = TimeSpan.FromSeconds(1);
+        while (!_stopping.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(delay, _timeProvider, _stopping.Token);
+                await LoadAllSettingsAsync(_stopping.Token, recoveryOnly: true);
+                _logger.LogInformation("Global settings startup recovery completed - {Count} settings loaded",
+                    Volatile.Read(ref _snapshot).Values.Count);
+                return;
+            }
+            catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Global settings startup recovery failed - retrying with bounded backoff");
+                delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 30));
+            }
         }
     }
 }
