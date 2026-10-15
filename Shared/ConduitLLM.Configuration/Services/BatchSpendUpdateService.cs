@@ -164,13 +164,18 @@ namespace ConduitLLM.Configuration.Services
         }
 
         /// <inheritdoc />
-        public void QueueFallbackUpdate(int virtualKeyId, decimal cost, DateTime? billedAtUtc = null)
+        public void QueueFallbackUpdate(int virtualKeyId, decimal cost, DateTime? billedAtUtc = null) =>
+            QueueFallbackUpdate(virtualKeyId, cost, billedAtUtc, $"fallback-spend:{Guid.NewGuid():N}");
+
+        /// <inheritdoc />
+        public void QueueFallbackUpdate(int virtualKeyId, decimal cost, DateTime? billedAtUtc, string idempotencyKey)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
             lock (_lifetimeSync)
             {
                 ThrowIfAdmissionClosed();
                 _fallbackQueue.Enqueue(new FallbackSpendUpdate(
-                    virtualKeyId, cost, GetBillingWindow(billedAtUtc), $"fallback-spend:{Guid.NewGuid():N}"));
+                    virtualKeyId, cost, GetBillingWindow(billedAtUtc), idempotencyKey));
             }
             _logger.LogWarning(
                 "Spend update for Virtual Key {VirtualKeyId} ({Cost:C}) queued to in-memory fallback. Will be flushed on next cycle.",
@@ -836,7 +841,7 @@ namespace ConduitLLM.Configuration.Services
                     -fallback.Cost,
                     $"API usage by virtual key #{fallback.VirtualKeyId} (recovered from fallback queue)",
                     "System",
-                    VirtualKeyBalanceReferenceType.System,
+                    VirtualKeyBalanceReferenceType.VirtualKey,
                     fallback.VirtualKeyId.ToString(CultureInfo.InvariantCulture),
                     IdempotencyKey: fallback.IdempotencyKey,
                     BillingWindowStartUtc: fallback.BillingWindowStartUtc), cancellationToken);
@@ -866,7 +871,7 @@ namespace ConduitLLM.Configuration.Services
                 fallback.IdempotencyKey,
                 $"API usage by virtual key #{fallback.VirtualKeyId} (recovered from fallback queue)",
                 "System",
-                ReferenceType.System,
+                ReferenceType.VirtualKey,
                 fallback.VirtualKeyId.ToString(CultureInfo.InvariantCulture),
                 fallback.BillingWindowStartUtc);
             return keyRecord.KeyHash;

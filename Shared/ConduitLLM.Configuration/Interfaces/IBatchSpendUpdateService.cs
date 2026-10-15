@@ -127,5 +127,11 @@ namespace ConduitLLM.Configuration.Interfaces
         /// Updates are drained on the next successful flush cycle.
         /// </summary>
         void QueueFallbackUpdate(int virtualKeyId, decimal cost, DateTime? billedAtUtc = null);
+
+        /// <summary>
+        /// Queues a failed direct debit with its original ledger idempotency key so
+        /// recovery cannot repeat a debit whose commit acknowledgement was lost.
+        /// </summary>
+        void QueueFallbackUpdate(int virtualKeyId, decimal cost, DateTime? billedAtUtc, string idempotencyKey);
     }
 }

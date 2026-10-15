@@ -414,7 +414,7 @@ namespace ConduitLLM.Tests.Http.Middleware
                 .Setup(x => x.QueueSpendUpdateAsync(988, 0.0001m, It.IsAny<DateTime?>()))
                 .ThrowsAsync(new InvalidOperationException("Redis unavailable"));
             Fixture.VirtualKeyService
-                .Setup(x => x.UpdateSpendAsync(988, 0.0001m, It.IsAny<DateTime?>()))
+                .Setup(x => x.UpdateSpendAsync(988, 0.0001m, It.IsAny<DateTime?>(), It.IsAny<string>()))
                 .ReturnsAsync(false);
 
             // Act
@@ -432,7 +432,7 @@ namespace ConduitLLM.Tests.Http.Middleware
             Assert.Contains(Fixture.CapturedBillingEvents,
                 e => e.EventType == BillingAuditEventType.UnexpectedError);
             Fixture.BatchSpendService.Verify(
-                x => x.QueueFallbackUpdate(988, 0.0001m, It.IsAny<DateTime?>()),
+                x => x.QueueFallbackUpdate(988, 0.0001m, It.IsAny<DateTime?>(), It.IsAny<string>()),
                 Times.Once);
         }
 
