@@ -31,7 +31,15 @@ public sealed class Issue1657ProxyFailureTests
             // The other peer stays open until the proxy observes that failure.
             resetPeer.Client.LingerState = new LingerOption(true, 0);
             resetPeer.Client.Close();
-            Assert.Equal(0, await survivingPeer.GetStream().ReadAsync(new byte[1], deadline.Token));
+            try
+            {
+                Assert.Equal(0, await survivingPeer.GetStream().ReadAsync(new byte[1], deadline.Token));
+            }
+            catch (IOException error) when (error.InnerException is SocketException)
+            {
+                // A socket reset also proves that the proxy closed this peer;
+                // cancellation and non-socket read failures remain visible.
+            }
 
             var failure = Assert.Throws<InvalidOperationException>(proxy.ThrowIfFaulted);
             var transportFailure = Assert.IsType<IOException>(failure.InnerException);
