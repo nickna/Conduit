@@ -22,8 +22,7 @@ public class RedisTestContainerFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         var hostPort = GetAvailableHostPort();
-        _redisContainer = new RedisBuilder()
-            .WithImage("redis:7.4-alpine")
+        _redisContainer = new RedisBuilder("redis:7.4-alpine")
             .WithName($"redis-signalr-test-{Guid.NewGuid():N}")
             .WithPortBinding(hostPort, 6379)
             .Build();

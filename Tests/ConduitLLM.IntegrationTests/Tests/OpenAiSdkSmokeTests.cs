@@ -45,7 +45,7 @@ public sealed class OpenAiSdkSmokeTests
     {
         var redisConnectionString = Environment.GetEnvironmentVariable("TEST_REDIS_CONNECTION");
         await using var redis = string.IsNullOrWhiteSpace(redisConnectionString)
-            ? new RedisBuilder().WithImage("redis:7.4-alpine").Build()
+            ? new RedisBuilder("redis:7.4-alpine").Build()
             : null;
         if (redis is not null)
         {

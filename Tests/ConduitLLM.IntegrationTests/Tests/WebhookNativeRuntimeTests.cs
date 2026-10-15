@@ -36,12 +36,12 @@ public sealed class WebhookNativeRuntimeTests(MediaDispatchFixture fixture, ITes
         await using var receiver = await WebhookReceiver.StartAsync(containerAccessible: true);
         // Exercise the native scheduled retry, then permanent exhaustion/replay.
         receiver.Respond = context => { context.Response.StatusCode = receiver.Posts.Count == 1 ? 503 : 400; return Task.CompletedTask; };
-        await using var redis = new RedisBuilder().WithImage("redis:7.4-alpine").Build();
+        await using var redis = new RedisBuilder("redis:7.4-alpine").Build();
         await redis.StartAsync();
         var connection = new NpgsqlConnectionStringBuilder(fixture.ConnectionString);
         var database = $"postgresql://{Uri.EscapeDataString(connection.Username!)}:{Uri.EscapeDataString(connection.Password!)}@host.docker.internal:{connection.Port}/{connection.Database}";
         const string master = "native-webhook-test-master-key-32-bytes";
-        IContainer Container(string image, string schema) => new ContainerBuilder().WithImage(image).WithPortBinding(8080, true)
+        IContainer Container(string image, string schema) => new ContainerBuilder(image).WithPortBinding(8080, true)
             .WithEnvironment("DATABASE_URL", database)
             .WithEnvironment("REDIS_URL", $"host.docker.internal:{redis.GetMappedPublicPort(6379)}")
             .WithEnvironment("CONDUIT_API_TO_API_BACKEND_AUTH_KEY", master).WithEnvironment("CONDUIT_MIGRATION_MODE", "Wait")
