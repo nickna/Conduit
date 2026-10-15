@@ -473,7 +473,18 @@ public sealed class GlobalSettingsCacheRecoveryTests
     private sealed class StagedSettings(IReadOnlyList<GlobalSetting> values, Action beforeSecond) : IReadOnlyList<GlobalSetting>
     {
         public int Count => values.Count;
-        public GlobalSetting this[int index] { get { if (index == 1) beforeSecond(); return values[index]; } }
+        public GlobalSetting this[int index]
+        {
+            get
+            {
+                if (index == 1)
+                {
+                    beforeSecond();
+                }
+
+                return values[index];
+            }
+        }
         public IEnumerator<GlobalSetting> GetEnumerator()
         {
             for (var index = 0; index < values.Count; index++) yield return this[index];
