@@ -13,6 +13,8 @@ using Microsoft.Extensions.Time.Testing;
 
 using Moq;
 
+using Npgsql;
+
 using StackExchange.Redis;
 
 namespace ConduitLLM.Tests.Configuration.Services;
@@ -36,6 +38,39 @@ public sealed class GlobalSettingsCacheRecoveryTests
         await AssertSettingsEventuallyAsync(fixture.Service, 17, false);
         Assert.Equal(2, fixture.ListCalls);
         Assert.Equal(0, fixture.KeyCalls);
+    }
+
+    [Theory]
+    [InlineData("invalid-operation")]
+    [InlineData("npgsql")]
+    [InlineData("timeout")]
+    [InlineData("redis")]
+    public async Task FailedRecoveryAttempt_AutomaticallyRetriesBackendFailuresUntilStoredValuesLoad(string kind)
+    {
+        await using var fixture = new Fixture();
+        Exception failure = kind switch
+        {
+            "npgsql" => new NpgsqlException("database unavailable during recovery"),
+            "timeout" => new TimeoutException("database recovery timed out"),
+            "redis" => new RedisConnectionException(ConnectionFailureType.UnableToConnect, "recovery dependency unavailable"),
+            _ => new InvalidOperationException("repository unavailable during recovery")
+        };
+        fixture.Load = (attempt, _) => attempt switch
+        {
+            1 => Task.FromException<IReadOnlyList<GlobalSetting>>(new InvalidOperationException("initial load unavailable")),
+            2 => Task.FromException<IReadOnlyList<GlobalSetting>>(failure),
+            _ => Task.FromResult(Settings(17, false))
+        };
+        await fixture.Service.StartAsync(CancellationToken.None);
+        fixture.Clock.Advance(await fixture.Clock.NextDelayAsync());
+        var retry = await fixture.Clock.NextDelayAsync();
+        Assert.Equal(TimeSpan.FromSeconds(2), retry);
+        Assert.Equal(0, (await fixture.Service.GetCacheStatsAsync()).EntryCount);
+
+        fixture.Clock.Advance(retry);
+
+        await AssertSettingsEventuallyAsync(fixture.Service, 17, false);
+        Assert.Equal(3, fixture.ListCalls);
     }
 
     [Fact]
@@ -155,6 +190,61 @@ public sealed class GlobalSettingsCacheRecoveryTests
         subscriber.Verify(value => value.UnsubscribeAsync(It.IsAny<RedisChannel>(),
             It.IsAny<Action<RedisChannel, RedisValue>>(), It.IsAny<CommandFlags>()), Times.Once);
         Assert.Equal(0, fixture.ListCalls);
+        Assert.Equal(0, (await fixture.Service.GetCacheStatsAsync()).EntryCount);
+    }
+
+    [Theory]
+    [InlineData("invalid-operation")]
+    [InlineData("object-disposed")]
+    [InlineData("operation-cancelled")]
+    public async Task Stop_NonRedisUnsubscribeFailuresRemainBestEffort(string kind)
+    {
+        Exception failure = kind switch
+        {
+            "object-disposed" => new ObjectDisposedException("subscriber"),
+            "operation-cancelled" => new OperationCanceledException("subscriber cancelled independently"),
+            _ => new InvalidOperationException("subscriber cleanup failed")
+        };
+        var redis = new Mock<IConnectionMultiplexer>();
+        var subscriber = new Mock<ISubscriber>();
+        redis.Setup(value => value.GetSubscriber(It.IsAny<object>())).Returns(subscriber.Object);
+        subscriber.Setup(value => value.UnsubscribeAsync(It.IsAny<RedisChannel>(),
+                It.IsAny<Action<RedisChannel, RedisValue>>(), It.IsAny<CommandFlags>()))
+            .ThrowsAsync(failure);
+        await using var fixture = new Fixture(redis.Object);
+        await fixture.Service.StartAsync(CancellationToken.None);
+        Assert.Equal(17, await fixture.Service.GetMaxAgenticIterationsAsync());
+
+        await fixture.Service.StopAsync(CancellationToken.None);
+
+        Assert.Equal(0, (await fixture.Service.GetCacheStatsAsync()).EntryCount);
+        subscriber.Verify(value => value.UnsubscribeAsync(It.IsAny<RedisChannel>(),
+            It.IsAny<Action<RedisChannel, RedisValue>>(), It.IsAny<CommandFlags>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Stop_CallerCancellationWhileUnsubscribingStillPropagates()
+    {
+        var redis = new Mock<IConnectionMultiplexer>();
+        var subscriber = new Mock<ISubscriber>();
+        var entered = Signal();
+        var unsubscribed = Signal();
+        redis.Setup(value => value.GetSubscriber(It.IsAny<object>())).Returns(subscriber.Object);
+        subscriber.Setup(value => value.UnsubscribeAsync(It.IsAny<RedisChannel>(),
+                It.IsAny<Action<RedisChannel, RedisValue>>(), It.IsAny<CommandFlags>()))
+            .Returns(() => { entered.TrySetResult(); return unsubscribed.Task; });
+        await using var fixture = new Fixture(redis.Object);
+        await fixture.Service.StartAsync(CancellationToken.None);
+        using var cancellation = new CancellationTokenSource();
+        var stopping = fixture.Service.StopAsync(cancellation.Token);
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stopping);
+        }
+        finally { unsubscribed.TrySetResult(); }
+
         Assert.Equal(0, (await fixture.Service.GetCacheStatsAsync()).EntryCount);
     }
 

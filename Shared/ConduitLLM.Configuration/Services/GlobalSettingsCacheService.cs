@@ -185,15 +185,9 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
             {
                 throw;
             }
-            catch (RedisException ex)
-            {
-                _logger.LogWarning(ex, "Failed to unsubscribe from global settings reloads during shutdown");
-            }
-            catch (TimeoutException ex)
-            {
-                _logger.LogWarning(ex, "Failed to unsubscribe from global settings reloads during shutdown");
-            }
-            catch (TaskCanceledException ex)
+            // Cleanup is best effort even when a subscriber fails with a non-Redis
+            // exception. The caller's shutdown cancellation is preserved above.
+            catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to unsubscribe from global settings reloads during shutdown");
             }
@@ -466,12 +460,9 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
             {
                 return;
             }
-            catch (RedisException ex)
-            {
-                _logger.LogWarning(ex, "Global settings startup recovery failed - retrying with bounded backoff");
-                delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 30));
-            }
-            catch (TimeoutException ex)
+            // This hosted boundary is backend-neutral: repository and snapshot
+            // failures must keep recovery alive regardless of the provider type.
+            catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Global settings startup recovery failed - retrying with bounded backoff");
                 delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 30));
