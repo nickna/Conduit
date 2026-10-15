@@ -157,7 +157,8 @@ public sealed class WebhookDeliveryHubDispatchSecurityTests
         Assert.Equal(new[] { OwnerAUrl, SharedUrl }.Order(StringComparer.Ordinal),
             (await host.WebhookTracker.GetConnectionWebhooksAsync(ownerA.ConnectionId!)).Order(StringComparer.Ordinal));
 
-        await GatewaySignalRDispatchHost.InvokeAsync(ownerA, "UnsubscribeFromWebhooks", new[] { SharedUrl });
+        await GatewaySignalRDispatchHost.InvokeAsync(ownerA, "UnsubscribeFromWebhooks",
+            new object[] { new[] { SharedUrl } });
         Assert.Equal(1, await host.WebhookTracker.GetWebhookConnectionCountAsync(SharedUrl));
         Assert.Equal(OwnerAUrl, Assert.Single(await host.WebhookTracker.GetConnectionWebhooksAsync(ownerA.ConnectionId!)));
         Assert.Contains(ownerBConnectionId, await host.WebhookTracker.GetWebhookConnectionsAsync(SharedUrl));
@@ -183,8 +184,9 @@ public sealed class WebhookDeliveryHubDispatchSecurityTests
         AssertNotifications(eventsA.Messages, OwnerAUrl, "retained-task-a", retryA);
     }
 
+    // The hub takes one array argument, so wrap it in the invocation argument list.
     private static Task SubscribeAsync(HubConnection connection, params string[] urls) =>
-        GatewaySignalRDispatchHost.InvokeAsync(connection, "SubscribeToWebhooks", urls);
+        GatewaySignalRDispatchHost.InvokeAsync(connection, "SubscribeToWebhooks", new object[] { urls });
 
     private static async Task<DateTime> SendNotificationsAsync(WebhookDeliveryNotificationService broadcaster,
         int owner, string url, string taskId)
