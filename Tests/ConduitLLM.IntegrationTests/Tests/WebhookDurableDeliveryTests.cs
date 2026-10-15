@@ -101,7 +101,7 @@ public sealed class WebhookDurableDeliveryTests(MediaDispatchFixture fixture)
     public async Task TwoWorkers_DuplicateEventsAndReportingFailure_ProduceOnePost()
     {
         await fixture.ResetAsync();
-        fixture.WebhookNotifications.Setup(n => n.NotifyDeliverySuccessAsync(It.IsAny<string>(), It.IsAny<string>(),
+        fixture.WebhookNotifications.Setup(n => n.NotifyDeliverySuccessAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<int>(), It.IsAny<long>(), It.IsAny<int>())).ThrowsAsync(new IOException("SignalR unavailable"));
         await using var receiver = await WebhookReceiver.StartAsync();
         receiver.Respond = async context => { await Task.Delay(300); context.Response.StatusCode = 204; };

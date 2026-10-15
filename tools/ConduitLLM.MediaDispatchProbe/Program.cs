@@ -163,11 +163,11 @@ internal sealed class PausedDeliveryStore(WebhookDeliveryStore inner, string? pa
 
 internal sealed class ProbeNotifications : IWebhookDeliveryNotificationService
 {
-    public Task NotifyDeliveryAttemptAsync(string url, string task, string type, string evt, int attempt) => Task.CompletedTask;
-    public Task NotifyDeliverySuccessAsync(string url, string task, int status, long elapsed, int attempts) => Task.CompletedTask;
-    public Task NotifyDeliveryFailureAsync(string url, string task, string error, int? status, int attempt, bool permanent) => Task.CompletedTask;
-    public Task NotifyRetryScheduledAsync(string url, string task, DateTime due, int attempt, int max) => Task.CompletedTask;
-    public Task NotifyCircuitBreakerStateChangeAsync(string url, string state, string previous, string reason, int failures) => Task.CompletedTask;
+    public Task NotifyDeliveryAttemptAsync(int virtualKeyId, string url, string task, string type, string evt, int attempt) => Task.CompletedTask;
+    public Task NotifyDeliverySuccessAsync(int virtualKeyId, string url, string task, int status, long elapsed, int attempts) => Task.CompletedTask;
+    public Task NotifyDeliveryFailureAsync(int virtualKeyId, string url, string task, string error, int? status, int attempt, bool permanent) => Task.CompletedTask;
+    public Task NotifyRetryScheduledAsync(int virtualKeyId, string url, string task, DateTime due, int attempt, int max) => Task.CompletedTask;
+    public Task NotifyCircuitBreakerStateChangeAsync(int virtualKeyId, string url, string state, string previous, string reason, int failures) => Task.CompletedTask;
     public Task<ConduitLLM.Configuration.DTOs.SignalR.WebhookStatistics> GetStatisticsAsync(string period = "last_hour") =>
         Task.FromResult(new ConduitLLM.Configuration.DTOs.SignalR.WebhookStatistics());
 }

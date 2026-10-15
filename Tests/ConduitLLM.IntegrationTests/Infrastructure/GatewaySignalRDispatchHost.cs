@@ -5,6 +5,7 @@ using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Authentication;
 using ConduitLLM.Gateway.Hubs;
 using ConduitLLM.Gateway.Models;
@@ -47,6 +48,7 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
     public const string EphemeralTokenB = "ek_dispatch-owner-b";
     public const string ExpiredEphemeralToken = "ek_dispatch-expired";
     public const string PublicVideoPath = "/hubs/public/video-generation";
+    public const string WebhookPath = "/hubs/webhooks";
     private const string BarrierEvent = "DispatchTestBarrier";
     private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(15);
 
@@ -60,6 +62,7 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
     public ConcurrentDictionary<string, EphemeralKeyData> EphemeralTokens { get; } = new();
     public ConcurrentDictionary<string, AsyncTaskStatus> Tasks { get; } = new();
     public IServiceProvider Services => _app!.Services;
+    public IWebhookConnectionTracker WebhookTracker => Services.GetRequiredService<IWebhookConnectionTracker>();
 
     public GatewaySignalRDispatchHost()
     {
@@ -105,6 +108,7 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
         builder.Services.AddSingleton(RuntimeKeys.Object);
         builder.Services.AddSingleton(TaskService.Object);
         builder.Services.AddSingleton(EphemeralKeys.Object);
+        builder.Services.AddSingleton<IWebhookConnectionTracker, InMemoryWebhookConnectionTracker>();
         builder.Services.Configure<GatewaySecurityOptions>(_ => { });
         builder.Services.AddAuthentication("VirtualKey")
             .AddScheme<AuthenticationSchemeOptions, VirtualKeyAuthenticationHandler>("VirtualKey", _ => { });
@@ -126,6 +130,7 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
         _app.UseAuthorization();
         _app.MapHub<TaskHub>("/hubs/tasks");
         _app.MapHub<PublicVideoGenerationHub>(PublicVideoPath);
+        _app.MapHub<WebhookDeliveryHub>(WebhookPath);
         configureEndpoints?.Invoke(_app);
         await _app.StartAsync().WaitAsync(Deadline);
         _address = Services.GetRequiredService<IServer>().Features
@@ -157,6 +162,8 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
     public ITaskHub CreateTaskBroadcaster() => ActivatorUtilities.CreateInstance<TaskHub>(Services);
     public VideoGenerationNotificationService CreateVideoBroadcaster() =>
         ActivatorUtilities.CreateInstance<VideoGenerationNotificationService>(Services);
+    public WebhookDeliveryNotificationService CreateWebhookBroadcaster() =>
+        ActivatorUtilities.CreateInstance<WebhookDeliveryNotificationService>(Services);
 
     public static async Task InvokeAsync(HubConnection connection, string method, params object?[] arguments)
     {

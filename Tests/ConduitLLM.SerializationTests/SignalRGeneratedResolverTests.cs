@@ -116,13 +116,16 @@ public sealed class SignalRGeneratedResolverTests
     }
 
     [Fact]
-    public void WebhookDeliveryDto_BindsCaseInsensitivelyAndPreservesEveryField()
+    public void WebhookDeliveryAttempt_ServerNotificationPreservesEveryFieldWithoutReflection()
     {
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         var protocol = CreateProtocol(SignalRTestOptions.Create());
-        var invocation = Parse(protocol,
-            "{\"type\":1,\"target\":\"BroadcastDeliveryAttempt\",\"arguments\":[\"https://native.invalid/hook\",{\"WEBHOOKID\":\"native-webhook\",\"DELIVERYID\":\"native-delivery\",\"URL\":\"https://native.invalid/hook\",\"EVENTTYPE\":\"fixture\",\"ATTEMPTNUMBER\":0,\"TIMESTAMP\":\"2026-10-10T01:02:03Z\",\"TASKID\":\"task\",\"TASKTYPE\":\"native-probe\"}]}\u001e",
-            typeof(string), typeof(WebhookDeliveryAttempt));
-        var attempt = Assert.IsType<WebhookDeliveryAttempt>(invocation.Arguments[1]);
+        var attempt = new WebhookDeliveryAttempt
+        {
+            WebhookId = "native-webhook", DeliveryId = "native-delivery", Url = "https://native.invalid/hook",
+            EventType = "fixture", AttemptNumber = 0, Timestamp = new DateTime(2026, 10, 10, 1, 2, 3, DateTimeKind.Utc),
+            TaskId = "task", TaskType = "native-probe"
+        };
         using var document = JsonDocument.Parse(Write(protocol, "DeliveryAttempted", attempt).AsMemory()[..^1]);
         var payload = document.RootElement.GetProperty("arguments")[0];
         Assert.Equal(new[] { "attemptNumber", "deliveryId", "eventType", "taskId", "taskType", "timestamp", "url", "webhookId" },
@@ -135,6 +138,105 @@ public sealed class SignalRGeneratedResolverTests
         Assert.Equal(new DateTime(2026, 10, 10, 1, 2, 3, DateTimeKind.Utc), payload.GetProperty("timestamp").GetDateTime());
         Assert.Equal("task", payload.GetProperty("taskId").GetString());
         Assert.Equal("native-probe", payload.GetProperty("taskType").GetString());
+    }
+
+    [Theory]
+    [InlineData("DeliverySucceeded")]
+    [InlineData("DeliveryFailed")]
+    [InlineData("RetryScheduled")]
+    [InlineData("CircuitBreakerStateChanged")]
+    public void WebhookServerNotifications_UseGeneratedMetadataAndPreserveEveryField(string target)
+    {
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
+        var protocol = CreateProtocol(SignalRTestOptions.Create());
+        var timestamp = new DateTime(2026, 10, 10, 1, 2, 3, DateTimeKind.Utc);
+        object notification = target switch
+        {
+            "DeliverySucceeded" => new WebhookDeliverySuccess
+            {
+                WebhookId = "native-webhook", DeliveryId = "native-delivery", Url = "https://native.invalid/hook",
+                EventType = "fixture", StatusCode = 200, ResponseTimeMs = 0.125, AttemptCount = 0,
+                Timestamp = timestamp, TaskId = "task", TotalAttempts = 0
+            },
+            "DeliveryFailed" => new WebhookDeliveryFailure
+            {
+                WebhookId = "native-webhook", DeliveryId = "native-delivery", Url = "https://native.invalid/hook",
+                EventType = "fixture", Error = "", StatusCode = null, AttemptCount = 0, IsFinal = false,
+                Timestamp = timestamp, TaskId = "task", ErrorMessage = "fixture failure", AttemptNumber = 0,
+                IsPermanentFailure = false
+            },
+            "RetryScheduled" => new WebhookRetryInfo
+            {
+                WebhookId = "native-webhook", DeliveryId = "native-delivery", Url = "https://native.invalid/hook",
+                EventType = "fixture", NextAttemptNumber = 0, ScheduledAt = timestamp, DelaySeconds = 0,
+                Reason = "fixture retry"
+            },
+            "CircuitBreakerStateChanged" => new WebhookCircuitBreakerState
+            {
+                Url = "https://native.invalid/hook", PreviousState = "closed", CurrentState = "open",
+                Reason = "fixture failure", FailureCount = 0, SuccessCount = 0, NextTestAt = null,
+                Timestamp = timestamp
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(target))
+        };
+        using var document = JsonDocument.Parse(Write(protocol, target, notification).AsMemory()[..^1]);
+        Assert.Equal(target, document.RootElement.GetProperty("target").GetString());
+        var payload = Assert.Single(document.RootElement.GetProperty("arguments").EnumerateArray());
+        Assert.Equal("https://native.invalid/hook", payload.GetProperty("url").GetString());
+        switch (target)
+        {
+            case "DeliverySucceeded":
+                Assert.Equal(new[] { "attemptCount", "deliveryId", "eventType", "responseTimeMs", "statusCode", "taskId", "timestamp", "totalAttempts", "url", "webhookId" },
+                    payload.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+                Assert.Equal("native-webhook", payload.GetProperty("webhookId").GetString());
+                Assert.Equal("native-delivery", payload.GetProperty("deliveryId").GetString());
+                Assert.Equal("fixture", payload.GetProperty("eventType").GetString());
+                Assert.Equal(200, payload.GetProperty("statusCode").GetInt32());
+                Assert.Equal(0.125, payload.GetProperty("responseTimeMs").GetDouble());
+                Assert.Equal(0, payload.GetProperty("attemptCount").GetInt32());
+                Assert.Equal(0, payload.GetProperty("totalAttempts").GetInt32());
+                Assert.Equal("task", payload.GetProperty("taskId").GetString());
+                Assert.Equal(timestamp, payload.GetProperty("timestamp").GetDateTime());
+                break;
+            case "DeliveryFailed":
+                Assert.Equal(new[] { "attemptCount", "attemptNumber", "deliveryId", "error", "errorMessage", "eventType", "isFinal", "isPermanentFailure", "statusCode", "taskId", "timestamp", "url", "webhookId" },
+                    payload.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+                Assert.Equal("native-webhook", payload.GetProperty("webhookId").GetString());
+                Assert.Equal("native-delivery", payload.GetProperty("deliveryId").GetString());
+                Assert.Equal("fixture", payload.GetProperty("eventType").GetString());
+                Assert.Equal("", payload.GetProperty("error").GetString());
+                Assert.Equal("fixture failure", payload.GetProperty("errorMessage").GetString());
+                Assert.Equal(JsonValueKind.Null, payload.GetProperty("statusCode").ValueKind);
+                Assert.Equal(0, payload.GetProperty("attemptCount").GetInt32());
+                Assert.Equal(0, payload.GetProperty("attemptNumber").GetInt32());
+                Assert.False(payload.GetProperty("isFinal").GetBoolean());
+                Assert.False(payload.GetProperty("isPermanentFailure").GetBoolean());
+                Assert.Equal("task", payload.GetProperty("taskId").GetString());
+                Assert.Equal(timestamp, payload.GetProperty("timestamp").GetDateTime());
+                break;
+            case "RetryScheduled":
+                Assert.Equal(new[] { "delaySeconds", "deliveryId", "eventType", "nextAttemptNumber", "reason", "scheduledAt", "url", "webhookId" },
+                    payload.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+                Assert.Equal("native-webhook", payload.GetProperty("webhookId").GetString());
+                Assert.Equal("native-delivery", payload.GetProperty("deliveryId").GetString());
+                Assert.Equal("fixture", payload.GetProperty("eventType").GetString());
+                Assert.Equal(0, payload.GetProperty("nextAttemptNumber").GetInt32());
+                Assert.Equal(0, payload.GetProperty("delaySeconds").GetDouble());
+                Assert.Equal("fixture retry", payload.GetProperty("reason").GetString());
+                Assert.Equal(timestamp, payload.GetProperty("scheduledAt").GetDateTime());
+                break;
+            default:
+                Assert.Equal(new[] { "currentState", "failureCount", "nextTestAt", "previousState", "reason", "successCount", "timestamp", "url" },
+                    payload.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+                Assert.Equal("open", payload.GetProperty("currentState").GetString());
+                Assert.Equal("closed", payload.GetProperty("previousState").GetString());
+                Assert.Equal("fixture failure", payload.GetProperty("reason").GetString());
+                Assert.Equal(0, payload.GetProperty("failureCount").GetInt32());
+                Assert.Equal(0, payload.GetProperty("successCount").GetInt32());
+                Assert.Equal(JsonValueKind.Null, payload.GetProperty("nextTestAt").ValueKind);
+                Assert.Equal(timestamp, payload.GetProperty("timestamp").GetDateTime());
+                break;
+        }
     }
 
     [Fact]

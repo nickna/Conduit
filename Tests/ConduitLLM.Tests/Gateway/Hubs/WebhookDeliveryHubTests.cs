@@ -1,7 +1,6 @@
 using ConduitLLM.Core.Constants;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Hubs;
-using ConduitLLM.Gateway.Metrics;
 
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -21,14 +20,7 @@ public sealed class WebhookDeliveryHubTests : HubTestBase
     [Fact]
     public async Task UnsubscribeFromWebhooks_RemovesTrackerEntriesAndSignalRGroups()
     {
-        var hub = new WebhookDeliveryHub(
-            (SignalRMetrics)RealMetrics,
-            Mock.Of<ILogger<WebhookDeliveryHub>>(),
-            MockServiceProvider.Object,
-            _tracker.Object);
-        var context = CreateHubCallerContext();
-        typeof(Hub).GetProperty("Context")?.SetValue(hub, context.Object);
-        typeof(Hub).GetProperty("Groups")?.SetValue(hub, MockGroups.Object);
+        var hub = CreateHub();
         var urls = new[] { "https://one.example/webhook", "https://two.example/webhook" };
 
         await hub.UnsubscribeFromWebhooks(urls);
@@ -38,7 +30,54 @@ public sealed class WebhookDeliveryHubTests : HubTestBase
             It.Is<IEnumerable<string>>(items => items.SequenceEqual(urls))), Times.Once);
         foreach (var url in urls)
         {
-            VerifyRemovedFromGroup(SignalRConstants.Groups.Webhook(url));
+            VerifyRemovedFromGroup(SignalRConstants.Groups.Webhook(DefaultVirtualKeyId, url));
         }
+    }
+
+    [Theory]
+    [InlineData(123)]
+    [InlineData(456)]
+    public async Task SubscribeToWebhooks_UsesOnlyAuthenticatedOwnerGroupsAndTracksUrls(int virtualKeyId)
+    {
+        var hub = CreateHub(virtualKeyId);
+        var urls = new[] { "https://shared.example/webhook", "https://foreign.example/webhook" };
+
+        await hub.SubscribeToWebhooks(urls);
+
+        _tracker.Verify(service => service.AddWebhooksToConnectionAsync(DefaultConnectionId,
+            It.Is<IEnumerable<string>>(items => items.SequenceEqual(urls))), Times.Once);
+        foreach (var url in urls)
+            VerifyAddedToGroup(SignalRConstants.Groups.Webhook(virtualKeyId, url));
+        Assert.Equal(urls.Length, MockGroups.Invocations.Count);
+        MockAuthService.Verify(service => service.IsAdminAsync(It.IsAny<HubCallerContext>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task MissingOrNonpositiveOwner_CannotMutateSubscriptions(int? virtualKeyId)
+    {
+        var hub = CreateHub(virtualKeyId);
+        var urls = new[] { "https://shared.example/webhook" };
+
+        await Assert.ThrowsAsync<HubException>(() => hub.SubscribeToWebhooks(urls));
+        await Assert.ThrowsAsync<HubException>(() => hub.UnsubscribeFromWebhooks(urls));
+
+        _tracker.VerifyNoOtherCalls();
+        Assert.Empty(MockGroups.Invocations);
+    }
+
+    private WebhookDeliveryHub CreateHub(int? virtualKeyId = DefaultVirtualKeyId)
+    {
+        MockAuthService.Setup(service => service.GetVirtualKeyId(It.IsAny<HubCallerContext>()))
+            .Returns(virtualKeyId);
+        return new WebhookDeliveryHub(
+            Mock.Of<ILogger<WebhookDeliveryHub>>(), MockServiceProvider.Object, _tracker.Object)
+        {
+            Context = CreateHubCallerContext(virtualKeyId).Object,
+            Groups = MockGroups.Object,
+            Clients = MockClients.Object
+        };
     }
 }

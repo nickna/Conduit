@@ -1533,21 +1533,37 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         {
             const string webhookArguments = """[["https://native.invalid/hook"]]""";
             await webhooks.InvokeAsync("SubscribeToWebhooks", webhookArguments, timeout.Token);
-            await webhooks.InvokeAsync("BroadcastDeliveryAttempt",
-                $$"""["https://native.invalid/hook",{"WEBHOOKID":"native-webhook","DELIVERYID":"native-delivery","URL":"https://native.invalid/hook","EVENTTYPE":"fixture","ATTEMPTNUMBER":0,"TIMESTAMP":"2026-10-10T01:02:03Z","TASKID":"{{NativeParityFixture.TaskId}}","TASKTYPE":"native-probe"}]""",
-                timeout.Token);
-            var attempt = GetHubArguments(await webhooks.WaitForTargetAsync("DeliveryAttempted", timeout.Token), "DeliveryAttempted", 1)[0];
-            AssertJsonFields(attempt, "webhookId", "deliveryId", "url", "eventType", "attemptNumber", "timestamp", "taskId", "taskType");
-            Equal("native-webhook", attempt.GetProperty("webhookId").GetString()!, "native webhook DTO case-insensitive binding");
-            Equal("native-delivery", attempt.GetProperty("deliveryId").GetString()!, "native webhook delivery ID");
-            Equal("https://native.invalid/hook", attempt.GetProperty("url").GetString()!, "native webhook URL");
-            Equal("fixture", attempt.GetProperty("eventType").GetString()!, "native webhook event type");
-            True(attempt.GetProperty("attemptNumber").GetInt32() == 0, "native webhook DTO retains zero attempt count");
-            True(attempt.GetProperty("timestamp").GetDateTime() == new DateTime(2026, 10, 10, 1, 2, 3, DateTimeKind.Utc),
-                "native webhook DTO retains supplied UTC timestamp");
-            Equal(NativeParityFixture.TaskId, attempt.GetProperty("taskId").GetString()!, "native webhook task ID");
-            Equal("native-probe", attempt.GetProperty("taskType").GetString()!, "native webhook task type");
+            (string Target, string Arguments)[] serverOnlyInvocations =
+            [
+                ("BroadcastDeliveryAttempt", $$"""["https://native.invalid/hook",{"webhookId":"native-webhook","deliveryId":"native-delivery","url":"https://native.invalid/hook","eventType":"fixture","attemptNumber":0,"timestamp":"2026-10-10T01:02:03Z","taskId":"{{NativeParityFixture.TaskId}}","taskType":"native-probe"}]"""),
+                ("BroadcastDeliverySuccess", $$"""["https://native.invalid/hook",{"webhookId":"native-webhook","url":"https://native.invalid/hook","statusCode":200,"responseTimeMs":0,"totalAttempts":1,"taskId":"{{NativeParityFixture.TaskId}}"}]"""),
+                ("BroadcastDeliveryFailure", $$"""["https://native.invalid/hook",{"webhookId":"native-webhook","url":"https://native.invalid/hook","errorMessage":"forged failure","statusCode":null,"attemptNumber":0,"isPermanentFailure":false,"taskId":"{{NativeParityFixture.TaskId}}"}]"""),
+                ("BroadcastRetryScheduled", """["https://native.invalid/hook",{"webhookId":"native-webhook","url":"https://native.invalid/hook","scheduledAt":"2026-10-10T01:02:03Z","nextAttemptNumber":1,"delaySeconds":0,"reason":"forged retry"}]"""),
+            ];
+            foreach (var (target, arguments) in serverOnlyInvocations)
+            {
+                var rejected = false;
+                try
+                {
+                    await webhooks.InvokeAsync(target, arguments, timeout.Token);
+                }
+                catch (InvalidOperationException exception) when (
+                    exception.Message == $"SignalR invocation {target} failed: Failed to invoke '{target}' due to an error on the server. HubException: Method does not exist.")
+                {
+                    rejected = true;
+                }
+                True(rejected, $"native WebhookDeliveryHub rejects client invocation of server-only {target}");
+            }
+            await webhooks.InvokeAsync("RequestStatistics", "[]", timeout.Token);
+            var connectionId = GetHubArguments(await webhooks.WaitForTargetAsync("StatisticsRequested", timeout.Token),
+                "StatisticsRequested", 1)[0].GetString()!;
+            await using var webhookRedis = await ConnectionMultiplexer.ConnectAsync(settings.RedisConnectionString);
+            var connectionWebhooks = $"webhook:connections:{connectionId}:webhooks";
+            True(await webhookRedis.GetDatabase().SetContainsAsync(connectionWebhooks, "https://native.invalid/hook"),
+                "native webhook subscription retains its Redis bookkeeping after rejected broadcasts");
             await webhooks.InvokeAsync("UnsubscribeFromWebhooks", webhookArguments, timeout.Token);
+            True(!await webhookRedis.GetDatabase().SetContainsAsync(connectionWebhooks, "https://native.invalid/hook"),
+                "native webhook unsubscription removes its Redis bookkeeping");
             True(true, "authenticated WebhookDeliveryHub Redis-backed invocations");
         }
 

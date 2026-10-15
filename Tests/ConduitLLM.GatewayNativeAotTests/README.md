@@ -4,6 +4,15 @@ This BCL-based probe and its HTTP provider are published with NativeAOT by the
 Linux gate. Production credential protection is prepared separately by the
 managed `ConduitLLM.SchemaStartupFixtures` utility.
 
+The native webhook SignalR probe verifies authenticated subscription and
+unsubscription, checks their Redis connection bookkeeping, and requires all four
+server-only `Broadcast*` method names to be unavailable to clients. The
+reflection-disabled serialization suite exercises all five outgoing webhook
+notification DTOs through the real JSON hub protocol. Real two-client dispatch
+tests cover trusted server publication and owner-scoped routing. Delivery of a
+genuine server webhook notification from the published native host remains
+outside this probe's coverage.
+
 `NativeFunctionFixture` prepares a GUID-owned Exa configuration with generated
 positive IDs, a separate virtual key and group, a scoped encrypted credential,
 an IP whitelist, and an active flat execution price of `0.12500001`. It uses the
