@@ -17,7 +17,8 @@ public sealed class VirtualKeyHubFilterPublicHubTests
     private readonly Mock<IVirtualKeyRuntimeService> _virtualKeys = new();
     private readonly PublicVideoGenerationHub _hub = new(
         Mock.Of<ILogger<PublicVideoGenerationHub>>(),
-        Mock.Of<IEphemeralKeyService>());
+        Mock.Of<IEphemeralKeyService>(),
+        Mock.Of<IAsyncTaskService>());
 
     [Fact]
     public async Task OnConnectedAsync_PublicHub_DoesNotRequireConnectionVirtualKey()

@@ -7,6 +7,7 @@ using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Gateway.Authentication;
 using ConduitLLM.Gateway.Hubs;
+using ConduitLLM.Gateway.Models;
 using ConduitLLM.Gateway.Serialization;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Security.Options;
@@ -40,6 +41,12 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
     public const string TokenB = "condt-dispatch-owner-b";
     public const string TaskA = "dispatch-task-a";
     public const string TaskB = "dispatch-task-b";
+    public const string VideoTaskA = "dispatch-video-a";
+    public const string VideoTaskB = "dispatch-video-b";
+    public const string EphemeralTokenA = "ek_dispatch-owner-a";
+    public const string EphemeralTokenB = "ek_dispatch-owner-b";
+    public const string ExpiredEphemeralToken = "ek_dispatch-expired";
+    public const string PublicVideoPath = "/hubs/public/video-generation";
     private const string BarrierEvent = "DispatchTestBarrier";
     private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(15);
 
@@ -50,6 +57,7 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
     public Mock<IVirtualKeyRuntimeService> RuntimeKeys { get; } = new();
     public Mock<IAsyncTaskService> TaskService { get; } = new();
     public Mock<IEphemeralKeyService> EphemeralKeys { get; } = new();
+    public ConcurrentDictionary<string, EphemeralKeyData> EphemeralTokens { get; } = new();
     public ConcurrentDictionary<string, AsyncTaskStatus> Tasks { get; } = new();
     public IServiceProvider Services => _app!.Services;
 
@@ -72,6 +80,13 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
             .ReturnsAsync((string id, CancellationToken _) => Tasks.GetValueOrDefault(id));
         Tasks[TaskA] = CreateTask(TaskA, OwnerA);
         Tasks[TaskB] = CreateTask(TaskB, OwnerB);
+        Tasks[VideoTaskA] = CreateTask(VideoTaskA, OwnerA, "video_generation");
+        Tasks[VideoTaskB] = CreateTask(VideoTaskB, OwnerB, "video_generation");
+        EphemeralTokens[EphemeralTokenA] = new() { VirtualKeyId = OwnerA, ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10) };
+        EphemeralTokens[EphemeralTokenB] = new() { VirtualKeyId = OwnerB, ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10) };
+        EphemeralTokens[ExpiredEphemeralToken] = new() { VirtualKeyId = OwnerA, ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1) };
+        EphemeralKeys.Setup(service => service.GetKeyDataAsync(It.IsAny<string>()))
+            .ReturnsAsync((string token) => EphemeralTokens.GetValueOrDefault(token));
     }
 
     public async Task StartAsync(
@@ -110,6 +125,7 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
         _app.UseAuthentication();
         _app.UseAuthorization();
         _app.MapHub<TaskHub>("/hubs/tasks");
+        _app.MapHub<PublicVideoGenerationHub>(PublicVideoPath);
         configureEndpoints?.Invoke(_app);
         await _app.StartAsync().WaitAsync(Deadline);
         _address = Services.GetRequiredService<IServer>().Features
@@ -139,6 +155,8 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
     }
 
     public ITaskHub CreateTaskBroadcaster() => ActivatorUtilities.CreateInstance<TaskHub>(Services);
+    public VideoGenerationNotificationService CreateVideoBroadcaster() =>
+        ActivatorUtilities.CreateInstance<VideoGenerationNotificationService>(Services);
 
     public static async Task InvokeAsync(HubConnection connection, string method, params object?[] arguments)
     {
@@ -182,10 +200,10 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
         }
     }
 
-    private static AsyncTaskStatus CreateTask(string id, int owner) => new()
+    private static AsyncTaskStatus CreateTask(string id, int owner, string taskType = "image_generation") => new()
     {
         TaskId = id,
-        TaskType = "image_generation",
+        TaskType = taskType,
         State = TaskState.Processing,
         Metadata = new TaskMetadata(owner)
     };

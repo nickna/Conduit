@@ -1602,14 +1602,15 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             timeout.Token);
         await publicVideo.InvokeAsync(
             "SubscribeToTask",
-            $$"""["native-public-video-task","{{ephemeralKey}}"]""",
+            $$"""["{{NativeParityFixture.VideoNotificationTaskId}}","{{ephemeralKey}}"]""",
             timeout.Token);
-        var subscribed = await publicVideo.WaitForTargetAsync("taskSubscribed", timeout.Token);
-        True(subscribed.Contains("native-public-video-task", StringComparison.Ordinal),
-            "public JSON SignalR subscription validates its Redis ephemeral key");
+        var subscribed = GetHubArguments(await publicVideo.WaitForTargetAsync("taskSubscribed", timeout.Token),
+            "taskSubscribed", 1)[0];
+        Equal(NativeParityFixture.VideoNotificationTaskId, subscribed.GetProperty("taskId").GetString()!,
+            "public JSON SignalR subscription validates its Redis ephemeral key and persisted task ownership");
         await publicVideo.InvokeAsync(
             "UnsubscribeFromTask",
-            """["native-public-video-task"]""",
+            $$"""["{{NativeParityFixture.VideoNotificationTaskId}}"]""",
             timeout.Token);
     }
 
