@@ -140,20 +140,35 @@ assert.equal(streamedResponseText, 'ok');
 assert.equal(responseCompletedCount, 1, 'Responses stream was missing its completed event.');
 assertResponse(await responseStream.finalResponse());
 
-const embedding = await client.embeddings.create({
-  model: embeddingModel,
-  input: 'SDK smoke test',
-  encoding_format: 'float',
-});
-assert.equal(embedding.object, 'list');
-assert.equal(embedding.model, embeddingModel);
-assert.equal(embedding.data.length, 1);
-assert.equal(embedding.data[0].object, 'embedding');
-assert.equal(embedding.data[0].index, 0);
-assert.equal(embedding.data[0].embedding.length, 1);
-assert.ok(Math.abs(embedding.data[0].embedding[0] - 0.1) < 1e-6, 'Embedding vector was incorrect.');
-assert.equal(embedding.usage.prompt_tokens, 1);
-assert.equal(embedding.usage.total_tokens, 1);
+for (const encoding of [undefined, 'float', 'base64']) {
+  // Omission exercises the SDK's default base64 request and automatic float decoding.
+  // Distinct inputs keep each format's provider invocation observable even with caching.
+  const label = encoding ?? 'default';
+  const embedding = await client.embeddings.create({
+    model: embeddingModel,
+    input: `Node SDK embedding ${label}`,
+    ...(encoding === undefined ? {} : { encoding_format: encoding }),
+  });
+  assert.equal(embedding.object, 'list');
+  assert.equal(embedding.model, embeddingModel);
+  assert.equal(embedding.data.length, 1);
+  assert.equal(embedding.data[0].object, 'embedding');
+  assert.equal(embedding.data[0].index, 0);
+  assert.equal(embedding.usage.prompt_tokens, 1);
+  assert.equal(embedding.usage.total_tokens, 1);
+  const vector = embedding.data[0].embedding;
+  if (encoding === 'base64') {
+    assert.equal(typeof vector, 'string', 'Explicit base64 embedding did not remain a string.');
+    assert.equal(vector, 'zczMPQ==', 'Explicit base64 embedding was changed.');
+    const bytes = Buffer.from(vector, 'base64');
+    assert.equal(bytes.length, 4, 'Base64 embedding must contain exactly one float32.');
+    assert.ok(Math.abs(bytes.readFloatLE(0) - 0.1) < 1e-6, 'Base64 float32 embedding value was incorrect.');
+  } else {
+    assert.ok(Array.isArray(vector), `${label} embedding was not decoded to a numeric array.`);
+    assert.equal(vector.length, 1);
+    assert.ok(Math.abs(vector[0] - 0.1) < 1e-6, `${label} embedding vector was incorrect.`);
+  }
+}
 
 const image = await client.images.generate({
   model: imageModel,

@@ -54,6 +54,18 @@ public sealed class StructuredJsonSchemaTransformer : IOpenApiSchemaTransformer
             schema.Type = null;
             schema.OneOf = ChatUnionSchemas.ToolChoice().OneOf;
         }
+        else if (context.JsonTypeInfo.Type == typeof(EmbeddingValue))
+        {
+            schema.Type = null;
+            schema.Properties = null;
+            schema.Required = null;
+            schema.AdditionalProperties = null;
+            schema.OneOf =
+            [
+                ArrayOf(new OpenApiSchema { Type = JsonSchemaType.Number, Format = "float" }),
+                new OpenApiSchema { Type = JsonSchemaType.String, Format = "byte" }
+            ];
+        }
 
         if (context.JsonTypeInfo.Type == typeof(ChatCompletionRequest))
         {

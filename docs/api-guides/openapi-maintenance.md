@@ -28,6 +28,16 @@ curl 'http://localhost:5001/v1/admin/virtual-keys' \
 
 For chat or Responses streaming, set `stream` to `true` and consume `text/event-stream` rather than a single JSON response. Asynchronous image/video generation returns a task identifier; poll its status to obtain the result. Required balance and provider/model capabilities are separate from authentication.
 
+Embedding responses preserve the provider's requested encoding: `encoding_format: "float"`
+returns a numeric array, and `encoding_format: "base64"` returns a base64 string. Omitting
+the field in a raw HTTP request defaults to `float`. The official Python and Node SDKs
+can request base64 internally when their caller omits the field, then decode the response
+into numeric vectors. Explicit base64 requests retain strings. Both response forms are
+described by the Gateway contract, consistent with the
+[OpenAI embedding response](https://developers.openai.com/api/reference/resources/embeddings/methods/create).
+The pinned SDK smoke tests exercise omitted, float, and base64 encodings against the
+Gateway; provider HTTP and source-generated serialization tests cover the transport boundary.
+
 All published Admin operations require a master key, including routes whose endpoint metadata says `AllowAnonymous`: the Admin security middleware still validates the key. Gateway media GET/HEAD routes permit anonymous retrieval by storage key, but IP bans, filtering, and rate limits can still deny access.
 
 Admin endpoint and exception errors use `application/problem+json` with `AdminProblemDetails`. Security middleware uses `application/json` with a string `error` and numeric `code` for authentication/IP failures. Rate-limit errors use the OpenAI-compatible object `error` envelope. Gateway endpoint errors also use that envelope; IP security failures can use the simple string envelope, and authentication/authorization or parameter binding can return an empty body. Check status and Content-Type before parsing errors. HTTP HEAD responses have no body, including failures.

@@ -1008,7 +1008,7 @@ export interface components {
     };
     EmbeddingData: {
       object: string;
-      embedding: number[];
+      embedding: components["schemas"]["EmbeddingValue"];
       /** Format: int32 */
       index?: number;
     };
@@ -1026,6 +1026,7 @@ export interface components {
       model: string;
       usage: components["schemas"]["Usage"];
     };
+    EmbeddingValue: number[] | string;
     /** @description Optional metadata for tracking ephemeral key usage */
     EphemeralKeyMetadata: {
       /** @description IP address that requested the ephemeral key */

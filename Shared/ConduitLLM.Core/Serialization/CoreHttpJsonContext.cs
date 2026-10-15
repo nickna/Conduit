@@ -21,6 +21,7 @@ namespace ConduitLLM.Core.Serialization;
 [JsonSerializable(typeof(global::ConduitLLM.Core.Models.Audio.TextToSpeechRequest))]
 [JsonSerializable(typeof(global::ConduitLLM.Core.Models.Audio.AudioTranscriptionResponse))]
 [JsonSerializable(typeof(EmbeddingRequest))]
+[JsonSerializable(typeof(EmbeddingResponse))]
 [JsonSerializable(typeof(ImageGenerationRequest))]
 [JsonSerializable(typeof(global::ConduitLLM.Core.Models.Rerank.RerankRequest))]
 [JsonSerializable(typeof(global::ConduitLLM.Core.Models.Responses.CreateResponseRequest))]

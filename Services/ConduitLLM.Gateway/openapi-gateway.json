@@ -10274,11 +10274,7 @@
             "type": "string"
           },
           "embedding": {
-            "type": "array",
-            "items": {
-              "type": "number",
-              "format": "float"
-            }
+            "$ref": "#/components/schemas/EmbeddingValue"
           },
           "index": {
             "type": "integer",
@@ -10370,6 +10366,21 @@
             "$ref": "#/components/schemas/Usage"
           }
         }
+      },
+      "EmbeddingValue": {
+        "oneOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          {
+            "type": "string",
+            "format": "byte"
+          }
+        ]
       },
       "EphemeralKeyMetadata": {
         "type": "object",
