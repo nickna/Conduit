@@ -71,7 +71,7 @@ internal static class FunctionExecutionReaderPersistenceProbe
             await ExpectCancelledAsync(reader.GetByIdAsync(seeds[0].Id, cancelled.Token), cancelled);
             await ExpectCancelledAsync(reader.ListByVirtualKeyAsync(VirtualKeyId, cancelled.Token), cancelled);
         }
-        await using (var held = await source.OpenConnectionAsync(token))
+        await using (await source.OpenConnectionAsync(token))
         {
             foreach (var getById in new[] { true, false })
             {
@@ -88,7 +88,7 @@ internal static class FunctionExecutionReaderPersistenceProbe
                 {
                     cancelled.Cancel();
                     try { await read.WaitAsync(TimeSpan.FromSeconds(5)); }
-                    catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+                    catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
                 }
             }
         }

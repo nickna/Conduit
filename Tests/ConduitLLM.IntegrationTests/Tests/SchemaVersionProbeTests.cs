@@ -109,7 +109,10 @@ public sealed class SchemaVersionProbeTests(PostgresLockTestContainerFixture fix
             cancellation.Cancel();
             await transaction.RollbackAsync();
             try { await pending; }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                // The test owns this cancelled read; all other drain errors propagate.
+            }
         }
         Assert.True((await Probe.GetStatusAsync()).IsCurrent);
     }
@@ -135,7 +138,10 @@ public sealed class SchemaVersionProbeTests(PostgresLockTestContainerFixture fix
             // Disposing an uncommitted transaction releases the DDL lock on failures.
             await transaction.DisposeAsync();
             try { await pending; }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                // The test owns this cancelled read; all other drain errors propagate.
+            }
         }
         await CreateHistoryAsync();
         await InsertVersionAsync(ConduitSchemaVersion.Current);

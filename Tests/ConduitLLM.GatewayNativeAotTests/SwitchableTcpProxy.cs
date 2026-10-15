@@ -6,8 +6,10 @@ internal sealed class SwitchableTcpProxy : IAsyncDisposable
     private readonly TcpListener _listener;
     private readonly string _upstreamHost;
     private readonly int _upstreamPort;
-    private readonly CancellationTokenSource _stopping = new();
-    private CancellationTokenSource _acceptGeneration = new();
+    // These sources span accept/forward tasks. The terminal using scopes in
+    // DisposeCoreAsync retain ownership until its socket/task drain completes.
+    private readonly CancellationTokenSource _stopping;
+    private CancellationTokenSource _acceptGeneration;
     private readonly object _gate = new();
     private readonly HashSet<Connection> _connections = [];
     private readonly Task _accepting;
@@ -21,7 +23,17 @@ internal sealed class SwitchableTcpProxy : IAsyncDisposable
         _upstreamHost = upstreamHost;
         _upstreamPort = upstreamPort;
         _listener = new TcpListener(IPAddress.Loopback, listenPort);
-        _listener.Start();
+        _stopping = new CancellationTokenSource();
+        _acceptGeneration = new CancellationTokenSource();
+        try { _listener.Start(); }
+        catch
+        {
+            // A failed constructor has no instance available for DisposeAsync.
+            _listener.Dispose();
+            _stopping.Dispose();
+            _acceptGeneration.Dispose();
+            throw;
+        }
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
         _accepting = AcceptAsync();
     }
@@ -85,9 +97,9 @@ internal sealed class SwitchableTcpProxy : IAsyncDisposable
                 }
             }
         }
-        catch (OperationCanceledException) when (_stopping.IsCancellationRequested) { }
-        catch (SocketException) when (_stopping.IsCancellationRequested) { }
-        catch (ObjectDisposedException) when (_stopping.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (_stopping.IsCancellationRequested) { return; }
+        catch (SocketException) when (_stopping.IsCancellationRequested) { return; }
+        catch (ObjectDisposedException) when (_stopping.IsCancellationRequested) { return; }
         catch (Exception exception) { RecordFailure(exception); }
     }
 
@@ -101,16 +113,25 @@ internal sealed class SwitchableTcpProxy : IAsyncDisposable
             var upstream = connection.Upstream.GetStream();
             var requests = downstream.CopyToAsync(upstream, pumping.Token);
             var responses = upstream.CopyToAsync(downstream, pumping.Token);
-            await Task.WhenAny(requests, responses);
+            var completed = await Task.WhenAny(requests, responses);
+            // WhenAny does not observe a failed copy. Record that failure before
+            // our cancellation/close can make it look like expected shutdown.
+            if (completed.Exception is { } failure && !_stopping.IsCancellationRequested && !connection.IsClosed)
+            {
+                foreach (var exception in failure.InnerExceptions)
+                    RecordFailure(exception);
+            }
             pumping.Cancel();
             connection.Close();
             await Task.WhenAll(requests, responses);
         }
-        catch (OperationCanceledException) { }
-        catch (IOException) { }
-        catch (SocketException) { }
-        catch (ObjectDisposedException) { }
-        catch (InvalidOperationException) when (connection.IsClosed) { }
+        // Blocking, shutdown and the first completed pump close both sockets.
+        // Failures before that owned close (including upstream refusal) remain visible.
+        catch (OperationCanceledException) when (_stopping.IsCancellationRequested || connection.IsClosed) { return; }
+        catch (IOException) when (_stopping.IsCancellationRequested || connection.IsClosed) { return; }
+        catch (SocketException) when (_stopping.IsCancellationRequested || connection.IsClosed) { return; }
+        catch (ObjectDisposedException) when (_stopping.IsCancellationRequested || connection.IsClosed) { return; }
+        catch (InvalidOperationException) when (connection.IsClosed) { return; }
         catch (Exception exception) { RecordFailure(exception); }
         finally
         {
@@ -128,26 +149,24 @@ internal sealed class SwitchableTcpProxy : IAsyncDisposable
 
     private async Task DisposeCoreAsync()
     {
+        // DisposeAsync invokes this method while holding _gate. Capture the
+        // exact final generation before shutdown; SetBlocked cannot replace it
+        // after stopping is canceled. The scopes also cover shutdown failures
+        // before the first await, as well as a failed or timed-out drain.
+        using var acceptGeneration = _acceptGeneration;
+        using var stopping = _stopping;
         Task[] forwarding;
         lock (_gate)
         {
-            _stopping.Cancel();
-            _acceptGeneration.Cancel();
+            stopping.Cancel();
+            acceptGeneration.Cancel();
             _listener.Stop();
             foreach (var connection in _connections)
                 connection.Close();
             forwarding = _connections.Select(connection => connection.Completed.Task).ToArray();
         }
-        try
-        {
-            await Task.WhenAll(forwarding.Append(_accepting)).WaitAsync(TimeSpan.FromSeconds(10));
-            ThrowIfFaulted();
-        }
-        finally
-        {
-            _stopping.Dispose();
-            _acceptGeneration.Dispose();
-        }
+        await Task.WhenAll(forwarding.Append(_accepting)).WaitAsync(TimeSpan.FromSeconds(10));
+        ThrowIfFaulted();
     }
 
     public void ThrowIfFaulted()
@@ -159,7 +178,7 @@ internal sealed class SwitchableTcpProxy : IAsyncDisposable
     private void RecordFailure(Exception exception)
     {
         Interlocked.CompareExchange(ref _unexpectedFailure, exception, null);
-        Console.Error.WriteLine($"Native dependency proxy failed: {exception}");
+        Console.Error.WriteLine("Native dependency proxy failed. " + NativeFixtureDiagnostics.Describe(exception));
     }
 
     private sealed class Connection(TcpClient client)

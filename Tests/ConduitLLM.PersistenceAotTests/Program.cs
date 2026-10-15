@@ -507,7 +507,7 @@ static async Task ExerciseConnectionPoolWarmupAsync(NpgsqlDataSource dataSource)
     // The caller deliberately supplies MaxPoolSize=1. More operations than slots
     // prove each operation returns its connection, rather than retaining a lease.
     await Task.WhenAll(Enumerable.Range(0, 32).Select(_ => warmup.WarmConnectionAsync(deadline.Token)));
-    await using (var holder = await dataSource.OpenConnectionAsync(deadline.Token))
+    await using (await dataSource.OpenConnectionAsync(deadline.Token))
     {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token);
         var waiting = warmup.WarmConnectionAsync(cancellation.Token);

@@ -107,10 +107,12 @@ internal static class NativeFunctionFixtureRedisCleanup
         yield return $"vkey:{hash}";
         yield return $"ipfilter:vkey:{key}";
         foreach (var scope in new[] { $"rate:vk:{hash}", $"rate:vkg:{group}" })
-        foreach (var limit in new[] { "rpm", "rpd", "tpm", "concurrency" })
         {
-            yield return $"{scope}:{limit}";
-            yield return $"{scope}:{limit}:sum";
+            foreach (var limit in new[] { "rpm", "rpd", "tpm", "concurrency" })
+            {
+                yield return $"{scope}:{limit}";
+                yield return $"{scope}:{limit}:sum";
+            }
         }
         // StoreBackedFunctionCostService uses HybridCacheAccessor; Gateway's
         // IDistributedCache InstanceName is conduit-tasks:, not a FusionCache prefix.

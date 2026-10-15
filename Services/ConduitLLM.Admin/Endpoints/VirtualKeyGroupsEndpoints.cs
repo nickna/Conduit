@@ -118,7 +118,7 @@ namespace ConduitLLM.Admin.Endpoints
 
             var (groups, totalCount) = await _groupRepository.GetPaginatedAsync(page, pageSize, cancellationToken);
 
-            var dtos = groups.Select(VirtualKeyGroupDto.FromEntity).ToList();
+            var dtos = groups.Select(group => VirtualKeyGroupDto.FromEntity(group)).ToList();
 
             return Ok(new PagedResult<VirtualKeyGroupDto>
             {
@@ -245,12 +245,8 @@ namespace ConduitLLM.Admin.Endpoints
                         ApplyPatch(group);
                         if (changes.Count > 0) group.UpdatedAt = DateTime.UtcNow;
                         keyCount = await context.VirtualKeys.CountAsync(key => key.VirtualKeyGroupId == id, ct);
-                    }, group =>
-                    {
-                        var snapshot = VirtualKeyGroupDto.FromEntity(group);
-                        snapshot.VirtualKeyCount = keyCount;
-                        return snapshot;
-                    }, cancellationToken) ?? throw new KeyNotFoundException();
+                    }, group => VirtualKeyGroupDto.FromEntity(group, keyCount),
+                    cancellationToken) ?? throw new KeyNotFoundException();
             }
 
             if (rateLimitsChanged)

@@ -88,6 +88,14 @@ namespace ConduitLLM.Tests.Configuration.Services
         public async Task IsHealthy_WhenRedisCircuitOpens_ShouldBecomeFalse()
         {
             // Arrange
+            var serviceStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _mockLogger.Setup(logger => logger.Log(
+                    LogLevel.Information,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((state, _) => state.ToString() == "BatchSpendUpdateService started"),
+                    It.IsAny<Exception>(),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()))
+                .Callback(() => serviceStarted.TrySetResult(true));
             var circuitOpen = false;
             var circuitBreaker = new Mock<IRedisCircuitBreaker>();
             circuitBreaker.SetupGet(x => x.IsOpen).Returns(() => circuitOpen);
@@ -103,7 +111,8 @@ namespace ConduitLLM.Tests.Configuration.Services
             await service.StartAsync(CancellationToken.None);
 
             // Act & Assert
-            await Task.Delay(50);
+            // The worker marks itself active before logging its startup.
+            await serviceStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.True(service.IsHealthy);
 
             circuitOpen = true;

@@ -145,10 +145,13 @@ internal static class NativeDependencyRoutes
 
     private static IEnumerable<KeyValuePair<string, string>> QueryOptions(Uri uri)
     {
-        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var parts in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+                     .Select(pair => pair.Split('=', 2)))
         {
-            var parts = pair.Split('=', 2);
-            if (parts.Length != 2) throw new InvalidOperationException("Dependency URI options require key=value.");
+            if (parts.Length != 2)
+            {
+                throw new InvalidOperationException("Dependency URI options require key=value.");
+            }
             yield return new KeyValuePair<string, string>(Uri.UnescapeDataString(parts[0]), Uri.UnescapeDataString(parts[1]));
         }
     }

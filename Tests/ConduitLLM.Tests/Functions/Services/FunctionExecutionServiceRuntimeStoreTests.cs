@@ -426,11 +426,11 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
         var rows = new List<FunctionExecution> { second, first };
         var cancelled = new OperationCanceledException(fixture.Token);
         fixture.ExecutionRepository.Setup(value => value.GetByIdAsync(first.Id, fixture.Token)).ReturnsAsync(first);
-        fixture.ExecutionRepository.Setup(value => value.GetByIdAsync(Guid.Empty, fixture.Token)).ReturnsAsync((FunctionExecution?)null);
+        fixture.ExecutionRepository.Setup(value => value.GetByIdAsync(Guid.Empty, fixture.Token)).ReturnsAsync(value: null);
         fixture.ExecutionRepository.Setup(value => value.GetByVirtualKeyIdAsync(Fixture.VirtualKeyId, fixture.Token)).ReturnsAsync(rows);
         fixture.ExecutionRepository.Setup(value => value.GetByVirtualKeyIdAsync(-1, fixture.Token)).ThrowsAsync(cancelled);
         fixture.RuntimeReader.Setup(value => value.GetByIdAsync(first.Id, fixture.Token)).ReturnsAsync(first);
-        fixture.RuntimeReader.Setup(value => value.GetByIdAsync(Guid.Empty, fixture.Token)).ReturnsAsync((FunctionExecution?)null);
+        fixture.RuntimeReader.Setup(value => value.GetByIdAsync(Guid.Empty, fixture.Token)).ReturnsAsync(value: null);
         fixture.RuntimeReader.Setup(value => value.ListByVirtualKeyAsync(Fixture.VirtualKeyId, fixture.Token)).ReturnsAsync(rows);
         fixture.RuntimeReader.Setup(value => value.ListByVirtualKeyAsync(-1, fixture.Token)).ThrowsAsync(cancelled);
 

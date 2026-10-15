@@ -273,11 +273,10 @@ internal static class NativeBillingAuditLifecycleProbe
             Sample(text, "conduit_audit_queue_depth{service=\"Billing\"}"),
             Sample(text, "conduit_audit_events_flushed_total{service=\"Billing\",status=\"failure\"}"));
     }
-    private static double Sample(string text, string name)
+    private static long Sample(string text, string name)
     {
-        if (!NativeMetricSamples.TryRead(text, name, out var value)) return 0;
-        Require(value >= 0 && value == Math.Truncate(value), "nonnegative integer worker counter");
-        return value;
+        // Unregistered worker counters have always represented a fresh zero.
+        return NativeMetricSamples.TryReadNonnegativeInteger(text, name, out var value) ? value : 0;
     }
     private static string RequestId(Guid owner, string phase, string host) =>
         new Guid(SHA256.HashData(Encoding.UTF8.GetBytes($"BillingAudit:{owner:N}:{phase}:{host}"))[..16]).ToString("N");
@@ -301,7 +300,7 @@ internal static class NativeBillingAuditLifecycleProbe
     {
         if (!condition) throw new InvalidOperationException("Native BillingAudit lifecycle failed: " + description + ".");
     }
-    private sealed record Metric(double Queued, double Flushed, double Depth, double Failures);
+    private sealed record Metric(long Queued, long Flushed, long Depth, long Failures);
     private sealed record Audit(Guid Id, DateTime Timestamp, int EventType, int? Key, int? Group, string? Model,
         string? RequestId, string? Usage, decimal? Cost, string? Reason, string? Provider, int? Status, string? Metadata,
         string? Path, bool Estimated, string? Tools, decimal? ToolCost);

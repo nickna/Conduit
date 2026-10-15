@@ -40,13 +40,17 @@ public sealed class FunctionDiscoveryPersistenceParityTests(PostgresLockTestCont
             var expected = await stores[0].ListEnabledAsync();
             expected.Select(configuration => configuration.Id).Should().BeEquivalentTo([1, 2, 3, 5]);
             foreach (var purpose in purposes)
-            foreach (var provider in providers)
             {
-                var matching = expected.Where(configuration =>
-                    (!purpose.HasValue || configuration.Purpose == purpose.Value) &&
-                    (!provider.HasValue || configuration.ProviderType == provider.Value)).ToArray();
-                foreach (var store in stores)
-                    (await store.ListEnabledAsync(purpose, provider)).Should().BeEquivalentTo(matching);
+                foreach (var provider in providers)
+                {
+                    var matching = expected.Where(configuration =>
+                        (!purpose.HasValue || configuration.Purpose == purpose.Value) &&
+                        (!provider.HasValue || configuration.ProviderType == provider.Value)).ToArray();
+                    foreach (var store in stores)
+                    {
+                        (await store.ListEnabledAsync(purpose, provider)).Should().BeEquivalentTo(matching);
+                    }
+                }
             }
             foreach (var id in new[] { -1, 0, 1, 2, 3, 4, 5, 999 })
                 (await stores[1].GetEnabledByIdAsync(id)).Should()

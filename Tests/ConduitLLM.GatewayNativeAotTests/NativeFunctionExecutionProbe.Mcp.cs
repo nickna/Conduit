@@ -78,9 +78,13 @@ internal static partial class NativeFunctionExecutionProbe
         foreach (var gateway in gateways)
         {
             foreach (var execution in executions)
-            foreach (var foreignKey in new[] { otherVirtualKey, exa.VirtualKey })
-                AssertNotFound(await GetExecutionAsync(gateway, foreignKey, execution.Id,
-                    HttpStatusCode.NotFound, token), execution.Id);
+            {
+                foreach (var foreignKey in new[] { otherVirtualKey, exa.VirtualKey })
+                {
+                    AssertNotFound(await GetExecutionAsync(gateway, foreignKey, execution.Id,
+                        HttpStatusCode.NotFound, token), execution.Id);
+                }
+            }
             var unknown = Guid.NewGuid();
             AssertNotFound(await GetExecutionAsync(gateway, fixture.VirtualKey, unknown,
                 HttpStatusCode.NotFound, token), unknown);
@@ -160,8 +164,10 @@ internal static partial class NativeFunctionExecutionProbe
     private static JsonElement McpArguments(JsonElement parameters) => Element(writer =>
     {
         writer.WriteStartObject();
-        foreach (var property in parameters.EnumerateObject())
-            if (property.Name != "__conduit_mcp_tool") property.WriteTo(writer);
+        foreach (var property in parameters.EnumerateObject().Where(property => property.Name != "__conduit_mcp_tool"))
+        {
+            property.WriteTo(writer);
+        }
         writer.WriteEndObject();
     });
 

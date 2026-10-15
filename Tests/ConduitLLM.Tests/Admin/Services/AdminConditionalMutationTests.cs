@@ -32,6 +32,64 @@ namespace ConduitLLM.Tests.Admin.Services;
 
 public sealed class AdminConditionalMutationTests
 {
+    [Theory]
+    [InlineData("group-adjust", false)]
+    [InlineData("group-adjust", true)]
+    [InlineData("group-refund", false)]
+    [InlineData("group-refund", true)]
+    public async Task FinancialGroupRoutes_UseMembershipTagAndRejectCountOnlyRace(string operation, bool race)
+    {
+        await using var fixture = await Fixture.CreateAsync(operation);
+        var keys = new VirtualKeyRepository(fixture.Database.CreateDbContextFactory(),
+            NullLogger<VirtualKeyRepository>.Instance);
+        var memberId = await keys.CreateAsync(new VirtualKey
+        {
+            KeyName = "member", KeyHash = "member-hash", VirtualKeyGroupId = 1
+        });
+        await keys.CreateAsync(new VirtualKey
+        {
+            KeyName = "second-member", KeyHash = "second-member-hash", VirtualKeyGroupId = 1
+        });
+        using var host = fixture.CreateHost();
+        using var get = await host.Client.GetAsync("/v1/admin/virtual-key-groups/1");
+        Assert.Equal(200, (int)get.StatusCode);
+        using (var body = JsonDocument.Parse(await get.Content.ReadAsStringAsync()))
+            Assert.Equal(2, body.RootElement.GetProperty("virtualKeyCount").GetInt32());
+        var tag = get.Headers.ETag!.Tag;
+        using var keyGroupGet = await host.Client.GetAsync($"/v1/admin/virtual-keys/{memberId}/group");
+        Assert.Equal(200, (int)keyGroupGet.StatusCode);
+        Assert.Equal(tag, keyGroupGet.Headers.ETag!.Tag);
+        using (var body = JsonDocument.Parse(await keyGroupGet.Content.ReadAsStringAsync()))
+            Assert.Equal(2, body.RootElement.GetProperty("virtualKeyCount").GetInt32());
+        if (race)
+            fixture.Race.Arm(() => keys.CreateAsync(new VirtualKey
+            {
+                KeyName = "concurrent-member", KeyHash = "concurrent-hash", VirtualKeyGroupId = 1
+            }));
+
+        using var request = fixture.CreateHttpRequest(tag);
+        using var response = await host.Client.SendAsync(request);
+        Assert.Equal(race ? 412 : 200, (int)response.StatusCode);
+        if (race)
+        {
+            await using var db = fixture.Database.CreateContext();
+            Assert.Equal(100m, (await db.VirtualKeyGroups.SingleAsync()).Balance);
+            Assert.Equal(3, await db.VirtualKeys.CountAsync());
+            Assert.Empty(await db.RefundIdempotencyRecords.ToListAsync());
+            fixture.Cost.Verify(cost => cost.CalculateRefundAsync(It.IsAny<string>(), It.IsAny<Usage>(),
+                It.IsAny<Usage>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<ProviderCostRefundContext?>(),
+                It.IsAny<CancellationToken>()), Times.Never);
+        }
+        else
+        {
+            using var freshGet = await host.Client.GetAsync("/v1/admin/virtual-key-groups/1");
+            Assert.Equal(freshGet.Headers.ETag!.Tag, response.Headers.ETag!.Tag);
+            using var repeated = fixture.CreateHttpRequest(response.Headers.ETag.Tag);
+            using var repeatedResponse = await host.Client.SendAsync(repeated);
+            Assert.Equal(200, (int)repeatedResponse.StatusCode);
+        }
+    }
+
     public static IEnumerable<object[]> HttpMutations()
     {
         foreach (var operation in new[] { "key-patch", "key-delete", "group-patch", "group-delete",

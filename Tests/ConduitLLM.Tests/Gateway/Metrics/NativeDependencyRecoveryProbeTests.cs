@@ -4,6 +4,21 @@ namespace ConduitLLM.Tests.Gateway.Metrics;
 
 public sealed class NativeDependencyRecoveryProbeTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProbeOwnsReturnedResponsesOnSuccessAndFailedHealth(bool failHealth)
+    {
+        using var fixture = new Fixture();
+        fixture.Handler.FailHealthDuringRedis = failHealth;
+        if (failHealth)
+            await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Probe.RunAsync());
+        else
+            await fixture.Probe.RunAsync();
+        Assert.NotEmpty(fixture.Handler.Responses);
+        Assert.All(fixture.Handler.Responses, response => Assert.Equal(1, response.Disposals));
+    }
+
     [Fact]
     public async Task HealthyOutageRecovery_RequiresExactMatricesAndRestoresBoth()
     {
@@ -107,6 +122,7 @@ public sealed class NativeDependencyRecoveryProbeTests
 
     private sealed class Handler : HttpMessageHandler
     {
+        public List<ObservedResponse> Responses { get; } = [];
         public List<string> Controls { get; } = [];
         public List<string> Health { get; } = [];
         public bool RedisBlocked { get; private set; }
@@ -157,6 +173,22 @@ public sealed class NativeDependencyRecoveryProbeTests
             return Reply(path == "health/ready" ? readiness : HttpStatusCode.OK);
         }
 
-        private static Task<HttpResponseMessage> Reply(HttpStatusCode status) => Task.FromResult(new HttpResponseMessage(status));
+        private Task<HttpResponseMessage> Reply(HttpStatusCode status)
+        {
+            var response = new ObservedResponse(status);
+            Responses.Add(response);
+            // The probe owns returned messages, including error responses.
+            return Task.FromResult<HttpResponseMessage>(response);
+        }
+    }
+
+    private sealed class ObservedResponse(HttpStatusCode status) : HttpResponseMessage(status)
+    {
+        public int Disposals { get; private set; }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) Disposals++;
+            base.Dispose(disposing);
+        }
     }
 }

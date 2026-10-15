@@ -42,6 +42,8 @@ public sealed class FunctionClientFactoryRuntimeStoreTests
         Assert.NotSame(first, second);
         Assert.True((await second.VerifyAuthenticationAsync()).IsSuccess);
         Assert.Equal(2, fixture.Http.Requests.Count);
+        Assert.Equal(2, fixture.Http.Responses.Count);
+        Assert.All(fixture.Http.Responses, content => Assert.Equal(1, content.Disposals));
         foreach (var request in fixture.Http.Requests)
         {
             Assert.Equal(new Uri(scoped ? "https://credential.test/search" : "https://configuration.test/search"), request.Uri);
@@ -200,23 +202,38 @@ public sealed class FunctionClientFactoryRuntimeStoreTests
     private sealed class RecordingHttpFactory : IHttpClientFactory
     {
         internal readonly List<RequestSnapshot> Requests = [];
+        internal readonly List<ObservedContent> Responses = [];
         public HttpClient CreateClient(string name)
         {
             HttpClient client = null;
             client = new HttpClient(new RecordingHandler(request => Requests.Add(new RequestSnapshot(
                 request.RequestUri!, client.Timeout, name,
                 request.Headers.TryGetValues("x-api-key", out var keys) ? keys.Single() : request.Headers.Authorization!.Parameter!,
-                request.Headers.Accept.ToString(), request.Headers.UserAgent.ToString()))));
+                request.Headers.Accept.ToString(), request.Headers.UserAgent.ToString())), Responses));
             return client;
         }
     }
 
-    private sealed class RecordingHandler(Action<HttpRequestMessage> record) : HttpMessageHandler
+    private sealed class RecordingHandler(Action<HttpRequestMessage> record, List<ObservedContent> responses) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             record(request);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") });
+            var content = new ObservedContent();
+            responses.Add(content);
+            // SendAsync transfers response ownership to the provider caller.
+            // The authentication matrix above verifies that caller disposes it.
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+        }
+    }
+
+    private sealed class ObservedContent() : StringContent("{}")
+    {
+        public int Disposals { get; private set; }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) Disposals++;
+            base.Dispose(disposing);
         }
     }
 }

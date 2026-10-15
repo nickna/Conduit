@@ -109,7 +109,8 @@ public sealed class AdminContractEndpointFilterTests
 
         var factory = database.CreateDbContextFactory();
         var filter = new VersionedResourceEndpointFilter();
-        var expected = new ResourceVersion(rowVersion, updatedAt).ETag;
+        var expected = new ResourceVersion(rowVersion, updatedAt)
+            { VirtualKeyCount = resource == "virtual-key-groups" ? 0 : null }.ETag;
         var get = Context("GET", $"/v1/admin/{resource}/41", 41, factory);
 
         var result = await filter.InvokeAsync(
@@ -221,7 +222,8 @@ public sealed class AdminContractEndpointFilterTests
         await SeedResourceAsync(database, resource, 43, updatedAt);
         var context = Context("DELETE", $"/v1/admin/{resource}/43", 43,
             database.CreateDbContextFactory());
-        var expected = new ResourceVersion(null, updatedAt).ETag;
+        var expected = new ResourceVersion(null, updatedAt)
+            { VirtualKeyCount = resource == "virtual-key-groups" ? 0 : null }.ETag;
         context.HttpContext.Request.Headers.IfMatch = expected;
 
         var result = await new VersionedResourceEndpointFilter().InvokeAsync(context, async _ =>

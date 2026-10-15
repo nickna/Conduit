@@ -85,7 +85,8 @@ public sealed class ResourceMutationGuardTests
         var scenario = CreateScenario(resource);
         await scenario.SeedAsync(database);
         var original = await scenario.ReadAsync(database);
-        var winnerTag = new ResourceVersion(StaticRowVersion, WinnerTime).ETag;
+        var winnerTag = new ResourceVersion(StaticRowVersion, WinnerTime)
+            { VirtualKeyCount = resource == "VirtualKeyGroup" ? 0 : null }.ETag;
         var condition = wildcard ? Condition("*") : Condition(original.Version.ETag + ", " + winnerTag);
         var callbackCount = 0;
         race.Arm(() => scenario.WriteWinnerAsync(database));
@@ -336,7 +337,8 @@ public sealed class ResourceMutationGuardTests
             return new Snapshot((string)entry.Property(NameProperty).CurrentValue!,
                 (string)entry.Property(RetainedProperty).CurrentValue!,
                 new ResourceVersion((byte[]?)entry.Property("RowVersion").CurrentValue,
-                    (DateTime)entry.Property("UpdatedAt").CurrentValue!));
+                    (DateTime)entry.Property("UpdatedAt").CurrentValue!)
+                    { VirtualKeyCount = entity is VirtualKeyGroup ? 0 : null });
         }
 
         public void Change(ConduitDbContext db, object entity, string name, string retained, DateTime timestamp)
