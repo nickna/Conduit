@@ -38,6 +38,13 @@ described by the Gateway contract, consistent with the
 The pinned SDK smoke tests exercise omitted, float, and base64 encodings against the
 Gateway; provider HTTP and source-generated serialization tests cover the transport boundary.
 
+Chat `moderation` accepts an object with a required `model` and optional nullable
+`policy`. Its optional nullable `input` and `output` policies each require a `mode`
+of `score` or `block`; omitting moderation or sending null retains the provider's
+default behavior. Speech `voice` accepts a voice ID string or a custom voice
+reference such as `{ "id": "voice_1234" }`. The Gateway forwards these typed shapes
+to compatible providers; availability depends on the selected provider and model.
+
 All published Admin operations require a master key, including routes whose endpoint metadata says `AllowAnonymous`: the Admin security middleware still validates the key. Gateway media GET/HEAD routes permit anonymous retrieval by storage key, but IP bans, filtering, and rate limits can still deny access.
 
 Admin endpoint and exception errors use `application/problem+json` with `AdminProblemDetails`. Security middleware uses `application/json` with a string `error` and numeric `code` for authentication/IP failures. Rate-limit errors use the OpenAI-compatible object `error` envelope. Gateway endpoint errors also use that envelope; IP security failures can use the simple string envelope, and authentication/authorization or parameter binding can return an empty body. Check status and Content-Type before parsing errors. HTTP HEAD responses have no body, including failures.

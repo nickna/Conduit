@@ -9390,9 +9390,13 @@
             ]
           },
           "moderation": {
-            "type": [
-              "null",
-              "string"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChatModerationOptions"
+              }
             ]
           },
           "prompt_cache_key": {
@@ -9604,6 +9608,71 @@
                 "type": "string"
               }
             }
+          }
+        }
+      },
+      "ChatModerationMode": {
+        "enum": [
+          "score",
+          "block"
+        ],
+        "type": "string"
+      },
+      "ChatModerationOptions": {
+        "required": [
+          "model"
+        ],
+        "type": "object",
+        "properties": {
+          "model": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "policy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChatModerationPolicy"
+              }
+            ]
+          }
+        }
+      },
+      "ChatModerationPolicy": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChatModerationRule"
+              }
+            ]
+          },
+          "output": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChatModerationRule"
+              }
+            ]
+          }
+        }
+      },
+      "ChatModerationRule": {
+        "required": [
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/ChatModerationMode"
           }
         }
       },
@@ -11742,9 +11811,13 @@
             ]
           },
           "moderation": {
-            "type": [
-              "null",
-              "string"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChatModerationOptions"
+              }
             ]
           },
           "prompt_cache_key": {
@@ -12458,6 +12531,26 @@
           }
         }
       },
+      "SpeechVoice": {
+        "oneOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "required": [
+              "id"
+            ],
+            "type": "object",
+            "properties": {
+              "id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
       "StreamOptions": {
         "type": "object",
         "properties": {
@@ -12601,7 +12694,7 @@
             "type": "string"
           },
           "voice": {
-            "type": "string"
+            "$ref": "#/components/schemas/SpeechVoice"
           },
           "response_format": {
             "type": [

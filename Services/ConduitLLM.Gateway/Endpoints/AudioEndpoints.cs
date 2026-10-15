@@ -179,7 +179,7 @@ namespace ConduitLLM.Gateway.Endpoints
                 return OpenAIError(400, "A model is required.", "invalid_request");
             if (string.IsNullOrEmpty(request.Input))
                 return OpenAIError(400, "Input text is required.", "invalid_request");
-            if (string.IsNullOrEmpty(request.Voice))
+            if (request.Voice is null || string.IsNullOrEmpty(request.Voice.Id))
                 return OpenAIError(400, "A voice is required.", "invalid_request");
 
             var alias = request.Model;

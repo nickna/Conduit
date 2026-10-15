@@ -798,7 +798,7 @@ export interface components {
       };
       safety_identifier?: null | string;
       verbosity?: null | string;
-      moderation?: null | string;
+      moderation?: null | components["schemas"]["ChatModerationOptions"];
       prompt_cache_key?: null | string;
       prompt_cache_options?: null | components["schemas"]["PromptCacheOptions"];
       prompt_cache_retention?: null | string;
@@ -860,6 +860,19 @@ export interface components {
         /** @enum {string} */
         mode: "explicit";
       };
+    };
+    /** @enum {string} */
+    ChatModerationMode: "score" | "block";
+    ChatModerationOptions: {
+      model: string;
+      policy?: null | components["schemas"]["ChatModerationPolicy"];
+    };
+    ChatModerationPolicy: {
+      input?: null | components["schemas"]["ChatModerationRule"];
+      output?: null | components["schemas"]["ChatModerationRule"];
+    };
+    ChatModerationRule: {
+      mode: components["schemas"]["ChatModerationMode"];
     };
     ChatPrediction: {
       type?: string;
@@ -1419,7 +1432,7 @@ export interface components {
       };
       safety_identifier?: null | string;
       verbosity?: null | string;
-      moderation?: null | string;
+      moderation?: null | components["schemas"]["ChatModerationOptions"];
       prompt_cache_key?: null | string;
       prompt_cache_options?: null | components["schemas"]["PromptCacheOptions"];
       prompt_cache_retention?: null | string;
@@ -1599,6 +1612,11 @@ export interface components {
       /** Format: int32 */
       code: null | number;
     };
+    SpeechVoice:
+      | string
+      | {
+          id: string;
+        };
     StreamOptions: {
       include_usage?: boolean;
     };
@@ -1639,7 +1657,7 @@ export interface components {
     TextToSpeechRequest: {
       model: string;
       input: string;
-      voice: string;
+      voice: components["schemas"]["SpeechVoice"];
       response_format?: null | string;
       /** Format: double */
       speed?: null | number;
