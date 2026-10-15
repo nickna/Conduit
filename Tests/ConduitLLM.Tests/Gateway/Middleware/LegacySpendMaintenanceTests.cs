@@ -86,7 +86,7 @@ public sealed class LegacySpendMaintenanceTests
         if (missingEntity == "key")
         {
             fixture.Keys.Setup(repository => repository.GetByIdAsync(KeyId, It.IsAny<CancellationToken>()))
-                .ReturnsAsync((VirtualKey)null);
+                .ReturnsAsync(null);
         }
         else
         {
