@@ -175,7 +175,10 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
                 // A subscription canceled during startup can complete later.
                 // Await it before unsubscribing so shutdown cannot leave it behind.
                 try { await subscription.WaitAsync(cancellationToken); }
-                catch (Exception) when (!cancellationToken.IsCancellationRequested) { }
+                catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogDebug(ex, "Ignoring subscription completion failure during shutdown; proceeding with unsubscribe");
+                }
                 await _subscriber.UnsubscribeAsync(RedisChannel.Literal(ReloadChannelName)).WaitAsync(cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
