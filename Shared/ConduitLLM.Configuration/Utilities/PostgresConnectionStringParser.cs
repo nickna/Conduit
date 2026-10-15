@@ -1,3 +1,4 @@
+using System.Linq;
 using Npgsql;
 
 namespace ConduitLLM.Configuration.Utilities;
@@ -30,10 +31,9 @@ public static class PostgresConnectionStringParser
                 // ContainsKey reports supported keywords even when absent. Keys
                 // contains canonical, explicitly serialized names, so aliases
                 // and casing cannot accidentally replace a caller's setting.
-                foreach (string key in defaults.Keys)
+                foreach (string key in defaults.Keys.Where(key => !result.ShouldSerialize(key)))
                 {
-                    if (!result.ShouldSerialize(key))
-                        result[key] = defaults[key];
+                    result[key] = defaults[key];
                 }
             }
 
