@@ -466,7 +466,12 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
             {
                 return;
             }
-            catch (Exception ex)
+            catch (RedisException ex)
+            {
+                _logger.LogWarning(ex, "Global settings startup recovery failed - retrying with bounded backoff");
+                delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 30));
+            }
+            catch (TimeoutException ex)
             {
                 _logger.LogWarning(ex, "Global settings startup recovery failed - retrying with bounded backoff");
                 delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 30));
