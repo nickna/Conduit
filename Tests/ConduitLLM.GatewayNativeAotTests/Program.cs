@@ -1489,23 +1489,31 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             await tasks.InvokeAsync("UnsubscribeFromTaskType", """["native-probe"]""", timeout.Token);
             True(true, "authenticated TaskHub JSON group invocations");
             await tasks.InvokeAsync("SubscribeToTask", $$"""["{{NativeParityFixture.TaskId}}"]""", timeout.Token);
-            await tasks.InvokeAsync("TaskCompleted",
-                $$$"""["{{{NativeParityFixture.TaskId}}}",{"Mixed_KEY":null,"zero":0,"done":false,"values":["fixture",0,null,false],"nested":{"UPPER_key":"preserved"}}]""",
-                timeout.Token);
-            var completion = GetHubArguments(await tasks.WaitForTargetAsync("TaskCompleted", timeout.Token), "TaskCompleted", 2);
-            Equal(NativeParityFixture.TaskId, completion[0].GetString()!, "native dynamic task completion ID");
-            var result = completion[1];
-            AssertJsonFields(result, "Mixed_KEY", "zero", "done", "values", "nested");
-            True(result.GetProperty("Mixed_KEY").ValueKind == JsonValueKind.Null,
-                "native dynamic task result retains null and exact property casing");
-            True(result.GetProperty("zero").GetInt32() == 0 && !result.GetProperty("done").GetBoolean(),
-                "native dynamic task result retains default scalar values");
-            var values = result.GetProperty("values");
-            True(values.GetArrayLength() == 4 && values[0].GetString() == "fixture" &&
-                 values[1].GetInt32() == 0 && values[2].ValueKind == JsonValueKind.Null && !values[3].GetBoolean(),
-                "native dynamic task result retains nested array values");
-            Equal("preserved", result.GetProperty("nested").GetProperty("UPPER_key").GetString()!,
-                "native dynamic task result retains nested property casing");
+            (string Target, string Arguments)[] serverOnlyInvocations =
+            [
+                ("TaskStarted", $$$"""["{{{NativeParityFixture.TaskId}}}","native-probe",{"virtualKeyId":1,"Mixed_KEY":null,"zero":0,"done":false,"nested":{"UPPER_key":"preserved"}}]"""),
+                ("TaskProgress", $$"""["{{NativeParityFixture.TaskId}}",99,"forged progress"]"""),
+                ("TaskCompleted", $$$"""["{{{NativeParityFixture.TaskId}}}",{"Mixed_KEY":null,"zero":0,"done":false,"values":["fixture",0,null,false],"nested":{"UPPER_key":"preserved"}}]"""),
+                ("TaskFailed", $$"""["{{NativeParityFixture.TaskId}}","forged failure",false]"""),
+                ("TaskCancelled", $$"""["{{NativeParityFixture.TaskId}}","forged cancellation"]"""),
+                ("TaskTimedOut", $$"""["{{NativeParityFixture.TaskId}}",30]"""),
+            ];
+            foreach (var (target, arguments) in serverOnlyInvocations)
+            {
+                var rejected = false;
+                try
+                {
+                    await tasks.InvokeAsync(target, arguments, timeout.Token);
+                }
+                catch (InvalidOperationException exception) when (
+                    exception.Message == $"SignalR invocation {target} failed: Failed to invoke '{target}' due to an error on the server. HubException: Method does not exist.")
+                {
+                    rejected = true;
+                }
+                True(rejected, $"native TaskHub rejects client invocation of server-only {target}");
+            }
+            await tasks.InvokeAsync("UnsubscribeFromTask", $$"""["{{NativeParityFixture.TaskId}}"]""", timeout.Token);
+            True(true, "authenticated TaskHub JSON task subscription and unsubscription");
         }
 
         await using (await NativeSignalRClient.ConnectAsync(

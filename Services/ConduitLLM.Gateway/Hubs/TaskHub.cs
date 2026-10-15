@@ -107,9 +107,9 @@ namespace ConduitLLM.Gateway.Hubs
             Logger.LogDebug("Virtual Key {KeyId} unsubscribed from task type {TaskType}", virtualKeyId, taskType);
         }
 
-        // ITaskHub implementation methods - these are called server-side to notify clients
+        // Explicit implementations keep server notifications out of SignalR client method discovery.
         
-        public async Task TaskStarted(string taskId, string taskType, object metadata)
+        async Task ITaskHub.TaskStarted(string taskId, string taskType, object metadata)
         {
             int? virtualKeyId = null;
 
@@ -143,7 +143,7 @@ namespace ConduitLLM.Gateway.Hubs
             }
         }
 
-        public async Task TaskProgress(string taskId, int progress, string? message = null)
+        async Task ITaskHub.TaskProgress(string taskId, int progress, string? message)
         {
             Logger.LogDebug("Task {TaskId} progress: {Progress}%{Message}",
                 taskId, progress, message != null ? $" - {message}" : "");
@@ -151,14 +151,14 @@ namespace ConduitLLM.Gateway.Hubs
                 .SendAsync("TaskProgress", taskId, progress, message);
         }
 
-        public async Task TaskCompleted(string taskId, object result)
+        async Task ITaskHub.TaskCompleted(string taskId, object result)
         {
             Logger.LogInformation("Task {TaskId} completed successfully", taskId);
             await _hubContext.Clients.Group($"task-{taskId}")
                 .SendAsync("TaskCompleted", taskId, result);
         }
 
-        public async Task TaskFailed(string taskId, string error, bool isRetryable = false)
+        async Task ITaskHub.TaskFailed(string taskId, string error, bool isRetryable)
         {
             Logger.LogWarning("Task {TaskId} failed (retryable: {IsRetryable}): {Error}",
                 taskId, isRetryable, error);
@@ -166,7 +166,7 @@ namespace ConduitLLM.Gateway.Hubs
                 .SendAsync("TaskFailed", taskId, error, isRetryable);
         }
 
-        public async Task TaskCancelled(string taskId, string? reason = null)
+        async Task ITaskHub.TaskCancelled(string taskId, string? reason)
         {
             Logger.LogInformation("Task {TaskId} cancelled{Reason}",
                 taskId, reason != null ? $": {reason}" : "");
@@ -174,7 +174,7 @@ namespace ConduitLLM.Gateway.Hubs
                 .SendAsync("TaskCancelled", taskId, reason);
         }
 
-        public async Task TaskTimedOut(string taskId, int timeoutSeconds)
+        async Task ITaskHub.TaskTimedOut(string taskId, int timeoutSeconds)
         {
             Logger.LogWarning("Task {TaskId} timed out after {TimeoutSeconds}s", taskId, timeoutSeconds);
             await _hubContext.Clients.Group($"task-{taskId}")

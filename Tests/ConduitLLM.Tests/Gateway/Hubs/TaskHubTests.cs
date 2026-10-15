@@ -346,7 +346,7 @@ namespace ConduitLLM.Tests.Gateway.Hubs
             var metadata = new TaskMetadata(DefaultVirtualKeyId) { Model = "dall-e-3" };
 
             // Act
-            await hub.TaskStarted(taskId, taskType, metadata);
+            await ((ITaskHub)hub).TaskStarted(taskId, taskType, metadata);
 
             // Assert
             _mockHubContextClients.Verify(x => x.Group(TaskGroup(taskId)), Times.Once());
@@ -370,7 +370,7 @@ namespace ConduitLLM.Tests.Gateway.Hubs
             };
 
             // Act
-            await hub.TaskStarted(taskId, taskType, metadata);
+            await ((ITaskHub)hub).TaskStarted(taskId, taskType, metadata);
 
             // Assert
             _mockHubContextClients.Verify(x => x.Group(TaskGroup(taskId)), Times.Once());
@@ -387,7 +387,7 @@ namespace ConduitLLM.Tests.Gateway.Hubs
             var metadata = new { model = "dall-e-3" }; // No virtualKeyId
 
             // Act
-            await hub.TaskStarted(taskId, taskType, metadata);
+            await ((ITaskHub)hub).TaskStarted(taskId, taskType, metadata);
 
             // Assert
             _mockHubContextClientProxy.Verify(
@@ -409,7 +409,7 @@ namespace ConduitLLM.Tests.Gateway.Hubs
             var message = "Processing...";
 
             // Act
-            await hub.TaskProgress(taskId, progress, message);
+            await ((ITaskHub)hub).TaskProgress(taskId, progress, message);
 
             // Assert
             _mockHubContextClients.Verify(x => x.Group(TaskGroup(taskId)), Times.Once());
@@ -430,7 +430,7 @@ namespace ConduitLLM.Tests.Gateway.Hubs
             var progress = 75;
 
             // Act
-            await hub.TaskProgress(taskId, progress);
+            await ((ITaskHub)hub).TaskProgress(taskId, progress);
 
             // Assert
             _mockHubContextClients.Verify(x => x.Group(TaskGroup(taskId)), Times.Once());
@@ -449,7 +449,7 @@ namespace ConduitLLM.Tests.Gateway.Hubs
             var result = new { ImageUrl = "https://example.com/image.png" };
 
             // Act
-            await hub.TaskCompleted(taskId, result);
+            await ((ITaskHub)hub).TaskCompleted(taskId, result);
 
             // Assert
             _mockHubContextClients.Verify(x => x.Group(TaskGroup(taskId)), Times.Once());
@@ -472,7 +472,7 @@ namespace ConduitLLM.Tests.Gateway.Hubs
             var isRetryable = false;
 
             // Act
-            await hub.TaskFailed(taskId, error, isRetryable);
+            await ((ITaskHub)hub).TaskFailed(taskId, error, isRetryable);
 
             // Assert
             _mockHubContextClients.Verify(x => x.Group(TaskGroup(taskId)), Times.Once());
@@ -494,7 +494,7 @@ namespace ConduitLLM.Tests.Gateway.Hubs
             var isRetryable = true;
 
             // Act
-            await hub.TaskFailed(taskId, error, isRetryable);
+            await ((ITaskHub)hub).TaskFailed(taskId, error, isRetryable);
 
             // Assert
             _mockHubContextClientProxy.Verify(
@@ -518,7 +518,7 @@ namespace ConduitLLM.Tests.Gateway.Hubs
             var reason = "User requested cancellation";
 
             // Act
-            await hub.TaskCancelled(taskId, reason);
+            await ((ITaskHub)hub).TaskCancelled(taskId, reason);
 
             // Assert
             _mockHubContextClients.Verify(x => x.Group(TaskGroup(taskId)), Times.Once());
@@ -535,7 +535,7 @@ namespace ConduitLLM.Tests.Gateway.Hubs
             var taskId = "task-cancelled-null";
 
             // Act
-            await hub.TaskCancelled(taskId, null);
+            await ((ITaskHub)hub).TaskCancelled(taskId, null);
 
             // Assert
             _mockHubContextClients.Verify(x => x.Group(TaskGroup(taskId)), Times.Once());
@@ -554,7 +554,7 @@ namespace ConduitLLM.Tests.Gateway.Hubs
             var timeoutSeconds = 300;
 
             // Act
-            await hub.TaskTimedOut(taskId, timeoutSeconds);
+            await ((ITaskHub)hub).TaskTimedOut(taskId, timeoutSeconds);
 
             // Assert
             _mockHubContextClients.Verify(x => x.Group(TaskGroup(taskId)), Times.Once());
