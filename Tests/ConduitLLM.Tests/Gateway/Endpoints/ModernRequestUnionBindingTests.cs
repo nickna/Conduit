@@ -136,8 +136,11 @@ public sealed class ModernRequestUnionBindingTests
         "{\"model\":\"speech-union\",\"input\":\"Say hello\"" +
         (voice is null ? "" : ",\"voice\":" + voice) + "}";
 
-    private static Task<HttpResponseMessage> PostAsync(GatewayEndpointTestHost host, string path, string body) =>
-        host.Client.PostAsync(path, new StringContent(body, Encoding.UTF8, "application/json"));
+    private static async Task<HttpResponseMessage> PostAsync(GatewayEndpointTestHost host, string path, string body)
+    {
+        using var content = new StringContent(body, Encoding.UTF8, "application/json");
+        return await host.Client.PostAsync(path, content);
+    }
 
     private static async Task AssertBadRequestAsync(HttpResponseMessage response)
     {
