@@ -1573,9 +1573,39 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
                          NativeParityFixture.VirtualKey,
                          timeout.Token))
         {
-            var status = await management.WaitForTargetAsync("VirtualKeyStatus", timeout.Token);
-            True(status.Contains("Native AOT parity key", StringComparison.Ordinal),
+            var status = GetHubArguments(await management.WaitForTargetAsync("VirtualKeyStatus", timeout.Token),
+                "VirtualKeyStatus", 1)[0];
+            Equal("Native AOT parity key", status.GetProperty("keyName").GetString()!,
                 "VirtualKeyManagementHub sends typed-store key and group status");
+            var keyId = status.GetProperty("keyId").GetInt32();
+            True(keyId > 0, "native virtual-key status identifies the authenticated persisted key");
+            (string Target, string Arguments)[] serverOnlyInvocations =
+            [
+                ("BroadcastKeyCreated", $$"""[{"keyId":{{keyId}},"keyName":"forged native key","isEnabled":false,"maxBudget":0,"allowedModels":null,"rateLimitPerMinute":0,"createdAt":"2026-10-10T01:02:03Z","expiresAt":null,"timestamp":"2026-10-10T01:02:03Z"}]"""),
+                ("BroadcastKeyUpdated", $$"""[{{keyId}},{"keyId":{{keyId}},"keyName":"forged native key","updatedProperties":["IsEnabled"],"isEnabled":false,"maxBudget":0,"allowedModels":null,"rateLimitPerMinute":0,"expiresAt":null,"updatedAt":"2026-10-10T01:02:03Z","timestamp":"2026-10-10T01:02:03Z"}]"""),
+                ("BroadcastKeyDeleted", $$"""[{{keyId}},{"keyId":{{keyId}},"keyName":"forged native key","deletedAt":"2026-10-10T01:02:03Z","deletionReason":"forged deletion","timestamp":"2026-10-10T01:02:03Z"}]"""),
+                ("BroadcastKeyStatusChanged", $$"""[{{keyId}},{"keyId":{{keyId}},"keyName":"forged native key","previousStatus":"enabled","newStatus":"disabled","statusChangeReason":"forged critical status","changedAt":"2026-10-10T01:02:03Z","timestamp":"2026-10-10T01:02:03Z"}]"""),
+            ];
+            foreach (var (target, arguments) in serverOnlyInvocations)
+            {
+                var rejected = false;
+                try
+                {
+                    await management.InvokeAsync(target, arguments, timeout.Token);
+                }
+                catch (InvalidOperationException exception) when (
+                    exception.Message == $"SignalR invocation {target} failed: Failed to invoke '{target}' due to an error on the server. HubException: Method does not exist.")
+                {
+                    rejected = true;
+                }
+                True(rejected, $"native VirtualKeyManagementHub rejects client invocation of server-only {target}");
+            }
+            await management.InvokeAsync("GetCurrentKeyStatus", "[]", timeout.Token);
+            var current = GetHubArguments(await management.WaitForTargetAsync("VirtualKeyStatus", timeout.Token),
+                "VirtualKeyStatus", 1)[0];
+            True(current.GetProperty("keyId").GetInt32() == keyId &&
+                 current.GetProperty("keyName").GetString() == "Native AOT parity key",
+                "native current-key status remains available after rejected lifecycle broadcasts");
         }
     }
 

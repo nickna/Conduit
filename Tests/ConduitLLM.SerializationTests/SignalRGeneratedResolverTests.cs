@@ -239,6 +239,87 @@ public sealed class SignalRGeneratedResolverTests
         }
     }
 
+    [Theory]
+    [InlineData("VirtualKeyCreated")]
+    [InlineData("VirtualKeyUpdated")]
+    [InlineData("VirtualKeyDeleted")]
+    [InlineData("VirtualKeyStatusChanged")]
+    public void VirtualKeyLifecycleServerNotifications_PreserveGeneratedProtocolContracts(string target)
+    {
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
+        var protocol = CreateProtocol(SignalRTestOptions.Create());
+        var timestamp = new DateTime(2026, 10, 10, 1, 2, 3, DateTimeKind.Utc);
+        object notification = target switch
+        {
+            "VirtualKeyCreated" => new VirtualKeyCreatedNotification
+            {
+                KeyId = 42, KeyName = "fixture key", IsEnabled = false, MaxBudget = 0m,
+                AllowedModels = null, RateLimitPerMinute = 0, CreatedAt = timestamp, ExpiresAt = null, Timestamp = timestamp
+            },
+            "VirtualKeyUpdated" => new VirtualKeyUpdatedNotification
+            {
+                KeyId = 42, KeyName = "fixture key", UpdatedProperties = ["IsEnabled", "MaxBudget"],
+                IsEnabled = false, MaxBudget = null, AllowedModels = "", RateLimitPerMinute = 0,
+                ExpiresAt = null, UpdatedAt = timestamp, Timestamp = timestamp
+            },
+            "VirtualKeyDeleted" => new VirtualKeyDeletedNotification
+            {
+                KeyId = 42, KeyName = "fixture key", DeletedAt = timestamp, DeletionReason = null, Timestamp = timestamp
+            },
+            "VirtualKeyStatusChanged" => new VirtualKeyStatusChangedNotification
+            {
+                KeyId = 42, KeyName = "fixture key", PreviousStatus = "enabled", NewStatus = "disabled",
+                StatusChangeReason = null, ChangedAt = timestamp, Timestamp = timestamp
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(target))
+        };
+        using var document = JsonDocument.Parse(Write(protocol, target, notification).AsMemory()[..^1]);
+        Assert.Equal(target, document.RootElement.GetProperty("target").GetString());
+        var payload = Assert.Single(document.RootElement.GetProperty("arguments").EnumerateArray());
+        Assert.Equal(42, payload.GetProperty("keyId").GetInt32());
+        Assert.Equal("fixture key", payload.GetProperty("keyName").GetString());
+        Assert.Equal(timestamp, payload.GetProperty("timestamp").GetDateTime());
+        switch (target)
+        {
+            case "VirtualKeyCreated":
+                Assert.Equal(new[] { "allowedModels", "createdAt", "expiresAt", "isEnabled", "keyId", "keyName", "maxBudget", "rateLimitPerMinute", "timestamp" },
+                    payload.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+                Assert.False(payload.GetProperty("isEnabled").GetBoolean());
+                Assert.Equal(0m, payload.GetProperty("maxBudget").GetDecimal());
+                Assert.Equal(JsonValueKind.Null, payload.GetProperty("allowedModels").ValueKind);
+                Assert.Equal(0, payload.GetProperty("rateLimitPerMinute").GetInt32());
+                Assert.Equal(timestamp, payload.GetProperty("createdAt").GetDateTime());
+                Assert.Equal(JsonValueKind.Null, payload.GetProperty("expiresAt").ValueKind);
+                break;
+            case "VirtualKeyUpdated":
+                Assert.Equal(new[] { "allowedModels", "expiresAt", "isEnabled", "keyId", "keyName", "maxBudget", "rateLimitPerMinute", "timestamp", "updatedAt", "updatedProperties" },
+                    payload.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+                Assert.Equal(new[] { "IsEnabled", "MaxBudget" }, payload.GetProperty("updatedProperties")
+                    .EnumerateArray().Select(value => value.GetString()));
+                Assert.False(payload.GetProperty("isEnabled").GetBoolean());
+                Assert.Equal(JsonValueKind.Null, payload.GetProperty("maxBudget").ValueKind);
+                Assert.Equal("", payload.GetProperty("allowedModels").GetString());
+                Assert.Equal(0, payload.GetProperty("rateLimitPerMinute").GetInt32());
+                Assert.Equal(JsonValueKind.Null, payload.GetProperty("expiresAt").ValueKind);
+                Assert.Equal(timestamp, payload.GetProperty("updatedAt").GetDateTime());
+                break;
+            case "VirtualKeyDeleted":
+                Assert.Equal(new[] { "deletedAt", "deletionReason", "keyId", "keyName", "timestamp" },
+                    payload.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+                Assert.Equal(timestamp, payload.GetProperty("deletedAt").GetDateTime());
+                Assert.Equal(JsonValueKind.Null, payload.GetProperty("deletionReason").ValueKind);
+                break;
+            default:
+                Assert.Equal(new[] { "changedAt", "keyId", "keyName", "newStatus", "previousStatus", "statusChangeReason", "timestamp" },
+                    payload.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+                Assert.Equal("enabled", payload.GetProperty("previousStatus").GetString());
+                Assert.Equal("disabled", payload.GetProperty("newStatus").GetString());
+                Assert.Equal(JsonValueKind.Null, payload.GetProperty("statusChangeReason").ValueKind);
+                Assert.Equal(timestamp, payload.GetProperty("changedAt").GetDateTime());
+                break;
+        }
+    }
+
     [Fact]
     public void SharedNotificationTimeSpan_PreservesStandardSignalRWireFormat()
     {

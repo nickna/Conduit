@@ -8,6 +8,7 @@ using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Authentication;
 using ConduitLLM.Gateway.Hubs;
+using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Gateway.Models;
 using ConduitLLM.Gateway.Serialization;
 using ConduitLLM.Gateway.Services;
@@ -38,8 +39,10 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
 {
     public const int OwnerA = 101;
     public const int OwnerB = 202;
+    public const int AdminKey = 303;
     public const string TokenA = "condt-dispatch-owner-a";
     public const string TokenB = "condt-dispatch-owner-b";
+    public const string AdminToken = "condt-dispatch-admin";
     public const string TaskA = "dispatch-task-a";
     public const string TaskB = "dispatch-task-b";
     public const string VideoTaskA = "dispatch-video-a";
@@ -49,6 +52,7 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
     public const string ExpiredEphemeralToken = "ek_dispatch-expired";
     public const string PublicVideoPath = "/hubs/public/video-generation";
     public const string WebhookPath = "/hubs/webhooks";
+    public const string KeyManagementPath = "/hubs/virtual-key-management";
     private const string BarrierEvent = "DispatchTestBarrier";
     private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(15);
 
@@ -69,7 +73,12 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
         var keys = new Dictionary<string, VirtualKey>
         {
             [TokenA] = new() { Id = OwnerA, KeyName = "Owner A", KeyHash = "dispatch-a", IsEnabled = true },
-            [TokenB] = new() { Id = OwnerB, KeyName = "Owner B", KeyHash = "dispatch-b", IsEnabled = true }
+            [TokenB] = new() { Id = OwnerB, KeyName = "Owner B", KeyHash = "dispatch-b", IsEnabled = true },
+            [AdminToken] = new()
+            {
+                Id = AdminKey, KeyName = "Administrator", KeyHash = "dispatch-admin", IsEnabled = true,
+                Metadata = """{"isAdmin":true}"""
+            }
         };
         RuntimeKeys.Setup(service => service.ValidateVirtualKeyForAuthenticationAsync(
                 It.IsAny<string>(), It.IsAny<string?>()))
@@ -109,6 +118,10 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
         builder.Services.AddSingleton(TaskService.Object);
         builder.Services.AddSingleton(EphemeralKeys.Object);
         builder.Services.AddSingleton<IWebhookConnectionTracker, InMemoryWebhookConnectionTracker>();
+        builder.Services.AddMetrics();
+        builder.Services.AddSingleton<SignalRMetrics>();
+        builder.Services.AddSingleton<ConduitLLM.Gateway.Interfaces.ISignalRMetrics>(
+            provider => provider.GetRequiredService<SignalRMetrics>());
         builder.Services.Configure<GatewaySecurityOptions>(_ => { });
         builder.Services.AddAuthentication("VirtualKey")
             .AddScheme<AuthenticationSchemeOptions, VirtualKeyAuthenticationHandler>("VirtualKey", _ => { });
@@ -131,6 +144,7 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
         _app.MapHub<TaskHub>("/hubs/tasks");
         _app.MapHub<PublicVideoGenerationHub>(PublicVideoPath);
         _app.MapHub<WebhookDeliveryHub>(WebhookPath);
+        _app.MapHub<VirtualKeyManagementHub>(KeyManagementPath);
         configureEndpoints?.Invoke(_app);
         await _app.StartAsync().WaitAsync(Deadline);
         _address = Services.GetRequiredService<IServer>().Features
@@ -164,6 +178,8 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
         ActivatorUtilities.CreateInstance<VideoGenerationNotificationService>(Services);
     public WebhookDeliveryNotificationService CreateWebhookBroadcaster() =>
         ActivatorUtilities.CreateInstance<WebhookDeliveryNotificationService>(Services);
+    public VirtualKeyManagementNotificationService CreateKeyBroadcaster() =>
+        ActivatorUtilities.CreateInstance<VirtualKeyManagementNotificationService>(Services);
 
     public static async Task InvokeAsync(HubConnection connection, string method, params object?[] arguments)
     {
