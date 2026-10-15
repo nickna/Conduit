@@ -93,7 +93,7 @@ public sealed class LegacySpendMaintenanceTests
             fixture.Groups.Setup(repository => repository.GetByIdAsync(GroupId, It.IsAny<CancellationToken>()))
                 .ReturnsAsync((VirtualKeyGroup)null);
             fixture.Groups.Setup(repository => repository.GetByKeyIdAsync(KeyId))
-                .ReturnsAsync((VirtualKeyGroup)null);
+                .ReturnsAsync(null);
         }
 
         await Assert.ThrowsAsync<BillingSystemException>(fixture.UpdateThroughHelperAsync);
