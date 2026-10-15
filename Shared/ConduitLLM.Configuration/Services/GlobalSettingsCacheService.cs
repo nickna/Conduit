@@ -365,6 +365,9 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
         }
         catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
         {
+            _logger.LogDebug(
+                "Cluster-wide global settings reload {RequestId} was canceled because the service is stopping",
+                requestId);
         }
         catch (Exception ex)
         {
