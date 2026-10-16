@@ -280,4 +280,3 @@ function Get-NativePublishToolchain {
         targetOs = $targetOs; targetArchitecture = $Capture["_targetArchitecture"]
     }
 }
-
