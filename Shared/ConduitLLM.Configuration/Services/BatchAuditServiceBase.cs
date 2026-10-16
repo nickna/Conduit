@@ -184,8 +184,14 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
     /// <summary>
     /// Removes audit events older than the retention period.
     /// </summary>
-    public async Task CleanupOldEventsAsync()
+    public Task CleanupOldEventsAsync() => CleanupOldEventsAsync(CancellationToken.None);
+
+    /// <summary>
+    /// Removes expired events while observing the retention worker's lifetime.
+    /// </summary>
+    public async Task CleanupOldEventsAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _logger.LogInformation("Starting cleanup of {EntityName} audit events older than {RetentionDays} days",
             EntityName, RetentionDays);
 
@@ -200,7 +206,7 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
             {
                 var deletedCount = await GetDbSet(context)
                     .Where(e => e.Timestamp < cutoffDate)
-                    .ExecuteDeleteAsync();
+                    .ExecuteDeleteAsync(cancellationToken);
 
                 if (deletedCount > 0)
                 {
@@ -221,13 +227,13 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
                         .Where(e => e.Timestamp < cutoffDate)
                         .OrderBy(e => e.Timestamp)
                         .Take(CleanupBatchSize)
-                        .ToListAsync();
+                        .ToListAsync(cancellationToken);
 
                     if (oldEvents.Count == 0)
                         break;
 
                     GetDbSet(context).RemoveRange(oldEvents);
-                    await context.SaveChangesAsync();
+                    await context.SaveChangesAsync(cancellationToken);
 
                     batchDeleted = oldEvents.Count;
                     totalDeleted += batchDeleted;
@@ -235,7 +241,7 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
                     _logger.LogDebug("Deleted {BatchCount} old {EntityName} audit events", batchDeleted, EntityName);
 
                     if (batchDeleted == CleanupBatchSize)
-                        await Task.Delay(100);
+                        await Task.Delay(100, cancellationToken);
 
                 } while (batchDeleted == CleanupBatchSize);
 
@@ -247,6 +253,10 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
                 }
                 AuditCleanupRuns.WithLabels(EntityName, "success").Inc();
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -271,15 +281,15 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
             TimeSpan.FromSeconds(FlushIntervalSeconds),
             TimeSpan.FromSeconds(FlushIntervalSeconds));
 
-        // Schedule data retention cleanup
-        _ = Task.Run(async () =>
-        {
-            try { await ScheduleDataRetentionAsync(cancellationToken); }
-            catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogError(ex, "Unhandled error during {EntityName} data retention scheduling", EntityName); }
-        }, cancellationToken);
-
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Runs shared retention separately from this process's hosted queue lifecycle.
+    /// A retention-only leader worker owns cancellation and joins this operation.
+    /// </summary>
+    public Task RunDataRetentionAsync(CancellationToken cancellationToken) =>
+        ScheduleDataRetentionAsync(cancellationToken);
 
     /// <inheritdoc/>
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -385,7 +395,11 @@ public abstract class BatchAuditServiceBase<TEvent> : IHostedService, IDisposabl
         {
             try
             {
-                await CleanupOldEventsAsync();
+                await CleanupOldEventsAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

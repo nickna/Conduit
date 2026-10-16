@@ -51,7 +51,11 @@ public class FunctionCallAuditService : BatchAuditServiceBase<FunctionCallAudit>
         // Run cleanup once on startup (no periodic cleanup)
         try
         {
-            await CleanupOldEventsAsync();
+            await CleanupOldEventsAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

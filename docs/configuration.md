@@ -181,6 +181,29 @@ period, the aggregate cycle, and the last outcome of each phase. Prometheus metr
 purge, expiration, quota, and retention are limited to those groups and reconciliation is skipped because
 an untracked object no longer has group ownership that can be scoped safely.
 
+### Audit queues and retention
+
+Each JIT host starts and stops its own billing, request-log, function-call and
+pricing audit queues when those services are registered. Queues flush at 100 events
+or every 10 seconds, and graceful shutdown drains the remaining events. A host that
+never acquires leadership still flushes its queue. Failed database writes retain
+their existing requeue and retry behavior.
+
+Shared retention has a separate leader-owned worker. Its leadership names remain
+`BillingAuditService`, `RequestLogService`, `FunctionCallAuditService` and
+`PricingAuditService`, including during rolling upgrades. Billing, request-log and
+pricing retention keep their five-minute initial delay and daily schedule;
+function-call retention runs once on acquiring leadership. Losing leadership cancels
+and joins retention while local queues continue running. Host shutdown joins
+retention before the queue's final drain.
+The queue and retention adapters borrow the DI-owned audit singleton; only the
+retention adapter owns its worker task and cancellation source.
+
+Native hosts retain their separately supported typed billing-audit/request-log
+writers and do not enable these JIT retention workers. These local queues buffer
+events in memory; graceful-drain verification does not establish durability after
+abrupt process termination.
+
 ## Runtime configuration (in the Admin UI)
 
 Everything about *how Conduit behaves per request* is data in Postgres, created and edited live

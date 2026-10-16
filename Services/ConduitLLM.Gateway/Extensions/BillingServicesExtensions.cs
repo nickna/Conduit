@@ -50,7 +50,7 @@ public static class BillingServicesExtensions
         // Ephemeral key service for direct browser-to-API authentication (used for all direct access including SignalR)
         services.AddScoped<IEphemeralKeyService, EphemeralKeyService>();
 
-        // Each native host flushes its own in-memory billing audit queue.
+        // Each host flushes its own in-memory billing audit queue.
 #if CONDUIT_NATIVE_AOT
         services.AddSingleton<IBillingAuditRuntimeWriter, NpgsqlBillingAuditRuntimeWriter>();
         services.AddSingleton<IBillingAuditService>(provider => BillingAuditService.CreateWithRuntimePersistence(
@@ -60,9 +60,13 @@ public static class BillingServicesExtensions
         services.AddSingleton<IHostedService>(provider => (BillingAuditService)provider.GetRequiredService<IBillingAuditService>());
 #else
         services.AddSingleton<IBillingAuditService, BillingAuditService>();
-        services.AddLeaderElectedHostedService<BillingAuditService>(
-            provider => (BillingAuditService)provider.GetRequiredService<IBillingAuditService>(),
-            "BillingAuditService", ownsInnerService: false);
+        services.AddSingleton<IHostedService>(provider => new BatchAuditQueueHostedService(
+            (BillingAuditService)provider.GetRequiredService<IBillingAuditService>()));
+        services.AddLeaderElectedHostedService<BatchAuditRetentionHostedService>(
+            provider => new BatchAuditRetentionHostedService(
+                ((BillingAuditService)provider.GetRequiredService<IBillingAuditService>()).RunDataRetentionAsync,
+                provider.GetRequiredService<ILogger<BatchAuditRetentionHostedService>>()),
+            "BillingAuditService", ownsInnerService: true);
 #endif
 
         services.AddOptions<ConduitLLM.Configuration.Options.BillingReconciliationOptions>()
@@ -90,11 +94,15 @@ public static class BillingServicesExtensions
         services.AddPricingRulesCache();
 
 #if !CONDUIT_NATIVE_AOT
-        // Pricing audit service for rules-based pricing evaluation tracking - with leader election
+        // Local pricing audit flushing is independent of shared retention leadership.
         services.AddSingleton<IPricingAuditService, PricingAuditService>();
-        services.AddLeaderElectedHostedService<PricingAuditService>(
-            provider => (PricingAuditService)provider.GetRequiredService<IPricingAuditService>(),
-            "PricingAuditService", ownsInnerService: false);
+        services.AddSingleton<IHostedService>(provider => new BatchAuditQueueHostedService(
+            (PricingAuditService)provider.GetRequiredService<IPricingAuditService>()));
+        services.AddLeaderElectedHostedService<BatchAuditRetentionHostedService>(
+            provider => new BatchAuditRetentionHostedService(
+                ((PricingAuditService)provider.GetRequiredService<IPricingAuditService>()).RunDataRetentionAsync,
+                provider.GetRequiredService<ILogger<BatchAuditRetentionHostedService>>()),
+            "PricingAuditService", ownsInnerService: true);
 #endif
 
         return services;
