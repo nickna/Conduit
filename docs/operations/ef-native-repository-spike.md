@@ -968,3 +968,42 @@ adds a conversion. This supports the implicit nullable-lift lead, separately
 from #1667's literal/`Expression.Constant` failure. The inspected current-main
 source has the same visitor bodies; no current-main compiler run or upstream
 fix is asserted. The duplicate search was not exhaustive.
+
+## Collector descendant cleanup verification (#1673)
+
+The repair in `f1e97a167` is already an ancestor of this branch. The bounded
+process helper and live-owned-descendant assertion retain that repair: capture
+verified descendants of a live root, signal only the original root, and wait
+for captured identities and streams within the shared five-second cleanup
+budget. Start-token/ancestry mismatch, foreign processes and invalid metadata
+remain failures. Matching zombie state and strictly verified latched absence
+retain their existing completion rules. The originating historical CI case
+and particular race remain unknown. The already-exited-root/late-fork limit
+continues separately in #1674.
+
+Official GitHub records now confirm that
+[fixing run 38331227243](https://github.com/nickna/Conduit/actions/runs/38331227243/job/115081177180)
+passed the collector step at the exact fixing commit: 101 collector cases and
+31 metadata boundaries. Native publication and the selected persistence and
+converter steps also passed. The workflow then failed the separate shared
+PostgreSQL parity step: 275 of 289 passed, 14 failed with SQLSTATE `53300`, zero
+skipped. Later release/two-host/protocol steps, runtime/symbol uploads and the
+image job were skipped. That failure remains part of the #1677 history.
+
+The later [native run 38939591595](https://github.com/nickna/Conduit/actions/runs/38939591595)
+at this branch's starting commit `15e187483` completed all three jobs
+successfully. Its collector, shared parity, two-host and protocol steps passed.
+Those statuses qualify only their recorded source and selected workflow scope;
+artifact bytes were not downloaded or independently qualified for this review.
+
+The current collector, test and attempt-evidence bytes exactly match #1642's
+retained Windows and Linux runs, each passing 144 collector cases plus all
+31 metadata boundaries with exit zero and whitespace-only stderr. The
+transitive collector inputs remain unchanged, and all 12 promotion inputs
+match the retained 204-case runs. Current source hashes, immutable logs and
+Git ancestry were checked; no unchanged suite was repeated and no cleanup
+assertion or budget was weakened. The official hosted-status receipt has
+SHA-256 `55d1b5abed249fc777da41f79d2059d58365d97fc98c607eed7be5f886e22303`.
+The final PR must still run the current branch's native workflow and address
+its failures. Neither ancestor CI nor retained local checks qualify later
+branch changes, the complete native repository suite or production readiness.
