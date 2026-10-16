@@ -208,6 +208,16 @@ its owned workload and fails collection. Preserve earlier unclassified attempts:
 a later tag cannot establish their cause. Full persisted per-phase diagnostics
 remain tracked in [#1642](https://github.com/nickna/Conduit/issues/1642).
 
+`Invoke-BoundedProcess` has one pipeline result for either a successful or a
+nonzero child exit: a `PSCustomObject` containing only `ExitCode` (`int`),
+`Stdout` and `Stderr` (`string`). Cleanup awaits and pending stream reads suppress
+their incidental .NET task results so callers cannot accidentally accept an array
+through PowerShell property enumeration ([#1589](https://github.com/nickna/Conduit/issues/1589)).
+Captured streams remain private; a timeout or cleanup failure throws a controlled
+error instead of returning a command record. The collector contract suite checks
+single-object cardinality, exact property names and types, stdout/stderr content,
+nonzero exit codes, UTF-8 decoding and bounded process-tree cleanup.
+
 The evaluator independently recomputes the medians and comparisons, validates
 complete zero-failure workloads and identical load parameters and fingerprints
 across every pair, and applies throughput and p99 thresholds separately to each
