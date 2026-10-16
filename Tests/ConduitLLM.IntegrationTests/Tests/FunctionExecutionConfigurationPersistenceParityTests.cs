@@ -167,14 +167,208 @@ public sealed class FunctionExecutionConfigurationPersistenceParityTests(Postgre
         finally { await DropAsync(schema); }
     }
 
+    [Theory]
+    [InlineData(false, nameof(IFunctionExecutionConfigurationStore.GetConfigurationAsync))]
+    [InlineData(false, nameof(IFunctionExecutionConfigurationStore.GetConfigurationsAsync))]
+    [InlineData(false, nameof(IFunctionExecutionConfigurationStore.ListCredentialsForProviderAsync))]
+    [InlineData(true, nameof(IFunctionExecutionConfigurationStore.GetConfigurationAsync))]
+    [InlineData(true, nameof(IFunctionExecutionConfigurationStore.GetConfigurationsAsync))]
+    [InlineData(true, nameof(IFunctionExecutionConfigurationStore.ListCredentialsForProviderAsync))]
+    public async Task SqlInFlightCancellationReleasesTheSingleConnectionSlot(bool typed, string readMethod)
+    {
+        var schema = $"function_runtime_{Guid.NewGuid():N}";
+        var table = readMethod == nameof(IFunctionExecutionConfigurationStore.ListCredentialsForProviderAsync)
+            ? "FunctionCredentials" : "FunctionConfigurations";
+        using var setup = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        // Only the explicit Cancel after the observed SQL wait cancels this token.
+        // Setup/observer timeouts must fail the proof, not satisfy its assertion.
+        using var cancelledRead = new CancellationTokenSource();
+        NpgsqlDataSource? source = null;
+        NpgsqlConnection? blocker = null;
+        NpgsqlConnection? observer = null;
+        NpgsqlTransaction? transaction = null;
+        Task? pending = null;
+        var lockReleased = false;
+
+        await IntegrationProofCleanup.RunAsync(async () =>
+        {
+            await SeedAsync(schema, setup.Token);
+            var connectionString = new NpgsqlConnectionStringBuilder(WithSearchPath(schema))
+            {
+                ApplicationName = schema, MinPoolSize = 0, MaxPoolSize = 1,
+                Timeout = 5, CommandTimeout = 30, CancellationTimeout = 1000
+            }.ConnectionString;
+            source = NpgsqlDataSource.Create(connectionString);
+            var store = CreateStores(source, source)[typed ? 1 : 0];
+            await AssertConfigurationReadsRecoverAsync(store, setup.Token);
+            var readerPid = await AssertConfigurationPoolReusableAsync(source, setup.Token);
+
+            blocker = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(connectionString)
+                { Pooling = false, ApplicationName = $"{schema}_blocker" }.ConnectionString);
+            await blocker.OpenAsync(setup.Token);
+            transaction = await blocker.BeginTransactionAsync(setup.Token);
+            await using (var command = blocker.CreateCommand())
+            {
+                command.Transaction = transaction;
+                command.CommandText = $"LOCK TABLE \"{schema}\".\"{table}\" IN ACCESS EXCLUSIVE MODE";
+                await command.ExecuteNonQueryAsync(setup.Token);
+            }
+            observer = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(connectionString)
+                { Pooling = false, ApplicationName = $"{schema}_observer" }.ConnectionString);
+            await observer.OpenAsync(setup.Token);
+
+            pending = InvokeConfigurationReadAsync(store, readMethod, cancelledRead.Token);
+            await WaitForConfigurationRelationWaitAsync(observer, schema, table,
+                readerPid, blocker.ProcessID, pending, setup.Token);
+            cancelledRead.Cancel();
+            var cancellation = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                pending.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal(cancelledRead.Token, cancellation.CancellationToken);
+
+            // The table lock is still held. Reusing the only pooled slot for an
+            // unrelated scalar proves cancellation reaped the command itself.
+            using (var poolRecovery = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
+                await AssertConfigurationPoolReusableAsync(source, poolRecovery.Token);
+            using (var release = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
+                await transaction.RollbackAsync(release.Token);
+            lockReleased = true;
+            using var recovery = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await AssertConfigurationReadsRecoverAsync(store, recovery.Token);
+        }, () => IntegrationProofCleanup.DrainIndependentlyAsync(
+            [async token =>
+                {
+                    cancelledRead.Cancel();
+                    if (pending is not null) await ReapConfigurationReadAsync(pending, token);
+                },
+             async token =>
+                {
+                    if (transaction is not null && !lockReleased)
+                        await transaction.RollbackAsync(token);
+                },
+             async token =>
+                {
+                    if (blocker is not null) await blocker.DisposeAsync().AsTask().WaitAsync(token);
+                },
+             // Releasing/disposal of the blocker runs even if the first drain
+             // fails, then the pending operation is joined again before its pool.
+             async token =>
+                {
+                    if (pending is not null) await ReapConfigurationReadAsync(pending, token);
+                },
+             async token =>
+                {
+                    if (transaction is not null) await transaction.DisposeAsync().AsTask().WaitAsync(token);
+                },
+             async token =>
+                {
+                    if (observer is not null) await observer.DisposeAsync().AsTask().WaitAsync(token);
+                },
+             async token =>
+                {
+                    if (source is not null) await source.DisposeAsync().AsTask().WaitAsync(token);
+                },
+             token => DropAsync(schema, token)],
+            TimeSpan.FromSeconds(5), "Pre-execution configuration SQL cancellation owners could not all be drained."),
+            "Pre-execution configuration SQL cancellation and owned cleanup failed.");
+    }
+
+    private static Task InvokeConfigurationReadAsync(
+        IFunctionExecutionConfigurationStore store, string readMethod, CancellationToken token) => readMethod switch
+    {
+        nameof(IFunctionExecutionConfigurationStore.GetConfigurationAsync) => store.GetConfigurationAsync(2, token),
+        nameof(IFunctionExecutionConfigurationStore.GetConfigurationsAsync) =>
+            store.GetConfigurationsAsync(new[] { 2, 1, 2, 3, -1, 999 }, token),
+        nameof(IFunctionExecutionConfigurationStore.ListCredentialsForProviderAsync) =>
+            store.ListCredentialsForProviderAsync(FunctionProviderType.Exa, token),
+        _ => throw new ArgumentOutOfRangeException(nameof(readMethod))
+    };
+
+    private static async Task AssertConfigurationReadsRecoverAsync(
+        IFunctionExecutionConfigurationStore store, CancellationToken token)
+    {
+        var configuration = (await store.GetConfigurationAsync(2, token))!;
+        configuration.ConfigurationName.Should().Be("O'Hare 雪");
+        configuration.IsEnabled.Should().BeFalse();
+        (await store.GetConfigurationsAsync(new[] { 2, 1, 2, 3, -1, 999 }, token))
+            .Select(row => row.Id).Should().BeEquivalentTo([1, 2, 3]);
+        (await store.ListCredentialsForProviderAsync(FunctionProviderType.Exa, token))
+            .Select(row => row.Id).Should().Equal(103, 100, 101, 102, 104, 107, 105);
+    }
+
+    private static async Task<int> AssertConfigurationPoolReusableAsync(NpgsqlDataSource source, CancellationToken token)
+    {
+        await using var connection = await source.OpenConnectionAsync(token);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1";
+        (await command.ExecuteScalarAsync(token)).Should().Be(1);
+        return connection.ProcessID;
+    }
+
+    private static async Task ReapConfigurationReadAsync(Task pending, CancellationToken cleanupToken)
+    {
+        try { await pending.WaitAsync(cleanupToken); }
+        // Do not mistake the independent cleanup deadline for a reaped query.
+        catch (OperationCanceledException) when (pending.IsCanceled) { }
+    }
+
+    private static async Task WaitForConfigurationRelationWaitAsync(
+        NpgsqlConnection observer, string schema, string table, int readerPid, int blockerPid,
+        Task pending, CancellationToken setupToken)
+    {
+        using var observation = CancellationTokenSource.CreateLinkedTokenSource(setupToken);
+        observation.CancelAfter(TimeSpan.FromSeconds(10));
+        await using var command = observer.CreateCommand();
+        command.CommandTimeout = 5;
+        // Autocommit observations get a fresh statistics snapshot each time.
+        // Identify the actual waiter, exact relation and our actual blocker;
+        // a different backend or an unrelated lock cannot satisfy this oracle.
+        command.CommandText = """
+            SELECT activity.pid
+            FROM pg_catalog.pg_stat_activity activity
+            JOIN pg_catalog.pg_locks waiting ON waiting.pid = activity.pid
+            JOIN pg_catalog.pg_class relation ON relation.oid = waiting.relation
+            JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+            JOIN pg_catalog.pg_locks blocking ON blocking.relation = waiting.relation
+                AND blocking.pid = @blocker AND blocking.granted
+                AND blocking.mode = 'AccessExclusiveLock'
+            WHERE activity.pid = @reader AND activity.application_name = @application
+                AND activity.datname = current_database() AND activity.wait_event_type = 'Lock'
+                AND @blocker = ANY(pg_catalog.pg_blocking_pids(activity.pid))
+                AND waiting.locktype = 'relation' AND NOT waiting.granted
+                AND waiting.mode = 'AccessShareLock'
+                AND waiting.relation = pg_catalog.to_regclass(@relation)
+                AND namespace.nspname = @schema AND relation.relname = @table
+            """;
+        command.Parameters.AddWithValue("reader", readerPid);
+        command.Parameters.AddWithValue("blocker", blockerPid);
+        command.Parameters.AddWithValue("application", schema);
+        command.Parameters.AddWithValue("relation", $"\"{schema}\".\"{table}\"");
+        command.Parameters.AddWithValue("schema", schema);
+        command.Parameters.AddWithValue("table", table);
+        while (true)
+        {
+            if (pending.IsCompleted)
+            {
+                await pending;
+                throw new InvalidOperationException("Pre-execution configuration read completed before its SQL relation wait was observed.");
+            }
+            if (await command.ExecuteScalarAsync(observation.Token) is int observed)
+            {
+                Assert.Equal(readerPid, observed);
+                return;
+            }
+            await Task.Delay(25, observation.Token);
+        }
+    }
+
     private static IFunctionExecutionConfigurationStore[] CreateStores(NpgsqlDataSource efSource, NpgsqlDataSource source) =>
         [new EfFunctionExecutionConfigurationStore(new ContextFactory(efSource)),
             new NpgsqlFunctionExecutionConfigurationStore(source)];
 
-    private async Task SeedAsync(string schema)
+    private async Task SeedAsync(string schema, CancellationToken cancellationToken = default)
     {
         await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = false }.ConnectionString);
-        await connection.OpenAsync();
+        await connection.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
             CREATE SCHEMA "{schema}";
@@ -218,12 +412,13 @@ public sealed class FunctionExecutionConfigurationPersistenceParityTests(Postgre
         var created = new DateTime(2026, 10, 11, 7, 0, 0, DateTimeKind.Utc);
         command.Parameters.AddWithValue("created", created);
         command.Parameters.AddWithValue("updated", created.AddMinutes(1));
-        await command.ExecuteNonQueryAsync();
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private async Task DropAsync(string schema)
+    private async Task DropAsync(string schema, CancellationToken cancellationToken = default)
     {
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(15));
         await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(deadline.Token);
         await using var command = connection.CreateCommand();

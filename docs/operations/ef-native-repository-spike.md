@@ -400,11 +400,12 @@ Independent source, TRX-identity, raw-command, ownership, and cleanup replay is
 `03eef96022e2b287b9bfbc1e2410a6d1bb4cefc016cd755e287f0f57ff8827b1`;
 it verifies all 34 joined commands and their 68 captured output streams.
 
-Existing coverage cancels before execution and during pool acquisition. Adding
-observed SQL-in-flight cancellation cases for all three reads is tracked as a
-non-blocking coverage improvement in
-[#1665](https://github.com/nickna/Conduit/issues/1665); no current cancellation
-failure has been demonstrated.
+That four-row run cancels before execution and during pool acquisition. The
+[#1665](https://github.com/nickna/Conduit/issues/1665) additions provide six
+observed SQL-in-flight cases and three typed persistence-driver counterparts,
+reconciled in the [current query inventory](persistence-aot-query-inventory.md).
+They do not alter the historical four-row receipt or establish EF published-native
+execution; no current cancellation failure has been demonstrated.
 
 Removing these translation errors does not establish generated-query execution,
 complete native repository-suite qualification, or production readiness.

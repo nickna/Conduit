@@ -483,7 +483,7 @@ async Task RunProbeAsync()
             await ExerciseSchemaVersionProbeAsync(schemaDataSource, storeConnectionString);
             await ExerciseConnectionPoolWarmupAsync(schemaDataSource);
             await FunctionDiscoveryPersistenceProbe.RunAsync(schemaDataSource);
-            await FunctionExecutionConfigurationPersistenceProbe.RunAsync(schemaDataSource);
+            await FunctionExecutionConfigurationPersistenceProbe.RunAsync(schemaDataSource, storeConnectionString);
             await FunctionPricingPersistenceProbe.RunAsync(schemaDataSource);
             await FunctionExecutionPersistenceProbe.RunAsync(schemaDataSource, storeConnectionString);
             await FunctionExecutionReaderPersistenceProbe.RunAsync(schemaDataSource);
