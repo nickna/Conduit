@@ -125,6 +125,20 @@ the NativeAOT workflow.
 | Function execution reads / `IFunctionExecutionRuntimeReader` | `FunctionExecutionPersistenceParityTests` | The successful publish/process job in [Linux run 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143) includes the native persistence probe's 39 scalar fields, included configuration/inverse graph and 105-row virtual-key list, plus the shared PostgreSQL parity suite. Native Gateway selects the reader in its prepared execution service after that proof; the published Exa process job linked below verifies opposite-host execution-by-ID reads and ownership. Execution-list HTTP remains separate. |
 | Stateless inline MCP execution | `NativeMcpFunctionProviderTests`, shared function configuration/pricing/execution contracts | [Linux run 38147134135](https://github.com/nickna/Conduit/actions/runs/38147134135) passes actual configured MCP execution on both native Gateways, production-protected scoped credentials, modern request metadata, structured/Unicode results, all 24 persisted fields, opposite-host ownership and exact configured pricing/accounting. Stateful sessions, agentic MCP and broader server interoperability remain separate. |
 
+The #1666 EF recovery additions provide ten deterministic PostgreSQL rows in
+`VirtualKeyRuntimeRetryPersistenceTests` and
+`VirtualKeyRuntimeUniqueConflictPersistenceTests`. A real `40001` after the
+balance update and tracked ledger creation proves provider-strategy retry,
+fresh attempt scalars/transactions, rollback and one committed debit. A real
+`23505` proves disposal before fresh-context recovery, current-state return,
+six conflicting replay identities and cancellation at recovery-query dispatch.
+The tests also verify exact ledger/totals and single-slot connection reuse.
+All 26 selected recovery and existing virtual-key/legacy replay cases passed
+locally without skips. The NativeAOT workflow explicitly includes the two new
+classes in its managed shared-contract gate; this is not EF native execution.
+Immediate-retry cancellation is covered here. Cancellation during nonzero retry
+backoff remains a separate defect, [#1703](https://github.com/nickna/Conduit/issues/1703).
+
 The #1665 configuration-read additions retain the four original parity rows and
 add six `SqlInFlightCancellationReleasesTheSingleConnectionSlot` rows: EF and
 typed Npgsql implementations of `GetConfigurationAsync`, `GetConfigurationsAsync`
