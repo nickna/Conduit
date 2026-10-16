@@ -10,6 +10,28 @@ function workflows() { return Object.fromEntries(readdirSync('.github/workflows'
 test('real workflows and cancellable validation jobs satisfy the policy without release warnings', () => {
   assert.equal(validateWorkflows(workflows(), inventory).requiredJobs, inventory.length);
 });
+for (const replacement of [null, 'tools/ConduitLLM.OtherProbe/**']) {
+  test(`rejects the NativeAOT HealthProbe path ${replacement ? 'replaced by another project' : 'removed'}`, () => {
+    const w = workflows();
+    const paths = w['native-aot.yml'].on.pull_request.paths;
+    paths.splice(paths.indexOf('tools/ConduitLLM.HealthProbe/**'), 1, ...(replacement ? [replacement] : []));
+    assert.throws(() => validateWorkflows(w, inventory), /explicitly include the packaged HealthProbe project/);
+  });
+}
+test('both native images restore and package the HealthProbe declared by their shared publisher', () => {
+  const project = 'tools/ConduitLLM.HealthProbe/ConduitLLM.HealthProbe.csproj';
+  const producer = readFileSync('scripts/aot/publish-native-image.ps1', 'utf8');
+  const healthDefinition = producer.split(/\r?\n/).find(line => line.includes('role = "health-probe"'));
+  assert.ok(healthDefinition?.includes(`project = "${project}"`), 'Shared publisher must compile the restored HealthProbe project');
+  for (const service of ['Admin', 'Gateway']) {
+    const dockerfile = readFileSync(`Services/ConduitLLM.${service}/Dockerfile.native`, 'utf8').replace(/\\\r?\n\s*/g, '');
+    assert.ok(dockerfile.includes(`dotnet restore ${project} --runtime linux-x64`), `${service} must restore the HealthProbe project`);
+    assert.ok(dockerfile.includes(`RUN pwsh -NoProfile -File scripts/aot/publish-native-image.ps1 -Service ${service.toLowerCase()} -ArtifactDirectory /app/native-publish`),
+      `${service} must use the shared native image publisher`);
+    assert.match(dockerfile, /^COPY --from=build (?:--chown=\S+ )?\/app\/native-publish\/payload\/ \.\/$/m);
+    assert.match(dockerfile, /^HEALTHCHECK[^\r\n]* CMD \["\/app\/conduit-health-probe", "http:\/\/localhost:8080\/health\/live"\]$/m);
+  }
+});
 for (const [name, mutate] of [
   ['missing required job', w => w['ci.yml'].jobs.required.needs.pop()],
   ['missing selector', w => delete w['ci.yml'].jobs.select],

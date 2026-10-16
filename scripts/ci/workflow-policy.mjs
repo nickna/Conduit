@@ -21,6 +21,8 @@ export function validateWorkflows(workflows, required) {
         `${name}/${id}: missing bounded timeout`);
     }
   }
+  require(array(workflows['native-aot.yml']?.on?.pull_request?.paths).includes('tools/ConduitLLM.HealthProbe/**'),
+    'NativeAOT pull requests must explicitly include the packaged HealthProbe project');
   const ci = workflows['ci.yml'];
   const packagedCheckout = array(ci.jobs.docker.steps).filter(step => step.uses?.startsWith('actions/checkout@'));
   require(packagedCheckout.length === 1 && packagedCheckout[0].with?.['persist-credentials'] === false,
