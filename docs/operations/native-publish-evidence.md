@@ -213,6 +213,25 @@ source record and records registry digest qualification as false. The completed
 package association below verifies local descriptor roles; production qualification
 still requires the canary policy.
 
+When a runtime contract fails, retain its scenario-specific diagnostic
+([#1609](https://github.com/nickna/Conduit/issues/1609)). Command-failure assertions
+report `scenario`, `elapsedSeconds`, `maximumSeconds`, `latch`, `targetCommandCount`,
+`expectedStage` and `controlledFailureStage`:
+
+| Negative fixture | Expected controlled stage |
+| --- | --- |
+| `create-timeout` | `runtime-create` |
+| `cp-timeout` | `runtime-openapi-copy` |
+| `logs-overflow` | `runtime-logs` |
+
+The invocation stopwatch stops before fingerprinting and assertions. Its bound
+includes OCI preflight, reached commands and reap budgets, execution and independent
+cleanup. `maximumSeconds` is a conservative whole-invocation fixture bound;
+individual command and cleanup deadlines retain their own limits.
+Separate `wait-timeout` coverage checks the execution deadline and
+`runtime-execution` stage. A later successful rerun does not establish the cause of
+an earlier failure whose scenario and timing were not retained.
+
 ## Offline OCI archive association
 
 `native-image-oci-association.ps1` verifies a saved OCI archive against separately
