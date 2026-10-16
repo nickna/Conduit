@@ -864,3 +864,49 @@ R1 remains REJECT at 424/196: guarded nullable Value evaluation and two integer/
 Actual Windows Release verification passes **326 shared PostgreSQL persistence cases** (the original 313 names/test IDs plus thirteen new media rows), zero failures/skips, and **62 existing media consumer/dependency-boundary cases**, zero failures/skips. New cases exercise provider-observed first/later-query cancellation, no tracking, borrowed-context/scoped transaction visibility and disposal, inactive/missing/default policy selection, null-size/tombstone aggregation, generated identity and durable replay/concurrent-winner failure paths. Shared receipt `d15a6f44…` has 81 valid observer samples, zero observer errors and a sampled peak of six connections including the observer / five excluding it; all 38 commands join, both owned fixtures are removed and protected images remain unchanged. Consumer receipt `97f7a9e9…` is independently replayed by `7fdeef95…`. These are managed behavior and focused compiler results, not generated-query execution or complete published-native repository qualification.
 
 At head `9f6ad048`, regular hosted CI passes all twenty jobs. Native run [38357642205](https://github.com/nickna/Conduit/actions/runs/38357642205) passes publishing, PostgreSQL/converter proofs, shared persistence parity and the two-host proof, then fails the final Gateway boundary probe's zero-LLM-cost agentic response assertion (exit 134). Its exact failed log is retained as `376964f3…`; a separate next unit will align that assertion with the fixture's already-required configured token settlement. No native workflow success or promotion is claimed. Complete repository migration/native coverage and operational rollout remain required under #1373, #1375 and #1368.
+
+## Required-member and decimal-literal reductions (#1667)
+
+Four isolated cases in `tools/EfQueryPrecompilerRepro/Variants` now reduce the
+replacement failures described above. Fresh Linux directories use SDK 10.0.401,
+EF runtime/Relational/Design/Tasks/CLI 10.0.12 and Npgsql/provider 10.0.3. All four
+initial managed builds pass. Query generation and generated-code compilation
+remain separate gates:
+
+| Variant | Generation exit | Generated managed build |
+|---|---:|---|
+| `RequiredProjection` | 1 | Skipped: `VisitMemberInit` expects object creation but receives an invocation |
+| `RequiredProjectionAfterMaterialization` | 0 | 0; one generated query source |
+| `DecimalImplicitZero` | 1 | Skipped: `Expression.Constant` rejects argument types in `VisitLiteralExpression` |
+| `DecimalExplicitZero` | 0 | 0; one generated query source |
+
+The required-member control projects every scalar in its minimal key/group
+model before constructing the original required init-only DTO graph. The decimal
+pair uses a scalar SELECT with integer `0` versus decimal `0m`, isolating literal
+translation from the separate bulk-update setter failures. Unsealed entities
+and local context/scalar aliases avoid the unrelated known failures. The two
+generated builds retain five and four CS9270/CS8669 warnings respectively.
+
+The matrix and logs are retained under
+`artifacts/issues-1469-1696/issue-1667/run-532425a80a474ab0adaa4aec888ea8ee/`;
+`matrix.json` SHA-256 is
+`19b92f7d6a448355486bae23177df04e796580ebd8018db498d899a7403e81d9`.
+Independent replay verifies 77 source, generated-file, package and log bindings;
+all fourteen child stages and their streams joined. The actual Design package
+identifies source commit `95017c711e6afc1085133d440e42b4bd78155701`.
+
+The existing production scalar snapshots and explicit decimal literals remain
+unchanged from branch base `15e187483`. Five current managed virtual-key runtime
+parity rows pass against PostgreSQL, including complete snapshots and
+cancellation/reuse. This reduction adds no production workaround and does not
+replace the earlier owner compiler comparison. The minimal methods were not
+executed, no database connection was made by the reductions, and no native EF
+publication or generated-query runtime qualification is claimed.
+
+Bounded all-state upstream searches found no exact duplicates. The reduced
+required-member failure is filed as [EF #39302](https://github.com/dotnet/efcore/issues/39302),
+and the decimal-literal failure as [EF #39303](https://github.com/dotnet/efcore/issues/39303).
+[EF #38012](https://github.com/dotnet/efcore/issues/38012) is related conversion
+work with a distinct custom-type binary-operator failure. Pinned source supports
+the unsafe-constructor/member-initializer and boxed-literal/converted-type leads;
+neither an upstream fix nor a tested current-main failure is asserted.

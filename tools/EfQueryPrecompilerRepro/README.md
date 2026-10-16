@@ -1,7 +1,8 @@
 # EF query-precompiler reductions
 
-Opt-in, design-time reproductions for Conduit [#1660](https://github.com/nickna/Conduit/issues/1660)
-and [#1662](https://github.com/nickna/Conduit/issues/1662).
+Opt-in, design-time reproductions for Conduit [#1660](https://github.com/nickna/Conduit/issues/1660),
+[#1662](https://github.com/nickna/Conduit/issues/1662), and
+[#1667](https://github.com/nickna/Conduit/issues/1667).
 This project is deliberately outside `Conduit.slnx`. It references no Conduit
 service, uses an inert design-time factory at loopback port 1, and its entrypoint
 does not call any query. Do not publish or execute its query methods to reproduce
@@ -10,7 +11,8 @@ these compiler failures.
 The local package file aligns EF runtime, Relational, Design and Tasks at
 10.0.12, with Npgsql/provider 10.0.3. It also retains the repository's patched
 MSBuild and cryptography dependencies without changing the service dependency
-graph. The measured commands used Windows x64 and SDK 10.0.401.
+graph. The #1660/#1662 commands used Windows x64; the #1667 matrix used Linux.
+Both used SDK 10.0.401.
 
 ## Repeat a case
 
@@ -185,3 +187,69 @@ new runs preserve explicit argument lists and actual child working directories.
 Successful generated builds retain experimental/nullable warnings. No sensitive
 data logging, database connection, query execution, native publication, or
 repository-suite qualification occurred in these reductions. #1373 remains open.
+
+## Required-member and decimal-literal reductions (#1667)
+
+These four isolated cases reduce [Conduit #1667](https://github.com/nickna/Conduit/issues/1667).
+Use the fresh-directory commands above with the following variant/context pairs.
+Both pairs alias context and scalar parameters into locals and omit optional
+query cancellation-token arguments to avoid the separate #35494 failure. Their
+EF entities are unsealed to avoid #37957 before the expression being tested.
+
+| Variants | `$context` |
+|---|---|
+| `RequiredProjection`, `RequiredProjectionAfterMaterialization` | `EfQueryPrecompilerRepro.RequiredProjectionContext` |
+| `DecimalImplicitZero`, `DecimalExplicitZero` | `EfQueryPrecompilerRepro.DecimalLiteralContext` |
+
+The accepted run used Linux, SDK 10.0.401, .NET 10.0.12, PowerShell 7.6.6,
+EF runtime/Relational/Design/Tasks/CLI 10.0.12, and Npgsql/provider 10.0.3.
+Every initial managed build exited 0. Each source was unchanged across its run.
+
+| Variant | Generation exit | Generated managed build | Observation |
+|---|---:|---:|---|
+| `RequiredProjection` | 1 | Not run | Required init-only `Group` DTO projection: `VisitMemberInit` expects `ObjectCreationExpressionSyntax` but receives `InvocationExpressionSyntax` |
+| `RequiredProjectionAfterMaterialization` | 0 | 0 | Materialize the same four scalars anonymously; construct the complete required DTO after `await` |
+| `DecimalImplicitZero` | 1 | Not run | Decimal conditional with integer `0`: `Argument types do not match` in `Expression.Constant` / `VisitLiteralExpression` |
+| `DecimalExplicitZero` | 0 | 0 | Same query with both zero literals written as `0m` |
+
+Each successful control produced one interceptor file. The required-member and
+decimal generated managed builds retain five and four CS9270/CS8669 warnings,
+respectively. The decimal projection alone reproduces the literal failure, so
+no bulk-update setter is needed to reach it.
+
+The pinned translator's [constructor branch](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore.Design/Query/Internal/LinqToCSharpSyntaxTranslator.cs#L2079)
+uses an unsafe-accessor invocation for a required-member type whose constructor
+lacks `SetsRequiredMembers`; its [member-initializer translation](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore.Design/Query/Internal/LinqToCSharpSyntaxTranslator.cs#L2476)
+expects object creation. The [literal translation](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore.Design/Query/Internal/CSharpToLinqTranslator.cs#L760)
+passes the token value and semantic converted type to `Expression.Constant`.
+These source paths support the reduced signatures; they do not establish a
+general EF fix or workaround guarantee.
+
+The required-member and decimal-literal failures are filed separately as
+[EF #39302](https://github.com/dotnet/efcore/issues/39302) and
+[EF #39303](https://github.com/dotnet/efcore/issues/39303). A bounded all-state
+review of 24 exact-signature, required-member, literal-conversion and precompiled
+query searches found no exact duplicate. Related
+[EF #38012](https://github.com/dotnet/efcore/issues/38012) concerns custom
+`Name`/string conversion in a binary expression, rather than this boxed integer
+literal with decimal converted type. This search does not establish an
+intentional restriction or an upstream fix.
+
+The capture is retained under
+`artifacts/issues-1469-1696/issue-1667/run-532425a80a474ab0adaa4aec888ea8ee/`.
+Its `matrix.json` SHA-256 is
+`19b92f7d6a448355486bae23177df04e796580ebd8018db498d899a7403e81d9`.
+The pre-run `variant-source-manifest.json` in the parent issue directory has
+SHA-256 `f1489fdc4cf9d50130bac7b56e1d55f18b73fd50b93757cc5953c5d36c9b5a81`.
+The ledger retains per-stage argument lists, child/stream joins, source hashes,
+resolved package identities, generated-file hashes, and stdout/stderr hashes.
+No query method ran, database connection opened, or native publication occurred.
+The design-time `--nativeaot` flag does not qualify native runtime execution.
+
+Production `EfVirtualKeyRuntimeStore` already uses complete anonymous scalar
+materialization followed by DTO construction and explicit decimal `0m`; this
+reduction changes no production query. The separate
+`existing-workaround-parity.json` receipt records five passing managed
+PostgreSQL parity rows from `issue-1666-r3.trx`, including complete snapshots,
+touch isolation, cancellation, and connection reuse. Those existing production
+tests execute neither these generated interceptors nor a native EF runtime.
