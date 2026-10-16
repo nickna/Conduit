@@ -18,6 +18,7 @@ namespace ConduitLLM.Functions.Serialization;
 [JsonSerializable(typeof(Dictionary<string, object>))]
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(FunctionCost))]
+[JsonSerializable(typeof(FunctionExecution))]
 [JsonSerializable(typeof(List<FunctionCost>))]
 [JsonSerializable(typeof(FunctionExecutionRequestData))]
 [JsonSerializable(typeof(FunctionExecutionCostDetails))]

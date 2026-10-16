@@ -32,12 +32,13 @@ public sealed class DocumentationLineEndingDocumentTransformerTests
         var document = CreateDocument("\r\n");
         var schema = Assert.IsType<OpenApiSchema>(document.Components!.Schemas!["Node"]);
         var example = Assert.IsType<OpenApiExample>(document.Components.Examples!["Payload"]);
+        var mediaType = document.Paths["/nodes"].Operations![HttpMethod.Post].RequestBody!.Content["application/json"];
 
         DocumentationLineEndingDocumentTransformer.Normalize(document);
 
         Assert.Equal("literal\r\nvalue", schema.Default!.GetValue<string>());
-        Assert.Equal("literal\r\nvalue", schema.Example!.GetValue<string>());
         Assert.Equal("literal\r\nvalue", schema.Examples![0].GetValue<string>());
+        Assert.Equal("literal\r\nvalue", mediaType.Example!.GetValue<string>());
         Assert.Equal("literal\r\nvalue", schema.Pattern);
         Assert.Equal("literal\r\nvalue", example.Value!["description"]!.GetValue<string>());
         Assert.Equal("line one\n  line two", schema.Description);
@@ -125,7 +126,6 @@ public sealed class DocumentationLineEndingDocumentTransformerTests
         {
             Type = JsonSchemaType.Object, Description = documentation,
             Default = JsonValue.Create("literal\r\nvalue"),
-            Example = JsonValue.Create("literal\r\nvalue"),
             Examples = [JsonValue.Create("literal\r\nvalue")],
             Pattern = "literal\r\nvalue",
             Properties = new Dictionary<string, IOpenApiSchema>
@@ -170,7 +170,11 @@ public sealed class DocumentationLineEndingDocumentTransformerTests
                             Description = documentation,
                             Content = new Dictionary<string, OpenApiMediaType>
                             {
-                                ["application/json"] = new() { Schema = new OpenApiSchemaReference("Node", document) }
+                                ["application/json"] = new()
+                                {
+                                    Schema = new OpenApiSchemaReference("Node", document),
+                                    Example = JsonValue.Create("literal\r\nvalue")
+                                }
                             }
                         },
                         Responses = new OpenApiResponses

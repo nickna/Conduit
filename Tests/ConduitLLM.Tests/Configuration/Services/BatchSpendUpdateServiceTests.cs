@@ -775,7 +775,7 @@ namespace ConduitLLM.Tests.Configuration.Services
                 .ReturnsAsync(new BalanceAdjustmentResult(49.875m, 0.125m, true));
             _mockGroupRepository.Setup(repository => repository.AdjustBalanceIdempotentAsync(
                     groupId, -fallbackCost, It.IsAny<string>(), It.IsAny<string>(), "System",
-                    ReferenceType.System, "41", It.IsAny<DateTime>()))
+                    ReferenceType.VirtualKey, "41", It.IsAny<DateTime>()))
                 .Callback<int, decimal, string, string, string, ReferenceType, string, DateTime>(
                     (_, _, _, _, _, _, _, window) => recoveredWindow = window)
                 .ReturnsAsync(new BalanceAdjustmentResult(47.125m, 2.875m, true));

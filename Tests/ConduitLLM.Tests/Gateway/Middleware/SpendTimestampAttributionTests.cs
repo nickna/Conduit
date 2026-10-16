@@ -93,13 +93,13 @@ public sealed class SpendTimestampAttributionTests
             await Assert.ThrowsAsync<BillingSystemException>(update);
             fixture.Batch.Verify(service => service.QueueFallbackUpdate(
                 41, 2.75m, It.Is<DateTime?>(time =>
-                    time == UsageUtc && time.Value.Kind == DateTimeKind.Utc)), Times.Once);
+                    time == UsageUtc && time.Value.Kind == DateTimeKind.Utc), It.IsAny<string>()), Times.Once);
         }
         else
         {
             await update();
             fixture.Batch.Verify(service => service.QueueFallbackUpdate(
-                It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<DateTime?>()), Times.Never);
+                It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<DateTime?>(), It.IsAny<string>()), Times.Never);
         }
 
         if (tier.StartsWith("redis", StringComparison.Ordinal))

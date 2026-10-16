@@ -1,4 +1,5 @@
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Events;
 using ConduitLLM.Configuration.Exceptions;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Gateway.Metrics;
@@ -54,9 +55,12 @@ namespace ConduitLLM.Gateway.Middleware
             // persistence failures with false, so do not treat task completion alone
             // as a successful charge.
             Exception? databaseFailure = null;
+            // A timeout can hide a committed debit. Recovery must replay the same
+            // ledger identity rather than create another charge.
+            var requestId = Guid.NewGuid().ToString("N");
             try
             {
-                if (await virtualKeyService.UpdateSpendAsync(virtualKeyId, cost, billedAtUtc))
+                if (await virtualKeyService.UpdateSpendAsync(virtualKeyId, cost, billedAtUtc, requestId))
                 {
                     return;
                 }
@@ -76,7 +80,7 @@ namespace ConduitLLM.Gateway.Middleware
             }
 
             // Tier 3: In-memory fallback queue (drained on next successful flush cycle)
-            batchSpendService.QueueFallbackUpdate(virtualKeyId, cost, billedAtUtc);
+            batchSpendService.QueueFallbackUpdate(virtualKeyId, cost, billedAtUtc, SpendIdempotency.KeyFor(requestId));
             BillingMetrics.RecordPotentialRevenueLoss(cost, "fallback_queue");
 
             // The in-memory queue is recoverable during this process lifetime, but it is

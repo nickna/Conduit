@@ -364,7 +364,7 @@ public partial class UsageTrackingMiddleware
 
         if (directCost.ActualCost > 0m)
         {
-            if (await RecordSpendOrSettleReservationAsync(
+            if (directCost.SpendAlreadySettled || await RecordSpendOrSettleReservationAsync(
                     context,
                     virtualKeyId,
                     directCost.ActualCost,

@@ -355,6 +355,7 @@ internal static class NativeFunctionFixture
         """;
 
     private const string DeleteDependentsSql = """
+        DELETE FROM "FunctionExecutionClaims" WHERE "VirtualKeyId" = @keyId;
         DELETE FROM "FunctionExecutionAudits" WHERE "FunctionExecutionId" IN (
             SELECT "Id" FROM "FunctionExecutions" WHERE "FunctionConfigurationId" = @configurationId AND "VirtualKeyId" = @keyId);
         DELETE FROM "FunctionCallAudits" WHERE "FunctionConfigurationId" = @configurationId AND "VirtualKeyId" = @keyId;

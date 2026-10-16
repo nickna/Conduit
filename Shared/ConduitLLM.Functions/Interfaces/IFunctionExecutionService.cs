@@ -9,12 +9,19 @@ public interface IFunctionExecutionService
 {
     /// <summary>
     /// Awaits a provider function and records its result and calculated cost.
-    /// Gateway middleware settles billing when this service is invoked through the HTTP endpoint.
+    /// Gateway middleware settles unkeyed HTTP requests. Keyed requests use a durable,
+    /// virtual-key-scoped claim and settle its execution identity before returning or replaying a result.
     /// </summary>
     /// <param name="functionConfigurationId">The function configuration to use.</param>
     /// <param name="virtualKeyId">The virtual key for billing.</param>
     /// <param name="parameters">Function-specific parameters.</param>
-    /// <param name="idempotencyKey">Optional key recorded with the request metadata.</param>
+    /// <param name="idempotencyKey">
+    /// Optional opaque key (1-200 nonblank characters), scoped to the virtual key. Identical canonical
+    /// requests replay the same execution; conflicting requests fail before provider dispatch.
+    /// Claims are retained indefinitely and uncertain calls are never automatically dispatched again.
+    /// The normal Gateway host configures the required durable store; unconfigured callers
+    /// fail closed when a key is supplied.
+    /// </param>
     /// <param name="metadata">Optional metadata for tracking.</param>
     /// <param name="providerToolName">
     /// For dynamic multi-tool providers (MCP), the provider-native tool name to invoke. Null for

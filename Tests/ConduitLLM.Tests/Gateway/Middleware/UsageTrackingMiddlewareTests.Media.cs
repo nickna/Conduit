@@ -279,6 +279,29 @@ namespace ConduitLLM.Tests.Http.Middleware
         }
 
         [Fact]
+        public async Task FunctionResponse_DurablySettledCostIsLoggedWithoutAnotherDebit()
+        {
+            var context = new HttpContextBuilder()
+                .WithPath("/v1/conduit/functions/execute")
+                .WithVirtualKey(1026)
+                .Build();
+
+            await Invoker.WithNextDelegate(ctx =>
+            {
+                var accounting = ctx.GetOrCreateRequestAccountingContext();
+                accounting.SetOperation(RequestOperation.Function, 1026, "claimed-function");
+                accounting.RecordDirectCost(new DirectCostEvidence(
+                    "claimed-function", 0.12500001m, Guid.NewGuid().ToString(), null,
+                    SpendAlreadySettled: true));
+                return Task.CompletedTask;
+            }).InvokeAsync(context);
+
+            UsageTrackingAssertions.VerifyNoSpendUpdate(Fixture.BatchSpendService, Fixture.VirtualKeyService);
+            UsageTrackingAssertions.VerifyRequestLogged(Fixture.RequestLogService,
+                dto => Assert.Equal(0.12500001m, dto.Cost));
+        }
+
+        [Fact]
         public async Task FunctionResponse_InvalidCost_EmitsRevenueLossAuditWithoutBilling()
         {
             var context = new HttpContextBuilder()

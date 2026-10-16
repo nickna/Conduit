@@ -39,6 +39,13 @@ public interface IVirtualKeyRuntimeService
     Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc);
 
     /// <summary>
+    /// Applies spend once per request ID. Retries, including fallback recovery, must
+    /// retain the request ID, key, amount, and original billing timestamp.
+    /// Returns true once the debit is persisted, even if ancillary maintenance fails.
+    /// </summary>
+    Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc, string requestId);
+
+    /// <summary>
     /// Gets virtual-key information needed by request validation and orchestration.
     /// </summary>
     Task<VirtualKey?> GetVirtualKeyInfoForValidationAsync(

@@ -326,6 +326,55 @@ namespace ConduitLLM.Configuration.Migrations
                     b.ToTable("BillingReconciliationCheckpoints", (string)null);
                 });
 
+            modelBuilder.Entity("ConduitLLM.Configuration.Entities.FunctionExecutionClaimEntity", b =>
+                {
+                    b.Property<int>("VirtualKeyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("KeyHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("BilledAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("BillingGroupId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ExecutionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ResultJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("VirtualKeyId", "KeyHash");
+
+                    b.HasIndex("ExecutionId")
+                        .IsUnique();
+
+                    b.ToTable("FunctionExecutionClaims", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_FunctionExecutionClaims_Billed", "\"BilledAtUtc\" IS NULL OR \"State\" = 'completed'");
+
+                            t.HasCheckConstraint("CK_FunctionExecutionClaims_Result", "(\"State\" = 'completed') = (\"ResultJson\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_FunctionExecutionClaims_State", "\"State\" IN ('claimed', 'dispatching', 'completed', 'uncertain')");
+                        });
+                });
+
             modelBuilder.Entity("ConduitLLM.Configuration.Entities.GlobalSetting", b =>
                 {
                     b.Property<int>("Id")

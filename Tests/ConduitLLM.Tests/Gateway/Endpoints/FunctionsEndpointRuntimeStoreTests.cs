@@ -26,6 +26,42 @@ namespace ConduitLLM.Tests.Gateway.Endpoints;
 
 public sealed class FunctionsEndpointRuntimeStoreTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SettledKeyedExecutionsDoNotPublishAnotherDebit(bool replay)
+    {
+        using var fixture = new Fixture(true);
+        fixture.Execution.IsIdempotencyBillingSettled = true;
+        fixture.Execution.IsIdempotencyReplay = replay;
+
+        using var body = await fixture.RenderAsync(await fixture.ExecuteAsync(), 200);
+
+        var evidence = fixture.Context.GetRequestAccountingSnapshot()!.DirectCost!;
+        Assert.True(evidence.SpendAlreadySettled);
+        Assert.Equal(replay ? 0m : fixture.Execution.ActualCost, evidence.ActualCost);
+        Assert.Equal(fixture.Execution.ActualCost, body.RootElement.GetProperty("cost").GetProperty("actual").GetDecimal());
+        Assert.Equal(fixture.Execution.Id.ToString(), fixture.Context.Response.Headers["Function-Execution-Id"]);
+        if (replay) Assert.Equal("true", fixture.Context.Response.Headers["Idempotency-Replayed"]);
+    }
+
+    [Theory]
+    [InlineData("idempotency_conflict")]
+    [InlineData("idempotency_in_progress")]
+    [InlineData("idempotency_outcome_unknown")]
+    public async Task IdempotencyConflictsExposeStableExecutionIdentity(string code)
+    {
+        using var fixture = new Fixture(true);
+        fixture.ExecutionError = new FunctionIdempotencyException(409, code, fixture.Execution.Id, "Existing operation");
+
+        using var body = await fixture.RenderAsync(await fixture.ExecuteAsync(), 409);
+
+        Assert.Equal(code, body.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(fixture.Execution.Id.ToString(), fixture.Context.Response.Headers["Function-Execution-Id"]);
+        Assert.Equal($"/v1/conduit/functions/executions/{fixture.Execution.Id}", fixture.Context.Response.Headers.Location);
+        Assert.Null(fixture.Context.GetRequestAccountingSnapshot()!.DirectCost);
+    }
+
     [Fact]
     public void ExistingRepositoryConstructorRemainsTheOnlyPublicConstructor()
     {
@@ -414,6 +450,7 @@ public sealed class FunctionsEndpointRuntimeStoreTests
         {
             _runtime = runtime;
             _services = new ServiceCollection().AddLogging()
+                .AddSingleton(Mock.Of<IFunctionExecutionIdempotencyStore>())
                 .Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
                 {
                     options.SerializerOptions.TypeInfoResolverChain.Clear();

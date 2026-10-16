@@ -104,13 +104,13 @@ public sealed class ConcurrencyRateLimitService : IConcurrencyRateLimitService
         var key = RedisKeys.RateLimit.VirtualKeyConcurrency(keyHash);
         var windows = new List<RateLimitWindow>(2);
 
-        if (hasKeyLimit)
+        if (keyMax is int keyLimit && keyLimit > 0)
         {
-            windows.Add(new RateLimitWindow(key, ScopeName, slotTtlMs, keyMax.Value));
+            windows.Add(new RateLimitWindow(key, ScopeName, slotTtlMs, keyLimit));
         }
 
         string? groupKey = null;
-        if (hasGroupLimit)
+        if (groupId is int limitedGroupId && groupMax is int groupCeiling && groupCeiling > 0)
         {
             // A low-priority key sees a capped group ceiling, so it sheds first once the
             // group's shared slots pass the saturation threshold.
@@ -118,11 +118,11 @@ public sealed class ConcurrencyRateLimitService : IConcurrencyRateLimitService
                 context.Items[RateLimitContextKeys.Priority] as int?,
                 _options.PrioritySaturationThreshold);
             var (groupLimit, groupScope) = saturationFraction is double fraction
-                ? (RateLimitSaturationPolicy.Cap(groupMax!.Value, fraction),
+                ? (RateLimitSaturationPolicy.Cap(groupCeiling, fraction),
                     GroupScopeName + RateLimitSaturationPolicy.ScopeSuffix)
-                : (groupMax!.Value, GroupScopeName);
+                : (groupCeiling, GroupScopeName);
 
-            groupKey = RedisKeys.RateLimit.GroupConcurrency(groupId.Value);
+            groupKey = RedisKeys.RateLimit.GroupConcurrency(limitedGroupId);
             windows.Add(new RateLimitWindow(groupKey, groupScope, slotTtlMs, groupLimit));
         }
 

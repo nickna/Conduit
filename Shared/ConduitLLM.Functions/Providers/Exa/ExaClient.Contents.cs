@@ -39,7 +39,7 @@ public partial class ExaClient
             using var client = CreateHttpClient(apiKey);
 
             // Make API request
-            var response = await client.PostAsJsonAsync(
+            using var response = await client.PostAsJsonAsync(
                 "/contents",
                 exaRequest,
                 FunctionProviderJsonContext.Default.ExaContentsRequest,

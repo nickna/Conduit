@@ -4,9 +4,10 @@ using ConduitLLM.Core.Services;
 using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Functions.Security;
 using ConduitLLM.Functions.Services;
-#if CONDUIT_NATIVE_AOT
 using ConduitLLM.Persistence.Interfaces;
-#endif
+using ConduitLLM.Persistence.Npgsql;
+
+using Npgsql;
 
 namespace ConduitLLM.Gateway.Extensions;
 
@@ -20,6 +21,11 @@ public static class FunctionServicesExtensions
     /// </summary>
     public static IServiceCollection AddFunctionServices(this IServiceCollection services)
     {
+        // The same fixed-shape durable claim and ledger adapter serves both runtimes.
+        services.AddSingleton<IFunctionExecutionIdempotencyStore>(provider =>
+            new NpgsqlFunctionExecutionIdempotencyStore(
+                provider.GetRequiredService<NpgsqlDataSource>(),
+                new NpgsqlVirtualKeyRuntimeStore(provider.GetRequiredService<NpgsqlDataSource>())));
         // Register Function repositories
         services.AddScoped<IFunctionConfigurationRepository, FunctionConfigurationRepository>();
 
@@ -51,9 +57,19 @@ public static class FunctionServicesExtensions
                 provider.GetRequiredService<IFunctionCostCalculationService>(),
                 provider.GetRequiredService<IFunctionClientFactory>(),
                 provider.GetRequiredService<IFunctionCredentialProtector>(),
-                provider.GetRequiredService<ILogger<FunctionExecutionService>>()));
+                provider.GetRequiredService<ILogger<FunctionExecutionService>>(),
+                provider.GetRequiredService<IFunctionExecutionIdempotencyStore>()));
 #else
-        services.AddScoped<IFunctionExecutionService, FunctionExecutionService>();
+        services.AddScoped<IFunctionExecutionService>(provider =>
+            FunctionExecutionService.CreateWithIdempotency(
+                provider.GetRequiredService<IFunctionConfigurationRepository>(),
+                provider.GetRequiredService<IFunctionCredentialRepository>(),
+                provider.GetRequiredService<IFunctionExecutionRepository>(),
+                provider.GetRequiredService<IFunctionCostCalculationService>(),
+                provider.GetRequiredService<IFunctionClientFactory>(),
+                provider.GetRequiredService<IFunctionCredentialProtector>(),
+                provider.GetRequiredService<ILogger<FunctionExecutionService>>(),
+                provider.GetRequiredService<IFunctionExecutionIdempotencyStore>()));
 #endif
         services.AddScoped<FunctionParameterValidationService>();
 

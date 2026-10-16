@@ -17,7 +17,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
     public partial class ConduitDbContextModel
     {
         private ConduitDbContextModel()
-            : base(skipDetectChanges: false, modelId: new Guid("d0f8f7ba-b6dd-43ed-8671-aa316c8ff3f9"), entityTypeCount: 38)
+            : base(skipDetectChanges: false, modelId: new Guid("85f2d574-4ed9-402b-bbc3-df9175655066"), entityTypeCount: 39)
         {
         }
 
@@ -27,6 +27,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var batchOperationHistory = BatchOperationHistoryEntityType.Create(this);
             var billingAuditEvent = BillingAuditEventEntityType.Create(this);
             var billingReconciliationCheckpoint = BillingReconciliationCheckpointEntityType.Create(this);
+            var functionExecutionClaimEntity = FunctionExecutionClaimEntityEntityType.Create(this);
             var globalSetting = GlobalSettingEntityType.Create(this);
             var ipFilterEntity = IpFilterEntityEntityType.Create(this);
             var mediaCleanupApproval = MediaCleanupApprovalEntityType.Create(this);
@@ -96,6 +97,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             BatchOperationHistoryEntityType.CreateAnnotations(batchOperationHistory);
             BillingAuditEventEntityType.CreateAnnotations(billingAuditEvent);
             BillingReconciliationCheckpointEntityType.CreateAnnotations(billingReconciliationCheckpoint);
+            FunctionExecutionClaimEntityEntityType.CreateAnnotations(functionExecutionClaimEntity);
             GlobalSettingEntityType.CreateAnnotations(globalSetting);
             IpFilterEntityEntityType.CreateAnnotations(ipFilterEntity);
             MediaCleanupApprovalEntityType.CreateAnnotations(mediaCleanupApproval);
@@ -1125,10 +1127,121 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateUniqueConstraints(pK_BillingReconciliationCheckpointsKey).Add(pK_BillingReconciliationCheckpoints);
             billingReconciliationCheckpointsTable.UniqueConstraints.Add("PK_BillingReconciliationCheckpoints", pK_BillingReconciliationCheckpoints);
 
-            var globalSetting = FindEntityType("ConduitLLM.Configuration.Entities.GlobalSetting")!;
+            var functionExecutionClaimEntity = FindEntityType("ConduitLLM.Configuration.Entities.FunctionExecutionClaimEntity")!;
 
             var defaultTableMappings3 = new List<TableMappingBase<ColumnMappingBase>>();
-            globalSetting.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings3);
+            functionExecutionClaimEntity.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings3);
+            var conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase = new TableBase("ConduitLLM.Configuration.Entities.FunctionExecutionClaimEntity", null, relationalModel);
+            var billedAtUtcColumnBase = new ColumnBase<ColumnMappingBase>("BilledAtUtc", "timestamp with time zone", conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase)
+            {
+                IsNullable = true
+            };
+            conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase.Columns.Add("BilledAtUtc", billedAtUtcColumnBase);
+            var billingGroupIdColumnBase = new ColumnBase<ColumnMappingBase>("BillingGroupId", "integer", conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase);
+            conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase.Columns.Add("BillingGroupId", billingGroupIdColumnBase);
+            var createdAtUtcColumnBase = new ColumnBase<ColumnMappingBase>("CreatedAtUtc", "timestamp with time zone", conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase);
+            conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase.Columns.Add("CreatedAtUtc", createdAtUtcColumnBase);
+            var executionIdColumnBase = new ColumnBase<ColumnMappingBase>("ExecutionId", "uuid", conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase);
+            conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase.Columns.Add("ExecutionId", executionIdColumnBase);
+            var fingerprintColumnBase = new ColumnBase<ColumnMappingBase>("Fingerprint", "character varying(64)", conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase);
+            conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase.Columns.Add("Fingerprint", fingerprintColumnBase);
+            var keyHashColumnBase = new ColumnBase<ColumnMappingBase>("KeyHash", "character varying(64)", conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase);
+            conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase.Columns.Add("KeyHash", keyHashColumnBase);
+            var resultJsonColumnBase = new ColumnBase<ColumnMappingBase>("ResultJson", "jsonb", conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase)
+            {
+                IsNullable = true
+            };
+            conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase.Columns.Add("ResultJson", resultJsonColumnBase);
+            var stateColumnBase0 = new ColumnBase<ColumnMappingBase>("State", "character varying(16)", conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase);
+            conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase.Columns.Add("State", stateColumnBase0);
+            var virtualKeyIdColumnBase2 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase);
+            conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase2);
+            relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.FunctionExecutionClaimEntity", conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase);
+            var conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityMappingBase = new TableMappingBase<ColumnMappingBase>(functionExecutionClaimEntity, conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase, null);
+            conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityMappingBase, false);
+            defaultTableMappings3.Add(conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)keyHashColumnBase, functionExecutionClaimEntity.FindProperty("KeyHash")!, conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase2, functionExecutionClaimEntity.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)billedAtUtcColumnBase, functionExecutionClaimEntity.FindProperty("BilledAtUtc")!, conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)billingGroupIdColumnBase, functionExecutionClaimEntity.FindProperty("BillingGroupId")!, conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtUtcColumnBase, functionExecutionClaimEntity.FindProperty("CreatedAtUtc")!, conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)executionIdColumnBase, functionExecutionClaimEntity.FindProperty("ExecutionId")!, conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)fingerprintColumnBase, functionExecutionClaimEntity.FindProperty("Fingerprint")!, conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)resultJsonColumnBase, functionExecutionClaimEntity.FindProperty("ResultJson")!, conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)stateColumnBase0, functionExecutionClaimEntity.FindProperty("State")!, conduitLLMConfigurationEntitiesFunctionExecutionClaimEntityMappingBase);
+
+            var tableMappings3 = new List<TableMapping>();
+            functionExecutionClaimEntity.SetRuntimeAnnotation("Relational:TableMappings", tableMappings3);
+            var functionExecutionClaimsTable = new Table("FunctionExecutionClaims", null, relationalModel);
+            var virtualKeyIdColumn2 = new Column("VirtualKeyId", "integer", functionExecutionClaimsTable);
+            functionExecutionClaimsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn2);
+            virtualKeyIdColumn2.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn2);
+            var keyHashColumn = new Column("KeyHash", "character varying(64)", functionExecutionClaimsTable);
+            functionExecutionClaimsTable.Columns.Add("KeyHash", keyHashColumn);
+            keyHashColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(keyHashColumn);
+            var billedAtUtcColumn = new Column("BilledAtUtc", "timestamp with time zone", functionExecutionClaimsTable)
+            {
+                IsNullable = true
+            };
+            functionExecutionClaimsTable.Columns.Add("BilledAtUtc", billedAtUtcColumn);
+            billedAtUtcColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(billedAtUtcColumn);
+            var billingGroupIdColumn = new Column("BillingGroupId", "integer", functionExecutionClaimsTable);
+            functionExecutionClaimsTable.Columns.Add("BillingGroupId", billingGroupIdColumn);
+            billingGroupIdColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(billingGroupIdColumn);
+            var createdAtUtcColumn = new Column("CreatedAtUtc", "timestamp with time zone", functionExecutionClaimsTable);
+            functionExecutionClaimsTable.Columns.Add("CreatedAtUtc", createdAtUtcColumn);
+            createdAtUtcColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(createdAtUtcColumn);
+            var executionIdColumn = new Column("ExecutionId", "uuid", functionExecutionClaimsTable);
+            functionExecutionClaimsTable.Columns.Add("ExecutionId", executionIdColumn);
+            executionIdColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<Guid>(executionIdColumn);
+            var fingerprintColumn = new Column("Fingerprint", "character varying(64)", functionExecutionClaimsTable);
+            functionExecutionClaimsTable.Columns.Add("Fingerprint", fingerprintColumn);
+            fingerprintColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(fingerprintColumn);
+            var resultJsonColumn = new Column("ResultJson", "jsonb", functionExecutionClaimsTable)
+            {
+                IsNullable = true
+            };
+            functionExecutionClaimsTable.Columns.Add("ResultJson", resultJsonColumn);
+            resultJsonColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(resultJsonColumn);
+            var stateColumn0 = new Column("State", "character varying(16)", functionExecutionClaimsTable);
+            functionExecutionClaimsTable.Columns.Add("State", stateColumn0);
+            stateColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(stateColumn0);
+            relationalModel.Tables.Add(("FunctionExecutionClaims", null), functionExecutionClaimsTable);
+            var functionExecutionClaimsTableMapping = new TableMapping(functionExecutionClaimEntity, functionExecutionClaimsTable, null);
+            functionExecutionClaimsTable.AddTypeMapping(functionExecutionClaimsTableMapping, false);
+            tableMappings3.Add(functionExecutionClaimsTableMapping);
+            RelationalModel.CreateColumnMapping(keyHashColumn, functionExecutionClaimEntity.FindProperty("KeyHash")!, functionExecutionClaimsTableMapping);
+            RelationalModel.CreateColumnMapping(virtualKeyIdColumn2, functionExecutionClaimEntity.FindProperty("VirtualKeyId")!, functionExecutionClaimsTableMapping);
+            RelationalModel.CreateColumnMapping(billedAtUtcColumn, functionExecutionClaimEntity.FindProperty("BilledAtUtc")!, functionExecutionClaimsTableMapping);
+            RelationalModel.CreateColumnMapping(billingGroupIdColumn, functionExecutionClaimEntity.FindProperty("BillingGroupId")!, functionExecutionClaimsTableMapping);
+            RelationalModel.CreateColumnMapping(createdAtUtcColumn, functionExecutionClaimEntity.FindProperty("CreatedAtUtc")!, functionExecutionClaimsTableMapping);
+            RelationalModel.CreateColumnMapping(executionIdColumn, functionExecutionClaimEntity.FindProperty("ExecutionId")!, functionExecutionClaimsTableMapping);
+            RelationalModel.CreateColumnMapping(fingerprintColumn, functionExecutionClaimEntity.FindProperty("Fingerprint")!, functionExecutionClaimsTableMapping);
+            RelationalModel.CreateColumnMapping(resultJsonColumn, functionExecutionClaimEntity.FindProperty("ResultJson")!, functionExecutionClaimsTableMapping);
+            RelationalModel.CreateColumnMapping(stateColumn0, functionExecutionClaimEntity.FindProperty("State")!, functionExecutionClaimsTableMapping);
+            var pK_FunctionExecutionClaims = new UniqueConstraint("PK_FunctionExecutionClaims", functionExecutionClaimsTable, new[] { virtualKeyIdColumn2, keyHashColumn });
+            functionExecutionClaimsTable.PrimaryKey = pK_FunctionExecutionClaims;
+            pK_FunctionExecutionClaims.SetRowKeyValueFactory(new CompositeRowKeyValueFactory(pK_FunctionExecutionClaims));
+            var pK_FunctionExecutionClaimsKey = RelationalModel.GetKey(this,
+                "ConduitLLM.Configuration.Entities.FunctionExecutionClaimEntity",
+                new[] { "VirtualKeyId", "KeyHash" });
+            pK_FunctionExecutionClaims.MappedKeys.Add(pK_FunctionExecutionClaimsKey);
+            RelationalModel.GetOrCreateUniqueConstraints(pK_FunctionExecutionClaimsKey).Add(pK_FunctionExecutionClaims);
+            functionExecutionClaimsTable.UniqueConstraints.Add("PK_FunctionExecutionClaims", pK_FunctionExecutionClaims);
+            var iX_FunctionExecutionClaims_ExecutionId = new TableIndex(
+            "IX_FunctionExecutionClaims_ExecutionId", functionExecutionClaimsTable, new[] { executionIdColumn }, true);
+            iX_FunctionExecutionClaims_ExecutionId.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<Guid>(iX_FunctionExecutionClaims_ExecutionId));
+            var iX_FunctionExecutionClaims_ExecutionIdIx = RelationalModel.GetIndex(this,
+                "ConduitLLM.Configuration.Entities.FunctionExecutionClaimEntity",
+                new[] { "ExecutionId" });
+            iX_FunctionExecutionClaims_ExecutionId.MappedIndexes.Add(iX_FunctionExecutionClaims_ExecutionIdIx);
+            RelationalModel.GetOrCreateTableIndexes(iX_FunctionExecutionClaims_ExecutionIdIx).Add(iX_FunctionExecutionClaims_ExecutionId);
+            functionExecutionClaimsTable.Indexes.Add("IX_FunctionExecutionClaims_ExecutionId", iX_FunctionExecutionClaims_ExecutionId);
+
+            var globalSetting = FindEntityType("ConduitLLM.Configuration.Entities.GlobalSetting")!;
+
+            var defaultTableMappings4 = new List<TableMappingBase<ColumnMappingBase>>();
+            globalSetting.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings4);
             var conduitLLMConfigurationEntitiesGlobalSettingTableBase = new TableBase("ConduitLLM.Configuration.Entities.GlobalSetting", null, relationalModel);
             var createdAtColumnBase0 = new ColumnBase<ColumnMappingBase>("CreatedAt", "timestamp with time zone", conduitLLMConfigurationEntitiesGlobalSettingTableBase);
             conduitLLMConfigurationEntitiesGlobalSettingTableBase.Columns.Add("CreatedAt", createdAtColumnBase0);
@@ -1148,7 +1261,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.GlobalSetting", conduitLLMConfigurationEntitiesGlobalSettingTableBase);
             var conduitLLMConfigurationEntitiesGlobalSettingMappingBase = new TableMappingBase<ColumnMappingBase>(globalSetting, conduitLLMConfigurationEntitiesGlobalSettingTableBase, null);
             conduitLLMConfigurationEntitiesGlobalSettingTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesGlobalSettingMappingBase, false);
-            defaultTableMappings3.Add(conduitLLMConfigurationEntitiesGlobalSettingMappingBase);
+            defaultTableMappings4.Add(conduitLLMConfigurationEntitiesGlobalSettingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase2, globalSetting.FindProperty("Id")!, conduitLLMConfigurationEntitiesGlobalSettingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase0, globalSetting.FindProperty("CreatedAt")!, conduitLLMConfigurationEntitiesGlobalSettingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)descriptionColumnBase, globalSetting.FindProperty("Description")!, conduitLLMConfigurationEntitiesGlobalSettingMappingBase);
@@ -1156,8 +1269,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase0, globalSetting.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesGlobalSettingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)valueColumnBase, globalSetting.FindProperty("Value")!, conduitLLMConfigurationEntitiesGlobalSettingMappingBase);
 
-            var tableMappings3 = new List<TableMapping>();
-            globalSetting.SetRuntimeAnnotation("Relational:TableMappings", tableMappings3);
+            var tableMappings4 = new List<TableMapping>();
+            globalSetting.SetRuntimeAnnotation("Relational:TableMappings", tableMappings4);
             var globalSettingsTable = new Table("GlobalSettings", null, relationalModel);
             var idColumn2 = new Column("Id", "integer", globalSettingsTable);
             globalSettingsTable.Columns.Add("Id", idColumn2);
@@ -1184,7 +1297,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("GlobalSettings", null), globalSettingsTable);
             var globalSettingsTableMapping = new TableMapping(globalSetting, globalSettingsTable, null);
             globalSettingsTable.AddTypeMapping(globalSettingsTableMapping, false);
-            tableMappings3.Add(globalSettingsTableMapping);
+            tableMappings4.Add(globalSettingsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn2, globalSetting.FindProperty("Id")!, globalSettingsTableMapping);
             RelationalModel.CreateColumnMapping(createdAtColumn0, globalSetting.FindProperty("CreatedAt")!, globalSettingsTableMapping);
             RelationalModel.CreateColumnMapping(descriptionColumn, globalSetting.FindProperty("Description")!, globalSettingsTableMapping);
@@ -1212,8 +1325,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var ipFilterEntity = FindEntityType("ConduitLLM.Configuration.Entities.IpFilterEntity")!;
 
-            var defaultTableMappings4 = new List<TableMappingBase<ColumnMappingBase>>();
-            ipFilterEntity.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings4);
+            var defaultTableMappings5 = new List<TableMappingBase<ColumnMappingBase>>();
+            ipFilterEntity.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings5);
             var conduitLLMConfigurationEntitiesIpFilterEntityTableBase = new TableBase("ConduitLLM.Configuration.Entities.IpFilterEntity", null, relationalModel);
             var createdAtColumnBase1 = new ColumnBase<ColumnMappingBase>("CreatedAt", "timestamp with time zone", conduitLLMConfigurationEntitiesIpFilterEntityTableBase);
             conduitLLMConfigurationEntitiesIpFilterEntityTableBase.Columns.Add("CreatedAt", createdAtColumnBase1);
@@ -1252,15 +1365,15 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 IsNullable = true
             };
             conduitLLMConfigurationEntitiesIpFilterEntityTableBase.Columns.Add("UpdatedBy", updatedByColumnBase);
-            var virtualKeyIdColumnBase2 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesIpFilterEntityTableBase)
+            var virtualKeyIdColumnBase3 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesIpFilterEntityTableBase)
             {
                 IsNullable = true
             };
-            conduitLLMConfigurationEntitiesIpFilterEntityTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase2);
+            conduitLLMConfigurationEntitiesIpFilterEntityTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase3);
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.IpFilterEntity", conduitLLMConfigurationEntitiesIpFilterEntityTableBase);
             var conduitLLMConfigurationEntitiesIpFilterEntityMappingBase = new TableMappingBase<ColumnMappingBase>(ipFilterEntity, conduitLLMConfigurationEntitiesIpFilterEntityTableBase, null);
             conduitLLMConfigurationEntitiesIpFilterEntityTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesIpFilterEntityMappingBase, false);
-            defaultTableMappings4.Add(conduitLLMConfigurationEntitiesIpFilterEntityMappingBase);
+            defaultTableMappings5.Add(conduitLLMConfigurationEntitiesIpFilterEntityMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase3, ipFilterEntity.FindProperty("Id")!, conduitLLMConfigurationEntitiesIpFilterEntityMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase1, ipFilterEntity.FindProperty("CreatedAt")!, conduitLLMConfigurationEntitiesIpFilterEntityMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdByColumnBase, ipFilterEntity.FindProperty("CreatedBy")!, conduitLLMConfigurationEntitiesIpFilterEntityMappingBase);
@@ -1272,10 +1385,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)rowVersionColumnBase, ipFilterEntity.FindProperty("RowVersion")!, conduitLLMConfigurationEntitiesIpFilterEntityMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase1, ipFilterEntity.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesIpFilterEntityMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedByColumnBase, ipFilterEntity.FindProperty("UpdatedBy")!, conduitLLMConfigurationEntitiesIpFilterEntityMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase2, ipFilterEntity.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesIpFilterEntityMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase3, ipFilterEntity.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesIpFilterEntityMappingBase);
 
-            var tableMappings4 = new List<TableMapping>();
-            ipFilterEntity.SetRuntimeAnnotation("Relational:TableMappings", tableMappings4);
+            var tableMappings5 = new List<TableMapping>();
+            ipFilterEntity.SetRuntimeAnnotation("Relational:TableMappings", tableMappings5);
             var ipFiltersTable = new Table("IpFilters", null, relationalModel);
             var idColumn3 = new Column("Id", "integer", ipFiltersTable);
             ipFiltersTable.Columns.Add("Id", idColumn3);
@@ -1326,16 +1439,16 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             };
             ipFiltersTable.Columns.Add("UpdatedBy", updatedByColumn);
             updatedByColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(updatedByColumn);
-            var virtualKeyIdColumn2 = new Column("VirtualKeyId", "integer", ipFiltersTable)
+            var virtualKeyIdColumn3 = new Column("VirtualKeyId", "integer", ipFiltersTable)
             {
                 IsNullable = true
             };
-            ipFiltersTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn2);
-            virtualKeyIdColumn2.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn2);
+            ipFiltersTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn3);
+            virtualKeyIdColumn3.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn3);
             relationalModel.Tables.Add(("IpFilters", null), ipFiltersTable);
             var ipFiltersTableMapping = new TableMapping(ipFilterEntity, ipFiltersTable, null);
             ipFiltersTable.AddTypeMapping(ipFiltersTableMapping, false);
-            tableMappings4.Add(ipFiltersTableMapping);
+            tableMappings5.Add(ipFiltersTableMapping);
             RelationalModel.CreateColumnMapping(idColumn3, ipFilterEntity.FindProperty("Id")!, ipFiltersTableMapping);
             RelationalModel.CreateColumnMapping(createdAtColumn1, ipFilterEntity.FindProperty("CreatedAt")!, ipFiltersTableMapping);
             RelationalModel.CreateColumnMapping(createdByColumn, ipFilterEntity.FindProperty("CreatedBy")!, ipFiltersTableMapping);
@@ -1347,7 +1460,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(rowVersionColumn, ipFilterEntity.FindProperty("RowVersion")!, ipFiltersTableMapping);
             RelationalModel.CreateColumnMapping(updatedAtColumn1, ipFilterEntity.FindProperty("UpdatedAt")!, ipFiltersTableMapping);
             RelationalModel.CreateColumnMapping(updatedByColumn, ipFilterEntity.FindProperty("UpdatedBy")!, ipFiltersTableMapping);
-            RelationalModel.CreateColumnMapping(virtualKeyIdColumn2, ipFilterEntity.FindProperty("VirtualKeyId")!, ipFiltersTableMapping);
+            RelationalModel.CreateColumnMapping(virtualKeyIdColumn3, ipFilterEntity.FindProperty("VirtualKeyId")!, ipFiltersTableMapping);
             var pK_IpFilters = new UniqueConstraint("PK_IpFilters", ipFiltersTable, new[] { idColumn3 });
             ipFiltersTable.PrimaryKey = pK_IpFilters;
             pK_IpFilters.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<int>(pK_IpFilters));
@@ -1376,7 +1489,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_IpFilters_IsEnabledIx).Add(iX_IpFilters_IsEnabled);
             ipFiltersTable.Indexes.Add("IX_IpFilters_IsEnabled", iX_IpFilters_IsEnabled);
             var iX_IpFilters_VirtualKeyId = new TableIndex(
-            "IX_IpFilters_VirtualKeyId", ipFiltersTable, new[] { virtualKeyIdColumn2 }, false);
+            "IX_IpFilters_VirtualKeyId", ipFiltersTable, new[] { virtualKeyIdColumn3 }, false);
             iX_IpFilters_VirtualKeyId.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_IpFilters_VirtualKeyId));
             var iX_IpFilters_VirtualKeyIdIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Configuration.Entities.IpFilterEntity",
@@ -1387,8 +1500,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var mediaCleanupApproval = FindEntityType("ConduitLLM.Configuration.Entities.MediaCleanupApproval")!;
 
-            var defaultTableMappings5 = new List<TableMappingBase<ColumnMappingBase>>();
-            mediaCleanupApproval.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings5);
+            var defaultTableMappings6 = new List<TableMappingBase<ColumnMappingBase>>();
+            mediaCleanupApproval.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings6);
             var conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase = new TableBase("ConduitLLM.Configuration.Entities.MediaCleanupApproval", null, relationalModel);
             var candidateBytesColumnBase = new ColumnBase<ColumnMappingBase>("CandidateBytes", "bigint", conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase);
             conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase.Columns.Add("CandidateBytes", candidateBytesColumnBase);
@@ -1396,8 +1509,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase.Columns.Add("CandidateCount", candidateCountColumnBase);
             var cleanupTypeColumnBase = new ColumnBase<ColumnMappingBase>("CleanupType", "character varying(64)", conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase);
             conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase.Columns.Add("CleanupType", cleanupTypeColumnBase);
-            var createdAtUtcColumnBase = new ColumnBase<ColumnMappingBase>("CreatedAtUtc", "timestamp with time zone", conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase);
-            conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase.Columns.Add("CreatedAtUtc", createdAtUtcColumnBase);
+            var createdAtUtcColumnBase0 = new ColumnBase<ColumnMappingBase>("CreatedAtUtc", "timestamp with time zone", conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase);
+            conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase.Columns.Add("CreatedAtUtc", createdAtUtcColumnBase0);
             var cutoffUtcColumnBase = new ColumnBase<ColumnMappingBase>("CutoffUtc", "timestamp with time zone", conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase);
             conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase.Columns.Add("CutoffUtc", cutoffUtcColumnBase);
             var decidedByColumnBase = new ColumnBase<ColumnMappingBase>("DecidedBy", "character varying(256)", conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase)
@@ -1442,12 +1555,12 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.MediaCleanupApproval", conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase);
             var conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase = new TableMappingBase<ColumnMappingBase>(mediaCleanupApproval, conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase, null);
             conduitLLMConfigurationEntitiesMediaCleanupApprovalTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase, false);
-            defaultTableMappings5.Add(conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
+            defaultTableMappings6.Add(conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase4, mediaCleanupApproval.FindProperty("Id")!, conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)candidateBytesColumnBase, mediaCleanupApproval.FindProperty("CandidateBytes")!, conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)candidateCountColumnBase, mediaCleanupApproval.FindProperty("CandidateCount")!, conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)cleanupTypeColumnBase, mediaCleanupApproval.FindProperty("CleanupType")!, conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtUtcColumnBase, mediaCleanupApproval.FindProperty("CreatedAtUtc")!, conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtUtcColumnBase0, mediaCleanupApproval.FindProperty("CreatedAtUtc")!, conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)cutoffUtcColumnBase, mediaCleanupApproval.FindProperty("CutoffUtc")!, conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)decidedByColumnBase, mediaCleanupApproval.FindProperty("DecidedBy")!, conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)decisionAtUtcColumnBase, mediaCleanupApproval.FindProperty("DecisionAtUtc")!, conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
@@ -1461,8 +1574,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtUtcColumnBase0, mediaCleanupApproval.FindProperty("UpdatedAtUtc")!, conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyGroupIdColumnBase0, mediaCleanupApproval.FindProperty("VirtualKeyGroupId")!, conduitLLMConfigurationEntitiesMediaCleanupApprovalMappingBase);
 
-            var tableMappings5 = new List<TableMapping>();
-            mediaCleanupApproval.SetRuntimeAnnotation("Relational:TableMappings", tableMappings5);
+            var tableMappings6 = new List<TableMapping>();
+            mediaCleanupApproval.SetRuntimeAnnotation("Relational:TableMappings", tableMappings6);
             var mediaCleanupApprovalsTable = new Table("MediaCleanupApprovals", null, relationalModel);
             var idColumn4 = new Column("Id", "uuid", mediaCleanupApprovalsTable);
             mediaCleanupApprovalsTable.Columns.Add("Id", idColumn4);
@@ -1476,9 +1589,9 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var cleanupTypeColumn = new Column("CleanupType", "character varying(64)", mediaCleanupApprovalsTable);
             mediaCleanupApprovalsTable.Columns.Add("CleanupType", cleanupTypeColumn);
             cleanupTypeColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(cleanupTypeColumn);
-            var createdAtUtcColumn = new Column("CreatedAtUtc", "timestamp with time zone", mediaCleanupApprovalsTable);
-            mediaCleanupApprovalsTable.Columns.Add("CreatedAtUtc", createdAtUtcColumn);
-            createdAtUtcColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(createdAtUtcColumn);
+            var createdAtUtcColumn0 = new Column("CreatedAtUtc", "timestamp with time zone", mediaCleanupApprovalsTable);
+            mediaCleanupApprovalsTable.Columns.Add("CreatedAtUtc", createdAtUtcColumn0);
+            createdAtUtcColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(createdAtUtcColumn0);
             var cutoffUtcColumn = new Column("CutoffUtc", "timestamp with time zone", mediaCleanupApprovalsTable);
             mediaCleanupApprovalsTable.Columns.Add("CutoffUtc", cutoffUtcColumn);
             cutoffUtcColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(cutoffUtcColumn);
@@ -1533,12 +1646,12 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("MediaCleanupApprovals", null), mediaCleanupApprovalsTable);
             var mediaCleanupApprovalsTableMapping = new TableMapping(mediaCleanupApproval, mediaCleanupApprovalsTable, null);
             mediaCleanupApprovalsTable.AddTypeMapping(mediaCleanupApprovalsTableMapping, false);
-            tableMappings5.Add(mediaCleanupApprovalsTableMapping);
+            tableMappings6.Add(mediaCleanupApprovalsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn4, mediaCleanupApproval.FindProperty("Id")!, mediaCleanupApprovalsTableMapping);
             RelationalModel.CreateColumnMapping(candidateBytesColumn, mediaCleanupApproval.FindProperty("CandidateBytes")!, mediaCleanupApprovalsTableMapping);
             RelationalModel.CreateColumnMapping(candidateCountColumn, mediaCleanupApproval.FindProperty("CandidateCount")!, mediaCleanupApprovalsTableMapping);
             RelationalModel.CreateColumnMapping(cleanupTypeColumn, mediaCleanupApproval.FindProperty("CleanupType")!, mediaCleanupApprovalsTableMapping);
-            RelationalModel.CreateColumnMapping(createdAtUtcColumn, mediaCleanupApproval.FindProperty("CreatedAtUtc")!, mediaCleanupApprovalsTableMapping);
+            RelationalModel.CreateColumnMapping(createdAtUtcColumn0, mediaCleanupApproval.FindProperty("CreatedAtUtc")!, mediaCleanupApprovalsTableMapping);
             RelationalModel.CreateColumnMapping(cutoffUtcColumn, mediaCleanupApproval.FindProperty("CutoffUtc")!, mediaCleanupApprovalsTableMapping);
             RelationalModel.CreateColumnMapping(decidedByColumn, mediaCleanupApproval.FindProperty("DecidedBy")!, mediaCleanupApprovalsTableMapping);
             RelationalModel.CreateColumnMapping(decisionAtUtcColumn, mediaCleanupApproval.FindProperty("DecisionAtUtc")!, mediaCleanupApprovalsTableMapping);
@@ -1590,8 +1703,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var mediaRecord = FindEntityType("ConduitLLM.Configuration.Entities.MediaRecord")!;
 
-            var defaultTableMappings6 = new List<TableMappingBase<ColumnMappingBase>>();
-            mediaRecord.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings6);
+            var defaultTableMappings7 = new List<TableMappingBase<ColumnMappingBase>>();
+            mediaRecord.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings7);
             var conduitLLMConfigurationEntitiesMediaRecordTableBase = new TableBase("ConduitLLM.Configuration.Entities.MediaRecord", null, relationalModel);
             var accessCountColumnBase = new ColumnBase<ColumnMappingBase>("AccessCount", "integer", conduitLLMConfigurationEntitiesMediaRecordTableBase);
             conduitLLMConfigurationEntitiesMediaRecordTableBase.Columns.Add("AccessCount", accessCountColumnBase);
@@ -1658,12 +1771,12 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 IsNullable = true
             };
             conduitLLMConfigurationEntitiesMediaRecordTableBase.Columns.Add("StorageUrl", storageUrlColumnBase);
-            var virtualKeyIdColumnBase3 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesMediaRecordTableBase);
-            conduitLLMConfigurationEntitiesMediaRecordTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase3);
+            var virtualKeyIdColumnBase4 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesMediaRecordTableBase);
+            conduitLLMConfigurationEntitiesMediaRecordTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase4);
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.MediaRecord", conduitLLMConfigurationEntitiesMediaRecordTableBase);
             var conduitLLMConfigurationEntitiesMediaRecordMappingBase = new TableMappingBase<ColumnMappingBase>(mediaRecord, conduitLLMConfigurationEntitiesMediaRecordTableBase, null);
             conduitLLMConfigurationEntitiesMediaRecordTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesMediaRecordMappingBase, false);
-            defaultTableMappings6.Add(conduitLLMConfigurationEntitiesMediaRecordMappingBase);
+            defaultTableMappings7.Add(conduitLLMConfigurationEntitiesMediaRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase5, mediaRecord.FindProperty("Id")!, conduitLLMConfigurationEntitiesMediaRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)accessCountColumnBase, mediaRecord.FindProperty("AccessCount")!, conduitLLMConfigurationEntitiesMediaRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)contentHashColumnBase, mediaRecord.FindProperty("ContentHash")!, conduitLLMConfigurationEntitiesMediaRecordMappingBase);
@@ -1680,10 +1793,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)sizeBytesColumnBase, mediaRecord.FindProperty("SizeBytes")!, conduitLLMConfigurationEntitiesMediaRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)storageKeyColumnBase, mediaRecord.FindProperty("StorageKey")!, conduitLLMConfigurationEntitiesMediaRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)storageUrlColumnBase, mediaRecord.FindProperty("StorageUrl")!, conduitLLMConfigurationEntitiesMediaRecordMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase3, mediaRecord.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesMediaRecordMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase4, mediaRecord.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesMediaRecordMappingBase);
 
-            var tableMappings6 = new List<TableMapping>();
-            mediaRecord.SetRuntimeAnnotation("Relational:TableMappings", tableMappings6);
+            var tableMappings7 = new List<TableMapping>();
+            mediaRecord.SetRuntimeAnnotation("Relational:TableMappings", tableMappings7);
             var mediaRecordsTable = new Table("MediaRecords", null, relationalModel);
             var idColumn5 = new Column("Id", "uuid", mediaRecordsTable);
             mediaRecordsTable.Columns.Add("Id", idColumn5);
@@ -1766,13 +1879,13 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             };
             mediaRecordsTable.Columns.Add("StorageUrl", storageUrlColumn);
             storageUrlColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(storageUrlColumn);
-            var virtualKeyIdColumn3 = new Column("VirtualKeyId", "integer", mediaRecordsTable);
-            mediaRecordsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn3);
-            virtualKeyIdColumn3.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn3);
+            var virtualKeyIdColumn4 = new Column("VirtualKeyId", "integer", mediaRecordsTable);
+            mediaRecordsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn4);
+            virtualKeyIdColumn4.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn4);
             relationalModel.Tables.Add(("MediaRecords", null), mediaRecordsTable);
             var mediaRecordsTableMapping = new TableMapping(mediaRecord, mediaRecordsTable, null);
             mediaRecordsTable.AddTypeMapping(mediaRecordsTableMapping, false);
-            tableMappings6.Add(mediaRecordsTableMapping);
+            tableMappings7.Add(mediaRecordsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn5, mediaRecord.FindProperty("Id")!, mediaRecordsTableMapping);
             RelationalModel.CreateColumnMapping(accessCountColumn, mediaRecord.FindProperty("AccessCount")!, mediaRecordsTableMapping);
             RelationalModel.CreateColumnMapping(contentHashColumn, mediaRecord.FindProperty("ContentHash")!, mediaRecordsTableMapping);
@@ -1789,7 +1902,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(sizeBytesColumn, mediaRecord.FindProperty("SizeBytes")!, mediaRecordsTableMapping);
             RelationalModel.CreateColumnMapping(storageKeyColumn, mediaRecord.FindProperty("StorageKey")!, mediaRecordsTableMapping);
             RelationalModel.CreateColumnMapping(storageUrlColumn, mediaRecord.FindProperty("StorageUrl")!, mediaRecordsTableMapping);
-            RelationalModel.CreateColumnMapping(virtualKeyIdColumn3, mediaRecord.FindProperty("VirtualKeyId")!, mediaRecordsTableMapping);
+            RelationalModel.CreateColumnMapping(virtualKeyIdColumn4, mediaRecord.FindProperty("VirtualKeyId")!, mediaRecordsTableMapping);
             var pK_MediaRecords = new UniqueConstraint("PK_MediaRecords", mediaRecordsTable, new[] { idColumn5 });
             mediaRecordsTable.PrimaryKey = pK_MediaRecords;
             pK_MediaRecords.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<Guid>(pK_MediaRecords));
@@ -1836,7 +1949,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_MediaRecords_StorageKeyIx).Add(iX_MediaRecords_StorageKey);
             mediaRecordsTable.Indexes.Add("IX_MediaRecords_StorageKey", iX_MediaRecords_StorageKey);
             var iX_MediaRecords_VirtualKeyId = new TableIndex(
-            "IX_MediaRecords_VirtualKeyId", mediaRecordsTable, new[] { virtualKeyIdColumn3 }, false);
+            "IX_MediaRecords_VirtualKeyId", mediaRecordsTable, new[] { virtualKeyIdColumn4 }, false);
             iX_MediaRecords_VirtualKeyId.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_MediaRecords_VirtualKeyId));
             var iX_MediaRecords_VirtualKeyIdIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Configuration.Entities.MediaRecord",
@@ -1845,7 +1958,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_MediaRecords_VirtualKeyIdIx).Add(iX_MediaRecords_VirtualKeyId);
             mediaRecordsTable.Indexes.Add("IX_MediaRecords_VirtualKeyId", iX_MediaRecords_VirtualKeyId);
             var iX_MediaRecords_VirtualKeyId_CreatedAt = new TableIndex(
-            "IX_MediaRecords_VirtualKeyId_CreatedAt", mediaRecordsTable, new[] { virtualKeyIdColumn3, createdAtColumn2 }, false);
+            "IX_MediaRecords_VirtualKeyId_CreatedAt", mediaRecordsTable, new[] { virtualKeyIdColumn4, createdAtColumn2 }, false);
             iX_MediaRecords_VirtualKeyId_CreatedAt.SetRowIndexValueFactory(new CompositeRowIndexValueFactory(iX_MediaRecords_VirtualKeyId_CreatedAt));
             var iX_MediaRecords_VirtualKeyId_CreatedAtIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Configuration.Entities.MediaRecord",
@@ -1856,8 +1969,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var mediaRetentionPolicy = FindEntityType("ConduitLLM.Configuration.Entities.MediaRetentionPolicy")!;
 
-            var defaultTableMappings7 = new List<TableMappingBase<ColumnMappingBase>>();
-            mediaRetentionPolicy.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings7);
+            var defaultTableMappings8 = new List<TableMappingBase<ColumnMappingBase>>();
+            mediaRetentionPolicy.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings8);
             var conduitLLMConfigurationEntitiesMediaRetentionPolicyTableBase = new TableBase("ConduitLLM.Configuration.Entities.MediaRetentionPolicy", null, relationalModel);
             var createdAtColumnBase3 = new ColumnBase<ColumnMappingBase>("CreatedAt", "timestamp with time zone", conduitLLMConfigurationEntitiesMediaRetentionPolicyTableBase);
             conduitLLMConfigurationEntitiesMediaRetentionPolicyTableBase.Columns.Add("CreatedAt", createdAtColumnBase3);
@@ -1903,7 +2016,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.MediaRetentionPolicy", conduitLLMConfigurationEntitiesMediaRetentionPolicyTableBase);
             var conduitLLMConfigurationEntitiesMediaRetentionPolicyMappingBase = new TableMappingBase<ColumnMappingBase>(mediaRetentionPolicy, conduitLLMConfigurationEntitiesMediaRetentionPolicyTableBase, null);
             conduitLLMConfigurationEntitiesMediaRetentionPolicyTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesMediaRetentionPolicyMappingBase, false);
-            defaultTableMappings7.Add(conduitLLMConfigurationEntitiesMediaRetentionPolicyMappingBase);
+            defaultTableMappings8.Add(conduitLLMConfigurationEntitiesMediaRetentionPolicyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase6, mediaRetentionPolicy.FindProperty("Id")!, conduitLLMConfigurationEntitiesMediaRetentionPolicyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase3, mediaRetentionPolicy.FindProperty("CreatedAt")!, conduitLLMConfigurationEntitiesMediaRetentionPolicyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)descriptionColumnBase1, mediaRetentionPolicy.FindProperty("Description")!, conduitLLMConfigurationEntitiesMediaRetentionPolicyMappingBase);
@@ -1921,8 +2034,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase2, mediaRetentionPolicy.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesMediaRetentionPolicyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)zeroBalanceRetentionDaysColumnBase, mediaRetentionPolicy.FindProperty("ZeroBalanceRetentionDays")!, conduitLLMConfigurationEntitiesMediaRetentionPolicyMappingBase);
 
-            var tableMappings7 = new List<TableMapping>();
-            mediaRetentionPolicy.SetRuntimeAnnotation("Relational:TableMappings", tableMappings7);
+            var tableMappings8 = new List<TableMapping>();
+            mediaRetentionPolicy.SetRuntimeAnnotation("Relational:TableMappings", tableMappings8);
             var mediaRetentionPoliciesTable = new Table("MediaRetentionPolicies", null, relationalModel);
             var idColumn6 = new Column("Id", "integer", mediaRetentionPoliciesTable);
             mediaRetentionPoliciesTable.Columns.Add("Id", idColumn6);
@@ -1985,7 +2098,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("MediaRetentionPolicies", null), mediaRetentionPoliciesTable);
             var mediaRetentionPoliciesTableMapping = new TableMapping(mediaRetentionPolicy, mediaRetentionPoliciesTable, null);
             mediaRetentionPoliciesTable.AddTypeMapping(mediaRetentionPoliciesTableMapping, false);
-            tableMappings7.Add(mediaRetentionPoliciesTableMapping);
+            tableMappings8.Add(mediaRetentionPoliciesTableMapping);
             RelationalModel.CreateColumnMapping(idColumn6, mediaRetentionPolicy.FindProperty("Id")!, mediaRetentionPoliciesTableMapping);
             RelationalModel.CreateColumnMapping(createdAtColumn3, mediaRetentionPolicy.FindProperty("CreatedAt")!, mediaRetentionPoliciesTableMapping);
             RelationalModel.CreateColumnMapping(descriptionColumn1, mediaRetentionPolicy.FindProperty("Description")!, mediaRetentionPoliciesTableMapping);
@@ -2041,8 +2154,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var model = FindEntityType("ConduitLLM.Configuration.Entities.Model")!;
 
-            var defaultTableMappings8 = new List<TableMappingBase<ColumnMappingBase>>();
-            model.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings8);
+            var defaultTableMappings9 = new List<TableMappingBase<ColumnMappingBase>>();
+            model.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings9);
             var conduitLLMConfigurationEntitiesModelTableBase = new TableBase("ConduitLLM.Configuration.Entities.Model", null, relationalModel);
             var capabilitiesLastVerifiedAtColumnBase = new ColumnBase<ColumnMappingBase>("CapabilitiesLastVerifiedAt", "timestamp with time zone", conduitLLMConfigurationEntitiesModelTableBase)
             {
@@ -2128,7 +2241,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.Model", conduitLLMConfigurationEntitiesModelTableBase);
             var conduitLLMConfigurationEntitiesModelMappingBase = new TableMappingBase<ColumnMappingBase>(model, conduitLLMConfigurationEntitiesModelTableBase, null);
             conduitLLMConfigurationEntitiesModelTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesModelMappingBase, false);
-            defaultTableMappings8.Add(conduitLLMConfigurationEntitiesModelMappingBase);
+            defaultTableMappings9.Add(conduitLLMConfigurationEntitiesModelMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase7, model.FindProperty("Id")!, conduitLLMConfigurationEntitiesModelMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)capabilitiesLastVerifiedAtColumnBase, model.FindProperty("CapabilitiesLastVerifiedAt")!, conduitLLMConfigurationEntitiesModelMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)capabilitySourceColumnBase, model.FindProperty("CapabilitySource")!, conduitLLMConfigurationEntitiesModelMappingBase);
@@ -2157,8 +2270,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase3, model.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesModelMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)versionColumnBase0, model.FindProperty("Version")!, conduitLLMConfigurationEntitiesModelMappingBase);
 
-            var tableMappings8 = new List<TableMapping>();
-            model.SetRuntimeAnnotation("Relational:TableMappings", tableMappings8);
+            var tableMappings9 = new List<TableMapping>();
+            model.SetRuntimeAnnotation("Relational:TableMappings", tableMappings9);
             var modelsTable = new Table("Models", null, relationalModel);
             var idColumn7 = new Column("Id", "integer", modelsTable);
             modelsTable.Columns.Add("Id", idColumn7);
@@ -2272,7 +2385,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("Models", null), modelsTable);
             var modelsTableMapping = new TableMapping(model, modelsTable, null);
             modelsTable.AddTypeMapping(modelsTableMapping, false);
-            tableMappings8.Add(modelsTableMapping);
+            tableMappings9.Add(modelsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn7, model.FindProperty("Id")!, modelsTableMapping);
             RelationalModel.CreateColumnMapping(capabilitiesLastVerifiedAtColumn, model.FindProperty("CapabilitiesLastVerifiedAt")!, modelsTableMapping);
             RelationalModel.CreateColumnMapping(capabilitySourceColumn, model.FindProperty("CapabilitySource")!, modelsTableMapping);
@@ -2321,8 +2434,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var modelAuthor = FindEntityType("ConduitLLM.Configuration.Entities.ModelAuthor")!;
 
-            var defaultTableMappings9 = new List<TableMappingBase<ColumnMappingBase>>();
-            modelAuthor.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings9);
+            var defaultTableMappings10 = new List<TableMappingBase<ColumnMappingBase>>();
+            modelAuthor.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings10);
             var conduitLLMConfigurationEntitiesModelAuthorTableBase = new TableBase("ConduitLLM.Configuration.Entities.ModelAuthor", null, relationalModel);
             var descriptionColumnBase3 = new ColumnBase<ColumnMappingBase>("Description", "character varying(500)", conduitLLMConfigurationEntitiesModelAuthorTableBase)
             {
@@ -2341,14 +2454,14 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.ModelAuthor", conduitLLMConfigurationEntitiesModelAuthorTableBase);
             var conduitLLMConfigurationEntitiesModelAuthorMappingBase = new TableMappingBase<ColumnMappingBase>(modelAuthor, conduitLLMConfigurationEntitiesModelAuthorTableBase, null);
             conduitLLMConfigurationEntitiesModelAuthorTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesModelAuthorMappingBase, false);
-            defaultTableMappings9.Add(conduitLLMConfigurationEntitiesModelAuthorMappingBase);
+            defaultTableMappings10.Add(conduitLLMConfigurationEntitiesModelAuthorMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase8, modelAuthor.FindProperty("Id")!, conduitLLMConfigurationEntitiesModelAuthorMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)descriptionColumnBase3, modelAuthor.FindProperty("Description")!, conduitLLMConfigurationEntitiesModelAuthorMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)nameColumnBase2, modelAuthor.FindProperty("Name")!, conduitLLMConfigurationEntitiesModelAuthorMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)websiteUrlColumnBase, modelAuthor.FindProperty("WebsiteUrl")!, conduitLLMConfigurationEntitiesModelAuthorMappingBase);
 
-            var tableMappings9 = new List<TableMapping>();
-            modelAuthor.SetRuntimeAnnotation("Relational:TableMappings", tableMappings9);
+            var tableMappings10 = new List<TableMapping>();
+            modelAuthor.SetRuntimeAnnotation("Relational:TableMappings", tableMappings10);
             var modelAuthorsTable = new Table("ModelAuthors", null, relationalModel);
             var idColumn8 = new Column("Id", "integer", modelAuthorsTable);
             modelAuthorsTable.Columns.Add("Id", idColumn8);
@@ -2372,7 +2485,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("ModelAuthors", null), modelAuthorsTable);
             var modelAuthorsTableMapping = new TableMapping(modelAuthor, modelAuthorsTable, null);
             modelAuthorsTable.AddTypeMapping(modelAuthorsTableMapping, false);
-            tableMappings9.Add(modelAuthorsTableMapping);
+            tableMappings10.Add(modelAuthorsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn8, modelAuthor.FindProperty("Id")!, modelAuthorsTableMapping);
             RelationalModel.CreateColumnMapping(descriptionColumn3, modelAuthor.FindProperty("Description")!, modelAuthorsTableMapping);
             RelationalModel.CreateColumnMapping(nameColumn2, modelAuthor.FindProperty("Name")!, modelAuthorsTableMapping);
@@ -2398,8 +2511,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var modelCost = FindEntityType("ConduitLLM.Configuration.Entities.ModelCost")!;
 
-            var defaultTableMappings10 = new List<TableMappingBase<ColumnMappingBase>>();
-            modelCost.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings10);
+            var defaultTableMappings11 = new List<TableMappingBase<ColumnMappingBase>>();
+            modelCost.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings11);
             var conduitLLMConfigurationEntitiesModelCostTableBase = new TableBase("ConduitLLM.Configuration.Entities.ModelCost", null, relationalModel);
             var audioCostPerMinuteColumnBase = new ColumnBase<ColumnMappingBase>("AudioCostPerMinute", "numeric(18,8)", conduitLLMConfigurationEntitiesModelCostTableBase)
             {
@@ -2483,7 +2596,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.ModelCost", conduitLLMConfigurationEntitiesModelCostTableBase);
             var conduitLLMConfigurationEntitiesModelCostMappingBase = new TableMappingBase<ColumnMappingBase>(modelCost, conduitLLMConfigurationEntitiesModelCostTableBase, null);
             conduitLLMConfigurationEntitiesModelCostTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesModelCostMappingBase, false);
-            defaultTableMappings10.Add(conduitLLMConfigurationEntitiesModelCostMappingBase);
+            defaultTableMappings11.Add(conduitLLMConfigurationEntitiesModelCostMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase9, modelCost.FindProperty("Id")!, conduitLLMConfigurationEntitiesModelCostMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)audioCostPerMinuteColumnBase, modelCost.FindProperty("AudioCostPerMinute")!, conduitLLMConfigurationEntitiesModelCostMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)audioCostPerThousandCharactersColumnBase, modelCost.FindProperty("AudioCostPerThousandCharacters")!, conduitLLMConfigurationEntitiesModelCostMappingBase);
@@ -2508,8 +2621,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)supportsBatchProcessingColumnBase, modelCost.FindProperty("SupportsBatchProcessing")!, conduitLLMConfigurationEntitiesModelCostMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase4, modelCost.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesModelCostMappingBase);
 
-            var tableMappings10 = new List<TableMapping>();
-            modelCost.SetRuntimeAnnotation("Relational:TableMappings", tableMappings10);
+            var tableMappings11 = new List<TableMapping>();
+            modelCost.SetRuntimeAnnotation("Relational:TableMappings", tableMappings11);
             var modelCostsTable = new Table("ModelCosts", null, relationalModel);
             var idColumn9 = new Column("Id", "integer", modelCostsTable);
             modelCostsTable.Columns.Add("Id", idColumn9);
@@ -2617,7 +2730,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("ModelCosts", null), modelCostsTable);
             var modelCostsTableMapping = new TableMapping(modelCost, modelCostsTable, null);
             modelCostsTable.AddTypeMapping(modelCostsTableMapping, false);
-            tableMappings10.Add(modelCostsTableMapping);
+            tableMappings11.Add(modelCostsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn9, modelCost.FindProperty("Id")!, modelCostsTableMapping);
             RelationalModel.CreateColumnMapping(audioCostPerMinuteColumn, modelCost.FindProperty("AudioCostPerMinute")!, modelCostsTableMapping);
             RelationalModel.CreateColumnMapping(audioCostPerThousandCharactersColumn, modelCost.FindProperty("AudioCostPerThousandCharacters")!, modelCostsTableMapping);
@@ -2662,8 +2775,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var modelProviderMapping = FindEntityType("ConduitLLM.Configuration.Entities.ModelProviderMapping")!;
 
-            var defaultTableMappings11 = new List<TableMappingBase<ColumnMappingBase>>();
-            modelProviderMapping.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings11);
+            var defaultTableMappings12 = new List<TableMappingBase<ColumnMappingBase>>();
+            modelProviderMapping.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings12);
             var conduitLLMConfigurationEntitiesModelProviderMappingTableBase = new TableBase("ConduitLLM.Configuration.Entities.ModelProviderMapping", null, relationalModel);
             var createdAtColumnBase6 = new ColumnBase<ColumnMappingBase>("CreatedAt", "timestamp with time zone", conduitLLMConfigurationEntitiesModelProviderMappingTableBase);
             conduitLLMConfigurationEntitiesModelProviderMappingTableBase.Columns.Add("CreatedAt", createdAtColumnBase6);
@@ -2693,7 +2806,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.ModelProviderMapping", conduitLLMConfigurationEntitiesModelProviderMappingTableBase);
             var conduitLLMConfigurationEntitiesModelProviderMappingMappingBase = new TableMappingBase<ColumnMappingBase>(modelProviderMapping, conduitLLMConfigurationEntitiesModelProviderMappingTableBase, null);
             conduitLLMConfigurationEntitiesModelProviderMappingTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesModelProviderMappingMappingBase, false);
-            defaultTableMappings11.Add(conduitLLMConfigurationEntitiesModelProviderMappingMappingBase);
+            defaultTableMappings12.Add(conduitLLMConfigurationEntitiesModelProviderMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase10, modelProviderMapping.FindProperty("Id")!, conduitLLMConfigurationEntitiesModelProviderMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase6, modelProviderMapping.FindProperty("CreatedAt")!, conduitLLMConfigurationEntitiesModelProviderMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isEnabledColumnBase0, modelProviderMapping.FindProperty("IsEnabled")!, conduitLLMConfigurationEntitiesModelProviderMappingMappingBase);
@@ -2706,8 +2819,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)routingWeightColumnBase, modelProviderMapping.FindProperty("RoutingWeight")!, conduitLLMConfigurationEntitiesModelProviderMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase5, modelProviderMapping.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesModelProviderMappingMappingBase);
 
-            var tableMappings11 = new List<TableMapping>();
-            modelProviderMapping.SetRuntimeAnnotation("Relational:TableMappings", tableMappings11);
+            var tableMappings12 = new List<TableMapping>();
+            modelProviderMapping.SetRuntimeAnnotation("Relational:TableMappings", tableMappings12);
             var modelProviderMappingsTable = new Table("ModelProviderMappings", null, relationalModel);
             var idColumn10 = new Column("Id", "integer", modelProviderMappingsTable);
             modelProviderMappingsTable.Columns.Add("Id", idColumn10);
@@ -2749,7 +2862,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("ModelProviderMappings", null), modelProviderMappingsTable);
             var modelProviderMappingsTableMapping = new TableMapping(modelProviderMapping, modelProviderMappingsTable, null);
             modelProviderMappingsTable.AddTypeMapping(modelProviderMappingsTableMapping, false);
-            tableMappings11.Add(modelProviderMappingsTableMapping);
+            tableMappings12.Add(modelProviderMappingsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn10, modelProviderMapping.FindProperty("Id")!, modelProviderMappingsTableMapping);
             RelationalModel.CreateColumnMapping(createdAtColumn6, modelProviderMapping.FindProperty("CreatedAt")!, modelProviderMappingsTableMapping);
             RelationalModel.CreateColumnMapping(isEnabledColumn0, modelProviderMapping.FindProperty("IsEnabled")!, modelProviderMappingsTableMapping);
@@ -2800,8 +2913,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var modelProviderTypeAssociation = FindEntityType("ConduitLLM.Configuration.Entities.ModelProviderTypeAssociation")!;
 
-            var defaultTableMappings12 = new List<TableMappingBase<ColumnMappingBase>>();
-            modelProviderTypeAssociation.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings12);
+            var defaultTableMappings13 = new List<TableMappingBase<ColumnMappingBase>>();
+            modelProviderTypeAssociation.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings13);
             var conduitLLMConfigurationEntitiesModelProviderTypeAssociationTableBase = new TableBase("ConduitLLM.Configuration.Entities.ModelProviderTypeAssociation", null, relationalModel);
             var capabilitiesLastVerifiedAtColumnBase0 = new ColumnBase<ColumnMappingBase>("CapabilitiesLastVerifiedAt", "timestamp with time zone", conduitLLMConfigurationEntitiesModelProviderTypeAssociationTableBase)
             {
@@ -2881,7 +2994,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.ModelProviderTypeAssociation", conduitLLMConfigurationEntitiesModelProviderTypeAssociationTableBase);
             var conduitLLMConfigurationEntitiesModelProviderTypeAssociationMappingBase = new TableMappingBase<ColumnMappingBase>(modelProviderTypeAssociation, conduitLLMConfigurationEntitiesModelProviderTypeAssociationTableBase, null);
             conduitLLMConfigurationEntitiesModelProviderTypeAssociationTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesModelProviderTypeAssociationMappingBase, false);
-            defaultTableMappings12.Add(conduitLLMConfigurationEntitiesModelProviderTypeAssociationMappingBase);
+            defaultTableMappings13.Add(conduitLLMConfigurationEntitiesModelProviderTypeAssociationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase11, modelProviderTypeAssociation.FindProperty("Id")!, conduitLLMConfigurationEntitiesModelProviderTypeAssociationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)capabilitiesLastVerifiedAtColumnBase0, modelProviderTypeAssociation.FindProperty("CapabilitiesLastVerifiedAt")!, conduitLLMConfigurationEntitiesModelProviderTypeAssociationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)capabilitySourceColumnBase0, modelProviderTypeAssociation.FindProperty("CapabilitySource")!, conduitLLMConfigurationEntitiesModelProviderTypeAssociationMappingBase);
@@ -2901,8 +3014,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)qualityScoreColumnBase, modelProviderTypeAssociation.FindProperty("QualityScore")!, conduitLLMConfigurationEntitiesModelProviderTypeAssociationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)speedScoreColumnBase, modelProviderTypeAssociation.FindProperty("SpeedScore")!, conduitLLMConfigurationEntitiesModelProviderTypeAssociationMappingBase);
 
-            var tableMappings12 = new List<TableMapping>();
-            modelProviderTypeAssociation.SetRuntimeAnnotation("Relational:TableMappings", tableMappings12);
+            var tableMappings13 = new List<TableMapping>();
+            modelProviderTypeAssociation.SetRuntimeAnnotation("Relational:TableMappings", tableMappings13);
             var modelIdentifiersTable = new Table("ModelIdentifiers", null, relationalModel);
             var idColumn11 = new Column("Id", "integer", modelIdentifiersTable);
             modelIdentifiersTable.Columns.Add("Id", idColumn11);
@@ -3001,7 +3114,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("ModelIdentifiers", null), modelIdentifiersTable);
             var modelIdentifiersTableMapping = new TableMapping(modelProviderTypeAssociation, modelIdentifiersTable, null);
             modelIdentifiersTable.AddTypeMapping(modelIdentifiersTableMapping, false);
-            tableMappings12.Add(modelIdentifiersTableMapping);
+            tableMappings13.Add(modelIdentifiersTableMapping);
             RelationalModel.CreateColumnMapping(idColumn11, modelProviderTypeAssociation.FindProperty("Id")!, modelIdentifiersTableMapping);
             RelationalModel.CreateColumnMapping(capabilitiesLastVerifiedAtColumn0, modelProviderTypeAssociation.FindProperty("CapabilitiesLastVerifiedAt")!, modelIdentifiersTableMapping);
             RelationalModel.CreateColumnMapping(capabilitySourceColumn0, modelProviderTypeAssociation.FindProperty("CapabilitySource")!, modelIdentifiersTableMapping);
@@ -3077,8 +3190,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var modelRoutePolicy = FindEntityType("ConduitLLM.Configuration.Entities.ModelRoutePolicy")!;
 
-            var defaultTableMappings13 = new List<TableMappingBase<ColumnMappingBase>>();
-            modelRoutePolicy.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings13);
+            var defaultTableMappings14 = new List<TableMappingBase<ColumnMappingBase>>();
+            modelRoutePolicy.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings14);
             var conduitLLMConfigurationEntitiesModelRoutePolicyTableBase = new TableBase("ConduitLLM.Configuration.Entities.ModelRoutePolicy", null, relationalModel);
             var affinityTtlSecondsColumnBase = new ColumnBase<ColumnMappingBase>("AffinityTtlSeconds", "integer", conduitLLMConfigurationEntitiesModelRoutePolicyTableBase);
             conduitLLMConfigurationEntitiesModelRoutePolicyTableBase.Columns.Add("AffinityTtlSeconds", affinityTtlSecondsColumnBase);
@@ -3107,7 +3220,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.ModelRoutePolicy", conduitLLMConfigurationEntitiesModelRoutePolicyTableBase);
             var conduitLLMConfigurationEntitiesModelRoutePolicyMappingBase = new TableMappingBase<ColumnMappingBase>(modelRoutePolicy, conduitLLMConfigurationEntitiesModelRoutePolicyTableBase, null);
             conduitLLMConfigurationEntitiesModelRoutePolicyTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesModelRoutePolicyMappingBase, false);
-            defaultTableMappings13.Add(conduitLLMConfigurationEntitiesModelRoutePolicyMappingBase);
+            defaultTableMappings14.Add(conduitLLMConfigurationEntitiesModelRoutePolicyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase12, modelRoutePolicy.FindProperty("Id")!, conduitLLMConfigurationEntitiesModelRoutePolicyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)affinityTtlSecondsColumnBase, modelRoutePolicy.FindProperty("AffinityTtlSeconds")!, conduitLLMConfigurationEntitiesModelRoutePolicyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)cacheAffinityEnabledColumnBase, modelRoutePolicy.FindProperty("CacheAffinityEnabled")!, conduitLLMConfigurationEntitiesModelRoutePolicyMappingBase);
@@ -3121,8 +3234,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)strategyColumnBase, modelRoutePolicy.FindProperty("Strategy")!, conduitLLMConfigurationEntitiesModelRoutePolicyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase6, modelRoutePolicy.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesModelRoutePolicyMappingBase);
 
-            var tableMappings13 = new List<TableMapping>();
-            modelRoutePolicy.SetRuntimeAnnotation("Relational:TableMappings", tableMappings13);
+            var tableMappings14 = new List<TableMapping>();
+            modelRoutePolicy.SetRuntimeAnnotation("Relational:TableMappings", tableMappings14);
             var modelRoutePoliciesTable = new Table("ModelRoutePolicies", null, relationalModel);
             var idColumn12 = new Column("Id", "integer", modelRoutePoliciesTable);
             modelRoutePoliciesTable.Columns.Add("Id", idColumn12);
@@ -3164,7 +3277,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("ModelRoutePolicies", null), modelRoutePoliciesTable);
             var modelRoutePoliciesTableMapping = new TableMapping(modelRoutePolicy, modelRoutePoliciesTable, null);
             modelRoutePoliciesTable.AddTypeMapping(modelRoutePoliciesTableMapping, false);
-            tableMappings13.Add(modelRoutePoliciesTableMapping);
+            tableMappings14.Add(modelRoutePoliciesTableMapping);
             RelationalModel.CreateColumnMapping(idColumn12, modelRoutePolicy.FindProperty("Id")!, modelRoutePoliciesTableMapping);
             RelationalModel.CreateColumnMapping(affinityTtlSecondsColumn, modelRoutePolicy.FindProperty("AffinityTtlSeconds")!, modelRoutePoliciesTableMapping);
             RelationalModel.CreateColumnMapping(cacheAffinityEnabledColumn, modelRoutePolicy.FindProperty("CacheAffinityEnabled")!, modelRoutePoliciesTableMapping);
@@ -3198,8 +3311,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var modelSeries = FindEntityType("ConduitLLM.Configuration.Entities.ModelSeries")!;
 
-            var defaultTableMappings14 = new List<TableMappingBase<ColumnMappingBase>>();
-            modelSeries.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings14);
+            var defaultTableMappings15 = new List<TableMappingBase<ColumnMappingBase>>();
+            modelSeries.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings15);
             var conduitLLMConfigurationEntitiesModelSeriesTableBase = new TableBase("ConduitLLM.Configuration.Entities.ModelSeries", null, relationalModel);
             var authorIdColumnBase = new ColumnBase<ColumnMappingBase>("AuthorId", "integer", conduitLLMConfigurationEntitiesModelSeriesTableBase);
             conduitLLMConfigurationEntitiesModelSeriesTableBase.Columns.Add("AuthorId", authorIdColumnBase);
@@ -3219,7 +3332,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.ModelSeries", conduitLLMConfigurationEntitiesModelSeriesTableBase);
             var conduitLLMConfigurationEntitiesModelSeriesMappingBase = new TableMappingBase<ColumnMappingBase>(modelSeries, conduitLLMConfigurationEntitiesModelSeriesTableBase, null);
             conduitLLMConfigurationEntitiesModelSeriesTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesModelSeriesMappingBase, false);
-            defaultTableMappings14.Add(conduitLLMConfigurationEntitiesModelSeriesMappingBase);
+            defaultTableMappings15.Add(conduitLLMConfigurationEntitiesModelSeriesMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase13, modelSeries.FindProperty("Id")!, conduitLLMConfigurationEntitiesModelSeriesMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)authorIdColumnBase, modelSeries.FindProperty("AuthorId")!, conduitLLMConfigurationEntitiesModelSeriesMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)descriptionColumnBase5, modelSeries.FindProperty("Description")!, conduitLLMConfigurationEntitiesModelSeriesMappingBase);
@@ -3227,8 +3340,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)parametersColumnBase0, modelSeries.FindProperty("Parameters")!, conduitLLMConfigurationEntitiesModelSeriesMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)tokenizerTypeColumnBase0, modelSeries.FindProperty("TokenizerType")!, conduitLLMConfigurationEntitiesModelSeriesMappingBase);
 
-            var tableMappings14 = new List<TableMapping>();
-            modelSeries.SetRuntimeAnnotation("Relational:TableMappings", tableMappings14);
+            var tableMappings15 = new List<TableMapping>();
+            modelSeries.SetRuntimeAnnotation("Relational:TableMappings", tableMappings15);
             var modelSeriesTable = new Table("ModelSeries", null, relationalModel);
             var idColumn13 = new Column("Id", "integer", modelSeriesTable);
             modelSeriesTable.Columns.Add("Id", idColumn13);
@@ -3255,7 +3368,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("ModelSeries", null), modelSeriesTable);
             var modelSeriesTableMapping = new TableMapping(modelSeries, modelSeriesTable, null);
             modelSeriesTable.AddTypeMapping(modelSeriesTableMapping, false);
-            tableMappings14.Add(modelSeriesTableMapping);
+            tableMappings15.Add(modelSeriesTableMapping);
             RelationalModel.CreateColumnMapping(idColumn13, modelSeries.FindProperty("Id")!, modelSeriesTableMapping);
             RelationalModel.CreateColumnMapping(authorIdColumn, modelSeries.FindProperty("AuthorId")!, modelSeriesTableMapping);
             RelationalModel.CreateColumnMapping(descriptionColumn5, modelSeries.FindProperty("Description")!, modelSeriesTableMapping);
@@ -3301,8 +3414,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var notification = FindEntityType("ConduitLLM.Configuration.Entities.Notification")!;
 
-            var defaultTableMappings15 = new List<TableMappingBase<ColumnMappingBase>>();
-            notification.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings15);
+            var defaultTableMappings16 = new List<TableMappingBase<ColumnMappingBase>>();
+            notification.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings16);
             var conduitLLMConfigurationEntitiesNotificationTableBase = new TableBase("ConduitLLM.Configuration.Entities.Notification", null, relationalModel);
             var createdAtColumnBase8 = new ColumnBase<ColumnMappingBase>("CreatedAt", "timestamp with time zone", conduitLLMConfigurationEntitiesNotificationTableBase);
             conduitLLMConfigurationEntitiesNotificationTableBase.Columns.Add("CreatedAt", createdAtColumnBase8);
@@ -3326,15 +3439,15 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             conduitLLMConfigurationEntitiesNotificationTableBase.Columns.Add("Severity", severityColumnBase);
             var typeColumnBase0 = new ColumnBase<ColumnMappingBase>("Type", "integer", conduitLLMConfigurationEntitiesNotificationTableBase);
             conduitLLMConfigurationEntitiesNotificationTableBase.Columns.Add("Type", typeColumnBase0);
-            var virtualKeyIdColumnBase4 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesNotificationTableBase)
+            var virtualKeyIdColumnBase5 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesNotificationTableBase)
             {
                 IsNullable = true
             };
-            conduitLLMConfigurationEntitiesNotificationTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase4);
+            conduitLLMConfigurationEntitiesNotificationTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase5);
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.Notification", conduitLLMConfigurationEntitiesNotificationTableBase);
             var conduitLLMConfigurationEntitiesNotificationMappingBase = new TableMappingBase<ColumnMappingBase>(notification, conduitLLMConfigurationEntitiesNotificationTableBase, null);
             conduitLLMConfigurationEntitiesNotificationTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesNotificationMappingBase, false);
-            defaultTableMappings15.Add(conduitLLMConfigurationEntitiesNotificationMappingBase);
+            defaultTableMappings16.Add(conduitLLMConfigurationEntitiesNotificationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase14, notification.FindProperty("Id")!, conduitLLMConfigurationEntitiesNotificationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase8, notification.FindProperty("CreatedAt")!, conduitLLMConfigurationEntitiesNotificationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isReadColumnBase, notification.FindProperty("IsRead")!, conduitLLMConfigurationEntitiesNotificationMappingBase);
@@ -3343,10 +3456,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)providerKeyCredentialIdColumnBase, notification.FindProperty("ProviderKeyCredentialId")!, conduitLLMConfigurationEntitiesNotificationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)severityColumnBase, notification.FindProperty("Severity")!, conduitLLMConfigurationEntitiesNotificationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)typeColumnBase0, notification.FindProperty("Type")!, conduitLLMConfigurationEntitiesNotificationMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase4, notification.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesNotificationMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase5, notification.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesNotificationMappingBase);
 
-            var tableMappings15 = new List<TableMapping>();
-            notification.SetRuntimeAnnotation("Relational:TableMappings", tableMappings15);
+            var tableMappings16 = new List<TableMapping>();
+            notification.SetRuntimeAnnotation("Relational:TableMappings", tableMappings16);
             var notificationsTable = new Table("Notifications", null, relationalModel);
             var idColumn14 = new Column("Id", "integer", notificationsTable);
             notificationsTable.Columns.Add("Id", idColumn14);
@@ -3379,16 +3492,16 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var typeColumn0 = new Column("Type", "integer", notificationsTable);
             notificationsTable.Columns.Add("Type", typeColumn0);
             typeColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(typeColumn0);
-            var virtualKeyIdColumn4 = new Column("VirtualKeyId", "integer", notificationsTable)
+            var virtualKeyIdColumn5 = new Column("VirtualKeyId", "integer", notificationsTable)
             {
                 IsNullable = true
             };
-            notificationsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn4);
-            virtualKeyIdColumn4.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn4);
+            notificationsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn5);
+            virtualKeyIdColumn5.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn5);
             relationalModel.Tables.Add(("Notifications", null), notificationsTable);
             var notificationsTableMapping = new TableMapping(notification, notificationsTable, null);
             notificationsTable.AddTypeMapping(notificationsTableMapping, false);
-            tableMappings15.Add(notificationsTableMapping);
+            tableMappings16.Add(notificationsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn14, notification.FindProperty("Id")!, notificationsTableMapping);
             RelationalModel.CreateColumnMapping(createdAtColumn8, notification.FindProperty("CreatedAt")!, notificationsTableMapping);
             RelationalModel.CreateColumnMapping(isReadColumn, notification.FindProperty("IsRead")!, notificationsTableMapping);
@@ -3397,7 +3510,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(providerKeyCredentialIdColumn, notification.FindProperty("ProviderKeyCredentialId")!, notificationsTableMapping);
             RelationalModel.CreateColumnMapping(severityColumn, notification.FindProperty("Severity")!, notificationsTableMapping);
             RelationalModel.CreateColumnMapping(typeColumn0, notification.FindProperty("Type")!, notificationsTableMapping);
-            RelationalModel.CreateColumnMapping(virtualKeyIdColumn4, notification.FindProperty("VirtualKeyId")!, notificationsTableMapping);
+            RelationalModel.CreateColumnMapping(virtualKeyIdColumn5, notification.FindProperty("VirtualKeyId")!, notificationsTableMapping);
             var pK_Notifications = new UniqueConstraint("PK_Notifications", notificationsTable, new[] { idColumn14 });
             notificationsTable.PrimaryKey = pK_Notifications;
             pK_Notifications.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<int>(pK_Notifications));
@@ -3426,7 +3539,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_Notifications_ProviderKeyCredentialIdIx).Add(iX_Notifications_ProviderKeyCredentialId);
             notificationsTable.Indexes.Add("IX_Notifications_ProviderKeyCredentialId", iX_Notifications_ProviderKeyCredentialId);
             var iX_Notifications_VirtualKeyId = new TableIndex(
-            "IX_Notifications_VirtualKeyId", notificationsTable, new[] { virtualKeyIdColumn4 }, false);
+            "IX_Notifications_VirtualKeyId", notificationsTable, new[] { virtualKeyIdColumn5 }, false);
             iX_Notifications_VirtualKeyId.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_Notifications_VirtualKeyId));
             var iX_Notifications_VirtualKeyIdIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Configuration.Entities.Notification",
@@ -3437,8 +3550,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var pricingAuditEvent = FindEntityType("ConduitLLM.Configuration.Entities.PricingAuditEvent")!;
 
-            var defaultTableMappings16 = new List<TableMappingBase<ColumnMappingBase>>();
-            pricingAuditEvent.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings16);
+            var defaultTableMappings17 = new List<TableMappingBase<ColumnMappingBase>>();
+            pricingAuditEvent.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings17);
             var conduitLLMConfigurationEntitiesPricingAuditEventTableBase = new TableBase("ConduitLLM.Configuration.Entities.PricingAuditEvent", null, relationalModel);
             var appliedRateColumnBase = new ColumnBase<ColumnMappingBase>("AppliedRate", "numeric(10,8)", conduitLLMConfigurationEntitiesPricingAuditEventTableBase);
             conduitLLMConfigurationEntitiesPricingAuditEventTableBase.Columns.Add("AppliedRate", appliedRateColumnBase);
@@ -3470,12 +3583,12 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             conduitLLMConfigurationEntitiesPricingAuditEventTableBase.Columns.Add("Timestamp", timestampColumnBase0);
             var usedDefaultRateColumnBase = new ColumnBase<ColumnMappingBase>("UsedDefaultRate", "boolean", conduitLLMConfigurationEntitiesPricingAuditEventTableBase);
             conduitLLMConfigurationEntitiesPricingAuditEventTableBase.Columns.Add("UsedDefaultRate", usedDefaultRateColumnBase);
-            var virtualKeyIdColumnBase5 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesPricingAuditEventTableBase);
-            conduitLLMConfigurationEntitiesPricingAuditEventTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase5);
+            var virtualKeyIdColumnBase6 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesPricingAuditEventTableBase);
+            conduitLLMConfigurationEntitiesPricingAuditEventTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase6);
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.PricingAuditEvent", conduitLLMConfigurationEntitiesPricingAuditEventTableBase);
             var conduitLLMConfigurationEntitiesPricingAuditEventMappingBase = new TableMappingBase<ColumnMappingBase>(pricingAuditEvent, conduitLLMConfigurationEntitiesPricingAuditEventTableBase, null);
             conduitLLMConfigurationEntitiesPricingAuditEventTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesPricingAuditEventMappingBase, false);
-            defaultTableMappings16.Add(conduitLLMConfigurationEntitiesPricingAuditEventMappingBase);
+            defaultTableMappings17.Add(conduitLLMConfigurationEntitiesPricingAuditEventMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase15, pricingAuditEvent.FindProperty("Id")!, conduitLLMConfigurationEntitiesPricingAuditEventMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)appliedRateColumnBase, pricingAuditEvent.FindProperty("AppliedRate")!, conduitLLMConfigurationEntitiesPricingAuditEventMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)calculatedCostColumnBase0, pricingAuditEvent.FindProperty("CalculatedCost")!, conduitLLMConfigurationEntitiesPricingAuditEventMappingBase);
@@ -3488,10 +3601,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)requestIdColumnBase0, pricingAuditEvent.FindProperty("RequestId")!, conduitLLMConfigurationEntitiesPricingAuditEventMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)timestampColumnBase0, pricingAuditEvent.FindProperty("Timestamp")!, conduitLLMConfigurationEntitiesPricingAuditEventMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)usedDefaultRateColumnBase, pricingAuditEvent.FindProperty("UsedDefaultRate")!, conduitLLMConfigurationEntitiesPricingAuditEventMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase5, pricingAuditEvent.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesPricingAuditEventMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase6, pricingAuditEvent.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesPricingAuditEventMappingBase);
 
-            var tableMappings16 = new List<TableMapping>();
-            pricingAuditEvent.SetRuntimeAnnotation("Relational:TableMappings", tableMappings16);
+            var tableMappings17 = new List<TableMapping>();
+            pricingAuditEvent.SetRuntimeAnnotation("Relational:TableMappings", tableMappings17);
             var pricingAuditEventsTable = new Table("PricingAuditEvents", null, relationalModel);
             var idColumn15 = new Column("Id", "bigint", pricingAuditEventsTable);
             pricingAuditEventsTable.Columns.Add("Id", idColumn15);
@@ -3536,13 +3649,13 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var usedDefaultRateColumn = new Column("UsedDefaultRate", "boolean", pricingAuditEventsTable);
             pricingAuditEventsTable.Columns.Add("UsedDefaultRate", usedDefaultRateColumn);
             usedDefaultRateColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<bool>(usedDefaultRateColumn);
-            var virtualKeyIdColumn5 = new Column("VirtualKeyId", "integer", pricingAuditEventsTable);
-            pricingAuditEventsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn5);
-            virtualKeyIdColumn5.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn5);
+            var virtualKeyIdColumn6 = new Column("VirtualKeyId", "integer", pricingAuditEventsTable);
+            pricingAuditEventsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn6);
+            virtualKeyIdColumn6.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn6);
             relationalModel.Tables.Add(("PricingAuditEvents", null), pricingAuditEventsTable);
             var pricingAuditEventsTableMapping = new TableMapping(pricingAuditEvent, pricingAuditEventsTable, null);
             pricingAuditEventsTable.AddTypeMapping(pricingAuditEventsTableMapping, false);
-            tableMappings16.Add(pricingAuditEventsTableMapping);
+            tableMappings17.Add(pricingAuditEventsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn15, pricingAuditEvent.FindProperty("Id")!, pricingAuditEventsTableMapping);
             RelationalModel.CreateColumnMapping(appliedRateColumn, pricingAuditEvent.FindProperty("AppliedRate")!, pricingAuditEventsTableMapping);
             RelationalModel.CreateColumnMapping(calculatedCostColumn0, pricingAuditEvent.FindProperty("CalculatedCost")!, pricingAuditEventsTableMapping);
@@ -3555,7 +3668,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(requestIdColumn0, pricingAuditEvent.FindProperty("RequestId")!, pricingAuditEventsTableMapping);
             RelationalModel.CreateColumnMapping(timestampColumn0, pricingAuditEvent.FindProperty("Timestamp")!, pricingAuditEventsTableMapping);
             RelationalModel.CreateColumnMapping(usedDefaultRateColumn, pricingAuditEvent.FindProperty("UsedDefaultRate")!, pricingAuditEventsTableMapping);
-            RelationalModel.CreateColumnMapping(virtualKeyIdColumn5, pricingAuditEvent.FindProperty("VirtualKeyId")!, pricingAuditEventsTableMapping);
+            RelationalModel.CreateColumnMapping(virtualKeyIdColumn6, pricingAuditEvent.FindProperty("VirtualKeyId")!, pricingAuditEventsTableMapping);
             var pK_PricingAuditEvents = new UniqueConstraint("PK_PricingAuditEvents", pricingAuditEventsTable, new[] { idColumn15 });
             pricingAuditEventsTable.PrimaryKey = pK_PricingAuditEvents;
             pK_PricingAuditEvents.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<long>(pK_PricingAuditEvents));
@@ -3620,7 +3733,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_PricingAuditEvents_TimestampIx).Add(iX_PricingAuditEvents_Timestamp);
             pricingAuditEventsTable.Indexes.Add("IX_PricingAuditEvents_Timestamp", iX_PricingAuditEvents_Timestamp);
             var iX_PricingAuditEvents_VirtualKeyId = new TableIndex(
-            "IX_PricingAuditEvents_VirtualKeyId", pricingAuditEventsTable, new[] { virtualKeyIdColumn5 }, false);
+            "IX_PricingAuditEvents_VirtualKeyId", pricingAuditEventsTable, new[] { virtualKeyIdColumn6 }, false);
             iX_PricingAuditEvents_VirtualKeyId.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_PricingAuditEvents_VirtualKeyId));
             var iX_PricingAuditEvents_VirtualKeyIdIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Configuration.Entities.PricingAuditEvent",
@@ -3629,7 +3742,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_PricingAuditEvents_VirtualKeyIdIx).Add(iX_PricingAuditEvents_VirtualKeyId);
             pricingAuditEventsTable.Indexes.Add("IX_PricingAuditEvents_VirtualKeyId", iX_PricingAuditEvents_VirtualKeyId);
             var iX_PricingAuditEvents_VirtualKeyId_Timestamp = new TableIndex(
-            "IX_PricingAuditEvents_VirtualKeyId_Timestamp", pricingAuditEventsTable, new[] { virtualKeyIdColumn5, timestampColumn0 }, false);
+            "IX_PricingAuditEvents_VirtualKeyId_Timestamp", pricingAuditEventsTable, new[] { virtualKeyIdColumn6, timestampColumn0 }, false);
             iX_PricingAuditEvents_VirtualKeyId_Timestamp.SetRowIndexValueFactory(new CompositeRowIndexValueFactory(iX_PricingAuditEvents_VirtualKeyId_Timestamp));
             var iX_PricingAuditEvents_VirtualKeyId_TimestampIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Configuration.Entities.PricingAuditEvent",
@@ -3640,8 +3753,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var provider = FindEntityType("ConduitLLM.Configuration.Entities.Provider")!;
 
-            var defaultTableMappings17 = new List<TableMappingBase<ColumnMappingBase>>();
-            provider.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings17);
+            var defaultTableMappings18 = new List<TableMappingBase<ColumnMappingBase>>();
+            provider.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings18);
             var conduitLLMConfigurationEntitiesProviderTableBase = new TableBase("ConduitLLM.Configuration.Entities.Provider", null, relationalModel);
             var baseUrlColumnBase = new ColumnBase<ColumnMappingBase>("BaseUrl", "text", conduitLLMConfigurationEntitiesProviderTableBase)
             {
@@ -3672,7 +3785,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.Provider", conduitLLMConfigurationEntitiesProviderTableBase);
             var conduitLLMConfigurationEntitiesProviderMappingBase = new TableMappingBase<ColumnMappingBase>(provider, conduitLLMConfigurationEntitiesProviderTableBase, null);
             conduitLLMConfigurationEntitiesProviderTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesProviderMappingBase, false);
-            defaultTableMappings17.Add(conduitLLMConfigurationEntitiesProviderMappingBase);
+            defaultTableMappings18.Add(conduitLLMConfigurationEntitiesProviderMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase16, provider.FindProperty("Id")!, conduitLLMConfigurationEntitiesProviderMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)baseUrlColumnBase, provider.FindProperty("BaseUrl")!, conduitLLMConfigurationEntitiesProviderMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase9, provider.FindProperty("CreatedAt")!, conduitLLMConfigurationEntitiesProviderMappingBase);
@@ -3684,8 +3797,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)trustProviderReportedCostsColumnBase, provider.FindProperty("TrustProviderReportedCosts")!, conduitLLMConfigurationEntitiesProviderMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase7, provider.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesProviderMappingBase);
 
-            var tableMappings17 = new List<TableMapping>();
-            provider.SetRuntimeAnnotation("Relational:TableMappings", tableMappings17);
+            var tableMappings18 = new List<TableMapping>();
+            provider.SetRuntimeAnnotation("Relational:TableMappings", tableMappings18);
             var providersTable = new Table("Providers", null, relationalModel);
             var idColumn16 = new Column("Id", "integer", providersTable);
             providersTable.Columns.Add("Id", idColumn16);
@@ -3727,7 +3840,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("Providers", null), providersTable);
             var providersTableMapping = new TableMapping(provider, providersTable, null);
             providersTable.AddTypeMapping(providersTableMapping, false);
-            tableMappings17.Add(providersTableMapping);
+            tableMappings18.Add(providersTableMapping);
             RelationalModel.CreateColumnMapping(idColumn16, provider.FindProperty("Id")!, providersTableMapping);
             RelationalModel.CreateColumnMapping(baseUrlColumn, provider.FindProperty("BaseUrl")!, providersTableMapping);
             RelationalModel.CreateColumnMapping(createdAtColumn9, provider.FindProperty("CreatedAt")!, providersTableMapping);
@@ -3759,8 +3872,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var providerKeyCredential = FindEntityType("ConduitLLM.Configuration.Entities.ProviderKeyCredential")!;
 
-            var defaultTableMappings18 = new List<TableMappingBase<ColumnMappingBase>>();
-            providerKeyCredential.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings18);
+            var defaultTableMappings19 = new List<TableMappingBase<ColumnMappingBase>>();
+            providerKeyCredential.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings19);
             var conduitLLMConfigurationEntitiesProviderKeyCredentialTableBase = new TableBase("ConduitLLM.Configuration.Entities.ProviderKeyCredential", null, relationalModel);
             var apiKeyColumnBase = new ColumnBase<ColumnMappingBase>("ApiKey", "text", conduitLLMConfigurationEntitiesProviderKeyCredentialTableBase)
             {
@@ -3799,7 +3912,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.ProviderKeyCredential", conduitLLMConfigurationEntitiesProviderKeyCredentialTableBase);
             var conduitLLMConfigurationEntitiesProviderKeyCredentialMappingBase = new TableMappingBase<ColumnMappingBase>(providerKeyCredential, conduitLLMConfigurationEntitiesProviderKeyCredentialTableBase, null);
             conduitLLMConfigurationEntitiesProviderKeyCredentialTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesProviderKeyCredentialMappingBase, false);
-            defaultTableMappings18.Add(conduitLLMConfigurationEntitiesProviderKeyCredentialMappingBase);
+            defaultTableMappings19.Add(conduitLLMConfigurationEntitiesProviderKeyCredentialMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase17, providerKeyCredential.FindProperty("Id")!, conduitLLMConfigurationEntitiesProviderKeyCredentialMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)apiKeyColumnBase, providerKeyCredential.FindProperty("ApiKey")!, conduitLLMConfigurationEntitiesProviderKeyCredentialMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)baseUrlColumnBase0, providerKeyCredential.FindProperty("BaseUrl")!, conduitLLMConfigurationEntitiesProviderKeyCredentialMappingBase);
@@ -3812,8 +3925,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)secretSettingsColumnBase, providerKeyCredential.FindProperty("SecretSettings")!, conduitLLMConfigurationEntitiesProviderKeyCredentialMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase8, providerKeyCredential.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesProviderKeyCredentialMappingBase);
 
-            var tableMappings18 = new List<TableMapping>();
-            providerKeyCredential.SetRuntimeAnnotation("Relational:TableMappings", tableMappings18);
+            var tableMappings19 = new List<TableMapping>();
+            providerKeyCredential.SetRuntimeAnnotation("Relational:TableMappings", tableMappings19);
             var providerKeyCredentialsTable = new Table("ProviderKeyCredentials", null, relationalModel);
             var idColumn17 = new Column("Id", "integer", providerKeyCredentialsTable);
             providerKeyCredentialsTable.Columns.Add("Id", idColumn17);
@@ -3864,7 +3977,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("ProviderKeyCredentials", null), providerKeyCredentialsTable);
             var providerKeyCredentialsTableMapping = new TableMapping(providerKeyCredential, providerKeyCredentialsTable, null);
             providerKeyCredentialsTable.AddTypeMapping(providerKeyCredentialsTableMapping, false);
-            tableMappings18.Add(providerKeyCredentialsTableMapping);
+            tableMappings19.Add(providerKeyCredentialsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn17, providerKeyCredential.FindProperty("Id")!, providerKeyCredentialsTableMapping);
             RelationalModel.CreateColumnMapping(apiKeyColumn, providerKeyCredential.FindProperty("ApiKey")!, providerKeyCredentialsTableMapping);
             RelationalModel.CreateColumnMapping(baseUrlColumn0, providerKeyCredential.FindProperty("BaseUrl")!, providerKeyCredentialsTableMapping);
@@ -3915,8 +4028,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var providerMetadataDriftItem = FindEntityType("ConduitLLM.Configuration.Entities.ProviderMetadataDriftItem")!;
 
-            var defaultTableMappings19 = new List<TableMappingBase<ColumnMappingBase>>();
-            providerMetadataDriftItem.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings19);
+            var defaultTableMappings20 = new List<TableMappingBase<ColumnMappingBase>>();
+            providerMetadataDriftItem.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings20);
             var conduitLLMConfigurationEntitiesProviderMetadataDriftItemTableBase = new TableBase("ConduitLLM.Configuration.Entities.ProviderMetadataDriftItem", null, relationalModel);
             var currentValuesJsonColumnBase = new ColumnBase<ColumnMappingBase>("CurrentValuesJson", "text", conduitLLMConfigurationEntitiesProviderMetadataDriftItemTableBase);
             conduitLLMConfigurationEntitiesProviderMetadataDriftItemTableBase.Columns.Add("CurrentValuesJson", currentValuesJsonColumnBase);
@@ -3956,7 +4069,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.ProviderMetadataDriftItem", conduitLLMConfigurationEntitiesProviderMetadataDriftItemTableBase);
             var conduitLLMConfigurationEntitiesProviderMetadataDriftItemMappingBase = new TableMappingBase<ColumnMappingBase>(providerMetadataDriftItem, conduitLLMConfigurationEntitiesProviderMetadataDriftItemTableBase, null);
             conduitLLMConfigurationEntitiesProviderMetadataDriftItemTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesProviderMetadataDriftItemMappingBase, false);
-            defaultTableMappings19.Add(conduitLLMConfigurationEntitiesProviderMetadataDriftItemMappingBase);
+            defaultTableMappings20.Add(conduitLLMConfigurationEntitiesProviderMetadataDriftItemMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase18, providerMetadataDriftItem.FindProperty("Id")!, conduitLLMConfigurationEntitiesProviderMetadataDriftItemMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)currentValuesJsonColumnBase, providerMetadataDriftItem.FindProperty("CurrentValuesJson")!, conduitLLMConfigurationEntitiesProviderMetadataDriftItemMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)driftTypeColumnBase, providerMetadataDriftItem.FindProperty("DriftType")!, conduitLLMConfigurationEntitiesProviderMetadataDriftItemMappingBase);
@@ -3971,8 +4084,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)resolvedByColumnBase, providerMetadataDriftItem.FindProperty("ResolvedBy")!, conduitLLMConfigurationEntitiesProviderMetadataDriftItemMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)statusColumnBase1, providerMetadataDriftItem.FindProperty("Status")!, conduitLLMConfigurationEntitiesProviderMetadataDriftItemMappingBase);
 
-            var tableMappings19 = new List<TableMapping>();
-            providerMetadataDriftItem.SetRuntimeAnnotation("Relational:TableMappings", tableMappings19);
+            var tableMappings20 = new List<TableMapping>();
+            providerMetadataDriftItem.SetRuntimeAnnotation("Relational:TableMappings", tableMappings20);
             var providerMetadataDriftItemsTable = new Table("ProviderMetadataDriftItems", null, relationalModel);
             var idColumn18 = new Column("Id", "integer", providerMetadataDriftItemsTable);
             providerMetadataDriftItemsTable.Columns.Add("Id", idColumn18);
@@ -4026,7 +4139,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("ProviderMetadataDriftItems", null), providerMetadataDriftItemsTable);
             var providerMetadataDriftItemsTableMapping = new TableMapping(providerMetadataDriftItem, providerMetadataDriftItemsTable, null);
             providerMetadataDriftItemsTable.AddTypeMapping(providerMetadataDriftItemsTableMapping, false);
-            tableMappings19.Add(providerMetadataDriftItemsTableMapping);
+            tableMappings20.Add(providerMetadataDriftItemsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn18, providerMetadataDriftItem.FindProperty("Id")!, providerMetadataDriftItemsTableMapping);
             RelationalModel.CreateColumnMapping(currentValuesJsonColumn, providerMetadataDriftItem.FindProperty("CurrentValuesJson")!, providerMetadataDriftItemsTableMapping);
             RelationalModel.CreateColumnMapping(driftTypeColumn, providerMetadataDriftItem.FindProperty("DriftType")!, providerMetadataDriftItemsTableMapping);
@@ -4079,8 +4192,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var providerMetadataSyncRun = FindEntityType("ConduitLLM.Configuration.Entities.ProviderMetadataSyncRun")!;
 
-            var defaultTableMappings20 = new List<TableMappingBase<ColumnMappingBase>>();
-            providerMetadataSyncRun.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings20);
+            var defaultTableMappings21 = new List<TableMappingBase<ColumnMappingBase>>();
+            providerMetadataSyncRun.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings21);
             var conduitLLMConfigurationEntitiesProviderMetadataSyncRunTableBase = new TableBase("ConduitLLM.Configuration.Entities.ProviderMetadataSyncRun", null, relationalModel);
             var completedAtColumnBase1 = new ColumnBase<ColumnMappingBase>("CompletedAt", "timestamp with time zone", conduitLLMConfigurationEntitiesProviderMetadataSyncRunTableBase)
             {
@@ -4115,7 +4228,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.ProviderMetadataSyncRun", conduitLLMConfigurationEntitiesProviderMetadataSyncRunTableBase);
             var conduitLLMConfigurationEntitiesProviderMetadataSyncRunMappingBase = new TableMappingBase<ColumnMappingBase>(providerMetadataSyncRun, conduitLLMConfigurationEntitiesProviderMetadataSyncRunTableBase, null);
             conduitLLMConfigurationEntitiesProviderMetadataSyncRunTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesProviderMetadataSyncRunMappingBase, false);
-            defaultTableMappings20.Add(conduitLLMConfigurationEntitiesProviderMetadataSyncRunMappingBase);
+            defaultTableMappings21.Add(conduitLLMConfigurationEntitiesProviderMetadataSyncRunMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase19, providerMetadataSyncRun.FindProperty("Id")!, conduitLLMConfigurationEntitiesProviderMetadataSyncRunMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)completedAtColumnBase1, providerMetadataSyncRun.FindProperty("CompletedAt")!, conduitLLMConfigurationEntitiesProviderMetadataSyncRunMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)errorMessageColumnBase0, providerMetadataSyncRun.FindProperty("ErrorMessage")!, conduitLLMConfigurationEntitiesProviderMetadataSyncRunMappingBase);
@@ -4129,8 +4242,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)statusColumnBase2, providerMetadataSyncRun.FindProperty("Status")!, conduitLLMConfigurationEntitiesProviderMetadataSyncRunMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)triggeredByColumnBase, providerMetadataSyncRun.FindProperty("TriggeredBy")!, conduitLLMConfigurationEntitiesProviderMetadataSyncRunMappingBase);
 
-            var tableMappings20 = new List<TableMapping>();
-            providerMetadataSyncRun.SetRuntimeAnnotation("Relational:TableMappings", tableMappings20);
+            var tableMappings21 = new List<TableMapping>();
+            providerMetadataSyncRun.SetRuntimeAnnotation("Relational:TableMappings", tableMappings21);
             var providerMetadataSyncRunsTable = new Table("ProviderMetadataSyncRuns", null, relationalModel);
             var idColumn19 = new Column("Id", "integer", providerMetadataSyncRunsTable);
             providerMetadataSyncRunsTable.Columns.Add("Id", idColumn19);
@@ -4178,7 +4291,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("ProviderMetadataSyncRuns", null), providerMetadataSyncRunsTable);
             var providerMetadataSyncRunsTableMapping = new TableMapping(providerMetadataSyncRun, providerMetadataSyncRunsTable, null);
             providerMetadataSyncRunsTable.AddTypeMapping(providerMetadataSyncRunsTableMapping, false);
-            tableMappings20.Add(providerMetadataSyncRunsTableMapping);
+            tableMappings21.Add(providerMetadataSyncRunsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn19, providerMetadataSyncRun.FindProperty("Id")!, providerMetadataSyncRunsTableMapping);
             RelationalModel.CreateColumnMapping(completedAtColumn1, providerMetadataSyncRun.FindProperty("CompletedAt")!, providerMetadataSyncRunsTableMapping);
             RelationalModel.CreateColumnMapping(errorMessageColumn0, providerMetadataSyncRun.FindProperty("ErrorMessage")!, providerMetadataSyncRunsTableMapping);
@@ -4203,8 +4316,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var providerTool = FindEntityType("ConduitLLM.Configuration.Entities.ProviderTool")!;
 
-            var defaultTableMappings21 = new List<TableMappingBase<ColumnMappingBase>>();
-            providerTool.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings21);
+            var defaultTableMappings22 = new List<TableMappingBase<ColumnMappingBase>>();
+            providerTool.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings22);
             var conduitLLMConfigurationEntitiesProviderToolTableBase = new TableBase("ConduitLLM.Configuration.Entities.ProviderTool", null, relationalModel);
             var billingUnitColumnBase = new ColumnBase<ColumnMappingBase>("BillingUnit", "character varying(50)", conduitLLMConfigurationEntitiesProviderToolTableBase)
             {
@@ -4239,7 +4352,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.ProviderTool", conduitLLMConfigurationEntitiesProviderToolTableBase);
             var conduitLLMConfigurationEntitiesProviderToolMappingBase = new TableMappingBase<ColumnMappingBase>(providerTool, conduitLLMConfigurationEntitiesProviderToolTableBase, null);
             conduitLLMConfigurationEntitiesProviderToolTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesProviderToolMappingBase, false);
-            defaultTableMappings21.Add(conduitLLMConfigurationEntitiesProviderToolMappingBase);
+            defaultTableMappings22.Add(conduitLLMConfigurationEntitiesProviderToolMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase20, providerTool.FindProperty("Id")!, conduitLLMConfigurationEntitiesProviderToolMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)billingUnitColumnBase, providerTool.FindProperty("BillingUnit")!, conduitLLMConfigurationEntitiesProviderToolMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)costDescriptionColumnBase, providerTool.FindProperty("CostDescription")!, conduitLLMConfigurationEntitiesProviderToolMappingBase);
@@ -4250,8 +4363,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)toolParametersColumnBase, providerTool.FindProperty("ToolParameters")!, conduitLLMConfigurationEntitiesProviderToolMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase9, providerTool.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesProviderToolMappingBase);
 
-            var tableMappings21 = new List<TableMapping>();
-            providerTool.SetRuntimeAnnotation("Relational:TableMappings", tableMappings21);
+            var tableMappings22 = new List<TableMapping>();
+            providerTool.SetRuntimeAnnotation("Relational:TableMappings", tableMappings22);
             var providerToolsTable = new Table("ProviderTools", null, relationalModel);
             var idColumn20 = new Column("Id", "integer", providerToolsTable);
             providerToolsTable.Columns.Add("Id", idColumn20);
@@ -4296,7 +4409,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("ProviderTools", null), providerToolsTable);
             var providerToolsTableMapping = new TableMapping(providerTool, providerToolsTable, null);
             providerToolsTable.AddTypeMapping(providerToolsTableMapping, false);
-            tableMappings21.Add(providerToolsTableMapping);
+            tableMappings22.Add(providerToolsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn20, providerTool.FindProperty("Id")!, providerToolsTableMapping);
             RelationalModel.CreateColumnMapping(billingUnitColumn, providerTool.FindProperty("BillingUnit")!, providerToolsTableMapping);
             RelationalModel.CreateColumnMapping(costDescriptionColumn, providerTool.FindProperty("CostDescription")!, providerToolsTableMapping);
@@ -4336,8 +4449,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var refundIdempotencyRecord = FindEntityType("ConduitLLM.Configuration.Entities.RefundIdempotencyRecord")!;
 
-            var defaultTableMappings22 = new List<TableMappingBase<ColumnMappingBase>>();
-            refundIdempotencyRecord.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings22);
+            var defaultTableMappings23 = new List<TableMappingBase<ColumnMappingBase>>();
+            refundIdempotencyRecord.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings23);
             var conduitLLMConfigurationEntitiesRefundIdempotencyRecordTableBase = new TableBase("ConduitLLM.Configuration.Entities.RefundIdempotencyRecord", null, relationalModel);
             var createdAtColumnBase11 = new ColumnBase<ColumnMappingBase>("CreatedAt", "timestamp with time zone", conduitLLMConfigurationEntitiesRefundIdempotencyRecordTableBase);
             conduitLLMConfigurationEntitiesRefundIdempotencyRecordTableBase.Columns.Add("CreatedAt", createdAtColumnBase11);
@@ -4356,7 +4469,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.RefundIdempotencyRecord", conduitLLMConfigurationEntitiesRefundIdempotencyRecordTableBase);
             var conduitLLMConfigurationEntitiesRefundIdempotencyRecordMappingBase = new TableMappingBase<ColumnMappingBase>(refundIdempotencyRecord, conduitLLMConfigurationEntitiesRefundIdempotencyRecordTableBase, null);
             conduitLLMConfigurationEntitiesRefundIdempotencyRecordTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesRefundIdempotencyRecordMappingBase, false);
-            defaultTableMappings22.Add(conduitLLMConfigurationEntitiesRefundIdempotencyRecordMappingBase);
+            defaultTableMappings23.Add(conduitLLMConfigurationEntitiesRefundIdempotencyRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase21, refundIdempotencyRecord.FindProperty("Id")!, conduitLLMConfigurationEntitiesRefundIdempotencyRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase11, refundIdempotencyRecord.FindProperty("CreatedAt")!, conduitLLMConfigurationEntitiesRefundIdempotencyRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)operationIdColumnBase0, refundIdempotencyRecord.FindProperty("OperationId")!, conduitLLMConfigurationEntitiesRefundIdempotencyRecordMappingBase);
@@ -4365,8 +4478,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)responseJsonColumnBase, refundIdempotencyRecord.FindProperty("ResponseJson")!, conduitLLMConfigurationEntitiesRefundIdempotencyRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyGroupIdColumnBase1, refundIdempotencyRecord.FindProperty("VirtualKeyGroupId")!, conduitLLMConfigurationEntitiesRefundIdempotencyRecordMappingBase);
 
-            var tableMappings22 = new List<TableMapping>();
-            refundIdempotencyRecord.SetRuntimeAnnotation("Relational:TableMappings", tableMappings22);
+            var tableMappings23 = new List<TableMapping>();
+            refundIdempotencyRecord.SetRuntimeAnnotation("Relational:TableMappings", tableMappings23);
             var refundIdempotencyRecordsTable = new Table("RefundIdempotencyRecords", null, relationalModel);
             var idColumn21 = new Column("Id", "bigint", refundIdempotencyRecordsTable);
             refundIdempotencyRecordsTable.Columns.Add("Id", idColumn21);
@@ -4393,7 +4506,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("RefundIdempotencyRecords", null), refundIdempotencyRecordsTable);
             var refundIdempotencyRecordsTableMapping = new TableMapping(refundIdempotencyRecord, refundIdempotencyRecordsTable, null);
             refundIdempotencyRecordsTable.AddTypeMapping(refundIdempotencyRecordsTableMapping, false);
-            tableMappings22.Add(refundIdempotencyRecordsTableMapping);
+            tableMappings23.Add(refundIdempotencyRecordsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn21, refundIdempotencyRecord.FindProperty("Id")!, refundIdempotencyRecordsTableMapping);
             RelationalModel.CreateColumnMapping(createdAtColumn11, refundIdempotencyRecord.FindProperty("CreatedAt")!, refundIdempotencyRecordsTableMapping);
             RelationalModel.CreateColumnMapping(operationIdColumn0, refundIdempotencyRecord.FindProperty("OperationId")!, refundIdempotencyRecordsTableMapping);
@@ -4422,14 +4535,14 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var requestLog = FindEntityType("ConduitLLM.Configuration.Entities.RequestLog")!;
 
-            var defaultTableMappings23 = new List<TableMappingBase<ColumnMappingBase>>();
-            requestLog.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings23);
+            var defaultTableMappings24 = new List<TableMappingBase<ColumnMappingBase>>();
+            requestLog.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings24);
             var conduitLLMConfigurationEntitiesRequestLogTableBase = new TableBase("ConduitLLM.Configuration.Entities.RequestLog", null, relationalModel);
-            var billedAtUtcColumnBase = new ColumnBase<ColumnMappingBase>("BilledAtUtc", "timestamp with time zone", conduitLLMConfigurationEntitiesRequestLogTableBase)
+            var billedAtUtcColumnBase0 = new ColumnBase<ColumnMappingBase>("BilledAtUtc", "timestamp with time zone", conduitLLMConfigurationEntitiesRequestLogTableBase)
             {
                 IsNullable = true
             };
-            conduitLLMConfigurationEntitiesRequestLogTableBase.Columns.Add("BilledAtUtc", billedAtUtcColumnBase);
+            conduitLLMConfigurationEntitiesRequestLogTableBase.Columns.Add("BilledAtUtc", billedAtUtcColumnBase0);
             var billingMethodColumnBase = new ColumnBase<ColumnMappingBase>("BillingMethod", "integer", conduitLLMConfigurationEntitiesRequestLogTableBase)
             {
                 IsNullable = true
@@ -4528,14 +4641,14 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 IsNullable = true
             };
             conduitLLMConfigurationEntitiesRequestLogTableBase.Columns.Add("UserId", userIdColumnBase);
-            var virtualKeyIdColumnBase6 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesRequestLogTableBase);
-            conduitLLMConfigurationEntitiesRequestLogTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase6);
+            var virtualKeyIdColumnBase7 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesRequestLogTableBase);
+            conduitLLMConfigurationEntitiesRequestLogTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase7);
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.RequestLog", conduitLLMConfigurationEntitiesRequestLogTableBase);
             var conduitLLMConfigurationEntitiesRequestLogMappingBase = new TableMappingBase<ColumnMappingBase>(requestLog, conduitLLMConfigurationEntitiesRequestLogTableBase, null);
             conduitLLMConfigurationEntitiesRequestLogTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesRequestLogMappingBase, false);
-            defaultTableMappings23.Add(conduitLLMConfigurationEntitiesRequestLogMappingBase);
+            defaultTableMappings24.Add(conduitLLMConfigurationEntitiesRequestLogMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase22, requestLog.FindProperty("Id")!, conduitLLMConfigurationEntitiesRequestLogMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)billedAtUtcColumnBase, requestLog.FindProperty("BilledAtUtc")!, conduitLLMConfigurationEntitiesRequestLogMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)billedAtUtcColumnBase0, requestLog.FindProperty("BilledAtUtc")!, conduitLLMConfigurationEntitiesRequestLogMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)billingMethodColumnBase, requestLog.FindProperty("BillingMethod")!, conduitLLMConfigurationEntitiesRequestLogMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)cacheWritePremiumColumnBase, requestLog.FindProperty("CacheWritePremium")!, conduitLLMConfigurationEntitiesRequestLogMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)cachedInputTokensColumnBase, requestLog.FindProperty("CachedInputTokens")!, conduitLLMConfigurationEntitiesRequestLogMappingBase);
@@ -4563,21 +4676,21 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)statusCodeColumnBase, requestLog.FindProperty("StatusCode")!, conduitLLMConfigurationEntitiesRequestLogMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)timestampColumnBase1, requestLog.FindProperty("Timestamp")!, conduitLLMConfigurationEntitiesRequestLogMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)userIdColumnBase, requestLog.FindProperty("UserId")!, conduitLLMConfigurationEntitiesRequestLogMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase6, requestLog.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesRequestLogMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase7, requestLog.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesRequestLogMappingBase);
 
-            var tableMappings23 = new List<TableMapping>();
-            requestLog.SetRuntimeAnnotation("Relational:TableMappings", tableMappings23);
+            var tableMappings24 = new List<TableMapping>();
+            requestLog.SetRuntimeAnnotation("Relational:TableMappings", tableMappings24);
             var requestLogsTable = new Table("RequestLogs", null, relationalModel);
             var idColumn22 = new Column("Id", "integer", requestLogsTable);
             requestLogsTable.Columns.Add("Id", idColumn22);
             idColumn22.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(idColumn22);
             idColumn22.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-            var billedAtUtcColumn = new Column("BilledAtUtc", "timestamp with time zone", requestLogsTable)
+            var billedAtUtcColumn0 = new Column("BilledAtUtc", "timestamp with time zone", requestLogsTable)
             {
                 IsNullable = true
             };
-            requestLogsTable.Columns.Add("BilledAtUtc", billedAtUtcColumn);
-            billedAtUtcColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(billedAtUtcColumn);
+            requestLogsTable.Columns.Add("BilledAtUtc", billedAtUtcColumn0);
+            billedAtUtcColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(billedAtUtcColumn0);
             var billingMethodColumn = new Column("BillingMethod", "integer", requestLogsTable)
             {
                 IsNullable = true
@@ -4701,15 +4814,15 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             };
             requestLogsTable.Columns.Add("UserId", userIdColumn);
             userIdColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(userIdColumn);
-            var virtualKeyIdColumn6 = new Column("VirtualKeyId", "integer", requestLogsTable);
-            requestLogsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn6);
-            virtualKeyIdColumn6.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn6);
+            var virtualKeyIdColumn7 = new Column("VirtualKeyId", "integer", requestLogsTable);
+            requestLogsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn7);
+            virtualKeyIdColumn7.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn7);
             relationalModel.Tables.Add(("RequestLogs", null), requestLogsTable);
             var requestLogsTableMapping = new TableMapping(requestLog, requestLogsTable, null);
             requestLogsTable.AddTypeMapping(requestLogsTableMapping, false);
-            tableMappings23.Add(requestLogsTableMapping);
+            tableMappings24.Add(requestLogsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn22, requestLog.FindProperty("Id")!, requestLogsTableMapping);
-            RelationalModel.CreateColumnMapping(billedAtUtcColumn, requestLog.FindProperty("BilledAtUtc")!, requestLogsTableMapping);
+            RelationalModel.CreateColumnMapping(billedAtUtcColumn0, requestLog.FindProperty("BilledAtUtc")!, requestLogsTableMapping);
             RelationalModel.CreateColumnMapping(billingMethodColumn, requestLog.FindProperty("BillingMethod")!, requestLogsTableMapping);
             RelationalModel.CreateColumnMapping(cacheWritePremiumColumn, requestLog.FindProperty("CacheWritePremium")!, requestLogsTableMapping);
             RelationalModel.CreateColumnMapping(cachedInputTokensColumn, requestLog.FindProperty("CachedInputTokens")!, requestLogsTableMapping);
@@ -4737,7 +4850,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(statusCodeColumn, requestLog.FindProperty("StatusCode")!, requestLogsTableMapping);
             RelationalModel.CreateColumnMapping(timestampColumn1, requestLog.FindProperty("Timestamp")!, requestLogsTableMapping);
             RelationalModel.CreateColumnMapping(userIdColumn, requestLog.FindProperty("UserId")!, requestLogsTableMapping);
-            RelationalModel.CreateColumnMapping(virtualKeyIdColumn6, requestLog.FindProperty("VirtualKeyId")!, requestLogsTableMapping);
+            RelationalModel.CreateColumnMapping(virtualKeyIdColumn7, requestLog.FindProperty("VirtualKeyId")!, requestLogsTableMapping);
             var pK_RequestLogs = new UniqueConstraint("PK_RequestLogs", requestLogsTable, new[] { idColumn22 });
             requestLogsTable.PrimaryKey = pK_RequestLogs;
             pK_RequestLogs.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<int>(pK_RequestLogs));
@@ -4748,7 +4861,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateUniqueConstraints(pK_RequestLogsKey).Add(pK_RequestLogs);
             requestLogsTable.UniqueConstraints.Add("PK_RequestLogs", pK_RequestLogs);
             var iX_RequestLogs_BilledAtUtc_VirtualKeyId = new TableIndex(
-            "IX_RequestLogs_BilledAtUtc_VirtualKeyId", requestLogsTable, new[] { billedAtUtcColumn, virtualKeyIdColumn6 }, false);
+            "IX_RequestLogs_BilledAtUtc_VirtualKeyId", requestLogsTable, new[] { billedAtUtcColumn0, virtualKeyIdColumn7 }, false);
             iX_RequestLogs_BilledAtUtc_VirtualKeyId.SetRowIndexValueFactory(new CompositeRowIndexValueFactory(iX_RequestLogs_BilledAtUtc_VirtualKeyId));
             var iX_RequestLogs_BilledAtUtc_VirtualKeyIdIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Configuration.Entities.RequestLog",
@@ -4766,7 +4879,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_RequestLogs_ModelProviderMappingId_TimestampIx).Add(iX_RequestLogs_ModelProviderMappingId_Timestamp);
             requestLogsTable.Indexes.Add("IX_RequestLogs_ModelProviderMappingId_Timestamp", iX_RequestLogs_ModelProviderMappingId_Timestamp);
             var iX_RequestLogs_VirtualKeyId = new TableIndex(
-            "IX_RequestLogs_VirtualKeyId", requestLogsTable, new[] { virtualKeyIdColumn6 }, false);
+            "IX_RequestLogs_VirtualKeyId", requestLogsTable, new[] { virtualKeyIdColumn7 }, false);
             iX_RequestLogs_VirtualKeyId.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_RequestLogs_VirtualKeyId));
             var iX_RequestLogs_VirtualKeyIdIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Configuration.Entities.RequestLog",
@@ -4777,8 +4890,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var virtualKey = FindEntityType("ConduitLLM.Configuration.Entities.VirtualKey")!;
 
-            var defaultTableMappings24 = new List<TableMappingBase<ColumnMappingBase>>();
-            virtualKey.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings24);
+            var defaultTableMappings25 = new List<TableMappingBase<ColumnMappingBase>>();
+            virtualKey.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings25);
             var conduitLLMConfigurationEntitiesVirtualKeyTableBase = new TableBase("ConduitLLM.Configuration.Entities.VirtualKey", null, relationalModel);
             var allowedModelsColumnBase = new ColumnBase<ColumnMappingBase>("AllowedModels", "text", conduitLLMConfigurationEntitiesVirtualKeyTableBase)
             {
@@ -4801,8 +4914,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             conduitLLMConfigurationEntitiesVirtualKeyTableBase.Columns.Add("Id", idColumnBase23);
             var isEnabledColumnBase5 = new ColumnBase<ColumnMappingBase>("IsEnabled", "boolean", conduitLLMConfigurationEntitiesVirtualKeyTableBase);
             conduitLLMConfigurationEntitiesVirtualKeyTableBase.Columns.Add("IsEnabled", isEnabledColumnBase5);
-            var keyHashColumnBase = new ColumnBase<ColumnMappingBase>("KeyHash", "character varying(128)", conduitLLMConfigurationEntitiesVirtualKeyTableBase);
-            conduitLLMConfigurationEntitiesVirtualKeyTableBase.Columns.Add("KeyHash", keyHashColumnBase);
+            var keyHashColumnBase0 = new ColumnBase<ColumnMappingBase>("KeyHash", "character varying(128)", conduitLLMConfigurationEntitiesVirtualKeyTableBase);
+            conduitLLMConfigurationEntitiesVirtualKeyTableBase.Columns.Add("KeyHash", keyHashColumnBase0);
             var keyNameColumnBase0 = new ColumnBase<ColumnMappingBase>("KeyName", "character varying(100)", conduitLLMConfigurationEntitiesVirtualKeyTableBase);
             conduitLLMConfigurationEntitiesVirtualKeyTableBase.Columns.Add("KeyName", keyNameColumnBase0);
             var maxParallelRequestsColumnBase = new ColumnBase<ColumnMappingBase>("MaxParallelRequests", "integer", conduitLLMConfigurationEntitiesVirtualKeyTableBase)
@@ -4852,14 +4965,14 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.VirtualKey", conduitLLMConfigurationEntitiesVirtualKeyTableBase);
             var conduitLLMConfigurationEntitiesVirtualKeyMappingBase = new TableMappingBase<ColumnMappingBase>(virtualKey, conduitLLMConfigurationEntitiesVirtualKeyTableBase, null);
             conduitLLMConfigurationEntitiesVirtualKeyTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesVirtualKeyMappingBase, false);
-            defaultTableMappings24.Add(conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
+            defaultTableMappings25.Add(conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase23, virtualKey.FindProperty("Id")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)allowedModelsColumnBase, virtualKey.FindProperty("AllowedModels")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase12, virtualKey.FindProperty("CreatedAt")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)descriptionColumnBase6, virtualKey.FindProperty("Description")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)expiresAtColumnBase0, virtualKey.FindProperty("ExpiresAt")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isEnabledColumnBase5, virtualKey.FindProperty("IsEnabled")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)keyHashColumnBase, virtualKey.FindProperty("KeyHash")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)keyHashColumnBase0, virtualKey.FindProperty("KeyHash")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)keyNameColumnBase0, virtualKey.FindProperty("KeyName")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)maxParallelRequestsColumnBase, virtualKey.FindProperty("MaxParallelRequests")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)metadataColumnBase3, virtualKey.FindProperty("Metadata")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
@@ -4872,8 +4985,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase10, virtualKey.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyGroupIdColumnBase2, virtualKey.FindProperty("VirtualKeyGroupId")!, conduitLLMConfigurationEntitiesVirtualKeyMappingBase);
 
-            var tableMappings24 = new List<TableMapping>();
-            virtualKey.SetRuntimeAnnotation("Relational:TableMappings", tableMappings24);
+            var tableMappings25 = new List<TableMapping>();
+            virtualKey.SetRuntimeAnnotation("Relational:TableMappings", tableMappings25);
             var virtualKeysTable = new Table("VirtualKeys", null, relationalModel);
             var idColumn23 = new Column("Id", "integer", virtualKeysTable);
             virtualKeysTable.Columns.Add("Id", idColumn23);
@@ -4903,9 +5016,9 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var isEnabledColumn5 = new Column("IsEnabled", "boolean", virtualKeysTable);
             virtualKeysTable.Columns.Add("IsEnabled", isEnabledColumn5);
             isEnabledColumn5.Accessors = ColumnAccessorsFactory.CreateGeneric<bool>(isEnabledColumn5);
-            var keyHashColumn = new Column("KeyHash", "character varying(128)", virtualKeysTable);
-            virtualKeysTable.Columns.Add("KeyHash", keyHashColumn);
-            keyHashColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(keyHashColumn);
+            var keyHashColumn0 = new Column("KeyHash", "character varying(128)", virtualKeysTable);
+            virtualKeysTable.Columns.Add("KeyHash", keyHashColumn0);
+            keyHashColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(keyHashColumn0);
             var keyNameColumn0 = new Column("KeyName", "character varying(100)", virtualKeysTable);
             virtualKeysTable.Columns.Add("KeyName", keyNameColumn0);
             keyNameColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(keyNameColumn0);
@@ -4966,14 +5079,14 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("VirtualKeys", null), virtualKeysTable);
             var virtualKeysTableMapping = new TableMapping(virtualKey, virtualKeysTable, null);
             virtualKeysTable.AddTypeMapping(virtualKeysTableMapping, false);
-            tableMappings24.Add(virtualKeysTableMapping);
+            tableMappings25.Add(virtualKeysTableMapping);
             RelationalModel.CreateColumnMapping(idColumn23, virtualKey.FindProperty("Id")!, virtualKeysTableMapping);
             RelationalModel.CreateColumnMapping(allowedModelsColumn, virtualKey.FindProperty("AllowedModels")!, virtualKeysTableMapping);
             RelationalModel.CreateColumnMapping(createdAtColumn12, virtualKey.FindProperty("CreatedAt")!, virtualKeysTableMapping);
             RelationalModel.CreateColumnMapping(descriptionColumn6, virtualKey.FindProperty("Description")!, virtualKeysTableMapping);
             RelationalModel.CreateColumnMapping(expiresAtColumn0, virtualKey.FindProperty("ExpiresAt")!, virtualKeysTableMapping);
             RelationalModel.CreateColumnMapping(isEnabledColumn5, virtualKey.FindProperty("IsEnabled")!, virtualKeysTableMapping);
-            RelationalModel.CreateColumnMapping(keyHashColumn, virtualKey.FindProperty("KeyHash")!, virtualKeysTableMapping);
+            RelationalModel.CreateColumnMapping(keyHashColumn0, virtualKey.FindProperty("KeyHash")!, virtualKeysTableMapping);
             RelationalModel.CreateColumnMapping(keyNameColumn0, virtualKey.FindProperty("KeyName")!, virtualKeysTableMapping);
             RelationalModel.CreateColumnMapping(maxParallelRequestsColumn, virtualKey.FindProperty("MaxParallelRequests")!, virtualKeysTableMapping);
             RelationalModel.CreateColumnMapping(metadataColumn3, virtualKey.FindProperty("Metadata")!, virtualKeysTableMapping);
@@ -4995,7 +5108,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateUniqueConstraints(pK_VirtualKeysKey).Add(pK_VirtualKeys);
             virtualKeysTable.UniqueConstraints.Add("PK_VirtualKeys", pK_VirtualKeys);
             var iX_VirtualKeys_KeyHash = new TableIndex(
-            "IX_VirtualKeys_KeyHash", virtualKeysTable, new[] { keyHashColumn }, true);
+            "IX_VirtualKeys_KeyHash", virtualKeysTable, new[] { keyHashColumn0 }, true);
             iX_VirtualKeys_KeyHash.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<string>(iX_VirtualKeys_KeyHash));
             var iX_VirtualKeys_KeyHashIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Configuration.Entities.VirtualKey",
@@ -5015,8 +5128,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var virtualKeyGroup = FindEntityType("ConduitLLM.Configuration.Entities.VirtualKeyGroup")!;
 
-            var defaultTableMappings25 = new List<TableMappingBase<ColumnMappingBase>>();
-            virtualKeyGroup.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings25);
+            var defaultTableMappings26 = new List<TableMappingBase<ColumnMappingBase>>();
+            virtualKeyGroup.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings26);
             var conduitLLMConfigurationEntitiesVirtualKeyGroupTableBase = new TableBase("ConduitLLM.Configuration.Entities.VirtualKeyGroup", null, relationalModel);
             var balanceColumnBase = new ColumnBase<ColumnMappingBase>("Balance", "numeric(19,8)", conduitLLMConfigurationEntitiesVirtualKeyGroupTableBase);
             conduitLLMConfigurationEntitiesVirtualKeyGroupTableBase.Columns.Add("Balance", balanceColumnBase);
@@ -5070,7 +5183,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.VirtualKeyGroup", conduitLLMConfigurationEntitiesVirtualKeyGroupTableBase);
             var conduitLLMConfigurationEntitiesVirtualKeyGroupMappingBase = new TableMappingBase<ColumnMappingBase>(virtualKeyGroup, conduitLLMConfigurationEntitiesVirtualKeyGroupTableBase, null);
             conduitLLMConfigurationEntitiesVirtualKeyGroupTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesVirtualKeyGroupMappingBase, false);
-            defaultTableMappings25.Add(conduitLLMConfigurationEntitiesVirtualKeyGroupMappingBase);
+            defaultTableMappings26.Add(conduitLLMConfigurationEntitiesVirtualKeyGroupMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase24, virtualKeyGroup.FindProperty("Id")!, conduitLLMConfigurationEntitiesVirtualKeyGroupMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)balanceColumnBase, virtualKeyGroup.FindProperty("Balance")!, conduitLLMConfigurationEntitiesVirtualKeyGroupMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase13, virtualKeyGroup.FindProperty("CreatedAt")!, conduitLLMConfigurationEntitiesVirtualKeyGroupMappingBase);
@@ -5086,8 +5199,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)rowVersionColumnBase1, virtualKeyGroup.FindProperty("RowVersion")!, conduitLLMConfigurationEntitiesVirtualKeyGroupMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase11, virtualKeyGroup.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesVirtualKeyGroupMappingBase);
 
-            var tableMappings25 = new List<TableMapping>();
-            virtualKeyGroup.SetRuntimeAnnotation("Relational:TableMappings", tableMappings25);
+            var tableMappings26 = new List<TableMapping>();
+            virtualKeyGroup.SetRuntimeAnnotation("Relational:TableMappings", tableMappings26);
             var virtualKeyGroupsTable = new Table("VirtualKeyGroups", null, relationalModel);
             var idColumn24 = new Column("Id", "integer", virtualKeyGroupsTable);
             virtualKeyGroupsTable.Columns.Add("Id", idColumn24);
@@ -5156,7 +5269,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("VirtualKeyGroups", null), virtualKeyGroupsTable);
             var virtualKeyGroupsTableMapping = new TableMapping(virtualKeyGroup, virtualKeyGroupsTable, null);
             virtualKeyGroupsTable.AddTypeMapping(virtualKeyGroupsTableMapping, false);
-            tableMappings25.Add(virtualKeyGroupsTableMapping);
+            tableMappings26.Add(virtualKeyGroupsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn24, virtualKeyGroup.FindProperty("Id")!, virtualKeyGroupsTableMapping);
             RelationalModel.CreateColumnMapping(balanceColumn, virtualKeyGroup.FindProperty("Balance")!, virtualKeyGroupsTableMapping);
             RelationalModel.CreateColumnMapping(createdAtColumn13, virtualKeyGroup.FindProperty("CreatedAt")!, virtualKeyGroupsTableMapping);
@@ -5201,8 +5314,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var virtualKeyGroupTransaction = FindEntityType("ConduitLLM.Configuration.Entities.VirtualKeyGroupTransaction")!;
 
-            var defaultTableMappings26 = new List<TableMappingBase<ColumnMappingBase>>();
-            virtualKeyGroupTransaction.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings26);
+            var defaultTableMappings27 = new List<TableMappingBase<ColumnMappingBase>>();
+            virtualKeyGroupTransaction.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings27);
             var conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase = new TableBase("ConduitLLM.Configuration.Entities.VirtualKeyGroupTransaction", null, relationalModel);
             var amountColumnBase = new ColumnBase<ColumnMappingBase>("Amount", "numeric(20,8)", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase);
             conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase.Columns.Add("Amount", amountColumnBase);
@@ -5275,7 +5388,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.VirtualKeyGroupTransaction", conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase);
             var conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase = new TableMappingBase<ColumnMappingBase>(virtualKeyGroupTransaction, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase, null);
             conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase, false);
-            defaultTableMappings26.Add(conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
+            defaultTableMappings27.Add(conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase25, virtualKeyGroupTransaction.FindProperty("Id")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)amountColumnBase, virtualKeyGroupTransaction.FindProperty("Amount")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)balanceAfterColumnBase, virtualKeyGroupTransaction.FindProperty("BalanceAfter")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
@@ -5296,8 +5409,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)transactionTypeColumnBase, virtualKeyGroupTransaction.FindProperty("TransactionType")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyGroupIdColumnBase3, virtualKeyGroupTransaction.FindProperty("VirtualKeyGroupId")!, conduitLLMConfigurationEntitiesVirtualKeyGroupTransactionMappingBase);
 
-            var tableMappings26 = new List<TableMapping>();
-            virtualKeyGroupTransaction.SetRuntimeAnnotation("Relational:TableMappings", tableMappings26);
+            var tableMappings27 = new List<TableMapping>();
+            virtualKeyGroupTransaction.SetRuntimeAnnotation("Relational:TableMappings", tableMappings27);
             var virtualKeyGroupTransactionsTable = new Table("VirtualKeyGroupTransactions", null, relationalModel);
             var idColumn25 = new Column("Id", "bigint", virtualKeyGroupTransactionsTable);
             virtualKeyGroupTransactionsTable.Columns.Add("Id", idColumn25);
@@ -5390,7 +5503,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("VirtualKeyGroupTransactions", null), virtualKeyGroupTransactionsTable);
             var virtualKeyGroupTransactionsTableMapping = new TableMapping(virtualKeyGroupTransaction, virtualKeyGroupTransactionsTable, null);
             virtualKeyGroupTransactionsTable.AddTypeMapping(virtualKeyGroupTransactionsTableMapping, false);
-            tableMappings26.Add(virtualKeyGroupTransactionsTableMapping);
+            tableMappings27.Add(virtualKeyGroupTransactionsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn25, virtualKeyGroupTransaction.FindProperty("Id")!, virtualKeyGroupTransactionsTableMapping);
             RelationalModel.CreateColumnMapping(amountColumn, virtualKeyGroupTransaction.FindProperty("Amount")!, virtualKeyGroupTransactionsTableMapping);
             RelationalModel.CreateColumnMapping(balanceAfterColumn, virtualKeyGroupTransaction.FindProperty("BalanceAfter")!, virtualKeyGroupTransactionsTableMapping);
@@ -5494,8 +5607,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var virtualKeySpendHistory = FindEntityType("ConduitLLM.Configuration.Entities.VirtualKeySpendHistory")!;
 
-            var defaultTableMappings27 = new List<TableMappingBase<ColumnMappingBase>>();
-            virtualKeySpendHistory.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings27);
+            var defaultTableMappings28 = new List<TableMappingBase<ColumnMappingBase>>();
+            virtualKeySpendHistory.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings28);
             var conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase = new TableBase("ConduitLLM.Configuration.Entities.VirtualKeySpendHistory", null, relationalModel);
             var amountColumnBase0 = new ColumnBase<ColumnMappingBase>("Amount", "numeric(12,8)", conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase);
             conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase.Columns.Add("Amount", amountColumnBase0);
@@ -5505,20 +5618,20 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase.Columns.Add("Id", idColumnBase26);
             var timestampColumnBase2 = new ColumnBase<ColumnMappingBase>("Timestamp", "timestamp with time zone", conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase);
             conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase.Columns.Add("Timestamp", timestampColumnBase2);
-            var virtualKeyIdColumnBase7 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase);
-            conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase7);
+            var virtualKeyIdColumnBase8 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase);
+            conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase8);
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.VirtualKeySpendHistory", conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase);
             var conduitLLMConfigurationEntitiesVirtualKeySpendHistoryMappingBase = new TableMappingBase<ColumnMappingBase>(virtualKeySpendHistory, conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase, null);
             conduitLLMConfigurationEntitiesVirtualKeySpendHistoryTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesVirtualKeySpendHistoryMappingBase, false);
-            defaultTableMappings27.Add(conduitLLMConfigurationEntitiesVirtualKeySpendHistoryMappingBase);
+            defaultTableMappings28.Add(conduitLLMConfigurationEntitiesVirtualKeySpendHistoryMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase26, virtualKeySpendHistory.FindProperty("Id")!, conduitLLMConfigurationEntitiesVirtualKeySpendHistoryMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)amountColumnBase0, virtualKeySpendHistory.FindProperty("Amount")!, conduitLLMConfigurationEntitiesVirtualKeySpendHistoryMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)dateColumnBase, virtualKeySpendHistory.FindProperty("Date")!, conduitLLMConfigurationEntitiesVirtualKeySpendHistoryMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)timestampColumnBase2, virtualKeySpendHistory.FindProperty("Timestamp")!, conduitLLMConfigurationEntitiesVirtualKeySpendHistoryMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase7, virtualKeySpendHistory.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesVirtualKeySpendHistoryMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase8, virtualKeySpendHistory.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesVirtualKeySpendHistoryMappingBase);
 
-            var tableMappings27 = new List<TableMapping>();
-            virtualKeySpendHistory.SetRuntimeAnnotation("Relational:TableMappings", tableMappings27);
+            var tableMappings28 = new List<TableMapping>();
+            virtualKeySpendHistory.SetRuntimeAnnotation("Relational:TableMappings", tableMappings28);
             var virtualKeySpendHistoryTable = new Table("VirtualKeySpendHistory", null, relationalModel);
             var idColumn26 = new Column("Id", "integer", virtualKeySpendHistoryTable);
             virtualKeySpendHistoryTable.Columns.Add("Id", idColumn26);
@@ -5533,18 +5646,18 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var timestampColumn2 = new Column("Timestamp", "timestamp with time zone", virtualKeySpendHistoryTable);
             virtualKeySpendHistoryTable.Columns.Add("Timestamp", timestampColumn2);
             timestampColumn2.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(timestampColumn2);
-            var virtualKeyIdColumn7 = new Column("VirtualKeyId", "integer", virtualKeySpendHistoryTable);
-            virtualKeySpendHistoryTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn7);
-            virtualKeyIdColumn7.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn7);
+            var virtualKeyIdColumn8 = new Column("VirtualKeyId", "integer", virtualKeySpendHistoryTable);
+            virtualKeySpendHistoryTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn8);
+            virtualKeyIdColumn8.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn8);
             relationalModel.Tables.Add(("VirtualKeySpendHistory", null), virtualKeySpendHistoryTable);
             var virtualKeySpendHistoryTableMapping = new TableMapping(virtualKeySpendHistory, virtualKeySpendHistoryTable, null);
             virtualKeySpendHistoryTable.AddTypeMapping(virtualKeySpendHistoryTableMapping, false);
-            tableMappings27.Add(virtualKeySpendHistoryTableMapping);
+            tableMappings28.Add(virtualKeySpendHistoryTableMapping);
             RelationalModel.CreateColumnMapping(idColumn26, virtualKeySpendHistory.FindProperty("Id")!, virtualKeySpendHistoryTableMapping);
             RelationalModel.CreateColumnMapping(amountColumn0, virtualKeySpendHistory.FindProperty("Amount")!, virtualKeySpendHistoryTableMapping);
             RelationalModel.CreateColumnMapping(dateColumn, virtualKeySpendHistory.FindProperty("Date")!, virtualKeySpendHistoryTableMapping);
             RelationalModel.CreateColumnMapping(timestampColumn2, virtualKeySpendHistory.FindProperty("Timestamp")!, virtualKeySpendHistoryTableMapping);
-            RelationalModel.CreateColumnMapping(virtualKeyIdColumn7, virtualKeySpendHistory.FindProperty("VirtualKeyId")!, virtualKeySpendHistoryTableMapping);
+            RelationalModel.CreateColumnMapping(virtualKeyIdColumn8, virtualKeySpendHistory.FindProperty("VirtualKeyId")!, virtualKeySpendHistoryTableMapping);
             var pK_VirtualKeySpendHistory = new UniqueConstraint("PK_VirtualKeySpendHistory", virtualKeySpendHistoryTable, new[] { idColumn26 });
             virtualKeySpendHistoryTable.PrimaryKey = pK_VirtualKeySpendHistory;
             pK_VirtualKeySpendHistory.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<int>(pK_VirtualKeySpendHistory));
@@ -5555,7 +5668,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateUniqueConstraints(pK_VirtualKeySpendHistoryKey).Add(pK_VirtualKeySpendHistory);
             virtualKeySpendHistoryTable.UniqueConstraints.Add("PK_VirtualKeySpendHistory", pK_VirtualKeySpendHistory);
             var iX_VirtualKeySpendHistory_VirtualKeyId = new TableIndex(
-            "IX_VirtualKeySpendHistory_VirtualKeyId", virtualKeySpendHistoryTable, new[] { virtualKeyIdColumn7 }, false);
+            "IX_VirtualKeySpendHistory_VirtualKeyId", virtualKeySpendHistoryTable, new[] { virtualKeyIdColumn8 }, false);
             iX_VirtualKeySpendHistory_VirtualKeyId.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_VirtualKeySpendHistory_VirtualKeyId));
             var iX_VirtualKeySpendHistory_VirtualKeyIdIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Configuration.Entities.VirtualKeySpendHistory",
@@ -5566,8 +5679,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var webhookDeliveryRecord = FindEntityType("ConduitLLM.Configuration.Entities.WebhookDeliveryRecord")!;
 
-            var defaultTableMappings28 = new List<TableMappingBase<ColumnMappingBase>>();
-            webhookDeliveryRecord.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings28);
+            var defaultTableMappings29 = new List<TableMappingBase<ColumnMappingBase>>();
+            webhookDeliveryRecord.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings29);
             var conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase = new TableBase("ConduitLLM.Configuration.Entities.WebhookDeliveryRecord", null, relationalModel);
             var attemptsColumnBase = new ColumnBase<ColumnMappingBase>("Attempts", "integer", conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase);
             conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase.Columns.Add("Attempts", attemptsColumnBase);
@@ -5607,18 +5720,18 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase.Columns.Add("RequestJson", requestJsonColumnBase);
             var retainUntilColumnBase = new ColumnBase<ColumnMappingBase>("RetainUntil", "timestamp with time zone", conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase);
             conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase.Columns.Add("RetainUntil", retainUntilColumnBase);
-            var stateColumnBase0 = new ColumnBase<ColumnMappingBase>("State", "character varying(16)", conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase);
-            conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase.Columns.Add("State", stateColumnBase0);
+            var stateColumnBase1 = new ColumnBase<ColumnMappingBase>("State", "character varying(16)", conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase);
+            conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase.Columns.Add("State", stateColumnBase1);
             var taskIdColumnBase = new ColumnBase<ColumnMappingBase>("TaskId", "character varying(50)", conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase);
             conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase.Columns.Add("TaskId", taskIdColumnBase);
             var updatedAtColumnBase12 = new ColumnBase<ColumnMappingBase>("UpdatedAt", "timestamp with time zone", conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase);
             conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase.Columns.Add("UpdatedAt", updatedAtColumnBase12);
-            var virtualKeyIdColumnBase8 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase);
-            conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase8);
+            var virtualKeyIdColumnBase9 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase);
+            conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase9);
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.WebhookDeliveryRecord", conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase);
             var conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase = new TableMappingBase<ColumnMappingBase>(webhookDeliveryRecord, conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase, null);
             conduitLLMConfigurationEntitiesWebhookDeliveryRecordTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase, false);
-            defaultTableMappings28.Add(conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
+            defaultTableMappings29.Add(conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase27, webhookDeliveryRecord.FindProperty("Id")!, conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)attemptsColumnBase, webhookDeliveryRecord.FindProperty("Attempts")!, conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)claimExpiresAtColumnBase, webhookDeliveryRecord.FindProperty("ClaimExpiresAt")!, conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
@@ -5632,13 +5745,13 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)nextAttemptAtColumnBase, webhookDeliveryRecord.FindProperty("NextAttemptAt")!, conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)requestJsonColumnBase, webhookDeliveryRecord.FindProperty("RequestJson")!, conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)retainUntilColumnBase, webhookDeliveryRecord.FindProperty("RetainUntil")!, conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)stateColumnBase0, webhookDeliveryRecord.FindProperty("State")!, conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)stateColumnBase1, webhookDeliveryRecord.FindProperty("State")!, conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)taskIdColumnBase, webhookDeliveryRecord.FindProperty("TaskId")!, conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase12, webhookDeliveryRecord.FindProperty("UpdatedAt")!, conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase8, webhookDeliveryRecord.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase9, webhookDeliveryRecord.FindProperty("VirtualKeyId")!, conduitLLMConfigurationEntitiesWebhookDeliveryRecordMappingBase);
 
-            var tableMappings28 = new List<TableMapping>();
-            webhookDeliveryRecord.SetRuntimeAnnotation("Relational:TableMappings", tableMappings28);
+            var tableMappings29 = new List<TableMapping>();
+            webhookDeliveryRecord.SetRuntimeAnnotation("Relational:TableMappings", tableMappings29);
             var webhookDeliveriesTable = new Table("WebhookDeliveries", null, relationalModel);
             var idColumn27 = new Column("Id", "character varying(64)", webhookDeliveriesTable);
             webhookDeliveriesTable.Columns.Add("Id", idColumn27);
@@ -5691,22 +5804,22 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var retainUntilColumn = new Column("RetainUntil", "timestamp with time zone", webhookDeliveriesTable);
             webhookDeliveriesTable.Columns.Add("RetainUntil", retainUntilColumn);
             retainUntilColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(retainUntilColumn);
-            var stateColumn0 = new Column("State", "character varying(16)", webhookDeliveriesTable);
-            webhookDeliveriesTable.Columns.Add("State", stateColumn0);
-            stateColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(stateColumn0);
+            var stateColumn1 = new Column("State", "character varying(16)", webhookDeliveriesTable);
+            webhookDeliveriesTable.Columns.Add("State", stateColumn1);
+            stateColumn1.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(stateColumn1);
             var taskIdColumn = new Column("TaskId", "character varying(50)", webhookDeliveriesTable);
             webhookDeliveriesTable.Columns.Add("TaskId", taskIdColumn);
             taskIdColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(taskIdColumn);
             var updatedAtColumn12 = new Column("UpdatedAt", "timestamp with time zone", webhookDeliveriesTable);
             webhookDeliveriesTable.Columns.Add("UpdatedAt", updatedAtColumn12);
             updatedAtColumn12.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(updatedAtColumn12);
-            var virtualKeyIdColumn8 = new Column("VirtualKeyId", "integer", webhookDeliveriesTable);
-            webhookDeliveriesTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn8);
-            virtualKeyIdColumn8.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn8);
+            var virtualKeyIdColumn9 = new Column("VirtualKeyId", "integer", webhookDeliveriesTable);
+            webhookDeliveriesTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn9);
+            virtualKeyIdColumn9.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn9);
             relationalModel.Tables.Add(("WebhookDeliveries", null), webhookDeliveriesTable);
             var webhookDeliveriesTableMapping = new TableMapping(webhookDeliveryRecord, webhookDeliveriesTable, null);
             webhookDeliveriesTable.AddTypeMapping(webhookDeliveriesTableMapping, false);
-            tableMappings28.Add(webhookDeliveriesTableMapping);
+            tableMappings29.Add(webhookDeliveriesTableMapping);
             RelationalModel.CreateColumnMapping(idColumn27, webhookDeliveryRecord.FindProperty("Id")!, webhookDeliveriesTableMapping);
             RelationalModel.CreateColumnMapping(attemptsColumn, webhookDeliveryRecord.FindProperty("Attempts")!, webhookDeliveriesTableMapping);
             RelationalModel.CreateColumnMapping(claimExpiresAtColumn, webhookDeliveryRecord.FindProperty("ClaimExpiresAt")!, webhookDeliveriesTableMapping);
@@ -5720,10 +5833,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(nextAttemptAtColumn, webhookDeliveryRecord.FindProperty("NextAttemptAt")!, webhookDeliveriesTableMapping);
             RelationalModel.CreateColumnMapping(requestJsonColumn, webhookDeliveryRecord.FindProperty("RequestJson")!, webhookDeliveriesTableMapping);
             RelationalModel.CreateColumnMapping(retainUntilColumn, webhookDeliveryRecord.FindProperty("RetainUntil")!, webhookDeliveriesTableMapping);
-            RelationalModel.CreateColumnMapping(stateColumn0, webhookDeliveryRecord.FindProperty("State")!, webhookDeliveriesTableMapping);
+            RelationalModel.CreateColumnMapping(stateColumn1, webhookDeliveryRecord.FindProperty("State")!, webhookDeliveriesTableMapping);
             RelationalModel.CreateColumnMapping(taskIdColumn, webhookDeliveryRecord.FindProperty("TaskId")!, webhookDeliveriesTableMapping);
             RelationalModel.CreateColumnMapping(updatedAtColumn12, webhookDeliveryRecord.FindProperty("UpdatedAt")!, webhookDeliveriesTableMapping);
-            RelationalModel.CreateColumnMapping(virtualKeyIdColumn8, webhookDeliveryRecord.FindProperty("VirtualKeyId")!, webhookDeliveriesTableMapping);
+            RelationalModel.CreateColumnMapping(virtualKeyIdColumn9, webhookDeliveryRecord.FindProperty("VirtualKeyId")!, webhookDeliveriesTableMapping);
             var pK_WebhookDeliveries = new UniqueConstraint("PK_WebhookDeliveries", webhookDeliveriesTable, new[] { idColumn27 });
             webhookDeliveriesTable.PrimaryKey = pK_WebhookDeliveries;
             pK_WebhookDeliveries.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<string>(pK_WebhookDeliveries));
@@ -5743,7 +5856,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_WebhookDeliveries_RetainUntilIx).Add(iX_WebhookDeliveries_RetainUntil);
             webhookDeliveriesTable.Indexes.Add("IX_WebhookDeliveries_RetainUntil", iX_WebhookDeliveries_RetainUntil);
             var iX_WebhookDeliveries_State_NextAttemptAt = new TableIndex(
-            "IX_WebhookDeliveries_State_NextAttemptAt", webhookDeliveriesTable, new[] { stateColumn0, nextAttemptAtColumn }, false);
+            "IX_WebhookDeliveries_State_NextAttemptAt", webhookDeliveriesTable, new[] { stateColumn1, nextAttemptAtColumn }, false);
             iX_WebhookDeliveries_State_NextAttemptAt.SetRowIndexValueFactory(new CompositeRowIndexValueFactory(iX_WebhookDeliveries_State_NextAttemptAt));
             var iX_WebhookDeliveries_State_NextAttemptAtIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Configuration.Entities.WebhookDeliveryRecord",
@@ -5763,8 +5876,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var webhookReplayAudit = FindEntityType("ConduitLLM.Configuration.Entities.WebhookReplayAudit")!;
 
-            var defaultTableMappings29 = new List<TableMappingBase<ColumnMappingBase>>();
-            webhookReplayAudit.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings29);
+            var defaultTableMappings30 = new List<TableMappingBase<ColumnMappingBase>>();
+            webhookReplayAudit.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings30);
             var conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase = new TableBase("ConduitLLM.Configuration.Entities.WebhookReplayAudit", null, relationalModel);
             var actorColumnBase = new ColumnBase<ColumnMappingBase>("Actor", "character varying(128)", conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase);
             conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase.Columns.Add("Actor", actorColumnBase);
@@ -5788,7 +5901,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Configuration.Entities.WebhookReplayAudit", conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase);
             var conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase = new TableMappingBase<ColumnMappingBase>(webhookReplayAudit, conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase, null);
             conduitLLMConfigurationEntitiesWebhookReplayAuditTableBase.AddTypeMapping(conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase, false);
-            defaultTableMappings29.Add(conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
+            defaultTableMappings30.Add(conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)operationIdColumnBase1, webhookReplayAudit.FindProperty("OperationId")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)actorColumnBase, webhookReplayAudit.FindProperty("Actor")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)cycleColumnBase0, webhookReplayAudit.FindProperty("Cycle")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
@@ -5798,8 +5911,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)requestedAtColumnBase, webhookReplayAudit.FindProperty("RequestedAt")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)retainUntilColumnBase0, webhookReplayAudit.FindProperty("RetainUntil")!, conduitLLMConfigurationEntitiesWebhookReplayAuditMappingBase);
 
-            var tableMappings29 = new List<TableMapping>();
-            webhookReplayAudit.SetRuntimeAnnotation("Relational:TableMappings", tableMappings29);
+            var tableMappings30 = new List<TableMapping>();
+            webhookReplayAudit.SetRuntimeAnnotation("Relational:TableMappings", tableMappings30);
             var webhookReplayAuditsTable = new Table("WebhookReplayAudits", null, relationalModel);
             var operationIdColumn1 = new Column("OperationId", "uuid", webhookReplayAuditsTable);
             webhookReplayAuditsTable.Columns.Add("OperationId", operationIdColumn1);
@@ -5831,7 +5944,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("WebhookReplayAudits", null), webhookReplayAuditsTable);
             var webhookReplayAuditsTableMapping = new TableMapping(webhookReplayAudit, webhookReplayAuditsTable, null);
             webhookReplayAuditsTable.AddTypeMapping(webhookReplayAuditsTableMapping, false);
-            tableMappings29.Add(webhookReplayAuditsTableMapping);
+            tableMappings30.Add(webhookReplayAuditsTableMapping);
             RelationalModel.CreateColumnMapping(operationIdColumn1, webhookReplayAudit.FindProperty("OperationId")!, webhookReplayAuditsTableMapping);
             RelationalModel.CreateColumnMapping(actorColumn, webhookReplayAudit.FindProperty("Actor")!, webhookReplayAuditsTableMapping);
             RelationalModel.CreateColumnMapping(cycleColumn0, webhookReplayAudit.FindProperty("Cycle")!, webhookReplayAuditsTableMapping);
@@ -5870,8 +5983,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionCallAudit = FindEntityType("ConduitLLM.Functions.Entities.FunctionCallAudit")!;
 
-            var defaultTableMappings30 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionCallAudit.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings30);
+            var defaultTableMappings31 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionCallAudit.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings31);
             var conduitLLMFunctionsEntitiesFunctionCallAuditTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionCallAudit", null, relationalModel);
             var chatCompletionIdColumnBase = new ColumnBase<ColumnMappingBase>("ChatCompletionId", "uuid", conduitLLMFunctionsEntitiesFunctionCallAuditTableBase)
             {
@@ -5924,19 +6037,19 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 IsNullable = true
             };
             conduitLLMFunctionsEntitiesFunctionCallAuditTableBase.Columns.Add("RequestId", requestIdColumnBase1);
-            var resultJsonColumnBase = new ColumnBase<ColumnMappingBase>("ResultJson", "jsonb", conduitLLMFunctionsEntitiesFunctionCallAuditTableBase)
+            var resultJsonColumnBase0 = new ColumnBase<ColumnMappingBase>("ResultJson", "jsonb", conduitLLMFunctionsEntitiesFunctionCallAuditTableBase)
             {
                 IsNullable = true
             };
-            conduitLLMFunctionsEntitiesFunctionCallAuditTableBase.Columns.Add("ResultJson", resultJsonColumnBase);
+            conduitLLMFunctionsEntitiesFunctionCallAuditTableBase.Columns.Add("ResultJson", resultJsonColumnBase0);
             var timestampColumnBase3 = new ColumnBase<ColumnMappingBase>("Timestamp", "timestamp with time zone", conduitLLMFunctionsEntitiesFunctionCallAuditTableBase);
             conduitLLMFunctionsEntitiesFunctionCallAuditTableBase.Columns.Add("Timestamp", timestampColumnBase3);
-            var virtualKeyIdColumnBase9 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMFunctionsEntitiesFunctionCallAuditTableBase);
-            conduitLLMFunctionsEntitiesFunctionCallAuditTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase9);
+            var virtualKeyIdColumnBase10 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMFunctionsEntitiesFunctionCallAuditTableBase);
+            conduitLLMFunctionsEntitiesFunctionCallAuditTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase10);
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionCallAudit", conduitLLMFunctionsEntitiesFunctionCallAuditTableBase);
             var conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase = new TableMappingBase<ColumnMappingBase>(functionCallAudit, conduitLLMFunctionsEntitiesFunctionCallAuditTableBase, null);
             conduitLLMFunctionsEntitiesFunctionCallAuditTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase, false);
-            defaultTableMappings30.Add(conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
+            defaultTableMappings31.Add(conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase28, functionCallAudit.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)chatCompletionIdColumnBase, functionCallAudit.FindProperty("ChatCompletionId")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)costColumnBase0, functionCallAudit.FindProperty("Cost")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
@@ -5949,12 +6062,12 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isEstimatedColumnBase0, functionCallAudit.FindProperty("IsEstimated")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)iterationNumberColumnBase, functionCallAudit.FindProperty("IterationNumber")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)requestIdColumnBase1, functionCallAudit.FindProperty("RequestId")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)resultJsonColumnBase, functionCallAudit.FindProperty("ResultJson")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)resultJsonColumnBase0, functionCallAudit.FindProperty("ResultJson")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)timestampColumnBase3, functionCallAudit.FindProperty("Timestamp")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase9, functionCallAudit.FindProperty("VirtualKeyId")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase10, functionCallAudit.FindProperty("VirtualKeyId")!, conduitLLMFunctionsEntitiesFunctionCallAuditMappingBase);
 
-            var tableMappings30 = new List<TableMapping>();
-            functionCallAudit.SetRuntimeAnnotation("Relational:TableMappings", tableMappings30);
+            var tableMappings31 = new List<TableMapping>();
+            functionCallAudit.SetRuntimeAnnotation("Relational:TableMappings", tableMappings31);
             var functionCallAuditsTable = new Table("FunctionCallAudits", null, relationalModel);
             var idColumn28 = new Column("Id", "uuid", functionCallAuditsTable);
             functionCallAuditsTable.Columns.Add("Id", idColumn28);
@@ -6019,22 +6132,22 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             };
             functionCallAuditsTable.Columns.Add("RequestId", requestIdColumn1);
             requestIdColumn1.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(requestIdColumn1);
-            var resultJsonColumn = new Column("ResultJson", "jsonb", functionCallAuditsTable)
+            var resultJsonColumn0 = new Column("ResultJson", "jsonb", functionCallAuditsTable)
             {
                 IsNullable = true
             };
-            functionCallAuditsTable.Columns.Add("ResultJson", resultJsonColumn);
-            resultJsonColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(resultJsonColumn);
+            functionCallAuditsTable.Columns.Add("ResultJson", resultJsonColumn0);
+            resultJsonColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(resultJsonColumn0);
             var timestampColumn3 = new Column("Timestamp", "timestamp with time zone", functionCallAuditsTable);
             functionCallAuditsTable.Columns.Add("Timestamp", timestampColumn3);
             timestampColumn3.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(timestampColumn3);
-            var virtualKeyIdColumn9 = new Column("VirtualKeyId", "integer", functionCallAuditsTable);
-            functionCallAuditsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn9);
-            virtualKeyIdColumn9.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn9);
+            var virtualKeyIdColumn10 = new Column("VirtualKeyId", "integer", functionCallAuditsTable);
+            functionCallAuditsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn10);
+            virtualKeyIdColumn10.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn10);
             relationalModel.Tables.Add(("FunctionCallAudits", null), functionCallAuditsTable);
             var functionCallAuditsTableMapping = new TableMapping(functionCallAudit, functionCallAuditsTable, null);
             functionCallAuditsTable.AddTypeMapping(functionCallAuditsTableMapping, false);
-            tableMappings30.Add(functionCallAuditsTableMapping);
+            tableMappings31.Add(functionCallAuditsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn28, functionCallAudit.FindProperty("Id")!, functionCallAuditsTableMapping);
             RelationalModel.CreateColumnMapping(chatCompletionIdColumn, functionCallAudit.FindProperty("ChatCompletionId")!, functionCallAuditsTableMapping);
             RelationalModel.CreateColumnMapping(costColumn0, functionCallAudit.FindProperty("Cost")!, functionCallAuditsTableMapping);
@@ -6047,9 +6160,9 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(isEstimatedColumn0, functionCallAudit.FindProperty("IsEstimated")!, functionCallAuditsTableMapping);
             RelationalModel.CreateColumnMapping(iterationNumberColumn, functionCallAudit.FindProperty("IterationNumber")!, functionCallAuditsTableMapping);
             RelationalModel.CreateColumnMapping(requestIdColumn1, functionCallAudit.FindProperty("RequestId")!, functionCallAuditsTableMapping);
-            RelationalModel.CreateColumnMapping(resultJsonColumn, functionCallAudit.FindProperty("ResultJson")!, functionCallAuditsTableMapping);
+            RelationalModel.CreateColumnMapping(resultJsonColumn0, functionCallAudit.FindProperty("ResultJson")!, functionCallAuditsTableMapping);
             RelationalModel.CreateColumnMapping(timestampColumn3, functionCallAudit.FindProperty("Timestamp")!, functionCallAuditsTableMapping);
-            RelationalModel.CreateColumnMapping(virtualKeyIdColumn9, functionCallAudit.FindProperty("VirtualKeyId")!, functionCallAuditsTableMapping);
+            RelationalModel.CreateColumnMapping(virtualKeyIdColumn10, functionCallAudit.FindProperty("VirtualKeyId")!, functionCallAuditsTableMapping);
             var pK_FunctionCallAudits = new UniqueConstraint("PK_FunctionCallAudits", functionCallAuditsTable, new[] { idColumn28 });
             functionCallAuditsTable.PrimaryKey = pK_FunctionCallAudits;
             pK_FunctionCallAudits.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<Guid>(pK_FunctionCallAudits));
@@ -6105,7 +6218,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_FunctionCallAudit_TimestampEventTypeIx).Add(iX_FunctionCallAudit_TimestampEventType);
             functionCallAuditsTable.Indexes.Add("IX_FunctionCallAudit_TimestampEventType", iX_FunctionCallAudit_TimestampEventType);
             var iX_FunctionCallAudit_VirtualKeyId = new TableIndex(
-            "IX_FunctionCallAudit_VirtualKeyId", functionCallAuditsTable, new[] { virtualKeyIdColumn9 }, false);
+            "IX_FunctionCallAudit_VirtualKeyId", functionCallAuditsTable, new[] { virtualKeyIdColumn10 }, false);
             iX_FunctionCallAudit_VirtualKeyId.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_FunctionCallAudit_VirtualKeyId));
             var iX_FunctionCallAudit_VirtualKeyIdIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Functions.Entities.FunctionCallAudit",
@@ -6114,7 +6227,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_FunctionCallAudit_VirtualKeyIdIx).Add(iX_FunctionCallAudit_VirtualKeyId);
             functionCallAuditsTable.Indexes.Add("IX_FunctionCallAudit_VirtualKeyId", iX_FunctionCallAudit_VirtualKeyId);
             var iX_FunctionCallAudit_VirtualKeyTimestamp = new TableIndex(
-            "IX_FunctionCallAudit_VirtualKeyTimestamp", functionCallAuditsTable, new[] { virtualKeyIdColumn9, timestampColumn3 }, false);
+            "IX_FunctionCallAudit_VirtualKeyTimestamp", functionCallAuditsTable, new[] { virtualKeyIdColumn10, timestampColumn3 }, false);
             iX_FunctionCallAudit_VirtualKeyTimestamp.SetRowIndexValueFactory(new CompositeRowIndexValueFactory(iX_FunctionCallAudit_VirtualKeyTimestamp));
             var iX_FunctionCallAudit_VirtualKeyTimestampIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Functions.Entities.FunctionCallAudit",
@@ -6125,8 +6238,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionConfiguration = FindEntityType("ConduitLLM.Functions.Entities.FunctionConfiguration")!;
 
-            var defaultTableMappings31 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionConfiguration.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings31);
+            var defaultTableMappings32 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionConfiguration.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings32);
             var conduitLLMFunctionsEntitiesFunctionConfigurationTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionConfiguration", null, relationalModel);
             var baseUrlColumnBase1 = new ColumnBase<ColumnMappingBase>("BaseUrl", "character varying(500)", conduitLLMFunctionsEntitiesFunctionConfigurationTableBase)
             {
@@ -6182,7 +6295,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionConfiguration", conduitLLMFunctionsEntitiesFunctionConfigurationTableBase);
             var conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase = new TableMappingBase<ColumnMappingBase>(functionConfiguration, conduitLLMFunctionsEntitiesFunctionConfigurationTableBase, null);
             conduitLLMFunctionsEntitiesFunctionConfigurationTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase, false);
-            defaultTableMappings31.Add(conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
+            defaultTableMappings32.Add(conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase29, functionConfiguration.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)baseUrlColumnBase1, functionConfiguration.FindProperty("BaseUrl")!, conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)cacheTtlMinutesColumnBase, functionConfiguration.FindProperty("CacheTtlMinutes")!, conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
@@ -6199,8 +6312,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)timeoutSecondsColumnBase, functionConfiguration.FindProperty("TimeoutSeconds")!, conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase13, functionConfiguration.FindProperty("UpdatedAt")!, conduitLLMFunctionsEntitiesFunctionConfigurationMappingBase);
 
-            var tableMappings31 = new List<TableMapping>();
-            functionConfiguration.SetRuntimeAnnotation("Relational:TableMappings", tableMappings31);
+            var tableMappings32 = new List<TableMapping>();
+            functionConfiguration.SetRuntimeAnnotation("Relational:TableMappings", tableMappings32);
             var functionConfigurationsTable = new Table("FunctionConfigurations", null, relationalModel);
             var idColumn29 = new Column("Id", "integer", functionConfigurationsTable);
             functionConfigurationsTable.Columns.Add("Id", idColumn29);
@@ -6272,7 +6385,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("FunctionConfigurations", null), functionConfigurationsTable);
             var functionConfigurationsTableMapping = new TableMapping(functionConfiguration, functionConfigurationsTable, null);
             functionConfigurationsTable.AddTypeMapping(functionConfigurationsTableMapping, false);
-            tableMappings31.Add(functionConfigurationsTableMapping);
+            tableMappings32.Add(functionConfigurationsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn29, functionConfiguration.FindProperty("Id")!, functionConfigurationsTableMapping);
             RelationalModel.CreateColumnMapping(baseUrlColumn1, functionConfiguration.FindProperty("BaseUrl")!, functionConfigurationsTableMapping);
             RelationalModel.CreateColumnMapping(cacheTtlMinutesColumn, functionConfiguration.FindProperty("CacheTtlMinutes")!, functionConfigurationsTableMapping);
@@ -6327,8 +6440,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionCost = FindEntityType("ConduitLLM.Functions.Entities.FunctionCost")!;
 
-            var defaultTableMappings32 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionCost.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings32);
+            var defaultTableMappings33 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionCost.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings33);
             var conduitLLMFunctionsEntitiesFunctionCostTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionCost", null, relationalModel);
             var baseCostColumnBase = new ColumnBase<ColumnMappingBase>("BaseCost", "numeric(18,8)", conduitLLMFunctionsEntitiesFunctionCostTableBase)
             {
@@ -6401,7 +6514,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionCost", conduitLLMFunctionsEntitiesFunctionCostTableBase);
             var conduitLLMFunctionsEntitiesFunctionCostMappingBase = new TableMappingBase<ColumnMappingBase>(functionCost, conduitLLMFunctionsEntitiesFunctionCostTableBase, null);
             conduitLLMFunctionsEntitiesFunctionCostTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionCostMappingBase, false);
-            defaultTableMappings32.Add(conduitLLMFunctionsEntitiesFunctionCostMappingBase);
+            defaultTableMappings33.Add(conduitLLMFunctionsEntitiesFunctionCostMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase30, functionCost.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionCostMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)baseCostColumnBase, functionCost.FindProperty("BaseCost")!, conduitLLMFunctionsEntitiesFunctionCostMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)costNameColumnBase0, functionCost.FindProperty("CostName")!, conduitLLMFunctionsEntitiesFunctionCostMappingBase);
@@ -6422,8 +6535,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)tieredPricingColumnBase, functionCost.FindProperty("TieredPricing")!, conduitLLMFunctionsEntitiesFunctionCostMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase14, functionCost.FindProperty("UpdatedAt")!, conduitLLMFunctionsEntitiesFunctionCostMappingBase);
 
-            var tableMappings32 = new List<TableMapping>();
-            functionCost.SetRuntimeAnnotation("Relational:TableMappings", tableMappings32);
+            var tableMappings33 = new List<TableMapping>();
+            functionCost.SetRuntimeAnnotation("Relational:TableMappings", tableMappings33);
             var functionCostsTable = new Table("FunctionCosts", null, relationalModel);
             var idColumn30 = new Column("Id", "integer", functionCostsTable);
             functionCostsTable.Columns.Add("Id", idColumn30);
@@ -6516,7 +6629,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("FunctionCosts", null), functionCostsTable);
             var functionCostsTableMapping = new TableMapping(functionCost, functionCostsTable, null);
             functionCostsTable.AddTypeMapping(functionCostsTableMapping, false);
-            tableMappings32.Add(functionCostsTableMapping);
+            tableMappings33.Add(functionCostsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn30, functionCost.FindProperty("Id")!, functionCostsTableMapping);
             RelationalModel.CreateColumnMapping(baseCostColumn, functionCost.FindProperty("BaseCost")!, functionCostsTableMapping);
             RelationalModel.CreateColumnMapping(costNameColumn0, functionCost.FindProperty("CostName")!, functionCostsTableMapping);
@@ -6566,8 +6679,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionCostMapping = FindEntityType("ConduitLLM.Functions.Entities.FunctionCostMapping")!;
 
-            var defaultTableMappings33 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionCostMapping.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings33);
+            var defaultTableMappings34 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionCostMapping.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings34);
             var conduitLLMFunctionsEntitiesFunctionCostMappingTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionCostMapping", null, relationalModel);
             var createdAtColumnBase18 = new ColumnBase<ColumnMappingBase>("CreatedAt", "timestamp with time zone", conduitLLMFunctionsEntitiesFunctionCostMappingTableBase);
             conduitLLMFunctionsEntitiesFunctionCostMappingTableBase.Columns.Add("CreatedAt", createdAtColumnBase18);
@@ -6582,15 +6695,15 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionCostMapping", conduitLLMFunctionsEntitiesFunctionCostMappingTableBase);
             var conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase = new TableMappingBase<ColumnMappingBase>(functionCostMapping, conduitLLMFunctionsEntitiesFunctionCostMappingTableBase, null);
             conduitLLMFunctionsEntitiesFunctionCostMappingTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase, false);
-            defaultTableMappings33.Add(conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
+            defaultTableMappings34.Add(conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase31, functionCostMapping.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase18, functionCostMapping.FindProperty("CreatedAt")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)functionConfigurationIdColumnBase0, functionCostMapping.FindProperty("FunctionConfigurationId")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)functionCostIdColumnBase, functionCostMapping.FindProperty("FunctionCostId")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isActiveColumnBase4, functionCostMapping.FindProperty("IsActive")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
 
-            var tableMappings33 = new List<TableMapping>();
-            functionCostMapping.SetRuntimeAnnotation("Relational:TableMappings", tableMappings33);
+            var tableMappings34 = new List<TableMapping>();
+            functionCostMapping.SetRuntimeAnnotation("Relational:TableMappings", tableMappings34);
             var functionCostMappingsTable = new Table("FunctionCostMappings", null, relationalModel);
             var idColumn31 = new Column("Id", "integer", functionCostMappingsTable);
             functionCostMappingsTable.Columns.Add("Id", idColumn31);
@@ -6611,7 +6724,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("FunctionCostMappings", null), functionCostMappingsTable);
             var functionCostMappingsTableMapping = new TableMapping(functionCostMapping, functionCostMappingsTable, null);
             functionCostMappingsTable.AddTypeMapping(functionCostMappingsTableMapping, false);
-            tableMappings33.Add(functionCostMappingsTableMapping);
+            tableMappings34.Add(functionCostMappingsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn31, functionCostMapping.FindProperty("Id")!, functionCostMappingsTableMapping);
             RelationalModel.CreateColumnMapping(createdAtColumn18, functionCostMapping.FindProperty("CreatedAt")!, functionCostMappingsTableMapping);
             RelationalModel.CreateColumnMapping(functionConfigurationIdColumn0, functionCostMapping.FindProperty("FunctionConfigurationId")!, functionCostMappingsTableMapping);
@@ -6647,8 +6760,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionCredential = FindEntityType("ConduitLLM.Functions.Entities.FunctionCredential")!;
 
-            var defaultTableMappings34 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionCredential.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings34);
+            var defaultTableMappings35 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionCredential.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings35);
             var conduitLLMFunctionsEntitiesFunctionCredentialTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionCredential", null, relationalModel);
             var apiKeyColumnBase0 = new ColumnBase<ColumnMappingBase>("ApiKey", "character varying(2000)", conduitLLMFunctionsEntitiesFunctionCredentialTableBase)
             {
@@ -6692,7 +6805,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionCredential", conduitLLMFunctionsEntitiesFunctionCredentialTableBase);
             var conduitLLMFunctionsEntitiesFunctionCredentialMappingBase = new TableMappingBase<ColumnMappingBase>(functionCredential, conduitLLMFunctionsEntitiesFunctionCredentialTableBase, null);
             conduitLLMFunctionsEntitiesFunctionCredentialTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionCredentialMappingBase, false);
-            defaultTableMappings34.Add(conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
+            defaultTableMappings35.Add(conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase32, functionCredential.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)apiKeyColumnBase0, functionCredential.FindProperty("ApiKey")!, conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)baseUrlColumnBase2, functionCredential.FindProperty("BaseUrl")!, conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
@@ -6706,8 +6819,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)providerTypeColumnBase5, functionCredential.FindProperty("ProviderType")!, conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)updatedAtColumnBase15, functionCredential.FindProperty("UpdatedAt")!, conduitLLMFunctionsEntitiesFunctionCredentialMappingBase);
 
-            var tableMappings34 = new List<TableMapping>();
-            functionCredential.SetRuntimeAnnotation("Relational:TableMappings", tableMappings34);
+            var tableMappings35 = new List<TableMapping>();
+            functionCredential.SetRuntimeAnnotation("Relational:TableMappings", tableMappings35);
             var functionCredentialsTable = new Table("FunctionCredentials", null, relationalModel);
             var idColumn32 = new Column("Id", "integer", functionCredentialsTable);
             functionCredentialsTable.Columns.Add("Id", idColumn32);
@@ -6764,7 +6877,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("FunctionCredentials", null), functionCredentialsTable);
             var functionCredentialsTableMapping = new TableMapping(functionCredential, functionCredentialsTable, null);
             functionCredentialsTable.AddTypeMapping(functionCredentialsTableMapping, false);
-            tableMappings34.Add(functionCredentialsTableMapping);
+            tableMappings35.Add(functionCredentialsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn32, functionCredential.FindProperty("Id")!, functionCredentialsTableMapping);
             RelationalModel.CreateColumnMapping(apiKeyColumn0, functionCredential.FindProperty("ApiKey")!, functionCredentialsTableMapping);
             RelationalModel.CreateColumnMapping(baseUrlColumn2, functionCredential.FindProperty("BaseUrl")!, functionCredentialsTableMapping);
@@ -6834,8 +6947,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionExecution = FindEntityType("ConduitLLM.Functions.Entities.FunctionExecution")!;
 
-            var defaultTableMappings35 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionExecution.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings35);
+            var defaultTableMappings36 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionExecution.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings36);
             var conduitLLMFunctionsEntitiesFunctionExecutionTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionExecution", null, relationalModel);
             var actualCostColumnBase = new ColumnBase<ColumnMappingBase>("ActualCost", "numeric(18,8)", conduitLLMFunctionsEntitiesFunctionExecutionTableBase)
             {
@@ -6912,8 +7025,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 IsNullable = true
             };
             conduitLLMFunctionsEntitiesFunctionExecutionTableBase.Columns.Add("StartedAt", startedAtColumnBase1);
-            var stateColumnBase1 = new ColumnBase<ColumnMappingBase>("State", "integer", conduitLLMFunctionsEntitiesFunctionExecutionTableBase);
-            conduitLLMFunctionsEntitiesFunctionExecutionTableBase.Columns.Add("State", stateColumnBase1);
+            var stateColumnBase2 = new ColumnBase<ColumnMappingBase>("State", "integer", conduitLLMFunctionsEntitiesFunctionExecutionTableBase);
+            conduitLLMFunctionsEntitiesFunctionExecutionTableBase.Columns.Add("State", stateColumnBase2);
             var statusMessageColumnBase = new ColumnBase<ColumnMappingBase>("StatusMessage", "character varying(500)", conduitLLMFunctionsEntitiesFunctionExecutionTableBase)
             {
                 IsNullable = true
@@ -6921,8 +7034,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             conduitLLMFunctionsEntitiesFunctionExecutionTableBase.Columns.Add("StatusMessage", statusMessageColumnBase);
             var versionColumnBase1 = new ColumnBase<ColumnMappingBase>("Version", "integer", conduitLLMFunctionsEntitiesFunctionExecutionTableBase);
             conduitLLMFunctionsEntitiesFunctionExecutionTableBase.Columns.Add("Version", versionColumnBase1);
-            var virtualKeyIdColumnBase10 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMFunctionsEntitiesFunctionExecutionTableBase);
-            conduitLLMFunctionsEntitiesFunctionExecutionTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase10);
+            var virtualKeyIdColumnBase11 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMFunctionsEntitiesFunctionExecutionTableBase);
+            conduitLLMFunctionsEntitiesFunctionExecutionTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase11);
             var webhookDeliveredColumnBase = new ColumnBase<ColumnMappingBase>("WebhookDelivered", "boolean", conduitLLMFunctionsEntitiesFunctionExecutionTableBase);
             conduitLLMFunctionsEntitiesFunctionExecutionTableBase.Columns.Add("WebhookDelivered", webhookDeliveredColumnBase);
             var webhookUrlColumnBase = new ColumnBase<ColumnMappingBase>("WebhookUrl", "character varying(1000)", conduitLLMFunctionsEntitiesFunctionExecutionTableBase)
@@ -6933,7 +7046,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionExecution", conduitLLMFunctionsEntitiesFunctionExecutionTableBase);
             var conduitLLMFunctionsEntitiesFunctionExecutionMappingBase = new TableMappingBase<ColumnMappingBase>(functionExecution, conduitLLMFunctionsEntitiesFunctionExecutionTableBase, null);
             conduitLLMFunctionsEntitiesFunctionExecutionTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionExecutionMappingBase, false);
-            defaultTableMappings35.Add(conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
+            defaultTableMappings36.Add(conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase33, functionExecution.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)actualCostColumnBase, functionExecution.FindProperty("ActualCost")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)completedAtColumnBase2, functionExecution.FindProperty("CompletedAt")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
@@ -6952,15 +7065,15 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)responseJsonColumnBase0, functionExecution.FindProperty("ResponseJson")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)retryCountColumnBase0, functionExecution.FindProperty("RetryCount")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)startedAtColumnBase1, functionExecution.FindProperty("StartedAt")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)stateColumnBase1, functionExecution.FindProperty("State")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)stateColumnBase2, functionExecution.FindProperty("State")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)statusMessageColumnBase, functionExecution.FindProperty("StatusMessage")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)versionColumnBase1, functionExecution.FindProperty("Version")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase10, functionExecution.FindProperty("VirtualKeyId")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase11, functionExecution.FindProperty("VirtualKeyId")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)webhookDeliveredColumnBase, functionExecution.FindProperty("WebhookDelivered")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)webhookUrlColumnBase, functionExecution.FindProperty("WebhookUrl")!, conduitLLMFunctionsEntitiesFunctionExecutionMappingBase);
 
-            var tableMappings35 = new List<TableMapping>();
-            functionExecution.SetRuntimeAnnotation("Relational:TableMappings", tableMappings35);
+            var tableMappings36 = new List<TableMapping>();
+            functionExecution.SetRuntimeAnnotation("Relational:TableMappings", tableMappings36);
             var functionExecutionsTable = new Table("FunctionExecutions", null, relationalModel);
             var idColumn33 = new Column("Id", "uuid", functionExecutionsTable);
             functionExecutionsTable.Columns.Add("Id", idColumn33);
@@ -7055,9 +7168,9 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             };
             functionExecutionsTable.Columns.Add("StartedAt", startedAtColumn1);
             startedAtColumn1.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(startedAtColumn1);
-            var stateColumn1 = new Column("State", "integer", functionExecutionsTable);
-            functionExecutionsTable.Columns.Add("State", stateColumn1);
-            stateColumn1.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(stateColumn1);
+            var stateColumn2 = new Column("State", "integer", functionExecutionsTable);
+            functionExecutionsTable.Columns.Add("State", stateColumn2);
+            stateColumn2.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(stateColumn2);
             var statusMessageColumn = new Column("StatusMessage", "character varying(500)", functionExecutionsTable)
             {
                 IsNullable = true
@@ -7067,9 +7180,9 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var versionColumn1 = new Column("Version", "integer", functionExecutionsTable);
             functionExecutionsTable.Columns.Add("Version", versionColumn1);
             versionColumn1.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(versionColumn1);
-            var virtualKeyIdColumn10 = new Column("VirtualKeyId", "integer", functionExecutionsTable);
-            functionExecutionsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn10);
-            virtualKeyIdColumn10.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn10);
+            var virtualKeyIdColumn11 = new Column("VirtualKeyId", "integer", functionExecutionsTable);
+            functionExecutionsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn11);
+            virtualKeyIdColumn11.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn11);
             var webhookDeliveredColumn = new Column("WebhookDelivered", "boolean", functionExecutionsTable);
             functionExecutionsTable.Columns.Add("WebhookDelivered", webhookDeliveredColumn);
             webhookDeliveredColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<bool>(webhookDeliveredColumn);
@@ -7082,7 +7195,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             relationalModel.Tables.Add(("FunctionExecutions", null), functionExecutionsTable);
             var functionExecutionsTableMapping = new TableMapping(functionExecution, functionExecutionsTable, null);
             functionExecutionsTable.AddTypeMapping(functionExecutionsTableMapping, false);
-            tableMappings35.Add(functionExecutionsTableMapping);
+            tableMappings36.Add(functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn33, functionExecution.FindProperty("Id")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(actualCostColumn, functionExecution.FindProperty("ActualCost")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(completedAtColumn2, functionExecution.FindProperty("CompletedAt")!, functionExecutionsTableMapping);
@@ -7101,10 +7214,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(responseJsonColumn0, functionExecution.FindProperty("ResponseJson")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(retryCountColumn0, functionExecution.FindProperty("RetryCount")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(startedAtColumn1, functionExecution.FindProperty("StartedAt")!, functionExecutionsTableMapping);
-            RelationalModel.CreateColumnMapping(stateColumn1, functionExecution.FindProperty("State")!, functionExecutionsTableMapping);
+            RelationalModel.CreateColumnMapping(stateColumn2, functionExecution.FindProperty("State")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(statusMessageColumn, functionExecution.FindProperty("StatusMessage")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(versionColumn1, functionExecution.FindProperty("Version")!, functionExecutionsTableMapping);
-            RelationalModel.CreateColumnMapping(virtualKeyIdColumn10, functionExecution.FindProperty("VirtualKeyId")!, functionExecutionsTableMapping);
+            RelationalModel.CreateColumnMapping(virtualKeyIdColumn11, functionExecution.FindProperty("VirtualKeyId")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(webhookDeliveredColumn, functionExecution.FindProperty("WebhookDelivered")!, functionExecutionsTableMapping);
             RelationalModel.CreateColumnMapping(webhookUrlColumn, functionExecution.FindProperty("WebhookUrl")!, functionExecutionsTableMapping);
             var pK_FunctionExecutions = new UniqueConstraint("PK_FunctionExecutions", functionExecutionsTable, new[] { idColumn33 });
@@ -7117,7 +7230,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateUniqueConstraints(pK_FunctionExecutionsKey).Add(pK_FunctionExecutions);
             functionExecutionsTable.UniqueConstraints.Add("PK_FunctionExecutions", pK_FunctionExecutions);
             var iX_FunctionExecution_AsyncProcessing = new TableIndex(
-            "IX_FunctionExecution_AsyncProcessing", functionExecutionsTable, new[] { stateColumn1, nextRetryAtColumn0, leasedByColumn0 }, false);
+            "IX_FunctionExecution_AsyncProcessing", functionExecutionsTable, new[] { stateColumn2, nextRetryAtColumn0, leasedByColumn0 }, false);
             iX_FunctionExecution_AsyncProcessing.SetRowIndexValueFactory(new CompositeRowIndexValueFactory(iX_FunctionExecution_AsyncProcessing));
             var iX_FunctionExecution_AsyncProcessingIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Functions.Entities.FunctionExecution",
@@ -7135,7 +7248,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_FunctionExecution_RequestedAtIx).Add(iX_FunctionExecution_RequestedAt);
             functionExecutionsTable.Indexes.Add("IX_FunctionExecution_RequestedAt", iX_FunctionExecution_RequestedAt);
             var iX_FunctionExecution_State = new TableIndex(
-            "IX_FunctionExecution_State", functionExecutionsTable, new[] { stateColumn1 }, false);
+            "IX_FunctionExecution_State", functionExecutionsTable, new[] { stateColumn2 }, false);
             iX_FunctionExecution_State.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_FunctionExecution_State));
             var iX_FunctionExecution_StateIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Functions.Entities.FunctionExecution",
@@ -7144,7 +7257,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateTableIndexes(iX_FunctionExecution_StateIx).Add(iX_FunctionExecution_State);
             functionExecutionsTable.Indexes.Add("IX_FunctionExecution_State", iX_FunctionExecution_State);
             var iX_FunctionExecution_VirtualKeyId = new TableIndex(
-            "IX_FunctionExecution_VirtualKeyId", functionExecutionsTable, new[] { virtualKeyIdColumn10 }, false);
+            "IX_FunctionExecution_VirtualKeyId", functionExecutionsTable, new[] { virtualKeyIdColumn11 }, false);
             iX_FunctionExecution_VirtualKeyId.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_FunctionExecution_VirtualKeyId));
             var iX_FunctionExecution_VirtualKeyIdIx = RelationalModel.GetIndex(this,
                 "ConduitLLM.Functions.Entities.FunctionExecution",
@@ -7164,8 +7277,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
 
             var functionExecutionAudit = FindEntityType("ConduitLLM.Functions.Entities.FunctionExecutionAudit")!;
 
-            var defaultTableMappings36 = new List<TableMappingBase<ColumnMappingBase>>();
-            functionExecutionAudit.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings36);
+            var defaultTableMappings37 = new List<TableMappingBase<ColumnMappingBase>>();
+            functionExecutionAudit.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings37);
             var conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase = new TableBase("ConduitLLM.Functions.Entities.FunctionExecutionAudit", null, relationalModel);
             var costColumnBase1 = new ColumnBase<ColumnMappingBase>("Cost", "numeric(18,8)", conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase)
             {
@@ -7195,15 +7308,15 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase.Columns.Add("IsEstimated", isEstimatedColumnBase1);
             var timestampColumnBase4 = new ColumnBase<ColumnMappingBase>("Timestamp", "timestamp with time zone", conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase);
             conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase.Columns.Add("Timestamp", timestampColumnBase4);
-            var virtualKeyIdColumnBase11 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase)
+            var virtualKeyIdColumnBase12 = new ColumnBase<ColumnMappingBase>("VirtualKeyId", "integer", conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase)
             {
                 IsNullable = true
             };
-            conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase11);
+            conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase.Columns.Add("VirtualKeyId", virtualKeyIdColumnBase12);
             relationalModel.DefaultTables.Add("ConduitLLM.Functions.Entities.FunctionExecutionAudit", conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase);
             var conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase = new TableMappingBase<ColumnMappingBase>(functionExecutionAudit, conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase, null);
             conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase.AddTypeMapping(conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase, false);
-            defaultTableMappings36.Add(conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
+            defaultTableMappings37.Add(conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase34, functionExecutionAudit.FindProperty("Id")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)costColumnBase1, functionExecutionAudit.FindProperty("Cost")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)eventDetailsColumnBase, functionExecutionAudit.FindProperty("EventDetails")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
@@ -7212,10 +7325,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)functionExecutionIdColumnBase0, functionExecutionAudit.FindProperty("FunctionExecutionId")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isEstimatedColumnBase1, functionExecutionAudit.FindProperty("IsEstimated")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)timestampColumnBase4, functionExecutionAudit.FindProperty("Timestamp")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase11, functionExecutionAudit.FindProperty("VirtualKeyId")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase12, functionExecutionAudit.FindProperty("VirtualKeyId")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
 
-            var tableMappings36 = new List<TableMapping>();
-            functionExecutionAudit.SetRuntimeAnnotation("Relational:TableMappings", tableMappings36);
+            var tableMappings37 = new List<TableMapping>();
+            functionExecutionAudit.SetRuntimeAnnotation("Relational:TableMappings", tableMappings37);
             var functionExecutionAuditsTable = new Table("FunctionExecutionAudits", null, relationalModel);
             var idColumn34 = new Column("Id", "uuid", functionExecutionAuditsTable);
             functionExecutionAuditsTable.Columns.Add("Id", idColumn34);
@@ -7253,16 +7366,16 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var timestampColumn4 = new Column("Timestamp", "timestamp with time zone", functionExecutionAuditsTable);
             functionExecutionAuditsTable.Columns.Add("Timestamp", timestampColumn4);
             timestampColumn4.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(timestampColumn4);
-            var virtualKeyIdColumn11 = new Column("VirtualKeyId", "integer", functionExecutionAuditsTable)
+            var virtualKeyIdColumn12 = new Column("VirtualKeyId", "integer", functionExecutionAuditsTable)
             {
                 IsNullable = true
             };
-            functionExecutionAuditsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn11);
-            virtualKeyIdColumn11.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn11);
+            functionExecutionAuditsTable.Columns.Add("VirtualKeyId", virtualKeyIdColumn12);
+            virtualKeyIdColumn12.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(virtualKeyIdColumn12);
             relationalModel.Tables.Add(("FunctionExecutionAudits", null), functionExecutionAuditsTable);
             var functionExecutionAuditsTableMapping = new TableMapping(functionExecutionAudit, functionExecutionAuditsTable, null);
             functionExecutionAuditsTable.AddTypeMapping(functionExecutionAuditsTableMapping, false);
-            tableMappings36.Add(functionExecutionAuditsTableMapping);
+            tableMappings37.Add(functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(idColumn34, functionExecutionAudit.FindProperty("Id")!, functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(costColumn1, functionExecutionAudit.FindProperty("Cost")!, functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(eventDetailsColumn, functionExecutionAudit.FindProperty("EventDetails")!, functionExecutionAuditsTableMapping);
@@ -7271,7 +7384,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(functionExecutionIdColumn0, functionExecutionAudit.FindProperty("FunctionExecutionId")!, functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(isEstimatedColumn1, functionExecutionAudit.FindProperty("IsEstimated")!, functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(timestampColumn4, functionExecutionAudit.FindProperty("Timestamp")!, functionExecutionAuditsTableMapping);
-            RelationalModel.CreateColumnMapping(virtualKeyIdColumn11, functionExecutionAudit.FindProperty("VirtualKeyId")!, functionExecutionAuditsTableMapping);
+            RelationalModel.CreateColumnMapping(virtualKeyIdColumn12, functionExecutionAudit.FindProperty("VirtualKeyId")!, functionExecutionAuditsTableMapping);
             var pK_FunctionExecutionAudits = new UniqueConstraint("PK_FunctionExecutionAudits", functionExecutionAuditsTable, new[] { idColumn34 });
             functionExecutionAuditsTable.PrimaryKey = pK_FunctionExecutionAudits;
             pK_FunctionExecutionAudits.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<Guid>(pK_FunctionExecutionAudits));
@@ -7432,7 +7545,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             functionConfigurationsTable.ReferencingForeignKeyConstraints.Add(fK_FunctionExecutions_FunctionConfigurations_FunctionConfigura);
             var fK_IpFilters_VirtualKeys_VirtualKeyId = new ForeignKeyConstraint(
                 "FK_IpFilters_VirtualKeys_VirtualKeyId", ipFiltersTable, virtualKeysTable,
-                new[] { virtualKeyIdColumn2 },
+                new[] { virtualKeyIdColumn3 },
                 virtualKeysTable.FindUniqueConstraint("PK_VirtualKeys")!, ReferentialAction.Cascade);
             fK_IpFilters_VirtualKeys_VirtualKeyId.SetRowForeignKeyValueFactory(RowForeignKeyValueFactoryFactory.CreateSimpleNonNullableFactory<int, int>(fK_IpFilters_VirtualKeys_VirtualKeyId));
             var fK_IpFilters_VirtualKeys_VirtualKeyIdFk = RelationalModel.GetForeignKey(this,
@@ -7446,7 +7559,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             virtualKeysTable.ReferencingForeignKeyConstraints.Add(fK_IpFilters_VirtualKeys_VirtualKeyId);
             var fK_MediaRecords_VirtualKeys_VirtualKeyId = new ForeignKeyConstraint(
                 "FK_MediaRecords_VirtualKeys_VirtualKeyId", mediaRecordsTable, virtualKeysTable,
-                new[] { virtualKeyIdColumn3 },
+                new[] { virtualKeyIdColumn4 },
                 virtualKeysTable.FindUniqueConstraint("PK_VirtualKeys")!, ReferentialAction.Cascade);
             fK_MediaRecords_VirtualKeys_VirtualKeyId.SetRowForeignKeyValueFactory(RowForeignKeyValueFactoryFactory.CreateSimpleNonNullableFactory<int, int>(fK_MediaRecords_VirtualKeys_VirtualKeyId));
             var fK_MediaRecords_VirtualKeys_VirtualKeyIdFk = RelationalModel.GetForeignKey(this,
@@ -7572,7 +7685,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             providersTable.ReferencingForeignKeyConstraints.Add(fK_Notifications_Providers_ProviderId);
             var fK_Notifications_VirtualKeys_VirtualKeyId = new ForeignKeyConstraint(
                 "FK_Notifications_VirtualKeys_VirtualKeyId", notificationsTable, virtualKeysTable,
-                new[] { virtualKeyIdColumn4 },
+                new[] { virtualKeyIdColumn5 },
                 virtualKeysTable.FindUniqueConstraint("PK_VirtualKeys")!, ReferentialAction.Cascade);
             fK_Notifications_VirtualKeys_VirtualKeyId.SetRowForeignKeyValueFactory(RowForeignKeyValueFactoryFactory.CreateSimpleNonNullableFactory<int, int>(fK_Notifications_VirtualKeys_VirtualKeyId));
             var fK_Notifications_VirtualKeys_VirtualKeyIdFk = RelationalModel.GetForeignKey(this,
@@ -7586,7 +7699,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             virtualKeysTable.ReferencingForeignKeyConstraints.Add(fK_Notifications_VirtualKeys_VirtualKeyId);
             var fK_PricingAuditEvents_VirtualKeys_VirtualKeyId = new ForeignKeyConstraint(
                 "FK_PricingAuditEvents_VirtualKeys_VirtualKeyId", pricingAuditEventsTable, virtualKeysTable,
-                new[] { virtualKeyIdColumn5 },
+                new[] { virtualKeyIdColumn6 },
                 virtualKeysTable.FindUniqueConstraint("PK_VirtualKeys")!, ReferentialAction.Cascade);
             fK_PricingAuditEvents_VirtualKeys_VirtualKeyId.SetRowForeignKeyValueFactory(RowForeignKeyValueFactoryFactory.CreateSimpleNonNullableFactory<int, int>(fK_PricingAuditEvents_VirtualKeys_VirtualKeyId));
             var fK_PricingAuditEvents_VirtualKeys_VirtualKeyIdFk = RelationalModel.GetForeignKey(this,
@@ -7628,7 +7741,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             modelProviderMappingsTable.ReferencingForeignKeyConstraints.Add(fK_ProviderMetadataDriftItems_ModelProviderMappings_ModelProvi);
             var fK_RequestLogs_VirtualKeys_VirtualKeyId = new ForeignKeyConstraint(
                 "FK_RequestLogs_VirtualKeys_VirtualKeyId", requestLogsTable, virtualKeysTable,
-                new[] { virtualKeyIdColumn6 },
+                new[] { virtualKeyIdColumn7 },
                 virtualKeysTable.FindUniqueConstraint("PK_VirtualKeys")!, ReferentialAction.Restrict);
             fK_RequestLogs_VirtualKeys_VirtualKeyId.SetRowForeignKeyValueFactory(RowForeignKeyValueFactoryFactory.CreateSimpleNonNullableFactory<int, int>(fK_RequestLogs_VirtualKeys_VirtualKeyId));
             var fK_RequestLogs_VirtualKeys_VirtualKeyIdFk = RelationalModel.GetForeignKey(this,
@@ -7684,7 +7797,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             virtualKeyGroupsTable.ReferencingForeignKeyConstraints.Add(fK_VirtualKeys_VirtualKeyGroups_VirtualKeyGroupId);
             var fK_VirtualKeySpendHistory_VirtualKeys_VirtualKeyId = new ForeignKeyConstraint(
                 "FK_VirtualKeySpendHistory_VirtualKeys_VirtualKeyId", virtualKeySpendHistoryTable, virtualKeysTable,
-                new[] { virtualKeyIdColumn7 },
+                new[] { virtualKeyIdColumn8 },
                 virtualKeysTable.FindUniqueConstraint("PK_VirtualKeys")!, ReferentialAction.Cascade);
             fK_VirtualKeySpendHistory_VirtualKeys_VirtualKeyId.SetRowForeignKeyValueFactory(RowForeignKeyValueFactoryFactory.CreateSimpleNonNullableFactory<int, int>(fK_VirtualKeySpendHistory_VirtualKeys_VirtualKeyId));
             var fK_VirtualKeySpendHistory_VirtualKeys_VirtualKeyIdFk = RelationalModel.GetForeignKey(this,

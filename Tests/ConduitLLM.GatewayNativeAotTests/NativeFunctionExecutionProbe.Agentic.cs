@@ -164,7 +164,7 @@ internal static partial class NativeFunctionExecutionProbe
     {
         Require(row.RequestJson is not null, "agentic execution persisted request JSON");
         var input = Parse(row.RequestJson!);
-        Properties(input, "parameters", "metadata", "idempotencyKey");
+        Properties(input, "parameters", "metadata");
         var parameters = Element(writer =>
         {
             writer.WriteStartObject();
@@ -184,8 +184,6 @@ internal static partial class NativeFunctionExecutionProbe
         Require(metadata.GetProperty("tool_call_id").GetString() == toolId && metadata.GetProperty("iteration_number").GetInt32() == 1,
             "persisted metadata links the first actual model iteration to its requested tool");
         var idempotencyKey = chatId.ToString("D") + "_" + toolId;
-        Require(input.GetProperty("idempotencyKey").GetString() == idempotencyKey,
-            "agentic execution idempotency uses generated chat identity and tool ID");
         // Build the independent expected input from known arguments and independently validated IDs.
         var expected = Element(writer =>
         {
@@ -197,7 +195,6 @@ internal static partial class NativeFunctionExecutionProbe
             writer.WriteNumber("iteration_number", 1);
             writer.WriteString("request_id", internalId.ToString("D"));
             writer.WriteEndObject();
-            writer.WriteString("idempotencyKey", idempotencyKey);
             writer.WriteEndObject();
         });
         return new ProbeCase(true, idempotencyKey, body, expected);

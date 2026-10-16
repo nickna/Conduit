@@ -103,7 +103,7 @@ namespace ConduitLLM.Tests.Http.Middleware.Assertions
                 x => x.QueueSpendUpdateAsync(It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<DateTime?>()),
                 Times.Never);
             virtualKeyService.Verify(
-                x => x.UpdateSpendAsync(It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<DateTime?>()),
+                x => x.UpdateSpendAsync(It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<DateTime?>(), It.IsAny<string>()),
                 Times.Never);
         }
 
@@ -119,7 +119,7 @@ namespace ConduitLLM.Tests.Http.Middleware.Assertions
             decimal expectedCost)
         {
             virtualKeyService.Verify(
-                x => x.UpdateSpendAsync(expectedVirtualKeyId, expectedCost, It.IsAny<DateTime?>()),
+                x => x.UpdateSpendAsync(expectedVirtualKeyId, expectedCost, It.IsAny<DateTime?>(), It.IsAny<string>()),
                 Times.Once);
         }
 
