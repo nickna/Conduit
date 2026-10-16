@@ -1,8 +1,5 @@
-using System.Diagnostics;
 using Microsoft.AspNetCore.SignalR;
-using ConduitLLM.Configuration.DTOs.SignalR;
 using ConduitLLM.Core.Constants;
-using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Core.Services;
 
 namespace ConduitLLM.Gateway.Hubs
@@ -13,24 +10,20 @@ namespace ConduitLLM.Gateway.Hubs
     public class WebhookDeliveryHub : SecureHub
     {
         private readonly ILogger<WebhookDeliveryHub> _logger;
-        private readonly SignalRMetrics _metrics;
         private readonly IWebhookConnectionTracker _connectionTracker;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="WebhookDeliveryHub"/> class.
         /// </summary>
-        /// <param name="metrics">SignalR metrics instance.</param>
         /// <param name="logger">Logger instance.</param>
         /// <param name="serviceProvider">Service provider for dependency resolution.</param>
         /// <param name="connectionTracker">Tracks each connection's webhook group subscriptions.</param>
         public WebhookDeliveryHub(
-            SignalRMetrics metrics,
             ILogger<WebhookDeliveryHub> logger,
             IServiceProvider serviceProvider,
             IWebhookConnectionTracker connectionTracker)
             : base(logger, serviceProvider)
         {
-            _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _connectionTracker = connectionTracker ?? throw new ArgumentNullException(nameof(connectionTracker));
         }
@@ -81,11 +74,10 @@ namespace ConduitLLM.Gateway.Hubs
                 return;
             }
 
-            var virtualKeyId = GetVirtualKeyId();
-            if (!virtualKeyId.HasValue)
+            var virtualKeyId = RequireVirtualKeyId();
+            if (virtualKeyId <= 0)
             {
-                await Clients.Caller.SendAsync("Error", "Authentication required");
-                return;
+                throw new HubException("Unauthorized");
             }
 
             // Add to connection's webhook list
@@ -94,7 +86,7 @@ namespace ConduitLLM.Gateway.Hubs
             // Join groups for these webhook URLs
             foreach (var url in webhookUrls)
             {
-                var groupName = SignalRConstants.Groups.Webhook(url);
+                var groupName = SignalRConstants.Groups.Webhook(virtualKeyId, url);
                 await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
             }
 
@@ -115,11 +107,17 @@ namespace ConduitLLM.Gateway.Hubs
                 return;
             }
 
+            var virtualKeyId = RequireVirtualKeyId();
+            if (virtualKeyId <= 0)
+            {
+                throw new HubException("Unauthorized");
+            }
+
             await _connectionTracker.RemoveWebhooksFromConnectionAsync(Context.ConnectionId, webhookUrls);
 
             foreach (var url in webhookUrls)
             {
-                var groupName = SignalRConstants.Groups.Webhook(url);
+                var groupName = SignalRConstants.Groups.Webhook(virtualKeyId, url);
                 await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
             }
 
@@ -150,78 +148,5 @@ namespace ConduitLLM.Gateway.Hubs
                 Context.ConnectionId);
         }
 
-        /// <summary>
-        /// Broadcast a delivery attempt to relevant clients.
-        /// </summary>
-        /// <param name="webhookUrl">The webhook URL.</param>
-        /// <param name="attempt">The delivery attempt details.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        public async Task BroadcastDeliveryAttempt(string webhookUrl, WebhookDeliveryAttempt attempt)
-        {
-            var groupName = SignalRConstants.Groups.Webhook(webhookUrl);
-            
-            await Clients.Group(groupName).SendAsync("DeliveryAttempted", attempt);
-            
-            RecordMetrics("delivery_attempt");
-        }
-
-        /// <summary>
-        /// Broadcast a successful delivery to relevant clients.
-        /// </summary>
-        /// <param name="webhookUrl">The webhook URL.</param>
-        /// <param name="success">The successful delivery details.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        public async Task BroadcastDeliverySuccess(string webhookUrl, WebhookDeliverySuccess success)
-        {
-            var groupName = SignalRConstants.Groups.Webhook(webhookUrl);
-            
-            await Clients.Group(groupName).SendAsync("DeliverySucceeded", success);
-            
-            RecordMetrics("delivery_success");
-        }
-
-        /// <summary>
-        /// Broadcast a delivery failure to relevant clients.
-        /// </summary>
-        /// <param name="webhookUrl">The webhook URL.</param>
-        /// <param name="failure">The delivery failure details.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        public async Task BroadcastDeliveryFailure(string webhookUrl, WebhookDeliveryFailure failure)
-        {
-            var groupName = SignalRConstants.Groups.Webhook(webhookUrl);
-            
-            await Clients.Group(groupName).SendAsync("DeliveryFailed", failure);
-            
-            RecordMetrics("delivery_failure");
-        }
-
-        /// <summary>
-        /// Broadcast retry information to relevant clients.
-        /// </summary>
-        /// <param name="webhookUrl">The webhook URL.</param>
-        /// <param name="retry">The retry information.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        public async Task BroadcastRetryScheduled(string webhookUrl, WebhookRetryInfo retry)
-        {
-            var groupName = SignalRConstants.Groups.Webhook(webhookUrl);
-            
-            await Clients.Group(groupName).SendAsync("RetryScheduled", retry);
-            
-            RecordMetrics("retry_scheduled");
-        }
-
-        /// <summary>
-        /// Records metrics for hub activities.
-        /// </summary>
-        /// <param name="eventType">The type of event.</param>
-        private void RecordMetrics(string eventType)
-        {
-            var tags = new TagList
-            {
-                { "hub", "WebhookDeliveryHub" },
-                { "message_type", eventType }
-            };
-            _metrics.MessagesSent.Add(1, tags);
-        }
     }
 }

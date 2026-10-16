@@ -230,6 +230,24 @@ comes from the HTTP histogram; legacy statistics response-time fields remain zer
 and URL statistics empty because the receipt snapshot does not measure them.
 Metrics and SignalR cannot control delivery scheduling or resend a committed success.
 
+Webhook destination notifications are partitioned by the authenticated virtual
+key and the normalized destination URL. Subscriptions and unsubscriptions derive the
+positive virtual key ID from the connection; clients cannot supply another owner,
+and administrator keys receive no exception to this notification boundary. Two
+keys using the same destination therefore receive only their own delivery
+attempts, successes, failures, retries, and circuit-breaker details. Knowing or
+subscribing to another key's URL provides no access to its notifications.
+
+Only the server notification service publishes destination events; the hub does
+not expose broadcaster methods to SignalR clients. The delivery consumer passes
+the durable delivery request's owner to that service. Legacy deliveries whose
+owner is missing or nonpositive continue through durable delivery, recovery, and
+reporting, but emit no destination notification because their recipient cannot
+be authorized. Destination-specific circuit changes are sent only to the owner's
+subscribed group. Aggregate retained statistics retain their existing behavior;
+their separate authorization work is tracked in
+[#1682](https://github.com/nickna/Conduit/issues/1682).
+
 The no-caller audit removed the batch timer/queue, Redis/cached/no-op receipt trackers,
 logging-only delivery service, old synchronous circuits, and duplicate Redis metrics
 writers. Legacy expiring circuit JSON remains readable for serialization compatibility.

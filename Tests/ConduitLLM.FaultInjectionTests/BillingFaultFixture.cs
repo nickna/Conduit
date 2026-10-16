@@ -26,15 +26,13 @@ public sealed class BillingFaultCollection : ICollectionFixture<BillingFaultFixt
 
 public sealed class BillingFaultFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("conduit_faults")
         .WithUsername("conduit")
         .WithPassword("conduitpass")
         .Build();
 
-    private readonly RedisContainer _redis = new RedisBuilder()
-        .WithImage("redis:7.4-alpine")
+    private readonly RedisContainer _redis = new RedisBuilder("redis:7.4-alpine")
         .Build();
 
     public string PostgreSqlConnectionString => _postgres.GetConnectionString();

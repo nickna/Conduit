@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 
+using ConduitLLM.Configuration.Utilities;
 using ConduitLLM.PersistenceConverterTests;
 
 using Npgsql;
@@ -75,19 +76,6 @@ Console.WriteLine("PASS: 31 persisted converter properties; model=compiled; dyna
     "; dictionaryComparers=2; ownedSchemaRemoved=true; EFQueryExecution=false.");
 return 0;
 
-static string NormalizeConnectionString(string value)
-{
-    if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
-        (uri.Scheme != "postgres" && uri.Scheme != "postgresql"))
-        return new NpgsqlConnectionStringBuilder(value).ConnectionString;
-    var credentials = uri.UserInfo.Split(':', 2);
-    return new NpgsqlConnectionStringBuilder
-    {
-        Host = uri.Host,
-        Port = uri.IsDefaultPort ? 5432 : uri.Port,
-        Database = Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')),
-        Username = Uri.UnescapeDataString(credentials[0]),
-        Password = credentials.Length == 2 ? Uri.UnescapeDataString(credentials[1]) : string.Empty
-    }.ConnectionString;
-}
+static string NormalizeConnectionString(string value) =>
+    PostgresConnectionStringParser.Parse(value).ConnectionString;
 #endif

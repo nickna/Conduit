@@ -111,6 +111,9 @@ public class RedisConnectionFactoryTests
         var connection = new Mock<IConnectionMultiplexer>();
         using var factory = new StubRedisConnectionFactory(logger, _ => Task.FromResult(connection.Object));
         await factory.GetConnectionAsync($"redis://{User}:{Password}@localhost:6379");
+        var startupEntries = logger.Entries.Count;
+        Assert.Equal(2, startupEntries);
+        Assert.All(logger.Entries, entry => Assert.Contains("localhost:6379", entry.Message));
         var endpoint = new DnsEndPoint($"redis://{User}:{Password}@localhost", 6379);
         var failure = new ConnectionFailedEventArgs(connection.Object, endpoint, ConnectionType.Interactive,
             ConnectionFailureType.UnableToConnect, null, null);
@@ -120,7 +123,8 @@ public class RedisConnectionFactoryTests
         connection.Raise(value => value.ErrorMessage += null,
             new RedisErrorEventArgs(connection.Object, endpoint, "synthetic error"));
 
-        Assert.All(logger.Entries, entry => Assert.Contains("(unavailable)", entry.Message));
+        Assert.Equal(startupEntries + 3, logger.Entries.Count);
+        Assert.All(logger.Entries.Skip(startupEntries), entry => Assert.Contains("(unavailable)", entry.Message));
         AssertLogsExcludeCredentials(logger);
     }
 
@@ -142,6 +146,26 @@ public class RedisConnectionFactoryTests
 
         Assert.Equal(1, calls);
         Assert.All(logger.Entries, entry => Assert.Contains("localhost:6379, 127.0.0.1:6380, [::1]:6381", entry.Message));
+        AssertLogsExcludeCredentials(logger);
+    }
+
+    [Theory]
+    [InlineData("redis://synthetic-test-user:synthetic-test-password@localhost:6379?abortConnect=true&connectTimeout=1234&syncTimeout=2345")]
+    [InlineData("localhost:6379,user=synthetic-test-user,password=synthetic-test-password,abortConnect=true,connectTimeout=1234,syncTimeout=2345,allowAdmin=false")]
+    public async Task GetConnectionAsync_RespectsExplicitTimeoutAndAbortOptionsWithAdminMetricsEnabled(string input)
+    {
+        var logger = new RecordingLogger();
+        var connection = new Mock<IConnectionMultiplexer>();
+        using var factory = new StubRedisConnectionFactory(logger, _ => Task.FromResult(connection.Object));
+
+        Assert.Same(connection.Object, await factory.GetConnectionAsync(input));
+
+        Assert.True(factory.Configuration.AbortOnConnectFail);
+        Assert.Equal(1234, factory.Configuration.ConnectTimeout);
+        Assert.Equal(2345, factory.Configuration.SyncTimeout);
+        Assert.True(factory.Configuration.AllowAdmin);
+        Assert.Equal(User, factory.Configuration.User);
+        Assert.Equal(Password, factory.Configuration.Password);
         AssertLogsExcludeCredentials(logger);
     }
 

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 
 using ConduitLLM.Configuration.Options;
+using ConduitLLM.Configuration.Utilities;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -78,10 +79,7 @@ namespace ConduitLLM.Configuration.Services
         {
             return new Lazy<Task<IConnectionMultiplexer>>(async () =>
             {
-                var configOptions = ConfigurationOptions.Parse(connectionString);
-                configOptions.AbortOnConnectFail = false;
-                configOptions.ConnectTimeout = 5000; // 5 second timeout
-                configOptions.SyncTimeout = 5000; // 5 second sync timeout
+                var configOptions = RedisUrlParser.ParseConfiguration(connectionString);
 
                 // Enable admin mode for Redis INFO command used by metrics collection
                 configOptions.AllowAdmin = true;

@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace ConduitLLM.Core.Constants
 {
     /// <summary>
@@ -86,12 +89,14 @@ namespace ConduitLLM.Core.Constants
             public static string Task(string taskId) => $"task-{taskId}";
 
             /// <summary>
-            /// Get the group name shared by webhook delivery publishers and subscribers.
+            /// Get the owner-scoped destination group shared by webhook publishers and subscribers.
             /// </summary>
-            public static string Webhook(string webhookUrl)
+            public static string Webhook(int virtualKeyId, string webhookUrl)
             {
-                var uri = new Uri(webhookUrl);
-                return $"webhook-{uri.Host.Replace(".", "-")}-{uri.AbsolutePath.Replace("/", "-")}";
+                ArgumentOutOfRangeException.ThrowIfNegativeOrZero(virtualKeyId);
+                var uri = new Uri(webhookUrl, UriKind.Absolute);
+                var destination = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(uri.AbsoluteUri)));
+                return $"webhook-{virtualKeyId}-{destination}";
             }
             
             /// <summary>

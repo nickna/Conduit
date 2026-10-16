@@ -1,5 +1,6 @@
 using ConduitLLM.Core.Data;
 using ConduitLLM.Core.Data.Extensions;
+using ConduitLLM.Core.Data.Interfaces;
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services;
@@ -7,6 +8,7 @@ using ConduitLLM.Persistence.Interfaces;
 using ConduitLLM.Persistence.Npgsql;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 using Npgsql;
@@ -36,15 +38,12 @@ namespace ConduitLLM.Admin.Extensions
             var (dbProvider, dbConnectionString) = connectionStringManager.GetProviderAndConnectionString("AdminAPI", msg => startupLogger?.LogInformation("{Message}", msg));
 
             // Log the connection pool settings for verification
-            if (dbProvider == "postgres" && dbConnectionString.Contains("MaxPoolSize"))
+            if (dbProvider == "postgres")
             {
-                var match = System.Text.RegularExpressions.Regex.Match(dbConnectionString, @"MinPoolSize=(\d+);MaxPoolSize=(\d+)");
-                if (match.Success)
-                {
-                    startupLogger?.LogInformation(
-                        "Admin API database connection pool configured — MinPoolSize: {MinPoolSize}, MaxPoolSize: {MaxPoolSize}",
-                        match.Groups[1].Value, match.Groups[2].Value);
-                }
+                var poolSettings = new NpgsqlConnectionStringBuilder(dbConnectionString);
+                startupLogger?.LogInformation(
+                    "Admin API database connection pool configured — Pooling: {Pooling}, MinPoolSize: {MinPoolSize}, MaxPoolSize: {MaxPoolSize}",
+                    poolSettings.Pooling, poolSettings.MinPoolSize, poolSettings.MaxPoolSize);
             }
 
             // Only PostgreSQL is supported
@@ -55,6 +54,13 @@ namespace ConduitLLM.Admin.Extensions
 
             services.AddSingleton(_ => NpgsqlDataSource.Create(dbConnectionString));
             services.AddSingleton<IConnectionPoolWarmup, NpgsqlConnectionPoolWarmup>();
+            // The raw database health check borrows the same Admin pool as EF,
+            // runtime stores, schema probes, and coordinated warmup.
+            services.Replace(ServiceDescriptor.Singleton<IDatabaseConnectionFactory>(provider =>
+                DatabaseConnectionFactory.FromDataSource(
+                    provider.GetRequiredService<NpgsqlDataSource>(),
+                    provider.GetRequiredService<IConnectionStringManager>(),
+                    provider.GetRequiredService<ILogger<DatabaseConnectionFactory>>())));
 
             // Configure query monitoring for performance tracking
             services.Configure<ConduitLLM.Configuration.Interceptors.QueryMonitoringOptions>(

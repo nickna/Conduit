@@ -237,7 +237,7 @@ public class ChatCompletionRequest
     /// <summary>Moderation behavior requested for the completion.</summary>
     [JsonPropertyName("moderation")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? Moderation { get; set; }
+    public ChatModerationOptions? Moderation { get; set; }
 
     /// <summary>Prompt-cache routing key.</summary>
     [JsonPropertyName("prompt_cache_key")]

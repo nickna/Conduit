@@ -4,6 +4,7 @@ using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Data;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Configuration.Utilities;
 using ConduitLLM.Persistence;
 using ConduitLLM.Persistence.Interfaces;
 using ConduitLLM.Persistence.Npgsql;
@@ -584,24 +585,8 @@ static async Task ExerciseSchemaVersionProbeAsync(NpgsqlDataSource dataSource, s
     }
 }
 
-static string NormalizeConnectionString(string configured)
-{
-    if (!Uri.TryCreate(configured, UriKind.Absolute, out var uri) ||
-        (uri.Scheme != "postgres" && uri.Scheme != "postgresql"))
-    {
-        return configured;
-    }
-
-    var credentials = uri.UserInfo.Split(':', 2);
-    return new NpgsqlConnectionStringBuilder
-    {
-        Host = uri.Host,
-        Port = uri.IsDefaultPort ? 5432 : uri.Port,
-        Database = uri.AbsolutePath.TrimStart('/'),
-        Username = Uri.UnescapeDataString(credentials[0]),
-        Password = credentials.Length == 2 ? Uri.UnescapeDataString(credentials[1]) : string.Empty
-    }.ConnectionString;
-}
+static string NormalizeConnectionString(string configured) =>
+    PostgresConnectionStringParser.Parse(configured).ConnectionString;
 
 static async Task OpenWithRetryAsync(NpgsqlConnection connection)
 {

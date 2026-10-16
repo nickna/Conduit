@@ -176,8 +176,11 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
     }
 
     [Theory]
-    [InlineData("shadow-cost")]
-    [InlineData("shadow-audit")]
+    [InlineData("foreign-canonical-cost")]
+    [InlineData("moved-canonical-cost")]
+    [InlineData("foreign-canonical-audit")]
+    [InlineData("moved-canonical-audit")]
+    [InlineData("foreign-audit-key")]
     [InlineData("foreign-key-execution")]
     [InlineData("notification-cascade")]
     public async Task ForeignReferencesCannotBeDeletedOrSilentlyChangedThroughOwnedParents(string reference)
@@ -189,17 +192,44 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
         var foreignExecution = await AddDependentsAsync(database, foreign);
         switch (reference)
         {
-            case "shadow-cost":
+            case "foreign-canonical-cost":
                 await database.ExecuteAsync("""
-                    UPDATE "FunctionCostMappings" SET "FunctionCostId1" = @owned
+                    UPDATE "FunctionCostMappings" SET "FunctionCostId" = @owned
                     WHERE "Id" = @foreign
                     """, ("owned", owned.CostId), ("foreign", foreign.MappingId));
                 break;
-            case "shadow-audit":
+            case "moved-canonical-cost":
                 await database.ExecuteAsync("""
-                    UPDATE "FunctionExecutionAudits" SET "FunctionExecutionId1" = @owned
+                    UPDATE "FunctionCostMappings" SET "FunctionCostId" = @foreign
+                    WHERE "Id" = @owned
+                    """, ("foreign", foreign.CostId), ("owned", owned.MappingId));
+                break;
+            case "foreign-canonical-audit":
+                await database.ExecuteAsync("""
+                    UPDATE "FunctionExecutionAudits" SET "FunctionExecutionId" = @owned
                     WHERE "FunctionExecutionId" = @foreign
                     """, ("owned", ownedExecution), ("foreign", foreignExecution));
+                // Moving the relationship must not rewrite the audit's independent owner.
+                Assert.Equal(new object[] { foreign.KeyId }, await database.RowAsync("""
+                    SELECT "VirtualKeyId" FROM "FunctionExecutionAudits"
+                    WHERE "FunctionExecutionId" = @execution AND "VirtualKeyId" = @key
+                    """, ("execution", ownedExecution), ("key", foreign.KeyId)));
+                break;
+            case "moved-canonical-audit":
+                await database.ExecuteAsync("""
+                    UPDATE "FunctionExecutionAudits" SET "FunctionExecutionId" = @foreign
+                    WHERE "FunctionExecutionId" = @owned
+                    """, ("foreign", foreignExecution), ("owned", ownedExecution));
+                Assert.Equal(new object[] { owned.KeyId }, await database.RowAsync("""
+                    SELECT "VirtualKeyId" FROM "FunctionExecutionAudits"
+                    WHERE "FunctionExecutionId" = @execution AND "VirtualKeyId" = @key
+                    """, ("execution", foreignExecution), ("key", owned.KeyId)));
+                break;
+            case "foreign-audit-key":
+                await database.ExecuteAsync("""
+                    UPDATE "FunctionExecutionAudits" SET "VirtualKeyId" = @foreign
+                    WHERE "FunctionExecutionId" = @owned
+                    """, ("foreign", foreign.KeyId), ("owned", ownedExecution));
                 break;
             case "foreign-key-execution":
                 await database.ExecuteAsync("""
@@ -219,8 +249,8 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
                 }
                 break;
         }
-        // The fingerprint includes every scalar, including nullable shadow FKs:
-        // equal row counts alone would miss a SetNull update or wrong-owner overwrite.
+        // The fingerprint includes every scalar, canonical relationship and audit owner:
+        // equal row counts alone would miss a relationship or wrong-owner overwrite.
         await AssertRejectedWithoutMutationAsync(database, owned.Owner);
     }
 
@@ -562,8 +592,8 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
         Assert.Equal(snapshot.ConfigurationId, mapping.FunctionConfigurationId);
         Assert.Equal(snapshot.CostId, mapping.FunctionCostId);
         Assert.True(mapping.IsActive);
-        Assert.Equal(new object[] { DBNull.Value }, await database.RowAsync(
-            "SELECT \"FunctionCostId1\" FROM \"FunctionCostMappings\" WHERE \"Id\" = @id", ("id", snapshot.MappingId)));
+        Assert.Equal(new object[] { snapshot.ConfigurationId, snapshot.CostId }, await database.RowAsync(
+            "SELECT \"FunctionConfigurationId\", \"FunctionCostId\" FROM \"FunctionCostMappings\" WHERE \"Id\" = @id", ("id", snapshot.MappingId)));
         var ip = await context.Set<IpFilterEntity>().AsNoTracking().SingleAsync(value => value.VirtualKeyId == snapshot.KeyId, database.Token);
         Assert.True(ip.Id > 0);
         Assert.Equal("whitelist", ip.FilterType);
@@ -647,9 +677,9 @@ public sealed class NativeFunctionFixturePersistenceParityTests(PostgresLockTest
                 SELECT "CostName", "ProviderType", "Purpose", "PricingModel", "CostPerExecution", "IsActive",
                     "Priority", "ExpiryDate" FROM "FunctionCosts" WHERE "Id" = @id
                 """, ("id", snapshot.CostId)));
-        Assert.Equal(new object[] { snapshot.ConfigurationId, snapshot.CostId, DBNull.Value, true },
+        Assert.Equal(new object[] { snapshot.ConfigurationId, snapshot.CostId, true },
             await database.RowAsync("""
-                SELECT "FunctionConfigurationId", "FunctionCostId", "FunctionCostId1", "IsActive"
+                SELECT "FunctionConfigurationId", "FunctionCostId", "IsActive"
                 FROM "FunctionCostMappings" WHERE "Id" = @id
                 """, ("id", snapshot.MappingId)));
         Assert.Equal(new object[] { "whitelist", "127.0.0.1", stem + ":ip", description, true,

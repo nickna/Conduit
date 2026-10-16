@@ -1,5 +1,4 @@
-using System.Text.RegularExpressions;
-
+using ConduitLLM.Configuration.Utilities;
 using ConduitLLM.Core.Data.Constants;
 using ConduitLLM.Core.Data.Interfaces;
 
@@ -46,17 +45,9 @@ namespace ConduitLLM.Core.Data
 
             // Check for PostgreSQL DATABASE_URL
             var databaseUrl = Environment.GetEnvironmentVariable(DatabaseConstants.DATABASE_URL_ENV);
-            if (string.IsNullOrEmpty(databaseUrl))
+            if (string.IsNullOrWhiteSpace(databaseUrl))
             {
                 var errorMsg = "DATABASE_URL environment variable is not set. PostgreSQL is required for Conduit.";
-                logAction($"[DB] Error: {errorMsg}");
-                throw new InvalidOperationException(errorMsg);
-            }
-
-            if (!databaseUrl.StartsWith(DatabaseConstants.POSTGRES_URL_PREFIX, StringComparison.OrdinalIgnoreCase) &&
-                !databaseUrl.StartsWith(DatabaseConstants.POSTGRESQL_URL_PREFIX, StringComparison.OrdinalIgnoreCase))
-            {
-                var errorMsg = $"Invalid DATABASE_URL prefix. Must start with '{DatabaseConstants.POSTGRES_URL_PREFIX}' or '{DatabaseConstants.POSTGRESQL_URL_PREFIX}'.";
                 logAction($"[DB] Error: {errorMsg}");
                 throw new InvalidOperationException(errorMsg);
             }
@@ -68,11 +59,11 @@ namespace ConduitLLM.Core.Data
                 logAction($"[DB] Using provider: {DatabaseConstants.POSTGRES_PROVIDER}, connection: {SanitizeConnectionString(connStr)}");
                 return (DatabaseConstants.POSTGRES_PROVIDER, connStr);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                var errorMsg = $"Failed to parse PostgreSQL URL: {ex.Message}";
+                const string errorMsg = "Invalid DATABASE_URL configuration. Use a PostgreSQL URI or Npgsql key/value connection string.";
                 logAction($"[DB] Error: {errorMsg}");
-                throw new InvalidOperationException(errorMsg, ex);
+                throw new InvalidOperationException(errorMsg);
             }
         }
 
@@ -138,92 +129,31 @@ namespace ConduitLLM.Core.Data
         }
 
         /// <summary>
-        /// Parses a PostgreSQL URL into a standard .NET connection string format.
+        /// Parses a PostgreSQL URI or Npgsql key/value string with service-specific defaults.
         /// </summary>
         /// <param name="postgresUrl">The PostgreSQL URL to parse (e.g., postgres://user:pass@host:port/database).</param>
         /// <param name="serviceType">Optional service type to apply service-specific connection pool settings (e.g., "CoreAPI", "AdminAPI", "WebAdmin")</param>
         /// <returns>A properly formatted PostgreSQL connection string.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when postgresUrl is null or empty.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the URL format is invalid.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the configuration is invalid.</exception>
         public string ParsePostgresUrl(string postgresUrl, string? serviceType)
         {
-            if (string.IsNullOrEmpty(postgresUrl))
+            var (minPoolSize, maxPoolSize) = serviceType?.ToUpperInvariant() switch
             {
-                throw new ArgumentNullException(nameof(postgresUrl), "PostgreSQL URL cannot be null or empty");
-            }
-
-            // Accepts both postgres:// and postgresql://
-            var pattern = @"^(postgres(?:ql)?):\/\/(?<user>[^:]+):(?<password>[^@]+)@(?<host>[^:/]+)(?::(?<port>\d+))?\/(?<database>[^?]+)";
-            var match = Regex.Match(postgresUrl, pattern, RegexOptions.IgnoreCase);
-
-            if (!match.Success)
+                "COREAPI" => (DatabaseConstants.CORE_API_MIN_POOL_SIZE, DatabaseConstants.CORE_API_MAX_POOL_SIZE),
+                "ADMINAPI" => (DatabaseConstants.ADMIN_API_MIN_POOL_SIZE, DatabaseConstants.ADMIN_API_MAX_POOL_SIZE),
+                "WEBADMIN" => (DatabaseConstants.WEBADMIN_MIN_POOL_SIZE, DatabaseConstants.WEBADMIN_MAX_POOL_SIZE),
+                _ => (DatabaseConstants.MIN_POOL_SIZE, DatabaseConstants.MAX_POOL_SIZE)
+            };
+            var defaults = new NpgsqlConnectionStringBuilder
             {
-                _logger?.LogError("Invalid PostgreSQL URL format: {SanitizedUrl}",
-                    Regex.Replace(postgresUrl, ":[^@]+@", ":****@"));
-                throw new InvalidOperationException(DatabaseConstants.ERR_INVALID_POSTGRES_URL);
-            }
-
-            var user = match.Groups["user"].Value;
-            var password = match.Groups["password"].Value;
-            var host = match.Groups["host"].Value;
-            var port = match.Groups["port"].Success
-                ? match.Groups["port"].Value
-                : DatabaseConstants.DEFAULT_POSTGRES_PORT;
-            var database = match.Groups["database"].Value;
-
-            // Handle optional query parameters
-            var uri = new Uri(postgresUrl);
-            var query = uri.Query;
-            var queryString = string.IsNullOrEmpty(query) ? string.Empty : query.TrimStart('?');
-
-            // Add connection pooling parameters if not specified in the URL
-            var poolingParams = string.Empty;
-            if (DatabaseConstants.POOLING_ENABLED &&
-                !queryString.Contains("Pooling=") &&
-                !queryString.Contains("pooling="))
-            {
-                // Determine pool sizes based on service type
-                int minPoolSize, maxPoolSize;
-                switch (serviceType?.ToUpperInvariant())
-                {
-                    case "COREAPI":
-                        minPoolSize = DatabaseConstants.CORE_API_MIN_POOL_SIZE;
-                        maxPoolSize = DatabaseConstants.CORE_API_MAX_POOL_SIZE;
-                        break;
-                    case "ADMINAPI":
-                        minPoolSize = DatabaseConstants.ADMIN_API_MIN_POOL_SIZE;
-                        maxPoolSize = DatabaseConstants.ADMIN_API_MAX_POOL_SIZE;
-                        break;
-                    case "WEBADMIN":
-                        minPoolSize = DatabaseConstants.WEBADMIN_MIN_POOL_SIZE;
-                        maxPoolSize = DatabaseConstants.WEBADMIN_MAX_POOL_SIZE;
-                        break;
-                    default:
-                        minPoolSize = DatabaseConstants.MIN_POOL_SIZE;
-                        maxPoolSize = DatabaseConstants.MAX_POOL_SIZE;
-                        break;
-                }
-
-                poolingParams = $";Pooling=true;MinPoolSize={minPoolSize};" +
-                               $"MaxPoolSize={maxPoolSize};" +
-                               $"ConnectionLifetime={DatabaseConstants.CONNECTION_LIFETIME_SECONDS};" +
-                               $"ConnectionIdleLifetime={DatabaseConstants.CONNECTION_IDLE_LIFETIME_SECONDS};" +
-                               $"IncludeErrorDetail=true";
-            }
-
-            // Build the connection string
-            var connStr = $"Host={host};Port={port};Database={database};Username={user};Password={password}";
-
-            // Add query parameters if present
-            if (!string.IsNullOrEmpty(queryString))
-            {
-                connStr += ";" + queryString.Replace("&", ";");
-            }
-
-            // Add pooling parameters if needed
-            connStr += poolingParams;
-
-            return connStr;
+                Pooling = DatabaseConstants.POOLING_ENABLED,
+                MinPoolSize = minPoolSize,
+                MaxPoolSize = maxPoolSize,
+                ConnectionLifetime = DatabaseConstants.CONNECTION_LIFETIME_SECONDS,
+                ConnectionIdleLifetime = DatabaseConstants.CONNECTION_IDLE_LIFETIME_SECONDS,
+                IncludeErrorDetail = true
+            };
+            return PostgresConnectionStringParser.Parse(postgresUrl, defaults).ConnectionString;
         }
 
         /// <inheritdoc/>
@@ -242,43 +172,17 @@ namespace ConduitLLM.Core.Data
             if (!providerName.Equals(DatabaseConstants.POSTGRES_PROVIDER, StringComparison.OrdinalIgnoreCase))
             {
                 throw new ArgumentException(
-                    $"Only PostgreSQL is supported. Invalid provider: {providerName}",
+                    "Only PostgreSQL is supported.",
                     nameof(providerName));
             }
 
-            ValidatePostgresConnectionString(connectionStringValue);
+            PostgresConnectionStringParser.Parse(connectionStringValue);
         }
 
         /// <inheritdoc/>
         public string SanitizeConnectionString(string connectionStringValue)
         {
-            if (string.IsNullOrEmpty(connectionStringValue))
-            {
-                return connectionStringValue;
-            }
-
-            // Mask password in connection string (case-insensitive)
-            return Regex.Replace(
-                connectionStringValue,
-                @"(Password|pwd)=([^;]+)",
-                "$1=*****",
-                RegexOptions.IgnoreCase);
-        }
-
-        private void ValidatePostgresConnectionString(string connectionString)
-        {
-            // Basic validation for required fields in Postgres connection string
-            if (!connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase) ||
-                !connectionString.Contains("Database=", StringComparison.OrdinalIgnoreCase) ||
-                !connectionString.Contains("Username=", StringComparison.OrdinalIgnoreCase) ||
-                !connectionString.Contains("Password=", StringComparison.OrdinalIgnoreCase))
-            {
-                // lgtm [cs/cleartext-storage-of-sensitive-information]
-                _logger?.LogError("Postgres connection string missing required fields: {SanitizedConnStr}",
-                    SanitizeConnectionString(connectionString));
-                throw new InvalidOperationException(
-                    string.Format(DatabaseConstants.ERR_MISSING_REQUIRED_FIELDS, "PostgreSQL"));
-            }
+            return PostgresConnectionStringParser.Sanitize(connectionStringValue);
         }
 
     }

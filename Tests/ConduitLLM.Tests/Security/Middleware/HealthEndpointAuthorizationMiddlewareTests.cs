@@ -20,10 +20,12 @@ namespace ConduitLLM.Tests.Security.Middleware;
 /// </summary>
 [Trait("Category", "Unit")]
 [Trait("Component", "Security")]
+[Collection("AdminCompositionEnvironment")]
 public class HealthEndpointAuthorizationMiddlewareTests : TestBase
 {
     private const string TestHealthKey = "test-health-monitoring-key-12345";
     private readonly Mock<ILogger<HealthEndpointAuthorizationMiddleware>> _loggerMock;
+    private readonly string? _originalHealthKey = Environment.GetEnvironmentVariable(HealthKeyAuthorizationHandler.HealthKeyEnvVar);
 
     public HealthEndpointAuthorizationMiddlewareTests(ITestOutputHelper output) : base(output)
     {
@@ -356,18 +358,89 @@ public class HealthEndpointAuthorizationMiddlewareTests : TestBase
         // Act
         await middleware.InvokeAsync(context);
 
-        // Assert - This depends on the implementation. If /healthy starts with /health, it might be protected.
-        // Based on the middleware using StartsWith, /healthy WILL be protected as it starts with "/health"
-        // This test documents the current behavior
-        nextCalled.Should().BeFalse("/healthy starts with /health so it is protected");
+        nextCalled.Should().BeTrue("/healthy is a different route segment from /health");
+        context.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
+    [Theory]
+    [InlineData("/health/")]
+    [InlineData("/HEALTH/READY/")]
+    [InlineData("/health/deep/path")]
+    [InlineData("/api/health")]
+    [InlineData("/api/health/")]
+    [InlineData("/API/HEALTH/ready")]
+    [InlineData("/v1/admin/health-status")]
+    [InlineData("/v1/admin/health-status/")]
+    [InlineData("/V1/ADMIN/HEALTH-STATUS/services")]
+    public async Task InvokeAsync_HealthRootsAndDescendants_KeepExternalUnauthorizedResponsesHidden(string path)
+    {
+        var nextCalled = false;
+        var middleware = CreateMiddleware(_ => { nextCalled = true; return Task.CompletedTask; });
+        var context = CreateHttpContext(path, IPAddress.Parse("203.0.113.1"));
+
+        await middleware.InvokeAsync(context);
+
+        Assert.False(nextCalled);
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/health-attacker-controlled")]
+    [InlineData("/HEALTHY")]
+    [InlineData("/health.json")]
+    [InlineData("/api/healthy")]
+    [InlineData("/api/health-attacker")]
+    [InlineData("/v1/admin/health-status-attacker")]
+    [InlineData("/v1/admin/health-status.json")]
+    public async Task InvokeAsync_PrefixCollisions_AreHandledByTheOrdinaryDownstreamPipeline(string path)
+    {
+        var nextCalled = false;
+        var middleware = CreateMiddleware(context =>
+        {
+            nextCalled = true;
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        });
+        var context = CreateHttpContext(path, IPAddress.Parse("203.0.113.1"));
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextCalled);
+        Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/health/")]
+    [InlineData("/HEALTH/READY")]
+    [InlineData("/api/health")]
+    [InlineData("/API/HEALTH/ready")]
+    [InlineData("/v1/admin/health-status")]
+    [InlineData("/V1/ADMIN/HEALTH-STATUS/services")]
+    public async Task InvokeAsync_HealthRootsAndDescendants_PreservePrivateNetworkAndValidKeyAccess(string path)
+    {
+        var calls = 0;
+        var middleware = CreateMiddleware(context =>
+        {
+            calls++;
+            context.Response.StatusCode = StatusCodes.Status204NoContent;
+            return Task.CompletedTask;
+        });
+        var privateRequest = CreateHttpContext(path, IPAddress.Parse("10.0.0.1"));
+        var externalWithKey = CreateHttpContext(path, IPAddress.Parse("203.0.113.1"), TestHealthKey);
+
+        await middleware.InvokeAsync(privateRequest);
+        await middleware.InvokeAsync(externalWithKey);
+
+        Assert.Equal(2, calls);
+        Assert.Equal(StatusCodes.Status204NoContent, privateRequest.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status204NoContent, externalWithKey.Response.StatusCode);
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
-            // Clean up environment variable after tests
-            Environment.SetEnvironmentVariable(HealthKeyAuthorizationHandler.HealthKeyEnvVar, null);
+            Environment.SetEnvironmentVariable(HealthKeyAuthorizationHandler.HealthKeyEnvVar, _originalHealthKey);
         }
         base.Dispose(disposing);
     }

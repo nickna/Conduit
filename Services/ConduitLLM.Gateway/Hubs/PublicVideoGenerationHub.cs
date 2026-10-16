@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using ConduitLLM.Configuration.DTOs.SignalR;
 using ConduitLLM.Core.Constants;
+using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Gateway.Services;
 
 namespace ConduitLLM.Gateway.Hubs
@@ -13,13 +14,16 @@ namespace ConduitLLM.Gateway.Hubs
     {
         private readonly ILogger<PublicVideoGenerationHub> _logger;
         private readonly IEphemeralKeyService _ephemeralKeyService;
+        private readonly IAsyncTaskService _taskService;
 
         public PublicVideoGenerationHub(
             ILogger<PublicVideoGenerationHub> logger,
-            IEphemeralKeyService ephemeralKeyService)
+            IEphemeralKeyService ephemeralKeyService,
+            IAsyncTaskService taskService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _ephemeralKeyService = ephemeralKeyService ?? throw new ArgumentNullException(nameof(ephemeralKeyService));
+            _taskService = taskService ?? throw new ArgumentNullException(nameof(taskService));
         }
 
         /// <summary>
@@ -53,13 +57,29 @@ namespace ConduitLLM.Gateway.Hubs
             }
             
             // Check if key is expired
-            if (keyData.ExpiresAt < DateTimeOffset.UtcNow)
+            if (keyData.ExpiresAt <= DateTimeOffset.UtcNow)
             {
                 _logger.LogWarning("Expired ephemeral key provided for task {TaskId}", taskId);
                 throw new HubException("Ephemeral key has expired");
             }
             
             var virtualKeyId = keyData.VirtualKeyId;
+
+            if (virtualKeyId <= 0)
+            {
+                throw new HubException("Task is unavailable or access is denied");
+            }
+
+            // Task IDs and ephemeral tokens are independently supplied by the browser.
+            // Authorize against the stored owner before changing any subscription state.
+            var status = await _taskService.GetTaskStatusAsync(taskId, Context.ConnectionAborted);
+            if (status?.Metadata is not { VirtualKeyId: > 0 } metadata ||
+                metadata.VirtualKeyId != virtualKeyId)
+            {
+                _logger.LogWarning("Video task subscription denied for task {TaskId} and virtual key {VirtualKeyId}",
+                    taskId, virtualKeyId);
+                throw new HubException("Task is unavailable or access is denied");
+            }
 
             // Add to task-specific group
             await Groups.AddToGroupAsync(Context.ConnectionId, SignalRConstants.Groups.VideoTask(taskId));

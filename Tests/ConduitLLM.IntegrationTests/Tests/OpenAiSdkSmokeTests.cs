@@ -45,7 +45,7 @@ public sealed class OpenAiSdkSmokeTests
     {
         var redisConnectionString = Environment.GetEnvironmentVariable("TEST_REDIS_CONNECTION");
         await using var redis = string.IsNullOrWhiteSpace(redisConnectionString)
-            ? new RedisBuilder().WithImage("redis:7.4-alpine").Build()
+            ? new RedisBuilder("redis:7.4-alpine").Build()
             : null;
         if (redis is not null)
         {
@@ -205,6 +205,9 @@ public sealed class OpenAiSdkSmokeTests
         Assert.True(
             missing.Length == 0,
             $"{sdk} SDK did not reach the real Gateway operations: {string.Join(", ", missing)}. " +
+            $"Observed: {counters.Describe()}");
+        Assert.True(counters["embeddings"] == 3 && counters["embeddings.float"] == 1 && counters["embeddings.base64"] == 2,
+            $"{sdk} SDK must send three embedding calls: one explicit float and two base64 (default plus explicit). " +
             $"Observed: {counters.Describe()}");
     }
 
@@ -583,12 +586,19 @@ internal sealed class SmokeProviderClient(
         CancellationToken cancellationToken = default)
     {
         counters.Increment("embeddings");
-        Assert.Equal("float", request.EncodingFormat);
+        Assert.Contains(request.EncodingFormat, new[] { "float", "base64" });
+        counters.Increment($"embeddings.{request.EncodingFormat}");
         return Task.FromResult(new EmbeddingResponse
         {
             Object = "list",
             Model = request.Model,
-            Data = [new EmbeddingData { Object = "embedding", Index = 0, Embedding = [0.1f] }],
+            Data = [new EmbeddingData
+            {
+                Object = "embedding", Index = 0,
+                Embedding = request.EncodingFormat == "base64"
+                    ? EmbeddingValue.FromBase64("zczMPQ==")
+                    : EmbeddingValue.FromFloats([0.1f])
+            }],
             Usage = new Usage { PromptTokens = 1, TotalTokens = 1 }
         });
     }

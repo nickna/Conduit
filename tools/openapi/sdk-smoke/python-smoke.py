@@ -1,6 +1,7 @@
 import base64
 import math
 import os
+import struct
 
 from openai import AuthenticationError, BadRequestError, NotFoundError, OpenAI
 
@@ -134,13 +135,30 @@ with client.responses.stream(model=chat_model, input="SDK smoke test", store=Fal
 check(streamed_response_text == "ok", "Responses stream output text was incorrect.")
 check(response_completed_count == 1, "Responses stream was missing its completed event.")
 
-embedding = client.embeddings.create(model=embedding_model, input="SDK smoke test", encoding_format="float")
-check((embedding.object, embedding.model) == ("list", embedding_model), "Embedding object/model was incorrect.")
-check(len(embedding.data) == 1, "Embedding item count was incorrect.")
-vector = embedding.data[0]
-check((vector.object, vector.index) == ("embedding", 0), "Embedding item was incorrect.")
-check(len(vector.embedding) == 1 and math.isclose(vector.embedding[0], 0.1, abs_tol=1e-6), "Embedding vector was incorrect.")
-check((embedding.usage.prompt_tokens, embedding.usage.total_tokens) == (1, 1), "Embedding usage was incorrect.")
+for encoding in (None, "float", "base64"):
+    # Omission exercises the SDK's default base64 request and automatic float decoding.
+    # Distinct inputs keep each format's provider invocation observable even with caching.
+    label = encoding or "default"
+    embedding_options = {} if encoding is None else {"encoding_format": encoding}
+    embedding = client.embeddings.create(
+        model=embedding_model,
+        input=f"Python SDK embedding {label}",
+        **embedding_options,
+    )
+    check((embedding.object, embedding.model) == ("list", embedding_model), f"{label} embedding object/model was incorrect.")
+    check(len(embedding.data) == 1, f"{label} embedding item count was incorrect.")
+    vector = embedding.data[0]
+    check((vector.object, vector.index) == ("embedding", 0), f"{label} embedding item was incorrect.")
+    check((embedding.usage.prompt_tokens, embedding.usage.total_tokens) == (1, 1), f"{label} embedding usage was incorrect.")
+    if encoding == "base64":
+        check(isinstance(vector.embedding, str), "Explicit base64 embedding did not remain a string.")
+        check(vector.embedding == "zczMPQ==", "Explicit base64 embedding was changed.")
+        raw_embedding = base64.b64decode(vector.embedding, validate=True)
+        check(len(raw_embedding) == 4, "Base64 embedding must contain exactly one float32.")
+        check(math.isclose(struct.unpack("<f", raw_embedding)[0], 0.1, abs_tol=1e-6), "Base64 float32 embedding value was incorrect.")
+    else:
+        check(isinstance(vector.embedding, list), f"{label} embedding was not decoded to a numeric array.")
+        check(len(vector.embedding) == 1 and math.isclose(vector.embedding[0], 0.1, abs_tol=1e-6), f"{label} embedding vector was incorrect.")
 
 image = client.images.generate(model=image_model, prompt="A small blue square", response_format="b64_json")
 check(image.created == 1 and image.data and len(image.data) == 1, "Image response was incorrect.")

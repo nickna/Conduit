@@ -256,8 +256,8 @@ internal static class NativeFunctionFixture
             VALUES (@costName, @providerType, 1, @description, NULL, 1, 0.12500001, NULL, NULL, NULL, NULL, NULL,
                 TRUE, @now - interval '1 day', NULL, 1, @now, @now) RETURNING "Id"
         ), created_mapping AS (
-            INSERT INTO "FunctionCostMappings" ("FunctionConfigurationId", "FunctionCostId", "FunctionCostId1", "IsActive", "CreatedAt")
-            SELECT configuration."Id", cost."Id", NULL, TRUE, @now
+            INSERT INTO "FunctionCostMappings" ("FunctionConfigurationId", "FunctionCostId", "IsActive", "CreatedAt")
+            SELECT configuration."Id", cost."Id", TRUE, @now
             FROM created_configuration configuration CROSS JOIN created_cost cost RETURNING "Id"
         ), created_ip AS (
             INSERT INTO "IpFilters" ("FilterType", "IpAddressOrCidr", "Name", "Description", "IsEnabled",
@@ -286,7 +286,7 @@ internal static class NativeFunctionFixture
                 OR "FunctionConfigurationId" IN (SELECT "Id" FROM owned_configurations) FOR UPDATE
         ), owned_mappings AS (
             SELECT * FROM "FunctionCostMappings" WHERE "FunctionConfigurationId" IN (SELECT "Id" FROM owned_configurations)
-                OR "FunctionCostId" IN (SELECT "Id" FROM owned_costs) OR "FunctionCostId1" IN (SELECT "Id" FROM owned_costs) FOR UPDATE
+                OR "FunctionCostId" IN (SELECT "Id" FROM owned_costs) FOR UPDATE
         ), owned_ip AS (
             SELECT * FROM "IpFilters" WHERE "CreatedBy" = @stem OR "UpdatedBy" = @stem OR "Name" = @ipName
                 OR "VirtualKeyId" IN (SELECT "Id" FROM owned_keys) FOR UPDATE
@@ -317,7 +317,7 @@ internal static class NativeFunctionFixture
                         WHERE configuration."Id" = credential."FunctionConfigurationId"), FALSE), NULL::varchar
             FROM owned_credentials credential
         UNION ALL SELECT 'mapping', "Id", "FunctionConfigurationId", "FunctionCostId",
-            "IsActive" AND "FunctionCostId1" IS NULL, NULL::varchar FROM owned_mappings
+            "IsActive", NULL::varchar FROM owned_mappings
         UNION ALL SELECT 'ip', "Id", "VirtualKeyId", NULL,
             COALESCE("CreatedBy" = @stem AND "UpdatedBy" = @stem AND "Name" = @ipName AND "Description" = @description
                 AND "FilterType" = 'whitelist' AND "IpAddressOrCidr" = '127.0.0.1' AND "IsEnabled", FALSE), NULL::varchar FROM owned_ip
@@ -337,11 +337,9 @@ internal static class NativeFunctionFixture
                     AND ("FunctionExecutionId" IS NULL OR "FunctionExecutionId" IN (SELECT "Id" FROM owned_executions)))
         ) OR EXISTS (
             SELECT 1 FROM "FunctionExecutionAudits" WHERE
-                ("FunctionExecutionId" IN (SELECT "Id" FROM owned_executions) OR "FunctionExecutionId1" IN (SELECT "Id" FROM owned_executions)
-                    OR "VirtualKeyId" = @keyId)
+                ("FunctionExecutionId" IN (SELECT "Id" FROM owned_executions) OR "VirtualKeyId" = @keyId)
                 AND NOT ("FunctionExecutionId" IN (SELECT "Id" FROM owned_executions)
-                    AND ("VirtualKeyId" IS NULL OR "VirtualKeyId" = @keyId)
-                    AND ("FunctionExecutionId1" IS NULL OR "FunctionExecutionId1" IN (SELECT "Id" FROM owned_executions)))
+                    AND ("VirtualKeyId" IS NULL OR "VirtualKeyId" = @keyId))
         ) OR EXISTS (
             SELECT 1 FROM "BillingAuditEvents" WHERE ("VirtualKeyId" = @keyId OR "VirtualKeyGroupId" = @groupId)
                 AND ("VirtualKeyId" IS NOT NULL AND "VirtualKeyId" <> @keyId OR "VirtualKeyGroupId" IS NOT NULL AND "VirtualKeyGroupId" <> @groupId)
@@ -371,7 +369,7 @@ internal static class NativeFunctionFixture
     private static readonly string[] DeleteParentsSql =
     [
         """DELETE FROM "IpFilters" WHERE "Id" = @ipId AND "VirtualKeyId" = @keyId AND "CreatedBy" = @stem AND "UpdatedBy" = @stem AND "Name" = @ipName""",
-        """DELETE FROM "FunctionCostMappings" WHERE "Id" = @mappingId AND "FunctionConfigurationId" = @configurationId AND "FunctionCostId" = @costId AND "FunctionCostId1" IS NULL""",
+        """DELETE FROM "FunctionCostMappings" WHERE "Id" = @mappingId AND "FunctionConfigurationId" = @configurationId AND "FunctionCostId" = @costId""",
         """DELETE FROM "FunctionCredentials" WHERE "Id" = @credentialId AND "FunctionConfigurationId" = @configurationId AND "KeyName" = @credentialName""",
         """DELETE FROM "FunctionConfigurations" WHERE "Id" = @configurationId AND "ConfigurationName" = @configurationName AND "Description" = @description""",
         """DELETE FROM "FunctionCosts" WHERE "Id" = @costId AND "CostName" = @costName AND "Description" = @description""",

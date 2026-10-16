@@ -1,153 +1,214 @@
-namespace ConduitLLM.Configuration.Utilities
+using System.Globalization;
+using System.Net;
+
+using StackExchange.Redis;
+
+namespace ConduitLLM.Configuration.Utilities;
+
+/// <summary>Parses the shared Redis environment configuration contract.</summary>
+public static class RedisUrlParser
 {
-    /// <summary>
-    /// Utility class for parsing Redis URLs into connection strings
-    /// </summary>
-    public static class RedisUrlParser
+    /// <summary>Resolves REDIS_URL first, falling back only when it is absent or blank.</summary>
+    public static ConfigurationOptions? ResolveConfiguration() => ResolveConfiguration(
+        Environment.GetEnvironmentVariable("REDIS_URL"),
+        Environment.GetEnvironmentVariable("CONDUIT_REDIS_CONNECTION_STRING"));
+
+    /// <summary>Resolves explicit values using the same precedence and validation as the hosts.</summary>
+    public static ConfigurationOptions? ResolveConfiguration(string? url, string? connectionString)
     {
-        /// <summary>
-        /// Resolves the Redis connection string from environment variables.
-        /// Checks REDIS_URL first (parsing it into a StackExchange.Redis format),
-        /// then falls back to CONDUIT_REDIS_CONNECTION_STRING.
-        /// </summary>
-        /// <returns>The resolved connection string, or null if neither variable is set.</returns>
-        public static string? ResolveConnectionString()
+        var value = !string.IsNullOrWhiteSpace(url) ? url : connectionString;
+        return string.IsNullOrWhiteSpace(value) ? null : ParseConfiguration(value);
+    }
+
+    /// <summary>Returns validated canonical options, or null when Redis is unconfigured.</summary>
+    public static string? ResolveConnectionString() => ResolveConfiguration()?.ToString(includePassword: true);
+
+    /// <summary>Parses a Redis URI, TCP endpoint, or StackExchange.Redis options string.</summary>
+    public static string ParseRedisUrl(string redisUrl) => ParseConfiguration(redisUrl).ToString(includePassword: true);
+
+    /// <summary>
+    /// Parses Redis configuration without exposing credentials in failure diagnostics.
+    /// URI credentials are percent-decoded once; options strings retain literal values.
+    /// </summary>
+    public static ConfigurationOptions ParseConfiguration(string configuration)
+    {
+        try
         {
-            var redisUrl = Environment.GetEnvironmentVariable("REDIS_URL");
-            var redisConnectionString = Environment.GetEnvironmentVariable("CONDUIT_REDIS_CONNECTION_STRING");
+            if (string.IsNullOrWhiteSpace(configuration) || configuration != configuration.Trim() ||
+                configuration.Any(char.IsControl))
+                throw InvalidConfiguration();
 
-            if (!string.IsNullOrEmpty(redisUrl))
-            {
-                try
-                {
-                    redisConnectionString = ParseRedisUrl(redisUrl);
-                }
-                catch
-                {
-                    // Failed to parse REDIS_URL, fall back to CONDUIT_REDIS_CONNECTION_STRING
-                }
-            }
-
-            return redisConnectionString;
-        }
-
-        /// <summary>
-        /// Parses a Redis URL into a StackExchange.Redis compatible connection string
-        /// </summary>
-        /// <param name="redisUrl">Redis URL in format: redis://[username]:[password]@[hostname]:[port]</param>
-        /// <returns>StackExchange.Redis compatible connection string</returns>
-        public static string ParseRedisUrl(string redisUrl)
-        {
-            if (string.IsNullOrWhiteSpace(redisUrl))
-            {
-                throw new ArgumentException("Redis URL cannot be null or empty", nameof(redisUrl));
-            }
-
-            // Remove redis:// prefix if present
-            if (redisUrl.StartsWith("redis://", StringComparison.OrdinalIgnoreCase))
-            {
-                redisUrl = redisUrl.Substring(8);
-            }
-            else if (redisUrl.StartsWith("rediss://", StringComparison.OrdinalIgnoreCase))
-            {
-                // SSL support - we'll add ssl=true to the connection string
-                redisUrl = redisUrl.Substring(9);
-                return ParseConnectionString(redisUrl, useSsl: true);
-            }
-
-            return ParseConnectionString(redisUrl, useSsl: false);
-        }
-
-        private static string ParseConnectionString(string urlPart, bool useSsl)
-        {
-            // Handle authentication part separately
-            string host;
-            string port = "6379";
-            string? username = null;
-            string? password = null;
-
-            // Check if there's an @ sign indicating authentication
-            var atIndex = urlPart.LastIndexOf('@');
-            if (atIndex >= 0)
-            {
-                var authPart = urlPart.Substring(0, atIndex);
-                var hostPart = urlPart.Substring(atIndex + 1);
-
-                // Parse auth part
-                var colonIndex = authPart.IndexOf(':');
-                if (colonIndex >= 0)
-                {
-                    if (colonIndex == 0)
-                    {
-                        // Format is :password (no username)
-                        password = authPart.Substring(1);
-                    }
-                    else
-                    {
-                        // Format is username:password
-                        username = authPart.Substring(0, colonIndex);
-                        password = authPart.Substring(colonIndex + 1);
-                    }
-                }
-
-                // Parse host:port
-                var portIndex = hostPart.LastIndexOf(':');
-                if (portIndex >= 0 && portIndex < hostPart.Length - 1)
-                {
-                    host = hostPart.Substring(0, portIndex);
-                    port = hostPart.Substring(portIndex + 1);
-                }
-                else
-                {
-                    host = hostPart;
-                }
-            }
+            ConfigurationOptions options;
+            if (configuration.StartsWith("redis://", StringComparison.OrdinalIgnoreCase) ||
+                configuration.StartsWith("rediss://", StringComparison.OrdinalIgnoreCase))
+                options = ParseUri(configuration);
             else
             {
-                // No authentication, just host:port
-                var portIndex = urlPart.LastIndexOf(':');
-                if (portIndex >= 0 && portIndex < urlPart.Length - 1)
-                {
-                    // Make sure it's actually a port by checking if it's numeric
-                    var possiblePort = urlPart.Substring(portIndex + 1);
-                    if (int.TryParse(possiblePort, out _))
-                    {
-                        host = urlPart.Substring(0, portIndex);
-                        port = possiblePort;
-                    }
-                    else
-                    {
-                        host = urlPart;
-                    }
-                }
-                else
-                {
-                    host = urlPart;
-                }
+                if (configuration.Contains("://", StringComparison.Ordinal)) throw InvalidConfiguration();
+                ValidateRawValues(configuration);
+                options = ConfigurationOptions.Parse(configuration);
+                options.SetDefaultPorts();
+                if (!HasOption(configuration, "abortConnect")) options.AbortOnConnectFail = false;
+                if (!HasOption(configuration, "connectTimeout")) options.ConnectTimeout = 10000;
+                if (!HasOption(configuration, "syncTimeout")) options.SyncTimeout = 10000;
             }
-
-            // Build StackExchange.Redis connection string
-            var connectionString = $"{host}:{port}";
-
-            if (!string.IsNullOrEmpty(password))
-            {
-                connectionString += $",password={password}";
-            }
-
-            if (!string.IsNullOrEmpty(username))
-            {
-                connectionString += $",user={username}";
-            }
-
-            if (useSsl)
-            {
-                connectionString += ",ssl=true";
-            }
-
-            // Add some reasonable defaults for production use
-            connectionString += ",abortConnect=false,connectTimeout=10000,syncTimeout=10000";
-
-            return connectionString;
+            ValidateOptions(options);
+            return options;
+        }
+        catch (Exception exception) when (exception is ArgumentException or FormatException or
+                                           OverflowException or InvalidOperationException)
+        {
+            // Third-party parser messages can include the complete input. Do not
+            // attach the original exception, even as an inner exception.
+            throw InvalidConfiguration();
         }
     }
+
+    private static ConfigurationOptions ParseUri(string value)
+    {
+        if (value.Any(char.IsWhiteSpace) || !Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            uri.Fragment.Length != 0 || uri.HostNameType is not (UriHostNameType.Dns or UriHostNameType.IPv4 or UriHostNameType.IPv6))
+            throw InvalidConfiguration();
+        ValidatePercentEscapes(value);
+        var authorityStart = value.IndexOf("://", StringComparison.Ordinal) + 3;
+        var authorityEnd = value.IndexOfAny(['/', '?', '#'], authorityStart);
+        if (authorityEnd < 0) authorityEnd = value.Length;
+        var authority = value[authorityStart..authorityEnd];
+        if (authority.EndsWith(':')) throw InvalidConfiguration();
+
+        var options = new ConfigurationOptions
+        {
+            AbortOnConnectFail = false,
+            ConnectTimeout = 10000,
+            SyncTimeout = 10000,
+            Ssl = uri.Scheme.Equals("rediss", StringComparison.OrdinalIgnoreCase)
+        };
+        var host = uri.IdnHost.Trim('[', ']');
+        var port = uri.Port < 0 ? 6379 : uri.Port;
+        if (port is < 1 or > 65535) throw InvalidConfiguration();
+        options.EndPoints.Add(host, port);
+
+        if (authority.Contains('@'))
+        {
+            var credentials = uri.UserInfo.Split(':', 2);
+            if (credentials.Length != 2) throw InvalidConfiguration();
+            options.User = credentials[0].Length == 0 ? null : Uri.UnescapeDataString(credentials[0]);
+            options.Password = Uri.UnescapeDataString(credentials[1]);
+            if (options.Password.Length == 0) throw InvalidConfiguration();
+            ValidateSerializableValue(options.User);
+            ValidateSerializableValue(options.Password);
+        }
+
+        var pathEnd = value.IndexOfAny(['?', '#'], authorityEnd);
+        if (pathEnd < 0) pathEnd = value.Length;
+        var path = Uri.UnescapeDataString(value[authorityEnd..pathEnd]);
+        if (path.Length > 0 && path != "/")
+        {
+            if (path[0] != '/' || !int.TryParse(path.AsSpan(1), NumberStyles.None,
+                    CultureInfo.InvariantCulture, out var database) || database < 0)
+                throw InvalidConfiguration();
+            options.DefaultDatabase = database;
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (uri.Query.Length > 1)
+        {
+            foreach (var item in uri.Query[1..].Split('&'))
+            {
+                var parts = item.Split('=', 2);
+                if (parts.Length != 2) throw InvalidConfiguration();
+                var key = Uri.UnescapeDataString(parts[0]);
+                var option = Uri.UnescapeDataString(parts[1]);
+                if (!seen.Add(key)) throw InvalidConfiguration();
+                ApplyUriOption(options, key, option, uri.Scheme.Equals("rediss", StringComparison.OrdinalIgnoreCase));
+            }
+        }
+        if (options.Ssl && !seen.Contains("sslHost")) options.SslHost = host;
+        return options;
+    }
+
+    private static void ApplyUriOption(ConfigurationOptions options, string key, string value, bool requireTls)
+    {
+        ValidateSerializableValue(value);
+        switch (key.ToLowerInvariant())
+        {
+            case "connecttimeout": options.ConnectTimeout = Number(value, positive: true); break;
+            case "synctimeout": options.SyncTimeout = Number(value, positive: true); break;
+            case "asynctimeout": options.AsyncTimeout = Number(value, positive: true); break;
+            case "connectretry": options.ConnectRetry = Number(value, positive: false); break;
+            case "keepalive": options.KeepAlive = Number(value, positive: false); break;
+            case "abortconnect": options.AbortOnConnectFail = Boolean(value); break;
+            case "ssl":
+                var ssl = Boolean(value);
+                if (requireTls && !ssl) throw InvalidConfiguration();
+                options.Ssl = ssl;
+                break;
+            case "sslhost":
+                if (value.Length == 0) throw InvalidConfiguration();
+                options.SslHost = value;
+                break;
+            default: throw InvalidConfiguration();
+        }
+    }
+
+    private static int Number(string value, bool positive) =>
+        int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) && number >= (positive ? 1 : 0)
+            ? number : throw InvalidConfiguration();
+
+    private static bool Boolean(string value) =>
+        bool.TryParse(value, out var result) ? result : throw InvalidConfiguration();
+
+    private static bool HasOption(string value, string key) => value.Split(',').Any(part =>
+        part.Split('=', 2) is { Length: 2 } option && option[0].Trim().Equals(key, StringComparison.OrdinalIgnoreCase));
+
+    private static void ValidateRawValues(string value)
+    {
+        foreach (var part in value.Split(','))
+        {
+            var option = part.Split('=', 2);
+            if (option.Length == 2 && (option[0].Trim().Equals("user", StringComparison.OrdinalIgnoreCase) ||
+                                       option[0].Trim().Equals("password", StringComparison.OrdinalIgnoreCase) ||
+                                       option[0].Trim().Equals("sslHost", StringComparison.OrdinalIgnoreCase)))
+                ValidateSerializableValue(option[1]);
+        }
+    }
+
+    private static void ValidateOptions(ConfigurationOptions options)
+    {
+        if (options.EndPoints.Count == 0) throw InvalidConfiguration();
+        foreach (var endpoint in options.EndPoints)
+        {
+            if (endpoint is IPEndPoint ip && ip.Port is >= 1 and <= 65535) continue;
+            if (endpoint is DnsEndPoint dns && dns.Port is >= 1 and <= 65535 &&
+                Uri.CheckHostName(dns.Host) != UriHostNameType.Unknown) continue;
+            throw InvalidConfiguration();
+        }
+        ValidateSerializableValue(options.User);
+        ValidateSerializableValue(options.Password);
+        ValidateSerializableValue(options.SslHost);
+        var roundTrip = ConfigurationOptions.Parse(options.ToString(includePassword: true));
+        if ((roundTrip.User ?? "") != (options.User ?? "") || (roundTrip.Password ?? "") != (options.Password ?? "") ||
+            roundTrip.Ssl != options.Ssl || (roundTrip.SslHost ?? "") != (options.SslHost ?? ""))
+            throw InvalidConfiguration();
+    }
+
+    private static void ValidateSerializableValue(string? value)
+    {
+        if (value is not null && (value.Contains(',') || value.Any(char.IsControl) || value != value.Trim()))
+            throw InvalidConfiguration();
+    }
+
+    private static void ValidatePercentEscapes(string value)
+    {
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (value[index] != '%') continue;
+            if (index + 2 >= value.Length || !Uri.IsHexDigit(value[index + 1]) || !Uri.IsHexDigit(value[index + 2]))
+                throw InvalidConfiguration();
+            index += 2;
+        }
+    }
+
+    private static ArgumentException InvalidConfiguration() =>
+        new("Redis configuration is invalid. Use a Redis URI, TCP endpoint, or supported StackExchange.Redis options.");
 }

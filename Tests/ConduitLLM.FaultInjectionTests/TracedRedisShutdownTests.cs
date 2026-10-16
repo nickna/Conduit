@@ -38,8 +38,14 @@ public sealed class TracedRedisShutdownTests(BillingFaultFixture fixture)
     {
         var account = await fixture.SeedAccountAsync();
         await using var dataSource = NpgsqlDataSource.Create(fixture.PostgreSqlConnectionString);
+        // This host exercises healthy Redis lifecycle ordering. Keep the shared
+        // fixture's short outage deadlines out of real cache subscription setup.
+        var redisConfiguration = ConfigurationOptions.Parse(fixture.RedisConnectionString);
+        redisConfiguration.ConnectTimeout = 10_000;
+        redisConfiguration.SyncTimeout = 10_000;
+        redisConfiguration.AsyncTimeout = 10_000;
         using var redisFactory = new RedisConnectionFactory(
-            Options.Create(new CacheOptions { RedisConnectionString = fixture.RedisConnectionString }),
+            Options.Create(new CacheOptions { RedisConnectionString = redisConfiguration.ToString(includePassword: true) }),
             NullLogger<RedisConnectionFactory>.Instance);
         var redis = await redisFactory.GetConnectionAsync();
         var serviceName = $"traced-shutdown-{Guid.NewGuid():N}";

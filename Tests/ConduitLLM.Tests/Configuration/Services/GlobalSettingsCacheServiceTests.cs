@@ -20,7 +20,7 @@ namespace ConduitLLM.Tests.Configuration.Services
     /// </summary>
     [Trait("Category", "Unit")]
     [Trait("Component", "CacheService")]
-    public class GlobalSettingsCacheServiceTests
+    public class GlobalSettingsCacheServiceTests : IAsyncLifetime
     {
         private readonly Mock<IServiceScopeFactory> _mockScopeFactory;
         private readonly Mock<IServiceScope> _mockScope;
@@ -45,6 +45,10 @@ namespace ConduitLLM.Tests.Configuration.Services
 
             _service = new GlobalSettingsCacheService(_mockScopeFactory.Object, _mockLogger.Object);
         }
+
+        public Task InitializeAsync() => Task.CompletedTask;
+
+        public Task DisposeAsync() => _service.StopAsync(CancellationToken.None);
 
         #region StartAsync Tests
 
@@ -144,23 +148,14 @@ namespace ConduitLLM.Tests.Configuration.Services
         [Fact]
         public async Task StartAsync_WhenCancellationRequested_StopsLoadingSettings()
         {
-            // Arrange
-            var settings = Enumerable.Range(1, 100)
-                .Select(i => new GlobalSetting { Id = i, Key = $"setting{i}", Value = $"value{i}" })
-                .ToList();
-
-            _mockRepository.Setup(x => x.ListAsync(It.IsAny<CancellationToken>())).ReturnsAsync(settings);
-
-            var cts = new CancellationTokenSource();
+            using var cts = new CancellationTokenSource();
             cts.Cancel();
 
-            // Act
-            await _service.StartAsync(cts.Token);
+            var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _service.StartAsync(cts.Token));
 
-            // Assert - Should handle cancellation gracefully
-            var stats = await _service.GetCacheStatsAsync();
-            // Cache size might be less than 100 if cancellation was honored
-            stats.EntryCount.Should().BeLessThanOrEqualTo(100);
+            Assert.Equal(cts.Token, exception.CancellationToken);
+            _mockRepository.Verify(x => x.ListAsync(It.IsAny<CancellationToken>()), Times.Never);
+            Assert.Equal(0, (await _service.GetCacheStatsAsync()).EntryCount);
         }
 
         #endregion

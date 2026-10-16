@@ -25,7 +25,7 @@ public class HealthEndpointAuthorizationMiddleware
     private readonly ILogger<HealthEndpointAuthorizationMiddleware> _logger;
 
     /// <summary>
-    /// Path prefixes that are considered health endpoints.
+    /// Route segment roots that are considered health endpoints.
     /// </summary>
     private static readonly string[] HealthPathPrefixes = new[]
     {
@@ -87,10 +87,9 @@ public class HealthEndpointAuthorizationMiddleware
         if (!path.HasValue)
             return false;
 
-        var pathValue = path.Value;
         foreach (var prefix in HealthPathPrefixes)
         {
-            if (pathValue.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            if (path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

@@ -215,13 +215,13 @@ namespace ConduitLLM.Providers.MiniMax
         private class MiniMaxUsage
         {
             [System.Text.Json.Serialization.JsonPropertyName("prompt_tokens")]
-            public int PromptTokens { get; set; }
+            public int? PromptTokens { get; set; }
 
             [System.Text.Json.Serialization.JsonPropertyName("completion_tokens")]
-            public int CompletionTokens { get; set; }
+            public int? CompletionTokens { get; set; }
 
             [System.Text.Json.Serialization.JsonPropertyName("total_tokens")]
-            public int TotalTokens { get; set; }
+            public int? TotalTokens { get; set; }
 
             [System.Text.Json.Serialization.JsonPropertyName("total_characters")]
             public int? TotalCharacters { get; set; }
