@@ -141,6 +141,13 @@ repeat this experiment. EF Tasks' publish-time stages must be retained when
 testing its native publish pipeline; disabling them would change the claim.
 See the official [NativeAOT query documentation](https://learn.microsoft.com/en-us/ef/core/performance/nativeaot-and-precompiled-queries)
 and [MSBuild integration documentation](https://learn.microsoft.com/en-us/ef/core/cli/msbuild).
+The [EF Tasks startup contract follow-up](../../tools/EfTasksStartupContract/README.md)
+resolves #1663's guidance ambiguity: selecting a separate startup project was
+removed from MSBuild integration, while the CLI options used above are a
+different interface. Fifteen isolated parameter checks describe the retained
+10.0.12 implementation; stale package instructions/diagnostics are filed in
+[EF #39275](https://github.com/dotnet/efcore/issues/39275). The earlier Windows
+`.exe` observation does not establish supported MSBuild startup selection.
 
 ## Remaining qualification work
 
