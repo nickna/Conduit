@@ -42,8 +42,8 @@ public sealed class MediaDispatchCollection : ICollectionFixture<MediaDispatchFi
 
 public sealed class MediaDispatchFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:17-alpine").WithDatabase("media_dispatch")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
+        .WithDatabase("media_dispatch")
         .WithUsername("conduit").WithPassword("conduitpass").Build();
     public string ConnectionString => _postgres.GetConnectionString();
     public Mock<ILLMClient> Provider { get; } = new();

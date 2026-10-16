@@ -215,7 +215,7 @@ namespace ConduitLLM.Providers.OpenAI
         public string Object { get; init; } = "embedding";
 
         [JsonPropertyName("embedding")]
-        public required IReadOnlyList<float> Embedding { get; init; }
+        public required ConduitLLM.Core.Models.EmbeddingValue Embedding { get; init; }
 
         [JsonPropertyName("index")]
         public int Index { get; init; }

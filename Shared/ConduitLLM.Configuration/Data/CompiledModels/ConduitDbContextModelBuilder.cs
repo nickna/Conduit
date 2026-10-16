@@ -17,7 +17,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
     public partial class ConduitDbContextModel
     {
         private ConduitDbContextModel()
-            : base(skipDetectChanges: false, modelId: new Guid("0b80bdf0-a1d8-4ab5-9b1e-882e3fbc0c7c"), entityTypeCount: 38)
+            : base(skipDetectChanges: false, modelId: new Guid("cc5a179c-87e8-4c11-a820-b5d48305ffdc"), entityTypeCount: 38)
         {
         }
 
@@ -88,11 +88,9 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             FunctionCallAuditEntityType.CreateForeignKey2(functionCallAudit, functionExecution);
             FunctionCostMappingEntityType.CreateForeignKey1(functionCostMapping, functionConfiguration);
             FunctionCostMappingEntityType.CreateForeignKey2(functionCostMapping, functionCost);
-            FunctionCostMappingEntityType.CreateForeignKey3(functionCostMapping, functionCost);
             FunctionCredentialEntityType.CreateForeignKey1(functionCredential, functionConfiguration);
             FunctionExecutionEntityType.CreateForeignKey1(functionExecution, functionConfiguration);
             FunctionExecutionAuditEntityType.CreateForeignKey1(functionExecutionAudit, functionExecution);
-            FunctionExecutionAuditEntityType.CreateForeignKey2(functionExecutionAudit, functionExecution);
 
             AsyncTaskEntityType.CreateAnnotations(asyncTask);
             BatchOperationHistoryEntityType.CreateAnnotations(batchOperationHistory);
@@ -6577,11 +6575,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             conduitLLMFunctionsEntitiesFunctionCostMappingTableBase.Columns.Add("FunctionConfigurationId", functionConfigurationIdColumnBase0);
             var functionCostIdColumnBase = new ColumnBase<ColumnMappingBase>("FunctionCostId", "integer", conduitLLMFunctionsEntitiesFunctionCostMappingTableBase);
             conduitLLMFunctionsEntitiesFunctionCostMappingTableBase.Columns.Add("FunctionCostId", functionCostIdColumnBase);
-            var functionCostId1ColumnBase = new ColumnBase<ColumnMappingBase>("FunctionCostId1", "integer", conduitLLMFunctionsEntitiesFunctionCostMappingTableBase)
-            {
-                IsNullable = true
-            };
-            conduitLLMFunctionsEntitiesFunctionCostMappingTableBase.Columns.Add("FunctionCostId1", functionCostId1ColumnBase);
             var idColumnBase31 = new ColumnBase<ColumnMappingBase>("Id", "integer", conduitLLMFunctionsEntitiesFunctionCostMappingTableBase);
             conduitLLMFunctionsEntitiesFunctionCostMappingTableBase.Columns.Add("Id", idColumnBase31);
             var isActiveColumnBase4 = new ColumnBase<ColumnMappingBase>("IsActive", "boolean", conduitLLMFunctionsEntitiesFunctionCostMappingTableBase);
@@ -6594,7 +6587,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase18, functionCostMapping.FindProperty("CreatedAt")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)functionConfigurationIdColumnBase0, functionCostMapping.FindProperty("FunctionConfigurationId")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)functionCostIdColumnBase, functionCostMapping.FindProperty("FunctionCostId")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)functionCostId1ColumnBase, functionCostMapping.FindProperty("FunctionCostId1")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isActiveColumnBase4, functionCostMapping.FindProperty("IsActive")!, conduitLLMFunctionsEntitiesFunctionCostMappingMappingBase);
 
             var tableMappings33 = new List<TableMapping>();
@@ -6613,12 +6605,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var functionCostIdColumn = new Column("FunctionCostId", "integer", functionCostMappingsTable);
             functionCostMappingsTable.Columns.Add("FunctionCostId", functionCostIdColumn);
             functionCostIdColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(functionCostIdColumn);
-            var functionCostId1Column = new Column("FunctionCostId1", "integer", functionCostMappingsTable)
-            {
-                IsNullable = true
-            };
-            functionCostMappingsTable.Columns.Add("FunctionCostId1", functionCostId1Column);
-            functionCostId1Column.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(functionCostId1Column);
             var isActiveColumn4 = new Column("IsActive", "boolean", functionCostMappingsTable);
             functionCostMappingsTable.Columns.Add("IsActive", isActiveColumn4);
             isActiveColumn4.Accessors = ColumnAccessorsFactory.CreateGeneric<bool>(isActiveColumn4);
@@ -6630,7 +6616,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(createdAtColumn18, functionCostMapping.FindProperty("CreatedAt")!, functionCostMappingsTableMapping);
             RelationalModel.CreateColumnMapping(functionConfigurationIdColumn0, functionCostMapping.FindProperty("FunctionConfigurationId")!, functionCostMappingsTableMapping);
             RelationalModel.CreateColumnMapping(functionCostIdColumn, functionCostMapping.FindProperty("FunctionCostId")!, functionCostMappingsTableMapping);
-            RelationalModel.CreateColumnMapping(functionCostId1Column, functionCostMapping.FindProperty("FunctionCostId1")!, functionCostMappingsTableMapping);
             RelationalModel.CreateColumnMapping(isActiveColumn4, functionCostMapping.FindProperty("IsActive")!, functionCostMappingsTableMapping);
             var pK_FunctionCostMappings = new UniqueConstraint("PK_FunctionCostMappings", functionCostMappingsTable, new[] { idColumn31 });
             functionCostMappingsTable.PrimaryKey = pK_FunctionCostMappings;
@@ -6659,15 +6644,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             iX_FunctionCostMappings_FunctionCostId.MappedIndexes.Add(iX_FunctionCostMappings_FunctionCostIdIx);
             RelationalModel.GetOrCreateTableIndexes(iX_FunctionCostMappings_FunctionCostIdIx).Add(iX_FunctionCostMappings_FunctionCostId);
             functionCostMappingsTable.Indexes.Add("IX_FunctionCostMappings_FunctionCostId", iX_FunctionCostMappings_FunctionCostId);
-            var iX_FunctionCostMappings_FunctionCostId1 = new TableIndex(
-            "IX_FunctionCostMappings_FunctionCostId1", functionCostMappingsTable, new[] { functionCostId1Column }, false);
-            iX_FunctionCostMappings_FunctionCostId1.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_FunctionCostMappings_FunctionCostId1));
-            var iX_FunctionCostMappings_FunctionCostId1Ix = RelationalModel.GetIndex(this,
-                "ConduitLLM.Functions.Entities.FunctionCostMapping",
-                new[] { "FunctionCostId1" });
-            iX_FunctionCostMappings_FunctionCostId1.MappedIndexes.Add(iX_FunctionCostMappings_FunctionCostId1Ix);
-            RelationalModel.GetOrCreateTableIndexes(iX_FunctionCostMappings_FunctionCostId1Ix).Add(iX_FunctionCostMappings_FunctionCostId1);
-            functionCostMappingsTable.Indexes.Add("IX_FunctionCostMappings_FunctionCostId1", iX_FunctionCostMappings_FunctionCostId1);
 
             var functionCredential = FindEntityType("ConduitLLM.Functions.Entities.FunctionCredential")!;
 
@@ -7210,11 +7186,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase.Columns.Add("FailureReason", failureReasonColumnBase1);
             var functionExecutionIdColumnBase0 = new ColumnBase<ColumnMappingBase>("FunctionExecutionId", "uuid", conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase);
             conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase.Columns.Add("FunctionExecutionId", functionExecutionIdColumnBase0);
-            var functionExecutionId1ColumnBase = new ColumnBase<ColumnMappingBase>("FunctionExecutionId1", "uuid", conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase)
-            {
-                IsNullable = true
-            };
-            conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase.Columns.Add("FunctionExecutionId1", functionExecutionId1ColumnBase);
             var idColumnBase34 = new ColumnBase<ColumnMappingBase>("Id", "uuid", conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase);
             conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase.Columns.Add("Id", idColumnBase34);
             var isEstimatedColumnBase1 = new ColumnBase<ColumnMappingBase>("IsEstimated", "boolean", conduitLLMFunctionsEntitiesFunctionExecutionAuditTableBase)
@@ -7239,7 +7210,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)eventTypeColumnBase1, functionExecutionAudit.FindProperty("EventType")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)failureReasonColumnBase1, functionExecutionAudit.FindProperty("FailureReason")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)functionExecutionIdColumnBase0, functionExecutionAudit.FindProperty("FunctionExecutionId")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)functionExecutionId1ColumnBase, functionExecutionAudit.FindProperty("FunctionExecutionId1")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isEstimatedColumnBase1, functionExecutionAudit.FindProperty("IsEstimated")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)timestampColumnBase4, functionExecutionAudit.FindProperty("Timestamp")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)virtualKeyIdColumnBase11, functionExecutionAudit.FindProperty("VirtualKeyId")!, conduitLLMFunctionsEntitiesFunctionExecutionAuditMappingBase);
@@ -7274,12 +7244,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var functionExecutionIdColumn0 = new Column("FunctionExecutionId", "uuid", functionExecutionAuditsTable);
             functionExecutionAuditsTable.Columns.Add("FunctionExecutionId", functionExecutionIdColumn0);
             functionExecutionIdColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<Guid>(functionExecutionIdColumn0);
-            var functionExecutionId1Column = new Column("FunctionExecutionId1", "uuid", functionExecutionAuditsTable)
-            {
-                IsNullable = true
-            };
-            functionExecutionAuditsTable.Columns.Add("FunctionExecutionId1", functionExecutionId1Column);
-            functionExecutionId1Column.Accessors = ColumnAccessorsFactory.CreateGeneric<Guid>(functionExecutionId1Column);
             var isEstimatedColumn1 = new Column("IsEstimated", "boolean", functionExecutionAuditsTable)
             {
                 IsNullable = true
@@ -7305,7 +7269,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.CreateColumnMapping(eventTypeColumn1, functionExecutionAudit.FindProperty("EventType")!, functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(failureReasonColumn1, functionExecutionAudit.FindProperty("FailureReason")!, functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(functionExecutionIdColumn0, functionExecutionAudit.FindProperty("FunctionExecutionId")!, functionExecutionAuditsTableMapping);
-            RelationalModel.CreateColumnMapping(functionExecutionId1Column, functionExecutionAudit.FindProperty("FunctionExecutionId1")!, functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(isEstimatedColumn1, functionExecutionAudit.FindProperty("IsEstimated")!, functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(timestampColumn4, functionExecutionAudit.FindProperty("Timestamp")!, functionExecutionAuditsTableMapping);
             RelationalModel.CreateColumnMapping(virtualKeyIdColumn11, functionExecutionAudit.FindProperty("VirtualKeyId")!, functionExecutionAuditsTableMapping);
@@ -7327,15 +7290,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             iX_FunctionExecutionAudit_ExecutionTimestamp.MappedIndexes.Add(iX_FunctionExecutionAudit_ExecutionTimestampIx);
             RelationalModel.GetOrCreateTableIndexes(iX_FunctionExecutionAudit_ExecutionTimestampIx).Add(iX_FunctionExecutionAudit_ExecutionTimestamp);
             functionExecutionAuditsTable.Indexes.Add("IX_FunctionExecutionAudit_ExecutionTimestamp", iX_FunctionExecutionAudit_ExecutionTimestamp);
-            var iX_FunctionExecutionAudits_FunctionExecutionId1 = new TableIndex(
-            "IX_FunctionExecutionAudits_FunctionExecutionId1", functionExecutionAuditsTable, new[] { functionExecutionId1Column }, false);
-            iX_FunctionExecutionAudits_FunctionExecutionId1.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<Guid>(iX_FunctionExecutionAudits_FunctionExecutionId1));
-            var iX_FunctionExecutionAudits_FunctionExecutionId1Ix = RelationalModel.GetIndex(this,
-                "ConduitLLM.Functions.Entities.FunctionExecutionAudit",
-                new[] { "FunctionExecutionId1" });
-            iX_FunctionExecutionAudits_FunctionExecutionId1.MappedIndexes.Add(iX_FunctionExecutionAudits_FunctionExecutionId1Ix);
-            RelationalModel.GetOrCreateTableIndexes(iX_FunctionExecutionAudits_FunctionExecutionId1Ix).Add(iX_FunctionExecutionAudits_FunctionExecutionId1);
-            functionExecutionAuditsTable.Indexes.Add("IX_FunctionExecutionAudits_FunctionExecutionId1", iX_FunctionExecutionAudits_FunctionExecutionId1);
             var fK_AsyncTasks_VirtualKeys_VirtualKeyId = new ForeignKeyConstraint(
                 "FK_AsyncTasks_VirtualKeys_VirtualKeyId", asyncTasksTable, virtualKeysTable,
                 new[] { virtualKeyIdColumn },
@@ -7434,20 +7388,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateForeignKeyConstraints(fK_FunctionCostMappings_FunctionCosts_FunctionCostIdFk).Add(fK_FunctionCostMappings_FunctionCosts_FunctionCostId);
             functionCostMappingsTable.ForeignKeyConstraints.Add(fK_FunctionCostMappings_FunctionCosts_FunctionCostId);
             functionCostsTable.ReferencingForeignKeyConstraints.Add(fK_FunctionCostMappings_FunctionCosts_FunctionCostId);
-            var fK_FunctionCostMappings_FunctionCosts_FunctionCostId1 = new ForeignKeyConstraint(
-                "FK_FunctionCostMappings_FunctionCosts_FunctionCostId1", functionCostMappingsTable, functionCostsTable,
-                new[] { functionCostId1Column },
-                functionCostsTable.FindUniqueConstraint("PK_FunctionCosts")!, ReferentialAction.NoAction);
-            fK_FunctionCostMappings_FunctionCosts_FunctionCostId1.SetRowForeignKeyValueFactory(RowForeignKeyValueFactoryFactory.CreateSimpleNonNullableFactory<int, int>(fK_FunctionCostMappings_FunctionCosts_FunctionCostId1));
-            var fK_FunctionCostMappings_FunctionCosts_FunctionCostId1Fk = RelationalModel.GetForeignKey(this,
-                "ConduitLLM.Functions.Entities.FunctionCostMapping",
-                new[] { "FunctionCostId1" },
-                "ConduitLLM.Functions.Entities.FunctionCost",
-                new[] { "Id" });
-            fK_FunctionCostMappings_FunctionCosts_FunctionCostId1.MappedForeignKeys.Add(fK_FunctionCostMappings_FunctionCosts_FunctionCostId1Fk);
-            RelationalModel.GetOrCreateForeignKeyConstraints(fK_FunctionCostMappings_FunctionCosts_FunctionCostId1Fk).Add(fK_FunctionCostMappings_FunctionCosts_FunctionCostId1);
-            functionCostMappingsTable.ForeignKeyConstraints.Add(fK_FunctionCostMappings_FunctionCosts_FunctionCostId1);
-            functionCostsTable.ReferencingForeignKeyConstraints.Add(fK_FunctionCostMappings_FunctionCosts_FunctionCostId1);
             var fK_FunctionCredentials_FunctionConfigurations_FunctionConfigur = new ForeignKeyConstraint(
                 "FK_FunctionCredentials_FunctionConfigurations_FunctionConfigur~", functionCredentialsTable, functionConfigurationsTable,
                 new[] { functionConfigurationIdColumn1 },
@@ -7476,20 +7416,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             RelationalModel.GetOrCreateForeignKeyConstraints(fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecutioFk).Add(fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecutio);
             functionExecutionAuditsTable.ForeignKeyConstraints.Add(fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecutio);
             functionExecutionsTable.ReferencingForeignKeyConstraints.Add(fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecutio);
-            var fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti1 = new ForeignKeyConstraint(
-                "FK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti~1", functionExecutionAuditsTable, functionExecutionsTable,
-                new[] { functionExecutionId1Column },
-                functionExecutionsTable.FindUniqueConstraint("PK_FunctionExecutions")!, ReferentialAction.NoAction);
-            fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti1.SetRowForeignKeyValueFactory(RowForeignKeyValueFactoryFactory.CreateSimpleNonNullableFactory<Guid, Guid>(fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti1));
-            var fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti1Fk = RelationalModel.GetForeignKey(this,
-                "ConduitLLM.Functions.Entities.FunctionExecutionAudit",
-                new[] { "FunctionExecutionId1" },
-                "ConduitLLM.Functions.Entities.FunctionExecution",
-                new[] { "Id" });
-            fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti1.MappedForeignKeys.Add(fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti1Fk);
-            RelationalModel.GetOrCreateForeignKeyConstraints(fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti1Fk).Add(fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti1);
-            functionExecutionAuditsTable.ForeignKeyConstraints.Add(fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti1);
-            functionExecutionsTable.ReferencingForeignKeyConstraints.Add(fK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti1);
             var fK_FunctionExecutions_FunctionConfigurations_FunctionConfigura = new ForeignKeyConstraint(
                 "FK_FunctionExecutions_FunctionConfigurations_FunctionConfigura~", functionExecutionsTable, functionConfigurationsTable,
                 new[] { functionConfigurationIdColumn2 },

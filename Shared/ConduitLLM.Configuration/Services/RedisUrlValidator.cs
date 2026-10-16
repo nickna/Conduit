@@ -1,79 +1,38 @@
-using System.Text.RegularExpressions;
-
 using Microsoft.Extensions.Logging;
 
-namespace ConduitLLM.Configuration.Services
+namespace ConduitLLM.Configuration.Services;
+
+/// <summary>Validates the shared Redis configuration contract without logging credentials.</summary>
+public static class RedisUrlValidator
 {
-    /// <summary>
-    /// Validates Redis URL format and logs warnings for invalid URLs
-    /// </summary>
-    public static class RedisUrlValidator
+    /// <summary>Validates a URI, endpoint, or options string using the same parser as the hosts.</summary>
+    public static bool ValidateAndLog(string? redisUrl, ILogger logger, string serviceName)
     {
-        private static readonly Regex RedisUrlRegex = new Regex(
-            @"^rediss?://(?:(?<username>[^:@]+)?:?(?<password>[^@]+)?@)?(?<host>[^:@/?#\s]+)(?::(?<port>\d+))?$",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        if (string.IsNullOrWhiteSpace(redisUrl)) return false;
 
-        /// <summary>
-        /// Validates a Redis URL and logs appropriate warnings
-        /// </summary>
-        /// <param name="redisUrl">The Redis URL to validate</param>
-        /// <param name="logger">Logger for warnings</param>
-        /// <param name="serviceName">Name of the service for logging context</param>
-        /// <returns>True if valid, false otherwise</returns>
-        public static bool ValidateAndLog(string? redisUrl, ILogger logger, string serviceName)
+        try
         {
-            if (string.IsNullOrWhiteSpace(redisUrl))
-            {
-                return false;
-            }
-
             try
             {
-                // Validate the URL format first
-                if (!RedisUrlRegex.IsMatch(redisUrl))
-                {
-                    logger.LogWarning(
-                        "{ServiceName}: Redis URL format appears invalid. Expected format: redis://[username]:[password]@hostname:port",
-                        serviceName);
-                    return false;
-                }
-                
-                // Try to parse it
-                var parsed = Utilities.RedisUrlParser.ParseRedisUrl(redisUrl);
-
-                // Check for common issues
-                if (redisUrl.Contains(" "))
-                {
-                    logger.LogWarning(
-                        "{ServiceName}: Redis URL contains spaces. This is likely invalid",
-                        serviceName);
-                    return false;
-                }
-
-                // Check for missing port (common mistake)
-                if (!redisUrl.Contains(":637") && !redisUrl.Contains(":638") && !redisUrl.Contains(":"))
-                {
-                    logger.LogWarning(
-                        "{ServiceName}: Redis URL appears to be missing port number. Default Redis port is 6379",
-                        serviceName);
-                }
-
-                logger.LogInformation(
-                    "{ServiceName}: Redis URL validated successfully",
-                    serviceName);
-                
-                return true;
+                Utilities.RedisUrlParser.ParseConfiguration(redisUrl);
             }
-            catch (Exception ex)
+            catch (ArgumentException)
             {
-                // Input and exception messages can both contain credentials. Omit them even
-                // when malformed input cannot be parsed or sanitized safely.
-                logger.LogError(
-                    "{ServiceName}: Failed to validate Redis URL ({ExceptionType})",
-                    serviceName,
-                    ex.GetType().Name);
+                logger.LogWarning("{ServiceName}: Redis configuration is invalid. Expected a Redis URI, TCP endpoint, or supported StackExchange.Redis options.",
+                    serviceName);
                 return false;
             }
+
+            logger.LogInformation("{ServiceName}: Redis configuration validated successfully", serviceName);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            // Logging providers can also throw exceptions containing their inputs.
+            // Keep only the exception type, without arbitrary exception text.
+            logger.LogError("{ServiceName}: Failed to validate Redis configuration ({ExceptionType})",
+                serviceName, exception.GetType().Name);
+            return false;
         }
     }
 }

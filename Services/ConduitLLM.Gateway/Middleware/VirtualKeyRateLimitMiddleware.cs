@@ -233,11 +233,11 @@ namespace ConduitLLM.Gateway.Middleware
 
         private static bool ShouldSkip(HttpContext context)
         {
-            var path = context.Request.Path.Value;
-            if (string.IsNullOrEmpty(path)) return false;
+            var path = context.Request.Path;
+            if (!path.HasValue) return false;
             foreach (var prefix in ExcludedPathPrefixes)
             {
-                if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
+                if (path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase)) return true;
             }
             return false;
         }

@@ -140,7 +140,15 @@ namespace ConduitLLM.Providers.MiniMax
                 Object = "chat.completion.chunk",
                 Created = miniMaxChunk.Created ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 Model = modelId,
-                Choices = new List<StreamingChoice>()
+                Choices = new List<StreamingChoice>(),
+                Usage = miniMaxChunk.Usage is { } usage &&
+                    (usage.PromptTokens.HasValue || usage.CompletionTokens.HasValue || usage.TotalTokens.HasValue)
+                    ? new Usage
+                {
+                    PromptTokens = usage.PromptTokens,
+                    CompletionTokens = usage.CompletionTokens,
+                    TotalTokens = usage.TotalTokens
+                } : null
             };
 
             if (miniMaxChunk.Choices != null)

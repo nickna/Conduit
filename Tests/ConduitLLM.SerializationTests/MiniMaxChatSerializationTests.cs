@@ -54,6 +54,10 @@ public sealed class MiniMaxChatSerializationTests
             Assert.Equal("ok", string.Concat(chunks.SelectMany(chunk => chunk.Choices).Select(choice => choice.Delta.Content)));
             Assert.Equal("stop", chunks.Last().Choices.Single().FinishReason);
             Assert.Equal(2, chunks.Count);
+            Assert.Null(chunks[0].Usage);
+            Assert.Equal(1, chunks[1].Usage!.PromptTokens);
+            Assert.Equal(1, chunks[1].Usage!.CompletionTokens);
+            Assert.Equal(2, chunks[1].Usage!.TotalTokens);
         }
         else
         {

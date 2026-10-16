@@ -23,12 +23,11 @@ namespace ConduitLLM.Core.Data.Interfaces
         (string ProviderName, string ConnectionStringValue) GetProviderAndConnectionString(Action<string>? logger = null);
 
         /// <summary>
-        /// Parses a PostgreSQL URL into a connection string.
+        /// Parses a PostgreSQL URI or Npgsql key/value string into a connection string.
         /// </summary>
         /// <param name="postgresUrl">The PostgreSQL URL to parse (e.g., "postgresql://user:password@host:port/database").</param>
         /// <returns>A formatted connection string compatible with Npgsql.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when URL is null or empty.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when URL format is invalid.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the configuration is invalid.</exception>
         /// <example>
         /// ```csharp
         /// // Example PostgreSQL URL

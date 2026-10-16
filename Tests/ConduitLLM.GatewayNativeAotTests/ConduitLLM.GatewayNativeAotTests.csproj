@@ -10,4 +10,10 @@
     <PackageReference Include="Npgsql" />
     <PackageReference Include="StackExchange.Redis" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Share host parsing without adding the Configuration/EF dependency graph. -->
+    <Compile Include="..\..\Shared\ConduitLLM.Configuration\Utilities\PostgresConnectionStringParser.cs" Link="PostgresConnectionStringParser.cs" />
+    <Compile Include="..\..\Shared\ConduitLLM.Configuration\Utilities\RedisUrlParser.cs" Link="RedisUrlParser.cs" />
+  </ItemGroup>
 </Project>

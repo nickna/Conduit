@@ -62,7 +62,7 @@ namespace ConduitLLM.Providers.OpenAICompatible
                     {
                         Index = d.Index,
                         Object = d.Object,
-                        Embedding = d.Embedding.ToList()
+                        Embedding = d.Embedding
                     }).ToList(),
                     Model = response.Model ?? ProviderModelId,
                     Object = response.Object ?? "embedding",

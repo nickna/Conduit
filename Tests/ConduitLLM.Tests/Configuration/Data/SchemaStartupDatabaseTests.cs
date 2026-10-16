@@ -33,9 +33,10 @@ public sealed class SchemaStartupDatabaseTests
     {
         var management = ManagementConnection();
         var fixture = await SchemaStartupDatabase.CreateAsync(management, previousSchema: true);
-        var originalEvidenceColumns = new[]
+        var removedShadowColumns = new[]
         {
-            "OriginalAmount", "OriginalAmountEvidence", "OriginalAmountVerifiedAtUtc", "OriginalAmountVerifiedBy"
+            (Table: "FunctionCostMappings", Column: "FunctionCostId1"),
+            (Table: "FunctionExecutionAudits", Column: "FunctionExecutionId1")
         };
         var variables = new[] { "DATABASE_URL", "ConduitLLM__Messaging__Backend", "ConduitLLM__Messaging__Wolverine__Transport" };
         var originals = variables.Select(Environment.GetEnvironmentVariable).ToArray();
@@ -43,12 +44,16 @@ public sealed class SchemaStartupDatabaseTests
         {
             Assert.NotNull(fixture.AppliedVersion);
             Assert.NotEqual(ConduitSchemaVersion.Current, fixture.AppliedVersion);
-            // The prior migration has real tables, but none of the latest
-            // migration's original-amount evidence columns.
+            // The actual prior migration retains both accidental shadow relationships.
+            // The latest migration removes them while keeping the canonical FKs.
             Assert.True(await TableExistsAsync(fixture.ConnectionString, "WebhookReplayAudits"));
             Assert.True(await TableExistsAsync(fixture.ConnectionString, "VirtualKeyGroupTransactions"));
-            Assert.Empty(await ReadColumnNullabilityAsync(
-                fixture.ConnectionString, "VirtualKeyGroupTransactions", originalEvidenceColumns));
+            foreach (var (table, column) in removedShadowColumns)
+            {
+                var previousColumns = await ReadColumnNullabilityAsync(fixture.ConnectionString, table, new[] { column });
+                Assert.True(previousColumns.TryGetValue(column, out var nullable) && nullable,
+                    $"The previous migration must retain nullable shadow column '{table}.{column}'.");
+            }
             Environment.SetEnvironmentVariable(variables[0], fixture.ConnectionString);
             Environment.SetEnvironmentVariable(variables[1], "Wolverine");
             Environment.SetEnvironmentVariable(variables[2], "InMemory");
@@ -56,12 +61,8 @@ public sealed class SchemaStartupDatabaseTests
             await using var dataSource = NpgsqlDataSource.Create(fixture.ConnectionString);
             Assert.True((await new SchemaVersionProbe(dataSource).GetStatusAsync()).IsCurrent);
             Assert.True(await TableExistsAsync(fixture.ConnectionString, "WebhookReplayAudits"));
-            var latestColumns = await ReadColumnNullabilityAsync(
-                fixture.ConnectionString, "VirtualKeyGroupTransactions", originalEvidenceColumns);
-            Assert.Equal(originalEvidenceColumns.Length, latestColumns.Count);
-            foreach (var column in originalEvidenceColumns)
-                Assert.True(latestColumns.TryGetValue(column, out var isNullable) && isNullable,
-                    $"The latest migration must create nullable column '{column}'.");
+            foreach (var (table, column) in removedShadowColumns)
+                Assert.Empty(await ReadColumnNullabilityAsync(fixture.ConnectionString, table, new[] { column }));
         }
         finally
         {

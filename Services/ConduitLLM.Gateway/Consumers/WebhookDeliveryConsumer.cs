@@ -62,7 +62,7 @@ public sealed class WebhookDeliveryConsumer(IWebhookNotificationService webhookS
             if (await store.ScheduleAsync(claim, due, cancellationToken: cancellation))
             {
                 WebhookDeliveryTelemetry.Schedule(deferral: true);
-                await ReportAsync(() => notifications.NotifyRetryScheduledAsync(request.WebhookUrl, request.TaskId,
+                await ReportAsync(() => notifications.NotifyRetryScheduledAsync(request.VirtualKeyId, request.WebhookUrl, request.TaskId,
                     due, claim.Attempts, _policy.Options.MaxAttempts));
             }
             return;
@@ -70,7 +70,7 @@ public sealed class WebhookDeliveryConsumer(IWebhookNotificationService webhookS
 
         var attempt = await store.BeginAttemptAsync(claim, cancellation);
         if (!attempt.HasValue) return;
-        await ReportAsync(() => notifications.NotifyDeliveryAttemptAsync(request.WebhookUrl, request.TaskId,
+        await ReportAsync(() => notifications.NotifyDeliveryAttemptAsync(request.VirtualKeyId, request.WebhookUrl, request.TaskId,
             request.TaskType, request.EventType.ToString(), attempt.Value));
         var stopwatch = Stopwatch.StartNew();
         WebhookSendResult result;
@@ -92,7 +92,7 @@ public sealed class WebhookDeliveryConsumer(IWebhookNotificationService webhookS
         {
             if (!await store.CompleteAsync(claim, result, exhausted: false, cancellation)) return;
             await ReportAsync(() => admissionLease.RecordAsync(true));
-            await ReportAsync(() => notifications.NotifyDeliverySuccessAsync(request.WebhookUrl, request.TaskId,
+            await ReportAsync(() => notifications.NotifyDeliverySuccessAsync(request.VirtualKeyId, request.WebhookUrl, request.TaskId,
                 result.StatusCode ?? 0, stopwatch.ElapsedMilliseconds, attempt.Value));
             return;
         }
@@ -108,16 +108,16 @@ public sealed class WebhookDeliveryConsumer(IWebhookNotificationService webhookS
         var retryAt = _policy.RetryAt(attempt.Value, claim.Deadline, result.RetryAfter);
         if (!await store.ScheduleAsync(claim, retryAt, result, cancellation)) return;
         WebhookDeliveryTelemetry.Schedule(deferral: false);
-        await ReportAsync(() => notifications.NotifyDeliveryFailureAsync(request.WebhookUrl, request.TaskId,
+        await ReportAsync(() => notifications.NotifyDeliveryFailureAsync(request.VirtualKeyId, request.WebhookUrl, request.TaskId,
             result.Error ?? "Receiver attempt failed.", result.StatusCode, attempt.Value, false));
-        await ReportAsync(() => notifications.NotifyRetryScheduledAsync(request.WebhookUrl, request.TaskId,
+        await ReportAsync(() => notifications.NotifyRetryScheduledAsync(request.VirtualKeyId, request.WebhookUrl, request.TaskId,
             retryAt, attempt.Value, _policy.Options.MaxAttempts));
     }
 
     private async Task ExhaustAsync(WebhookClaim claim, WebhookSendResult result, int attempts, CancellationToken cancellation)
     {
         if (!await store.CompleteAsync(claim, result, exhausted: true, cancellation)) return;
-        await ReportAsync(() => notifications.NotifyDeliveryFailureAsync(claim.Request.WebhookUrl, claim.Request.TaskId,
+        await ReportAsync(() => notifications.NotifyDeliveryFailureAsync(claim.Request.VirtualKeyId, claim.Request.WebhookUrl, claim.Request.TaskId,
             result.Error ?? "Delivery exhausted.", result.StatusCode, attempts, true));
         throw new NonRetryableMessageException($"Webhook delivery {claim.Id} exhausted after {attempts} reserved attempts.");
     }

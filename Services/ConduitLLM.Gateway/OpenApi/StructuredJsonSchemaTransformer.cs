@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Reflection;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Models.Audio;
@@ -54,6 +55,46 @@ public sealed class StructuredJsonSchemaTransformer : IOpenApiSchemaTransformer
             schema.Type = null;
             schema.OneOf = ChatUnionSchemas.ToolChoice().OneOf;
         }
+        else if (context.JsonTypeInfo.Type == typeof(EmbeddingValue))
+        {
+            schema.Type = null;
+            schema.Properties = null;
+            schema.Required = null;
+            schema.AdditionalProperties = null;
+            schema.OneOf =
+            [
+                ArrayOf(new OpenApiSchema { Type = JsonSchemaType.Number, Format = "float" }),
+                new OpenApiSchema { Type = JsonSchemaType.String, Format = "byte" }
+            ];
+        }
+        else if (context.JsonTypeInfo.Type == typeof(SpeechVoice))
+        {
+            schema.Type = null;
+            schema.Properties = null;
+            schema.Required = null;
+            schema.OneOf =
+            [
+                new OpenApiSchema { Type = JsonSchemaType.String, MinLength = 1 },
+                new OpenApiSchema
+                {
+                    Type = JsonSchemaType.Object,
+                    Required = new HashSet<string> { "id" },
+                    Properties = new Dictionary<string, IOpenApiSchema>
+                    {
+                        ["id"] = new OpenApiSchema { Type = JsonSchemaType.String, MinLength = 1 }
+                    }
+                }
+            ];
+        }
+        else if (context.JsonTypeInfo.Type == typeof(ChatModerationMode))
+        {
+            schema.Type = JsonSchemaType.String;
+            schema.Format = null;
+            schema.Enum = [JsonValue.Create("score"), JsonValue.Create("block")];
+        }
+
+        if (IsProperty(context, typeof(ChatModerationOptions), nameof(ChatModerationOptions.Model)))
+            schema.MinLength = 1;
 
         if (context.JsonTypeInfo.Type == typeof(ChatCompletionRequest))
         {

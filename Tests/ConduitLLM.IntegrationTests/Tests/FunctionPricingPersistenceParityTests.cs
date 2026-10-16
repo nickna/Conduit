@@ -72,7 +72,7 @@ public sealed class FunctionPricingPersistenceParityTests(PostgresLockTestContai
                 foreach (var missing in new[] { -1, 0, 5, 999 })
                     (await store.FindEligibleCostAsync(missing, asOf)).Should().BeNull();
                 var nullable = (await store.FindEligibleCostAsync(4, asOf))!;
-                nullable.Id.Should().Be(101); // Shadow points at much higher priority 106; canonical still wins.
+                nullable.Id.Should().Be(101); // Higher-priority 106 has only an inactive mapping for this configuration.
                 nullable.Purpose.Should().BeNull();
                 nullable.Description.Should().BeNull();
                 nullable.BaseCost.Should().BeNull();
@@ -244,7 +244,7 @@ public sealed class FunctionPricingPersistenceParityTests(PostgresLockTestContai
                     TRUE, @asOf + interval '1 day', NULL, 80, @created, @updated),
                 (105, 'Expired', @exa, NULL, NULL, NULL, @flat, NULL, NULL, NULL, NULL, NULL, NULL,
                     TRUE, @asOf - interval '1 day', @asOf, 70, @created, @updated),
-                (106, 'Unmapped canonical shadow target', @exa, NULL, NULL, NULL, @flat, NULL, NULL, NULL, NULL, NULL, NULL,
+                (106, 'High-priority inactive-mapping sentinel', @exa, NULL, NULL, NULL, @flat, NULL, NULL, NULL, NULL, NULL, NULL,
                     TRUE, @asOf - interval '1 day', NULL, 100, @created, @updated),
                 (107, 'Exact boundary and unknown enums', 197, -9, NULL, NULL, 123, NULL, NULL, NULL, NULL, '[]', @settings,
                     TRUE, @asOf, @asOf + interval '2 microseconds', 5, @created, @updated),
@@ -254,18 +254,17 @@ public sealed class FunctionPricingPersistenceParityTests(PostgresLockTestContai
                     TRUE, @asOf - interval '1 day', NULL, 1, @created, @updated);
             CREATE TABLE "FunctionCostMappings" (
                 "Id" integer PRIMARY KEY, "FunctionConfigurationId" integer NOT NULL REFERENCES "FunctionConfigurations" ("Id"),
-                "FunctionCostId" integer NOT NULL REFERENCES "FunctionCosts" ("Id"),
-                "FunctionCostId1" integer NULL REFERENCES "FunctionCosts" ("Id"), "IsActive" boolean NOT NULL,
+                "FunctionCostId" integer NOT NULL REFERENCES "FunctionCosts" ("Id"), "IsActive" boolean NOT NULL,
                 "CreatedAt" timestamptz NOT NULL, UNIQUE ("FunctionConfigurationId", "FunctionCostId"));
             INSERT INTO "FunctionCostMappings" VALUES
-                (1, 1, 101, NULL, TRUE, @asOf), (2, 1, 102, 106, TRUE, @asOf),
-                (3, 1, 103, NULL, TRUE, @asOf), (4, 1, 104, NULL, TRUE, @asOf),
-                (5, 1, 105, NULL, TRUE, @asOf), (6, 1, 106, NULL, FALSE, @asOf),
-                (7, 1, 108, NULL, TRUE, @asOf), (8, 2, 107, NULL, TRUE, @asOf),
-                (9, 3, 103, 102, TRUE, @asOf), (10, 3, 104, NULL, TRUE, @asOf),
-                (11, 3, 105, NULL, TRUE, @asOf), (12, 4, 101, 106, TRUE, @asOf),
-                (13, 4, 106, NULL, FALSE, @asOf), (14, 7, 102, NULL, TRUE, @asOf),
-                (15, 7, 110, NULL, TRUE, @asOf);
+                (1, 1, 101, TRUE, @asOf), (2, 1, 102, TRUE, @asOf),
+                (3, 1, 103, TRUE, @asOf), (4, 1, 104, TRUE, @asOf),
+                (5, 1, 105, TRUE, @asOf), (6, 1, 106, FALSE, @asOf),
+                (7, 1, 108, TRUE, @asOf), (8, 2, 107, TRUE, @asOf),
+                (9, 3, 103, TRUE, @asOf), (10, 3, 104, TRUE, @asOf),
+                (11, 3, 105, TRUE, @asOf), (12, 4, 101, TRUE, @asOf),
+                (13, 4, 106, FALSE, @asOf), (14, 7, 102, TRUE, @asOf),
+                (15, 7, 110, TRUE, @asOf);
             """;
         command.Parameters.AddWithValue("asOf", NpgsqlDbType.TimestampTz, asOf);
         command.Parameters.AddWithValue("created", NpgsqlDbType.TimestampTz, asOf.AddDays(-3));

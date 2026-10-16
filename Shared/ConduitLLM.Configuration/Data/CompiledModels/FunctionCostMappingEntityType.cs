@@ -27,10 +27,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 "ConduitLLM.Functions.Entities.FunctionCostMapping",
                 typeof(FunctionCostMapping),
                 baseEntityType,
-                propertyCount: 6,
+                propertyCount: 5,
                 navigationCount: 2,
-                foreignKeyCount: 3,
-                unnamedIndexCount: 3,
+                foreignKeyCount: 2,
+                unnamedIndexCount: 2,
                 keyCount: 1);
 
             var id = runtimeEntityType.AddProperty(
@@ -232,41 +232,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             functionCostId.SetCurrentValueComparer(new EntryCurrentValueComparer<int>(functionCostId));
             functionCostId.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
 
-            var functionCostId1 = runtimeEntityType.AddProperty(
-                "FunctionCostId1",
-                typeof(int?),
-                nullable: true);
-            functionCostId1.SetAccessors(
-                int? (IInternalEntry entry) => (entry.FlaggedAsStoreGenerated(4) ? entry.ReadStoreGeneratedValue<int?>(3) : (entry.FlaggedAsTemporary(4) && !(entry.ReadShadowValue<int?>(0).HasValue) ? entry.ReadTemporaryValue<int?>(3) : entry.ReadShadowValue<int?>(0))),
-                int? (IInternalEntry entry) => entry.ReadShadowValue<int?>(0),
-                int? (IInternalEntry entry) => entry.ReadOriginalValue<int?>(functionCostId1, 4),
-                int? (IInternalEntry entry) => ((InternalEntityEntry)entry).ReadRelationshipSnapshotValue<int?>(functionCostId1, 3));
-            functionCostId1.SetPropertyIndexes(
-                index: 4,
-                originalValueIndex: 4,
-                shadowIndex: 0,
-                relationshipIndex: 3,
-                storeGenerationIndex: 3);
-            functionCostId1.TypeMapping = IntTypeMapping.Default.Clone(
-                comparer: new ValueComparer<int>(
-                    bool (int v1, int v2) => v1 == v2,
-                    int (int v) => v,
-                    int (int v) => v),
-                keyComparer: new ValueComparer<int>(
-                    bool (int v1, int v2) => v1 == v2,
-                    int (int v) => v,
-                    int (int v) => v),
-                providerValueComparer: new ValueComparer<int>(
-                    bool (int v1, int v2) => v1 == v2,
-                    int (int v) => v,
-                    int (int v) => v),
-                mappingInfo: new RelationalTypeMappingInfo(
-                    storeTypeName: "integer"));
-            functionCostId1.SetCurrentValueComparer(new EntryCurrentValueComparer<int?>(functionCostId1));
-            functionCostId1.SetComparer(new NullableValueComparer<int>(functionCostId1.TypeMapping.Comparer));
-            functionCostId1.SetKeyComparer(new NullableValueComparer<int>(functionCostId1.TypeMapping.KeyComparer));
-            functionCostId1.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
-
             var isActive = runtimeEntityType.AddProperty(
                 "IsActive",
                 typeof(bool),
@@ -291,11 +256,11 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             isActive.SetAccessors(
                 bool (IInternalEntry entry) => FunctionCostMappingUnsafeAccessors.IsActive(((FunctionCostMapping)(entry.Entity))),
                 bool (IInternalEntry entry) => FunctionCostMappingUnsafeAccessors.IsActive(((FunctionCostMapping)(entry.Entity))),
-                bool (IInternalEntry entry) => entry.ReadOriginalValue<bool>(isActive, 5),
+                bool (IInternalEntry entry) => entry.ReadOriginalValue<bool>(isActive, 4),
                 bool (IInternalEntry entry) => entry.GetCurrentValue<bool>(isActive));
             isActive.SetPropertyIndexes(
-                index: 5,
-                originalValueIndex: 5,
+                index: 4,
+                originalValueIndex: 4,
                 shadowIndex: -1,
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
@@ -322,12 +287,9 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 new[] { functionCostId });
 
             var index0 = runtimeEntityType.AddIndex(
-                new[] { functionCostId1 });
-
-            var index1 = runtimeEntityType.AddIndex(
                 new[] { functionConfigurationId, functionCostId },
                 unique: true);
-            index1.AddAnnotation("Relational:Name", "IX_FunctionCostMapping_Unique");
+            index0.AddAnnotation("Relational:Name", "IX_FunctionCostMapping_Unique");
 
             return runtimeEntityType;
         }
@@ -371,7 +333,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 index: 0,
                 originalValueIndex: -1,
                 shadowIndex: -1,
-                relationshipIndex: 4,
+                relationshipIndex: 3,
                 storeGenerationIndex: -1);
             var costMappings = principalEntityType.AddNavigation("CostMappings",
                 runtimeForeignKey,
@@ -454,17 +416,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 index: 1,
                 originalValueIndex: -1,
                 shadowIndex: -1,
-                relationshipIndex: 5,
+                relationshipIndex: 4,
                 storeGenerationIndex: -1);
-            return runtimeForeignKey;
-        }
-
-        public static RuntimeForeignKey CreateForeignKey3(RuntimeEntityType declaringEntityType, RuntimeEntityType principalEntityType)
-        {
-            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("FunctionCostId1") },
-                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id") }),
-                principalEntityType);
-
             var functionMappings = principalEntityType.AddNavigation("FunctionMappings",
                 runtimeForeignKey,
                 onDependent: false,
@@ -513,7 +466,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             var createdAt = runtimeEntityType.FindProperty("CreatedAt");
             var functionConfigurationId = runtimeEntityType.FindProperty("FunctionConfigurationId");
             var functionCostId = runtimeEntityType.FindProperty("FunctionCostId");
-            var functionCostId1 = runtimeEntityType.FindProperty("FunctionCostId1");
             var isActive = runtimeEntityType.FindProperty("IsActive");
             var key = runtimeEntityType.FindKey(new[] { id });
             key.SetPrincipalKeyValueFactory(KeyValueFactoryFactory.CreateSimpleNonNullableFactory<int>(key));
@@ -524,31 +476,31 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 ISnapshot (IInternalEntry source) =>
                 {
                     var structuralType = ((FunctionCostMapping)(source.Entity));
-                    return ((ISnapshot)(new Snapshot<int, DateTime, int, int, int?, bool>(((ValueComparer<int>)(((IProperty)id).GetValueComparer())).Snapshot(source.GetCurrentValue<int>(id)), ((ValueComparer<DateTime>)(((IProperty)createdAt).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime>(createdAt)), ((ValueComparer<int>)(((IProperty)functionConfigurationId).GetValueComparer())).Snapshot(source.GetCurrentValue<int>(functionConfigurationId)), ((ValueComparer<int>)(((IProperty)functionCostId).GetValueComparer())).Snapshot(source.GetCurrentValue<int>(functionCostId)), (source.GetCurrentValue<int?>(functionCostId1) == null ? null : ((ValueComparer<int?>)(((IProperty)functionCostId1).GetValueComparer())).Snapshot(source.GetCurrentValue<int?>(functionCostId1))), ((ValueComparer<bool>)(((IProperty)isActive).GetValueComparer())).Snapshot(source.GetCurrentValue<bool>(isActive)))));
+                    return ((ISnapshot)(new Snapshot<int, DateTime, int, int, bool>(((ValueComparer<int>)(((IProperty)id).GetValueComparer())).Snapshot(source.GetCurrentValue<int>(id)), ((ValueComparer<DateTime>)(((IProperty)createdAt).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime>(createdAt)), ((ValueComparer<int>)(((IProperty)functionConfigurationId).GetValueComparer())).Snapshot(source.GetCurrentValue<int>(functionConfigurationId)), ((ValueComparer<int>)(((IProperty)functionCostId).GetValueComparer())).Snapshot(source.GetCurrentValue<int>(functionCostId)), ((ValueComparer<bool>)(((IProperty)isActive).GetValueComparer())).Snapshot(source.GetCurrentValue<bool>(isActive)))));
                 });
             runtimeEntityType.SetStoreGeneratedValuesFactory(
-                ISnapshot () => ((ISnapshot)(new Snapshot<int, int, int, int?>(((ValueComparer<int>)(((IProperty)id).GetValueComparer())).Snapshot(default(int)), ((ValueComparer<int>)(((IProperty)functionConfigurationId).GetValueComparer())).Snapshot(default(int)), ((ValueComparer<int>)(((IProperty)functionCostId).GetValueComparer())).Snapshot(default(int)), (default(int? ) == null ? null : ((ValueComparer<int?>)(((IProperty)functionCostId1).GetValueComparer())).Snapshot(default(int? )))))));
+                ISnapshot () => ((ISnapshot)(new Snapshot<int, int, int>(((ValueComparer<int>)(((IProperty)id).GetValueComparer())).Snapshot(default(int)), ((ValueComparer<int>)(((IProperty)functionConfigurationId).GetValueComparer())).Snapshot(default(int)), ((ValueComparer<int>)(((IProperty)functionCostId).GetValueComparer())).Snapshot(default(int))))));
             runtimeEntityType.SetTemporaryValuesFactory(
-                ISnapshot (IInternalEntry source) => ((ISnapshot)(new Snapshot<int, int, int, int?>(default(int), default(int), default(int), default(int? )))));
+                ISnapshot (IInternalEntry source) => ((ISnapshot)(new Snapshot<int, int, int>(default(int), default(int), default(int)))));
             runtimeEntityType.SetShadowValuesFactory(
-                ISnapshot (IDictionary<string, object> source) => ((ISnapshot)(new Snapshot<int?>((source.ContainsKey("FunctionCostId1") ? ((int? )(source["FunctionCostId1"])) : null)))));
+                ISnapshot (IDictionary<string, object> source) => Snapshot.Empty);
             runtimeEntityType.SetEmptyShadowValuesFactory(
-                ISnapshot () => ((ISnapshot)(new Snapshot<int?>(default(int? )))));
+                ISnapshot () => Snapshot.Empty);
             runtimeEntityType.SetRelationshipSnapshotFactory(
                 ISnapshot (IInternalEntry source) =>
                 {
                     var structuralType = ((FunctionCostMapping)(source.Entity));
-                    return ((ISnapshot)(new Snapshot<int, int, int, int?, object, object>(((ValueComparer<int>)(((IProperty)id).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<int>(id)), ((ValueComparer<int>)(((IProperty)functionConfigurationId).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<int>(functionConfigurationId)), ((ValueComparer<int>)(((IProperty)functionCostId).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<int>(functionCostId)), (source.GetCurrentValue<int?>(functionCostId1) == null ? null : ((ValueComparer<int?>)(((IProperty)functionCostId1).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<int?>(functionCostId1))), source.GetCurrentValue<FunctionConfiguration>(functionConfiguration), source.GetCurrentValue<FunctionCost>(functionCost))));
+                    return ((ISnapshot)(new Snapshot<int, int, int, object, object>(((ValueComparer<int>)(((IProperty)id).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<int>(id)), ((ValueComparer<int>)(((IProperty)functionConfigurationId).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<int>(functionConfigurationId)), ((ValueComparer<int>)(((IProperty)functionCostId).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<int>(functionCostId)), source.GetCurrentValue<FunctionConfiguration>(functionConfiguration), source.GetCurrentValue<FunctionCost>(functionCost))));
                 });
             runtimeEntityType.SetCounts(new PropertyCounts(
-                propertyCount: 6,
+                propertyCount: 5,
                 navigationCount: 2,
                 complexPropertyCount: 0,
                 complexCollectionCount: 0,
-                originalValueCount: 6,
-                shadowCount: 1,
-                relationshipCount: 6,
-                storeGeneratedCount: 4));
+                originalValueCount: 5,
+                shadowCount: 0,
+                relationshipCount: 5,
+                storeGeneratedCount: 3));
             runtimeEntityType.AddAnnotation("Relational:FunctionName", null);
             runtimeEntityType.AddAnnotation("Relational:Schema", null);
             runtimeEntityType.AddAnnotation("Relational:SqlQuery", null);

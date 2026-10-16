@@ -41,10 +41,10 @@ namespace ConduitLLM.Core.Models
         public required string Object { get; set; }
 
         /// <summary>
-        /// The embedding vector, represented as a list of floating-point numbers.
+        /// The embedding vector, represented as floating-point numbers or a base64 float32 string.
         /// </summary>
         [JsonPropertyName("embedding")]
-        public required List<float> Embedding { get; set; }
+        public required EmbeddingValue Embedding { get; set; }
 
         /// <summary>
         /// The index of the embedding in the list.

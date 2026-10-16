@@ -129,7 +129,7 @@ public sealed class WebhookDeliveryNotificationServiceTests
             .Returns(Task.CompletedTask);
         var hubClients = new Mock<IHubClients>();
         hubClients
-            .Setup(clients => clients.Group(SignalRConstants.Groups.Webhook(webhookUrl)))
+            .Setup(clients => clients.Group(SignalRConstants.Groups.Webhook(42, webhookUrl)))
             .Returns(clientProxy.Object);
         var hubContext = new Mock<IHubContext<WebhookDeliveryHub>>();
         hubContext.SetupGet(context => context.Clients).Returns(hubClients.Object);
@@ -139,12 +139,115 @@ public sealed class WebhookDeliveryNotificationServiceTests
             Mock.Of<ILogger<WebhookDeliveryNotificationService>>());
 
         await service.NotifyDeliveryAttemptAsync(
-            webhookUrl, "task-1", "video", "completed", attemptNumber: 2);
+            42, webhookUrl, "task-1", "video", "completed", attemptNumber: 2);
 
         clientProxy.Verify(client => client.SendCoreAsync(
             "DeliveryAttempted",
             It.Is<object?[]>(arguments => IsExpectedAttempt(arguments, webhookUrl)),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AllDestinationNotifications_KeepPayloadsAndPublishOnlyToOwnerGroup()
+    {
+        const string url = "https://shared.example/webhook?recipient=one";
+        var notifications = new List<(string Event, object Payload)>();
+        var proxy = new Mock<IClientProxy>();
+        proxy.Setup(client => client.SendCoreAsync(
+                It.IsAny<string>(), It.IsAny<object[]>(), It.IsAny<CancellationToken>()))
+            .Callback<string, object[], CancellationToken>((name, arguments, _) =>
+                notifications.Add((name, Assert.Single(arguments))))
+            .Returns(Task.CompletedTask);
+        var clients = new Mock<IHubClients>(MockBehavior.Strict);
+        clients.Setup(value => value.Group(SignalRConstants.Groups.Webhook(42, url))).Returns(proxy.Object);
+        var hub = new Mock<IHubContext<WebhookDeliveryHub>>();
+        hub.SetupGet(value => value.Clients).Returns(clients.Object);
+        using var service = new WebhookDeliveryNotificationService(
+            hub.Object, Mock.Of<IServiceProvider>(), NullLogger<WebhookDeliveryNotificationService>.Instance);
+        var retryTime = DateTime.UtcNow.AddMinutes(1);
+
+        await service.NotifyDeliveryAttemptAsync(42, url, "task", "video", "completed", 2);
+        await service.NotifyDeliverySuccessAsync(42, url, "task", 202, 123, 2);
+        await service.NotifyDeliveryFailureAsync(42, url, "task", "receiver error", 503, 2, false);
+        await service.NotifyRetryScheduledAsync(42, url, "task", retryTime, 3, 5);
+        await service.NotifyCircuitBreakerStateChangeAsync(42, url, "open", "closed", "receiver error", 3);
+
+        Assert.Collection(notifications,
+            item =>
+            {
+                Assert.Equal("DeliveryAttempted", item.Event);
+                var payload = Assert.IsType<WebhookDeliveryAttempt>(item.Payload);
+                Assert.Equal(url, payload.Url);
+                Assert.Equal("task", payload.TaskId);
+                Assert.Equal("video", payload.TaskType);
+                Assert.Equal("completed", payload.EventType);
+                Assert.Equal(2, payload.AttemptNumber);
+            },
+            item =>
+            {
+                Assert.Equal("DeliverySucceeded", item.Event);
+                var payload = Assert.IsType<WebhookDeliverySuccess>(item.Payload);
+                Assert.Equal(url, payload.Url);
+                Assert.Equal("task", payload.TaskId);
+                Assert.Equal(202, payload.StatusCode);
+                Assert.Equal(123, payload.ResponseTimeMs);
+                Assert.Equal(2, payload.TotalAttempts);
+            },
+            item =>
+            {
+                Assert.Equal("DeliveryFailed", item.Event);
+                var payload = Assert.IsType<WebhookDeliveryFailure>(item.Payload);
+                Assert.Equal(url, payload.Url);
+                Assert.Equal("task", payload.TaskId);
+                Assert.Equal("receiver error", payload.ErrorMessage);
+                Assert.Equal(503, payload.StatusCode);
+                Assert.Equal(2, payload.AttemptNumber);
+                Assert.False(payload.IsPermanentFailure);
+            },
+            item =>
+            {
+                Assert.Equal("RetryScheduled", item.Event);
+                var payload = Assert.IsType<WebhookRetryInfo>(item.Payload);
+                Assert.Equal(url, payload.Url);
+                Assert.Equal("task-retry-3", payload.DeliveryId);
+                Assert.Equal(retryTime, payload.ScheduledAt);
+                Assert.Equal(3, payload.NextAttemptNumber);
+            },
+            item =>
+            {
+                Assert.Equal("CircuitBreakerStateChanged", item.Event);
+                var payload = Assert.IsType<WebhookCircuitBreakerState>(item.Payload);
+                Assert.Equal(url, payload.Url);
+                Assert.Equal("open", payload.CurrentState);
+                Assert.Equal("closed", payload.PreviousState);
+                Assert.Equal("receiver error", payload.Reason);
+                Assert.Equal(3, payload.FailureCount);
+            });
+        clients.Verify(value => value.Group(SignalRConstants.Groups.Webhook(42, url)), Times.Exactly(5));
+        foreach (var eventName in new[]
+                 { "DeliveryAttempted", "DeliverySucceeded", "DeliveryFailed", "RetryScheduled", "CircuitBreakerStateChanged" })
+            proxy.Verify(value => value.SendCoreAsync(eventName,
+                It.IsAny<object[]>(), It.IsAny<CancellationToken>()), Times.Once);
+        clients.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task LegacyOrInvalidOwner_PublishesNoDestinationNotifications(int owner)
+    {
+        var hub = new Mock<IHubContext<WebhookDeliveryHub>>(MockBehavior.Strict);
+        using var service = new WebhookDeliveryNotificationService(
+            hub.Object, Mock.Of<IServiceProvider>(), NullLogger<WebhookDeliveryNotificationService>.Instance);
+        const string url = "https://shared.example/webhook";
+
+        await service.NotifyDeliveryAttemptAsync(owner, url, "task", "video", "completed", 1);
+        await service.NotifyDeliverySuccessAsync(owner, url, "task", 202, 123, 1);
+        await service.NotifyDeliveryFailureAsync(owner, url, "task", "receiver error", 503, 1, false);
+        await service.NotifyRetryScheduledAsync(owner, url, "task", DateTime.UtcNow, 2, 5);
+        await service.NotifyCircuitBreakerStateChangeAsync(owner, url, "open", "closed", "receiver error", 3);
+
+        hub.VerifyNoOtherCalls();
     }
 
     private static bool IsExpectedAttempt(object?[] arguments, string webhookUrl)

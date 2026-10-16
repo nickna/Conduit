@@ -34,10 +34,10 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                 "ConduitLLM.Functions.Entities.FunctionExecutionAudit",
                 typeof(FunctionExecutionAudit),
                 baseEntityType,
-                propertyCount: 10,
+                propertyCount: 9,
                 navigationCount: 1,
-                foreignKeyCount: 2,
-                unnamedIndexCount: 2,
+                foreignKeyCount: 1,
+                unnamedIndexCount: 1,
                 keyCount: 1);
 
             var id = runtimeEntityType.AddProperty(
@@ -355,41 +355,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
         functionExecutionId.SetCurrentValueComparer(new EntryCurrentValueComparer<Guid>(functionExecutionId));
         functionExecutionId.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
 
-        var functionExecutionId1 = runtimeEntityType.AddProperty(
-            "FunctionExecutionId1",
-            typeof(Guid?),
-            nullable: true);
-        functionExecutionId1.SetAccessors(
-            Guid? (IInternalEntry entry) => (entry.FlaggedAsStoreGenerated(6) ? entry.ReadStoreGeneratedValue<Guid?>(2) : (entry.FlaggedAsTemporary(6) && !(entry.ReadShadowValue<Guid?>(0).HasValue) ? entry.ReadTemporaryValue<Guid?>(2) : entry.ReadShadowValue<Guid?>(0))),
-            Guid? (IInternalEntry entry) => entry.ReadShadowValue<Guid?>(0),
-            Guid? (IInternalEntry entry) => entry.ReadOriginalValue<Guid?>(functionExecutionId1, 6),
-            Guid? (IInternalEntry entry) => ((InternalEntityEntry)entry).ReadRelationshipSnapshotValue<Guid?>(functionExecutionId1, 2));
-        functionExecutionId1.SetPropertyIndexes(
-            index: 6,
-            originalValueIndex: 6,
-            shadowIndex: 0,
-            relationshipIndex: 2,
-            storeGenerationIndex: 2);
-        functionExecutionId1.TypeMapping = GuidTypeMapping.Default.Clone(
-            comparer: new ValueComparer<Guid>(
-                bool (Guid v1, Guid v2) => v1 == v2,
-                int (Guid v) => ((object)v).GetHashCode(),
-                Guid (Guid v) => v),
-            keyComparer: new ValueComparer<Guid>(
-                bool (Guid v1, Guid v2) => v1 == v2,
-                int (Guid v) => ((object)v).GetHashCode(),
-                Guid (Guid v) => v),
-            providerValueComparer: new ValueComparer<Guid>(
-                bool (Guid v1, Guid v2) => v1 == v2,
-                int (Guid v) => ((object)v).GetHashCode(),
-                Guid (Guid v) => v),
-            mappingInfo: new RelationalTypeMappingInfo(
-                storeTypeName: "uuid"));
-        functionExecutionId1.SetCurrentValueComparer(new EntryCurrentValueComparer<Guid?>(functionExecutionId1));
-        functionExecutionId1.SetComparer(new NullableValueComparer<Guid>(functionExecutionId1.TypeMapping.Comparer));
-        functionExecutionId1.SetKeyComparer(new NullableValueComparer<Guid>(functionExecutionId1.TypeMapping.KeyComparer));
-        functionExecutionId1.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
-
         var isEstimated = runtimeEntityType.AddProperty(
             "IsEstimated",
             typeof(bool?),
@@ -414,11 +379,11 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
         isEstimated.SetAccessors(
             bool? (IInternalEntry entry) => FunctionExecutionAuditUnsafeAccessors.IsEstimated(((FunctionExecutionAudit)(entry.Entity))),
             bool? (IInternalEntry entry) => FunctionExecutionAuditUnsafeAccessors.IsEstimated(((FunctionExecutionAudit)(entry.Entity))),
-            bool? (IInternalEntry entry) => entry.ReadOriginalValue<bool?>(isEstimated, 7),
+            bool? (IInternalEntry entry) => entry.ReadOriginalValue<bool?>(isEstimated, 6),
             bool? (IInternalEntry entry) => entry.GetCurrentValue<bool?>(isEstimated));
         isEstimated.SetPropertyIndexes(
-            index: 7,
-            originalValueIndex: 7,
+            index: 6,
+            originalValueIndex: 6,
             shadowIndex: -1,
             relationshipIndex: -1,
             storeGenerationIndex: -1);
@@ -463,11 +428,11 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
         timestamp.SetAccessors(
             DateTime (IInternalEntry entry) => FunctionExecutionAuditUnsafeAccessors.Timestamp(((FunctionExecutionAudit)(entry.Entity))),
             DateTime (IInternalEntry entry) => FunctionExecutionAuditUnsafeAccessors.Timestamp(((FunctionExecutionAudit)(entry.Entity))),
-            DateTime (IInternalEntry entry) => entry.ReadOriginalValue<DateTime>(timestamp, 8),
+            DateTime (IInternalEntry entry) => entry.ReadOriginalValue<DateTime>(timestamp, 7),
             DateTime (IInternalEntry entry) => entry.GetCurrentValue<DateTime>(timestamp));
         timestamp.SetPropertyIndexes(
-            index: 8,
-            originalValueIndex: 8,
+            index: 7,
+            originalValueIndex: 7,
             shadowIndex: -1,
             relationshipIndex: -1,
             storeGenerationIndex: -1);
@@ -510,11 +475,11 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
         virtualKeyId.SetAccessors(
             int? (IInternalEntry entry) => FunctionExecutionAuditUnsafeAccessors.VirtualKeyId(((FunctionExecutionAudit)(entry.Entity))),
             int? (IInternalEntry entry) => FunctionExecutionAuditUnsafeAccessors.VirtualKeyId(((FunctionExecutionAudit)(entry.Entity))),
-            int? (IInternalEntry entry) => entry.ReadOriginalValue<int?>(virtualKeyId, 9),
+            int? (IInternalEntry entry) => entry.ReadOriginalValue<int?>(virtualKeyId, 8),
             int? (IInternalEntry entry) => entry.GetCurrentValue<int?>(virtualKeyId));
         virtualKeyId.SetPropertyIndexes(
-            index: 9,
-            originalValueIndex: 9,
+            index: 8,
+            originalValueIndex: 8,
             shadowIndex: -1,
             relationshipIndex: -1,
             storeGenerationIndex: -1);
@@ -542,11 +507,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
         runtimeEntityType.SetPrimaryKey(key);
 
         var index = runtimeEntityType.AddIndex(
-            new[] { functionExecutionId1 });
-
-        var index0 = runtimeEntityType.AddIndex(
             new[] { functionExecutionId, timestamp });
-        index0.AddAnnotation("Relational:Name", "IX_FunctionExecutionAudit_ExecutionTimestamp");
+        index.AddAnnotation("Relational:Name", "IX_FunctionExecutionAudit_ExecutionTimestamp");
 
         return runtimeEntityType;
     }
@@ -590,17 +552,8 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             index: 0,
             originalValueIndex: -1,
             shadowIndex: -1,
-            relationshipIndex: 3,
+            relationshipIndex: 2,
             storeGenerationIndex: -1);
-        return runtimeForeignKey;
-    }
-
-    public static RuntimeForeignKey CreateForeignKey2(RuntimeEntityType declaringEntityType, RuntimeEntityType principalEntityType)
-    {
-        var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("FunctionExecutionId1") },
-            principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id") }),
-            principalEntityType);
-
         var auditEvents = principalEntityType.AddNavigation("AuditEvents",
             runtimeForeignKey,
             onDependent: false,
@@ -640,7 +593,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             (FunctionExecution entity, ICollection<FunctionExecutionAudit> collection) => FunctionExecutionUnsafeAccessors.AuditEvents(entity) = ((ICollection<FunctionExecutionAudit>)collection),
             ICollection<FunctionExecutionAudit> (FunctionExecution entity, Action<FunctionExecution, ICollection<FunctionExecutionAudit>> setter) => ClrCollectionAccessorFactory.CreateAndSetHashSet<FunctionExecution, ICollection<FunctionExecutionAudit>, FunctionExecutionAudit>(entity, setter),
             ICollection<FunctionExecutionAudit> () => ((ICollection<FunctionExecutionAudit>)(((ICollection<FunctionExecutionAudit>)(new HashSet<FunctionExecutionAudit>(ReferenceEqualityComparer.Instance))))));
-        runtimeForeignKey.AddAnnotation("Relational:Name", "FK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti~1");
         return runtimeForeignKey;
     }
 
@@ -652,7 +604,6 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
         var eventType = runtimeEntityType.FindProperty("EventType");
         var failureReason = runtimeEntityType.FindProperty("FailureReason");
         var functionExecutionId = runtimeEntityType.FindProperty("FunctionExecutionId");
-        var functionExecutionId1 = runtimeEntityType.FindProperty("FunctionExecutionId1");
         var isEstimated = runtimeEntityType.FindProperty("IsEstimated");
         var timestamp = runtimeEntityType.FindProperty("Timestamp");
         var virtualKeyId = runtimeEntityType.FindProperty("VirtualKeyId");
@@ -664,31 +615,31 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
             ISnapshot (IInternalEntry source) =>
             {
                 var structuralType = ((FunctionExecutionAudit)(source.Entity));
-                return ((ISnapshot)(new Snapshot<Guid, decimal?, string, FunctionAuditEventType, string, Guid, Guid?, bool?, DateTime, int?>(((ValueComparer<Guid>)(((IProperty)id).GetValueComparer())).Snapshot(source.GetCurrentValue<Guid>(id)), (source.GetCurrentValue<decimal?>(cost) == null ? null : ((ValueComparer<decimal?>)(((IProperty)cost).GetValueComparer())).Snapshot(source.GetCurrentValue<decimal?>(cost))), (source.GetCurrentValue<string>(eventDetails) == null ? null : ((ValueComparer<string>)(((IProperty)eventDetails).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(eventDetails))), ((ValueComparer<FunctionAuditEventType>)(((IProperty)eventType).GetValueComparer())).Snapshot(source.GetCurrentValue<FunctionAuditEventType>(eventType)), (source.GetCurrentValue<string>(failureReason) == null ? null : ((ValueComparer<string>)(((IProperty)failureReason).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(failureReason))), ((ValueComparer<Guid>)(((IProperty)functionExecutionId).GetValueComparer())).Snapshot(source.GetCurrentValue<Guid>(functionExecutionId)), (source.GetCurrentValue<Guid?>(functionExecutionId1) == null ? null : ((ValueComparer<Guid?>)(((IProperty)functionExecutionId1).GetValueComparer())).Snapshot(source.GetCurrentValue<Guid?>(functionExecutionId1))), (source.GetCurrentValue<bool?>(isEstimated) == null ? null : ((ValueComparer<bool?>)(((IProperty)isEstimated).GetValueComparer())).Snapshot(source.GetCurrentValue<bool?>(isEstimated))), ((ValueComparer<DateTime>)(((IProperty)timestamp).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime>(timestamp)), (source.GetCurrentValue<int?>(virtualKeyId) == null ? null : ((ValueComparer<int?>)(((IProperty)virtualKeyId).GetValueComparer())).Snapshot(source.GetCurrentValue<int?>(virtualKeyId))))));
+                return ((ISnapshot)(new Snapshot<Guid, decimal?, string, FunctionAuditEventType, string, Guid, bool?, DateTime, int?>(((ValueComparer<Guid>)(((IProperty)id).GetValueComparer())).Snapshot(source.GetCurrentValue<Guid>(id)), (source.GetCurrentValue<decimal?>(cost) == null ? null : ((ValueComparer<decimal?>)(((IProperty)cost).GetValueComparer())).Snapshot(source.GetCurrentValue<decimal?>(cost))), (source.GetCurrentValue<string>(eventDetails) == null ? null : ((ValueComparer<string>)(((IProperty)eventDetails).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(eventDetails))), ((ValueComparer<FunctionAuditEventType>)(((IProperty)eventType).GetValueComparer())).Snapshot(source.GetCurrentValue<FunctionAuditEventType>(eventType)), (source.GetCurrentValue<string>(failureReason) == null ? null : ((ValueComparer<string>)(((IProperty)failureReason).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(failureReason))), ((ValueComparer<Guid>)(((IProperty)functionExecutionId).GetValueComparer())).Snapshot(source.GetCurrentValue<Guid>(functionExecutionId)), (source.GetCurrentValue<bool?>(isEstimated) == null ? null : ((ValueComparer<bool?>)(((IProperty)isEstimated).GetValueComparer())).Snapshot(source.GetCurrentValue<bool?>(isEstimated))), ((ValueComparer<DateTime>)(((IProperty)timestamp).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime>(timestamp)), (source.GetCurrentValue<int?>(virtualKeyId) == null ? null : ((ValueComparer<int?>)(((IProperty)virtualKeyId).GetValueComparer())).Snapshot(source.GetCurrentValue<int?>(virtualKeyId))))));
             });
         runtimeEntityType.SetStoreGeneratedValuesFactory(
-            ISnapshot () => ((ISnapshot)(new Snapshot<Guid, Guid, Guid?>(((ValueComparer<Guid>)(((IProperty)id).GetValueComparer())).Snapshot(default(Guid)), ((ValueComparer<Guid>)(((IProperty)functionExecutionId).GetValueComparer())).Snapshot(default(Guid)), (default(Guid? ) == null ? null : ((ValueComparer<Guid?>)(((IProperty)functionExecutionId1).GetValueComparer())).Snapshot(default(Guid? )))))));
+            ISnapshot () => ((ISnapshot)(new Snapshot<Guid, Guid>(((ValueComparer<Guid>)(((IProperty)id).GetValueComparer())).Snapshot(default(Guid)), ((ValueComparer<Guid>)(((IProperty)functionExecutionId).GetValueComparer())).Snapshot(default(Guid))))));
         runtimeEntityType.SetTemporaryValuesFactory(
-            ISnapshot (IInternalEntry source) => ((ISnapshot)(new Snapshot<Guid, Guid, Guid?>(default(Guid), default(Guid), default(Guid? )))));
+            ISnapshot (IInternalEntry source) => ((ISnapshot)(new Snapshot<Guid, Guid>(default(Guid), default(Guid)))));
         runtimeEntityType.SetShadowValuesFactory(
-            ISnapshot (IDictionary<string, object> source) => ((ISnapshot)(new Snapshot<Guid?>((source.ContainsKey("FunctionExecutionId1") ? ((Guid? )(source["FunctionExecutionId1"])) : null)))));
+            ISnapshot (IDictionary<string, object> source) => Snapshot.Empty);
         runtimeEntityType.SetEmptyShadowValuesFactory(
-            ISnapshot () => ((ISnapshot)(new Snapshot<Guid?>(default(Guid? )))));
+            ISnapshot () => Snapshot.Empty);
         runtimeEntityType.SetRelationshipSnapshotFactory(
             ISnapshot (IInternalEntry source) =>
             {
                 var structuralType = ((FunctionExecutionAudit)(source.Entity));
-                return ((ISnapshot)(new Snapshot<Guid, Guid, Guid?, object>(((ValueComparer<Guid>)(((IProperty)id).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<Guid>(id)), ((ValueComparer<Guid>)(((IProperty)functionExecutionId).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<Guid>(functionExecutionId)), (source.GetCurrentValue<Guid?>(functionExecutionId1) == null ? null : ((ValueComparer<Guid?>)(((IProperty)functionExecutionId1).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<Guid?>(functionExecutionId1))), source.GetCurrentValue<FunctionExecution>(functionExecution))));
+                return ((ISnapshot)(new Snapshot<Guid, Guid, object>(((ValueComparer<Guid>)(((IProperty)id).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<Guid>(id)), ((ValueComparer<Guid>)(((IProperty)functionExecutionId).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<Guid>(functionExecutionId)), source.GetCurrentValue<FunctionExecution>(functionExecution))));
             });
         runtimeEntityType.SetCounts(new PropertyCounts(
-            propertyCount: 10,
+            propertyCount: 9,
             navigationCount: 1,
             complexPropertyCount: 0,
             complexCollectionCount: 0,
-            originalValueCount: 10,
-            shadowCount: 1,
-            relationshipCount: 4,
-            storeGeneratedCount: 3));
+            originalValueCount: 9,
+            shadowCount: 0,
+            relationshipCount: 3,
+            storeGeneratedCount: 2));
         runtimeEntityType.AddAnnotation("Relational:FunctionName", null);
         runtimeEntityType.AddAnnotation("Relational:Schema", null);
         runtimeEntityType.AddAnnotation("Relational:SqlQuery", null);

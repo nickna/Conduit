@@ -209,7 +209,7 @@ namespace ConduitLLM.Gateway.Authentication
         /// <summary>
         /// Determines if the path should be excluded from authentication
         /// </summary>
-        private bool IsPathExcluded(string path)
+        private bool IsPathExcluded(PathString path)
         {
             var excludedPaths = new[]
             {
@@ -220,7 +220,7 @@ namespace ConduitLLM.Gateway.Authentication
             };
 
             return Array.Exists(excludedPaths, excludedPath => 
-                path.StartsWith(excludedPath, StringComparison.OrdinalIgnoreCase));
+                path.StartsWithSegments(excludedPath, StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>

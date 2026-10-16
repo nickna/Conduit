@@ -27,7 +27,7 @@ public sealed class WebhookDeliveryConsumerTests
         var retry = Assert.IsType<WebhookDeliveryRequested>(Assert.Single(fixture.Context.Scheduled).Event);
         Assert.Equal(0, retry.RetryCount);
         fixture.Store.Verify(s => s.BeginAttemptAsync(It.IsAny<WebhookClaim>(), It.IsAny<CancellationToken>()), Times.Never);
-        fixture.Notifications.Verify(n => n.NotifyDeliveryAttemptAsync(It.IsAny<string>(), It.IsAny<string>(),
+        fixture.Notifications.Verify(n => n.NotifyDeliveryAttemptAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()), Times.Never);
         Assert.Empty(fixture.Webhook.Invocations);
     }
@@ -51,7 +51,7 @@ public sealed class WebhookDeliveryConsumerTests
         var fixture = new Fixture();
         fixture.Webhook.Setup(w => w.SendTaskCompletionWebhookAsync(It.IsAny<string>(), It.IsAny<object>(),
             It.IsAny<Dictionary<string, string>?>(), It.IsAny<CancellationToken>())).ReturnsAsync(WebhookSendResult.Ok(204));
-        fixture.Notifications.Setup(n => n.NotifyDeliverySuccessAsync(It.IsAny<string>(), It.IsAny<string>(),
+        fixture.Notifications.Setup(n => n.NotifyDeliverySuccessAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<int>(), It.IsAny<long>(), It.IsAny<int>())).ThrowsAsync(new IOException("reporting unavailable"));
         await fixture.Consumer.HandleAsync(Fixture.Request, fixture.Context);
         Assert.Empty(fixture.Context.Scheduled);
@@ -116,7 +116,7 @@ public sealed class WebhookDeliveryConsumerTests
             It.IsAny<CancellationToken>()), Times.Once);
         // The endpoint's actual status code must be forwarded, not null / a fabricated 200
         fixture.Notifications.Verify(service => service.NotifyDeliveryFailureAsync(
-            request.WebhookUrl, request.TaskId, It.IsAny<string>(), 503, 4, true), Times.Once);
+            request.VirtualKeyId, request.WebhookUrl, request.TaskId, It.IsAny<string>(), 503, 4, true), Times.Once);
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public sealed class WebhookDeliveryConsumerTests
 
         // A 202 from the endpoint must be reported as 202, not assumed to be 200
         fixture.Notifications.Verify(service => service.NotifyDeliverySuccessAsync(
-            Fixture.Request.WebhookUrl, Fixture.Request.TaskId, 202, It.IsAny<long>(), 1), Times.Once);
+            Fixture.Request.VirtualKeyId, Fixture.Request.WebhookUrl, Fixture.Request.TaskId, 202, It.IsAny<long>(), 1), Times.Once);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class WebhookDeliveryConsumerTests
         var retry = Assert.IsType<WebhookDeliveryRequested>(scheduled.Event);
         Assert.Equal(1, retry.RetryCount);
         fixture.Notifications.Verify(service => service.NotifyDeliveryFailureAsync(
-            Fixture.Request.WebhookUrl, Fixture.Request.TaskId, It.IsAny<string>(), null, 1, false), Times.Once);
+            Fixture.Request.VirtualKeyId, Fixture.Request.WebhookUrl, Fixture.Request.TaskId, It.IsAny<string>(), null, 1, false), Times.Once);
     }
 
     [Fact]
@@ -176,12 +176,60 @@ public sealed class WebhookDeliveryConsumerTests
         Assert.Equal("Failed to deserialize payload", payload.GetProperty("error").GetString());
     }
 
+    [Theory]
+    [InlineData("success")]
+    [InlineData("retry")]
+    [InlineData("permanent-failure")]
+    [InlineData("admission-deferral")]
+    [InlineData("exhausted")]
+    public async Task NotificationsUseThePersistedClaimOwnerRatherThanTheIncomingEvent(string scenario)
+    {
+        var fixture = new Fixture();
+        var claimed = Fixture.Request;
+        fixture.Store.Setup(service => service.TryClaimAsync(It.IsAny<WebhookDeliveryRequested>(),
+                It.IsAny<DateTime>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((WebhookDeliveryRequested _, DateTime deadline, TimeSpan _, CancellationToken _) =>
+                new WebhookClaim(WebhookClaimStatus.Acquired, "owned-delivery", Guid.NewGuid(), claimed, 0,
+                    scenario == "exhausted" ? DateTime.UtcNow.AddMinutes(-1) : deadline));
+        if (scenario == "admission-deferral")
+            fixture.Admission.Setup(service => service.AcquireAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new WebhookAdmissionDecision(null, DateTime.UtcNow.AddSeconds(30)));
+        else
+            fixture.Webhook.Setup(service => service.SendTaskCompletionWebhookAsync(It.IsAny<string>(),
+                    It.IsAny<object>(), It.IsAny<Dictionary<string, string>?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(scenario switch
+                {
+                    "success" => WebhookSendResult.Ok(202),
+                    "permanent-failure" => WebhookSendResult.Failed(400, "invalid receiver request"),
+                    _ => WebhookSendResult.Failed(503, "receiver unavailable")
+                });
+
+        var execution = () => fixture.Consumer.HandleAsync(claimed with { VirtualKeyId = 999 }, fixture.Context);
+        if (scenario is "permanent-failure" or "exhausted")
+            await Assert.ThrowsAsync<NonRetryableMessageException>(execution);
+        else
+            await execution();
+
+        var reports = fixture.Notifications.Invocations;
+        Assert.NotEmpty(reports);
+        Assert.All(reports, report => Assert.Equal(42, report.Arguments[0]));
+        Assert.Equal(scenario switch
+        {
+            "success" => new[] { "NotifyDeliveryAttemptAsync", "NotifyDeliverySuccessAsync" },
+            "retry" => new[] { "NotifyDeliveryAttemptAsync", "NotifyDeliveryFailureAsync", "NotifyRetryScheduledAsync" },
+            "permanent-failure" => new[] { "NotifyDeliveryAttemptAsync", "NotifyDeliveryFailureAsync" },
+            "admission-deferral" => new[] { "NotifyRetryScheduledAsync" },
+            _ => new[] { "NotifyDeliveryFailureAsync" }
+        }, reports.Select(report => report.Method.Name));
+    }
+
     private sealed class Fixture
     {
         public static WebhookDeliveryRequested Request => new()
         {
             TaskId = "task-1",
             TaskType = "video",
+            VirtualKeyId = 42,
             WebhookUrl = "https://example.test/webhook",
             EventType = WebhookEventType.TaskCompleted,
             PayloadJson = "{}"

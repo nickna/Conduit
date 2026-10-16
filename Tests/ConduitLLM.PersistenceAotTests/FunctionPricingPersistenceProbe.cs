@@ -37,7 +37,7 @@ internal static class FunctionPricingPersistenceProbe
                         TRUE, @asOf + interval '1 day', NULL, 80, @created, @updated),
                     (105, 'Expired', @exa, NULL, NULL, NULL, @flat, NULL, NULL, NULL, NULL, NULL, NULL,
                         TRUE, @asOf - interval '1 day', @asOf, 70, @created, @updated),
-                    (106, 'Shadow target', @exa, NULL, NULL, NULL, @flat, NULL, NULL, NULL, NULL, NULL, NULL,
+                    (106, 'High-priority inactive-mapping sentinel', @exa, NULL, NULL, NULL, @flat, NULL, NULL, NULL, NULL, NULL, NULL,
                         TRUE, @asOf - interval '1 day', NULL, 100, @created, @updated),
                     (107, 'Exact boundary and unknown enums', 197, -9, NULL, NULL, 123, NULL, NULL, NULL, NULL, '[]', @settings,
                         TRUE, @asOf, @asOf + interval '2 microseconds', 5, @created, @updated),
@@ -45,16 +45,15 @@ internal static class FunctionPricingPersistenceProbe
                         TRUE, @asOf, NULL, 0, @created, @updated);
                 CREATE TABLE "FunctionCostMappings" (
                     "Id" integer PRIMARY KEY, "FunctionConfigurationId" integer NOT NULL REFERENCES "FunctionConfigurations" ("Id"),
-                    "FunctionCostId" integer NOT NULL REFERENCES "FunctionCosts" ("Id"),
-                    "FunctionCostId1" integer NULL REFERENCES "FunctionCosts" ("Id"), "IsActive" boolean NOT NULL,
+                    "FunctionCostId" integer NOT NULL REFERENCES "FunctionCosts" ("Id"), "IsActive" boolean NOT NULL,
                     "CreatedAt" timestamptz NOT NULL, UNIQUE ("FunctionConfigurationId", "FunctionCostId"));
                 INSERT INTO "FunctionCostMappings" VALUES
-                    (1, 11, 101, NULL, TRUE, @asOf), (2, 11, 102, 106, TRUE, @asOf),
-                    (3, 11, 103, NULL, TRUE, @asOf), (4, 11, 104, NULL, TRUE, @asOf),
-                    (5, 11, 105, NULL, TRUE, @asOf), (6, 11, 106, NULL, FALSE, @asOf),
-                    (7, 11, 108, NULL, TRUE, @asOf), (8, 12, 107, NULL, TRUE, @asOf),
-                    (9, 13, 103, 102, TRUE, @asOf), (10, 13, 104, NULL, TRUE, @asOf),
-                    (11, 13, 105, NULL, TRUE, @asOf), (12, 12, 101, 106, TRUE, @asOf);
+                    (1, 11, 101, TRUE, @asOf), (2, 11, 102, TRUE, @asOf),
+                    (3, 11, 103, TRUE, @asOf), (4, 11, 104, TRUE, @asOf),
+                    (5, 11, 105, TRUE, @asOf), (6, 11, 106, FALSE, @asOf),
+                    (7, 11, 108, TRUE, @asOf), (8, 12, 107, TRUE, @asOf),
+                    (9, 13, 103, TRUE, @asOf), (10, 13, 104, TRUE, @asOf),
+                    (11, 13, 105, TRUE, @asOf), (12, 12, 101, TRUE, @asOf);
                 """;
             command.Parameters.AddWithValue("asOf", NpgsqlDbType.TimestampTz, asOf);
             command.Parameters.AddWithValue("created", NpgsqlDbType.TimestampTz, asOf.AddDays(-3));
@@ -111,7 +110,7 @@ internal static class FunctionPricingPersistenceProbe
             nullable.BaseCost is null && nullable.CostPerExecution is null && nullable.CostPerResult is null &&
             nullable.CostPerToken is null && nullable.CostPerMinute is null && nullable.TieredPricing is null &&
             nullable.PricingConfiguration is null && nullable.ExpiryDate is null,
-            "expiry equality excludes cost, canonical shadow isolation and null fields");
+            "expiry equality excludes cost, canonical mapping isolation and null fields");
 
         await using (await source.OpenConnectionAsync(deadline.Token))
         {

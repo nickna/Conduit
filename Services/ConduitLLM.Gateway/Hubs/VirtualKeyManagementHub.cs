@@ -50,6 +50,13 @@ namespace ConduitLLM.Gateway.Hubs
             var virtualKeyId = GetVirtualKeyId();
             if (virtualKeyId.HasValue)
             {
+                // Lifecycle publication is server-only. Administrative recipients join
+                // through trusted authentication, never a caller-supplied group name.
+                if (await IsAdminAsync())
+                {
+                    await Groups.AddToGroupAsync(Context.ConnectionId, "admin", Context.ConnectionAborted);
+                }
+
                 // Send initial virtual key status to the connected client
                 await SendInitialKeyStatus(virtualKeyId.Value);
                 
@@ -180,195 +187,6 @@ namespace ConduitLLM.Gateway.Hubs
                 {
                     Message = "Failed to get key status"
                 });
-            }
-        }
-
-        /// <summary>
-        /// Broadcasts a virtual key creation event.
-        /// </summary>
-        /// <param name="notification">The key creation notification.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        public async Task BroadcastKeyCreated(VirtualKeyCreatedNotification notification)
-        {
-            var correlationId = GetOrCreateCorrelationId();
-            
-            using (_logger.BeginScope(new Dictionary<string, object>
-            {
-                ["CorrelationId"] = correlationId,
-                ["VirtualKeyId"] = notification.KeyId,
-                ["KeyName"] = notification.KeyName
-            }))
-            {
-                try
-                {
-                    // Broadcast to admin group
-                    await Clients.Group("admin").SendAsync("VirtualKeyCreated", notification);
-                    
-                    _metrics.MessagesSent.Add(1,
-                        new("hub", "VirtualKeyManagementHub"),
-                        new("message_type", "key_created"));
-                    
-                    _logger.LogInformation(
-                        "Broadcasted virtual key creation: {KeyName} (ID: {KeyId})",
-                        notification.KeyName,
-                        notification.KeyId);
-                }
-                catch (Exception ex)
-                {
-                    _metrics.HubErrors.Add(1,
-                        new("hub", "VirtualKeyManagementHub"),
-                        new("error_type", ex.GetType().Name));
-                    _logger.LogError(ex, "Error broadcasting key creation");
-                    throw;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Broadcasts a virtual key update event.
-        /// </summary>
-        /// <param name="virtualKeyId">The ID of the updated key.</param>
-        /// <param name="notification">The key update notification.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        public async Task BroadcastKeyUpdated(int virtualKeyId, VirtualKeyUpdatedNotification notification)
-        {
-            var correlationId = GetOrCreateCorrelationId();
-            
-            using (_logger.BeginScope(new Dictionary<string, object>
-            {
-                ["CorrelationId"] = correlationId,
-                ["VirtualKeyId"] = virtualKeyId,
-                ["UpdatedProperties"] = string.Join(", ", notification.UpdatedProperties)
-            }))
-            {
-                try
-                {
-                    // Send to the key's own group
-                    await Clients.Group($"vkey-{virtualKeyId}").SendAsync("VirtualKeyUpdated", notification);
-                    
-                    // Send to management subscribers
-                    await Clients.Group($"vkey-mgmt-{virtualKeyId}").SendAsync("VirtualKeyUpdated", notification);
-                    
-                    // Send to admin group
-                    await Clients.Group("admin").SendAsync("VirtualKeyUpdated", notification);
-                    
-                    _metrics.MessagesSent.Add(1,
-                        new("hub", "VirtualKeyManagementHub"),
-                        new("message_type", "key_updated"));
-                    
-                    _logger.LogInformation(
-                        "Broadcasted virtual key update for key {KeyId}: {UpdatedProperties}",
-                        virtualKeyId,
-                        string.Join(", ", notification.UpdatedProperties));
-                }
-                catch (Exception ex)
-                {
-                    _metrics.HubErrors.Add(1,
-                        new("hub", "VirtualKeyManagementHub"),
-                        new("error_type", ex.GetType().Name));
-                    _logger.LogError(ex, "Error broadcasting key update");
-                    throw;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Broadcasts a virtual key deletion event.
-        /// </summary>
-        /// <param name="virtualKeyId">The ID of the deleted key.</param>
-        /// <param name="notification">The key deletion notification.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        public async Task BroadcastKeyDeleted(int virtualKeyId, VirtualKeyDeletedNotification notification)
-        {
-            var correlationId = GetOrCreateCorrelationId();
-            
-            using (_logger.BeginScope(new Dictionary<string, object>
-            {
-                ["CorrelationId"] = correlationId,
-                ["VirtualKeyId"] = virtualKeyId,
-                ["DeletedAt"] = notification.DeletedAt
-            }))
-            {
-                try
-                {
-                    // Send to the key's own group
-                    await Clients.Group($"vkey-{virtualKeyId}").SendAsync("VirtualKeyDeleted", notification);
-                    
-                    // Send to management subscribers
-                    await Clients.Group($"vkey-mgmt-{virtualKeyId}").SendAsync("VirtualKeyDeleted", notification);
-                    
-                    // Send to admin group
-                    await Clients.Group("admin").SendAsync("VirtualKeyDeleted", notification);
-                    
-                    _metrics.MessagesSent.Add(1,
-                        new("hub", "VirtualKeyManagementHub"),
-                        new("message_type", "key_deleted"));
-                    
-                    _logger.LogInformation(
-                        "Broadcasted virtual key deletion for key {KeyId}",
-                        virtualKeyId);
-                }
-                catch (Exception ex)
-                {
-                    _metrics.HubErrors.Add(1,
-                        new("hub", "VirtualKeyManagementHub"),
-                        new("error_type", ex.GetType().Name));
-                    _logger.LogError(ex, "Error broadcasting key deletion");
-                    throw;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Broadcasts a key status change event.
-        /// </summary>
-        /// <param name="virtualKeyId">The ID of the key.</param>
-        /// <param name="notification">The status change notification.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        public async Task BroadcastKeyStatusChanged(int virtualKeyId, VirtualKeyStatusChangedNotification notification)
-        {
-            var correlationId = GetOrCreateCorrelationId();
-            
-            using (_logger.BeginScope(new Dictionary<string, object>
-            {
-                ["CorrelationId"] = correlationId,
-                ["VirtualKeyId"] = virtualKeyId,
-                ["NewStatus"] = notification.NewStatus,
-                ["PreviousStatus"] = notification.PreviousStatus
-            }))
-            {
-                try
-                {
-                    // Send to the key's own group
-                    await Clients.Group($"vkey-{virtualKeyId}").SendAsync("VirtualKeyStatusChanged", notification);
-                    
-                    // Send to management subscribers
-                    await Clients.Group($"vkey-mgmt-{virtualKeyId}").SendAsync("VirtualKeyStatusChanged", notification);
-                    
-                    // Send to admin group if it's a critical status change
-                    if (notification.NewStatus == "disabled" || notification.NewStatus == "suspended")
-                    {
-                        await Clients.Group("admin").SendAsync("VirtualKeyStatusChanged", notification);
-                    }
-                    
-                    _metrics.MessagesSent.Add(1,
-                        new("hub", "VirtualKeyManagementHub"),
-                        new("message_type", "status_changed"));
-                    
-                    _logger.LogInformation(
-                        "Broadcasted status change for key {KeyId}: {PreviousStatus} -> {NewStatus}",
-                        virtualKeyId,
-                        notification.PreviousStatus,
-                        notification.NewStatus);
-                }
-                catch (Exception ex)
-                {
-                    _metrics.HubErrors.Add(1,
-                        new("hub", "VirtualKeyManagementHub"),
-                        new("error_type", ex.GetType().Name));
-                    _logger.LogError(ex, "Error broadcasting status change");
-                    throw;
-                }
             }
         }
 

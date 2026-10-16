@@ -1489,23 +1489,31 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             await tasks.InvokeAsync("UnsubscribeFromTaskType", """["native-probe"]""", timeout.Token);
             True(true, "authenticated TaskHub JSON group invocations");
             await tasks.InvokeAsync("SubscribeToTask", $$"""["{{NativeParityFixture.TaskId}}"]""", timeout.Token);
-            await tasks.InvokeAsync("TaskCompleted",
-                $$$"""["{{{NativeParityFixture.TaskId}}}",{"Mixed_KEY":null,"zero":0,"done":false,"values":["fixture",0,null,false],"nested":{"UPPER_key":"preserved"}}]""",
-                timeout.Token);
-            var completion = GetHubArguments(await tasks.WaitForTargetAsync("TaskCompleted", timeout.Token), "TaskCompleted", 2);
-            Equal(NativeParityFixture.TaskId, completion[0].GetString()!, "native dynamic task completion ID");
-            var result = completion[1];
-            AssertJsonFields(result, "Mixed_KEY", "zero", "done", "values", "nested");
-            True(result.GetProperty("Mixed_KEY").ValueKind == JsonValueKind.Null,
-                "native dynamic task result retains null and exact property casing");
-            True(result.GetProperty("zero").GetInt32() == 0 && !result.GetProperty("done").GetBoolean(),
-                "native dynamic task result retains default scalar values");
-            var values = result.GetProperty("values");
-            True(values.GetArrayLength() == 4 && values[0].GetString() == "fixture" &&
-                 values[1].GetInt32() == 0 && values[2].ValueKind == JsonValueKind.Null && !values[3].GetBoolean(),
-                "native dynamic task result retains nested array values");
-            Equal("preserved", result.GetProperty("nested").GetProperty("UPPER_key").GetString()!,
-                "native dynamic task result retains nested property casing");
+            (string Target, string Arguments)[] serverOnlyInvocations =
+            [
+                ("TaskStarted", $$$"""["{{{NativeParityFixture.TaskId}}}","native-probe",{"virtualKeyId":1,"Mixed_KEY":null,"zero":0,"done":false,"nested":{"UPPER_key":"preserved"}}]"""),
+                ("TaskProgress", $$"""["{{NativeParityFixture.TaskId}}",99,"forged progress"]"""),
+                ("TaskCompleted", $$$"""["{{{NativeParityFixture.TaskId}}}",{"Mixed_KEY":null,"zero":0,"done":false,"values":["fixture",0,null,false],"nested":{"UPPER_key":"preserved"}}]"""),
+                ("TaskFailed", $$"""["{{NativeParityFixture.TaskId}}","forged failure",false]"""),
+                ("TaskCancelled", $$"""["{{NativeParityFixture.TaskId}}","forged cancellation"]"""),
+                ("TaskTimedOut", $$"""["{{NativeParityFixture.TaskId}}",30]"""),
+            ];
+            foreach (var (target, arguments) in serverOnlyInvocations)
+            {
+                var rejected = false;
+                try
+                {
+                    await tasks.InvokeAsync(target, arguments, timeout.Token);
+                }
+                catch (InvalidOperationException exception) when (
+                    exception.Message == $"SignalR invocation {target} failed: Failed to invoke '{target}' due to an error on the server. HubException: Method does not exist.")
+                {
+                    rejected = true;
+                }
+                True(rejected, $"native TaskHub rejects client invocation of server-only {target}");
+            }
+            await tasks.InvokeAsync("UnsubscribeFromTask", $$"""["{{NativeParityFixture.TaskId}}"]""", timeout.Token);
+            True(true, "authenticated TaskHub JSON task subscription and unsubscription");
         }
 
         await using (await NativeSignalRClient.ConnectAsync(
@@ -1525,21 +1533,37 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
         {
             const string webhookArguments = """[["https://native.invalid/hook"]]""";
             await webhooks.InvokeAsync("SubscribeToWebhooks", webhookArguments, timeout.Token);
-            await webhooks.InvokeAsync("BroadcastDeliveryAttempt",
-                $$"""["https://native.invalid/hook",{"WEBHOOKID":"native-webhook","DELIVERYID":"native-delivery","URL":"https://native.invalid/hook","EVENTTYPE":"fixture","ATTEMPTNUMBER":0,"TIMESTAMP":"2026-10-10T01:02:03Z","TASKID":"{{NativeParityFixture.TaskId}}","TASKTYPE":"native-probe"}]""",
-                timeout.Token);
-            var attempt = GetHubArguments(await webhooks.WaitForTargetAsync("DeliveryAttempted", timeout.Token), "DeliveryAttempted", 1)[0];
-            AssertJsonFields(attempt, "webhookId", "deliveryId", "url", "eventType", "attemptNumber", "timestamp", "taskId", "taskType");
-            Equal("native-webhook", attempt.GetProperty("webhookId").GetString()!, "native webhook DTO case-insensitive binding");
-            Equal("native-delivery", attempt.GetProperty("deliveryId").GetString()!, "native webhook delivery ID");
-            Equal("https://native.invalid/hook", attempt.GetProperty("url").GetString()!, "native webhook URL");
-            Equal("fixture", attempt.GetProperty("eventType").GetString()!, "native webhook event type");
-            True(attempt.GetProperty("attemptNumber").GetInt32() == 0, "native webhook DTO retains zero attempt count");
-            True(attempt.GetProperty("timestamp").GetDateTime() == new DateTime(2026, 10, 10, 1, 2, 3, DateTimeKind.Utc),
-                "native webhook DTO retains supplied UTC timestamp");
-            Equal(NativeParityFixture.TaskId, attempt.GetProperty("taskId").GetString()!, "native webhook task ID");
-            Equal("native-probe", attempt.GetProperty("taskType").GetString()!, "native webhook task type");
+            (string Target, string Arguments)[] serverOnlyInvocations =
+            [
+                ("BroadcastDeliveryAttempt", $$"""["https://native.invalid/hook",{"webhookId":"native-webhook","deliveryId":"native-delivery","url":"https://native.invalid/hook","eventType":"fixture","attemptNumber":0,"timestamp":"2026-10-10T01:02:03Z","taskId":"{{NativeParityFixture.TaskId}}","taskType":"native-probe"}]"""),
+                ("BroadcastDeliverySuccess", $$"""["https://native.invalid/hook",{"webhookId":"native-webhook","url":"https://native.invalid/hook","statusCode":200,"responseTimeMs":0,"totalAttempts":1,"taskId":"{{NativeParityFixture.TaskId}}"}]"""),
+                ("BroadcastDeliveryFailure", $$"""["https://native.invalid/hook",{"webhookId":"native-webhook","url":"https://native.invalid/hook","errorMessage":"forged failure","statusCode":null,"attemptNumber":0,"isPermanentFailure":false,"taskId":"{{NativeParityFixture.TaskId}}"}]"""),
+                ("BroadcastRetryScheduled", """["https://native.invalid/hook",{"webhookId":"native-webhook","url":"https://native.invalid/hook","scheduledAt":"2026-10-10T01:02:03Z","nextAttemptNumber":1,"delaySeconds":0,"reason":"forged retry"}]"""),
+            ];
+            foreach (var (target, arguments) in serverOnlyInvocations)
+            {
+                var rejected = false;
+                try
+                {
+                    await webhooks.InvokeAsync(target, arguments, timeout.Token);
+                }
+                catch (InvalidOperationException exception) when (
+                    exception.Message == $"SignalR invocation {target} failed: Failed to invoke '{target}' due to an error on the server. HubException: Method does not exist.")
+                {
+                    rejected = true;
+                }
+                True(rejected, $"native WebhookDeliveryHub rejects client invocation of server-only {target}");
+            }
+            await webhooks.InvokeAsync("RequestStatistics", "[]", timeout.Token);
+            var connectionId = GetHubArguments(await webhooks.WaitForTargetAsync("StatisticsRequested", timeout.Token),
+                "StatisticsRequested", 1)[0].GetString()!;
+            await using var webhookRedis = await ConnectionMultiplexer.ConnectAsync(settings.RedisConnectionString);
+            var connectionWebhooks = $"webhook:connections:{connectionId}:webhooks";
+            True(await webhookRedis.GetDatabase().SetContainsAsync(connectionWebhooks, "https://native.invalid/hook"),
+                "native webhook subscription retains its Redis bookkeeping after rejected broadcasts");
             await webhooks.InvokeAsync("UnsubscribeFromWebhooks", webhookArguments, timeout.Token);
+            True(!await webhookRedis.GetDatabase().SetContainsAsync(connectionWebhooks, "https://native.invalid/hook"),
+                "native webhook unsubscription removes its Redis bookkeeping");
             True(true, "authenticated WebhookDeliveryHub Redis-backed invocations");
         }
 
@@ -1549,9 +1573,39 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
                          NativeParityFixture.VirtualKey,
                          timeout.Token))
         {
-            var status = await management.WaitForTargetAsync("VirtualKeyStatus", timeout.Token);
-            True(status.Contains("Native AOT parity key", StringComparison.Ordinal),
+            var status = GetHubArguments(await management.WaitForTargetAsync("VirtualKeyStatus", timeout.Token),
+                "VirtualKeyStatus", 1)[0];
+            Equal("Native AOT parity key", status.GetProperty("keyName").GetString()!,
                 "VirtualKeyManagementHub sends typed-store key and group status");
+            var keyId = status.GetProperty("keyId").GetInt32();
+            True(keyId > 0, "native virtual-key status identifies the authenticated persisted key");
+            (string Target, string Arguments)[] serverOnlyInvocations =
+            [
+                ("BroadcastKeyCreated", $$"""[{"keyId":{{keyId}},"keyName":"forged native key","isEnabled":false,"maxBudget":0,"allowedModels":null,"rateLimitPerMinute":0,"createdAt":"2026-10-10T01:02:03Z","expiresAt":null,"timestamp":"2026-10-10T01:02:03Z"}]"""),
+                ("BroadcastKeyUpdated", $$"""[{{keyId}},{"keyId":{{keyId}},"keyName":"forged native key","updatedProperties":["IsEnabled"],"isEnabled":false,"maxBudget":0,"allowedModels":null,"rateLimitPerMinute":0,"expiresAt":null,"updatedAt":"2026-10-10T01:02:03Z","timestamp":"2026-10-10T01:02:03Z"}]"""),
+                ("BroadcastKeyDeleted", $$"""[{{keyId}},{"keyId":{{keyId}},"keyName":"forged native key","deletedAt":"2026-10-10T01:02:03Z","deletionReason":"forged deletion","timestamp":"2026-10-10T01:02:03Z"}]"""),
+                ("BroadcastKeyStatusChanged", $$"""[{{keyId}},{"keyId":{{keyId}},"keyName":"forged native key","previousStatus":"enabled","newStatus":"disabled","statusChangeReason":"forged critical status","changedAt":"2026-10-10T01:02:03Z","timestamp":"2026-10-10T01:02:03Z"}]"""),
+            ];
+            foreach (var (target, arguments) in serverOnlyInvocations)
+            {
+                var rejected = false;
+                try
+                {
+                    await management.InvokeAsync(target, arguments, timeout.Token);
+                }
+                catch (InvalidOperationException exception) when (
+                    exception.Message == $"SignalR invocation {target} failed: Failed to invoke '{target}' due to an error on the server. HubException: Method does not exist.")
+                {
+                    rejected = true;
+                }
+                True(rejected, $"native VirtualKeyManagementHub rejects client invocation of server-only {target}");
+            }
+            await management.InvokeAsync("GetCurrentKeyStatus", "[]", timeout.Token);
+            var current = GetHubArguments(await management.WaitForTargetAsync("VirtualKeyStatus", timeout.Token),
+                "VirtualKeyStatus", 1)[0];
+            True(current.GetProperty("keyId").GetInt32() == keyId &&
+                 current.GetProperty("keyName").GetString() == "Native AOT parity key",
+                "native current-key status remains available after rejected lifecycle broadcasts");
         }
     }
 
@@ -1594,14 +1648,15 @@ internal sealed class GatewayNativeParityProbe(ProbeSettings settings)
             timeout.Token);
         await publicVideo.InvokeAsync(
             "SubscribeToTask",
-            $$"""["native-public-video-task","{{ephemeralKey}}"]""",
+            $$"""["{{NativeParityFixture.VideoNotificationTaskId}}","{{ephemeralKey}}"]""",
             timeout.Token);
-        var subscribed = await publicVideo.WaitForTargetAsync("taskSubscribed", timeout.Token);
-        True(subscribed.Contains("native-public-video-task", StringComparison.Ordinal),
-            "public JSON SignalR subscription validates its Redis ephemeral key");
+        var subscribed = GetHubArguments(await publicVideo.WaitForTargetAsync("taskSubscribed", timeout.Token),
+            "taskSubscribed", 1)[0];
+        Equal(NativeParityFixture.VideoNotificationTaskId, subscribed.GetProperty("taskId").GetString()!,
+            "public JSON SignalR subscription validates its Redis ephemeral key and persisted task ownership");
         await publicVideo.InvokeAsync(
             "UnsubscribeFromTask",
-            """["native-public-video-task"]""",
+            $$"""["{{NativeParityFixture.VideoNotificationTaskId}}"]""",
             timeout.Token);
     }
 

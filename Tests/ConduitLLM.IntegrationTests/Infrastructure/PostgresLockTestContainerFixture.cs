@@ -17,14 +17,13 @@ public sealed class PostgresLockTestContainerFixture : IAsyncLifetime
     public PostgresLockTestContainerFixture()
     {
         if (_externalConnectionString is null)
-            _container = new PostgreSqlBuilder()
-                .WithImage("postgres:17-alpine")
+            _container = new PostgreSqlBuilder("postgres:17-alpine")
                 .WithDatabase("conduit")
                 .WithUsername("conduit")
                 .WithPassword("conduitpass")
                 .Build();
         if (_externalRedisConnectionString is null)
-            _redis = new RedisBuilder().WithImage("redis:7.4-alpine").Build();
+            _redis = new RedisBuilder("redis:7.4-alpine").Build();
     }
 
     public string ConnectionString => _externalConnectionString ?? _container!.GetConnectionString();

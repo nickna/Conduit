@@ -16,9 +16,9 @@ namespace ConduitLLM.Core.Models.Audio
         [JsonPropertyName("input")]
         public required string Input { get; set; }
 
-        /// <summary>The voice identifier (provider/model specific).</summary>
+        /// <summary>A stock voice identifier or custom voice reference (provider/model specific).</summary>
         [JsonPropertyName("voice")]
-        public required string Voice { get; set; }
+        public required SpeechVoice Voice { get; set; }
 
         /// <summary>
         /// Output audio format, e.g. <c>mp3</c> or <c>pcm</c>. Defaults to <c>mp3</c> (OpenAI-compatible

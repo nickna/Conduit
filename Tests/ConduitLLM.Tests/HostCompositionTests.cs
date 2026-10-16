@@ -8,6 +8,10 @@ using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Repositories;
 using ConduitLLM.Configuration.Services;
 using ConduitLLM.Core;
+using ConduitLLM.Core.Data;
+using ConduitLLM.Core.Data.Extensions;
+using ConduitLLM.Core.Data.Health;
+using ConduitLLM.Core.Data.Interfaces;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Functions.Interfaces;
@@ -46,6 +50,33 @@ namespace ConduitLLM.Tests;
 [Trait("Component", "HostComposition")]
 public sealed class HostCompositionTests
 {
+    [Fact]
+    public void GenericDatabaseFactory_DoesNotBorrowAnUnrelatedRegisteredDataSource()
+    {
+        const string genericConnection = "Host=localhost;Database=generic;Username=generic;Password=test-only;Minimum Pool Size=1;Maximum Pool Size=100";
+        var manager = new Moq.Mock<IConnectionStringManager>();
+        manager.Setup(value => value.GetProviderAndConnectionString(Moq.It.IsAny<Action<string>>()))
+            .Returns(("postgres", genericConnection));
+        using var unrelatedSource = NpgsqlDataSource.Create(
+            "Host=localhost;Database=unrelated;Username=unrelated;Password=test-only;Minimum Pool Size=7;Maximum Pool Size=13");
+        var descriptors = new ServiceCollection();
+        descriptors.AddLogging();
+        descriptors.AddSingleton(manager.Object);
+        descriptors.AddSingleton(unrelatedSource);
+        descriptors.AddDatabaseConnectionFactory();
+        using var provider = descriptors.BuildServiceProvider();
+
+        var factory = Assert.IsType<DatabaseConnectionFactory>(provider.GetRequiredService<IDatabaseConnectionFactory>());
+        using var connection = factory.CreateConnection();
+        var settings = new NpgsqlConnectionStringBuilder(connection.ConnectionString);
+
+        Assert.Equal("generic", settings.Database);
+        Assert.Equal(1, settings.MinPoolSize);
+        Assert.Equal(100, settings.MaxPoolSize);
+        Assert.Null(typeof(DatabaseConnectionFactory).GetField("_dataSource",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(factory));
+    }
+
     [Theory]
     [InlineData("Development")]
     [InlineData("Production")]
@@ -765,6 +796,30 @@ public sealed class HostCompositionTests
         Assert.Equal(ServiceLifetime.Singleton, Assert.Single(descriptors,
             descriptor => descriptor.ServiceType == typeof(NpgsqlDataSource)).Lifetime);
         var dataSource = provider.GetRequiredService<NpgsqlDataSource>();
+        if (descriptors.Any(descriptor => descriptor.ServiceType == typeof(IDatabaseConnectionFactory)))
+        {
+            var factoryRegistration = Assert.Single(descriptors,
+                descriptor => descriptor.ServiceType == typeof(IDatabaseConnectionFactory));
+            Assert.Equal(ServiceLifetime.Singleton, factoryRegistration.Lifetime);
+            var factory = Assert.IsType<DatabaseConnectionFactory>(provider.GetRequiredService<IDatabaseConnectionFactory>());
+            Assert.Same(factory, scope.ServiceProvider.GetRequiredService<IDatabaseConnectionFactory>());
+            Assert.Same(dataSource, typeof(DatabaseConnectionFactory).GetField("_dataSource",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(factory));
+            using var rawConnection = factory.CreateConnection();
+            Assert.IsType<NpgsqlConnection>(rawConnection);
+            Assert.Equal(System.Data.ConnectionState.Closed, rawConnection.State);
+            var poolSettings = new NpgsqlConnectionStringBuilder(rawConnection.ConnectionString);
+            var (_, adminConnectionString) = new ConnectionStringManager().GetProviderAndConnectionString("AdminAPI");
+            var adminSettings = new NpgsqlConnectionStringBuilder(adminConnectionString);
+            Assert.Equal(adminSettings.MinPoolSize, poolSettings.MinPoolSize);
+            Assert.Equal(adminSettings.MaxPoolSize, poolSettings.MaxPoolSize);
+
+            var healthRegistration = Assert.Single(provider.GetRequiredService<IOptions<HealthCheckServiceOptions>>()
+                .Value.Registrations, value => value.Name == "database_health");
+            var health = Assert.IsType<DatabaseHealthCheck>(healthRegistration.Factory(provider));
+            Assert.Same(factory, typeof(DatabaseHealthCheck).GetField("_connectionFactory",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(health));
+        }
         var options = provider.GetRequiredService<DbContextOptions<ConduitDbContext>>();
 #pragma warning disable EF1001 // Test-only inspection proves the pinned provider uses the exact host-owned pool.
         Assert.Same(dataSource, options.FindExtension<NpgsqlOptionsExtension>()!.DataSource);

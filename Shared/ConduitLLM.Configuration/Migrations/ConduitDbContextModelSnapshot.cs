@@ -2266,17 +2266,12 @@ namespace ConduitLLM.Configuration.Migrations
                     b.Property<int>("FunctionCostId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("FunctionCostId1")
-                        .HasColumnType("integer");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
                     b.HasIndex("FunctionCostId");
-
-                    b.HasIndex("FunctionCostId1");
 
                     b.HasIndex("FunctionConfigurationId", "FunctionCostId")
                         .IsUnique()
@@ -2482,9 +2477,6 @@ namespace ConduitLLM.Configuration.Migrations
                     b.Property<Guid>("FunctionExecutionId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("FunctionExecutionId1")
-                        .HasColumnType("uuid");
-
                     b.Property<bool?>("IsEstimated")
                         .HasColumnType("boolean");
 
@@ -2495,8 +2487,6 @@ namespace ConduitLLM.Configuration.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("FunctionExecutionId1");
 
                     b.HasIndex("FunctionExecutionId", "Timestamp")
                         .HasDatabaseName("IX_FunctionExecutionAudit_ExecutionTimestamp");
@@ -2751,14 +2741,10 @@ namespace ConduitLLM.Configuration.Migrations
                         .IsRequired();
 
                     b.HasOne("ConduitLLM.Functions.Entities.FunctionCost", "FunctionCost")
-                        .WithMany()
+                        .WithMany("FunctionMappings")
                         .HasForeignKey("FunctionCostId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("ConduitLLM.Functions.Entities.FunctionCost", null)
-                        .WithMany("FunctionMappings")
-                        .HasForeignKey("FunctionCostId1");
 
                     b.Navigation("FunctionConfiguration");
 
@@ -2787,15 +2773,10 @@ namespace ConduitLLM.Configuration.Migrations
             modelBuilder.Entity("ConduitLLM.Functions.Entities.FunctionExecutionAudit", b =>
                 {
                     b.HasOne("ConduitLLM.Functions.Entities.FunctionExecution", "FunctionExecution")
-                        .WithMany()
+                        .WithMany("AuditEvents")
                         .HasForeignKey("FunctionExecutionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("ConduitLLM.Functions.Entities.FunctionExecution", null)
-                        .WithMany("AuditEvents")
-                        .HasForeignKey("FunctionExecutionId1")
-                        .HasConstraintName("FK_FunctionExecutionAudits_FunctionExecutions_FunctionExecuti~1");
 
                     b.Navigation("FunctionExecution");
                 });

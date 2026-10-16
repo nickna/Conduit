@@ -16,27 +16,27 @@ namespace ConduitLLM.Gateway.Services
         /// <summary>
         /// Notifies about a webhook delivery attempt.
         /// </summary>
-        Task NotifyDeliveryAttemptAsync(string webhookUrl, string taskId, string taskType, string eventType, int attemptNumber);
+        Task NotifyDeliveryAttemptAsync(int virtualKeyId, string webhookUrl, string taskId, string taskType, string eventType, int attemptNumber);
         
         /// <summary>
         /// Notifies about a successful webhook delivery.
         /// </summary>
-        Task NotifyDeliverySuccessAsync(string webhookUrl, string taskId, int statusCode, long responseTimeMs, int totalAttempts);
+        Task NotifyDeliverySuccessAsync(int virtualKeyId, string webhookUrl, string taskId, int statusCode, long responseTimeMs, int totalAttempts);
         
         /// <summary>
         /// Notifies about a failed webhook delivery.
         /// </summary>
-        Task NotifyDeliveryFailureAsync(string webhookUrl, string taskId, string errorMessage, int? statusCode, int attemptNumber, bool isPermanent);
+        Task NotifyDeliveryFailureAsync(int virtualKeyId, string webhookUrl, string taskId, string errorMessage, int? statusCode, int attemptNumber, bool isPermanent);
         
         /// <summary>
         /// Notifies about a scheduled retry.
         /// </summary>
-        Task NotifyRetryScheduledAsync(string webhookUrl, string taskId, DateTime retryTime, int retryNumber, int maxRetries);
+        Task NotifyRetryScheduledAsync(int virtualKeyId, string webhookUrl, string taskId, DateTime retryTime, int retryNumber, int maxRetries);
         
         /// <summary>
         /// Notifies about circuit breaker state change.
         /// </summary>
-        Task NotifyCircuitBreakerStateChangeAsync(string webhookUrl, string newState, string previousState, string reason, int failureCount);
+        Task NotifyCircuitBreakerStateChangeAsync(int virtualKeyId, string webhookUrl, string newState, string previousState, string reason, int failureCount);
         
         /// <summary>
         /// Gets current webhook delivery statistics.
@@ -151,12 +151,16 @@ namespace ConduitLLM.Gateway.Services
         }
 
         public async Task NotifyDeliveryAttemptAsync(
+            int virtualKeyId,
             string webhookUrl, 
             string taskId, 
             string taskType, 
             string eventType, 
             int attemptNumber)
         {
+            // Legacy ownerless deliveries remain durable but have no authorized notification recipient.
+            if (virtualKeyId <= 0) return;
+
             try
             {
                 var attempt = new WebhookDeliveryAttempt
@@ -170,7 +174,7 @@ namespace ConduitLLM.Gateway.Services
                     Timestamp = DateTime.UtcNow
                 };
                 
-                var groupName = SignalRConstants.Groups.Webhook(webhookUrl);
+                var groupName = SignalRConstants.Groups.Webhook(virtualKeyId, webhookUrl);
                 await _hubContext.Clients.Group(groupName).SendAsync("DeliveryAttempted", attempt);
                 
                 _logger.LogDebug(
@@ -184,12 +188,16 @@ namespace ConduitLLM.Gateway.Services
         }
 
         public async Task NotifyDeliverySuccessAsync(
+            int virtualKeyId,
             string webhookUrl, 
             string taskId, 
             int statusCode, 
             long responseTimeMs, 
             int totalAttempts)
         {
+            // Legacy ownerless deliveries remain durable but have no authorized notification recipient.
+            if (virtualKeyId <= 0) return;
+
             try
             {
                 var success = new WebhookDeliverySuccess
@@ -204,7 +212,7 @@ namespace ConduitLLM.Gateway.Services
                 };
                 
                 // Broadcast to webhook-specific group
-                var groupName = SignalRConstants.Groups.Webhook(webhookUrl);
+                var groupName = SignalRConstants.Groups.Webhook(virtualKeyId, webhookUrl);
                 await _hubContext.Clients.Group(groupName).SendAsync("DeliverySucceeded", success);
                 
                 _logger.LogInformation(
@@ -218,6 +226,7 @@ namespace ConduitLLM.Gateway.Services
         }
 
         public async Task NotifyDeliveryFailureAsync(
+            int virtualKeyId,
             string webhookUrl, 
             string taskId, 
             string errorMessage, 
@@ -225,6 +234,9 @@ namespace ConduitLLM.Gateway.Services
             int attemptNumber, 
             bool isPermanent)
         {
+            // Legacy ownerless deliveries remain durable but have no authorized notification recipient.
+            if (virtualKeyId <= 0) return;
+
             try
             {
                 var failure = new WebhookDeliveryFailure
@@ -240,7 +252,7 @@ namespace ConduitLLM.Gateway.Services
                 };
                 
                 // Broadcast to webhook-specific group
-                var groupName = SignalRConstants.Groups.Webhook(webhookUrl);
+                var groupName = SignalRConstants.Groups.Webhook(virtualKeyId, webhookUrl);
                 await _hubContext.Clients.Group(groupName).SendAsync("DeliveryFailed", failure);
                 
                 _logger.LogWarning(
@@ -254,12 +266,16 @@ namespace ConduitLLM.Gateway.Services
         }
 
         public async Task NotifyRetryScheduledAsync(
+            int virtualKeyId,
             string webhookUrl, 
             string taskId, 
             DateTime retryTime, 
             int retryNumber, 
             int maxRetries)
         {
+            // Legacy ownerless deliveries remain durable but have no authorized notification recipient.
+            if (virtualKeyId <= 0) return;
+
             try
             {
                 var retry = new WebhookRetryInfo
@@ -275,7 +291,7 @@ namespace ConduitLLM.Gateway.Services
                 };
                 
                 // Broadcast to webhook-specific group
-                var groupName = SignalRConstants.Groups.Webhook(webhookUrl);
+                var groupName = SignalRConstants.Groups.Webhook(virtualKeyId, webhookUrl);
                 await _hubContext.Clients.Group(groupName).SendAsync("RetryScheduled", retry);
                 
                 _logger.LogInformation(
@@ -289,12 +305,16 @@ namespace ConduitLLM.Gateway.Services
         }
 
         public async Task NotifyCircuitBreakerStateChangeAsync(
+            int virtualKeyId,
             string webhookUrl, 
             string newState, 
             string previousState, 
             string reason, 
             int failureCount)
         {
+            // Legacy ownerless deliveries remain durable but have no authorized notification recipient.
+            if (virtualKeyId <= 0) return;
+
             try
             {
                 var stateChange = new WebhookCircuitBreakerState
@@ -308,10 +328,9 @@ namespace ConduitLLM.Gateway.Services
                     Timestamp = DateTime.UtcNow
                 };
                 
-                // Broadcast to webhook-specific group and all clients
-                var groupName = SignalRConstants.Groups.Webhook(webhookUrl);
+                // Destination details are visible only to the delivery owner.
+                var groupName = SignalRConstants.Groups.Webhook(virtualKeyId, webhookUrl);
                 await _hubContext.Clients.Group(groupName).SendAsync("CircuitBreakerStateChanged", stateChange);
-                await _hubContext.Clients.All.SendAsync("CircuitBreakerStateChanged", stateChange);
                 
                 _logger.LogWarning(
                     "Circuit breaker state changed for {WebhookUrl}: {PreviousState} -> {NewState}, reason: {Reason}",
