@@ -1,3 +1,6 @@
+#if !CONDUIT_NATIVE_AOT
+// Managed validation reference cases; the EF-free published native metrics
+// probe retains equivalent typed-store input and cancellation coverage.
 using AwesomeAssertions;
 
 using ConduitLLM.Configuration;
@@ -227,3 +230,4 @@ public sealed partial class GatewayMetricsPersistenceParityTests
         public void Dispose() { }
     }
 }
+#endif

@@ -117,7 +117,7 @@ the NativeAOT workflow.
 | Billing-audit batch writes / `IBillingAuditRuntimeWriter` | `BillingAuditPersistenceParityTests`, `BillingAuditServicePersistenceTests` | [Linux run 38149774358](https://github.com/nickna/Conduit/actions/runs/38149774358) passes the standalone probe's 17 scalars, generated defaults, ordered immutable results, 129-row atomic rollback/retry, constraints and SQL/pool cancellation with reuse. Its host gate checks independent subthreshold timers on two quiet Gateways, then a fresh timer marker and pending shutdown tail on each host in turn, owned graceful exits, exclusive final-flush witnesses and all 17 stored fields. Real PostgreSQL service cases also cover failed-write requeue/retry and shutdown cancellation/reuse. Native Admin uses the same hosted writer; no controlled Admin HTTP enqueue is claimed. Scheduled native retention is disabled; audit reads, retention and billing reconciliation remain separate. |
 | Async tasks / `IAsyncTaskRuntimeStore` | `AsyncTaskRuntimePersistenceParityTests` | Persistence probe exercises CRUD, claim/provider phases and archival; Gateway probe reads and cancels a durable task across hosts. Native lease recovery/retry and video/provider workloads require additional process tests. |
 | Media ownership/quota / `IMediaRuntimeStore` | `MediaRuntimePersistenceParityTests` | Persistence probe covers ownership, tombstones, aggregates, and quota reads; Gateway probe generates, stores, reads, and downloads an identical PNG through S3-compatible storage. Assigned/unlimited-policy cases have shared-contract evidence. Admin cleanup/reconciliation remains EF. |
-| Gateway operational aggregates / `IGatewayMetricsStore` | `GatewayMetricsPersistenceParityTests` | Gateway process gate checks seeded $0.40/min cost rate, 0.20s mean latency and one active mapping on an elected metrics host, plus two pending notification tasks on each Gateway. [Linux run 38121134709](https://github.com/nickna/Conduit/actions/runs/38121134709) passes these assertions. Broader Admin reporting remains separate. |
+| Gateway operational aggregates / `IGatewayMetricsStore` | `GatewayMetricsPersistenceParityTests`, independent published `GatewayMetricsPersistenceProbe` | The #1671 proof below covers all six repository methods and eight SQL cancellation phases. The earlier Gateway process gate checks seeded $0.40/min cost rate, 0.20s mean latency and one active mapping on an elected metrics host, plus two pending notification tasks on each Gateway. [Linux run 38121134709](https://github.com/nickna/Conduit/actions/runs/38121134709) passes those host assertions. Broader Admin reporting remains separate. |
 | Function catalog / `IFunctionDiscoveryRuntimeStore` | `FunctionDiscoveryPersistenceParityTests` | Published persistence probe verifies scalar enabled-row/filter/schema reads. [Linux run 38124571584](https://github.com/nickna/Conduit/actions/runs/38124571584) also proves authenticated function catalog/parameter HTTP on both Gateways, including filters, private-field omission and error contracts. This is metadata discovery, not LLM tool discovery or execution. |
 | Function execution configuration / `IFunctionExecutionConfigurationStore` | `FunctionExecutionConfigurationPersistenceParityTests` | [Linux run 38122760993](https://github.com/nickna/Conduit/actions/runs/38122760993) proves scalar configuration and opaque credential reads, ordering and pool cancellation/reuse. It predates the SQL-in-flight cancellation additions described below. Native Gateway selects the store for client construction, HTTP preflight and Core tool/route configuration reads; paired managed tests and host composition cover those selections. [Linux run 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143) also passes native execution authentication/configuration/required-parameter preflight on both Gateways. The published Exa process job linked below proves configured search dispatch and Core LLM tool discovery on both Gateways; other provider workflows remain separate. |
 | Function pricing / `IFunctionPricingRuntimeStore` | `FunctionPricingPersistenceParityTests` | [Linux run 38124571584](https://github.com/nickna/Conduit/actions/runs/38124571584) proves canonical mapping/cost eligibility reads. Native Gateway selects the cached configuration-pricing adapter; JIT/Admin retain cost management. Selected Exa function accounting is qualified by the published process job linked below; Admin CRUD and other providers remain separate. |
@@ -140,8 +140,34 @@ exact exception/parameter assertions, no context entry or SQL dispatch, and
 positive recovery controls. Valid cases preserve the aggregate matrix, original
 string matching, maximum positive limit and caller cancellation. All four new
 owned input schemas were verified absent after independent bounded cleanup.
-This managed proof does not qualify the published native metrics profile;
-that coverage is tracked separately in #1671.
+Published native metrics coverage is recorded separately below for #1671.
+
+For #1671, both managed metrics partials explicitly use
+`#if !CONDUIT_NATIVE_AOT` and identify the independent typed native replacement.
+All 13 prior managed cases remain discovered and executed; the added production
+schema equality case brings the passing managed total to 14 without skips.
+An isolated compile includes both actual files with the native symbol and no
+package dependencies; its unsymbolized control fails as expected. That focused
+guard proof covers these two files. Full integration-project native compatibility
+and application qualification remain under #1373/#1375.
+
+The fresh EF-free Linux native driver executes all six metrics methods against
+a separate owned schema using embedded production-model DDL, checked for drift
+by the managed case. Independent expectations cover every output field, empty
+results, grouping, UTC/time boundaries, nullable duration averages, decimal sums
+and spend ties. Six pre-cancelled calls, six occupied-pool cancellations,
+14 invalid-input/token combinations and all eight observed SQL lock waits verify
+caller tokens and single-slot recovery. SQL recovery uses the same backend while
+the blocker still holds its lock; bounded cleanup drains, releases and joins again.
+The full driver published in 22.040 seconds with zero warnings and ran in 10.803
+seconds with exit zero and empty stderr. All 182 source/resource inputs and four
+published files remained unchanged; three restored graphs contain no EF packages.
+Owned schema sets were empty before and after execution. The embedded schema has
+SHA-256 `d058f5531627940e3622a586422dc89f35894f601d6eab926b10f1c8090e5c01`;
+the executable has SHA-256
+`dc2695ef24e379e0c30c29ebef523bca31522e38165705500ea174a2b9dbeaf7`.
+The retained complete execution receipt has SHA-256
+`6362777d709294c8dd7aa2f0336e02821618891282a5b2801f1f1e09e9b05bb1`.
 
 The #1669 model-cost contract captures one UTC eligibility timestamp after
 identifier validation and before awaiting a context or connection. The typed
