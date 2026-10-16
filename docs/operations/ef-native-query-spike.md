@@ -47,6 +47,13 @@ wall time from the bounded command receipt, rounded to two decimal places.
 
 The internal `ParameterSymbol`/`UnreachableException` signature matches
 [upstream EF issue 35494](https://github.com/dotnet/efcore/issues/35494).
+The separate expired-key maintenance NRE now has an
+[isolated seven-case reduction](../../tools/EfQueryPrecompilerRepro/README.md):
+even an unfiltered boolean value setter reproduces it, while value-lambda update
+controls generate and compile. It is filed as
+[EF #39271](https://github.com/dotnet/efcore/issues/39271), distinct from #35494.
+The reduction performs no database query or native publication and does not
+change this spike's qualification result.
 Repeated diagnostic renderings were not counted as distinct unsupported queries.
 The [observed failure index](ef-query-precompiler-failure-inventory.md) separates
 334 project/expression/failure signatures, source-match ambiguity, nested null

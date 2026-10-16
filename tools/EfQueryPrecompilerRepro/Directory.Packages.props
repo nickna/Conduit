@@ -1,0 +1,19 @@
+<Project>
+  <!-- This opt-in diagnostic project is independently copyable and deliberately
+       aligns all EF tooling with its runtime without changing repository pins. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tasks" Version="10.0.12" />
+    <PackageVersion Include="Npgsql" Version="10.0.3" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- Preserve the repository's security fixes for design-time dependencies. -->
+    <PackageVersion Include="Microsoft.Build.Tasks.Core" Version="18.6.3" />
+    <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="18.6.3" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
+  </ItemGroup>
+</Project>
