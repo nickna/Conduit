@@ -1,0 +1,173 @@
+using System.Net;
+
+using ConduitLLM.Admin.Extensions;
+using ConduitLLM.Gateway.Extensions;
+using ConduitLLM.Security.Middleware;
+
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace ConduitLLM.Tests.Security;
+
+/// <summary>
+/// Real loopback HTTP coverage for the production security registration and header
+/// pipeline only. These partial security hosts do not start either complete API.
+/// </summary>
+[Trait("Category", "Integration")]
+[Trait("Component", "Security")]
+public sealed class SecurityHeadersHttpHostTests
+{
+    private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(15);
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PartialSecurityHost_DefaultsSuppressKestrelIdentification(bool gateway)
+    {
+        var response = await SendAsync(gateway, new Dictionary<string, string>());
+
+        Assert.Empty(response.Server);
+        Assert.False(response.AddServerHeader);
+        Assert.Equal("nosniff", response.ContentTypeOptions);
+        Assert.Equal("v1", response.ApiVersion);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task PartialSecurityHost_ExplicitAggregateSuppressesEvenWhenIndividualHeadersAreDisabled(
+        bool gateway, bool disableIndividualHeaders)
+    {
+        var prefix = Prefix(gateway);
+        var configuration = new Dictionary<string, string>
+        {
+            [$"{prefix}SECURITY_HEADERS_ENABLED"] = "true"
+        };
+        if (disableIndividualHeaders)
+        {
+            configuration[$"{prefix}SECURITY_HEADERS_X_CONTENT_TYPE_OPTIONS_ENABLED"] = "false";
+            configuration[$"{prefix}SECURITY_HEADERS_X_XSS_PROTECTION_ENABLED"] = "false";
+            configuration[$"{prefix}SECURITY_HEADERS_HSTS_ENABLED"] = "false";
+        }
+
+        var response = await SendAsync(gateway, configuration, addServerHeader: true);
+
+        Assert.Empty(response.Server);
+        Assert.False(response.AddServerHeader);
+        Assert.Equal(disableIndividualHeaders ? null : "nosniff", response.ContentTypeOptions);
+        Assert.Equal("v1", response.ApiVersion);
+    }
+
+    [Theory]
+    [InlineData(true, null, true)]
+    [InlineData(false, null, true)]
+    [InlineData(true, false, false)]
+    [InlineData(false, false, false)]
+    public async Task PartialSecurityHost_DisabledAggregatePreservesTheHostsKestrelSetting(
+        bool gateway, bool? configuredAddServerHeader, bool expectedAddServerHeader)
+    {
+        var response = await SendAsync(gateway, new Dictionary<string, string>
+        {
+            [$"{Prefix(gateway)}SECURITY_HEADERS_ENABLED"] = "false"
+        }, configuredAddServerHeader);
+
+        Assert.Equal(expectedAddServerHeader, response.AddServerHeader);
+        if (expectedAddServerHeader) Assert.Equal("Kestrel", Assert.Single(response.Server));
+        else Assert.Empty(response.Server);
+        Assert.Null(response.ContentTypeOptions);
+        Assert.Null(response.ApiVersion);
+    }
+
+    private static string Prefix(bool gateway) => gateway ? "CONDUIT_CORE_" : "CONDUIT_ADMIN_";
+
+    private static async Task<ObservedHeaders> SendAsync(
+        bool gateway, Dictionary<string, string> configuration, bool? addServerHeader = null)
+    {
+        // No default environment/configuration providers: a developer's API settings
+        // must not alter the security options exercised by this isolated host.
+        var builder = new HostBuilder()
+            .ConfigureAppConfiguration((_, options) => options.AddInMemoryCollection(configuration))
+            .ConfigureLogging(logging => logging.ClearProviders())
+            .ConfigureWebHost(web =>
+            {
+                web.UseKestrel(options =>
+                {
+                    options.Listen(IPAddress.Loopback, 0);
+                    if (addServerHeader.HasValue) options.AddServerHeader = addServerHeader.Value;
+                });
+                web.ConfigureServices((context, services) =>
+                {
+                    var existingHostedServices = services.Where(descriptor => descriptor.ServiceType == typeof(IHostedService)).ToHashSet();
+                    if (gateway) services.AddCoreApiSecurity(context.Configuration);
+                    else services.AddAdminServices(context.Configuration);
+
+                    // Keep the web-server lifecycle. Remove only background workers
+                    // added by API registration, whose database/messaging work is not
+                    // part of this partial security host's header contract.
+                    foreach (var descriptor in services.Where(descriptor => descriptor.ServiceType == typeof(IHostedService) &&
+                        !existingHostedServices.Contains(descriptor)).ToArray())
+                        services.Remove(descriptor);
+                });
+                web.Configure(app =>
+                {
+                    if (gateway) app.UseGatewaySecurityHeaders();
+                    else app.UseAdminSecurityHeaders();
+                    app.Run(context => context.Response.WriteAsync("partial security host", context.RequestAborted));
+                });
+            });
+
+        var host = builder.Build();
+        try
+        {
+            using var deadline = new CancellationTokenSource(TestTimeout);
+            await host.StartAsync(deadline.Token).WaitAsync(TestTimeout);
+            var server = host.Services.GetRequiredService<IServer>();
+            var address = Assert.Single(server.Features.Get<IServerAddressesFeature>()!.Addresses);
+            var uri = new Uri(address);
+            Assert.True(IPAddress.IsLoopback(IPAddress.Parse(uri.Host)));
+            Assert.InRange(uri.Port, 1, 65535);
+            using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false })
+            {
+                BaseAddress = uri,
+                Timeout = TestTimeout
+            };
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/proof")
+            {
+                Version = HttpVersion.Version11,
+                VersionPolicy = HttpVersionPolicy.RequestVersionExact
+            };
+            using var response = await client.SendAsync(request, deadline.Token);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("partial security host", await response.Content.ReadAsStringAsync(deadline.Token));
+            return new ObservedHeaders(response.Headers.Server.Select(value => value.ToString()).ToArray(),
+                response.Headers.TryGetValues("X-Content-Type-Options", out var contentType) ? Assert.Single(contentType) : null,
+                response.Headers.TryGetValues("X-API-Version", out var apiVersion) ? Assert.Single(apiVersion) : null,
+                host.Services.GetRequiredService<IOptions<KestrelServerOptions>>().Value.AddServerHeader);
+        }
+        finally
+        {
+            try
+            {
+                using var shutdown = new CancellationTokenSource(TestTimeout);
+                await host.StopAsync(shutdown.Token).WaitAsync(TestTimeout);
+            }
+            finally
+            {
+                await Assert.IsAssignableFrom<IAsyncDisposable>(host).DisposeAsync().AsTask().WaitAsync(TestTimeout);
+            }
+        }
+    }
+
+    private sealed record ObservedHeaders(string[] Server, string? ContentTypeOptions, string? ApiVersion, bool AddServerHeader);
+}

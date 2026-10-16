@@ -125,8 +125,9 @@ namespace ConduitLLM.Security.Options
     public class SecurityHeadersOptions
     {
         /// <summary>
-        /// Whether the security headers middleware may add or remove response headers.
-        /// When disabled, individual header settings are ignored.
+        /// Whether security middleware may change response headers and the host
+        /// suppresses Kestrel's Server header. When disabled, individual header
+        /// settings are ignored and Kestrel's configured behavior is preserved.
         /// </summary>
         public bool Enabled { get; set; } = true;
 

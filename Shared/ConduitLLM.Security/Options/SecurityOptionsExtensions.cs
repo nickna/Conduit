@@ -1,5 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
+
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace ConduitLLM.Security.Options
 {
@@ -45,6 +49,7 @@ namespace ConduitLLM.Security.Options
                 }
             });
 
+            ConfigureServerIdentification<AdminSecurityOptions>(services);
             return services;
         }
 
@@ -114,7 +119,26 @@ namespace ConduitLLM.Security.Options
                     "Gateway discovery rate-limit paths must be nonblank absolute route roots starting with '/'.")
                 .ValidateOnStart();
 
+            ConfigureServerIdentification<GatewaySecurityOptions>(services);
             return services;
+        }
+
+        private static void ConfigureServerIdentification<
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TOptions>(
+            IServiceCollection services)
+            where TOptions : SecurityOptionsBase
+        {
+            // Kestrel adds its own Server header after middleware runs. Apply the
+            // enabled security policy after ordinary host configuration; when off,
+            // preserve the host's configured server-identification behavior.
+            services.AddOptions<KestrelServerOptions>()
+                .PostConfigure<IOptions<TOptions>>(static (server, security) =>
+                {
+                    if (security.Value.Headers.Enabled)
+                    {
+                        server.AddServerHeader = false;
+                    }
+                });
         }
 
         /// <summary>
