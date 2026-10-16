@@ -61,6 +61,14 @@ public interface IGlobalSettingsCacheService
     /// Broadcasts a full reload to every process-local cache. Redis pub/sub is used when
     /// configured; a Redis-less development process reloads itself.
     /// </summary>
+    /// <remarks>
+    /// Each receiver records the request ID only after a successful reload. Concurrent
+    /// duplicates share the in-flight result; failed or canceled IDs remain retryable.
+    /// Without Redis, this task propagates load failures. With Redis, it acknowledges
+    /// publication only; receiver failures are logged without recording success.
+    /// Redis pub/sub does not provide durable redelivery.
+    /// </remarks>
+    /// <param name="requestId">The duplicate-correlation ID; a blank value creates a fresh ID.</param>
     Task PublishReloadAsync(string requestId);
 
     /// <summary>
