@@ -88,6 +88,13 @@ the benchmark reader requires a digest-pinned candidate and replays that binding
 Existing historical schema-1 baselines have no manifest identity. Production
 promotion remains blocked by the [canary policy](native-aot-canary.md).
 
+The document kind distinguishes the two uses of schema 1: a current
+`conduit-native-publish` manifest contains source, toolchain and file identity;
+a historical `native-baselines.json` report contains unbound metrics. A version
+number alone does not make the historical report qualify. The container collector
+rejects the legacy `NativeBaselinePath` argument and reads metrics from exactly
+one completed image package, avoiding first-match selection from a service list.
+
 ## Assembled image payloads
 
 `scripts/aot/publish-native-image.ps1` prepares a complete application payload for
@@ -242,6 +249,23 @@ calculations. Changed files, source, build, digest roles or metrics produce HOLD
 This binding leaves the operational promotion policy and its provenance,
 benchmark, soak and rollback requirements in force.
 
+The following contracts exercise the build association required by
+[#1582](https://github.com/nickna/Conduit/issues/1582):
+
+| Association | Validator and regression suite |
+| --- | --- |
+| Exact source, selected toolchain, fresh outputs and full runtime inventory | `native-publish-evidence.ps1`, `native-publish-build.ps1`; `test-native-publish-evidence.ps1` |
+| Independently compiled application and health probe belong to one sealed image build | `native-image-publish-evidence.ps1`; `test-native-image-publish.ps1`, including a substituted child manifest with its reference hash updated |
+| Requested index, selected platform manifest, config and observed local image/container retain their distinct roles | `native-image-oci-association.ps1`; `test-native-image-oci-association.ps1` |
+| Every measured sample and publish metric belongs to the retained package | `native-benchmark-image-evidence.ps1`, collector and evaluator; `test-native-benchmark-collector.ps1` and `test-native-promotion.ps1` |
+
+The promotion suite rejects a different sealed build even when its source,
+runtime bytes and metric values match, and rejects a single cold sample borrowed
+from another build. Collector regressions reject the cross-build package before
+launching the workload. Mutated retained payloads, manifests and OCI archives also
+fail validation. These are contract fixtures; their synthetic promotion decisions
+do not supply production measurements or operational approval.
+
 Schema 4 also seals collection attempts and atomic report publication. The evaluator
 requires the latest successful attempt, or an explicitly approved historical
 selection inside an accepted qualification window. It rechecks original report,
@@ -271,9 +295,17 @@ The earlier successful
 at `e0f9f9904df187460ab338bd86619d912f653d60` retains clean-Git payloads and
 successful Admin/Gateway packaged OpenAPI documents (191/35 paths). Both packages
 honestly report missing image/container descriptors and OCI association HOLD from
-the classic image store. A new run of the required descriptor gate must supply
-verified association before that evidence gap can be closed; the final PR records
-the exact tested commit and run rather than altering historical reports.
+the classic image store.
+
+[Linux run 38856125759](https://github.com/nickna/Conduit/actions/runs/38856125759)
+subsequently passed the required OCI association gate for both Admin and Gateway,
+with packaged OpenAPI exports of 191 and 35 paths and confirmed runtime cleanup.
+The run's PR head is `bc9a0741fa68ed3a401161b633825cc76a6fbe94`; its actual
+checkout and image source are the synthetic merge
+`e340f3f940a8f9419384dbb4cc4b6d0b11d38a73`. The gate verified each clean package
+against that merge's `GITHUB_SHA`. This supplies hosted local descriptor-chain
+evidence for those builds. Registry digest qualification and operational promotion
+remain separate, and later source changes require their own CI verification.
 
 ## Native build source
 
