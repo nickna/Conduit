@@ -86,14 +86,14 @@ public sealed class LegacySpendMaintenanceTests
         if (missingEntity == "key")
         {
             fixture.Keys.Setup(repository => repository.GetByIdAsync(KeyId, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(null);
+                .Returns(Task.FromResult<VirtualKey>(null));
         }
         else
         {
             fixture.Groups.Setup(repository => repository.GetByIdAsync(GroupId, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(null);
+                .Returns(Task.FromResult<VirtualKeyGroup>(null));
             fixture.Groups.Setup(repository => repository.GetByKeyIdAsync(KeyId))
-                .ReturnsAsync(null);
+                .Returns(Task.FromResult<VirtualKeyGroup>(null));
         }
 
         await Assert.ThrowsAsync<BillingSystemException>(fixture.UpdateThroughHelperAsync);
