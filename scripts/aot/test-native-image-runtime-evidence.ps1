@@ -233,7 +233,7 @@ function Invoke-RuntimeCase([string] $Service, [string] $Scenario, [bool] $Succe
             Assert-RuntimeContract ($records.Count -eq 0) 'Invalid source/output/deadline reached Docker.'
             if ($null -ne $sentinel) { Assert-RuntimeContract ([IO.File]::ReadAllText($sentinel) -ceq 'existing runtime owner' -and [IO.Directory]::GetFileSystemEntries($artifact).Length -eq 1) 'Runtime freshness rejection changed existing state.' }
         }
-        elseif ($Scenario -cin @('wrong-owner', 'wrong-name', 'wrong-image', 'foreign-running')) {
+        elseif ($Scenario -cin @('wrong-owner', 'wrong-name', 'wrong-image', 'wrong-service', 'foreign-running', 'late-owner-change')) {
             Assert-RuntimeContract ($created.Count -eq 1 -and $stopped.Count -eq 0 -and $removed.Count -eq 0 -and [IO.File]::Exists((Join-Path $root 'active.json'))) 'Runtime cleanup acted on foreign/unassociated state.'
         }
         elseif ($Scenario -cin @('stop-failure', 'stop-still-running')) {
@@ -244,6 +244,17 @@ function Invoke-RuntimeCase([string] $Service, [string] $Scenario, [bool] $Succe
         }
         elseif ($created.Count -gt 0) {
             Assert-RuntimeContract ($removed.Count -eq 1 -and -not [IO.File]::Exists((Join-Path $root 'active.json'))) 'Failed runtime did not remove its verified stopped container.'
+        }
+        if ($Scenario -ceq 'late-owner-change') {
+            $starts = @($records | Where-Object { $_.arguments[1] -ceq 'start' })
+            $copies = @($records | Where-Object { $_.arguments[1] -ceq 'cp' })
+            $logs = @($records | Where-Object { $_.arguments[1] -ceq 'logs' })
+            $state = Read-VerificationJson (Join-Path $root 'active.json')
+            Assert-RuntimeContract ($starts.Count -eq 1 -and $copies.Count -eq 1 -and $logs.Count -eq 1 -and
+                $starts[0].ordinal -lt $copies[0].ordinal -and $copies[0].ordinal -lt $logs[0].ordinal -and
+                @($records | Where-Object { $_.ordinal -gt $logs[0].ordinal -and $_.arguments[1] -ceq 'inspect' -and $_.arguments[-1] -ceq $containerId }).Count -eq 1 -and
+                $state.container.Config.Labels['conduit.proof.owner'] -ceq ('d' * 32) -and $state.container.State.Running -and
+                $caught.Exception.Message.StartsWith('Native image execution owned cleanup failed;', [StringComparison]::Ordinal)) 'Late ownership change did not occur after validated execution and before cleanup refusal.'
         }
         if ($Scenario -cin @('start-nonzero', 'wait-timeout', 'running-after-wait')) {
             Assert-RuntimeContract ($stopped.Count -eq 1 -and $removed.Count -eq 1 -and $stopped[0].arguments[-1] -ceq $containerId) 'Owned running failure did not stop then nonforce-remove its exact ID.'
@@ -410,6 +421,7 @@ switch ($DockerArguments[1]) {
             'wrong-owner' { $state.container.Config.Labels['conduit.proof.owner'] = 'd' * 32 }
             'wrong-name' { $state.container.Name = '/foreign-runtime' }
             'wrong-image' { $state.container.Image = $otherImageId }
+            'wrong-service' { $state.container.Config.Labels['conduit.proof.service'] = 'gateway' }
             'foreign-running' { $state.container.Config.Labels['conduit.proof.owner'] = 'd' * 32; $state.container.State.Running = $true; $state.container.State.Status = 'running' }
             'runtime-wrong-manifest' { $state.container.ImageManifestDescriptor.digest = 'sha256:' + ('d' * 64) }
         }
@@ -426,7 +438,7 @@ switch ($DockerArguments[1]) {
         if ($lookup -cne $id -and $lookup -cne $state.lookupName) { Missing $lookup }
         if ($phase -ceq 'runtime' -and $state.started -and $state.container.State.Running -and
             $scenario -cnotin @('wait-timeout', 'start-nonzero', 'stop-failure', 'stop-still-running') -and
-            -not ($scenario -ceq 'running-after-wait' -and $state.waited)) {
+            -not ($scenario -cin @('running-after-wait', 'late-owner-change') -and $state.waited)) {
             $state.container.State.Running = $false; $state.container.State.Status = 'exited'; Write-Json $active $state
         }
         [Console]::Out.WriteLine((ConvertTo-Json -InputObject $state.container -Depth 32 -Compress)); exit 0
@@ -476,6 +488,14 @@ switch ($DockerArguments[1]) {
     'logs' {
         if ($DockerArguments.Count -ne 3 -or $DockerArguments[-1] -cne $id) { throw 'Invalid runtime logs identity.' }
         if ($scenario -ceq 'logs-overflow') { Pause-Command; [Console]::Out.Write([string]::new([char]120, 4194305)); Start-Sleep -Seconds 60; exit 0 }
+        if ($scenario -ceq 'late-owner-change') {
+            # Initial ownership validation, execution and OpenAPI copy already
+            # succeeded. Cleanup must revalidate this now-foreign running record.
+            $state = Read-Json $active
+            $state.container.Config.Labels['conduit.proof.owner'] = 'd' * 32
+            $state.container.State.Running = $true; $state.container.State.Status = 'running'
+            Write-Json $active $state
+        }
         [Console]::Out.WriteLine('Owned native runtime completed.'); exit 0
     }
     'stop' {
@@ -513,8 +533,8 @@ switch ($DockerArguments[1]) {
     foreach ($scenario in @('package-report-tamper', 'manifest-tamper', 'payload-tamper', 'runtime-manifest-tamper', 'runtime-payload-tamper',
         'create-nonzero', 'create-malformed', 'create-timeout', 'start-nonzero', 'wait-nonzero',
         'exit-mismatch', 'running-after-wait', 'wait-timeout', 'cp-nonzero', 'cp-timeout', 'cp-directory',
-        'openapi-nonjson', 'openapi-duplicate', 'logs-overflow', 'wrong-owner', 'wrong-name', 'wrong-image',
-        'foreign-running', 'stop-failure', 'stop-still-running', 'rm-failure', 'absence-failure',
+        'openapi-nonjson', 'openapi-duplicate', 'logs-overflow', 'wrong-owner', 'wrong-name', 'wrong-image', 'wrong-service',
+        'foreign-running', 'late-owner-change', 'stop-failure', 'stop-still-running', 'rm-failure', 'absence-failure',
         'fresh-visible', 'fresh-hidden', 'fresh-claim', 'invalid-execution-timeout', 'invalid-cleanup-timeout',
         'invalid-docker-timeout', 'nested-artifact', 'oci-report-tamper', 'oci-observations-tamper', 'oci-archive-tamper',
         'oci-reference-path', 'runtime-wrong-manifest', 'runtime-oci-report-tamper', 'runtime-oci-archive-tamper')) {

@@ -184,6 +184,23 @@ and confirms absence before `runtime/evidence.json` records success. The evidenc
 binds the execution to the original packaging report and OpenAPI bytes. Failed
 execution leaves its diagnostic files without successful execution evidence.
 
+The runtime verifier addresses uncertain creation
+([#1595](https://github.com/nickna/Conduit/issues/1595)) by recording its create
+attempt before launching Docker. A fresh GUID supplies the exact container name
+and owner label. Cleanup can recover that name when creation accepted the request
+but returned an error, timed out or produced an unusable ID. Inspection must agree
+on name, owner, service and immutable image before cleanup pins or acts on the ID.
+An ownership mismatch fails verification and leaves that container untouched.
+
+Execution and cleanup have independent budgets. Cleanup inspects again, stops an
+owned running container, verifies its stopped state, removes it without force and
+confirms absence. Successful evidence is created only after that sequence and a
+final replay of the package and OpenAPI identity. A retry requires a fresh artifact
+directory; diagnostic files from a failed invocation cannot become a successful
+report from a later run. `test-native-image-runtime-evidence.ps1` exercises these
+boundaries with real child commands; packaged entrypoint evidence is supplied by
+the hosted image jobs described below.
+
 Each invocation retains a fresh parent directory with `packaging` and `runtime`
 children. The Node command `native-container-smoke.mjs IMAGE SERVICE` calls this
 same PowerShell driver; an optional third argument selects the fresh parent
