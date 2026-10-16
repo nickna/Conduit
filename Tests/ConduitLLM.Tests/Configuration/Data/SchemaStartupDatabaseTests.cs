@@ -3,7 +3,6 @@ using ConduitLLM.Migrator;
 using ConduitLLM.SchemaStartupFixtures;
 
 using Npgsql;
-using NpgsqlTypes;
 
 namespace ConduitLLM.Tests.Configuration.Data;
 
@@ -33,27 +32,22 @@ public sealed class SchemaStartupDatabaseTests
     {
         var management = ManagementConnection();
         var fixture = await SchemaStartupDatabase.CreateAsync(management, previousSchema: true);
-        var removedShadowColumns = new[]
-        {
-            (Table: "FunctionCostMappings", Column: "FunctionCostId1"),
-            (Table: "FunctionExecutionAudits", Column: "FunctionExecutionId1")
-        };
         var variables = new[] { "DATABASE_URL", "ConduitLLM__Messaging__Backend", "ConduitLLM__Messaging__Wolverine__Transport" };
         var originals = variables.Select(Environment.GetEnvironmentVariable).ToArray();
         try
         {
             Assert.NotNull(fixture.AppliedVersion);
             Assert.NotEqual(ConduitSchemaVersion.Current, fixture.AppliedVersion);
-            // The actual prior migration retains both accidental shadow relationships.
-            // The latest migration removes them while keeping the canonical FKs.
+            var previousHistory = await ReadAppliedMigrationsAsync(fixture.ConnectionString);
+            Assert.NotEmpty(previousHistory);
+            Assert.Equal(fixture.AppliedVersion, previousHistory[^1]);
+            Assert.DoesNotContain(ConduitSchemaVersion.Current, previousHistory);
+            // The fixture applies the immediately preceding migration's real DDL.
+            // Shadow-relationship upgrades have their own explicitly targeted tests;
+            // this release adds durable function claims to the already paired schema.
             Assert.True(await TableExistsAsync(fixture.ConnectionString, "WebhookReplayAudits"));
             Assert.True(await TableExistsAsync(fixture.ConnectionString, "VirtualKeyGroupTransactions"));
-            foreach (var (table, column) in removedShadowColumns)
-            {
-                var previousColumns = await ReadColumnNullabilityAsync(fixture.ConnectionString, table, new[] { column });
-                Assert.True(previousColumns.TryGetValue(column, out var nullable) && nullable,
-                    $"The previous migration must retain nullable shadow column '{table}.{column}'.");
-            }
+            Assert.False(await TableExistsAsync(fixture.ConnectionString, "FunctionExecutionClaims"));
             Environment.SetEnvironmentVariable(variables[0], fixture.ConnectionString);
             Environment.SetEnvironmentVariable(variables[1], "Wolverine");
             Environment.SetEnvironmentVariable(variables[2], "InMemory");
@@ -61,8 +55,12 @@ public sealed class SchemaStartupDatabaseTests
             await using var dataSource = NpgsqlDataSource.Create(fixture.ConnectionString);
             Assert.True((await new SchemaVersionProbe(dataSource).GetStatusAsync()).IsCurrent);
             Assert.True(await TableExistsAsync(fixture.ConnectionString, "WebhookReplayAudits"));
-            foreach (var (table, column) in removedShadowColumns)
-                Assert.Empty(await ReadColumnNullabilityAsync(fixture.ConnectionString, table, new[] { column }));
+            Assert.True(await TableExistsAsync(fixture.ConnectionString, "VirtualKeyGroupTransactions"));
+            Assert.True(await TableExistsAsync(fixture.ConnectionString, "FunctionExecutionClaims"));
+            var upgradedHistory = await ReadAppliedMigrationsAsync(fixture.ConnectionString);
+            Assert.Equal(previousHistory.Append(ConduitSchemaVersion.Current), upgradedHistory);
+            Assert.Equal(0, await MigrationRunner.RunAsync());
+            Assert.Equal(upgradedHistory, await ReadAppliedMigrationsAsync(fixture.ConnectionString));
         }
         finally
         {
@@ -135,22 +133,17 @@ public sealed class SchemaStartupDatabaseTests
         return (bool)(await query.ExecuteScalarAsync())!;
     }
 
-    private static async Task<Dictionary<string, bool>> ReadColumnNullabilityAsync(
-        string connectionString, string table, IReadOnlyList<string> columns)
+    private static async Task<List<string>> ReadAppliedMigrationsAsync(string connectionString)
     {
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync();
         await using var query = new NpgsqlCommand("""
-            SELECT column_name, is_nullable = 'YES'
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = @table AND column_name = ANY(@columns)
+            SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId"
             """, connection);
-        query.Parameters.Add("table", NpgsqlDbType.Text).Value = table;
-        query.Parameters.Add("columns", NpgsqlDbType.Array | NpgsqlDbType.Text).Value = columns.ToArray();
         await using var reader = await query.ExecuteReaderAsync();
-        var result = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var result = new List<string>();
         while (await reader.ReadAsync())
-            result.Add(reader.GetString(0), reader.GetBoolean(1));
+            result.Add(reader.GetString(0));
         return result;
     }
 }
