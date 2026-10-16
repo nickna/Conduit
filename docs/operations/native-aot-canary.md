@@ -160,6 +160,18 @@ It rejects the old service-only `-NativeBaselinePath` argument. Both container
 variants run by their observed immutable local image IDs on Linux/amd64. Every
 native sample records its actual container ID and verifies the packaged selected
 manifest before and after workloads; cleanup still uses verified ownership.
+
+For a multi-platform JIT index, metadata selection requires exactly one valid
+Linux/amd64 descriptor, then inspects that exact digest and sums its layer sizes.
+Missing or ambiguous platform descriptors and invalid selected digests fail before
+container/workload launch.
+The `jit-index` collector regression uses distinct index and selected-manifest
+digests, a synthetic selected-layer total of 518 bytes, and checks all six warm
+and measured launches use the observed immutable local ID
+([#1619](https://github.com/nickna/Conduit/issues/1619)). Keep descriptor collections
+in an ordinary variable such as `platformCandidates`: PowerShell's scalar regex
+operators can overwrite the automatic, case-insensitive `$Matches` variable.
+
 After collecting metrics, the collector stops each owned host with a bounded
 deadline (30 seconds by default, configurable with `-ShutdownTimeoutSeconds`).
 It requires a stopped host with exit code zero before ordinary removal. A failed
