@@ -38,12 +38,13 @@ public interface IFunctionCostRepository
     Task<List<FunctionCost>> GetAllActiveAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets the active cost configuration for a function configuration
-    /// Returns the highest priority active cost that is currently effective
+    /// Gets the highest-priority eligible cost associated by an active mapping with the function configuration.
+    /// Costs must be active, effective at or before the current UTC time, and unexpired (expiry is exclusive).
+    /// Ineligible costs are excluded before ranking; equal priorities prefer the newest effective date.
     /// </summary>
     /// <param name="functionConfigurationId">The function configuration ID</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The active function cost or null if not found</returns>
+    /// <returns>The best eligible function cost, or null when no eligible actively mapped cost exists.</returns>
     Task<FunctionCost?> GetActiveCostForFunctionAsync(int functionConfigurationId, CancellationToken cancellationToken = default);
 
     /// <summary>
