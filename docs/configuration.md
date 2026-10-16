@@ -244,6 +244,33 @@ The clearest illustration of the deploy-vs-runtime split is the **routing kill s
 like an infrastructure toggle, but it is a *runtime* setting stored in the database, so you can flip
 routing off during an incident without touching a deployment.
 
+### Global-settings reload requests
+
+Each process records successful global-settings reload IDs to suppress duplicate
+work. It keeps at most 10,000 completed IDs, evicting the oldest by successful
+completion order as soon as the count exceeds that limit. Deduplication also
+expires after 24 hours of elapsed time from successful completion, measured with
+a monotonic clock. Duplicate hits do not extend that window or change FIFO order.
+Expired records are pruned on the next reload request or completion.
+
+In-flight requests are tracked separately and are never evicted by completed-ID
+retention. Concurrent deliveries of the same ID join the same result. Failed or
+canceled reloads are not retained as completed, so a later delivery can retry;
+failed loads preserve the previous cache snapshot.
+
+A delayed or out-of-order duplicate from either durable Admin or Gateway queue
+may therefore trigger another reload after expiry, capacity eviction, or process
+restart. That is safe because every reload reads a fresh full database snapshot;
+it never reapplies the event's payload or restores an older event value. This is
+bounded duplicate suppression, with no permanent exactly-once guarantee.
+
+When Redis is configured, the bridge broadcasts reload IDs through Redis pub/sub.
+Publication acknowledges sending the notification, not successful reloads on all
+receivers; pub/sub itself does not provide durable delivery or redelivery. A
+Redis-less process reloads locally and propagates load errors to its caller. The
+count, ordering and elapsed-time contracts are testable bounds on completed-ID
+tracking, not measurements or guarantees of heap usage.
+
 ## Where to go next
 
 - **[Core concepts](./concepts.md)** — what providers, keys, mappings, and virtual keys are.

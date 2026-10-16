@@ -8,6 +8,7 @@ using ConduitLLM.Configuration.Services;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 
 using Moq;
 
@@ -15,7 +16,7 @@ using StackExchange.Redis;
 
 namespace ConduitLLM.Tests.Configuration.Services;
 
-public sealed class GlobalSettingsReloadRetryTests
+public sealed partial class GlobalSettingsReloadRetryTests
 {
     private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(5);
 
@@ -227,6 +228,7 @@ public sealed class GlobalSettingsReloadRetryTests
 
         public GlobalSettingsCacheService Service { get; }
         public RecordingLogger Logger { get; } = new();
+        public ReloadClock Clock { get; } = new();
         public Mock<ISubscriber>? Subscriber { get; }
         public int ListCalls => Volatile.Read(ref _listCalls);
         public Func<int, CancellationToken, Task<IReadOnlyList<GlobalSetting>>> Load { get; set; } =
@@ -260,7 +262,7 @@ public sealed class GlobalSettingsReloadRetryTests
                 redis = multiplexer.Object;
             }
 
-            Service = new GlobalSettingsCacheService(_provider.GetRequiredService<IServiceScopeFactory>(), Logger, redis);
+            Service = new GlobalSettingsCacheService(_provider.GetRequiredService<IServiceScopeFactory>(), Logger, redis, Clock);
         }
 
         public void Deliver(string requestId)
@@ -274,6 +276,21 @@ public sealed class GlobalSettingsReloadRetryTests
             try { await Service.StopAsync(CancellationToken.None).WaitAsync(TestTimeout); }
             finally { await _provider.DisposeAsync(); }
         }
+    }
+
+    private sealed class ReloadClock : TimeProvider
+    {
+        private readonly FakeTimeProvider _inner = new();
+
+        public TimeSpan WallClockOffset { get; set; }
+
+        public override DateTimeOffset GetUtcNow() => _inner.GetUtcNow() + WallClockOffset;
+        public override long GetTimestamp() => _inner.GetTimestamp();
+        public override long TimestampFrequency => _inner.TimestampFrequency;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            _inner.CreateTimer(callback, state, dueTime, period);
+
+        public void Advance(TimeSpan delta) => _inner.Advance(delta);
     }
 
     private sealed record LoggedFailure(string Message, Exception? Exception);

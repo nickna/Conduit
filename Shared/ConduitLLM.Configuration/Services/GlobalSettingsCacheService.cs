@@ -15,6 +15,8 @@ namespace ConduitLLM.Configuration.Services;
 public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheService
 {
     private const string ReloadChannelName = "conduit:global-settings:reload";
+    private const int CompletedReloadLimit = 10_000;
+    private static readonly TimeSpan CompletedReloadRetention = TimeSpan.FromHours(24);
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<GlobalSettingsCacheService> _logger;
     private readonly IConnectionMultiplexer? _redis;
@@ -23,6 +25,7 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
     private readonly object _lifecycleGate = new();
     private readonly object _reloadGate = new();
     private readonly HashSet<string> _processedReloads = new(StringComparer.Ordinal);
+    private readonly Queue<CompletedReload> _processedReloadOrder = new();
     private readonly Dictionary<string, TaskCompletionSource> _reloadsInFlight = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _lock = new(1, 1);
     private CacheSnapshot _snapshot = CacheSnapshot.Empty;
@@ -31,6 +34,8 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
     private ISubscriber? _subscriber;
     private bool _stopRequested;
     private bool _hasLoaded;
+
+    private readonly record struct CompletedReload(string RequestId, long CompletedTimestamp);
 
     private sealed record CacheSnapshot(IReadOnlyDictionary<string, string> Values, DateTime LastLoadTime)
     {
@@ -385,6 +390,7 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
         TaskCompletionSource completion;
         lock (_reloadGate)
         {
+            EvictCompletedReloads(_timeProvider.GetTimestamp());
             if (_processedReloads.Contains(requestId))
                 return Task.CompletedTask;
             if (_reloadsInFlight.TryGetValue(requestId, out var existing))
@@ -411,7 +417,10 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
                 // ReloadAllSettingsAsync deliberately becomes a no-op after stop;
                 // that skipped operation must never acknowledge a new request ID.
                 ThrowIfReloadStopping();
-                _processedReloads.Add(requestId);
+                var completedTimestamp = _timeProvider.GetTimestamp();
+                if (_processedReloads.Add(requestId))
+                    _processedReloadOrder.Enqueue(new CompletedReload(requestId, completedTimestamp));
+                EvictCompletedReloads(completedTimestamp);
                 _reloadsInFlight.Remove(requestId);
                 completion.TrySetResult();
             }
@@ -439,6 +448,19 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
         _stopping.Token.ThrowIfCancellationRequested();
         if (Volatile.Read(ref _stopRequested))
             throw new OperationCanceledException(_stopping.Token);
+    }
+
+    // Caller holds _reloadGate. Each completion is enqueued and removed once;
+    // duplicate hits neither extend its lifetime nor require scanning the set.
+    private void EvictCompletedReloads(long now)
+    {
+        while (_processedReloadOrder.TryPeek(out var oldest) &&
+            (_processedReloadOrder.Count > CompletedReloadLimit ||
+                _timeProvider.GetElapsedTime(oldest.CompletedTimestamp, now) >= CompletedReloadRetention))
+        {
+            _processedReloadOrder.Dequeue();
+            _processedReloads.Remove(oldest.RequestId);
+        }
     }
 
     public Task<CacheStats> GetCacheStatsAsync()
