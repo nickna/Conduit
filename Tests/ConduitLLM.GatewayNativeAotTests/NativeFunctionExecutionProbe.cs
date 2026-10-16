@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 using Npgsql;
@@ -13,7 +15,7 @@ internal static partial class NativeFunctionExecutionProbe
     private const string ExecutePath = "v1/conduit/functions/execute";
     private const decimal Price = 0.12500001m;
     private const string ProviderError = """{"error":{"message":"native function upstream private diagnostic","type":"invalid_request_error","code":"native_bad_query"}}""";
-    private const string ErrorMessage = "Bad request to Exa API: " + ProviderError;
+    private const string ErrorMessage = ProviderError;
     private const string CustomerErrorMessage = "An upstream provider error occurred. Please retry later.";
     private const string ProviderSuccess = """
         {"requestId":"native-function-search","resolvedSearchType":"neural","results":[{"title":"Native search 雪 🔎","url":"https://example.test/native-function","publishedDate":"2026-10-11T00:00:00Z","author":"Native fixture","score":0.875,"text":"Unicode text café 雪","highlights":["snow 雪","café"],"highlightScores":[0.875,0.75],"summary":"Native summary","subpages":[{"title":"Nested 雪","url":"https://example.test/native-function/child","text":"Nested content"}],"extras":{"links":["https://example.test/link"],"imageLinks":["https://example.test/image.png"]}}]}
@@ -56,6 +58,11 @@ internal static partial class NativeFunctionExecutionProbe
             AssertResource(resource, row, test, fromPersistence: false);
             var opposite = await GetExecutionAsync(gateways[1 - index], fixture.VirtualKey, id, HttpStatusCode.OK, token);
             AssertResource(opposite, row, test, fromPersistence: true);
+            // An identical POST on the other process must replay the durable result;
+            // the settled accounting oracle below still permits only one charge.
+            var replay = await ExecuteAsync(gateways[1 - index], fixture, test, HttpStatusCode.OK, token);
+            Require(replay.GetProperty("id").GetGuid() == id, "cross-process retry retains the original execution ID");
+            AssertResource(replay, row, test, fromPersistence: false);
             executions.Add(new ObservedExecution(id, test));
         }
 
@@ -269,7 +276,6 @@ internal static partial class NativeFunctionExecutionProbe
             writer.WriteStartObject();
             writer.WritePropertyName("parameters"); parameters.WriteTo(writer);
             writer.WritePropertyName("metadata"); metadata.WriteTo(writer);
-            writer.WriteString("idempotencyKey", marker);
             writer.WriteEndObject();
         });
         return new ProbeCase(success, marker, body, input);
@@ -343,7 +349,9 @@ internal static partial class NativeFunctionExecutionProbe
             row.Completed is { Kind: DateTimeKind.Utc } && row.Requested >= started && row.Requested <= row.Started &&
             row.Started <= row.Completed && row.Completed <= DateTime.UtcNow && row.Duration is { } duration &&
             duration >= TimeSpan.Zero && duration <= TimeSpan.FromSeconds(90), "stored execution coherent UTC times and interval");
-        Require(row.RequestJson is not null && SameJson(row.RequestJson, test.Input), "stored JSON-bound parameters, metadata and idempotency header");
+        Require(row.RequestJson is not null && SameJson(row.RequestJson, test.Input) &&
+            !Parse(row.RequestJson).TryGetProperty("idempotencyKey", out _),
+            "stored JSON-bound parameters and metadata exclude the raw idempotency header");
         Require(row.Estimated == Price && row.Actual == (test.Success ? Price : 0m) && row.RetryCount == 0 &&
             row.NextRetry is null && row.LeasedBy is null && row.LeaseExpiry is null && row.Version == 2 &&
             row.WebhookUrl is null && !row.WebhookDelivered && row.Progress is null && row.StatusMessage is null,
@@ -445,11 +453,14 @@ internal static partial class NativeFunctionExecutionProbe
         await using var connection = await source.OpenConnectionAsync(token);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT "Id" FROM "FunctionExecutions" WHERE "FunctionConfigurationId" = @configurationId AND "VirtualKeyId" = @keyId
-                AND "RequestJson" ->> 'idempotencyKey' = @idempotencyKey
+            SELECT execution."Id" FROM "FunctionExecutions" execution
+            JOIN "FunctionExecutionClaims" claim ON claim."ExecutionId" = execution."Id"
+            WHERE execution."FunctionConfigurationId" = @configurationId AND execution."VirtualKeyId" = @keyId
+                AND claim."VirtualKeyId" = @keyId AND claim."KeyHash" = @keyHash
             """;
         AddScope(command, fixture);
-        command.Parameters.AddWithValue("idempotencyKey", NpgsqlDbType.Text, idempotencyKey);
+        command.Parameters.AddWithValue("keyHash", NpgsqlDbType.Varchar,
+            Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey))));
         await using var reader = await command.ExecuteReaderAsync(token);
         Require(await reader.ReadAsync(token), "provider rejection persisted an execution before responding");
         var id = reader.GetGuid(0);
@@ -493,7 +504,7 @@ internal static partial class NativeFunctionExecutionProbe
         await using var connection = await source.OpenConnectionAsync(token);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT (SELECT count(*) FROM "RequestLogs" WHERE "VirtualKeyId" = @keyId),
+            SELECT (SELECT count(*) FROM "RequestLogs" WHERE "VirtualKeyId" = @keyId AND "Cost" > 0),
                 (SELECT COALESCE(sum("Cost"), 0) FROM "RequestLogs" WHERE "VirtualKeyId" = @keyId),
                 group_row."Balance", group_row."LifetimeSpent", group_row."LifetimeCreditsAdded",
                 (SELECT COALESCE(sum("Amount"), 0) FROM "VirtualKeyGroupTransactions"
@@ -526,7 +537,7 @@ internal static partial class NativeFunctionExecutionProbe
                 "RequestPath", "StatusCode", "Metadata", "BilledAtUtc", "Timestamp", "ResponseTimeMs", "ModelProviderMappingId",
                 "PromptCachingEligible", "PromptCachingPolicyApplied", "CachedReadSavings", "CacheWritePremium", "RoutingAffinityUsed",
                 "RoutingDecisionReason", "RoutingFailoverCount", "UserId", "ClientIp"
-            FROM "RequestLogs" WHERE "VirtualKeyId" = @keyId ORDER BY "Id"
+            FROM "RequestLogs" WHERE "VirtualKeyId" = @keyId AND "Cost" > 0 ORDER BY "Id"
             """;
         command.Parameters.AddWithValue("keyId", NpgsqlDbType.Integer, fixture.KeyId);
         await using var reader = await command.ExecuteReaderAsync(token);

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using ConduitLLM.Functions.DTOs;
 using ConduitLLM.Functions.Extensions;
@@ -104,6 +106,37 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
                 return OpenAIError(401, "Invalid authentication", "invalid_auth", "authentication_error");
             }
 
+            // Existing scoped operations remain readable even after their configuration
+            // changes. The execution service verifies the complete request fingerprint.
+            if (idempotencyKey is not null)
+            {
+                if (Request.Headers.TryGetValue("Idempotency-Key", out var headerValues) && headerValues.Count != 1)
+                    return OpenAIError(400, "Supply exactly one Idempotency-Key header value.", "invalid_idempotency_key");
+                if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 200)
+                    return OpenAIError(400, "Idempotency-Key must contain 1 to 200 nonblank characters.", "invalid_idempotency_key");
+                var store = HttpContext.RequestServices.GetService<IFunctionExecutionIdempotencyStore>();
+                if (store is null)
+                    return OpenAIError(503, "Durable function idempotency is unavailable.", "idempotency_unavailable", "server_error");
+                var keyHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey)));
+                bool existing;
+                try { existing = await store.FindAsync(keyId, keyHash, cancellationToken) is not null; }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Could not read durable function claims for virtual key {VirtualKeyId}", keyId);
+                    return OpenAIError(503, "Durable function idempotency is unavailable.", "idempotency_unavailable", "server_error");
+                }
+                if (existing)
+                {
+                    var replay = await _executionService.ExecuteAsync(
+                        request.FunctionConfigurationId, keyId,
+                        request.Parameters ?? new Dictionary<string, object>(),
+                        idempotencyKey, request.Metadata, cancellationToken: cancellationToken);
+                    return ExecutionResult(replay, keyId,
+                        replay.FunctionConfiguration?.ConfigurationName ?? $"function:{replay.FunctionConfigurationId}");
+                }
+            }
+
             // Validate function configuration exists and is enabled
             var configuration = _runtimeConfigurationStore is not null
                 ? await _runtimeConfigurationStore.GetConfigurationAsync(request.FunctionConfigurationId, cancellationToken)
@@ -165,24 +198,18 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
                 request.Metadata,
                 cancellationToken: cancellationToken);
 
-            // Store execution info for middleware billing
-            HttpContext.Items["FunctionExecutionId"] = execution.Id;
-            HttpContext.Items["EstimatedCost"] = execution.EstimatedCost;
-            HttpContext.Items["ActualCost"] = execution.ActualCost;
-            var actualCost = execution.ActualCost ?? execution.EstimatedCost ?? 0m;
-            accounting.RecordDirectCost(new DirectCostEvidence(
-                configuration.ConfigurationName,
-                actualCost,
-                execution.Id.ToString(),
-                JsonSerializer.Serialize(
-                    new FunctionCostMetadata(
-                        configuration.Id,
-                        execution.Id,
-                        execution.State.ToString()),
-                    GatewayInternalJsonContext.Default.FunctionCostMetadata)));
-
-            // Return execution result
-            return Ok(ToCustomerDto(execution));
+            return ExecutionResult(execution, keyId, configuration.ConfigurationName);
+        }
+        catch (FunctionIdempotencyException ex)
+        {
+            if (ex.ExecutionId != Guid.Empty)
+            {
+                Response.Headers["Function-Execution-Id"] = ex.ExecutionId.ToString();
+                Response.Headers.Location = $"/v1/conduit/functions/executions/{ex.ExecutionId}";
+            }
+            if (ex.Code == "idempotency_in_progress") Response.Headers.RetryAfter = "3";
+            return OpenAIError(ex.StatusCode, ex.Message, ex.Code,
+                ex.StatusCode >= 500 ? "server_error" : "invalid_request_error");
         }
         catch (FunctionCommunicationException ex)
         {
@@ -212,6 +239,39 @@ public class FunctionsEndpoints : GatewayEndpointHandlerBase
             _logger.LogError(ex, "Error executing function");
             return OpenAIError(500, "An unexpected error occurred during function execution", "internal_error", "server_error");
         }
+    }
+
+    private IResult ExecutionResult(FunctionExecution execution, int virtualKeyId, string operationName)
+    {
+        HttpContext.Items["FunctionExecutionId"] = execution.Id;
+        HttpContext.Items["EstimatedCost"] = execution.EstimatedCost;
+        HttpContext.Items["ActualCost"] = execution.ActualCost;
+        var accounting = HttpContext.GetOrCreateRequestAccountingContext();
+        accounting.SetOperation(RequestOperation.Function, virtualKeyId, operationName);
+        var actualCost = execution.IsIdempotencyReplay ? 0m : execution.ActualCost ?? execution.EstimatedCost ?? 0m;
+        accounting.RecordDirectCost(new DirectCostEvidence(
+            operationName, actualCost, execution.Id.ToString(),
+            JsonSerializer.Serialize(
+                new FunctionCostMetadata(execution.FunctionConfigurationId, execution.Id, execution.State.ToString()),
+                GatewayInternalJsonContext.Default.FunctionCostMetadata),
+            SpendAlreadySettled: execution.IsIdempotencyBillingSettled));
+        Response.Headers["Function-Execution-Id"] = execution.Id.ToString();
+        if (execution.IsIdempotencyReplay) Response.Headers["Idempotency-Replayed"] = "true";
+        var dto = ToCustomerDto(execution);
+        if (execution.IsIdempotencyBillingSettled && execution.State == ExecutionState.Failed
+            && dto.Cost.Breakdown?.TryGetValue("httpStatusCode", out var status) == true
+            && status.TryGetInt32(out var code) && code >= 400)
+        {
+            // A definitive provider HTTP error is a replayable terminal result too.
+            var translated = _errorTranslator.Translate((System.Net.HttpStatusCode)code,
+                execution.ErrorMessage, execution.FunctionConfiguration?.ProviderType.ToString());
+            var mapping = ExceptionToResponseMapper.MapProviderCommunicationStatus(
+                (System.Net.HttpStatusCode)code, translated.Message);
+            return OpenAIError(mapping.StatusCode, mapping.ResponseMessage, mapping.ErrorCode,
+                mapping.OpenAIErrorType, mapping.Param,
+                ChatEndpoints.BuildProviderErrorMetadata(null, translated.Detail));
+        }
+        return Ok(dto);
     }
 
     /// <summary>

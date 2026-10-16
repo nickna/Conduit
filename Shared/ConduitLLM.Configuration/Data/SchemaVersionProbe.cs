@@ -7,7 +7,7 @@ namespace ConduitLLM.Configuration.Data;
 /// </summary>
 public static class ConduitSchemaVersion
 {
-    public const string Current = "20261015050045_PairFunctionInverseRelationships";
+    public const string Current = "20261016024856_AddFunctionExecutionClaims";
 }
 
 public sealed record SchemaVersionStatus(string? AppliedVersion, string ExpectedVersion)

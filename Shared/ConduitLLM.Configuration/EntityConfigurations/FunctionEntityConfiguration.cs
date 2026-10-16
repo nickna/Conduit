@@ -14,6 +14,26 @@ public static class FunctionEntityConfiguration
     /// </summary>
     public static void ApplyFunctionEntityConfigurations(this ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ConduitLLM.Configuration.Entities.FunctionExecutionClaimEntity>(entity =>
+        {
+            entity.ToTable("FunctionExecutionClaims", table =>
+            {
+                table.HasCheckConstraint("CK_FunctionExecutionClaims_State",
+                    "\"State\" IN ('claimed', 'dispatching', 'completed', 'uncertain')");
+                table.HasCheckConstraint("CK_FunctionExecutionClaims_Result",
+                    "(\"State\" = 'completed') = (\"ResultJson\" IS NOT NULL)");
+                table.HasCheckConstraint("CK_FunctionExecutionClaims_Billed",
+                    "\"BilledAtUtc\" IS NULL OR \"State\" = 'completed'");
+            });
+            entity.HasKey(e => new { e.VirtualKeyId, e.KeyHash });
+            entity.HasIndex(e => e.ExecutionId).IsUnique();
+            entity.Property(e => e.ExecutionId).ValueGeneratedNever();
+            entity.Property(e => e.KeyHash).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.Fingerprint).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.State).HasMaxLength(16).IsRequired();
+            entity.Property(e => e.ResultJson).HasColumnType("jsonb");
+        });
+
         // Configure FunctionConfiguration entity
         modelBuilder.Entity<FunctionConfiguration>(entity =>
         {

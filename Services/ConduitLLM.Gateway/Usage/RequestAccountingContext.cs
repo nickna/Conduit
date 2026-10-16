@@ -77,7 +77,8 @@ public sealed record DirectCostEvidence(
     string OperationName,
     decimal ActualCost,
     string? ExecutionId,
-    string? MetadataJson);
+    string? MetadataJson,
+    bool SpendAlreadySettled = false);
 
 public sealed record RequestAccountingSnapshot(
     string BillingRequestId,

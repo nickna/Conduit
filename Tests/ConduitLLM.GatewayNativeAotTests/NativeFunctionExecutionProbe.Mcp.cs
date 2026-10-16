@@ -54,6 +54,9 @@ internal static partial class NativeFunctionExecutionProbe
             AssertMcpResource(resource, row, test, output, fromPersistence: false);
             var opposite = await GetExecutionAsync(gateways[1 - index], fixture.VirtualKey, id, HttpStatusCode.OK, token);
             AssertMcpResource(opposite, row, test, output, fromPersistence: true);
+            var replay = await ExecuteAsync(gateways[1 - index], fixture, test, HttpStatusCode.OK, token);
+            Require(replay.GetProperty("id").GetGuid() == id, "cross-process MCP retry retains its durable execution ID");
+            AssertMcpResource(replay, row, test, output, fromPersistence: false);
             executions.Add(new ObservedExecution(id, test));
             await stub.WaitForIdleAsync(token);
             Require(stub.LastCallArguments is { } arguments &&
@@ -155,7 +158,6 @@ internal static partial class NativeFunctionExecutionProbe
             writer.WriteStartObject();
             writer.WritePropertyName("parameters"); parameters.WriteTo(writer);
             writer.WritePropertyName("metadata"); metadata.WriteTo(writer);
-            writer.WriteString("idempotencyKey", marker);
             writer.WriteEndObject();
         });
         return new ProbeCase(true, marker, body, input);
@@ -266,7 +268,7 @@ internal static partial class NativeFunctionExecutionProbe
                 "RequestPath", "StatusCode", "Metadata", "BilledAtUtc", "Timestamp", "ResponseTimeMs", "ModelProviderMappingId",
                 "PromptCachingEligible", "PromptCachingPolicyApplied", "CachedReadSavings", "CacheWritePremium", "RoutingAffinityUsed",
                 "RoutingDecisionReason", "RoutingFailoverCount", "UserId", "ClientIp"
-            FROM "RequestLogs" WHERE "VirtualKeyId" = @keyId ORDER BY "Id"
+            FROM "RequestLogs" WHERE "VirtualKeyId" = @keyId AND "Cost" > 0 ORDER BY "Id"
             """;
         command.Parameters.AddWithValue("keyId", NpgsqlDbType.Integer, fixture.KeyId);
         await using var reader = await command.ExecuteReaderAsync(token);

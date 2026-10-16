@@ -323,7 +323,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Executes a function with the provided parameters. */
+    /**
+     * Executes a function with the provided parameters.
+     * @description Completed retries include Idempotency-Replayed: true. Function-Execution-Id identifies successful and conflicting operations; 409 responses include their execution Location. In-progress retries include Retry-After: 3. Durable result and billing settlement survive Gateway restarts. See the function resources guide for recovery limits.
+     */
     post: operations["Functions_Execute"];
     delete?: never;
     options?: never;
@@ -4012,7 +4015,7 @@ export interface operations {
     parameters: {
       query?: never;
       header?: {
-        /** @description Client-supplied key for deduplicating repeated requests. Reuse the same key only for the same intended operation. */
+        /** @description Optional opaque key of 1 to 200 nonblank characters, scoped to the authenticated virtual key. Identical retries replay the stored execution and charge once. Reuse with a different function, parameters or metadata returns 409. Claims have no automatic expiry; running or uncertain outcomes return 409 and are never automatically dispatched again. */
         "Idempotency-Key"?: string;
       };
       path?: never;
@@ -4092,6 +4095,17 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
+      /** @description Conflict */
+      409: {
+        headers: {
+          /** @description Request identifier for support and distributed tracing. */
+          "x-request-id"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenAIErrorResponse"];
+        };
+      };
       /** @description The request Content-Type is not supported. */
       415: {
         headers: {
@@ -4135,7 +4149,7 @@ export interface operations {
           "application/json": components["schemas"]["OpenAIErrorResponse"];
         };
       };
-      /** @description Required infrastructure is temporarily unavailable. */
+      /** @description Service Unavailable */
       503: {
         headers: {
           /** @description Request identifier for support and distributed tracing. */

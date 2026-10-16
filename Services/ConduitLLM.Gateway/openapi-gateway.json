@@ -4086,12 +4086,13 @@
           "Functions"
         ],
         "summary": "Executes a function with the provided parameters.",
+        "description": "Completed retries include Idempotency-Replayed: true. Function-Execution-Id identifies successful and conflicting operations; 409 responses include their execution Location. In-progress retries include Retry-After: 3. Durable result and billing settlement survive Gateway restarts. See the function resources guide for recovery limits.",
         "operationId": "Functions_Execute",
         "parameters": [
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "Client-supplied key for deduplicating repeated requests. Reuse the same key only for the same intended operation.",
+            "description": "Optional opaque key of 1 to 200 nonblank characters, scoped to the authenticated virtual key. Identical retries replay the stored execution and charge once. Reuse with a different function, parameters or metadata returns 409. Claims have no automatic expiry; running or uncertain outcomes return 409 and are never automatically dispatched again.",
             "schema": {
               "type": "string"
             }
@@ -4169,6 +4170,49 @@
                 "description": "Request identifier for support and distributed tracing.",
                 "schema": {
                   "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Delay in seconds before retrying the request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
                 }
               }
             },
@@ -4264,31 +4308,6 @@
                 "description": "Scope of the exceeded limit (key, group, model, token, concurrency, or IP).",
                 "schema": {
                   "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OpenAIErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Required infrastructure is temporarily unavailable.",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "Retry-After": {
-                "description": "Delay in seconds before retrying the request.",
-                "schema": {
-                  "minimum": 1,
-                  "type": "integer"
                 }
               }
             },

@@ -23,6 +23,7 @@ public abstract class FunctionClientBase
     protected readonly ILogger _logger;
     protected readonly string _baseUrl;
     protected readonly JsonSerializerOptions _jsonOptions;
+    private bool _singleDispatchTransport;
 
     protected FunctionClientBase(
         FunctionConfiguration configuration,
@@ -52,6 +53,9 @@ public abstract class FunctionClientBase
     /// <summary>Adds the provider's authentication header for the given API key.</summary>
     protected abstract void ApplyAuthHeader(HttpClient client, string apiKey);
 
+    /// <summary>Keyed executions must not retry a request whose provider outcome is unknown.</summary>
+    internal void UseSingleDispatchTransport() => _singleDispatchTransport = true;
+
     /// <summary>
     /// Creates an HTTP client instance.
     /// </summary>
@@ -66,7 +70,9 @@ public abstract class FunctionClientBase
                 "Creating HttpClient instances directly can cause socket exhaustion under load.");
         }
 
-        var client = _httpClientFactory.CreateClient($"{ProviderName}FunctionClient");
+        var clientName = $"{ProviderName}FunctionClient";
+        if (_singleDispatchTransport) clientName += ".SingleDispatch";
+        var client = _httpClientFactory.CreateClient(clientName);
         ConfigureHttpClient(client, apiKey);
         return client;
     }

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 using ConduitLLM.Functions.Entities.Interfaces;
 using ConduitLLM.Functions.Enums;
 
@@ -159,6 +160,16 @@ public class FunctionExecution : IIdentifiableEntity<Guid>
     /// </summary>
     [StringLength(500)]
     public string? StatusMessage { get; set; }
+
+    /// <summary>True when this response replays an existing scoped idempotency claim.</summary>
+    [NotMapped]
+    [JsonIgnore]
+    public bool IsIdempotencyReplay { get; set; }
+
+    /// <summary>The keyed execution's cost was already durably settled; request middleware must not debit it again.</summary>
+    [NotMapped]
+    [JsonIgnore]
+    public bool IsIdempotencyBillingSettled { get; set; }
 
     // Navigation properties
 

@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Enums;
+using ConduitLLM.Functions.Exceptions;
 using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Security;
@@ -81,7 +82,7 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
         fixture.Result.ErrorMessage = success ? null : "provider rejected request";
         fixture.Result.HttpStatusCode = success ? 200 : 429;
         var metadata = Dictionary("""{"trace":"trace-52","nested":{"enabled":true},"optional":null}""");
-        var result = await fixture.ExecuteAsync("same-idempotency-key", metadata);
+        var result = await fixture.ExecuteAsync(metadata: metadata);
 
         Assert.Equal(
             new[] { "configuration", "estimate", "create", "credentials", "reveal", "factory", "provider", "usage", "cost", "update" },
@@ -110,7 +111,7 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
         Assert.Same(result, Assert.Single(fixture.Writer.Updates).Input);
         Assert.Same(fixture.Parameters, fixture.ProviderParameters);
         Assert.Same(fixture.Parameters, fixture.UsageParameters);
-        AssertRequest(result.RequestJson, fixture.Parameters, metadata, "same-idempotency-key");
+        AssertRequest(result.RequestJson, fixture.Parameters, metadata, null);
         Assert.Equal(created.RequestJson, result.RequestJson);
         AssertCost(result.CostCalculationDetails, Fixture.Estimate, Fixture.ActualCost, fixture.Result.HttpStatusCode);
         AssertExecutionDefaults(result);
@@ -120,22 +121,54 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task IdempotencyIsRecordedAndRepeatedCallsStillExecuteWhileNullMetadataIsOmitted(bool runtime)
+    public async Task UnkeyedCallsRemainIndependentAndOmitNullMetadata(bool runtime)
     {
         using var fixture = new Fixture(runtime);
-        var first = await fixture.ExecuteAsync("repeat-key");
-        var second = await fixture.ExecuteAsync("repeat-key");
+        var first = await fixture.ExecuteAsync();
+        var second = await fixture.ExecuteAsync();
         Assert.NotEqual(first.Id, second.Id);
         Assert.Equal(2, fixture.ProviderCalls);
         Assert.Equal(2, fixture.Writer.Creates.Count);
-        AssertRequest(first.RequestJson, fixture.Parameters, null, "repeat-key");
-        AssertRequest(second.RequestJson, fixture.Parameters, null, "repeat-key");
+        AssertRequest(first.RequestJson, fixture.Parameters, null, null);
+        AssertRequest(second.RequestJson, fixture.Parameters, null, null);
         fixture.AssertBoundary(2, 2);
 
         using var omitted = new Fixture(runtime);
         var result = await omitted.ExecuteAsync();
         AssertRequest(result.RequestJson, omitted.Parameters, null, null);
         omitted.AssertBoundary(1, 1);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task KeyedCallsWithoutADurableStoreFailClosedBeforeProviderOrPersistenceWork(bool runtime)
+    {
+        using var fixture = new Fixture(runtime);
+        var error = await Assert.ThrowsAsync<FunctionIdempotencyException>(() => fixture.ExecuteAsync("requires-durable-claim"));
+        Assert.Equal(503, error.StatusCode);
+        Assert.Equal("idempotency_unavailable", error.Code);
+        Assert.Equal(Guid.Empty, error.ExecutionId);
+        Assert.Empty(fixture.Events);
+        Assert.Equal(0, fixture.ProviderCalls);
+        fixture.AssertBoundary(0, 0);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InvalidKeysAreRejectedBeforeAnyPersistenceOrProviderWork(bool runtime)
+    {
+        using var fixture = new Fixture(runtime);
+        foreach (var key in new[] { "", "   ", new string('k', 201) })
+        {
+            var error = await Assert.ThrowsAsync<FunctionIdempotencyException>(() => fixture.ExecuteAsync(key));
+            Assert.Equal(400, error.StatusCode);
+            Assert.Equal("invalid_idempotency_key", error.Code);
+            Assert.Equal(Guid.Empty, error.ExecutionId);
+        }
+        Assert.Empty(fixture.Events);
+        fixture.AssertBoundary(0, 0);
     }
 
     [Theory]
@@ -250,12 +283,12 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
             fixture.ConfigurationError = original;
             fixture.Writer.CreateError = (_, _) => persistence;
         }
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.ExecuteAsync("error-key"));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.ExecuteAsync());
         Assert.Same(original, error);
         var attempt = providerStarted ? Assert.Single(fixture.Writer.Updates) : Assert.Single(fixture.Writer.Creates);
         Assert.Equal(0m, attempt.Snapshot.ActualCost);
         Assert.Equal(original.Message, attempt.Snapshot.ErrorMessage);
-        AssertRequest(attempt.Snapshot.RequestJson, fixture.Parameters, null, "error-key");
+        AssertRequest(attempt.Snapshot.RequestJson, fixture.Parameters, null, null);
         Assert.Equal(providerStarted ? 1 : 0, fixture.ProviderCalls);
         fixture.AssertBoundary(1, providerStarted ? 1 : 0);
     }

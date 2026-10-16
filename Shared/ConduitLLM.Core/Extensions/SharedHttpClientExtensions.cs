@@ -46,6 +46,10 @@ public static class SharedHttpClientExtensions
         // Register HTTP clients for function providers (Exa and Tavily)
         AddFunctionProviderHttpClient(services, "ExaFunctionClient");
         AddFunctionProviderHttpClient(services, "TavilyFunctionClient");
+        // A durable claim permits one dispatch. A lost response must not cause a
+        // transport policy to repeat a possibly billable provider operation.
+        AddFunctionProviderHttpClient(services, "ExaFunctionClient.SingleDispatch", retry: false);
+        AddFunctionProviderHttpClient(services, "TavilyFunctionClient.SingleDispatch", retry: false);
 
         // MCP uses Streamable HTTP / SSE: it manages its own Accept negotiation, keeps long-lived
         // streams open, and must not be wrapped in a request-level retry policy, so it gets a
@@ -80,9 +84,9 @@ public static class SharedHttpClientExtensions
     /// <summary>
     /// Registers an HTTP client for a function provider with standard configuration.
     /// </summary>
-    private static void AddFunctionProviderHttpClient(IServiceCollection services, string clientName)
+    private static void AddFunctionProviderHttpClient(IServiceCollection services, string clientName, bool retry = true)
     {
-        services.AddHttpClient(clientName, client =>
+        var builder = services.AddHttpClient(clientName, client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.Add("User-Agent", "ConduitLLM-Functions");
@@ -94,7 +98,7 @@ public static class SharedHttpClientExtensions
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
             MaxConnectionsPerServer = 10,
             EnableMultipleHttp2Connections = true
-        })
-        .AddPolicyHandler(HttpRetryPolicies.GetStandardRetryPolicy());
+        });
+        if (retry) builder.AddPolicyHandler(HttpRetryPolicies.GetStandardRetryPolicy());
     }
 }

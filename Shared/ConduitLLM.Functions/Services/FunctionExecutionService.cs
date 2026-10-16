@@ -2,10 +2,13 @@ using System.Diagnostics;
 using System.Text.Json;
 using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Enums;
+using ConduitLLM.Functions.Exceptions;
 using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Functions.Models;
+using ConduitLLM.Functions.Providers;
 using ConduitLLM.Functions.Security;
 using ConduitLLM.Functions.Serialization;
+using ConduitLLM.Persistence;
 using ConduitLLM.Persistence.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -22,9 +25,10 @@ namespace ConduitLLM.Functions.Services;
 /// 4. Calculate actual usage and cost
 /// 5. Update execution record with results
 ///
-/// Billing is handled by the calling layer (middleware/controller).
+/// Unkeyed requests are billed by the calling layer. Keyed requests settle their
+/// durable execution identity before returning a result.
 /// </remarks>
-public class FunctionExecutionService : IFunctionExecutionService
+public partial class FunctionExecutionService : IFunctionExecutionService
 {
     private readonly IFunctionConfigurationRepository? _functionConfigurationRepository;
     private readonly IFunctionCredentialRepository? _credentialRepository;
@@ -36,6 +40,7 @@ public class FunctionExecutionService : IFunctionExecutionService
     private readonly IFunctionClientFactory _clientFactory;
     private readonly IFunctionCredentialProtector _credentialProtector;
     private readonly ILogger<FunctionExecutionService> _logger;
+    private IFunctionExecutionIdempotencyStore? _idempotencyStore;
 
     public FunctionExecutionService(
         IFunctionConfigurationRepository functionConfigurationRepository,
@@ -66,8 +71,9 @@ public class FunctionExecutionService : IFunctionExecutionService
         IFunctionCostCalculationService costCalculationService,
         IFunctionClientFactory clientFactory,
         IFunctionCredentialProtector credentialProtector,
-        ILogger<FunctionExecutionService> logger) =>
-        new(configurationStore, writer, reader, costCalculationService, clientFactory, credentialProtector, logger);
+        ILogger<FunctionExecutionService> logger,
+        IFunctionExecutionIdempotencyStore? idempotencyStore = null) =>
+        new(configurationStore, writer, reader, costCalculationService, clientFactory, credentialProtector, logger, idempotencyStore);
 
     private FunctionExecutionService(
         IFunctionExecutionConfigurationStore configurationStore,
@@ -76,7 +82,8 @@ public class FunctionExecutionService : IFunctionExecutionService
         IFunctionCostCalculationService costCalculationService,
         IFunctionClientFactory clientFactory,
         IFunctionCredentialProtector credentialProtector,
-        ILogger<FunctionExecutionService> logger)
+        ILogger<FunctionExecutionService> logger,
+        IFunctionExecutionIdempotencyStore? idempotencyStore)
     {
         _runtimeConfigurationStore = configurationStore ?? throw new ArgumentNullException(nameof(configurationStore));
         _runtimeWriter = writer ?? throw new ArgumentNullException(nameof(writer));
@@ -85,6 +92,7 @@ public class FunctionExecutionService : IFunctionExecutionService
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         _credentialProtector = credentialProtector ?? throw new ArgumentNullException(nameof(credentialProtector));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _idempotencyStore = idempotencyStore;
     }
 
     /// <inheritdoc />
@@ -99,6 +107,23 @@ public class FunctionExecutionService : IFunctionExecutionService
     {
         ArgumentNullException.ThrowIfNull(parameters);
 
+        return await (idempotencyKey is null
+            ? ExecuteCoreAsync(functionConfigurationId, virtualKeyId, parameters, metadata,
+                providerToolName, null, null, cancellationToken)
+            : ExecuteIdempotentAsync(functionConfigurationId, virtualKeyId, parameters,
+                idempotencyKey, metadata, providerToolName, cancellationToken));
+    }
+
+    private async Task<FunctionExecution> ExecuteCoreAsync(
+        int functionConfigurationId,
+        int virtualKeyId,
+        Dictionary<string, object> parameters,
+        Dictionary<string, object>? metadata,
+        string? providerToolName,
+        Guid? claimedExecutionId,
+        FunctionExecutionClaim? claim,
+        CancellationToken cancellationToken)
+    {
         var stopwatch = Stopwatch.StartNew();
         FunctionExecution? execution = null;
         var providerExecutionCompleted = false;
@@ -134,12 +159,12 @@ public class FunctionExecutionService : IFunctionExecutionService
             {
                 Parameters = parameters,
                 Metadata = metadata,
-                IdempotencyKey = idempotencyKey
+                IdempotencyKey = null
             };
 
             execution = new FunctionExecution
             {
-                Id = Guid.NewGuid(),
+                Id = claimedExecutionId ?? Guid.NewGuid(),
                 FunctionConfigurationId = functionConfigurationId,
                 VirtualKeyId = virtualKeyId,
                 ExecutionMode = configuration.DefaultExecutionMode,
@@ -185,6 +210,8 @@ public class FunctionExecutionService : IFunctionExecutionService
 
             // 5. Execute function via provider client
             var client = await _clientFactory.GetClientAsync(configuration.ProviderType, functionConfigurationId);
+            if (claim is not null && client is FunctionClientBase httpProvider)
+                httpProvider.UseSingleDispatchTransport();
 
             _logger.LogInformation("Executing {ProviderType} function via client...",
                 configuration.ProviderType);
@@ -201,7 +228,20 @@ public class FunctionExecutionService : IFunctionExecutionService
                 };
             }
 
+            if (claim is not null)
+            {
+                var store = _idempotencyStore ?? throw IdempotencyUnavailable(claim.ExecutionId);
+                if (!await store.MarkDispatchedAsync(claim, cancellationToken))
+                    throw IdempotencyUnavailable(claim.ExecutionId);
+            }
+
             var result = await client.ExecuteAsync(executeParameters, apiKey, cancellationToken);
+            if (claim is not null && !result.IsSuccess && (result.HttpStatusCode is null or 0) && result.ResponseJson is null)
+            {
+                // Providers may report timeouts or transport loss as a failed result
+                // rather than throw. No response proves whether the external operation ran.
+                throw IdempotencyOutcomeUnknown(claim.ExecutionId);
+            }
 
             stopwatch.Stop();
             providerExecutionCompleted = true;
@@ -247,6 +287,10 @@ public class FunctionExecutionService : IFunctionExecutionService
 
             _logger.LogError(ex, "Error executing function {ConfigId}: {Error}",
                 functionConfigurationId, ex.Message);
+            var errorMessage = claim is not null && ex is FunctionCommunicationException providerError
+                ? providerError.ResponseBody ?? providerError.Message
+                : ex.Message;
+            if (claim is not null && errorMessage.Length > 2000) errorMessage = errorMessage[..2000];
 
             // Create/update execution record with error if we can
             try
@@ -258,12 +302,12 @@ public class FunctionExecutionService : IFunctionExecutionService
                     {
                         Parameters = parameters,
                         Metadata = metadata,
-                        IdempotencyKey = idempotencyKey
+                        IdempotencyKey = null
                     };
 
                     execution = new FunctionExecution
                     {
-                        Id = Guid.NewGuid(),
+                        Id = claimedExecutionId ?? Guid.NewGuid(),
                         FunctionConfigurationId = functionConfigurationId,
                         VirtualKeyId = virtualKeyId,
                         ExecutionMode = ExecutionMode.Synchronous, // Default for error case
@@ -275,7 +319,7 @@ public class FunctionExecutionService : IFunctionExecutionService
                             requestData,
                             FunctionsJsonContext.Default.FunctionExecutionRequestData),
                         ActualCost = 0m,
-                        ErrorMessage = ex.Message,
+                        ErrorMessage = errorMessage,
                         RetryCount = 0,
                         Version = 1,
                         WebhookDelivered = false
@@ -295,7 +339,7 @@ public class FunctionExecutionService : IFunctionExecutionService
                     execution.State = ExecutionState.Failed;
                     execution.CompletedAt = DateTime.UtcNow;
                     execution.Duration = stopwatch.Elapsed;
-                    execution.ErrorMessage = ex.Message;
+                    execution.ErrorMessage = errorMessage;
                     execution.ActualCost = providerExecutionCompleted
                         ? incurredCost ?? execution.ActualCost ?? execution.EstimatedCost ?? 0m
                         : 0m;
@@ -314,6 +358,13 @@ public class FunctionExecutionService : IFunctionExecutionService
             {
                 _logger.LogError(recordEx, "Failed to record execution error for function {ConfigId}",
                     functionConfigurationId);
+            }
+
+            if (claim is not null && execution is not null && ex is FunctionCommunicationException)
+            {
+                // An actual provider error response is a known terminal result. Preserve
+                // it for replay instead of treating it as an uncertain transport outcome.
+                return execution;
             }
 
             if (providerExecutionCompleted && execution != null)

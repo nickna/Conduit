@@ -261,6 +261,10 @@ var execution = await executionService.ExecuteAsync(
 
 Use the Gateway execution route when the request must go through its authentication, parameter validation and accounting middleware.
 
+For retryable HTTP operations, send `Idempotency-Key` and reuse it with the same function,
+parameters and metadata. PostgreSQL claims and execution-specific ledger settlement protect
+retries across Gateway instances and restarts. See [retry and recovery semantics](../../docs/api-guides/function-resources.md#retrying-an-execution), including permanent claim retention and uncertain provider outcomes.
+
 ## See Also
 
 - [Function Resources API](../../docs/api-guides/function-resources.md)
