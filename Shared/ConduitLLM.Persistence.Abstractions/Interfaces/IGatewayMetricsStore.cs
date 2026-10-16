@@ -22,11 +22,19 @@ public interface IGatewayMetricsStore
     Task<GatewayTaskQueueMetrics> GetTaskQueueMetricsAsync(
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Reads metrics for a nonblank task type, preserving its case and whitespace.
+    /// Validates the task type before cancellation or I/O.
+    /// </summary>
     Task<IReadOnlyList<GatewayGenerationTaskMetric>> GetGenerationTaskMetricsAsync(
         string taskType,
         DateTime since,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Reads the highest spend totals within the requested time range.
+    /// Requires a positive limit and validates it before cancellation or I/O.
+    /// </summary>
     Task<IReadOnlyList<GatewayVirtualKeySpendMetric>> GetTopVirtualKeySpendAsync(
         DateTime from,
         DateTime before,

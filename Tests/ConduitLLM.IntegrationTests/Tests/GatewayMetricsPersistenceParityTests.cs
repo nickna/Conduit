@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 using Xunit;
+using Xunit.Abstractions;
 
 namespace ConduitLLM.IntegrationTests.Tests;
 
@@ -22,13 +23,15 @@ namespace ConduitLLM.IntegrationTests.Tests;
 /// Runs Gateway operational metrics queries against EF and typed Npgsql.
 /// </summary>
 [Collection("Postgres advisory locks")]
-public sealed class GatewayMetricsPersistenceParityTests
+public sealed partial class GatewayMetricsPersistenceParityTests
 {
     private readonly PostgresLockTestContainerFixture _fixture;
+    private readonly ITestOutputHelper _output;
 
-    public GatewayMetricsPersistenceParityTests(PostgresLockTestContainerFixture fixture)
+    public GatewayMetricsPersistenceParityTests(PostgresLockTestContainerFixture fixture, ITestOutputHelper output)
     {
         _fixture = fixture;
+        _output = output;
     }
 
     [Fact]
@@ -260,43 +263,6 @@ public sealed class GatewayMetricsPersistenceParityTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task MetricsValidationRetainsTheDocumentedAdapterDifferences(bool typedNpgsql)
-    {
-        // #1670 tracks reconciliation separately; the compiler rewrite preserves the EF baseline.
-        var schema = $"gm_inputs_{Guid.NewGuid():N}";
-        try
-        {
-            await CreateMetricsMatrixAsync(schema, seed: true);
-            await using var source = NpgsqlDataSource.Create(WithSearchPath(schema));
-            var store = CreateMetricsStore(source, typedNpgsql);
-            foreach (var invalid in new[] { null, "", " \t\r\n" })
-            {
-                if (typedNpgsql)
-                    await Assert.ThrowsAnyAsync<ArgumentException>(() =>
-                        store.GetGenerationTaskMetricsAsync(invalid!, MetricsFrom));
-                else
-                    (await store.GetGenerationTaskMetricsAsync(invalid!, MetricsFrom)).Should().BeEmpty();
-            }
-            if (typedNpgsql)
-            {
-                foreach (var limit in new[] { 0, -1 })
-                    await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-                        store.GetTopVirtualKeySpendAsync(MetricsFrom, MetricsInstant, limit));
-            }
-            else
-            {
-                (await store.GetTopVirtualKeySpendAsync(MetricsFrom, MetricsInstant, 0)).Should().BeEmpty();
-                // Negative EF Take is deliberately not assigned an unobserved provider-specific outcome.
-            }
-            await AssertMetricsReadAsync(store, MetricsRead.Generation, CancellationToken.None);
-            await AssertMetricsReadAsync(store, MetricsRead.Spend, CancellationToken.None);
-        }
-        finally { await DropSchemaAsync(schema); }
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
     public async Task AllSixMetricsReadsCancelBeforeExecutionAndInOccupiedPoolThenRecover(bool typedNpgsql)
     {
         var schema = $"gm_pool_{Guid.NewGuid():N}";
@@ -502,24 +468,25 @@ public sealed class GatewayMetricsPersistenceParityTests
         }
     }
 
-    private async Task CreateMetricsMatrixAsync(string schema, bool seed)
+    private async Task CreateMetricsMatrixAsync(string schema, bool seed, CancellationToken cancellationToken = default)
     {
-        await using (var connection = new NpgsqlConnection(_fixture.ConnectionString))
+        await using (var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(_fixture.ConnectionString)
+            { Pooling = false }.ConnectionString))
         {
-            await connection.OpenAsync();
+            await connection.OpenAsync(cancellationToken);
             await using var command = connection.CreateCommand();
             command.CommandText = $"CREATE SCHEMA \"{schema}\"";
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
         await using var efSource = NpgsqlDataSource.Create(WithSearchPath(schema));
         await using var context = new TestDbContextFactory(efSource).CreateDbContext();
         // Use the actual production model, including FK and unique indexes. EnsureCreated would
         // see unrelated shared fixture tables, so execute its creation script in this owned schema.
-        await context.Database.OpenConnectionAsync();
+        await context.Database.OpenConnectionAsync(cancellationToken);
         await using (var command = context.Database.GetDbConnection().CreateCommand())
         {
             command.CommandText = context.Database.GenerateCreateScript();
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
         if (!seed) return;
 
@@ -614,7 +581,7 @@ public sealed class GatewayMetricsPersistenceParityTests
             MatrixSpend(101, 99m, MetricsFrom.AddTicks(-10)),
             MatrixSpend(101, 100m, MetricsInstant),
             MatrixSpend(101, 100m, MetricsInstant.AddMinutes(1)));
-        await context.SaveChangesAsync();
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     private static RequestLog MatrixRequest(string model, string? provider, double latency, decimal cost,

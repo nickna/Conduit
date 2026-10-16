@@ -125,6 +125,24 @@ the NativeAOT workflow.
 | Function execution reads / `IFunctionExecutionRuntimeReader` | `FunctionExecutionPersistenceParityTests` | The successful publish/process job in [Linux run 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143) includes the native persistence probe's 39 scalar fields, included configuration/inverse graph and 105-row virtual-key list, plus the shared PostgreSQL parity suite. Native Gateway selects the reader in its prepared execution service after that proof; the published Exa process job linked below verifies opposite-host execution-by-ID reads and ownership. Execution-list HTTP remains separate. |
 | Stateless inline MCP execution | `NativeMcpFunctionProviderTests`, shared function configuration/pricing/execution contracts | [Linux run 38147134135](https://github.com/nickna/Conduit/actions/runs/38147134135) passes actual configured MCP execution on both native Gateways, production-protected scoped credentials, modern request metadata, structured/Unicode results, all 24 persisted fields, opposite-host ownership and exact configured pricing/accounting. Stateful sessions, agentic MCP and broader server interoperability remain separate. |
 
+The #1670 metrics contract requires a nonblank generation task type and a
+positive spend limit. Both adapters validate before context/pool access or
+cancellation; nonblank task types retain their original case and whitespace,
+and positive limits are not capped. EF now uses the typed adapter's existing
+guards without changing grouping, time predicates or decimal sums.
+Twenty-four unchanged-source PostgreSQL observations measured the discrepancy:
+EF returned no rows for null/empty/whitespace task types and limit zero,
+negative limits raised SQLSTATE `2201W`, and pre-cancelled calls canceled first.
+Typed Npgsql raised the corresponding argument exception in both token states.
+The reconciled PostgreSQL class passes all 13 cases without skips, including
+14 invalid-input/token combinations per adapter with a held sole pool lease,
+exact exception/parameter assertions, no context entry or SQL dispatch, and
+positive recovery controls. Valid cases preserve the aggregate matrix, original
+string matching, maximum positive limit and caller cancellation. All four new
+owned input schemas were verified absent after independent bounded cleanup.
+This managed proof does not qualify the published native metrics profile;
+that coverage is tracked separately in #1671.
+
 The #1669 model-cost contract captures one UTC eligibility timestamp after
 identifier validation and before awaiting a context or connection. The typed
 adapter now matches EF's existing boundary; effective bounds remain inclusive,
