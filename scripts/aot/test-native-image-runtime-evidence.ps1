@@ -236,7 +236,7 @@ function Invoke-RuntimeCase([string] $Service, [string] $Scenario, [bool] $Succe
         elseif ($Scenario -cin @('wrong-owner', 'wrong-name', 'wrong-image', 'wrong-service', 'foreign-running', 'late-owner-change')) {
             Assert-RuntimeContract ($created.Count -eq 1 -and $stopped.Count -eq 0 -and $removed.Count -eq 0 -and [IO.File]::Exists((Join-Path $root 'active.json'))) 'Runtime cleanup acted on foreign/unassociated state.'
         }
-        elseif ($Scenario -cin @('stop-failure', 'stop-still-running')) {
+        elseif ($Scenario -cin @('stop-failure', 'stop-still-running', 'stop-deprecation-stdout', 'stop-wrong-id')) {
             Assert-RuntimeContract ($stopped.Count -eq 1 -and $removed.Count -eq 0 -and [IO.File]::Exists((Join-Path $root 'active.json'))) 'Runtime stop failure was followed by unsafe removal.'
         }
         elseif ($Scenario -ceq 'rm-failure') {
@@ -255,6 +255,28 @@ function Invoke-RuntimeCase([string] $Service, [string] $Scenario, [bool] $Succe
                 @($records | Where-Object { $_.ordinal -gt $logs[0].ordinal -and $_.arguments[1] -ceq 'inspect' -and $_.arguments[-1] -ceq $containerId }).Count -eq 1 -and
                 $state.container.Config.Labels['conduit.proof.owner'] -ceq ('d' * 32) -and $state.container.State.Running -and
                 $caught.Exception.Message.StartsWith('Native image execution owned cleanup failed;', [StringComparison]::Ordinal)) 'Late ownership change did not occur after validated execution and before cleanup refusal.'
+        }
+        if ($Scenario -cin @('stop-deprecation-stdout', 'stop-wrong-id')) {
+            $state = Read-VerificationJson (Join-Path $root 'active.json')
+            $stopResult = Read-VerificationJson (Join-Path $root 'stop-result.json')
+            $expectedStdout = if ($Scenario -ceq 'stop-deprecation-stdout') {
+                'Flag --time has been deprecated, use --timeout instead' + "`n" + $containerId + "`n"
+            } else { ('d' * 64) + "`n" }
+            # The fixture first fails start, then cleanup rejects stop stdout.
+            # Both failures must survive; cleanup-only wording would hide the primary stage.
+            $checks = [ordered]@{
+                stopExitedZero = ($stopResult.exitCode -eq 0)
+                stdoutAsPlanned = ($stopResult.stdout -ceq $expectedStdout)
+                stopped = (-not $state.container.State.Running)
+                exactId = ($state.container.Id -ceq $containerId)
+                exactOwner = ($state.container.Config.Labels['conduit.proof.owner'] -ceq ([IO.File]::ReadAllText((Join-Path $artifact 'native-image-runtime.claim')).Trim()))
+                noResults = ($results.Count -eq 0)
+                combinedStartAndCleanupFailure = [regex]::IsMatch($caught.Exception.Message,
+                    '\ANative image execution and owned cleanup failed; stage=runtime-start; type=System\.Management\.Automation\.RuntimeException; line=[1-9][0-9]*; cleanupType=System\.Management\.Automation\.RuntimeException\.\z')
+            }
+            $diagnostic = 'Runtime strict stop-result fixture mismatch; scenario=' + $Scenario + '; ' +
+                ((@($checks.Keys | ForEach-Object { $_ + '=' + $checks[$_].ToString().ToLowerInvariant() })) -join '; ') + '.'
+            Assert-RuntimeContract (@($checks.Values | Where-Object { -not $_ }).Count -eq 0) $diagnostic
         }
         if ($Scenario -cin @('start-nonzero', 'wait-timeout', 'running-after-wait')) {
             Assert-RuntimeContract ($stopped.Count -eq 1 -and $removed.Count -eq 1 -and $stopped[0].arguments[-1] -ceq $containerId) 'Owned running failure did not stop then nonforce-remove its exact ID.'
@@ -437,7 +459,7 @@ switch ($DockerArguments[1]) {
         $state = if ([IO.File]::Exists($active)) { Read-Json $active } elseif ($scenario -ceq 'absence-failure' -and [IO.File]::Exists($removed)) { Read-Json $removed } else { Missing $lookup }
         if ($lookup -cne $id -and $lookup -cne $state.lookupName) { Missing $lookup }
         if ($phase -ceq 'runtime' -and $state.started -and $state.container.State.Running -and
-            $scenario -cnotin @('wait-timeout', 'start-nonzero', 'stop-failure', 'stop-still-running') -and
+            $scenario -cnotin @('wait-timeout', 'start-nonzero', 'stop-failure', 'stop-still-running', 'stop-deprecation-stdout', 'stop-wrong-id') -and
             -not ($scenario -cin @('running-after-wait', 'late-owner-change') -and $state.waited)) {
             $state.container.State.Running = $false; $state.container.State.Status = 'exited'; Write-Json $active $state
         }
@@ -450,7 +472,7 @@ switch ($DockerArguments[1]) {
     'start' {
         if ($DockerArguments.Count -ne 3 -or $DockerArguments[-1] -cne $id) { throw 'Invalid runtime start identity.' }
         $state = Read-Json $active; $state.started = $true; $state.container.State.Running = $true; $state.container.State.Status = 'running'; Write-Json $active $state
-        if ($scenario -cin @('start-nonzero', 'stop-failure', 'stop-still-running')) { [Console]::Error.WriteLine($diagnostic); exit 17 }
+        if ($scenario -cin @('start-nonzero', 'stop-failure', 'stop-still-running', 'stop-deprecation-stdout', 'stop-wrong-id')) { [Console]::Error.WriteLine($diagnostic); exit 17 }
         [Console]::Out.WriteLine($id); exit 0
     }
     'wait' {
@@ -503,6 +525,13 @@ switch ($DockerArguments[1]) {
         if ($scenario -ceq 'stop-failure') { [Console]::Error.WriteLine($diagnostic); exit 17 }
         $state = Read-Json $active
         if ($scenario -cne 'stop-still-running') { $state.container.State.Running = $false; $state.container.State.Status = 'exited'; $state.container.State.ExitCode = 137; Write-Json $active $state }
+        if ($scenario -cin @('stop-deprecation-stdout', 'stop-wrong-id')) {
+            $stdout = if ($scenario -ceq 'stop-deprecation-stdout') {
+                'Flag --time has been deprecated, use --timeout instead' + "`n" + $id + "`n"
+            } else { ('d' * 64) + "`n" }
+            Write-Json (Join-Path $root 'stop-result.json') @{ exitCode = 0; stdout = $stdout }
+            [Console]::Out.Write($stdout); exit 0
+        }
         [Console]::Out.WriteLine($id); exit 0
     }
     'rm' {
@@ -534,7 +563,7 @@ switch ($DockerArguments[1]) {
         'create-nonzero', 'create-malformed', 'create-timeout', 'start-nonzero', 'wait-nonzero',
         'exit-mismatch', 'running-after-wait', 'wait-timeout', 'cp-nonzero', 'cp-timeout', 'cp-directory',
         'openapi-nonjson', 'openapi-duplicate', 'logs-overflow', 'wrong-owner', 'wrong-name', 'wrong-image', 'wrong-service',
-        'foreign-running', 'late-owner-change', 'stop-failure', 'stop-still-running', 'rm-failure', 'absence-failure',
+        'foreign-running', 'late-owner-change', 'stop-failure', 'stop-still-running', 'stop-deprecation-stdout', 'stop-wrong-id', 'rm-failure', 'absence-failure',
         'fresh-visible', 'fresh-hidden', 'fresh-claim', 'invalid-execution-timeout', 'invalid-cleanup-timeout',
         'invalid-docker-timeout', 'nested-artifact', 'oci-report-tamper', 'oci-observations-tamper', 'oci-archive-tamper',
         'oci-reference-path', 'runtime-wrong-manifest', 'runtime-oci-report-tamper', 'runtime-oci-archive-tamper')) {

@@ -58,6 +58,15 @@ docker build --file Services/ConduitLLM.Gateway/Dockerfile.native --tag conduit-
 Do not add `linux-arm64` until that RID is published and receives the same process,
 image-content, protocol, and canary coverage.
 
+The packaged-entrypoint runtime proof stops a running owned container with
+`docker container stop --timeout <calculated-grace> <exact-id>`. It keeps the
+command deadline and reap allowance within the cleanup budget, rechecks ownership
+and stopped state, removes without force, and independently confirms absence.
+A zero exit alone is insufficient: stop stdout must contain only the exact ID
+after trimming. Warning text or a different ID prevents removal and success
+evidence. The supported spelling avoids Docker 29's deprecated `--time` warning
+without relaxing this check ([#1664](https://github.com/nickna/Conduit/issues/1664)).
+
 ## Reproducible comparison
 
 The release-owned migrator must prepare the database before either application
