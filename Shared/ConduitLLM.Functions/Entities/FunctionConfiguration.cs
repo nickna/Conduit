@@ -36,14 +36,14 @@ public class FunctionConfiguration : IIdentifiableEntity<int>
     public required string ConfigurationName { get; set; }
 
     /// <summary>
-    /// Purpose/use case for this function (Search, Answer, RAG_Search, etc.)
+    /// Purpose/use case for this function (Search, Answer, ContentRetrieval or RAG).
     /// </summary>
     [Required]
     public FunctionPurpose Purpose { get; set; }
 
     /// <summary>
-    /// Default execution mode for this function (Synchronous or Asynchronous)
-    /// Can be overridden per execution request
+    /// Stored execution mode copied into execution records (Synchronous or Asynchronous).
+    /// The current execution service awaits the provider inline for either value.
     /// </summary>
     [Required]
     public ExecutionMode DefaultExecutionMode { get; set; } = ExecutionMode.Synchronous;

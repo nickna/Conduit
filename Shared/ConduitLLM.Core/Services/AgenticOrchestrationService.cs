@@ -200,7 +200,9 @@ public class AgenticOrchestrationService : IAgenticOrchestrationService
                 route.ConfigurationId,
                 virtualKeyId,
                 parameters,
-                idempotencyKey: $"{chatCompletionId}_{toolCall.Id}",
+                // The enclosing chat request owns billing. Internal tool identities
+                // remain tracing metadata and do not opt into direct HTTP settlement.
+                idempotencyKey: null,
                 metadata: new Dictionary<string, object>
                 {
                     ["chat_completion_id"] = chatCompletionId.ToString(),

@@ -1,6 +1,10 @@
+using System.Security.Cryptography;
+using System.Text;
+
 using ConduitLLM.Core.Extensions;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Models;
+using ConduitLLM.Persistence.Interfaces;
 
 namespace ConduitLLM.Gateway.Endpoints;
 
@@ -41,6 +45,35 @@ public sealed class RequireBalanceEndpointFilter : IEndpointFilter
                 "Virtual key not found in authentication context",
                 "unauthorized",
                 "authentication_error");
+        }
+
+        // Authentication remains mandatory. An existing operation has already passed
+        // its admission check and must remain replayable after its debit depletes balance.
+        var isFunctionExecution = HttpMethods.IsPost(httpContext.Request.Method)
+            && string.Equals(httpContext.Request.Path.Value?.TrimEnd('/'),
+                "/v1/conduit/functions/execute", StringComparison.OrdinalIgnoreCase);
+        if (isFunctionExecution && httpContext.Request.Headers.TryGetValue("Idempotency-Key", out var values)
+            && values.Count != 1)
+            return GatewayResults.OpenAIError(400, "Supply exactly one Idempotency-Key header value.", "invalid_idempotency_key");
+        if (isFunctionExecution
+            && httpContext.Request.Headers.TryGetValue("Idempotency-Key", out var keyHeader)
+            && keyHeader.Count == 1
+            && keyHeader.ToString() is { Length: > 0 and <= 200 } operationKey
+            && !string.IsNullOrWhiteSpace(operationKey)
+            && int.TryParse(httpContext.User.FindFirst("VirtualKeyId")?.Value, out var keyId)
+            && httpContext.RequestServices.GetService<IFunctionExecutionIdempotencyStore>() is { } claims)
+        {
+            var keyHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(operationKey)));
+            bool existing;
+            try { existing = await claims.FindAsync(keyId, keyHash, httpContext.RequestAborted) is not null; }
+            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Could not read durable function claims for virtual key {VirtualKeyId}", keyId);
+                return GatewayResults.OpenAIError(503, "Durable function idempotency is unavailable.",
+                    "idempotency_unavailable", "server_error");
+            }
+            if (existing) return await next(context);
         }
 
         VirtualKeyValidationOutcome validation;

@@ -28,6 +28,60 @@ public sealed class FunctionPricingPersistenceParityTests(PostgresLockTestContai
     // PostgreSQL timestamps preserve microseconds, not arbitrary DateTime ticks.
     private static DateTime Instant => new(DateTime.UtcNow.Ticks / 10 * 10, DateTimeKind.Utc);
 
+    [Theory]
+    [InlineData("inactive high-priority cost", 101, new[] { 101, 103 })]
+    [InlineData("future high-priority cost", 101, new[] { 101, 104 })]
+    [InlineData("expired high-priority cost", 101, new[] { 101, 105 })]
+    [InlineData("all costs ineligible", null, new[] { 103, 104, 105 })]
+    [InlineData("eligible highest-priority cost", 106, new[] { 101, 106 })]
+    [InlineData("newest equal-priority cost", 102, new[] { 101, 102 })]
+    public async Task RepositoryAndRuntimePricingSelectTheBestEligibleCost(
+        string scenario, int? expectedCostId, int[] mappedCostIds)
+    {
+        var schema = $"function_pricing_{Guid.NewGuid():N}";
+        var asOf = Instant;
+        try
+        {
+            await SeedAsync(schema, asOf);
+            var connectionString = WithSearchPath(schema);
+            await using var source = NpgsqlDataSource.Create(connectionString);
+            await using var efSource = NpgsqlDataSource.Create(connectionString);
+
+            // Isolate each invalid category so another eligibility predicate cannot mask it.
+            // Every candidate is actively mapped; eligibility is a property of the cost.
+            await using (var connection = await source.OpenConnectionAsync())
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = """
+                    DELETE FROM "FunctionCostMappings" WHERE "FunctionConfigurationId" = 1;
+                    INSERT INTO "FunctionCostMappings"
+                        ("Id", "FunctionConfigurationId", "FunctionCostId", "IsActive", "CreatedAt")
+                    SELECT 1000 + candidate.ordinality::integer, 1, candidate.id, TRUE, @asOf
+                    FROM unnest(@costIds) WITH ORDINALITY AS candidate(id, ordinality);
+                    """;
+                command.Parameters.AddWithValue("asOf", NpgsqlDbType.TimestampTz, asOf);
+                command.Parameters.AddWithValue("costIds", NpgsqlDbType.Array | NpgsqlDbType.Integer, mappedCostIds);
+                await command.ExecuteNonQueryAsync();
+            }
+
+            // The repository uses UtcNow, while runtime stores take an explicit instant.
+            // Day-wide eligibility windows keep these checks away from clock boundaries.
+            var repository = new FunctionCostRepository(
+                new ContextFactory(efSource), NullLogger<FunctionCostRepository>.Instance);
+            var selected = await repository.GetActiveCostForFunctionAsync(1);
+            (selected?.Id).Should().Be(expectedCostId, scenario);
+
+            foreach (var store in CreateStores(efSource, source))
+            {
+                var runtimeSelected = await store.FindEligibleCostAsync(1, asOf);
+                (runtimeSelected?.Id).Should().Be(expectedCostId, scenario);
+                runtimeSelected.Should().BeEquivalentTo(selected,
+                    options => options.Excluding(cost => cost.FunctionMappings), scenario);
+            }
+        }
+        finally { await DropAsync(schema); }
+    }
+
     [Fact]
     public async Task EfAndTypedPricingPreserveEligibilityRankingCanonicalIdsAndAllScalars()
     {

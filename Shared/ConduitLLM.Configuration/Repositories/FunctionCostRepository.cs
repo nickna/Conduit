@@ -62,23 +62,15 @@ public class FunctionCostRepository : RepositoryBase<FunctionCost, int>, IFuncti
                 .AsNoTracking()
                 .Include(m => m.FunctionCost)
                 .Where(m => m.FunctionConfigurationId == functionConfigurationId && m.IsActive)
+                .Where(m => m.FunctionCost != null
+                    && m.FunctionCost.IsActive
+                    && m.FunctionCost.EffectiveDate <= now
+                    && (m.FunctionCost.ExpiryDate == null || m.FunctionCost.ExpiryDate > now))
                 .OrderByDescending(m => m.FunctionCost!.Priority)
                 .ThenByDescending(m => m.FunctionCost!.EffectiveDate)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            if (mapping?.FunctionCost == null)
-            {
-                return null;
-            }
-
-            if (mapping.FunctionCost.IsActive
-                && mapping.FunctionCost.EffectiveDate <= now
-                && (mapping.FunctionCost.ExpiryDate == null || mapping.FunctionCost.ExpiryDate > now))
-            {
-                return mapping.FunctionCost;
-            }
-
-            return null;
+            return mapping?.FunctionCost;
         }, cancellationToken, "GetActiveCostForFunction");
     }
 }

@@ -332,6 +332,23 @@ public sealed class HostCompositionTests
         Assert.Same(first.ServiceProvider.GetRequiredService<IFunctionClientFactory>(), Field(service, "_clientFactory"));
         Assert.Same(first.ServiceProvider.GetRequiredService<ConduitLLM.Functions.Security.IFunctionCredentialProtector>(),
             Field(service, "_credentialProtector"));
+        if (gateway)
+        {
+            var claimDescriptor = Assert.Single(descriptors, value => value.ServiceType == typeof(IFunctionExecutionIdempotencyStore));
+            Assert.Equal(ServiceLifetime.Singleton, claimDescriptor.Lifetime);
+            Assert.Null(claimDescriptor.ImplementationType);
+            Assert.NotNull(claimDescriptor.ImplementationFactory);
+            var claims = Assert.IsType<NpgsqlFunctionExecutionIdempotencyStore>(
+                first.ServiceProvider.GetRequiredService<IFunctionExecutionIdempotencyStore>());
+            Assert.Same(claims, second.ServiceProvider.GetRequiredService<IFunctionExecutionIdempotencyStore>());
+            Assert.Same(claims, Field(service, "_idempotencyStore"));
+            Assert.Same(claims, Field(other, "_idempotencyStore"));
+        }
+        else
+        {
+            Assert.Null(Field(service, "_idempotencyStore"));
+            Assert.Null(Field(other, "_idempotencyStore"));
+        }
 #if CONDUIT_NATIVE_AOT
         if (gateway)
         {
@@ -361,8 +378,16 @@ public sealed class HostCompositionTests
             return;
         }
 #endif
-        Assert.Equal(typeof(FunctionExecutionService), descriptor.ImplementationType);
-        Assert.Null(descriptor.ImplementationFactory);
+        if (gateway)
+        {
+            Assert.Null(descriptor.ImplementationType);
+            Assert.NotNull(descriptor.ImplementationFactory);
+        }
+        else
+        {
+            Assert.Equal(typeof(FunctionExecutionService), descriptor.ImplementationType);
+            Assert.Null(descriptor.ImplementationFactory);
+        }
         foreach (var field in new[] { "_runtimeConfigurationStore", "_runtimeWriter", "_runtimeReader" })
         {
             Assert.Null(Field(service, field));

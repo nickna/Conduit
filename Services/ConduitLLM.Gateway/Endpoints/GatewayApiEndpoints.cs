@@ -169,13 +169,14 @@ public static class GatewayApiEndpoints
 
         var functions = app.MapGroup("/v1/conduit/functions")
             .RequireAuthorization("VirtualKeyAuthentication")
-            .AddEndpointFilter<RequireBalanceEndpointFilter>()
             .AddEndpointFilter<OperationLoggingEndpointFilter>()
             .WithTags("Functions");
         functions.MapPost("/execute", ([FromServices] FunctionsEndpoints endpoints, FunctionsEndpoints.FunctionExecutionRequest request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, CancellationToken cancellationToken) => endpoints.ExecuteFunction(request, idempotencyKey, cancellationToken))
+            .AddEndpointFilter<RequireBalanceEndpointFilter>()
             .WithName("Functions_Execute")
-            .WithParameterDescription("Idempotency-Key", "Client-supplied key for deduplicating repeated requests. Reuse the same key only for the same intended operation.")
-            .WithSummary("Executes a function with the provided parameters.").Produces<FunctionExecutionDto>().Produces<OpenAIErrorResponse>(400).Produces<OpenAIErrorResponse>(402).Produces<OpenAIErrorResponse>(404).Produces(500);
+            .WithParameterDescription("Idempotency-Key", "Optional opaque key of 1 to 200 nonblank characters, scoped to the authenticated virtual key. Identical retries replay the stored execution and charge once. Reuse with a different function, parameters or metadata returns 409. Claims have no automatic expiry; running or uncertain outcomes return 409 and are never automatically dispatched again.")
+            .WithDescription("Completed retries include Idempotency-Replayed: true. Function-Execution-Id identifies successful and conflicting operations; 409 responses include their execution Location. In-progress retries include Retry-After: 3. Durable result and billing settlement survive Gateway restarts. See the function resources guide for recovery limits.")
+            .WithSummary("Executes a function with the provided parameters.").Produces<FunctionExecutionDto>().Produces<OpenAIErrorResponse>(400).Produces<OpenAIErrorResponse>(402).Produces<OpenAIErrorResponse>(404).Produces<OpenAIErrorResponse>(409).Produces<OpenAIErrorResponse>(503).Produces(500);
         functions.MapGet("/executions/{executionId}", ([FromServices] FunctionsEndpoints endpoints, Guid executionId, CancellationToken cancellationToken) => endpoints.GetExecution(executionId, cancellationToken))
             .WithName("Functions_GetExecution")
             .WithSummary("Gets the status and result of a function execution.")

@@ -24,7 +24,7 @@ public class FunctionDiscoveryDto
     public string ProviderType { get; set; } = string.Empty;
 
     /// <summary>
-    /// Function purpose (e.g., "Search", "Answer", "RAG_Search").
+    /// Function purpose ("Search", "Answer", "ContentRetrieval" or "RAG").
     /// </summary>
     public string Purpose { get; set; } = string.Empty;
 

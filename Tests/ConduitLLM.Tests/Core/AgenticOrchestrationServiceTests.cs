@@ -25,9 +25,10 @@ public class AgenticOrchestrationServiceTests
                 It.IsAny<string>(), It.IsAny<Dictionary<string, object>>(),
                 It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((int configurationId, int virtualKeyId, Dictionary<string, object> parameters,
-                string idempotencyKey, Dictionary<string, object> executionMetadata,
+                string? idempotencyKey, Dictionary<string, object> executionMetadata,
                 string providerToolName, CancellationToken cancellationToken) =>
             {
+                Assert.Null(idempotencyKey);
                 metadata.Add(executionMetadata);
                 return new FunctionExecution
                 {
