@@ -290,8 +290,8 @@ Gateways: successful and failed execution, opposite-host status retrieval,
 ownership denial and settled accounting. Configured non-streaming Exa agentic chat
 is qualified below. Execution-list HTTP, stateful/agentic MCP and function
 audit/retention remain separate workload proofs.
-The inherited ignored concurrency-update result remains tracked separately in
-[#1572](https://github.com/nickna/Conduit/issues/1572).
+The ignored concurrency-update result from extraction is corrected by the #1572
+policy above.
 
 `FunctionsEndpoints.CreateWithRuntimePersistence` follows with the HTTP handler's
 single configuration preflight read. Native Gateway constructs it explicitly over
@@ -302,8 +302,16 @@ contracts retain their existing behavior. Paired handler tests use production JS
 metadata, and the native two-host probe exercises requests rejected before provider
 invocation. The preflight cases alone do not establish native execution or chat
 workflow support; the complete selected Exa workload below supplies that proof.
-Inherited validation of JSON-bound primitive parameters is preserved and tracked in
-[#1573](https://github.com/nickna/Conduit/issues/1573).
+The subsequent [#1573](https://github.com/nickna/Conduit/issues/1573) correction checks
+JSON-bound and CLR strings, booleans, numbers and select values consistently without
+changing the supplied dictionary or wire values. Numeric bounds are inclusive and
+compare decimal digits exactly within the finite double range, rejecting overflow
+and underflow. Typed null/undefined inputs are rejected. Missing schemas
+still skip validation, while malformed schemas or field definitions produce explicit
+warnings and retain their existing provider-validation fallback; independent required
+parameter errors are preserved when a field definition is malformed. Generated-wire
+endpoint tests cover both preflight constructions. These local corrections do not
+constitute a new published-native workload proof.
 
 `FunctionDiscoveryService.CreateWithRuntimePersistence` reuses the proven scalar
 configuration store for Core's tool and routing-map reads. Native Gateway selects
