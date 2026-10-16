@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using ConduitLLM.Core.OpenApi;
 using ConduitLLM.Admin.Extensions;
 using ConduitLLM.Admin.DTOs;
@@ -421,7 +423,7 @@ namespace ConduitLLM.Admin.Endpoints
         /// Reuses <see cref="ProviderConfigurationRegistry.ResolveBaseUrl"/> so a full BaseUrl override
         /// with the identifier already embedded is still accepted (dual-read during migration).
         /// </summary>
-        private static bool TryValidateProviderSettings(Provider provider, out string? error)
+        private static bool TryValidateProviderSettings(Provider provider, [NotNullWhen(false)] out string? error)
         {
             try
             {

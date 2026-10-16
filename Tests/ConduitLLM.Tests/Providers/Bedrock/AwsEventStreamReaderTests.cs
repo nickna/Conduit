@@ -115,6 +115,7 @@ public class AwsEventStreamReaderTests
     internal static byte[] BuildFrame(Dictionary<string, string> headers, string payload)
     {
         using var headerStream = new MemoryStream();
+        Span<byte> length = stackalloc byte[2];
         foreach (var (name, value) in headers)
         {
             var nameBytes = Encoding.UTF8.GetBytes(name);
@@ -122,7 +123,6 @@ public class AwsEventStreamReaderTests
             headerStream.WriteByte((byte)nameBytes.Length);
             headerStream.Write(nameBytes);
             headerStream.WriteByte(7); // value type: string
-            Span<byte> length = stackalloc byte[2];
             BinaryPrimitives.WriteUInt16BigEndian(length, (ushort)valueBytes.Length);
             headerStream.Write(length);
             headerStream.Write(valueBytes);
