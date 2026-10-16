@@ -818,6 +818,36 @@ The three new Passed Billing rows assert backend disappearance after successful 
 
 The 313-row result was measured on 6695b390 with 17 uncommitted fixture changes; later remote integration requires separate verification. The local host uses the current JIT cleanup probe DLL; Linux CI uses the native probe, so this comparison grants no current-head native qualification. [#1677](https://github.com/nickna/Conduit/issues/1677) still requires fresh native workflow and merge CI evidence. #1373/#1375 and all remaining repository migrations/native coverage remain required. Production remains JIT under ADR 0006; generated-query execution, complete native repository coverage, registry qualification and production readiness remain unestablished.
 
+### #1634 follow-up: fixture ownership and independent cleanup
+
+The 2026-10-16 audit confirms Unit 142's explicit source ownership in both
+billing fixture families, function discovery, and async-task parity. EF borrows
+the owned source through `UseNpgsql(dataSource)`; closing a context alone is not
+treated as closing its pool. The remaining async-task management operations now
+use unpooled, bounded connections. Its two schema drops receive independent
+deadlines, and their cleanup failures preserve an earlier work failure. No global
+pool clearing or PostgreSQL capacity increase is used. See
+[database pool ownership](database-pool-ownership.md#persistence-test-fixtures).
+
+New discovery and async-task regressions complement the existing billing
+success/query/setup-failure cases. They verify owned backend PID and schema
+disappearance inside the live test process and preserve an unrelated idle source.
+Discovery observes a blocked production EF query before cancellation; the
+async-task cancellation case covers pre-canceled typed work after both pools have
+been used. A real table lock also proves the first async-task drop can expire
+without skipping the second or replacing the primary failure.
+
+On an independently owned PostgreSQL **16.15** server with unchanged
+`max_connections=100`, the current shared CI persistence selector passed the same
+**394/394 tests twice, zero failures or skips**, using Windows Release/JIT and the
+managed cleanup probe. Each run retained 49 live `pg_stat_activity` samples, with peaks
+of 18 and 7 client backends respectively, including the observer. These sampled
+peaks are lower bounds and do not establish the cause of historical R2 failures.
+Both runs finished with zero owned schemas. The retained `issue-1634-shared-1.trx`,
+`issue-1634-shared-2.trx`, `issue-1634-pg16-samples.jsonl`, and tested-input hashes
+record this local verification; published-native execution remains a separate
+hosted check.
+
 ### Unit 143: incoming integration after fixture-pool repair
 
 After Unit 142 commit 2a528784, incoming 48119ec9 was integrated with six reviewed source fixes while preserving the tested fixture bytes. The chat runtime factory now forwards both optional pricing services through its existing constructors, and native-only endpoint registration resolves them; the single public repository constructor remains intact. Configuration tests retain explicit flags and validation ordering while aligning omitted options with intended global defaults. Twelve runtime-factory pricing cases cover the nonstreaming cost path. Security tests require exact 401/429 outcomes and cache-read counts during the existing memory-fallback/legacy-cache-outage scenario; worker tests require the leader/lifecycle adapters to borrow the registered singleton instances.

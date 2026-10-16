@@ -22,6 +22,7 @@ namespace ConduitLLM.IntegrationTests.Tests;
 [Collection("Postgres advisory locks")]
 public sealed class AsyncTaskRuntimePersistenceParityTests
 {
+    private static readonly TimeSpan CleanupTimeout = TimeSpan.FromSeconds(15);
     private readonly PostgresLockTestContainerFixture _fixture;
 
     public AsyncTaskRuntimePersistenceParityTests(PostgresLockTestContainerFixture fixture)
@@ -34,26 +35,158 @@ public sealed class AsyncTaskRuntimePersistenceParityTests
     {
         var efSchema = $"task_runtime_ef_{Guid.NewGuid():N}";
         var npgsqlSchema = $"task_runtime_np_{Guid.NewGuid():N}";
-        try
+        await WithOwnedSourcesAsync(efSchema, npgsqlSchema, async (efSource, typedSource) =>
         {
-            await CreateSchemaAsync(efSchema);
-            await CreateSchemaAsync(npgsqlSchema);
-
-            await using var efSource = NpgsqlDataSource.Create(WithSearchPath(efSchema));
-
             var efRepository = new AsyncTaskRepository(
                 new TestDbContextFactory(efSource),
                 NullLogger<AsyncTaskRepository>.Instance);
             await ExerciseContractAsync(new EfAsyncTaskRuntimeStore(efRepository));
+            await ExerciseContractAsync(new NpgsqlAsyncTaskRuntimeStore(typedSource));
+        });
+    }
 
-            await using var dataSource = NpgsqlDataSource.Create(WithSearchPath(npgsqlSchema));
-            await ExerciseContractAsync(new NpgsqlAsyncTaskRuntimeStore(dataSource));
-        }
-        finally
+    [Theory]
+    [InlineData("success")]
+    [InlineData("failure")]
+    [InlineData("cancellation")]
+    public async Task OwnedSourcesReleaseTheirBackendsAfterSuccessfulFailedOrCancelledWork(string outcome)
+    {
+        var efSchema = $"task_runtime_ef_{Guid.NewGuid():N}";
+        var typedSchema = $"task_runtime_np_{Guid.NewGuid():N}";
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var observer = new NpgsqlConnection(ManagementConnectionString($"task_runtime_observer_{Guid.NewGuid():N}"));
+        await observer.OpenAsync(deadline.Token);
+        await using var sentinelSource = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(_fixture.ConnectionString)
         {
-            await DropSchemaAsync(efSchema);
-            await DropSchemaAsync(npgsqlSchema);
+            ApplicationName = $"task_runtime_sentinel_{Guid.NewGuid():N}",
+            Pooling = true,
+            MinPoolSize = 0,
+            MaxPoolSize = 1
+        }.ConnectionString);
+        var sentinelPid = await BackendPidAsync(sentinelSource, deadline.Token);
+        var efPid = 0;
+        var typedPid = 0;
+        Exception? primary = null;
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        var actual = await Record.ExceptionAsync(() => WithOwnedSourcesAsync(efSchema, typedSchema,
+            async (efSource, typedSource) =>
+            {
+                var efStore = new EfAsyncTaskRuntimeStore(new AsyncTaskRepository(
+                    new TestDbContextFactory(efSource), NullLogger<AsyncTaskRepository>.Instance));
+                var typedStore = new NpgsqlAsyncTaskRuntimeStore(typedSource);
+                // Both production adapters must actually use their owned pool before
+                // observing its backend; inspecting an unopened source proves nothing.
+                Assert.Null(await efStore.GetByIdAsync("missing", deadline.Token));
+                Assert.Null(await typedStore.GetByIdAsync("missing", deadline.Token));
+                efPid = await BackendPidAsync(efSource, deadline.Token);
+                typedPid = await BackendPidAsync(typedSource, deadline.Token);
+                try
+                {
+                    if (outcome == "failure")
+                    {
+                        await using var connection = await efSource.OpenConnectionAsync(deadline.Token);
+                        await using var command = new NpgsqlCommand("SELECT 1 / 0", connection);
+                        await command.ExecuteScalarAsync(deadline.Token);
+                    }
+                    else if (outcome == "cancellation")
+                    {
+                        await typedStore.GetByIdAsync("missing", cancelled.Token);
+                    }
+                }
+                catch (Exception exception) { primary = exception; throw; }
+            }));
+
+        if (outcome == "success") Assert.Null(actual);
+        else
+        {
+            Assert.NotNull(primary);
+            Assert.Same(primary, actual);
+            if (outcome == "failure")
+                Assert.Equal(PostgresErrorCodes.DivisionByZero, Assert.IsType<PostgresException>(actual).SqlState);
+            else
+                Assert.Equal(cancelled.Token, Assert.IsAssignableFrom<OperationCanceledException>(actual).CancellationToken);
         }
+        Assert.True(efPid > 0);
+        Assert.True(typedPid > 0);
+        Assert.NotEqual(efPid, typedPid);
+        Assert.NotEqual(sentinelPid, efPid);
+        Assert.NotEqual(sentinelPid, typedPid);
+        await WaitForOwnedBackendsToDisappearAsync(observer, efSchema, typedSchema, [efPid, typedPid], deadline.Token);
+        Assert.False(await SchemaExistsAsync(observer, efSchema, deadline.Token));
+        Assert.False(await SchemaExistsAsync(observer, typedSchema, deadline.Token));
+        // The unrelated idle source must retain its backend across owned cleanup.
+        // Reopening it is stronger than keeping an already-open sentinel lease.
+        Assert.Equal(sentinelPid, await BackendPidAsync(sentinelSource, deadline.Token));
+    }
+
+    [Fact]
+    public async Task BlockedFirstSchemaDropIsBoundedAndStillDropsTheSecondWithoutLosingTheWorkFailure()
+    {
+        var efSchema = $"task_runtime_ef_{Guid.NewGuid():N}";
+        var typedSchema = $"task_runtime_np_{Guid.NewGuid():N}";
+        var primary = new InvalidOperationException("Injected async-task fixture failure.");
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var observer = new NpgsqlConnection(ManagementConnectionString($"task_runtime_observer_{Guid.NewGuid():N}"));
+        await observer.OpenAsync(deadline.Token);
+        NpgsqlConnection? blocker = null;
+        NpgsqlTransaction? transaction = null;
+        var efPid = 0;
+        var typedPid = 0;
+        await IntegrationProofCleanup.RunAsync(async () =>
+        {
+            var elapsed = new System.Diagnostics.Stopwatch();
+            var failure = await Assert.ThrowsAsync<AggregateException>(() => WithOwnedSourcesAsync(
+                efSchema, typedSchema, async (efSource, typedSource) =>
+                {
+                    efPid = await BackendPidAsync(efSource, deadline.Token);
+                    typedPid = await BackendPidAsync(typedSource, deadline.Token);
+                    blocker = new NpgsqlConnection(ManagementConnectionString($"{efSchema}_blocker"));
+                    await blocker.OpenAsync(deadline.Token);
+                    transaction = await blocker.BeginTransactionAsync(deadline.Token);
+                    await using var command = new NpgsqlCommand(
+                        $"LOCK TABLE \"{efSchema}\".\"AsyncTasks\" IN ACCESS SHARE MODE", blocker);
+                    await command.ExecuteNonQueryAsync(deadline.Token);
+                    elapsed.Start();
+                    throw primary;
+                }, TimeSpan.FromSeconds(1)));
+
+            elapsed.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(8));
+            Assert.Same(primary, failure.InnerExceptions[0]);
+            var cleanup = Assert.IsType<AggregateException>(failure.InnerExceptions[1]);
+            Assert.IsAssignableFrom<OperationCanceledException>(Assert.Single(cleanup.InnerExceptions));
+            await WaitForOwnedBackendsToDisappearAsync(observer, efSchema, typedSchema, [efPid, typedPid], deadline.Token);
+            Assert.True(await SchemaExistsAsync(observer, efSchema, deadline.Token));
+            Assert.False(await SchemaExistsAsync(observer, typedSchema, deadline.Token));
+        }, () => IntegrationProofCleanup.DrainIndependentlyAsync(
+            [async _ => { if (transaction is not null) await transaction.DisposeAsync(); },
+             async _ => { if (blocker is not null) await blocker.DisposeAsync(); },
+             token => DropSchemaAsync(efSchema, token),
+             token => DropSchemaAsync(typedSchema, token)],
+            CleanupTimeout, "Async-task cleanup regression resources could not all be released."),
+            "Async-task cleanup regression and resource release failed.");
+    }
+
+    private async Task WithOwnedSourcesAsync(
+        string efSchema,
+        string typedSchema,
+        Func<NpgsqlDataSource, NpgsqlDataSource, Task> work,
+        TimeSpan? cleanupTimeout = null)
+    {
+        await IntegrationProofCleanup.RunAsync(async () =>
+        {
+            await CreateSchemaAsync(efSchema);
+            await CreateSchemaAsync(typedSchema);
+            // All contexts and connection leases in work are joined before these
+            // two sources are disposed, and both sources end before schema drops.
+            await using var efSource = NpgsqlDataSource.Create(WithSearchPath(efSchema));
+            await using var typedSource = NpgsqlDataSource.Create(WithSearchPath(typedSchema));
+            await work(efSource, typedSource);
+        }, () => IntegrationProofCleanup.DrainIndependentlyAsync(
+            [token => DropSchemaAsync(efSchema, token), token => DropSchemaAsync(typedSchema, token)],
+            cleanupTimeout ?? CleanupTimeout, "Async-task owned schemas could not all be removed."),
+            "Async-task fixture work and owned schema cleanup failed.");
     }
 
     private static async Task ExerciseContractAsync(IAsyncTaskRuntimeStore store)
@@ -199,8 +332,9 @@ public sealed class AsyncTaskRuntimePersistenceParityTests
 
     private async Task CreateSchemaAsync(string schema)
     {
-        await using var connection = new NpgsqlConnection(_fixture.ConnectionString);
-        await connection.OpenAsync();
+        using var deadline = new CancellationTokenSource(CleanupTimeout);
+        await using var connection = new NpgsqlConnection(ManagementConnectionString($"{schema}_management"));
+        await connection.OpenAsync(deadline.Token);
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
             CREATE SCHEMA "{schema}";
@@ -233,25 +367,69 @@ public sealed class AsyncTaskRuntimePersistenceParityTests
                 "NextRetryAt" timestamp with time zone NULL
             );
             """;
-        await command.ExecuteNonQueryAsync();
+        await command.ExecuteNonQueryAsync(deadline.Token);
     }
 
-    private async Task DropSchemaAsync(string schema)
+    private async Task DropSchemaAsync(string schema, CancellationToken token)
     {
-        await using var connection = new NpgsqlConnection(_fixture.ConnectionString);
-        await connection.OpenAsync();
+        // This connection never enters the fixture's shared implicit pool. Its
+        // independent caller budget covers both opening and the schema command.
+        await using var connection = new NpgsqlConnection(ManagementConnectionString($"{schema}_management"));
+        await connection.OpenAsync(token);
         await using var command = connection.CreateCommand();
         command.CommandText = $"DROP SCHEMA IF EXISTS \"{schema}\" CASCADE";
-        await command.ExecuteNonQueryAsync();
+        await command.ExecuteNonQueryAsync(token);
     }
+
+    private string ManagementConnectionString(string applicationName) =>
+        new NpgsqlConnectionStringBuilder(_fixture.ConnectionString)
+        {
+            ApplicationName = applicationName,
+            Pooling = false,
+            Timeout = 5,
+            CommandTimeout = 10,
+            CancellationTimeout = 1000
+        }.ConnectionString;
 
     private string WithSearchPath(string schema)
     {
         var builder = new NpgsqlConnectionStringBuilder(_fixture.ConnectionString)
         {
-            SearchPath = schema
+            SearchPath = schema,
+            ApplicationName = schema,
+            Pooling = true,
+            MinPoolSize = 0
         };
         return builder.ConnectionString;
+    }
+
+    private static async Task<int> BackendPidAsync(NpgsqlDataSource source, CancellationToken token)
+    {
+        await using var connection = await source.OpenConnectionAsync(token);
+        return connection.ProcessID;
+    }
+
+    private static async Task<bool> SchemaExistsAsync(NpgsqlConnection observer, string schema, CancellationToken token)
+    {
+        await using var command = new NpgsqlCommand("SELECT to_regnamespace(@schema) IS NOT NULL", observer);
+        command.Parameters.AddWithValue("schema", schema);
+        return (bool)(await command.ExecuteScalarAsync(token))!;
+    }
+
+    private static async Task WaitForOwnedBackendsToDisappearAsync(
+        NpgsqlConnection observer, string efSchema, string typedSchema, int[] pids, CancellationToken token)
+    {
+        await using var command = new NpgsqlCommand("""
+            SELECT NOT EXISTS (SELECT 1 FROM pg_stat_activity
+                WHERE pid = ANY(@pids) OR application_name = ANY(@applications))
+            """, observer);
+        command.Parameters.AddWithValue("pids", pids);
+        command.Parameters.AddWithValue("applications", new[]
+        {
+            efSchema, typedSchema, $"{efSchema}_management", $"{typedSchema}_management"
+        });
+        while (await command.ExecuteScalarAsync(token) is not true)
+            await Task.Delay(25, token);
     }
 
     private sealed class TestDbContextFactory(NpgsqlDataSource source) :

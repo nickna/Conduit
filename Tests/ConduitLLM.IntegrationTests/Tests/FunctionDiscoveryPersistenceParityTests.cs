@@ -1,3 +1,5 @@
+using System.Data.Common;
+
 using AwesomeAssertions;
 
 using ConduitLLM.Configuration;
@@ -144,10 +146,142 @@ public sealed class FunctionDiscoveryPersistenceParityTests(PostgresLockTestCont
         finally { await DropAsync(schema); }
     }
 
-    private async Task SeedAsync(string schema)
+    [Theory]
+    [InlineData("success")]
+    [InlineData("query-failure")]
+    [InlineData("cancellation")]
+    public async Task OwnedEfAndTypedBackendsCloseAfterDiscoveryWorkEnds(string outcome)
+    {
+        var schema = $"function_discovery_{Guid.NewGuid():N}";
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var observer = new NpgsqlConnection(LifecycleConnectionString("observer", pooling: false));
+        await observer.OpenAsync(deadline.Token);
+        await using var sentinelSource = NpgsqlDataSource.Create(LifecycleConnectionString("sentinel", pooling: true));
+        int sentinelPid;
+        await using (var sentinel = await sentinelSource.OpenConnectionAsync(deadline.Token))
+            sentinelPid = await BackendPidAsync(sentinel, deadline.Token);
+        var efPid = 0;
+        var typedPid = 0;
+        var lockWaitObserved = false;
+        Exception? primary = null;
+
+        var actual = await Record.ExceptionAsync(() => IntegrationProofCleanup.RunAsync(async () =>
+        {
+            await SeedAsync(schema, deadline.Token);
+            var connectionString = WithSearchPath(schema);
+            await using var source = NpgsqlDataSource.Create(connectionString);
+            await using var efSource = NpgsqlDataSource.Create(connectionString);
+            var factory = new ContextFactory(efSource);
+            await using (var context = factory.CreateDbContext())
+            {
+                await context.Database.OpenConnectionAsync(deadline.Token);
+                efPid = await BackendPidAsync(context.Database.GetDbConnection(), deadline.Token);
+            }
+            await using (var typed = await source.OpenConnectionAsync(deadline.Token))
+                typedPid = await BackendPidAsync(typed, deadline.Token);
+            Assert.True(efPid > 0);
+            Assert.True(typedPid > 0);
+            Assert.NotEqual(efPid, typedPid);
+            Assert.NotEqual(sentinelPid, efPid);
+            Assert.NotEqual(sentinelPid, typedPid);
+            var ef = new EfFunctionDiscoveryRuntimeStore(factory);
+            var typedStore = new NpgsqlFunctionDiscoveryRuntimeStore(source);
+            Assert.Equal(4, (await ef.ListEnabledAsync(cancellationToken: deadline.Token)).Count);
+            Assert.Equal(4, (await typedStore.ListEnabledAsync(cancellationToken: deadline.Token)).Count);
+
+            try
+            {
+                if (outcome == "query-failure")
+                {
+                    await using (var connection = await source.OpenConnectionAsync(deadline.Token))
+                    await using (var command = connection.CreateCommand())
+                    {
+                        command.CommandText = "DROP TABLE \"FunctionConfigurations\"";
+                        await command.ExecuteNonQueryAsync(deadline.Token);
+                    }
+                    await ef.ListEnabledAsync(cancellationToken: deadline.Token);
+                }
+                else if (outcome == "cancellation")
+                {
+                    await using var blocker = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(connectionString)
+                        { Pooling = false, ApplicationName = $"{schema}_blocker" }.ConnectionString);
+                    await blocker.OpenAsync(deadline.Token);
+                    await using var transaction = await blocker.BeginTransactionAsync(deadline.Token);
+                    await using (var command = blocker.CreateCommand())
+                    {
+                        command.CommandText = "LOCK TABLE \"FunctionConfigurations\" IN ACCESS EXCLUSIVE MODE";
+                        await command.ExecuteNonQueryAsync(deadline.Token);
+                    }
+                    using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token);
+                    var pending = ef.ListEnabledAsync(cancellationToken: cancellation.Token);
+                    await IntegrationProofCleanup.RunAsync(async () =>
+                    {
+                        await WaitForLockWaitAsync(connectionString, schema, pending);
+                        lockWaitObserved = true;
+                        cancellation.Cancel();
+                        await pending.WaitAsync(TimeSpan.FromSeconds(5));
+                    }, async () =>
+                    {
+                        cancellation.Cancel();
+                        try { await pending.WaitAsync(TimeSpan.FromSeconds(5)); }
+                        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+                    }, "Discovery cancellation proof and its read drain failed.");
+                }
+            }
+            catch (Exception exception)
+            {
+                primary = exception;
+                throw;
+            }
+        }, () => DropAsync(schema), "Discovery lifecycle work and schema cleanup failed."));
+
+        if (outcome == "success")
+            Assert.Null(actual);
+        else
+        {
+            Assert.NotNull(primary);
+            Assert.Same(primary, actual);
+            if (outcome == "query-failure")
+                Assert.Equal(PostgresErrorCodes.UndefinedTable, Assert.IsType<PostgresException>(actual).SqlState);
+            else
+            {
+                Assert.True(lockWaitObserved, "The discovery query must reach an observed PostgreSQL lock wait before caller cancellation.");
+                Assert.IsAssignableFrom<OperationCanceledException>(actual);
+            }
+        }
+
+        using var observation = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        await using (var command = observer.CreateCommand())
+        {
+            command.CommandText = """
+                SELECT NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ANY(@pids))
+                    AND to_regnamespace(@schema) IS NULL
+                """;
+            command.Parameters.AddWithValue("pids", new[] { efPid, typedPid });
+            command.Parameters.AddWithValue("schema", schema);
+            while (!(bool)(await command.ExecuteScalarAsync(observation.Token))!)
+                await Task.Delay(25, observation.Token);
+        }
+        // The unrelated source was idle during disposal and must retain its backend.
+        await using var survivingSentinel = await sentinelSource.OpenConnectionAsync(observation.Token);
+        Assert.Equal(sentinelPid, await BackendPidAsync(survivingSentinel, observation.Token));
+    }
+
+    private string LifecycleConnectionString(string role, bool pooling) =>
+        new NpgsqlConnectionStringBuilder(fixture.ConnectionString)
+            { Pooling = pooling, ApplicationName = $"discovery_{role}_{Guid.NewGuid():N}", MaxPoolSize = 1 }.ConnectionString;
+
+    private static async Task<int> BackendPidAsync(DbConnection connection, CancellationToken token)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT pg_backend_pid()";
+        return (int)(await command.ExecuteScalarAsync(token))!;
+    }
+
+    private async Task SeedAsync(string schema, CancellationToken cancellationToken = default)
     {
         await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { Pooling = false }.ConnectionString);
-        await connection.OpenAsync();
+        await connection.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
             CREATE SCHEMA "{schema}";
@@ -181,7 +315,7 @@ public sealed class FunctionDiscoveryPersistenceParityTests(PostgresLockTestCont
         var created = new DateTime(2026, 10, 11, 7, 0, 0, DateTimeKind.Utc);
         command.Parameters.AddWithValue("created", created);
         command.Parameters.AddWithValue("updated", created.AddMinutes(1));
-        await command.ExecuteNonQueryAsync();
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private async Task DropAsync(string schema)
