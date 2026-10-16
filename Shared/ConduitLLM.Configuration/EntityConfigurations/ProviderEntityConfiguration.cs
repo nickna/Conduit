@@ -25,9 +25,9 @@ namespace ConduitLLM.Configuration.EntityConfigurations
                 json => ProviderSettingsJson.Deserialize(json));
 
             var comparer = new ValueComparer<Dictionary<string, string>?>(
-                (left, right) => ProviderSettingsJson.Serialize(left) == ProviderSettingsJson.Serialize(right),
-                value => value == null ? 0 : ProviderSettingsJson.Serialize(value)!.GetHashCode(),
-                value => value == null ? null : new Dictionary<string, string>(value));
+                (left, right) => ProviderSettingsComparer.AreEqual(left, right),
+                value => ProviderSettingsComparer.ComputeHashCode(value),
+                value => ProviderSettingsComparer.Snapshot(value));
 
             builder.Property(p => p.Settings)
                 .HasColumnName("Settings")
@@ -51,9 +51,9 @@ namespace ConduitLLM.Configuration.EntityConfigurations
                 json => ProviderSettingsJson.Deserialize(json));
 
             var comparer = new ValueComparer<Dictionary<string, string>?>(
-                (left, right) => ProviderSettingsJson.Serialize(left) == ProviderSettingsJson.Serialize(right),
-                value => value == null ? 0 : ProviderSettingsJson.Serialize(value)!.GetHashCode(),
-                value => value == null ? null : new Dictionary<string, string>(value));
+                (left, right) => ProviderSettingsComparer.AreEqual(left, right),
+                value => ProviderSettingsComparer.ComputeHashCode(value),
+                value => ProviderSettingsComparer.Snapshot(value));
 
             builder.Property(p => p.SecretSettings)
                 .HasColumnName("SecretSettings")
@@ -77,6 +77,51 @@ namespace ConduitLLM.Configuration.EntityConfigurations
             string.IsNullOrWhiteSpace(json)
                 ? null
                 : JsonSerializer.Deserialize(json, ProviderSettingsJsonContext.Default.DictionaryStringString);
+    }
+
+    /// <summary>
+    /// Structural change tracking for settings bags, independent of insertion order and
+    /// the caller's dictionary comparer. Public helpers are used by the generated model.
+    /// </summary>
+    public static class ProviderSettingsComparer
+    {
+        public static bool AreEqual(Dictionary<string, string>? left, Dictionary<string, string>? right)
+        {
+            if (ReferenceEquals(left, right))
+            {
+                return true;
+            }
+
+            if (left == null || right == null || left.Count != right.Count)
+            {
+                return false;
+            }
+
+            // KeyValuePair's default equality compares string keys and values ordinally.
+            // Sorting also avoids inheriting a case-insensitive caller's lookup semantics.
+            return left.OrderBy(entry => entry.Key, StringComparer.Ordinal)
+                .SequenceEqual(right.OrderBy(entry => entry.Key, StringComparer.Ordinal));
+        }
+
+        public static int ComputeHashCode(Dictionary<string, string>? value)
+        {
+            if (value == null)
+            {
+                return 0;
+            }
+
+            var hash = new HashCode();
+            foreach (var entry in value.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+            {
+                hash.Add(entry.Key, StringComparer.Ordinal);
+                hash.Add(entry.Value, StringComparer.Ordinal);
+            }
+
+            return hash.ToHashCode();
+        }
+
+        public static Dictionary<string, string>? Snapshot(Dictionary<string, string>? value) =>
+            value == null ? null : new Dictionary<string, string>(value, StringComparer.Ordinal);
     }
 
     [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]

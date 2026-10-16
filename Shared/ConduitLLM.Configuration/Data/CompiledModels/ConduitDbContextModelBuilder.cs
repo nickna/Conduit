@@ -17,7 +17,7 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
     public partial class ConduitDbContextModel
     {
         private ConduitDbContextModel()
-            : base(skipDetectChanges: false, modelId: new Guid("b120ed35-ce59-4539-95e0-52afbd96d991"), entityTypeCount: 39)
+            : base(skipDetectChanges: false, modelId: new Guid("85f2d574-4ed9-402b-bbc3-df9175655066"), entityTypeCount: 39)
         {
         }
 

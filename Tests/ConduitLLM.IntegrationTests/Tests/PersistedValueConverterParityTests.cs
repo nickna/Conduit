@@ -77,7 +77,7 @@ public sealed class PersistedValueConverterParityTests(PostgresLockTestContainer
     }
 
     [Fact]
-    public async Task ProviderSettingsInPlaceMutationUsesAnIndependentOriginalSnapshotAndPersists()
+    public async Task ProviderSettingsReorderedReplacementRemainsUnmodifiedAndInPlaceMutationPersists()
     {
         var schema = NewSchema();
         try
@@ -96,6 +96,13 @@ public sealed class PersistedValueConverterParityTests(PostgresLockTestContainer
             var property = context.Entry(provider).Property(item => item.Settings);
             var snapshot = Assert.IsType<Dictionary<string, string>>(property.OriginalValue);
             Assert.NotSame(bag, snapshot);
+            bag = new Dictionary<string, string> { ["unicode"] = "雪 🔎", ["region"] = "west" };
+            provider.Settings = bag;
+            Assert.NotSame(bag, snapshot);
+            context.ChangeTracker.DetectChanges();
+            Assert.False(property.IsModified);
+            Assert.Equal(EntityState.Unchanged, context.Entry(provider).State);
+            Assert.Equal(0, await context.SaveChangesAsync(deadline.Token));
             bag["region"] = "east";
             bag["added"] = "café";
             Assert.Equal("west", snapshot["region"]);
@@ -115,7 +122,7 @@ public sealed class PersistedValueConverterParityTests(PostgresLockTestContainer
     }
 
     [Fact]
-    public async Task CredentialSecretSettingsInPlaceMutationUsesAnIndependentOriginalSnapshotAndPersists()
+    public async Task CredentialSecretSettingsReorderedReplacementRemainsUnmodifiedAndInPlaceMutationPersists()
     {
         var schema = NewSchema();
         try
@@ -139,6 +146,13 @@ public sealed class PersistedValueConverterParityTests(PostgresLockTestContainer
             var property = context.Entry(credential).Property(item => item.SecretSettings);
             var snapshot = Assert.IsType<Dictionary<string, string>>(property.OriginalValue);
             Assert.NotSame(bag, snapshot);
+            bag = new Dictionary<string, string> { ["unicode"] = "雪 🔎", ["region"] = "west" };
+            credential.SecretSettings = bag;
+            Assert.NotSame(bag, snapshot);
+            context.ChangeTracker.DetectChanges();
+            Assert.False(property.IsModified);
+            Assert.Equal(EntityState.Unchanged, context.Entry(credential).State);
+            Assert.Equal(0, await context.SaveChangesAsync(deadline.Token));
             bag["region"] = "east";
             bag["added"] = "café";
             Assert.Equal("west", snapshot["region"]);

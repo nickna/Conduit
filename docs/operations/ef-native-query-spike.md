@@ -47,6 +47,18 @@ wall time from the bounded command receipt, rounded to two decimal places.
 
 The internal `ParameterSymbol`/`UnreachableException` signature matches
 [upstream EF issue 35494](https://github.com/dotnet/efcore/issues/35494).
+The separate expired-key maintenance NRE now has an
+[isolated seven-case reduction](../../tools/EfQueryPrecompilerRepro/README.md):
+even an unfiltered boolean value setter reproduces it, while value-lambda update
+controls generate and compile. It is filed as
+[EF #39271](https://github.com/dotnet/efcore/issues/39271), distinct from #35494.
+The reduction performs no database query or native publication and does not
+change this spike's qualification result.
+The four additional exceptional expressions in #1662 also have
+[13 isolated reduction/control cases](../../tools/EfQueryPrecompilerRepro/README.md#additional-expression-reductions-1662).
+The two captured-object forms reduce together; constant translation and
+`ThenInclude` have separate upstream reports. Generated-code compilation remains
+a separate gate, including the additional namespaced-local failure in #1696.
 Repeated diagnostic renderings were not counted as distinct unsupported queries.
 The [observed failure index](ef-query-precompiler-failure-inventory.md) separates
 334 project/expression/failure signatures, source-match ambiguity, nested null
@@ -129,6 +141,13 @@ repeat this experiment. EF Tasks' publish-time stages must be retained when
 testing its native publish pipeline; disabling them would change the claim.
 See the official [NativeAOT query documentation](https://learn.microsoft.com/en-us/ef/core/performance/nativeaot-and-precompiled-queries)
 and [MSBuild integration documentation](https://learn.microsoft.com/en-us/ef/core/cli/msbuild).
+The [EF Tasks startup contract follow-up](../../tools/EfTasksStartupContract/README.md)
+resolves #1663's guidance ambiguity: selecting a separate startup project was
+removed from MSBuild integration, while the CLI options used above are a
+different interface. Fifteen isolated parameter checks describe the retained
+10.0.12 implementation; stale package instructions/diagnostics are filed in
+[EF #39275](https://github.com/dotnet/efcore/issues/39275). The earlier Windows
+`.exe` observation does not establish supported MSBuild startup selection.
 
 ## Remaining qualification work
 
