@@ -125,6 +125,38 @@ the NativeAOT workflow.
 | Function execution reads / `IFunctionExecutionRuntimeReader` | `FunctionExecutionPersistenceParityTests` | The successful publish/process job in [Linux run 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143) includes the native persistence probe's 39 scalar fields, included configuration/inverse graph and 105-row virtual-key list, plus the shared PostgreSQL parity suite. Native Gateway selects the reader in its prepared execution service after that proof; the published Exa process job linked below verifies opposite-host execution-by-ID reads and ownership. Execution-list HTTP remains separate. |
 | Stateless inline MCP execution | `NativeMcpFunctionProviderTests`, shared function configuration/pricing/execution contracts | [Linux run 38147134135](https://github.com/nickna/Conduit/actions/runs/38147134135) passes actual configured MCP execution on both native Gateways, production-protected scoped credentials, modern request metadata, structured/Unicode results, all 24 persisted fields, opposite-host ownership and exact configured pricing/accounting. Stateful sessions, agentic MCP and broader server interoperability remain separate. |
 
+The #1669 model-cost contract captures one UTC eligibility timestamp after
+identifier validation and before awaiting a context or connection. The typed
+adapter now matches EF's existing boundary; effective bounds remain inclusive,
+expiry bounds exclusive, and active/enabled filtering and priority/effective
+ordering are unchanged. Two unchanged-source PostgreSQL reproductions held the
+sole pool slot across controlled effective/expiry boundaries: EF retained the
+invocation winner while typed Npgsql selected the later winner. Fresh reads
+selected the later winner in both adapters; both producers joined, the slot was
+reused and the owned schemas were removed.
+
+With the fix, all 31 managed model-routing cases pass without skips. Sixteen
+new rows include the two paired clock crossings, twelve EF/typed exact-boundary
+cases at equality and plus/minus one microsecond, and cancellation/reuse in the
+sole-slot pool and observed SQL waits. A scoped Npgsql pre-send tracing filter
+reads the actual bound UTC value without changing query parameters; an
+independent unpooled fixture update/readback establishes the exact PostgreSQL
+microsecond boundary. EF's nullable/nonnullable parameters must share that same
+logical timestamp. No production clock injection or constructor change is added.
+
+A fresh Linux publish passes with zero warnings, followed by the full EF-free
+native driver in 8.89 seconds. The native proof records dispatch 6.32 seconds
+before and release 1.01 seconds after its boundary, the expected queued/fresh
+winners, cancellation and slot reuse. All 180 compile inputs and the publish
+closure remain stable; three assets are EF-free and owned-schema sets are empty
+before/after. Receipt `issue-1669/native-2b182a2f599a460fafd8774a318c7f53/complete.json`
+has SHA-256 `ac52cbb59a1c4998f3a616715ac9f7e0937d75015d463057e1ab71a8863e8660`.
+The rejected first native attempt retains its exact source and executable: its
+five-second pool timeout expired during the deliberately longer hold, before
+clock selection ran. The corrected fixture uses twenty seconds, retaining all
+operation/join bounds. This is a standalone typed repository proof, not native
+EF or Gateway qualification.
+
 The #1668 typed pagination fix reuses the count connection for the graph read.
 Count and page remain separate statements with the original SQL, typed
 parameters, ordering, normalization and graph materializer. Two unchanged-source

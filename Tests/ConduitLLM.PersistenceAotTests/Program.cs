@@ -498,6 +498,7 @@ async Task RunProbeAsync()
             dataSource,
             new NpgsqlModelProviderMappingRuntimeStore(dataSource));
         await ModelRoutingPaginationPersistenceProbe.RunAsync(storeConnectionString);
+        await ModelRoutingEligibilityClockPersistenceProbe.RunAsync(storeConnectionString);
         await ExerciseVirtualKeyRuntimeStoreAsync(dataSource, new NpgsqlVirtualKeyRuntimeStore(dataSource));
         await ExerciseMediaRuntimeStoreAsync(new NpgsqlMediaRuntimeStore(dataSource));
         await ExerciseAsyncTaskRuntimeStoreAsync(new NpgsqlAsyncTaskRuntimeStore(dataSource));

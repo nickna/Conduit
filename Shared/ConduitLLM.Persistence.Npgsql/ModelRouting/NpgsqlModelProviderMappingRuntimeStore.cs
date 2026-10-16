@@ -279,6 +279,7 @@ public sealed class NpgsqlModelProviderMappingRuntimeStore : IModelProviderMappi
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelIdentifier);
+        var now = DateTime.UtcNow;
         return await ReadCostAsync(
             $"""
             {SelectCost}
@@ -301,7 +302,7 @@ public sealed class NpgsqlModelProviderMappingRuntimeStore : IModelProviderMappi
                 command.Parameters.AddWithValue(
                     "now",
                     NpgsqlDbType.TimestampTz,
-                    DateTime.UtcNow);
+                    now);
             },
             cancellationToken);
     }
