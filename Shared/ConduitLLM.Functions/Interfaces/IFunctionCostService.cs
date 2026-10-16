@@ -91,7 +91,11 @@ public interface IFunctionCostService
     /// <remarks>
     /// Call this after creating, updating, or deleting cost configurations
     /// to ensure changes are immediately reflected.
-    /// Clears both L1 (memory) and L2 (Redis) caches.
+    /// Invalidates all list, cost-ID and configuration entries in both tiers by
+    /// rotating their shared namespace. Other service instances recheck that
+    /// namespace before using cached data. Retired payloads expire normally.
+    /// An overlapping read may finish with its old snapshot but cannot populate
+    /// the new namespace. A failed distributed invalidation is reported to the caller.
     /// </remarks>
     Task ClearCacheAsync();
 }

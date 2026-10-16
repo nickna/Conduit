@@ -24,7 +24,7 @@ public class FunctionCostService : IFunctionCostService
 {
     private readonly IFunctionCostRepository _functionCostRepository;
     private readonly IFunctionCostMappingRepository _functionCostMappingRepository;
-    private readonly HybridCacheAccessor _cache;
+    private readonly FunctionCostCache _cache;
     private readonly ILogger<FunctionCostService> _logger;
     private const string AllCostsCacheKey = "All";
 
@@ -46,13 +46,7 @@ public class FunctionCostService : IFunctionCostService
         _functionCostRepository = functionCostRepository ?? throw new ArgumentNullException(nameof(functionCostRepository));
         _functionCostMappingRepository = functionCostMappingRepository ?? throw new ArgumentNullException(nameof(functionCostMappingRepository));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _cache = new HybridCacheAccessor(
-            memoryCache,
-            distributedCache,
-            logger,
-            "FunctionCost:",
-            TimeSpan.FromMinutes(15),
-            TimeSpan.FromHours(1));
+        _cache = new FunctionCostCache(memoryCache, distributedCache, logger);
     }
 
     /// <inheritdoc />
@@ -66,9 +60,10 @@ public class FunctionCostService : IFunctionCostService
         }
 
         string cacheKey = $"Config:{functionConfigurationId}";
+        var cache = await _cache.CaptureAsync(cancellationToken);
 
         // Try hybrid cache first
-        var cachedCost = await _cache.GetAsync(
+        var cachedCost = await cache.GetAsync(
             cacheKey,
             FunctionsJsonContext.Default.FunctionCost,
             cancellationToken);
@@ -123,7 +118,7 @@ public class FunctionCostService : IFunctionCostService
 
         if (functionCost is not null)
         {
-            await _cache.SetAsync(
+            await cache.SetAsync(
                 cacheKey,
                 functionCost,
                 FunctionsJsonContext.Default.FunctionCost,
@@ -141,9 +136,10 @@ public class FunctionCostService : IFunctionCostService
         }
 
         string cacheKey = $"Id:{costId}";
+        var cache = await _cache.CaptureAsync(cancellationToken);
 
         // Try hybrid cache first
-        var cachedCost = await _cache.GetAsync(
+        var cachedCost = await cache.GetAsync(
             cacheKey,
             FunctionsJsonContext.Default.FunctionCost,
             cancellationToken);
@@ -157,7 +153,7 @@ public class FunctionCostService : IFunctionCostService
 
         if (cost != null)
         {
-            await _cache.SetAsync(
+            await cache.SetAsync(
                 cacheKey,
                 cost,
                 FunctionsJsonContext.Default.FunctionCost,
@@ -171,9 +167,10 @@ public class FunctionCostService : IFunctionCostService
     public async Task<List<FunctionCost>> ListCostsAsync(bool activeOnly = false, CancellationToken cancellationToken = default)
     {
         string cacheKey = activeOnly ? $"{AllCostsCacheKey}_Active" : AllCostsCacheKey;
+        var cache = await _cache.CaptureAsync(cancellationToken);
 
         // Try hybrid cache first
-        var cachedCosts = await _cache.GetAsync(
+        var cachedCosts = await cache.GetAsync(
             cacheKey,
             FunctionsJsonContext.Default.ListFunctionCost,
             cancellationToken);
@@ -194,7 +191,7 @@ public class FunctionCostService : IFunctionCostService
                 .ToList();
         }
 
-        await _cache.SetAsync(
+        await cache.SetAsync(
             cacheKey,
             costs,
             FunctionsJsonContext.Default.ListFunctionCost,
@@ -215,7 +212,8 @@ public class FunctionCostService : IFunctionCostService
 
         var costId = await _functionCostRepository.CreateAsync(cost, cancellationToken);
 
-        await InvalidateCacheAsync(costId, []);
+        // Once the write commits, caller cancellation must not skip invalidation.
+        await _cache.ClearAsync();
 
         _logger.LogInformation("Created function cost: {CostName} (ID={CostId})", cost.CostName, costId);
         return costId;
@@ -229,12 +227,11 @@ public class FunctionCostService : IFunctionCostService
             throw new ArgumentNullException(nameof(cost));
         }
 
-        var affectedConfigurationIds = await GetMappedConfigurationIdsAsync(cost.Id, cancellationToken);
         cost.UpdatedAt = DateTime.UtcNow;
 
         await _functionCostRepository.UpdateAsync(cost, cancellationToken);
 
-        await InvalidateCacheAsync(cost.Id, affectedConfigurationIds);
+        await _cache.ClearAsync();
 
         _logger.LogInformation("Updated function cost: {CostName} (ID={CostId})", cost.CostName, cost.Id);
     }
@@ -247,55 +244,13 @@ public class FunctionCostService : IFunctionCostService
             throw new ArgumentException("Cost ID must be greater than zero", nameof(costId));
         }
 
-        var affectedConfigurationIds = await GetMappedConfigurationIdsAsync(costId, cancellationToken);
         await _functionCostRepository.DeleteAsync(costId, cancellationToken);
 
-        await InvalidateCacheAsync(costId, affectedConfigurationIds);
+        await _cache.ClearAsync();
 
         _logger.LogInformation("Deleted function cost: ID={CostId}", costId);
     }
 
     /// <inheritdoc />
-    public async Task ClearCacheAsync()
-    {
-        await InvalidateCacheAsync(null, []);
-    }
-
-    private async Task<List<int>> GetMappedConfigurationIdsAsync(
-        int costId,
-        CancellationToken cancellationToken)
-    {
-        var existingCost = await _functionCostRepository.GetByIdAsync(costId, cancellationToken);
-        return existingCost?.FunctionMappings
-            .Select(mapping => mapping.FunctionConfigurationId)
-            .Distinct()
-            .ToList() ?? [];
-    }
-
-    private async Task InvalidateCacheAsync(int? costId, IEnumerable<int> functionConfigurationIds)
-    {
-        var keysToRemove = new HashSet<string>
-        {
-            AllCostsCacheKey,
-            $"{AllCostsCacheKey}_Active"
-        };
-
-        if (costId.HasValue)
-        {
-            keysToRemove.Add($"Id:{costId.Value}");
-        }
-
-        foreach (var functionConfigurationId in functionConfigurationIds)
-        {
-            keysToRemove.Add($"Config:{functionConfigurationId}");
-        }
-
-        await _cache.RemoveAsync(keysToRemove);
-
-        _logger.LogInformation(
-            "Cleared {CacheKeyCount} function cost cache entries for CostId={CostId}",
-            keysToRemove.Count,
-            costId);
-    }
-
+    public Task ClearCacheAsync() => _cache.ClearAsync();
 }

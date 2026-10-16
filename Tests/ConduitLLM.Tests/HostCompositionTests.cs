@@ -19,6 +19,7 @@ using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Enums;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Services;
+using ConduitLLM.Functions.Serialization;
 using ConduitLLM.Gateway.Billing;
 using ConduitLLM.Gateway.Endpoints;
 using ConduitLLM.Gateway.Interfaces;
@@ -33,6 +34,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -431,15 +433,25 @@ public sealed class HostCompositionTests
         var calculator = Assert.IsType<FunctionCostCalculationService>(
             first.ServiceProvider.GetRequiredService<IFunctionCostCalculationService>());
         var configurationId = Random.Shared.Next(1, int.MaxValue);
-        var key = $"FunctionCost:Config:{configurationId}";
         var memory = provider.GetRequiredService<IMemoryCache>();
-        memory.Set(key, new FunctionCost
+        var cache = service.GetType().GetField("_cache",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(service)!;
+        var capture = (Task)cache.GetType().GetMethod("CaptureAsync")!.Invoke(cache, [CancellationToken.None])!;
+        await capture;
+        var snapshot = capture.GetType().GetProperty("Result")!.GetValue(capture)!;
+        var key = (string)snapshot.GetType().GetMethod("BuildKey",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(snapshot, [$"Config:{configurationId}"])!;
+        var cost = new FunctionCost
         {
             Id = 91, CostName = "Composition pricing", PricingModel = FunctionPricingModel.FlatRate,
             CostPerExecution = 0.12500001m, BaseCost = 0.12500001m
-        });
+        };
         try
         {
+            await (Task)snapshot.GetType().GetMethod("SetAsync")!.MakeGenericMethod(typeof(FunctionCost))
+                .Invoke(snapshot, [$"Config:{configurationId}", cost, FunctionsJsonContext.Default.FunctionCost, CancellationToken.None])!;
+            Assert.True(memory.TryGetValue(key, out _));
             Assert.Equal(0.12500001m, await calculator.EstimateCostAsync(configurationId,
                 new Dictionary<string, object> { ["query"] = "snow" }));
             Assert.Equal(0.12500001m, await calculator.CalculateCostAsync(configurationId, new FunctionExecutionUsage()));
@@ -447,6 +459,8 @@ public sealed class HostCompositionTests
         finally
         {
             memory.Remove(key);
+            if (provider.GetService<IDistributedCache>() is { } distributed)
+                await distributed.RemoveAsync(key);
         }
     }
 

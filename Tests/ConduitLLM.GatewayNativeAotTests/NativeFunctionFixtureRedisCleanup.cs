@@ -114,8 +114,8 @@ internal static class NativeFunctionFixtureRedisCleanup
                 yield return $"{scope}:{limit}:sum";
             }
         }
-        // StoreBackedFunctionCostService uses HybridCacheAccessor; Gateway's
-        // IDistributedCache InstanceName is conduit-tasks:, not a FusionCache prefix.
+        // Remove the former fixed key too when cleaning a fixture from an older image.
+        // Gateway's IDistributedCache InstanceName is conduit-tasks:.
         yield return $"conduit-tasks:FunctionCost:Config:{value.ConfigurationId.ToString(CultureInfo.InvariantCulture)}";
         yield return $"spend:patterns:{key}";
         foreach (var prefix in new[]
@@ -138,6 +138,10 @@ internal static class NativeFunctionFixtureRedisCleanup
         // another group's numeric suffix or an unrelated key within the same group.
         yield return $"ipfilter:check:*:{key}";
         yield return $"rate:vk:{value.VirtualKeyHash}:model:*";
+        // Cost generations are shared, but these terminal IDs belong to this fixture.
+        // Include retired generations without deleting their shared marker or lists.
+        yield return $"conduit-tasks:FunctionCost:v2:*:Config:{value.ConfigurationId.ToString(CultureInfo.InvariantCulture)}";
+        yield return $"conduit-tasks:FunctionCost:v2:*:Id:{value.CostId.ToString(CultureInfo.InvariantCulture)}";
         yield return $"processing_spend:group:{group}:claim:*";
         yield return $"processing_spend_units:group:{group}:claim:*";
         yield return $"processing_key_usage:group:{group}:key:{key}:claim:*";

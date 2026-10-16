@@ -212,9 +212,18 @@ passes the typed pricing-store probe before runtime selection. Native Gateway no
 selects this scoped adapter over the singleton typed pricing store; host composition
 tests run both build profiles and exercise estimate/actual billing through the resolved
 calculator. JIT Gateway and Admin retain the legacy service, and calculator constructors
-are unchanged. Cost management methods are outside this adapter. Both implementations
-retain the inherited list-only explicit cache clear, tracked separately in
-[#1570](https://github.com/nickna/Conduit/issues/1570).
+are unchanged. Cost management methods are outside this adapter. The subsequent
+[#1570](https://github.com/nickna/Conduit/issues/1570) correction replaces the inherited
+list-only clear with a shared, non-expiring random generation marker. Both services
+check the marker before every L1/L2 lookup and pin database results to that generation.
+Explicit clears and cost mutations rotate the namespace, including list, ID and
+configuration entries across hosts; unreachable payloads retain their 15-minute L1
+and one-hour L2 expiration. Without L2, one process-wide generation serves memory
+instances. Marker read failures bypass both tiers; failed marker writes make clear
+fail visibly. A lost marker initializes a fresh random generation rather than
+resurrecting an earlier namespace. An overlapping old read may return its snapshot
+but cannot populate the new namespace. This correction changes the cache keys;
+the earlier published run above does not establish its hosted native verification.
 
 `IFunctionExecutionRuntimeWriter` adds scalar execution inserts and full snapshot
 updates guarded by ID and the caller's original version. It preserves all 24 fields,

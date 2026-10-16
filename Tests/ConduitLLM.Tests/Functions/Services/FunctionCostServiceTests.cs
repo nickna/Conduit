@@ -10,6 +10,7 @@ using Moq;
 
 namespace ConduitLLM.Tests.Functions.Services;
 
+[Collection("Function cost cache")]
 public class FunctionCostServiceTests
 {
     private const int CostId = 11;
