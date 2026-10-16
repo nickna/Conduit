@@ -326,6 +326,7 @@ public sealed class NpgsqlModelProviderMappingRuntimeStore : IModelProviderMappi
 
         var filter = providerId.HasValue ? "WHERE mapping.\"ProviderId\" = @providerId " : string.Empty;
         var mappings = await ReadMappingsAsync(
+            connection,
             $"{SelectRuntimeGraph} {filter}" +
             "ORDER BY mapping.\"ModelAlias\", mapping.\"Id\" OFFSET @offset LIMIT @limit",
             command =>
@@ -347,6 +348,15 @@ public sealed class NpgsqlModelProviderMappingRuntimeStore : IModelProviderMappi
         CancellationToken cancellationToken)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        return await ReadMappingsAsync(connection, sql, addParameters, cancellationToken);
+    }
+
+    private static async Task<List<ModelProviderMappingRuntimeRecord>> ReadMappingsAsync(
+        NpgsqlConnection connection,
+        string sql,
+        Action<NpgsqlCommand>? addParameters,
+        CancellationToken cancellationToken)
+    {
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         addParameters?.Invoke(command);

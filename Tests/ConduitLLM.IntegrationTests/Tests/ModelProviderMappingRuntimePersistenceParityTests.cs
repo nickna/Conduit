@@ -16,6 +16,7 @@ using Npgsql;
 using System.Text.Json;
 
 using Xunit;
+using Xunit.Abstractions;
 
 namespace ConduitLLM.IntegrationTests.Tests;
 
@@ -23,13 +24,15 @@ namespace ConduitLLM.IntegrationTests.Tests;
 /// Runs the Gateway model-routing read contract against EF and typed Npgsql.
 /// </summary>
 [Collection("Postgres advisory locks")]
-public sealed class ModelProviderMappingRuntimePersistenceParityTests
+public sealed partial class ModelProviderMappingRuntimePersistenceParityTests
 {
     private readonly PostgresLockTestContainerFixture _fixture;
+    private readonly ITestOutputHelper _output;
 
-    public ModelProviderMappingRuntimePersistenceParityTests(PostgresLockTestContainerFixture fixture)
+    public ModelProviderMappingRuntimePersistenceParityTests(PostgresLockTestContainerFixture fixture, ITestOutputHelper output)
     {
         _fixture = fixture;
+        _output = output;
     }
 
     [Fact]
@@ -205,7 +208,8 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
                 using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                 var applicationName = $"mr_cancel_{Guid.NewGuid():N}_{(int)operation}";
                 System.Text.Encoding.UTF8.GetByteCount(applicationName).Should().BeLessThan(64);
-                // Typed pages retain the count connection while opening the graph connection.
+                // This wider matrix deliberately exercises a two-slot source;
+                // the dedicated single-slot proof covers pagination ownership.
                 var connectionString = new NpgsqlConnectionStringBuilder(WithSearchPath(schema))
                     { ApplicationName = applicationName, MaxPoolSize = 2 }.ConnectionString;
                 ownedConnectionStrings.Add(connectionString);
@@ -276,7 +280,7 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
             ? new NpgsqlModelProviderMappingRuntimeStore(source)
             : new EfModelProviderMappingRuntimeStore(new TestDbContextFactory(source));
 
-    private async Task<SnapshotMatrix> SeedSnapshotMatrixAsync(string schema)
+    private async Task<SnapshotMatrix> SeedSnapshotMatrixAsync(string schema, CancellationToken cancellationToken = default)
     {
         await using var efSource = NpgsqlDataSource.Create(WithSearchPath(schema));
         await using var context = new TestDbContextFactory(efSource).CreateDbContext();
@@ -299,7 +303,7 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
             CreatedAt = SnapshotInstant.AddDays(-4), UpdatedAt = SnapshotInstant.AddDays(-1)
         };
         context.AddRange(populated, nulls, shared, nullCost, policy);
-        await context.SaveChangesAsync();
+        await context.SaveChangesAsync(cancellationToken);
         return new SnapshotMatrix(populated, nulls, shared, nullCost, policy);
     }
 
@@ -469,13 +473,14 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
         JsonElement.DeepEquals(actualJson.RootElement, expectedJson.RootElement).Should().BeTrue();
     }
 
-    private async Task<SelectionMatrix> SeedSelectionMatrixAsync(string schema, SeedIds ids)
+    private async Task<SelectionMatrix> SeedSelectionMatrixAsync(string schema, SeedIds ids,
+        CancellationToken cancellationToken = default)
     {
         await using var efSource = NpgsqlDataSource.Create(WithSearchPath(schema));
         await using var context = new TestDbContextFactory(efSource).CreateDbContext();
         var mappings = await context.ModelProviderMappings.Include(mapping => mapping.Provider)
             .Include(mapping => mapping.ModelProviderTypeAssociation).ThenInclude(association => association.Model)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
         var secondary = mappings.Single(mapping => mapping.Id == ids.SecondaryMappingId);
         secondary.Provider.IsEnabled = false;
         secondary.ModelProviderTypeAssociation.IsEnabled = false;
@@ -494,7 +499,7 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
         primary.ModelAlias = added[99].ModelAlias;
         primary.RoutingPriority = added[99].RoutingPriority;
         context.AddRange(added);
-        (await context.ModelRoutePolicies.SingleAsync()).IsEnabled = false;
+        (await context.ModelRoutePolicies.SingleAsync(cancellationToken)).IsEnabled = false;
         var now = DateTime.UtcNow;
         var winner = NewSelectionCost("winning effective date", 10, now.AddDays(-2), now.AddDays(2));
         var older = NewSelectionCost("older same priority", 10, now.AddDays(-3), null);
@@ -511,7 +516,7 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
                 Model = secondary.ModelProviderTypeAssociation.Model, Identifier = "cost-choice",
                 Provider = (ProviderType)(28000 + index), ModelCost = costs[index], IsEnabled = costs[index] != disabled
             });
-        await context.SaveChangesAsync();
+        await context.SaveChangesAsync(cancellationToken);
         return new SelectionMatrix(added, secondary.ProviderId, otherModel.Id, winner, older, lower,
             [inactive, future, expired, disabled]);
     }
@@ -773,27 +778,28 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
         policy.IsEnabled.Should().BeTrue();
     }
 
-    private async Task<SeedIds> CreateAndSeedSchemaAsync(string schema)
+    private async Task<SeedIds> CreateAndSeedSchemaAsync(string schema, CancellationToken cancellationToken = default)
     {
-        await using (var connection = new NpgsqlConnection(_fixture.ConnectionString))
+        await using (var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(_fixture.ConnectionString)
+            { Pooling = false }.ConnectionString))
         {
-            await connection.OpenAsync();
+            await connection.OpenAsync(cancellationToken);
             await using var command = connection.CreateCommand();
             command.CommandText = $"CREATE SCHEMA \"{schema}\"";
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await using var efSource = NpgsqlDataSource.Create(WithSearchPath(schema));
         var factory = new TestDbContextFactory(efSource);
-        await using var context = await factory.CreateDbContextAsync();
+        await using var context = await factory.CreateDbContextAsync(cancellationToken);
         // EnsureCreated checks every schema in the database and sees Testcontainers'
         // resource-reaper table. Execute EF's deterministic creation script directly so
         // every object is created in this connection's isolated search path.
-        await context.Database.OpenConnectionAsync();
+        await context.Database.OpenConnectionAsync(cancellationToken);
         await using (var createCommand = context.Database.GetDbConnection().CreateCommand())
         {
             createCommand.CommandText = context.Database.GenerateCreateScript();
-            await createCommand.ExecuteNonQueryAsync();
+            await createCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
         var author = new ModelAuthor { Name = "Runtime Author" };
@@ -917,7 +923,7 @@ public sealed class ModelProviderMappingRuntimePersistenceParityTests
             MaxAffinityScorePenalty = 0.075m,
             IsEnabled = true
         });
-        await context.SaveChangesAsync();
+        await context.SaveChangesAsync(cancellationToken);
 
         return new SeedIds(
             model.Id,

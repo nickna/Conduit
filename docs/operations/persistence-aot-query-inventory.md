@@ -125,6 +125,31 @@ the NativeAOT workflow.
 | Function execution reads / `IFunctionExecutionRuntimeReader` | `FunctionExecutionPersistenceParityTests` | The successful publish/process job in [Linux run 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143) includes the native persistence probe's 39 scalar fields, included configuration/inverse graph and 105-row virtual-key list, plus the shared PostgreSQL parity suite. Native Gateway selects the reader in its prepared execution service after that proof; the published Exa process job linked below verifies opposite-host execution-by-ID reads and ownership. Execution-list HTTP remains separate. |
 | Stateless inline MCP execution | `NativeMcpFunctionProviderTests`, shared function configuration/pricing/execution contracts | [Linux run 38147134135](https://github.com/nickna/Conduit/actions/runs/38147134135) passes actual configured MCP execution on both native Gateways, production-protected scoped credentials, modern request metadata, structured/Unicode results, all 24 persisted fields, opposite-host ownership and exact configured pricing/accounting. Stateful sessions, agentic MCP and broader server interoperability remain separate. |
 
+The #1668 typed pagination fix reuses the count connection for the graph read.
+Count and page remain separate statements with the original SQL, typed
+parameters, ordering, normalization and graph materializer. Two unchanged-source
+PostgreSQL reproductions observed the sole backend idle after count while each
+page API waited for another pool slot; cancellation joined each producer and
+reused that same slot. With the fix, all 15 managed model-routing rows pass
+without skips. Eight new rows cover both one-slot regressions, both adapters'
+complete graphs/counts/filtering/normalized ordering, and caller cancellation
+before dispatch, in an occupied pool and at observed count/graph SQL waits.
+Independent cleanup releases held resources, joins producers again, disposes
+sources and verifies owned schema absence. The ordering oracle uses PostgreSQL's
+collation rather than assuming ordinal mixed-case ordering.
+
+A fresh Linux native publish also passes the full EF-free persistence driver,
+including both typed page APIs with complete populated/null graphs, provider
+filters, ordering ties, normalized bounds, occupied-pool cancellation and all
+four observed count/graph SQL cancellation cases. Publish takes 20.29 seconds
+with zero warnings; execution takes 1.53 seconds with empty stderr. All 179
+compile inputs, including four linked Configuration files, remain unchanged;
+three dependency assets are EF-free. Owned-schema sets are empty before and
+after execution. The retained `issue-1668/native-08ecf24dc1224f8b8e5dbdf51449010c/complete.json`
+receipt has SHA-256 `bfabcec4650e7f579169d11c1e173ed394812f8428da635000cc3d5754e5580e`.
+This standalone repository proof does not establish native EF or Gateway
+qualification.
+
 The #1666 EF recovery additions provide ten deterministic PostgreSQL rows in
 `VirtualKeyRuntimeRetryPersistenceTests` and
 `VirtualKeyRuntimeUniqueConflictPersistenceTests`. A real `40001` after the
