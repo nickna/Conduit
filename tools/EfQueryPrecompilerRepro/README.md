@@ -1,6 +1,7 @@
 # EF query-precompiler reductions
 
-Opt-in, design-time reproductions for Conduit [#1660](https://github.com/nickna/Conduit/issues/1660).
+Opt-in, design-time reproductions for Conduit [#1660](https://github.com/nickna/Conduit/issues/1660)
+and [#1662](https://github.com/nickna/Conduit/issues/1662).
 This project is deliberately outside `Conduit.slnx`. It references no Conduit
 service, uses an inert design-time factory at loopback port 1, and its entrypoint
 does not call any query. Do not publish or execute its query methods to reproduce
@@ -20,6 +21,7 @@ Restore the repository's pinned `dotnet-ef` 10.0.12 tool first.
 ```powershell
 dotnet tool restore
 $variant = 'BoolLiteral'
+$context = 'EfQueryPrecompilerRepro.ReproContext'
 $scratch = Join-Path $PWD "artifacts/ef-query-repro/$([Guid]::NewGuid().ToString('N'))/$variant"
 New-Item -ItemType Directory -Path $scratch -Force | Out-Null
 $source = Join-Path $PWD 'tools/EfQueryPrecompilerRepro'
@@ -36,7 +38,7 @@ try {
     $env:ReproVariant = $variant
     dotnet build EfQueryPrecompilerRepro.csproj -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Initial build failed before query analysis.' }
-    dotnet ef dbcontext optimize --project EfQueryPrecompilerRepro.csproj --startup-project EfQueryPrecompilerRepro.csproj --context EfQueryPrecompilerRepro.ReproContext -c Release --output-dir Generated --namespace EfQueryPrecompilerRepro.Generated --no-scaffold --precompile-queries --nativeaot --no-build
+    dotnet ef dbcontext optimize --project EfQueryPrecompilerRepro.csproj --startup-project EfQueryPrecompilerRepro.csproj --context $context --configuration Release --output-dir Generated --namespace EfQueryPrecompilerRepro.Generated --no-scaffold --precompile-queries --nativeaot --no-build
     $optimizeExit = $LASTEXITCODE
     Write-Host "Query generation exit: $optimizeExit"
     # For generation-success controls, compile the generated interceptors as a separate gate.
@@ -107,3 +109,79 @@ existing upstream issue rather than filing a duplicate there.
 The null-forgiven path in `ExpressionTreeFuncletizer.VisitUnary.EvaluateOperand`
 is a source lead, not a proven root cause. A successful value-lambda control is
 a diagnostic result, not a general workaround guarantee.
+
+## Additional expression reductions (#1662)
+
+Use the same fresh-directory commands, setting `$variant` and `$context` before
+copying/building. Each selected file contains its own minimal model and inert
+factory; the common executable and dependency pins remain unchanged.
+
+| Variant prefix | `$context` |
+|---|---|
+| `ProviderSync` | `EfQueryPrecompilerRepro.SyncContext` |
+| `ProviderTools` | `EfQueryPrecompilerRepro.ToolsContext` |
+| `Discovery` | `EfQueryPrecompilerRepro.DiscoveryContext` |
+| `Billing` | `EfQueryPrecompilerRepro.BillingContext` |
+
+All 13 accepted initial builds exited 0. The generation/compilation outcomes are:
+
+| Variant | Generation exit | Generated managed build | Observation |
+|---|---:|---:|---|
+| `ProviderSyncIncludes` | 1 | Not run | Original retrieved-object property capture, including navigation chains: wrapped NRE |
+| `ProviderSyncCaptured` | 1 | Not run | Same property capture without includes: wrapped NRE |
+| `ProviderSyncObjectLocal` | 1 | Not run | Locally initialized non-null object, no prior query: wrapped NRE |
+| `ProviderSyncScalarControl` | 0 | 0 | Copy mapping ID into a scalar local before querying |
+| `ProviderToolsForeachField` | 1 | Not run | Original context field and foreach DTO members: wrapped NRE |
+| `ProviderToolsForeachLocal` | 1 | Not run | Local context and foreach DTO members: wrapped NRE |
+| `ProviderToolsForeachScalars` | 0 | 0 | Copy DTO properties into scalar locals before querying |
+| `DiscoveryChain` | 1 | Not run | Original two `ThenInclude` chain: non-IQueryable first-parameter exception |
+| `DiscoveryOneThenInclude` | 1 | Not run | A single `ThenInclude` suffices |
+| `DiscoveryIncludeOnly` | 0 | 1 | Include-only generation succeeds; dotted local identifier causes `CS1003`/`CS1002` |
+| `BillingCheckpoint` | 1 | Not run | Unqualified class constant: unknown `CheckpointId` identifier |
+| `BillingLocalNoToken` | 0 | 0 | Constant copied to local; optional token omitted |
+| `BillingLiteralNoToken` | 0 | 0 | Literal substituted; optional token omitted |
+
+The two wrapped NRE forms reduce to captured custom-object property access,
+including a source-initialized non-null object. They are filed together as
+[EF #39272](https://github.com/dotnet/efcore/issues/39272). The translator's fake
+null for a flowing-in reference local is a source lead; it does not establish
+that an application object is null at runtime. The scalar controls preserve
+the queries' intent for diagnosis, without changing production queries.
+
+The constant and `ThenInclude` failures are filed separately as
+[EF #39273](https://github.com/dotnet/efcore/issues/39273) and
+[EF #39274](https://github.com/dotnet/efcore/issues/39274). Source review identifies
+the missing constant-field handling and the generator's one-type-argument guard
+as possible causes. Bounded all-state exact-signature, `const`/`ThenInclude`
+precompile/NativeAOT, `IIncludableQueryable`, and translator searches found no
+exact duplicates. The official limitations do not explicitly exclude these
+fixed query forms. No EF patch or intentional-restriction disposition is claimed.
+
+The Include-only generated variable
+`efQueryPrecompilerRepro.DiscoveryMappingPrimaryKeyProperties` exactly matches
+[EF #37972](https://github.com/dotnet/efcore/issues/37972), fixed upstream by
+[PR #39208](https://github.com/dotnet/efcore/pull/39208). The tested package still
+exhibits it; [Conduit #1696](https://github.com/nickna/Conduit/issues/1696) tracks
+that additional failure without duplicating the upstream report.
+
+Original captures and per-process/source/package hashes are retained under
+`artifacts/issues-1662/`. The aggregate `matrix.json` SHA-256 is
+`54e8f976cfbe83922a5717f58dcacb9590c66ddb6dd1195e6b6210850b1db6e3`.
+Only an extra final blank line was removed from each of the three ProviderTools
+sources after capture; original source hashes remain in the ledger. The
+`committed-matrix.json` additionally records those normalized file hashes;
+its SHA-256 is `30cae313b4b559b8f85635d7c2bf4f787b0670dfb6ee45ee88391641e11ca984`.
+The accepted matrix excludes earlier wrong-configuration attempts that did not
+reach analysis, and a discovery attempt stopped earlier at known #35494 on the
+model method parameter. The accepted discovery cases copy that parameter to a
+local. Billing controls first retaining a method-parameter cancellation token
+stopped at #35494; the final controls explicitly omit that optional argument
+to isolate the constant. The original billing failure retains the token.
+
+Repeat commands use EF's `--configuration Release`: its `-c` alias selects the
+context, unlike `dotnet build -c`. This corrects the earlier README abbreviation;
+the #1660 accepted original logs reached the recorded query signatures. The
+new runs preserve explicit argument lists and actual child working directories.
+Successful generated builds retain experimental/nullable warnings. No sensitive
+data logging, database connection, query execution, native publication, or
+repository-suite qualification occurred in these reductions. #1373 remains open.
