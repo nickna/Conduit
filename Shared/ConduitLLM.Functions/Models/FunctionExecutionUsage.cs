@@ -109,7 +109,7 @@ public class FunctionExecutionUsage
     /// </summary>
     /// <remarks>
     /// RAG-specific: Number of document chunks indexed in vector database.
-    /// Used for RAG_Save function pricing.
+    /// Used for RAG storage pricing.
     /// </remarks>
     [JsonPropertyName("documents_indexed")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

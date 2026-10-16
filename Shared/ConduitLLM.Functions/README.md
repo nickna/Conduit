@@ -172,6 +172,8 @@ Use each host's OpenAPI document for request contracts and the complete manageme
 
 `FunctionConfigurationChanged` invalidates cached function discovery after configuration changes. `FunctionDiscoveryCacheInvalidationRequested` requests explicit discovery cache invalidation. Both hosts have generated Wolverine handlers for these shared contracts. Production messaging uses Wolverine with PostgreSQL durability; these events do not execute functions.
 
+The supported transport is defined by [`MessagingBackend`](../ConduitLLM.Configuration/Messaging/MessagingBackend.cs); host registration lives in [Gateway](../../Services/ConduitLLM.Gateway/Program.Messaging.cs) and [Admin](../../Services/ConduitLLM.Admin/Program.Messaging.cs). Use these registrations when extending configuration events or their handlers.
+
 ### Provider Implementations
 
 `FunctionClientFactory` creates Exa, Tavily and MCP clients from `ConduitLLM.Functions.Providers` through `IFunctionClient`. Provider HTTP and JSON handling lives with those clients.
@@ -179,6 +181,15 @@ Use each host's OpenAPI document for request contracts and the complete manageme
 ## Usage Examples
 
 These examples assume repositories and services resolved from the normal JIT host. They do not establish NativeAOT support for function execution.
+
+### Discovering RAG Configurations
+
+```http
+GET /v1/conduit/discovery/functions?purpose=RAG
+Authorization: Bearer YOUR_VIRTUAL_KEY
+```
+
+`RAG` is the enum purpose for this filter. An unparseable purpose is ignored and returns the enabled configurations matching any remaining filter; it does not select a RAG subcategory.
 
 ### Creating a Configuration
 
