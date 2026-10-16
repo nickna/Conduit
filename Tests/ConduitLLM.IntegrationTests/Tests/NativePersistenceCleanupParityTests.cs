@@ -16,12 +16,17 @@ namespace ConduitLLM.IntegrationTests.Tests;
 public sealed class NativePersistenceCleanupParityTests(PostgresLockTestContainerFixture fixture)
 {
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public async Task ProcessSuccessRequiresOwnedSchemaRemovalAndPreservesBothFailures(bool blockedDrop, bool failWork)
+    [InlineData("none", false)]
+    [InlineData("blocked", false)]
+    [InlineData("read-only", false)]
+    [InlineData("none", true)]
+    [InlineData("blocked", true)]
+    [InlineData("read-only", true)]
+    public async Task ProcessSuccessRequiresOwnedSchemaRemovalAndPreservesBothFailures(string cleanupFailure, bool failWork)
     {
+        var blockedDrop = cleanupFailure == "blocked";
+        var readOnlyCleanup = cleanupFailure == "read-only";
+        var cleanupMustFail = blockedDrop || readOnlyCleanup;
         var sentinel = $"cleanup_sentinel_{Guid.NewGuid():N}";
         string? schema = null;
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -34,7 +39,7 @@ public sealed class NativePersistenceCleanupParityTests(PostgresLockTestContaine
         await IntegrationProofCleanup.RunAsync(async () =>
         {
             await ExecuteAsync(observer, $"CREATE SCHEMA \"{sentinel}\"", deadline.Token);
-            process = StartProbe(failWork);
+            process = StartProbe(failWork, readOnlyCleanup);
             error = process.StandardError.ReadToEndAsync();
             var ready = await process.StandardOutput.ReadLineAsync(deadline.Token);
             ready.Should().StartWith("CLEANUP_FIXTURE_READY:");
@@ -56,19 +61,24 @@ public sealed class NativePersistenceCleanupParityTests(PostgresLockTestContaine
             elapsed.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(8));
             var stderr = await error.WaitAsync(TimeSpan.FromSeconds(5));
             var stdout = await output.WaitAsync(TimeSpan.FromSeconds(5));
-            process.ExitCode.Should().Be(blockedDrop || failWork ? 1 : 0);
-            if (blockedDrop)
+            process.ExitCode.Should().Be(cleanupMustFail || failWork ? 1 : 0);
+            if (cleanupMustFail)
             {
                 stderr.Should().Contain($"Cleanup failed for owned schema '{schema}'");
                 stdout.Should().NotContain("Cleanup fixture passed.");
             }
             else stderr.Should().NotContain("Cleanup failed");
+            if (readOnlyCleanup)
+            {
+                stderr.Should().Contain(nameof(PostgresException)).And.Contain(PostgresErrorCodes.ReadOnlySqlTransaction);
+                stderr.Should().NotContain(nameof(OperationCanceledException)).And.NotContain(nameof(TimeoutException));
+            }
             if (failWork) stderr.Should().Contain("Injected primary probe failure.");
             else stderr.Should().NotContain("Persistence probe failed:");
-            if (!blockedDrop && !failWork) stdout.Should().Contain("Cleanup fixture passed.");
+            if (!cleanupMustFail && !failWork) stdout.Should().Contain("Cleanup fixture passed.");
             else stdout.Should().NotContain("Cleanup fixture passed.");
             if (blocker is not null) { await blocker.DisposeAsync(); blocker = null; }
-            (await SchemaExistsAsync(observer, schema, deadline.Token)).Should().Be(blockedDrop);
+            (await SchemaExistsAsync(observer, schema, deadline.Token)).Should().Be(cleanupMustFail);
             (await SchemaExistsAsync(observer, sentinel, deadline.Token)).Should().BeTrue();
         }, async () =>
         {
@@ -149,7 +159,7 @@ public sealed class NativePersistenceCleanupParityTests(PostgresLockTestContaine
                 PersistenceProbeLifecycle.CleanupOwnedSchemaAsync("invalid connection string", name));
     }
 
-    private Process StartProbe(bool failWork)
+    private Process StartProbe(bool failWork, bool readOnlyCleanup)
     {
         var native = Environment.GetEnvironmentVariable("CONDUIT_PERSISTENCE_PROBE_PATH");
         var start = new ProcessStartInfo(string.IsNullOrWhiteSpace(native) ? "dotnet" : native)
@@ -169,6 +179,7 @@ public sealed class NativePersistenceCleanupParityTests(PostgresLockTestContaine
         else if (!File.Exists(native)) throw new FileNotFoundException("Configured published persistence probe is missing.", native);
         start.ArgumentList.Add("--cleanup-fixture");
         if (failWork) start.ArgumentList.Add("--fail-work");
+        if (readOnlyCleanup) start.ArgumentList.Add("--read-only-cleanup");
         start.Environment["DATABASE_URL"] = new NpgsqlConnectionStringBuilder(fixture.ConnectionString)
             { Timeout = 0, CommandTimeout = 0, CancellationTimeout = 0, Pooling = false }.ConnectionString;
         return Process.Start(start) ?? throw new InvalidOperationException("Could not start the owned cleanup probe.");

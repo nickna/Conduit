@@ -21,9 +21,15 @@ if (string.IsNullOrWhiteSpace(configured))
 var connectionString = NormalizeConnectionString(configured);
 if (args.Length > 0 && args[0] == "--cleanup-fixture")
 {
-    if (args.Length > 2 || (args.Length == 2 && args[1] != "--fail-work"))
-        throw new ArgumentException("Cleanup fixture accepts only --fail-work.");
-    return await PersistenceProbeCleanupFixture.RunAsync(connectionString, args.Length == 2);
+    // These fault-injection options belong only to the short cleanup fixture.
+    // Either option, or both options in either order, may occur at most once.
+    var fixtureArguments = args.Skip(1).ToArray();
+    if (fixtureArguments.Length > 2 ||
+        fixtureArguments.Distinct(StringComparer.Ordinal).Count() != fixtureArguments.Length ||
+        fixtureArguments.Any(argument => argument is not ("--fail-work" or "--read-only-cleanup")))
+        throw new ArgumentException("Cleanup fixture accepts --fail-work and --read-only-cleanup at most once each.");
+    return await PersistenceProbeCleanupFixture.RunAsync(connectionString,
+        fixtureArguments.Contains("--fail-work"), fixtureArguments.Contains("--read-only-cleanup"));
 }
 var schema = $"{PersistenceProbeLifecycle.SchemaPrefix}{Guid.NewGuid():N}";
 return await PersistenceProbeLifecycle.RunAsync(schema, RunProbeAsync,
