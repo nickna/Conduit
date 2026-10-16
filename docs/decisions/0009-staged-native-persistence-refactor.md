@@ -273,6 +273,18 @@ post-provider billable failure behavior. Paired tests exercise both construction
 read and list results retain the existing public return types. Complete host
 composition verifies exact port/calculator/client identities and empty legacy
 repository fields on native, while JIT/Admin retain their scoped repositories.
+The subsequent [#1572](https://github.com/nickna/Conduit/issues/1572) policy treats an
+inline result-write concurrency miss as an explicit failed, billable service result.
+It retains the actual provider response, usage and incurred cost, adds the execution
+ID and a reconciliation diagnostic, and leaves the competing durable snapshot
+unchanged. It does not reload and replace the winner or call the provider again.
+An error-record concurrency miss is logged and included in any returned failed
+result; an original provider exception remains the exception thrown to the caller.
+Unkeyed billing remains the caller's responsibility, while keyed claims retain
+their existing durable result/settlement flow. The returned snapshot can therefore
+differ from the winning stored execution, and operators must reconcile that ID
+before dispatching a replacement operation. Earlier hosted proofs below predate
+this policy correction.
 Published Linux run 38133326127 proves the bounded inline Exa path on two native
 Gateways: successful and failed execution, opposite-host status retrieval,
 ownership denial and settled accounting. Configured non-streaming Exa agentic chat

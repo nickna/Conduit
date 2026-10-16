@@ -343,7 +343,7 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
         Assert.NotNull(result.Duration);
         Assert.Equal(1, fixture.ProviderCalls);
         Assert.Equal(costWasCalculated ? 2 : 1, fixture.Writer.Updates.Count);
-        Assert.Equal(costWasCalculated ? 3 : 2, result.Version);
+        Assert.Equal(failure == "both-updates" ? 1 : 2, result.Version);
         if (costWasCalculated)
         {
             Assert.Equal(ExecutionState.Completed, fixture.Writer.Updates[0].Snapshot.State);
@@ -404,7 +404,7 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
             Assert.Equal(stage == "cost" ? Fixture.Estimate : Fixture.ActualCost, result.ActualCost);
             Assert.Equal(fixture.Result.ResponseJson, result.ResponseJson);
             Assert.Equal(cancellation.Message, result.ErrorMessage);
-            Assert.Equal(stage == "cost" ? 2 : 3, result.Version);
+            Assert.Equal(1, result.Version);
         }
         Assert.True(source.IsCancellationRequested);
         Assert.All(fixture.Writer.Creates.Concat(fixture.Writer.Updates), attempt => Assert.Equal(source.Token, attempt.Token));
@@ -414,16 +414,87 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task FalseUpdateIsIgnoredAndWriterInputMutationsRemainVisible(bool runtime)
+    public async Task FalseFinalUpdateReturnsAnExplicitFailedBillableResultWithoutRepeatingProviderOrPersistence(bool runtime)
     {
         using var fixture = new Fixture(runtime);
         fixture.Writer.UpdateResult = false;
         var result = await fixture.ExecuteAsync();
-        Assert.Equal(ExecutionState.Completed, result.State);
+        Assert.Equal(ExecutionState.Failed, result.State);
         Assert.Equal(Fixture.ActualCost, result.ActualCost);
-        Assert.Equal(2, result.Version);
-        Assert.Same(result, Assert.Single(fixture.Writer.Updates).Input);
+        Assert.Equal(Fixture.Estimate, result.EstimatedCost);
+        Assert.Equal(fixture.Result.ResponseJson, result.ResponseJson);
+        AssertCost(result.CostCalculationDetails, Fixture.Estimate, Fixture.ActualCost, fixture.Result.HttpStatusCode);
+        AssertBillableConcurrencyDiagnostic(result);
+        Assert.Equal(1, result.Version);
+        Assert.NotNull(result.CompletedAt);
+        var attempt = Assert.Single(fixture.Writer.Updates);
+        Assert.Equal(ExecutionState.Completed, attempt.Snapshot.State);
+        Assert.Same(result, attempt.Input);
+        Assert.Equal(1, fixture.ProviderCalls);
         Assert.Single(fixture.Writer.Creates);
+        AssertConflictLogged(fixture, result.Id);
+        fixture.AssertBoundary(1, 1);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task FalseErrorRecordBeforeProviderCompletionPreservesTheOriginalException(bool runtime, bool providerStarted)
+    {
+        using var fixture = new Fixture(runtime);
+        var original = new InvalidOperationException("original pre-completion failure");
+        if (providerStarted) fixture.ProviderError = original;
+        else fixture.Protector.Setup(value => value.Reveal(It.IsAny<string>())).Throws(original);
+        fixture.Writer.UpdateResult = false;
+
+        Assert.Same(original, await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.ExecuteAsync()));
+
+        var attempt = Assert.Single(fixture.Writer.Updates);
+        Assert.Equal(ExecutionState.Failed, attempt.Snapshot.State);
+        Assert.Equal(0m, attempt.Snapshot.ActualCost);
+        Assert.Equal(original.Message, attempt.Snapshot.ErrorMessage);
+        Assert.Null(attempt.Snapshot.ResponseJson);
+        Assert.Equal(1, attempt.Input.Version);
+        Assert.Equal(providerStarted ? 1 : 0, fixture.ProviderCalls);
+        Assert.Single(fixture.Writer.Creates);
+        AssertConflictLogged(fixture, attempt.Input.Id);
+        fixture.AssertBoundary(1, 1);
+    }
+
+    [Theory]
+    [InlineData(false, "usage")]
+    [InlineData(true, "usage")]
+    [InlineData(false, "cost")]
+    [InlineData(true, "cost")]
+    [InlineData(false, "update")]
+    [InlineData(true, "update")]
+    public async Task FalseErrorRecordAfterProviderCompletionPreservesIncurredCostAndReportsBothFailures(bool runtime, string stage)
+    {
+        using var fixture = new Fixture(runtime);
+        var original = new InvalidOperationException("original bookkeeping failure: " + stage);
+        if (stage == "usage") fixture.UsageError = original;
+        if (stage == "cost") fixture.CostError = original;
+        if (stage == "update") fixture.Writer.UpdateError = (attempt, _) => attempt == 1 ? original : null;
+        fixture.Writer.UpdateResult = false;
+
+        var result = await fixture.ExecuteAsync();
+
+        Assert.Equal(ExecutionState.Failed, result.State);
+        Assert.Equal(stage == "update" ? Fixture.ActualCost : Fixture.Estimate, result.ActualCost);
+        Assert.Equal(Fixture.Estimate, result.EstimatedCost);
+        Assert.Equal(fixture.Result.ResponseJson, result.ResponseJson);
+        Assert.Contains(original.Message, result.ErrorMessage, StringComparison.Ordinal);
+        AssertBillableConcurrencyDiagnostic(result);
+        Assert.Equal(1, result.Version);
+        Assert.Equal(1, fixture.ProviderCalls);
+        Assert.Equal(stage == "update" ? 2 : 1, fixture.Writer.Updates.Count);
+        Assert.Equal(ExecutionState.Failed, fixture.Writer.Updates[^1].Snapshot.State);
+        if (stage == "update") AssertCost(result.CostCalculationDetails, Fixture.Estimate, Fixture.ActualCost, fixture.Result.HttpStatusCode);
+        else Assert.Null(result.CostCalculationDetails);
+        Assert.Single(fixture.Writer.Creates);
+        AssertConflictLogged(fixture, result.Id);
         fixture.AssertBoundary(1, 1);
     }
 
@@ -586,6 +657,19 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
         Assert.Equal(4, root.EnumerateObject().Count());
     }
 
+    private static void AssertBillableConcurrencyDiagnostic(FunctionExecution execution)
+    {
+        Assert.Contains("concurrency", execution.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("billable", execution.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("reconcile", execution.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(execution.Id.ToString("D"), execution.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AssertConflictLogged(Fixture fixture, Guid executionId) =>
+        Assert.Contains(fixture.Log.Entries, entry => entry.Level >= LogLevel.Warning &&
+            entry.Message.Contains("persistence conflict", StringComparison.OrdinalIgnoreCase) &&
+            entry.Message.Contains(executionId.ToString("D"), StringComparison.OrdinalIgnoreCase));
+
     private static Dictionary<string, object> Dictionary(string json) =>
         JsonSerializer.Deserialize(json, FunctionsJsonContext.Default.DictionaryStringObject);
 
@@ -663,6 +747,7 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
         public Mock<IFunctionClientFactory> ClientFactory { get; } = new(MockBehavior.Strict);
         public Mock<IFunctionClient> Client { get; } = new(MockBehavior.Strict);
         public Mock<IFunctionCredentialProtector> Protector { get; } = new(MockBehavior.Strict);
+        public RecordingLogger Log { get; } = new();
 
         public Fixture(bool runtime, CancellationToken? token = null)
         {
@@ -731,9 +816,9 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
             });
             Service = runtime
                 ? FunctionExecutionService.CreateWithRuntimePersistence(RuntimeConfiguration.Object, Writer, RuntimeReader.Object,
-                    Calculator.Object, ClientFactory.Object, Protector.Object, NullLogger<FunctionExecutionService>.Instance)
+                    Calculator.Object, ClientFactory.Object, Protector.Object, Log)
                 : new FunctionExecutionService(ConfigurationRepository.Object, CredentialRepository.Object, ExecutionRepository.Object,
-                    Calculator.Object, ClientFactory.Object, Protector.Object, NullLogger<FunctionExecutionService>.Instance);
+                    Calculator.Object, ClientFactory.Object, Protector.Object, Log);
         }
 
         public Task<FunctionExecution> ExecuteAsync(string idempotencyKey = null, Dictionary<string, object> metadata = null, string providerToolName = null) =>
@@ -776,8 +861,18 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
 
     private sealed record WriteAttempt(FunctionExecution Input, FunctionExecution Snapshot, CancellationToken Token);
 
+    private sealed class RecordingLogger : ILogger<FunctionExecutionService>
+    {
+        public List<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Entries.Add((logLevel, formatter(state, exception), exception));
+    }
+
     // Both service paths use this recording persistence boundary. It models the
-    // already-proven writer's input version mutation, including unsuccessful writes.
+    // writer's temporary version increment and #1569 restoration on failed writes.
+    // Attempt snapshots retain the proposed write; Input exposes the restored caller.
     private sealed class RecordingWriter(List<string> events) : IFunctionExecutionRuntimeWriter
     {
         public List<WriteAttempt> Creates { get; } = [];
@@ -801,10 +896,21 @@ public sealed class FunctionExecutionServiceRuntimeStoreTests
             events.Add("update");
             Assert.Null(execution.FunctionConfiguration);
             Assert.Empty(execution.AuditEvents);
-            execution.Version = unchecked(execution.Version + 1);
-            Updates.Add(new WriteAttempt(execution, Snapshot(execution), cancellationToken));
-            var error = UpdateError?.Invoke(Updates.Count, cancellationToken);
-            return error == null ? Task.FromResult(UpdateResult) : Task.FromException<bool>(error);
+            var originalVersion = execution.Version;
+            var saved = false;
+            execution.Version = unchecked(originalVersion + 1);
+            try
+            {
+                Updates.Add(new WriteAttempt(execution, Snapshot(execution), cancellationToken));
+                var error = UpdateError?.Invoke(Updates.Count, cancellationToken);
+                if (error is not null) return Task.FromException<bool>(error);
+                saved = UpdateResult;
+                return Task.FromResult(saved);
+            }
+            finally
+            {
+                if (!saved) execution.Version = originalVersion;
+            }
         }
 
         private static FunctionExecution Snapshot(FunctionExecution value) => new()
