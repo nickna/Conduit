@@ -45,7 +45,7 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
     }
 
     [Fact]
-    public async Task UpdatesReplaceSnapshotsAndPreserveLegacyMissMutationAndOverflow()
+    public async Task UpdatesReplaceSnapshotsAndRestoreFailedVersionsWithoutChangingSuccessfulOverflow()
     {
         await InSchemaAsync(async (connectionString, efSource, source) =>
         {
@@ -67,23 +67,22 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
                 await AssertRowAsync(connectionString, replacement);
 
                 original.StatusMessage = "stale";
-                (await writer.UpdateAsync(original)).Should().BeFalse();
-                original.Version.Should().Be(8);
-                await AssertRowAsync(connectionString, replacement);
-                // Preserve the existing repository quirk; a separate ticket covers this retry.
-                (await writer.UpdateAsync(original)).Should().BeTrue();
-                original.Version.Should().Be(9);
-                await AssertRowAsync(connectionString, original);
+                for (var attempt = 0; attempt < 3; attempt++)
+                {
+                    (await writer.UpdateAsync(original)).Should().BeFalse();
+                    original.Version.Should().Be(7);
+                    await AssertRowAsync(connectionString, replacement);
+                }
 
                 var missing = Snapshot(true);
                 (await writer.UpdateAsync(missing)).Should().BeFalse();
-                missing.Version.Should().Be(8);
+                missing.Version.Should().Be(7);
                 (await ReadAsync(connectionString, missing.Id)).Should().BeNull();
                 var empty = Snapshot(false);
                 (await writer.UpdateAsync(empty)).Should().BeFalse();
                 empty.Id.Should().NotBeEmpty();
                 empty.Id.Version.Should().Be(7);
-                empty.Version.Should().Be(8);
+                empty.Version.Should().Be(7);
                 (await ReadAsync(connectionString, empty.Id)).Should().BeNull();
 
                 var overflow = Snapshot(true);
@@ -113,8 +112,21 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
             }).ToArray();
             var results = await Task.WhenAll(writers.Select((writer, index) => writer.UpdateAsync(contenders[index])));
             results.Count(result => result).Should().Be(1);
-            contenders.Should().OnlyContain(row => row.Version == 8);
-            await AssertRowAsync(connectionString, contenders[Array.IndexOf(results, true)]);
+            var winner = contenders[Array.IndexOf(results, true)];
+            for (var index = 0; index < contenders.Length; index++)
+            {
+                contenders[index].Version.Should().Be(results[index] ? 8 : 7);
+                if (!results[index])
+                {
+                    for (var attempt = 0; attempt < 2; attempt++)
+                    {
+                        (await writers[index].UpdateAsync(contenders[index])).Should().BeFalse();
+                        contenders[index].Version.Should().Be(7);
+                        await AssertRowAsync(connectionString, winner);
+                    }
+                }
+            }
+            await AssertRowAsync(connectionString, winner);
         }, maxPoolSize: 3);
     }
 
@@ -140,7 +152,7 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
                 invalidJson.Id = seed.Id;
                 invalidJson.ResponseJson = "invalid json";
                 await AssertSqlStateAsync(() => writer.UpdateAsync(invalidJson), PostgresErrorCodes.InvalidTextRepresentation);
-                invalidJson.Version.Should().Be(8);
+                invalidJson.Version.Should().Be(7);
                 await AssertRowAsync(connectionString, seed);
             }
         });
@@ -150,7 +162,7 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]
-    public async Task CancellationOfPoolAndObservedSqlWaitsKeepsMutationsAndReleasesSlots(int adapter)
+    public async Task CancellationOfPoolAndObservedSqlWaitsRestoresVersionsAndReleasesSlots(int adapter)
     {
         await InSchemaAsync(async (connectionString, efSource, source) =>
         {
@@ -177,6 +189,7 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
                         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => write.WaitAsync(TimeSpan.FromSeconds(5)));
                     }
                     finally { await DrainAsync(write, cancelled); }
+                    row.Version.Should().Be(7);
                 }
             }
             foreach (var id in cancelledInsertIds) (await ReadAsync(connectionString, id)).Should().BeNull();
@@ -202,7 +215,7 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
                 await WaitForLockWaitAsync(connectionString, blocked, recovery.Token);
                 sqlCancelled.Cancel();
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => blocked.WaitAsync(TimeSpan.FromSeconds(5)));
-                update.Version.Should().Be(8);
+                update.Version.Should().Be(7);
             }
             finally { await DrainAsync(blocked, sqlCancelled); }
             await transaction.RollbackAsync(recovery.Token);
@@ -213,7 +226,7 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
     }
 
     [Fact]
-    public async Task PrecancelledCallsRetainLegacyMutationsAndScalarPortsRejectGraphs()
+    public async Task PrecancelledCallsRetainGeneratedIdsAndRestoreVersionsAndScalarPortsRejectGraphs()
     {
         await InSchemaAsync(async (connectionString, efSource, source) =>
         {
@@ -230,7 +243,7 @@ public sealed partial class FunctionExecutionPersistenceParityTests(PostgresLock
                 var update = Snapshot(false);
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => writer.UpdateAsync(update, cancelled.Token));
                 update.Id.Version.Should().Be(7);
-                update.Version.Should().Be(8);
+                update.Version.Should().Be(7);
                 (await ReadAsync(connectionString, update.Id)).Should().BeNull();
             }
             foreach (var writer in writers.Skip(1))

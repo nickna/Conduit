@@ -485,7 +485,7 @@ async Task RunProbeAsync()
             await FunctionDiscoveryPersistenceProbe.RunAsync(schemaDataSource);
             await FunctionExecutionConfigurationPersistenceProbe.RunAsync(schemaDataSource);
             await FunctionPricingPersistenceProbe.RunAsync(schemaDataSource);
-            await FunctionExecutionPersistenceProbe.RunAsync(schemaDataSource);
+            await FunctionExecutionPersistenceProbe.RunAsync(schemaDataSource, storeConnectionString);
             await FunctionExecutionReaderPersistenceProbe.RunAsync(schemaDataSource);
             await BillingAuditPersistenceProbe.RunAsync(schemaDataSource, storeConnectionString);
         }

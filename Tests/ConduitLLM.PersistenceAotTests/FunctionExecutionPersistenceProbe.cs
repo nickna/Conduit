@@ -10,7 +10,7 @@ internal static class FunctionExecutionPersistenceProbe
 {
     private static readonly DateTime Instant = new(2026, 10, 11, 9, 0, 0, DateTimeKind.Utc);
 
-    internal static async Task RunAsync(NpgsqlDataSource source)
+    internal static async Task RunAsync(NpgsqlDataSource source, string originalConnectionString)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var token = deadline.Token;
@@ -51,23 +51,34 @@ internal static class FunctionExecutionPersistenceProbe
         replacement.RetryCount = -3;
         Require(await writer.UpdateAsync(replacement, token) && replacement.Version == 8, "replace snapshot with nulls");
         await AssertRowAsync(source, replacement, token);
-        Require(!await writer.UpdateAsync(original, token) && original.Version == 8, "stale miss keeps caller increment");
-        await AssertRowAsync(source, replacement, token);
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            Require(!await writer.UpdateAsync(original, token) && original.Version == 7, "stale retries retain original version");
+            await AssertRowAsync(source, replacement, token);
+        }
 
+        var concurrentSeed = Snapshot(true);
+        await writer.CreateAsync(concurrentSeed, token);
         var first = Snapshot(true);
         var second = Snapshot(true);
-        first.Id = second.Id = replacement.Id;
-        first.Version = second.Version = 8;
+        first.Id = second.Id = concurrentSeed.Id;
         first.StatusMessage = "first";
         second.StatusMessage = "second";
         var results = await Task.WhenAll(writer.UpdateAsync(first, token), writer.UpdateAsync(second, token));
-        Require(results.Count(result => result) == 1 && first.Version == 9 && second.Version == 9, "one CAS winner");
+        Require(results.Count(result => result) == 1, "one CAS winner");
         var winner = results[0] ? first : second;
+        var loser = results[0] ? second : first;
+        Require(winner.Version == 8 && loser.Version == 7, "only the CAS winner advances its version");
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            Require(!await writer.UpdateAsync(loser, token) && loser.Version == 7, "CAS loser retries remain stale");
+            await AssertRowAsync(source, winner, token);
+        }
         await AssertRowAsync(source, winner, token);
 
         var missing = Snapshot(false);
-        Require(!await writer.UpdateAsync(missing, token) && missing.Id.Version == 7 && missing.Version == 8,
-            "empty update generates v7 ID and returns missing");
+        Require(!await writer.UpdateAsync(missing, token) && missing.Id.Version == 7 && missing.Version == 7,
+            "empty update retains generated v7 ID and original version on missing row");
         Require(await ReadAsync(source, missing.Id, token) is null, "missing update never inserts");
         var overflow = Snapshot(true);
         overflow.Version = int.MaxValue;
@@ -88,7 +99,7 @@ internal static class FunctionExecutionPersistenceProbe
         invalidJson.Version = winner.Version;
         invalidJson.ResponseJson = "invalid json";
         await ExpectSqlStateAsync(() => writer.UpdateAsync(invalidJson, token), PostgresErrorCodes.InvalidTextRepresentation);
-        Require(invalidJson.Version == 10, "failed update keeps increment");
+        Require(invalidJson.Version == winner.Version, "failed update restores original version");
         await AssertRowAsync(source, winner, token);
 
         using (var cancelled = new CancellationTokenSource())
@@ -100,8 +111,8 @@ internal static class FunctionExecutionPersistenceProbe
                 "precancelled create mutation without row");
             var update = Snapshot(false);
             await ExpectCancelledAsync(writer.UpdateAsync(update, cancelled.Token), cancelled);
-            Require(update.Id.Version == 7 && update.Version == 8 && await ReadAsync(source, update.Id, token) is null,
-                "precancelled update mutation without row");
+            Require(update.Id.Version == 7 && update.Version == 7 && await ReadAsync(source, update.Id, token) is null,
+                "precancelled update retains generated ID and restores version without row");
         }
 
         var cancelledInsertIds = new List<Guid>();
@@ -115,7 +126,7 @@ internal static class FunctionExecutionPersistenceProbe
                 Task write = create ? writer.CreateAsync(row, cancelled.Token) : writer.UpdateAsync(row, cancelled.Token);
                 try
                 {
-                    Require(!write.IsCompleted && row.Id != Guid.Empty && row.Version == (create ? 7 : 10), "occupied pool mutation");
+                    Require(!write.IsCompleted && row.Id != Guid.Empty && row.Version == (create ? 7 : winner.Version + 1), "occupied pool mutation");
                     if (create) cancelledInsertIds.Add(row.Id);
                     cancelled.Cancel();
                     await ExpectCancelledAsync(write, cancelled);
@@ -126,13 +137,47 @@ internal static class FunctionExecutionPersistenceProbe
                     try { await write.WaitAsync(TimeSpan.FromSeconds(5)); }
                     catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
                 }
+                Require(row.Version == (create ? 7 : winner.Version), "pool cancellation restores original version");
             }
         }
         foreach (var id in cancelledInsertIds) Require(await ReadAsync(source, id, token) is null, "pool-cancelled create writes no row");
         await AssertRowAsync(source, winner, token);
+
+        // The source's public connection string hides credentials after opening.
+        await using (var blocker = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(originalConnectionString)
+            { Pooling = false }.ConnectionString))
+        {
+            await blocker.OpenAsync(token);
+            await using var transaction = await blocker.BeginTransactionAsync(token);
+            await using (var command = blocker.CreateCommand())
+            {
+                command.CommandText = "LOCK TABLE \"FunctionExecutions\" IN ACCESS EXCLUSIVE MODE";
+                await command.ExecuteNonQueryAsync(token);
+            }
+            var update = Snapshot(true);
+            update.Id = winner.Id;
+            update.Version = winner.Version;
+            using var cancelled = new CancellationTokenSource();
+            var write = writer.UpdateAsync(update, cancelled.Token);
+            try
+            {
+                await WaitForSqlLockAsync(originalConnectionString, blocker.ProcessID, write, token);
+                cancelled.Cancel();
+                await ExpectCancelledAsync(write, cancelled);
+                Require(update.Version == winner.Version, "observed SQL cancellation restores original version");
+            }
+            finally
+            {
+                cancelled.Cancel();
+                try { await write.WaitAsync(TimeSpan.FromSeconds(5)); }
+                catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { /* Expected owned cancellation; every other failure propagates. */ }
+            }
+            await transaction.RollbackAsync(token);
+        }
+        await AssertRowAsync(source, winner, token);
         Require(await writer.UpdateAsync(winner, token), "single-slot recovery update");
         await AssertRowAsync(source, winner, token);
-        Console.WriteLine("Native function execution scalar writer passed: 24 fields, generated IDs, CAS, nulls, JSONB, failures, cancellation and pool reuse.");
+        Console.WriteLine("Native function execution scalar writer passed: 24 fields, generated IDs, CAS with stale-retry protection, nulls, JSONB, restored versions after failures/cancellation and pool reuse.");
     }
 
     private static FunctionExecution Snapshot(bool populated) => new()
@@ -211,6 +256,26 @@ internal static class FunctionExecutionPersistenceProbe
         try { await write.WaitAsync(TimeSpan.FromSeconds(5)); }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; }
         throw new InvalidOperationException("Execution write ignored cancellation.");
+    }
+
+    private static async Task WaitForSqlLockAsync(string connectionString, int blockerProcessId, Task write, CancellationToken token)
+    {
+        // Observe outside the blocker's transaction so each poll sees fresh activity.
+        await using var observer = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(connectionString)
+            { Pooling = false }.ConnectionString);
+        await observer.OpenAsync(token);
+        await using var command = observer.CreateCommand();
+        command.CommandText = """
+            SELECT EXISTS (SELECT 1 FROM pg_stat_activity
+                WHERE wait_event_type = 'Lock' AND @blocker = ANY(pg_blocking_pids(pid)))
+            """;
+        command.Parameters.AddWithValue("blocker", blockerProcessId);
+        while (true)
+        {
+            if (write.IsCompleted) { await write; throw new InvalidOperationException("Execution write completed before its SQL lock wait was observed."); }
+            if (await command.ExecuteScalarAsync(token) is true) return;
+            await Task.Delay(25, token);
+        }
     }
 
     private static void Require(bool condition, string description)

@@ -218,17 +218,28 @@ retain the inherited list-only explicit cache clear, tracked separately in
 
 `IFunctionExecutionRuntimeWriter` adds scalar execution inserts and full snapshot
 updates guarded by ID and the caller's original version. It preserves all 24 fields,
-empty-ID generation, unchecked integer version increments and caller mutations before
-database attempts, including cancellation and concurrency misses. Navigation graphs
-are explicitly outside this new port; the full legacy repository remains unchanged.
+empty-ID generation and unchecked successful integer version increments. Navigation
+graphs are explicitly outside this new port. At extraction, the adapters preserved
+the legacy repository's caller-version increments even after cancellation or a
+concurrency miss; that inherited behavior was the subject of
+[#1569](https://github.com/nickna/Conduit/issues/1569).
 Real PostgreSQL tests compare the actual repository with both adapters, including
 three-way concurrent writes, invalid JSON/FK/duplicate failures, occupied pools and
 observed SQL lock cancellation. The native persistence probe independently reads all
 24 fields and checks scalar writes, CAS, failure atomicity and single-slot recovery.
-Published Linux run 38126684370 proves this writer before Gateway selection.
-Lease/retry/retention operations and audit writes remain separate boundaries. The
-inherited stale-snapshot retry behavior is tracked in
-[#1569](https://github.com/nickna/Conduit/issues/1569).
+Published Linux run 38126684370 proved the extracted writer before Gateway selection
+under that historical contract; it does not verify the subsequent #1569 correction.
+Lease/retry/retention operations and audit writes remain separate boundaries.
+
+The #1569 correction changes all three writers: a false update or an exception,
+including cancellation, restores the caller's original `Version`. An in-flight
+attempt may temporarily increment it, successful increments retain unchecked
+overflow, and existing empty-ID generation remains visible after failure. Regression
+checks require repeated stale retries to stay false without changing the durable
+winner, one concurrent version-8 winner with version-7 losers, and original versions
+after invalid JSON, missing rows, pre-cancellation, occupied-pool cancellation and
+observed SQL-wait cancellation. The native probe carries the same changed contract.
+These regression changes do not by themselves establish a new hosted native proof.
 
 `IFunctionExecutionRuntimeReader` follows with exact-ID and virtual-key execution
 reads. It includes all 24 execution scalars and the 15 configuration scalars through

@@ -198,11 +198,12 @@ public class FunctionExecutionRepository : RepositoryBase<FunctionExecution, Gui
 
         return await ExecuteWriteAsync(async context =>
         {
+            var originalVersion = execution.Version;
+            var saved = false;
             try
             {
                 // Increment version for optimistic concurrency
-                var originalVersion = execution.Version;
-                execution.Version++;
+                execution.Version = unchecked(originalVersion + 1);
 
                 // Attach and update
                 GetDbSet(context).Attach(execution);
@@ -213,12 +214,18 @@ public class FunctionExecutionRepository : RepositoryBase<FunctionExecution, Gui
 
                 int rowsAffected = await context.SaveChangesAsync(cancellationToken);
 
-                return rowsAffected > 0;
+                saved = rowsAffected > 0;
+                return saved;
             }
             catch (DbUpdateConcurrencyException ex)
             {
                 Logger.LogWarning(ex, "Concurrency conflict updating execution {ExecutionId}", execution.Id);
                 return false;
+            }
+            finally
+            {
+                // A stale snapshot must retain its stale version, even when retried.
+                if (!saved) execution.Version = originalVersion;
             }
         }, $"updating ID {execution.Id}", cancellationToken);
     }
