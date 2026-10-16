@@ -179,7 +179,7 @@ internal static class NativeBenchmarkWorkloadProbe
         var timings = diagnostics is null ? null : new RequestDiagnostic[requests];
         if (timings is not null)
             for (var index = 0; index < timings.Length; index++)
-                timings[index] = new RequestDiagnostic(index);
+                timings[index] = new RequestDiagnostic(index, configuration.IsStream);
         var before = diagnostics is null ? null : RuntimeSnapshot.Capture();
         var phaseStart = diagnostics is null ? 0 : Stopwatch.GetTimestamp() - origin;
         var next = -1;
@@ -269,7 +269,8 @@ internal static class NativeBenchmarkWorkloadProbe
                 response.Content.Headers.ContentLength is > MaximumResponseBytes)
                 return false;
             await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
-            var bytes = await ReadBoundedAsync(stream, MaximumResponseBytes, deadline.Token);
+            var bytes = await ReadBoundedAsync(stream, MaximumResponseBytes, deadline.Token,
+                diagnostic?.Streaming, origin);
             if (diagnostic is not null)
             {
                 diagnostic.BodyOffsetTicks = Stopwatch.GetTimestamp() - origin;
@@ -325,7 +326,8 @@ internal static class NativeBenchmarkWorkloadProbe
         return bytes.ToArray();
     }
 
-    private static async Task<byte[]> ReadBoundedAsync(Stream stream, int maximumBytes, CancellationToken token)
+    private static async Task<byte[]> ReadBoundedAsync(Stream stream, int maximumBytes, CancellationToken token,
+        StreamingDiagnostic? streaming = null, long origin = 0)
     {
         using var bytes = new MemoryStream();
         var buffer = new byte[16 * 1024];
@@ -336,6 +338,7 @@ internal static class NativeBenchmarkWorkloadProbe
                 return bytes.ToArray();
             if (bytes.Length + read > maximumBytes)
                 throw new InvalidDataException("Benchmark input or response exceeds its limit.");
+            streaming?.Observe(buffer.AsSpan(0, read), Stopwatch.GetTimestamp() - origin);
             await bytes.WriteAsync(buffer.AsMemory(0, read), token);
         }
     }
@@ -582,7 +585,7 @@ internal static class NativeBenchmarkWorkloadProbe
     private static void WriteDiagnostics(Utf8JsonWriter writer, Configuration configuration, List<PhaseDiagnostic> phases)
     {
         writer.WriteStartObject();
-        writer.WriteNumber("schemaVersion", 1);
+        writer.WriteNumber("schemaVersion", configuration.IsStream ? 2 : 1);
         writer.WriteString("kind", "conduit-native-benchmark-workload-diagnostics");
         writer.WriteString("scope", "client");
         writer.WriteString("service", configuration.IsAdmin ? "admin" : "gateway");
@@ -619,6 +622,18 @@ internal static class NativeBenchmarkWorkloadProbe
                 writer.WriteNumber("endOffsetTicks", request.EndOffsetTicks);
                 WriteNullable("responseBytes", request.ResponseBytes);
                 writer.WriteBoolean("succeeded", request.Succeeded);
+                if (request.Streaming is { } streaming)
+                {
+                    writer.WriteStartObject("streaming");
+                    WriteNullable("firstBodyReadOffsetTicks", streaming.FirstBodyReadOffsetTicks);
+                    WriteNullable("lastBodyReadOffsetTicks", streaming.LastBodyReadOffsetTicks);
+                    WriteNullable("firstDataEventOffsetTicks", streaming.FirstDataEventOffsetTicks);
+                    WriteNullable("doneEventOffsetTicks", streaming.DoneEventOffsetTicks);
+                    writer.WriteNumber("bodyReadCount", streaming.BodyReadCount);
+                    writer.WriteNumber("dataEventCount", streaming.DataEventCount);
+                    writer.WriteNumber("doneEventCount", streaming.DoneEventCount);
+                    writer.WriteEndObject();
+                }
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();
@@ -653,7 +668,7 @@ internal static class NativeBenchmarkWorkloadProbe
         }
     }
 
-    private sealed class RequestDiagnostic(int index)
+    private sealed class RequestDiagnostic(int index, bool streaming)
     {
         internal int Index { get; } = index;
         internal int Worker { get; set; }
@@ -666,6 +681,7 @@ internal static class NativeBenchmarkWorkloadProbe
         internal long EndOffsetTicks { get; set; }
         internal long? ResponseBytes { get; set; }
         internal bool Succeeded { get; set; }
+        internal StreamingDiagnostic? Streaming { get; } = streaming ? new() : null;
 
         private static string NewTraceId()
         {
@@ -679,6 +695,93 @@ internal static class NativeBenchmarkWorkloadProbe
             ActivitySpanId id;
             do { id = ActivitySpanId.CreateRandom(); } while (id == default);
             return id.ToHexString();
+        }
+    }
+
+    /// <summary>
+    /// Observes byte-read completion and SSE framing, without decoding or retaining payload.
+    /// Events within one read share its observation timestamp. These are not wire-arrival
+    /// times or content/usage validation; the complete original validator still runs at EOF.
+    /// </summary>
+    private sealed class StreamingDiagnostic
+    {
+        private int _lineLength;
+        private bool _lineIsData = true;
+        private int _lineDataLength;
+        private bool _lineIsDone = true;
+        private int _eventDataLength;
+        private bool _eventIsDone = true;
+        private bool _previousCr;
+
+        internal long? FirstBodyReadOffsetTicks { get; private set; }
+        internal long? LastBodyReadOffsetTicks { get; private set; }
+        internal long? FirstDataEventOffsetTicks { get; private set; }
+        internal long? DoneEventOffsetTicks { get; private set; }
+        internal int BodyReadCount { get; private set; }
+        internal int DataEventCount { get; private set; }
+        internal int DoneEventCount { get; private set; }
+
+        internal void Observe(ReadOnlySpan<byte> bytes, long timestamp)
+        {
+            FirstBodyReadOffsetTicks ??= timestamp;
+            LastBodyReadOffsetTicks = timestamp;
+            BodyReadCount++;
+            foreach (var value in bytes)
+            {
+                if (_previousCr)
+                {
+                    _previousCr = false;
+                    if (value == (byte)'\n') continue;
+                }
+                if (value is (byte)'\r' or (byte)'\n')
+                {
+                    EndLine(timestamp);
+                    _previousCr = value == (byte)'\r';
+                    continue;
+                }
+                if (_lineLength < 5)
+                    _lineIsData &= value == "data:"u8[_lineLength];
+                else if (_lineIsData && !(_lineLength == 5 && value == (byte)' '))
+                {
+                    _lineIsDone &= _lineDataLength < 6 && value == "[DONE]"u8[_lineDataLength];
+                    _lineDataLength++;
+                }
+                _lineLength++;
+            }
+        }
+
+        private void EndLine(long timestamp)
+        {
+            if (_lineLength == 0)
+            {
+                if (_eventDataLength != 0)
+                {
+                    DataEventCount++;
+                    FirstDataEventOffsetTicks ??= timestamp;
+                    if (_eventIsDone && _eventDataLength == 6)
+                    {
+                        DoneEventCount++;
+                        DoneEventOffsetTicks ??= timestamp;
+                    }
+                }
+                _eventDataLength = 0;
+                _eventIsDone = true;
+            }
+            else if (_lineIsData && _lineLength >= 5)
+            {
+                if (_eventDataLength != 0)
+                {
+                    _eventDataLength++;
+                    _eventIsDone = false;
+                }
+                else
+                    _eventIsDone = _lineIsDone;
+                _eventDataLength += _lineDataLength;
+            }
+            _lineLength = 0;
+            _lineIsData = true;
+            _lineDataLength = 0;
+            _lineIsDone = true;
         }
     }
 

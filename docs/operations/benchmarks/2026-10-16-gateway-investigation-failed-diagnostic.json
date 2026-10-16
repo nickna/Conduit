@@ -1,0 +1,1 @@
+{"schemaVersion":1,"kind":"conduit-native-benchmark-failure-diagnostic","attemptId":"db78cc2b445a4493b1fec5017941cdef","service":"gateway","phase":"workload","reason":"probe-exit","runtime":"jit","sampleKind":"warmup","pair":null,"ownedContainerCleanup":{"status":"confirmed","reason":"none"},"privateFileCleanup":{"status":"confirmed","reason":"none"}}

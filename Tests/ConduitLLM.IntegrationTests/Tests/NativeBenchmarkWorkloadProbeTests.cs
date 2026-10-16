@@ -250,6 +250,83 @@ public sealed class NativeBenchmarkWorkloadProbeTests
     }
 
     [Theory]
+    [InlineData("\n", false)]
+    [InlineData("\r\n", false)]
+    [InlineData("\r", false)]
+    [InlineData("\n", true)]
+    [InlineData("\r\n", true)]
+    public async Task StreamingDiagnosticsObserveFramingWithoutChangingCompleteUnicodeValidation(string newline, bool chunked)
+    {
+        using var secret = new EnvironmentSecret(Secret);
+        // Comments and empty data frames are not nonempty data events. JSON events
+        // span multiple data lines, while seven-byte socket writes split UTF8 and framing.
+        var body = "data:\n\n" + SseResponse().Replace("data: {", "data: {\ndata: ", StringComparison.Ordinal);
+        body = body.Replace("\n", newline, StringComparison.Ordinal);
+        await using var server = new LoopbackServer(new Response("text/event-stream", body, Chunked: chunked));
+
+        var (exitCode, report, diagnostics) = await server.RunWithDiagnosticsAsync(Configuration(server, "gateway-chat-sse"));
+
+        Assert.Equal(0, exitCode);
+        AssertReport(report, "gateway-chat-sse", requested: 1, completed: 1, failures: 0);
+        AssertDiagnostics(diagnostics, report, server, warmup: 0, requested: 1, completed: 1, concurrency: 1);
+        var request = Assert.Single(diagnostics.GetProperty("phases")[1].GetProperty("requests").EnumerateArray());
+        var streaming = request.GetProperty("streaming");
+        Assert.Equal(6, streaming.GetProperty("dataEventCount").GetInt32());
+        Assert.Equal(1, streaming.GetProperty("doneEventCount").GetInt32());
+        Assert.Equal(Encoding.UTF8.GetByteCount(body), request.GetProperty("responseBytes").GetInt32());
+    }
+
+    [Fact]
+    public async Task StreamingDiagnosticsStillReadToEofAfterDoneAndPreserveDeadlineFailure()
+    {
+        using var secret = new EnvironmentSecret(Secret);
+        await using var server = new LoopbackServer(new Response("text/event-stream", SseResponse(), HoldAfterBody: true));
+        var configuration = Configuration(server, "gateway-chat-sse");
+        configuration["timeoutSeconds"] = 1;
+
+        var (exitCode, report, diagnostics) = await server.RunWithDiagnosticsAsync(configuration);
+
+        Assert.Equal(1, exitCode);
+        AssertReport(report, "gateway-chat-sse", requested: 1, completed: 0, failures: 1, timeout: 1);
+        AssertDiagnostics(diagnostics, report, server, warmup: 0, requested: 1, completed: 0, concurrency: 1);
+        var request = Assert.Single(diagnostics.GetProperty("phases")[1].GetProperty("requests").EnumerateArray());
+        var streaming = request.GetProperty("streaming");
+        Assert.Equal(6, streaming.GetProperty("dataEventCount").GetInt32());
+        Assert.Equal(1, streaming.GetProperty("doneEventCount").GetInt32());
+        Assert.NotEqual(JsonValueKind.Null, streaming.GetProperty("doneEventOffsetTicks").ValueKind);
+        foreach (var field in new[] { "bodyOffsetTicks", "validatedOffsetTicks", "responseBytes" })
+            Assert.Equal(JsonValueKind.Null, request.GetProperty(field).ValueKind);
+    }
+
+    [Theory]
+    [InlineData("missing-usage", 5, 1)]
+    [InlineData("missing-done", 5, 0)]
+    [InlineData("duplicate-done", 7, 2)]
+    [InlineData("after-done", 7, 1)]
+    public async Task StreamingObservationDoesNotAcceptInvalidContentUsageOrTerminalFraming(string scenario, int events, int done)
+    {
+        using var secret = new EnvironmentSecret(Secret);
+        var body = scenario switch
+        {
+            "missing-usage" => SseResponse(includeUsage: false),
+            "missing-done" => SseResponse(includeDone: false),
+            "duplicate-done" => SseResponse() + "data: [DONE]\n\n",
+            _ => SseResponse() + "data: " + Chunk("private " + Secret, role: false) + "\n\n"
+        };
+        await using var server = new LoopbackServer(new Response("text/event-stream", body));
+
+        var (exitCode, report, diagnostics) = await server.RunWithDiagnosticsAsync(Configuration(server, "gateway-chat-sse"));
+
+        Assert.Equal(1, exitCode);
+        AssertDiagnostics(diagnostics, report, server, warmup: 0, requested: 1, completed: 0, concurrency: 1);
+        var request = Assert.Single(diagnostics.GetProperty("phases")[1].GetProperty("requests").EnumerateArray());
+        var streaming = request.GetProperty("streaming");
+        Assert.Equal(events, streaming.GetProperty("dataEventCount").GetInt32());
+        Assert.Equal(done, streaming.GetProperty("doneEventCount").GetInt32());
+        Assert.Equal(JsonValueKind.Null, request.GetProperty("validatedOffsetTicks").ValueKind);
+    }
+
+    [Theory]
     [InlineData("invalid-json")]
     [InlineData("missing-fields")]
     [InlineData("wrong-content")]
@@ -598,7 +675,8 @@ public sealed class NativeBenchmarkWorkloadProbeTests
     {
         AssertKeys(diagnostics, "schemaVersion", "kind", "scope", "service", "workload", "inputFingerprint",
             "stopwatchFrequency", "runtimeTickFrequency", "phases");
-        Assert.Equal(1, diagnostics.GetProperty("schemaVersion").GetInt32());
+        var isStream = diagnostics.GetProperty("workload").GetString() == "gateway-chat-sse";
+        Assert.Equal(isStream ? 2 : 1, diagnostics.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("conduit-native-benchmark-workload-diagnostics", diagnostics.GetProperty("kind").GetString());
         Assert.Equal("client", diagnostics.GetProperty("scope").GetString());
         Assert.Equal(report.GetProperty("service").GetString(), diagnostics.GetProperty("service").GetString());
@@ -641,8 +719,9 @@ public sealed class NativeBenchmarkWorkloadProbeTests
             var workerEnds = new Dictionary<int, long>();
             foreach (var request in requests)
             {
-                AssertKeys(request, "index", "worker", "traceId", "spanId", "startOffsetTicks", "headersOffsetTicks",
-                    "bodyOffsetTicks", "validatedOffsetTicks", "endOffsetTicks", "responseBytes", "succeeded");
+                var requestKeys = new[] { "index", "worker", "traceId", "spanId", "startOffsetTicks", "headersOffsetTicks",
+                    "bodyOffsetTicks", "validatedOffsetTicks", "endOffsetTicks", "responseBytes", "succeeded" };
+                AssertKeys(request, isStream ? [.. requestKeys, "streaming"] : requestKeys);
                 var worker = request.GetProperty("worker").GetInt32();
                 Assert.InRange(worker, 0, concurrency - 1);
                 var start = request.GetProperty("startOffsetTicks").GetInt64();
@@ -667,6 +746,40 @@ public sealed class NativeBenchmarkWorkloadProbeTests
                 }
                 var succeeded = request.GetProperty("succeeded").GetBoolean();
                 if (succeeded) Assert.False(missingStage);
+                if (isStream)
+                {
+                    var streaming = request.GetProperty("streaming");
+                    AssertKeys(streaming, "firstBodyReadOffsetTicks", "lastBodyReadOffsetTicks", "firstDataEventOffsetTicks", "doneEventOffsetTicks",
+                        "bodyReadCount", "dataEventCount", "doneEventCount");
+                    var readCount = streaming.GetProperty("bodyReadCount").GetInt32();
+                    var eventCount = streaming.GetProperty("dataEventCount").GetInt32();
+                    var doneCount = streaming.GetProperty("doneEventCount").GetInt32();
+                    Assert.InRange(readCount, 0, NativeBenchmarkWorkloadProbe.MaximumResponseBytes);
+                    Assert.InRange(doneCount, 0, eventCount);
+                    if (readCount == 0)
+                    {
+                        Assert.Equal(0, eventCount);
+                        Assert.Equal(JsonValueKind.Null, streaming.GetProperty("firstBodyReadOffsetTicks").ValueKind);
+                        Assert.Equal(JsonValueKind.Null, streaming.GetProperty("lastBodyReadOffsetTicks").ValueKind);
+                    }
+                    else
+                    {
+                        var first = streaming.GetProperty("firstBodyReadOffsetTicks").GetInt64();
+                        var last = streaming.GetProperty("lastBodyReadOffsetTicks").GetInt64();
+                        Assert.InRange(first, request.GetProperty("headersOffsetTicks").GetInt64(), end);
+                        Assert.InRange(last, first, end);
+                        if (request.GetProperty("bodyOffsetTicks").ValueKind != JsonValueKind.Null)
+                            Assert.True(last <= request.GetProperty("bodyOffsetTicks").GetInt64());
+                        foreach (var field in new[] { "firstDataEventOffsetTicks", "doneEventOffsetTicks" })
+                            if (streaming.GetProperty(field).ValueKind != JsonValueKind.Null)
+                                Assert.InRange(streaming.GetProperty(field).GetInt64(), first, last);
+                    }
+                    Assert.Equal(eventCount == 0, streaming.GetProperty("firstDataEventOffsetTicks").ValueKind == JsonValueKind.Null);
+                    Assert.Equal(doneCount == 0, streaming.GetProperty("doneEventOffsetTicks").ValueKind == JsonValueKind.Null);
+                    if (doneCount > 0)
+                        Assert.True(streaming.GetProperty("firstDataEventOffsetTicks").GetInt64() <= streaming.GetProperty("doneEventOffsetTicks").GetInt64());
+                    if (succeeded) Assert.Equal(1, doneCount);
+                }
                 var bytes = request.GetProperty("responseBytes");
                 if (request.GetProperty("bodyOffsetTicks").ValueKind == JsonValueKind.Null)
                     Assert.Equal(JsonValueKind.Null, bytes.ValueKind);
@@ -839,7 +952,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
         public void Dispose() => Environment.SetEnvironmentVariable(SecretVariable, _previous);
     }
 
-    private sealed record Response(string ContentType, string Body, int StatusCode = 200, bool Hold = false, bool Chunked = false);
+    private sealed record Response(string ContentType, string Body, int StatusCode = 200, bool Hold = false, bool Chunked = false, bool HoldAfterBody = false);
 
     private sealed class LoopbackServer : IAsyncDisposable
     {
@@ -935,7 +1048,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
                 var response = Response;
                 if (response.Hold) await Task.Delay(Timeout.Infinite, _stop.Token);
                 var body = Encoding.UTF8.GetBytes(response.Body);
-                var framing = response.Chunked ? "Transfer-Encoding: chunked\r\n"
+                var framing = response.HoldAfterBody ? string.Empty : response.Chunked ? "Transfer-Encoding: chunked\r\n"
                     : "Content-Length: " + body.Length.ToString(CultureInfo.InvariantCulture) + "\r\n";
                 var header = Encoding.ASCII.GetBytes("HTTP/1.1 " + response.StatusCode.ToString(CultureInfo.InvariantCulture)
                     + " fixture\r\nContent-Type: " + response.ContentType + "; charset=utf-8\r\n" + framing + "Connection: close\r\n\r\n");
@@ -959,6 +1072,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
                         await stream.WriteAsync(body.AsMemory(offset, Math.Min(7, body.Length - offset)), _stop.Token);
                 }
                 else await stream.WriteAsync(body, _stop.Token);
+                if (response.HoldAfterBody) await Task.Delay(Timeout.Infinite, _stop.Token);
             }
             catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
             catch (ObjectDisposedException) when (_stop.IsCancellationRequested) { }

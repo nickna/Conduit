@@ -1,0 +1,671 @@
+{
+  "schemaVersion": 1,
+  "kind": "conduit-gateway-sse-investigation-summary",
+  "date": "2026-10-16",
+  "issue": 1647,
+  "disposition": "investigated-blocked-historical-cause-undetermined",
+  "historical": {
+    "reportSha256": "8a49e89c519cadbd6d0b3823464d5afb2238ce30e0ea1f27a287be6fc821f2da",
+    "attemptSha256": "235eb931c15d4225a7a6a097eb4b5d28a894091c444643bdd030371cd7a521d5",
+    "bytesUnchanged": true,
+    "nativeSseThroughputChangePercent": -4.183203,
+    "nativeSseP99ChangePercent": 7.695668,
+    "originalImagesAndPrivateBundleAvailable": false,
+    "exactReplayPerformed": false
+  },
+  "sourceRoles": {
+    "applicationRevision": "b5ced25a67bc0c5356af1c8d5035443d800a7ede",
+    "applicationsClean": true,
+    "managedFixtureRevision": "45d99bcd1ed1c52b4acaa728e27f9b3704155dcd",
+    "freshDefaultFixtureDllSha256": "71def16ba43c42176e2248da1ea6a2f579538ef30aa816e30a7cecf06da3ac96",
+    "collectorSha256": "d244b10106c7098a8b3fdc3022f86375026316cbf3de20443bd16f286f3226f4",
+    "freshBinariesAndNewRelays": true,
+    "historicalRelayImplementationAvailable": false
+  },
+  "images": {
+    "jit": {
+      "tag": "127.0.0.1:64966/issue1647-gateway-jit:b5ced25a-3a5291840732",
+      "reference": "127.0.0.1:64966/issue1647-gateway-jit@sha256:7fe4a87f71b28aed2f02a17b58d3813d0e6cc85a29ebc3c0850a54e774017543",
+      "localId": "sha256:7fe4a87f71b28aed2f02a17b58d3813d0e6cc85a29ebc3c0850a54e774017543",
+      "imageBytes": 487599147,
+      "sourceRevision": "b5ced25a67bc0c5356af1c8d5035443d800a7ede",
+      "buildTimestamp": "2026-10-16T21:12:16.3831358+00:00",
+      "dockerfileSha256": "246de07981f21dfcba89952e5c12ace2900c5689405237b37b666fb012240aaf"
+    },
+    "native": {
+      "tag": "127.0.0.1:64966/issue1647-gateway-native:b5ced25a-3a5291840732",
+      "reference": "127.0.0.1:64966/issue1647-gateway-native@sha256:640685bfe9c885a4c24031a5ec4678c43f9a09c450658d0d7fdac140a59d72ca",
+      "localId": "sha256:640685bfe9c885a4c24031a5ec4678c43f9a09c450658d0d7fdac140a59d72ca",
+      "imageBytes": 228023305,
+      "sourceRevision": "b5ced25a67bc0c5356af1c8d5035443d800a7ede",
+      "buildTimestamp": "2026-10-16T21:12:16.3831358+00:00",
+      "dockerfileSha256": "bd6bc3251acb32fa25a24fff823a045a61b60feb30984fa2bb64963d61e5c368"
+    },
+    "nativeIdentity": {
+      "schemaVersion": 1,
+      "kind": "conduit-native-benchmark-image",
+      "service": "gateway",
+      "rid": "linux-x64",
+      "requestedImage": "127.0.0.1:64966/issue1647-gateway-native@sha256:640685bfe9c885a4c24031a5ec4678c43f9a09c450658d0d7fdac140a59d72ca",
+      "requestedDigest": "sha256:640685bfe9c885a4c24031a5ec4678c43f9a09c450658d0d7fdac140a59d72ca",
+      "requestedDigestKind": "manifest",
+      "localImageId": "sha256:640685bfe9c885a4c24031a5ec4678c43f9a09c450658d0d7fdac140a59d72ca",
+      "rootDescriptor": {
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "digest": "sha256:640685bfe9c885a4c24031a5ec4678c43f9a09c450658d0d7fdac140a59d72ca",
+        "size": 1239
+      },
+      "selectedManifestDescriptor": {
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "digest": "sha256:640685bfe9c885a4c24031a5ec4678c43f9a09c450658d0d7fdac140a59d72ca",
+        "size": 1239
+      },
+      "configDigest": "sha256:d20590664bd98942c521e8c264549b4b4f034c0cd198fe3ab6ddafbf52c020ab",
+      "buildId": "37e31bb930d4477abef48a91136b19c7",
+      "source": {
+        "dirty": false,
+        "revision": "b5ced25a67bc0c5356af1c8d5035443d800a7ede",
+        "status": "git"
+      },
+      "packagingEvidence": {
+        "path": "packaging-evidence.json",
+        "sha256": "41ba81171e8e6b55a351aa6a60ef8ffd5d72c2a0243e3835211bce92d6f865c6"
+      },
+      "runtimeFilesSha256": "55516dfb237c2f9b849672e54ec427b4184f2556a155d76f166ba8d022727695",
+      "manifestHashes": {
+        "application.json": "120bd6a283a871f1b87c4fa1bcccf9cd4728b9fa6cdf1c524fd909acbf8cf14d",
+        "health-probe.json": "1f4e9f21a069064644c19bd6667f6446b21747caa3d27cc50dd9ad78eaf473c6",
+        "image-publish.json": "cf924e9ec028833cdaeb7f990813c0bec55b669271b6eced8c26b66dfbae84f2"
+      },
+      "application": {
+        "executable": {
+          "path": "ConduitLLM.Gateway",
+          "bytes": 97429952,
+          "sha256": "fb8cc7b20da98271fd61334e7defee2013a151e6dffd621af27402a212085a3f"
+        },
+        "toolchain": {
+          "hostArchitecture": "x64",
+          "hostOs": "linux",
+          "ilCompiler": {
+            "bytes": 13497256,
+            "path": "/root/.nuget/packages/runtime.linux-x64.microsoft.dotnet.ilcompiler/10.0.12/tools/ilc",
+            "sha256": "aff0fc8b87141f4e6f0db736bff841b18ce03a7a85a6fa171c7d0dc3ee001b99"
+          },
+          "ilCompilerPackage": {
+            "id": "runtime.linux-x64.Microsoft.DotNet.ILCompiler",
+            "path": "/root/.nuget/packages/runtime.linux-x64.microsoft.dotnet.ilcompiler/10.0.12",
+            "version": "10.0.12"
+          },
+          "nativeLinkerDriver": {
+            "bytes": 140592,
+            "command": "clang",
+            "flavor": "bfd",
+            "path": "/usr/lib/llvm-18/bin/clang",
+            "sha256": "8ef402d453d1ba4902e4ee0f0f847f6cfa01400c95aa43c24e97818b9c0e3f45",
+            "version": "Ubuntu clang version 18.1.3 (1ubuntu1)\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/lib/llvm-18/bin"
+          },
+          "sdkVersion": "10.0.401",
+          "targetArchitecture": "x64",
+          "targetOs": "linux"
+        }
+      },
+      "healthProbe": {
+        "executable": {
+          "path": "conduit-health-probe",
+          "bytes": 5853648,
+          "sha256": "5f269171c823fbc943fb6957807d4b8582dfff3b8f270201f81f2496dbb8bdfe"
+        },
+        "toolchain": {
+          "hostArchitecture": "x64",
+          "hostOs": "linux",
+          "ilCompiler": {
+            "bytes": 13497256,
+            "path": "/root/.nuget/packages/runtime.linux-x64.microsoft.dotnet.ilcompiler/10.0.12/tools/ilc",
+            "sha256": "aff0fc8b87141f4e6f0db736bff841b18ce03a7a85a6fa171c7d0dc3ee001b99"
+          },
+          "ilCompilerPackage": {
+            "id": "runtime.linux-x64.Microsoft.DotNet.ILCompiler",
+            "path": "/root/.nuget/packages/runtime.linux-x64.microsoft.dotnet.ilcompiler/10.0.12",
+            "version": "10.0.12"
+          },
+          "nativeLinkerDriver": {
+            "bytes": 140592,
+            "command": "clang",
+            "flavor": "bfd",
+            "path": "/usr/lib/llvm-18/bin/clang",
+            "sha256": "8ef402d453d1ba4902e4ee0f0f847f6cfa01400c95aa43c24e97818b9c0e3f45",
+            "version": "Ubuntu clang version 18.1.3 (1ubuntu1)\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/lib/llvm-18/bin"
+          },
+          "sdkVersion": "10.0.401",
+          "targetArchitecture": "x64",
+          "targetOs": "linux"
+        }
+      }
+    },
+    "nativePublish": {
+      "service": "Gateway",
+      "rid": "linux-x64",
+      "publishDurationMilliseconds": 222205,
+      "applicationPublishDurationMilliseconds": 216237,
+      "healthProbePublishDurationMilliseconds": 5968,
+      "executableBytes": 97429952,
+      "runtimeArtifactBytes": 104070289,
+      "imageBinding": {
+        "schemaVersion": 1,
+        "kind": "conduit-native-benchmark-image-binding",
+        "packagingEvidence": {
+          "path": "packaging-evidence.json",
+          "sha256": "41ba81171e8e6b55a351aa6a60ef8ffd5d72c2a0243e3835211bce92d6f865c6"
+        },
+        "buildId": "37e31bb930d4477abef48a91136b19c7",
+        "sourceRevision": "b5ced25a67bc0c5356af1c8d5035443d800a7ede",
+        "requestedImage": "127.0.0.1:64966/issue1647-gateway-native@sha256:640685bfe9c885a4c24031a5ec4678c43f9a09c450658d0d7fdac140a59d72ca",
+        "requestedDigest": "sha256:640685bfe9c885a4c24031a5ec4678c43f9a09c450658d0d7fdac140a59d72ca",
+        "requestedDigestKind": "manifest",
+        "observedLocalImageId": "sha256:640685bfe9c885a4c24031a5ec4678c43f9a09c450658d0d7fdac140a59d72ca",
+        "selectedManifestDescriptor": {
+          "mediaType": "application/vnd.oci.image.manifest.v1+json",
+          "digest": "sha256:640685bfe9c885a4c24031a5ec4678c43f9a09c450658d0d7fdac140a59d72ca",
+          "size": 1239
+        }
+      }
+    },
+    "fullPackagingVerified": true,
+    "nativeCompressedLayerBytes": 68605319
+  },
+  "environment": {
+    "schemaVersion": 1,
+    "environmentId": "fresh-b5-gateway-issue1647-c3dbee205e034561a69409694aa11d9c",
+    "host": {
+      "os": "linux",
+      "architecture": "x64",
+      "cpu": "Intel(R) Core(TM) i7-14700T",
+      "logicalProcessors": 28,
+      "memoryBytes": 50390425600,
+      "dockerVersion": "29.8.2",
+      "kernelVersion": "6.18.54.1-microsoft-standard-WSL2"
+    },
+    "backingServices": {
+      "postgresqlVersion": "16.15 (Debian 16.15-1.pgdg13+2)",
+      "redisVersion": "7.4.11",
+      "wolverineVersion": "6.48.3",
+      "configurationId": "fresh-b5-pg100-redis-wolverine-default30s-ip-disabled-c3dbee205e034561a69409694aa11d9c",
+      "providerFixtureId": "unmodified-source45-linux-managed-opaque-relay-c3dbee205e034561a69409694aa11d9c"
+    }
+  },
+  "fixedRuntimeEnvironment": {
+    "ASPNETCORE_ENVIRONMENT": "Production",
+    "DOTNET_ENVIRONMENT": "Production",
+    "ASPNETCORE_URLS": "http://+:8080",
+    "ASPNETCORE_HTTP_PORTS": "8080",
+    "CONDUIT_MIGRATION_MODE": "Wait",
+    "ConduitLLM__Messaging__Backend": "Wolverine",
+    "ConduitLLM__Messaging__Wolverine__Transport": "Postgresql",
+    "ConduitLLM__Messaging__Wolverine__AutoProvision": "false",
+    "ConduitLLM__Storage__Provider": "InMemory",
+    "MediaLifecycle__Enabled": "false",
+    "CONDUIT_ENABLE_HTTPS_REDIRECTION": "false",
+    "Telemetry__TracingEnabled": "false",
+    "CONDUIT_CORE_IP_FILTERING_ENABLED": "false",
+    "CONDUIT_CORE_RATE_LIMITING_ENABLED": "true",
+    "CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS": "100000",
+    "CONDUIT_CORE_RATE_LIMIT_WINDOW_SECONDS": "60",
+    "BatchSpending__FlushIntervalSeconds": "30",
+    "CONDUIT_MIGRATION_WAIT_TIMEOUT_SECONDS": "0"
+  },
+  "limits": {
+    "key": {
+      "rpd": 200000,
+      "rpm": 100000,
+      "tpm": null,
+      "parallel": null,
+      "priority": null
+    },
+    "group": {
+      "rpd": null,
+      "rpm": null,
+      "tpm": null,
+      "parallel": null
+    },
+    "route": {
+      "enabled": true,
+      "strategy": "Balanced",
+      "cacheAffinity": true,
+      "affinityTtlSeconds": 900
+    }
+  },
+  "preflight": {
+    "passed": true,
+    "expected": {
+      "totalRequests": 2,
+      "jsonRequests": 1,
+      "sseRequests": 1,
+      "inputTokens": 20,
+      "outputTokens": 10,
+      "cost": 0.00015,
+      "balance": 99.99985
+    },
+    "logs": {
+      "cost": 0.00015,
+      "count": 2,
+      "distinctIds": 2,
+      "inputTokens": 20,
+      "outputTokens": 10,
+      "matchingCount": 2
+    },
+    "ownedAudit": {
+      "cost": 0.00015,
+      "count": 2,
+      "distinctIds": 2,
+      "matchingCount": 2,
+      "distinctRequests": 2
+    },
+    "group": {
+      "id": 1,
+      "spent": 0.00015,
+      "balance": 99.99985,
+      "credits": 100.0
+    },
+    "ledger": {
+      "count": 2,
+      "debits": 0.00015,
+      "matchingCount": 2,
+      "distinctIdempotency": 2
+    },
+    "provider": {
+      "non_stream_requests": 1,
+      "stream_requests": 1,
+      "image_requests": 0,
+      "error_requests": 0,
+      "authorization_failures": 0,
+      "active_cancellation_requests": 0,
+      "cancellations_observed": 0,
+      "function_requests": 0,
+      "function_error_requests": 0,
+      "function_authorization_failures": 0,
+      "function_chunked_requests": 0,
+      "agentic_tool_call_requests": 0,
+      "agentic_final_requests": 0,
+      "agentic_contract_failures": 0
+    },
+    "financialRedisObligationsAbsent": true,
+    "liveBalancedObservations": [
+      {
+        "elapsedSeconds": 0.6792973,
+        "snapshotSha256": "deae05dc2a48f27b796b824bbeb5950c5e5114257077ace7da52871e05fe1cd4",
+        "observedUtc": "2026-10-16T21:25:58.2746311+00:00"
+      },
+      {
+        "elapsedSeconds": 30.9565176,
+        "snapshotSha256": "bd999fb22333d0a96951d01ffe0a64630c5fd7bfb4bcc13624a8ca62bf8dab94",
+        "observedUtc": "2026-10-16T21:26:28.6703399+00:00"
+      },
+      {
+        "elapsedSeconds": 61.1725325,
+        "snapshotSha256": "9b29b5adbb35c83cd5cd74c48cb368a884124ee30be81ff59a5e80dbc3026994",
+        "observedUtc": "2026-10-16T21:26:58.9038378+00:00"
+      }
+    ],
+    "jitLiveExactLogPreserved": true,
+    "jitOriginalBroaderGatePassed": false,
+    "jitBroaderOracleCorrectedAfterHostStop": true,
+    "completeOwnedRowHashesJoinedToRetainedLiveSnapshot": true,
+    "firstPollSupersededAfterOracleSourceChange": true,
+    "finalPollAndSettleOracleSha256": "aa500b40e0cf93ddbbe6fd605fe517f4035ca72f626e794b5635cf580659f5b4",
+    "finalDrainExitedZeroRemovedWithoutForceAndAbsent": true
+  },
+  "failedBaseline": {
+    "attempt": {
+      "schemaVersion": 1,
+      "kind": "conduit-native-benchmark-attempt",
+      "attemptId": "db78cc2b445a4493b1fec5017941cdef",
+      "service": "gateway",
+      "status": "failed",
+      "startedAt": "2026-10-16T21:28:07.3985013+00:00",
+      "completedAt": "2026-10-16T21:29:10.7590298+00:00",
+      "reportSha256": null,
+      "failureCode": "collection-failed"
+    },
+    "diagnostics": {
+      "schemaVersion": 1,
+      "kind": "conduit-native-benchmark-failure-diagnostic",
+      "attemptId": "db78cc2b445a4493b1fec5017941cdef",
+      "service": "gateway",
+      "phase": "workload",
+      "reason": "probe-exit",
+      "runtime": "jit",
+      "sampleKind": "warmup",
+      "pair": null,
+      "ownedContainerCleanup": {
+        "status": "confirmed",
+        "reason": "none"
+      },
+      "privateFileCleanup": {
+        "status": "confirmed",
+        "reason": "none"
+      }
+    },
+    "completePairedReportPublished": false,
+    "sseBaselineWorkloadReached": false,
+    "rawProbeStdoutAggregateRetained": false,
+    "clientSuccessesAndLatenciesIndependentlyReconstructed": false,
+    "plannedProtocol": {
+      "discardedWarmPairs": 1,
+      "recordedAlternatingPairs": 5,
+      "workloadsPerHost": [
+        "gateway-chat-nonstream",
+        "gateway-chat-sse"
+      ],
+      "measuredRequestsPerWorkload": 1000,
+      "warmupRequestsPerWorkload": 100,
+      "concurrency": 8,
+      "perRequestTimeoutSeconds": 30,
+      "zeroFailuresRequired": true
+    },
+    "cumulativeServerObservation": {
+      "logs": {
+        "cost": 0.08205,
+        "count": 1094,
+        "distinctIds": 1094,
+        "inputTokens": 10940,
+        "outputTokens": 5470,
+        "matchingCount": 1094
+      },
+      "ownedAudit": {
+        "cost": 0.08205,
+        "count": 1102,
+        "distinctIds": 1102,
+        "matchingCount": 1094,
+        "distinctRequests": 1102
+      },
+      "group": {
+        "id": 1,
+        "spent": 0.08205,
+        "balance": 99.91795,
+        "credits": 100.0
+      },
+      "ledger": {
+        "count": 5,
+        "debits": 0.08205,
+        "matchingCount": 5,
+        "distinctIdempotency": 5
+      },
+      "provider": {
+        "non_stream_requests": 1093,
+        "stream_requests": 1,
+        "image_requests": 0,
+        "error_requests": 0,
+        "authorization_failures": 0,
+        "active_cancellation_requests": 0,
+        "cancellations_observed": 0,
+        "function_requests": 0,
+        "function_error_requests": 0,
+        "function_authorization_failures": 0,
+        "function_chunked_requests": 0,
+        "agentic_tool_call_requests": 0,
+        "agentic_final_requests": 0,
+        "agentic_contract_failures": 0
+      },
+      "additionalErrorAudits": {
+        "events": 8,
+        "event_type": 7,
+        "known_cost": 0,
+        "http_status": 502,
+        "reason_category": "http-error-skipped",
+        "null_cost_events": 8,
+        "distinct_requests": 8,
+        "null_usage_events": 8
+      },
+      "sourceProcedureRequestsIncludingPreflights": 1102,
+      "additionalAcceptedJsonAfterPreflights": 1092,
+      "acceptedProviderCountersAreNotClientEofProof": true
+    },
+    "unresolved": {
+      "reservations": 8,
+      "knownUnitsPerRecord": 0,
+      "heldAmountPerRecord": 0.0410075,
+      "heldTotal": 0.32806,
+      "reasonCategory": "started-without-settlement",
+      "ordinaryReservations": 0,
+      "startedReservations": 8,
+      "manuallyReleased": false
+    },
+    "completeFinancialSettlementEstablished": false,
+    "balancesRowsCountersKeysAndHoldsReset": false,
+    "freshPerformanceComparisonEstablished": false,
+    "cause": "undetermined"
+  },
+  "providerStop": {
+    "supervisorExitCode": 0,
+    "relayExitCode": 0,
+    "providerExitCode": 137,
+    "providerTermination": "owned-child-kill-after-traffic-and-relay-drain",
+    "children": [
+      {
+        "role": "provider",
+        "pid": 16,
+        "startTicks": 1227861,
+        "joined": true,
+        "exitCode": 137,
+        "streamsJoined": true
+      },
+      {
+        "role": "relay",
+        "pid": 24,
+        "startTicks": 1227865,
+        "joined": true,
+        "exitCode": 0,
+        "streamsJoined": true
+      }
+    ],
+    "relayCounters": {
+      "listenPort": 24000,
+      "targetPort": 24001,
+      "accepted": 1115,
+      "connected": 1115,
+      "connectFailures": 0,
+      "completed": 1115,
+      "copyFailures": 0,
+      "bytesToTarget": 550585,
+      "bytesToClient": 439718,
+      "active": 0,
+      "peakActive": 8,
+      "minimumEffectiveSocketBufferBytes": 131072,
+      "maximumEffectiveSocketBufferBytes": 131072
+    },
+    "relayCounterScope": "TCP-connections-and-opaque-bytes-not-HTTP-request-or-cause-proof",
+    "finalProviderCounters": {
+      "non_stream_requests": 1093,
+      "stream_requests": 1,
+      "image_requests": 0,
+      "error_requests": 0,
+      "authorization_failures": 0,
+      "active_cancellation_requests": 0,
+      "cancellations_observed": 0,
+      "function_requests": 0,
+      "function_error_requests": 0,
+      "function_authorization_failures": 0,
+      "function_chunked_requests": 0,
+      "agentic_tool_call_requests": 0,
+      "agentic_final_requests": 0,
+      "agentic_contract_failures": 0
+    },
+    "stopped": true,
+    "removed": false,
+    "restarted": false,
+    "flushedProviderAndRelayStderrEmpty": true,
+    "emptyStderrDoesNotExcludeSilentRejection": true
+  },
+  "privateArchives": {
+    "postgres": {
+      "sha256": "61ab35e47bd170c6b308d07a80313e34c0c927958db619a4d835093c5d5708fb",
+      "bytes": 348930,
+      "customHeaderValidated": true,
+      "restoreListExitCode": 0,
+      "tocEntries": 472,
+      "scope": "complete-owned-database-schema-and-data;roles-and-cluster-globals-excluded"
+    },
+    "redis": {
+      "receiptSha256": "2a2a86830eaf209ca0581e80d7ea10bf7edde723d47b8ae30b922da6d488e943",
+      "remoteSha256": "5012ad3ade913e7a53449fe191d4a4413847822918e38abf353e5af5f188a6f4",
+      "localSha256": "5012ad3ade913e7a53449fe191d4a4413847822918e38abf353e5af5f188a6f4",
+      "bytes": 92704,
+      "integrityExitCode": 0,
+      "contentsPrivate": true,
+      "businessKeysAndHoldsUnchanged": true
+    },
+    "targetDatabaseBackendCount": 0,
+    "backendQueryCompletedWithoutException": true,
+    "backendCountScope": "post-archive-postshutdown;not-during-workload-pool-evidence",
+    "backendCountReceiptSha256": "63955095997009093b056f663c6121fda5fdd5082d93f424d038519df3d66410"
+  },
+  "diagnosticTooling": {
+    "sseSidecarSchemaVersion": 2,
+    "adminAndNonstreamSidecarSchemaVersion": 1,
+    "defaultReportSchemaVersion": 2,
+    "completeEofContentUsageDoneValidationPreserved": true,
+    "focusedTestsPassed": 67,
+    "focusedTestsFailed": 0,
+    "focusedTestsSkipped": 0,
+    "testsExitCode": 0,
+    "probeAnalyzerExitCode": 0,
+    "probeAnalyzerWarnings": 0,
+    "probeAnalyzerErrors": 0,
+    "frozenProbeSha256": "7b28da4cf7b566dd138baf370c755214e547f61151b00e319023ab844a70ecb5",
+    "frozenGuardSha256": "cd76e9b8305547578cc574f376b298a71ea2a9eaca11778630480bd02f0c01e0",
+    "diagnosticArmLaunched": false,
+    "applicationProfilingCompleted": false,
+    "receiverProofChecks": 24,
+    "postgresObserverProofSamples": 9,
+    "preconditioningLimit": "Baseline JSON then SSE per host; prepared diagnostic SSE only; differences would not isolate tracing overhead",
+    "providerTimingLimit": "HTTPCLIENT Activity can end at headers; full provider-stream versus relay time remains unseparated"
+  },
+  "transportOnlyProof": {
+    "passed": true,
+    "pairCount": 1,
+    "independentChecks": 4470,
+    "publicFilesVerified": 24,
+    "componentsVerified": 7,
+    "requestsPerArm": 1100,
+    "warmupRequests": 100,
+    "measuredRequests": 1000,
+    "concurrency": 8,
+    "perRequestTimeoutSeconds": 30,
+    "overallTimeoutSeconds": 120,
+    "framing": "HTTP/1.1 StringContent UTF8 application/json with computed Content-Length, Accept JSON and original fixture bearer",
+    "validation": "Exact original45 private ValidateChat method: complete JSON content/usage/finish/role/error/tool-call contract",
+    "arms": [
+      {
+        "mode": "direct",
+        "clientExitCode": 0,
+        "phases": [
+          {
+            "name": "warmup",
+            "requested": 100,
+            "executed": 100,
+            "completed": 100,
+            "failures": 0
+          },
+          {
+            "name": "measured",
+            "requested": 1000,
+            "executed": 1000,
+            "completed": 1000,
+            "failures": 0
+          }
+        ],
+        "providerJsonOperations": 1100,
+        "otherProviderCounterSum": 0,
+        "relayAccepted": 1,
+        "relayConnected": 1,
+        "relayCompleted": 1,
+        "relayConnectFailures": 0,
+        "relayCopyFailures": 0,
+        "relayActive": 0,
+        "relayPeakActive": 1,
+        "providerAndRelayStderrBytes": 0,
+        "providerStopped": true,
+        "providerTermination": "owned-child-kill-after-traffic-and-relay-drain",
+        "allChildrenAndStreamsJoined": true,
+        "providerExitCode": 137,
+        "relayExitCode": 0,
+        "cleanupComplete": true
+      },
+      {
+        "mode": "relayed",
+        "clientExitCode": 0,
+        "phases": [
+          {
+            "name": "warmup",
+            "requested": 100,
+            "executed": 100,
+            "completed": 100,
+            "failures": 0
+          },
+          {
+            "name": "measured",
+            "requested": 1000,
+            "executed": 1000,
+            "completed": 1000,
+            "failures": 0
+          }
+        ],
+        "providerJsonOperations": 1100,
+        "otherProviderCounterSum": 0,
+        "relayAccepted": 1103,
+        "relayConnected": 1103,
+        "relayCompleted": 1103,
+        "relayConnectFailures": 0,
+        "relayCopyFailures": 0,
+        "relayActive": 0,
+        "relayPeakActive": 9,
+        "providerAndRelayStderrBytes": 0,
+        "providerStopped": true,
+        "providerTermination": "owned-child-kill-after-traffic-and-relay-drain",
+        "allChildrenAndStreamsJoined": true,
+        "providerExitCode": 137,
+        "relayExitCode": 0,
+        "cleanupComplete": true
+      }
+    ],
+    "limits": "One transport-only pair with fresh provider identities/counters. Relayed arm uses a distinct bridge container and dynamically published host loopback port. No Gateway, SQL, Redis, financial reset, historical causality or throughput qualification. Relay TCP counts do not establish HTTP acceptance.",
+    "failedOriginalFixtureTouched": false,
+    "appSqlRedisUsed": false,
+    "causalConclusion": "No reproduction of the eight Gateway502 responses in this one limited transport control; cause remains undetermined."
+  },
+  "followupIssue": 1702,
+  "receiptSha256": {
+    "buildProvenance": "0971cbb4b9739e0e077bdd1704d6b18187b8f5fbe7635a2a9792ac509ffdeafe",
+    "nativePackaging": "f06557d2382d18d23ee27d18c93595eb0eedcea168029d0bf0de33c1f916ee8f",
+    "baselinePlan": "791fd36aa0a2bf3e4b8d4132c53d098853ce526174577b9b832bd71774e05387",
+    "preflightSettlement": "1622fa6089392da0018d2cd7d6af72821c2d15ceac5cbe57959f50809c65fcc8",
+    "jitPreflightCorrection": "4500af08f3fac83dc910359b1f4b49896d895d1e05048df057ebaa6987b8f1fa",
+    "oracleSourceCorrection": "9a4cbe8fdbdc14a17b8edf0e8d91a7a159fd44b3695e1814df0a5a28d3d899e1",
+    "failedAttempt": "30afb416b440839d27344136372acce3b8c657862e7f79d57967158a11d96472",
+    "failedDiagnostic": "30f5280778d0bbb4dda737ad2a334e319509f6ce571b3711298e6a1d777671fc",
+    "failedStateReadback": "ca729555026aeefa54f5e61053ddee82e556fab1b46c157a6384f4e2e57cb5e4",
+    "failedStateClassification": "a479d99888e9ca71ad54145f62569868ddb28a6148926d98ab291dfd7a406bfa",
+    "databaseArchive": "4a1419f751586c8955b7be6e312324e5902a09b543a236729497eddc833f6b0d",
+    "redisArchive": "2a2a86830eaf209ca0581e80d7ea10bf7edde723d47b8ae30b922da6d488e943",
+    "explicitBackendCount": "63955095997009093b056f663c6121fda5fdd5082d93f424d038519df3d66410",
+    "providerStop": "8ec123d100b9cd657dc895fbb99319359641c2ea70d57f234d78e705d17f5c57",
+    "providerCaptureClassification": "70f031d662f1908c1612341327419fd36ed29e0d78c45994323c553104458f6e",
+    "probeTests": "47646edb7c815c5a45833a9ea0d6bc1d04753eea7881a7270eb682ca02be31d3",
+    "probeAnalyzer": "6460e6782d97aa7604af84c7860ac78c19999755fa3f0d136fadda84537b8e11",
+    "frozenDiagnostics": "fb15dcf20b07e55d010a9d682047be929db02f3d968f8a7886f4b60869e48875",
+    "instrumentedHarnessFreeze": "dfe60587c6f70ca3662666f10324b460dd7f5810d0c3229d50f11614145b643c",
+    "receiverProof": "d5baf7254908f375b38a5505a50651034071a0ca44906046081fead8cb9eb9bd",
+    "metricsBootstrapProof": "9f5891e9d7e17df1dcbfb1cc570b4035b18771cb016dcdee182813e850e78974",
+    "postgresObserverProof": "4c804573eeb504fa13dabec2f16b16c24bcef82d3ab9e42f2458ced8a8367f5d",
+    "transportProof": "7e5c936d8b538b1af0603abbcb4c175bbe7aa38a1ef2e3bfd26406e67b8cb120",
+    "transportIndependentSummary": "80d878d4c73237ef1192c9a6c8959abc06b83a57b009b9ee7255797cf39fa0be"
+  },
+  "qualification": {
+    "acceptedWindow": false,
+    "productionCanary": false,
+    "orderedAdminGatewaySoak": false,
+    "rollbackEstablished": false,
+    "promotion": false,
+    "productionRemainsJit": true
+  }
+}

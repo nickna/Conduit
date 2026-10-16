@@ -86,9 +86,16 @@ response completion, including SSE's terminal event and EOF.
 
 For a separate instrumented investigation, invoke the published probe directly
 with `--benchmark-workload-diagnostics <configuration.json> <new-sidecar.json>`.
-Its normal schema-2 report remains on stdout; the additional schema-1 sidecar
-contains client request milestones, generated W3C trace/span IDs and client
-runtime snapshots for both warm-up and measured phases. The sidecar must not
+Its normal schema-2 report remains on stdout; the additional sidecar contains
+client request milestones, generated W3C trace/span IDs and client runtime
+snapshots for both warm-up and measured phases. Admin and non-streaming sidecars
+use schema 1. Complete-SSE sidecars use schema 2 and also retain first/last body
+read, first nonempty data event and `[DONE]` observation offsets, plus read and
+event counts. These offsets describe completed client reads; multiple events in
+one read share its timestamp. They are neither wire-arrival times nor validation
+results. The original content/usage/framing validator still runs after EOF, and
+receiving `[DONE]` does not stop body consumption or relax the request deadline.
+The sidecar must not
 already exist. The ordinary `--benchmark-workload` command and production
 collector do not enable this instrumentation or send its correlation headers.
 
@@ -100,6 +107,9 @@ keys, request bodies or response content. Configuration, warm-up and caller
 cancellation failures produce no completed report; a newly created sidecar can
 remain empty. Output I/O failure or process termination can leave a partial file,
 so retain and validate exit status and both artifacts before analysis.
+Sidecars are limited to 64 MiB, including SSE schema 2. A sufficiently large
+diagnostic workload can exceed that bound even when its request configuration is
+valid; the invocation fails rather than truncating the evidence.
 
 An enabled server tracer can join its server span's trace ID and parent span ID
 to the sidecar's trace ID and span ID. Convert correlated durations to common

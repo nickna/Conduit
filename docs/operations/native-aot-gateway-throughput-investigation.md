@@ -1,0 +1,214 @@
+# Gateway complete-SSE investigation, 2026-10-16
+
+The historical complete-SSE regression remains unexplained. A fresh source-matched
+Gateway baseline stopped during the discarded JIT warm pair with eight HTTP 502
+operations. It produced no paired performance report and never reached its SSE
+workload. This failed experiment cannot establish whether the historical SSE
+result reproduces, identify a runtime bottleneck, or justify an optimization.
+
+The [original comparison](native-aot-gateway-controlled-benchmark.md),
+[original report](benchmarks/2026-10-12-gateway-controlled.json), and
+[original attempt](benchmarks/2026-10-12-gateway-controlled-attempt.json) remain
+unchanged. Their source roles, five alternating pairs and adverse SSE observation
+remain authoritative: native median SSE throughput was 4.18% lower and the median
+of five per-run p99 values was 7.70% higher. A failed follow-up does not replace
+that result. [Issue #1647](https://github.com/nickna/Conduit/issues/1647) remains open.
+
+## Fresh experiment and retained provenance
+
+Both fresh application images were built from clean
+`b5ced25a67bc0c5356af1c8d5035443d800a7ede`. The deterministic managed provider and
+default workload probe were freshly published from
+`45d99bcd1ed1c52b4acaa728e27f9b3704155dcd`, preserving the original separation
+between application and fixture revisions. The original images and ignored
+unit113 evidence bundle were unavailable; their documented cleanup removed the
+original application images. This is a new experiment, not an original-byte replay.
+
+| Fresh identity | Value |
+| --- | --- |
+| JIT requested digest / observed local ID | `sha256:7fe4a87f71b28aed2f02a17b58d3813d0e6cc85a29ebc3c0850a54e774017543` |
+| Native requested digest / selected manifest / observed local ID | `sha256:640685bfe9c885a4c24031a5ec4678c43f9a09c450658d0d7fdac140a59d72ca` |
+| Native config digest | `sha256:d20590664bd98942c521e8c264549b4b4f034c0cd198fe3ab6ddafbf52c020ab` |
+| Native publish build ID | `37e31bb930d4477abef48a91136b19c7` |
+| Fresh default provider/probe DLL SHA-256 | `71def16ba43c42176e2248da1ea6a2f579538ef30aa816e30a7cecf06da3ac96` |
+| Collector SHA-256 | `d244b10106c7098a8b3fdc3022f86375026316cbf3de20443bd16f286f3226f4` |
+
+Both image digests were pushed and pulled through the owned TLS registry. The
+complete native OCI archive, clean-source publish manifests, executable, health
+probe and runtime inventory passed the packaging helper and independent typed
+benchmark reader. Those bindings describe inspection of this fresh image; they
+do not constitute registry promotion attestation.
+
+The selected SDK was 10.0.401, ILCompiler 10.0.12 and clang 18.1.3. Compiler and
+linker executable hashes match the historical tool evidence. Fresh binaries,
+build timestamps, registry identities and the host kernel differ. Original
+third-party trim/AOT warnings remain in the retained publish logs; the fresh
+Gateway publish is not described as globally warning-free.
+
+The host was Docker Desktop/WSL2 Linux x64, 28 logical processors, Docker 29.8.2,
+kernel `6.18.54.1-microsoft-standard-WSL2`. The fixture used a fresh GUID database
+on PostgreSQL 16.15 with `max_connections=100`, a separate Redis 7.4.11 instance,
+52 exact-source release migrations and eleven positive generated linked IDs.
+The graph was inserted once. An evidence-publication error after its transaction
+committed was recovered through read-only identity lookups; no accounting rows
+were reset or reseeded.
+
+Both profiles selected Production, Wait migration mode, Wolverine/Postgresql,
+automatic provisioning disabled, in-memory media, disabled media lifecycle/HTTPS
+redirection/tracing, normal 30-second spending flushes, and the same private
+database, Redis and distinct backend/virtual credentials. IP filtering was
+disabled for this bridge topology and its database override was independently
+absent. Parent limits were 100,000 requests per 60 seconds; the key allowed
+100,000 RPM and 200,000 RPD. Group and token/parallel limits were null. The
+collector's two optional ambient numeric rate-limit overrides were absent.
+
+New opaque byte relays used TCP NoDelay and 65,536-byte copy/requested socket
+buffers. Their implementation was retained and tested for exact bytes, half-close
+and active cancellation. The historical relay implementation was unavailable;
+its socket settings are not reconstructed. The provider's intentional 25 ms SSE
+delay was unchanged. These controls do not isolate a single historical variable.
+
+## Preflights and failed collection
+
+One JIT JSON request and one native SSE request passed the original complete
+response validator. Persisted log counts were read while the respective hosts
+were live. Both hosts subsequently exited zero, were removed without force, and
+were confirmed absent. Before the native request, a broad invariant check had
+misclassified the JIT host's expected owned UsageTracked audit and singleton
+reconciliation checkpoint as unrelated writes. The JIT host was stopped before
+that failed check was inspected, and the native host had already started with no
+business request sent. Further requests paused until the correction was reviewed.
+The original failed gate remains retained.
+Read-only correction joined the complete audit/checkpoint row hashes back to the
+retained live snapshot, validated their source-derived semantics, and confirmed
+all other unrelated rows unchanged. The corrected broader gate was established
+after the JIT host stopped, not retroactively described as an original live pass.
+
+The two-request preflight then passed three independently balanced live
+observations at least 30 seconds apart on an unmeasured native drain, followed by
+exit-zero graceful removal, independent absence checks and a balanced post-stop
+readback. It matched two logs/audits/provider operations, 20 input/10 output
+tokens, cost/spent/debits `0.00015000`, balance `99.99985000`, and absent financial
+Redis obligations. A first read-only polling series was superseded after an
+oracle source update; three fresh observations and post-stop verification used
+the same final frozen oracle. All original receipts and both oracle versions are
+retained.
+
+The planned baseline retained the full original protocol: one discarded warm
+pair, five recorded pairs in alternating order, JSON then SSE inside each fresh
+host, 1,000 measured requests and 100 warmups per workload, concurrency eight,
+30-second request deadlines, complete content/usage/DONE/EOF validation and
+unchanged zero-failure requirements. Builds and tests stopped before collection.
+
+Collection attempt `db78cc2b445a4493b1fec5017941cdef` ran from
+`2026-10-16T21:28:07.3985013+00:00` to
+`2026-10-16T21:29:10.7590298+00:00`. The
+[original failed attempt](benchmarks/2026-10-16-gateway-investigation-failed-attempt.json)
+has `reportSha256: null`. Its
+[closed failure diagnostic](benchmarks/2026-10-16-gateway-investigation-failed-diagnostic.json)
+records workload/probe-exit in the JIT discarded-warm-pair variant, with both
+owned-container and private-file cleanup confirmed. The phase name identifies
+the collector's unrecorded pair; it does not mean the probe failed its own
+100-request warmup.
+
+Independent server-side observations after collection matched:
+
+| Cumulative observation, including two preflights | Value |
+| --- | ---: |
+| Successful RequestLogs / matching UsageTracked audits | 1,094 / 1,094 |
+| Provider accepted JSON / SSE operations | 1,093 / 1 |
+| Input / output tokens | 10,940 / 5,470 |
+| Cost / group spent / debit total | 0.08205000 |
+| Group balance / lifetime credits | 99.91795000 / 100.00000000 |
+| Additional ErrorResponseSkipped audits, HTTP 502 | 8 |
+| Unresolved started reservations / known units | 8 / 0 |
+| Held amount per reservation / total | 0.0410075 / 0.32806 |
+
+The eight error audits have distinct request IDs, null usage and null calculated
+cost. All twelve other provider counters, including authentication failures,
+were zero. Limits and the absence of post-shutdown database backends do not
+establish why these operations failed. The unresolved holds were preserved;
+successful-request debits are not equated with full settlement of the attempt.
+
+These counts are consistent with 100 JSON warmups, 992 successful measured JSON
+operations and eight measured failures, beyond the separate preflights. The
+collector throws on the probe's nonzero exit before retaining its structured
+stdout report. Individual client results and latencies therefore cannot be
+reconstructed from this failed attempt. Provider counters count accepted fixture
+operations; persisted successful logs do not independently prove client EOF.
+No fresh throughput, latency percentile or complete-SSE comparison is reported.
+The [public numeric summary](benchmarks/2026-10-16-gateway-investigation-summary.json)
+retains the source/image identities, server-side accounting, unresolved holds,
+tooling checks and original receipt hashes without private input contents.
+
+## Transport evidence and disposition
+
+The original provider was sealed after an independent final counter read. Its
+supervisor and relay exited zero; the unmodified provider has no cooperative
+stop entrypoint and was deliberately killed as an owned child after relay drain,
+with exit 137. Both children and all capture streams joined. The stopped
+container was retained. Its relay counted 1,115 accepted/connected/completed TCP
+connections, zero connect/copy failures, zero final active connections and peak
+active eight. TCP counts include health/state traffic and do not prove HTTP
+acceptance or explain the eight operations. Fully flushed provider/relay stderr
+was empty; that does not exclude a silent close or rejection.
+
+The complete private PostgreSQL custom archive passed header and `pg_restore
+--list` verification with 472 TOC entries. Its SHA-256 is
+`61ab35e47bd170c6b308d07a80313e34c0c927958db619a4d835093c5d5708fb`.
+Private captures and archive contents remain private. No balances, provider
+counters, SQL rows, Redis keys or indeterminate holds were reset to retry the run.
+The complete private Redis RDB also passed integrity verification and exact
+remote/local SHA-256 equality:
+`5012ad3ade913e7a53449fe191d4a4413847822918e38abf353e5af5f188a6f4`
+(92,704 bytes). The reserved amount and exact hashes of the eight started and
+eight indeterminate records remained unchanged before and after capture. A fresh
+unpooled management query explicitly counted zero target-database backends after
+both archives. That post-shutdown observation cannot establish pool pressure
+during the failed workload; the earlier grouped query's JSON null remains
+preserved alongside the independent empty-array/count explanation.
+
+One supplemental transport pair used fresh provider identities and counters,
+without Gateway, SQL, Redis or traffic to the failed fixture. Each arm completed
+100 warmup and 1,000 measured JSON requests at concurrency eight, with zero
+failures and the original complete JSON validator. The direct client ran beside
+the provider on loopback. The relayed client ran in a separate bridge container
+through a newly published host-loopback port and the unchanged opaque relay.
+Both used HTTP/1.1 UTF-8 `StringContent` with computed Content-Length and a
+synthetic prompt. The relayed arm's 1,103 completed TCP connections include
+1,100 business requests plus state/health traffic; connect/copy failures and
+final active connections were zero. All new containers were removed after joined
+capture flush. Independent readback passed 4,470 checks over all 2,200 request
+rows, counters, lifecycle receipts and component hashes. The raw receipt SHA-256
+is `7e5c936d8b538b1af0603abbcb4c175bbe7aa38a1ef2e3bfd26406e67b8cb120`;
+the compact independent summary is
+`80d878d4c73237ef1192c9a6c8959abc06b83a57b009b9ee7255797cf39fa0be`.
+This single transport-only control did not reproduce the Gateway errors and
+cannot establish their cause or a Gateway performance comparison.
+
+The [opt-in client diagnostic sidecar](native-aot-canary.md#reproducible-comparison)
+now supports schema-2 complete-SSE observations: first/last completed body reads,
+first nonempty data event, exact DONE-frame observation, read/event counts, and
+the existing header/body/validated/end boundaries. Default schema-2 stdout and
+the production collector remain unchanged. Admin/non-streaming sidecars retain
+schema 1. The full validator still runs after EOF; seeing DONE cannot bypass a
+deadline, malformed usage, duplicate/trailing events or incomplete consumption.
+
+The extension passed 67 focused real-HTTP tests and a zero-warning probe analyzer
+build. A frozen Linux diagnostic probe/guard, bounded Gateway SERVER/provider
+HTTPCLIENT OTLP receiver, numeric metrics/PostgreSQL observers, and independent
+offline join verifier were also prepared. Receiver and bootstrap proofs passed;
+they are tooling checks, not completed application profiling. The diagnostic arm
+was not launched because its successful-baseline settlement gate was unmet.
+HTTPCLIENT Activity can end at headers and cannot by itself separate the full
+provider stream from relay time. The planned SSE-only diagnostic arm would also
+omit the baseline's preceding JSON phase; any difference would not isolate
+tracing overhead.
+
+The failed collection is retained as a separate blocker, tracked in
+[issue #1702](https://github.com/nickna/Conduit/issues/1702). Current-head
+reproduction and the cause of those 502 responses remain unestablished. No application or
+persistence optimization was selected, and the historical causal question remains
+open. This investigation establishes no accepted qualification window, canary,
+ordered Admin/Gateway soak, rollback, successor ADR approval or production
+promotion. Production remains on JIT under the existing blocked policy.
