@@ -1,0 +1,2016 @@
+{
+  "schemaVersion": 1,
+  "kind": "conduit-admin-throughput-investigation-summary",
+  "date": "2026-10-16",
+  "applicationRevision": "45d99bcd1ed1c52b4acaa728e27f9b3704155dcd",
+  "collectorRevision": "ba1749686f31a4a5d2cbfe26827815c9adf03c67",
+  "historicalCause": "undetermined",
+  "historicalLossReproduced": false,
+  "applicationFixSelected": false,
+  "qualification": "not-recorded",
+  "baseline": {
+    "report": "2026-10-16-admin-investigation-baseline.json",
+    "sha256": "446106aa1610661facc7ba73ced5159e71f371b0aa61633163a4ae3892a457e6",
+    "attemptId": "1aa5a2e7ae764b9cbfd07dafc3a20f05"
+  },
+  "instrumented": {
+    "arm": "210c4ff1c20f4335ace7ad6dfe621e82",
+    "samplerScope": "brackets-full-probe-invocation-including-request-warmup",
+    "probeOuterTimeoutSeconds": 540,
+    "baselineProbeOuterTimeoutSeconds": 900,
+    "perRequestTimeoutSeconds": 30,
+    "observerDurationLimitSeconds": 600,
+    "runnerProbeSha256": "ec0a8c3c3f55f076df14b566b21422c0620691aaadd3c828b461ede3e9e6fd0f",
+    "runnerGuardSha256": "4f4dd676d4fafc1b1fa115bd88c00eae8f99ee4a3bbe5954382364f7d5eaa499",
+    "pairedRuns": 5,
+    "discardedWarmPairs": 1,
+    "variants": [
+      {
+        "ordinal": 1,
+        "runtime": "jit",
+        "sampleKind": "warmup",
+        "pair": null,
+        "image": "127.0.0.1:64966/issue1645-admin-jit@sha256:1dd73b3e9cbdd4f4456d782ea376c283a19d19fdb202ccc82655742b4d91dc7e",
+        "imageId": "sha256:1dd73b3e9cbdd4f4456d782ea376c283a19d19fdb202ccc82655742b4d91dc7e",
+        "containerId": "9ed3f46e2b2c1312a03f54b20394674c55920d1c00e7e31fe9e9e192e44bd6de",
+        "workload": {
+          "id": "admin-setting-read",
+          "method": "GET",
+          "path": "/v1/admin/global-settings/by-key/{key}",
+          "authenticated": true,
+          "inputFingerprint": "066e5560271d3aad523f6fa8473868e3ff18639d2d007bde575dfe48a6d8aa58",
+          "requested": 1000,
+          "executed": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "elapsedMilliseconds": 1092.9702,
+          "throughputPerSecond": 914.9380285025155,
+          "p50Milliseconds": 7.918692,
+          "p95Milliseconds": 13.762749,
+          "p99Milliseconds": 20.827308
+        },
+        "joinedRequests": 1100,
+        "serverMetrics": {
+          "scope": "brackets-full-probe-invocation-including-request-warmup",
+          "sampleCount": 32,
+          "statusCounts": {
+            "ok": 32,
+            "invalid": 0,
+            "unavailable": 0
+          },
+          "sampleWindowMilliseconds": 3127.2753,
+          "maximumSampleGapMilliseconds": 101.9292,
+          "knownPoolCount": 2,
+          "poolConfiguredLimits": [
+            {
+              "poolOrdinal": 1,
+              "available": true,
+              "maximumObserved": 32
+            },
+            {
+              "poolOrdinal": 2,
+              "available": true,
+              "maximumObserved": 75
+            }
+          ],
+          "observations": {
+            "processCpuSecondsDelta": 4.162976,
+            "runtimeAllocatedBytesDelta": 118981552,
+            "runtimeGcPauseSecondsDelta": 0.01729,
+            "runtimeThreadPoolCompletedDelta": 6669,
+            "runtimeThreadPoolMaximumObservedPending": 2,
+            "maximumObservedConnectionsAllKnownPools": 10,
+            "maximumObservedUsedInAnyPool": 8,
+            "operationHistogramObservationCountDeltaAvailablePools": 1144,
+            "operationHistogramMeanSecondsAvailablePools": 0.00258629388111888,
+            "operationHistogramPoolsWithObservedDelta": 1,
+            "operationHistogramPoolsWithoutObservedDelta": 1,
+            "connectionPendingObservedPools": 0,
+            "connectionPendingMissingPools": 2,
+            "maximumObservedConnectionPending": null,
+            "connectionTimeoutObservedPools": 0,
+            "connectionTimeoutMissingPools": 2,
+            "connectionTimeoutDeltaAvailablePools": null
+          },
+          "rawSha256": "12393a420e04ea036312ae2665e36e4f879ad2dc097b9c9e472b7949b24027ea"
+        },
+        "postgres": {
+          "scope": "full-probe-invocation-including-request-warmup",
+          "requestedIntervalMilliseconds": 100,
+          "samples": 26,
+          "maximumSampledBackends": 13,
+          "states": [
+            {
+              "identity": {
+                "state": "active"
+              },
+              "samplesPresent": 1,
+              "backendObservations": 1,
+              "maximumConcurrentBackends": 1
+            },
+            {
+              "identity": {
+                "state": "idle"
+              },
+              "samplesPresent": 26,
+              "backendObservations": 309,
+              "maximumConcurrentBackends": 13
+            }
+          ],
+          "waits": [
+            {
+              "identity": {
+                "waitEventType": "Client",
+                "waitEvent": "ClientRead"
+              },
+              "samplesPresent": 26,
+              "backendObservations": 309,
+              "maximumConcurrentBackends": 13
+            },
+            {
+              "identity": {
+                "waitEventType": null,
+                "waitEvent": null
+              },
+              "samplesPresent": 1,
+              "backendObservations": 1,
+              "maximumConcurrentBackends": 1
+            }
+          ],
+          "counterContinuity": true,
+          "databaseCounterDeltas": {
+            "xact_commit": 1638.0,
+            "xact_rollback": 1.0,
+            "blks_read": 0.0,
+            "blks_hit": 5454.0,
+            "tup_returned": 2667.0,
+            "tup_fetched": 2641.0,
+            "tup_inserted": 0.0,
+            "tup_updated": 0.0,
+            "tup_deleted": 0.0,
+            "conflicts": 0.0,
+            "temp_files": 0.0,
+            "temp_bytes": 0.0,
+            "deadlocks": 0.0,
+            "sessions": 4.0,
+            "sessions_abandoned": 0.0,
+            "sessions_fatal": 0.0,
+            "sessions_killed": 0.0,
+            "active_time": 44.337,
+            "idle_in_transaction_time": 10.109
+          },
+          "rawSha256": "5f64487a794a9904c731366be0229af5f9e0b219b09f24248493b39c5c725949"
+        }
+      },
+      {
+        "ordinal": 2,
+        "runtime": "native-aot",
+        "sampleKind": "warmup",
+        "pair": null,
+        "image": "127.0.0.1:64966/issue1645-admin-native@sha256:3adc5f56030e6c60d997ec3c882708b183791061807932991f23d6d76f6f6ec7",
+        "imageId": "sha256:3adc5f56030e6c60d997ec3c882708b183791061807932991f23d6d76f6f6ec7",
+        "containerId": "254b2f098e3e34d030ee9e0b18bac89dae76d930551beda397190bbf0a6cc730",
+        "workload": {
+          "id": "admin-setting-read",
+          "method": "GET",
+          "path": "/v1/admin/global-settings/by-key/{key}",
+          "authenticated": true,
+          "inputFingerprint": "066e5560271d3aad523f6fa8473868e3ff18639d2d007bde575dfe48a6d8aa58",
+          "requested": 1000,
+          "executed": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "elapsedMilliseconds": 837.1317,
+          "throughputPerSecond": 1194.555169754054,
+          "p50Milliseconds": 5.393705,
+          "p95Milliseconds": 13.57496,
+          "p99Milliseconds": 38.553939
+        },
+        "joinedRequests": 1100,
+        "serverMetrics": {
+          "scope": "brackets-full-probe-invocation-including-request-warmup",
+          "sampleCount": 27,
+          "statusCounts": {
+            "ok": 27,
+            "invalid": 0,
+            "unavailable": 0
+          },
+          "sampleWindowMilliseconds": 2636.1524,
+          "maximumSampleGapMilliseconds": 111.3155,
+          "knownPoolCount": 2,
+          "poolConfiguredLimits": [
+            {
+              "poolOrdinal": 1,
+              "available": true,
+              "maximumObserved": 32
+            },
+            {
+              "poolOrdinal": 2,
+              "available": true,
+              "maximumObserved": 75
+            }
+          ],
+          "observations": {
+            "processCpuSecondsDelta": 1.7213949999999998,
+            "runtimeAllocatedBytesDelta": 36466592,
+            "runtimeGcPauseSecondsDelta": 0.008212000000000004,
+            "runtimeThreadPoolCompletedDelta": 7341,
+            "runtimeThreadPoolMaximumObservedPending": 1,
+            "maximumObservedConnectionsAllKnownPools": 9,
+            "maximumObservedUsedInAnyPool": 5,
+            "operationHistogramObservationCountDeltaAvailablePools": 1137,
+            "operationHistogramMeanSecondsAvailablePools": 0.0017947112576956917,
+            "operationHistogramPoolsWithObservedDelta": 1,
+            "operationHistogramPoolsWithoutObservedDelta": 1,
+            "connectionPendingObservedPools": 0,
+            "connectionPendingMissingPools": 2,
+            "maximumObservedConnectionPending": null,
+            "connectionTimeoutObservedPools": 0,
+            "connectionTimeoutMissingPools": 2,
+            "connectionTimeoutDeltaAvailablePools": null
+          },
+          "rawSha256": "a777cb2744edb3d100308cc49c9caed032ef8d41ba29c5f1085da0737e7d2e99"
+        },
+        "postgres": {
+          "scope": "full-probe-invocation-including-request-warmup",
+          "requestedIntervalMilliseconds": 100,
+          "samples": 21,
+          "maximumSampledBackends": 11,
+          "states": [
+            {
+              "identity": {
+                "state": "active"
+              },
+              "samplesPresent": 1,
+              "backendObservations": 1,
+              "maximumConcurrentBackends": 1
+            },
+            {
+              "identity": {
+                "state": "idle"
+              },
+              "samplesPresent": 21,
+              "backendObservations": 215,
+              "maximumConcurrentBackends": 11
+            }
+          ],
+          "waits": [
+            {
+              "identity": {
+                "waitEventType": "Client",
+                "waitEvent": "ClientRead"
+              },
+              "samplesPresent": 21,
+              "backendObservations": 214,
+              "maximumConcurrentBackends": 11
+            },
+            {
+              "identity": {
+                "waitEventType": null,
+                "waitEvent": null
+              },
+              "samplesPresent": 2,
+              "backendObservations": 2,
+              "maximumConcurrentBackends": 1
+            }
+          ],
+          "counterContinuity": true,
+          "databaseCounterDeltas": {
+            "xact_commit": 96.0,
+            "xact_rollback": 1.0,
+            "blks_read": 0.0,
+            "blks_hit": 3904.0,
+            "tup_returned": 6600.0,
+            "tup_fetched": 2372.0,
+            "tup_inserted": 0.0,
+            "tup_updated": 1.0,
+            "tup_deleted": 0.0,
+            "conflicts": 0.0,
+            "temp_files": 0.0,
+            "temp_bytes": 0.0,
+            "deadlocks": 0.0,
+            "sessions": 2.0,
+            "sessions_abandoned": 0.0,
+            "sessions_fatal": 0.0,
+            "sessions_killed": 0.0,
+            "active_time": 7.812,
+            "idle_in_transaction_time": 10.128
+          },
+          "rawSha256": "49f6be0e8949a3b7fb3d28dc33d22ca2e73280fe9ad38a3f99d5b318d7e08019"
+        }
+      },
+      {
+        "ordinal": 3,
+        "runtime": "jit",
+        "sampleKind": "recorded",
+        "pair": 1,
+        "image": "127.0.0.1:64966/issue1645-admin-jit@sha256:1dd73b3e9cbdd4f4456d782ea376c283a19d19fdb202ccc82655742b4d91dc7e",
+        "imageId": "sha256:1dd73b3e9cbdd4f4456d782ea376c283a19d19fdb202ccc82655742b4d91dc7e",
+        "containerId": "9ceb131e8f93fe4d61d10d00dd218ae2e6e36f5ab42d0e68022d28cb04085c0f",
+        "workload": {
+          "id": "admin-setting-read",
+          "method": "GET",
+          "path": "/v1/admin/global-settings/by-key/{key}",
+          "authenticated": true,
+          "inputFingerprint": "066e5560271d3aad523f6fa8473868e3ff18639d2d007bde575dfe48a6d8aa58",
+          "requested": 1000,
+          "executed": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "elapsedMilliseconds": 828.5554,
+          "throughputPerSecond": 1206.9198993815019,
+          "p50Milliseconds": 6.391553,
+          "p95Milliseconds": 8.003308,
+          "p99Milliseconds": 13.490797
+        },
+        "joinedRequests": 1100,
+        "serverMetrics": {
+          "scope": "brackets-full-probe-invocation-including-request-warmup",
+          "sampleCount": 28,
+          "statusCounts": {
+            "ok": 28,
+            "invalid": 0,
+            "unavailable": 0
+          },
+          "sampleWindowMilliseconds": 2725.8576,
+          "maximumSampleGapMilliseconds": 102.8985,
+          "knownPoolCount": 2,
+          "poolConfiguredLimits": [
+            {
+              "poolOrdinal": 1,
+              "available": true,
+              "maximumObserved": 32
+            },
+            {
+              "poolOrdinal": 2,
+              "available": true,
+              "maximumObserved": 75
+            }
+          ],
+          "observations": {
+            "processCpuSecondsDelta": 3.9153630000000006,
+            "runtimeAllocatedBytesDelta": 117640768,
+            "runtimeGcPauseSecondsDelta": 0.017431000000000002,
+            "runtimeThreadPoolCompletedDelta": 6798,
+            "runtimeThreadPoolMaximumObservedPending": 1,
+            "maximumObservedConnectionsAllKnownPools": 9,
+            "maximumObservedUsedInAnyPool": 8,
+            "operationHistogramObservationCountDeltaAvailablePools": 1147,
+            "operationHistogramMeanSecondsAvailablePools": 0.0018389036617262409,
+            "operationHistogramPoolsWithObservedDelta": 1,
+            "operationHistogramPoolsWithoutObservedDelta": 1,
+            "connectionPendingObservedPools": 0,
+            "connectionPendingMissingPools": 2,
+            "maximumObservedConnectionPending": null,
+            "connectionTimeoutObservedPools": 0,
+            "connectionTimeoutMissingPools": 2,
+            "connectionTimeoutDeltaAvailablePools": null
+          },
+          "rawSha256": "231352bb656c554da8761da4b052acc9df5b97bfc8df8ffba59e612ed31520d3"
+        },
+        "postgres": {
+          "scope": "full-probe-invocation-including-request-warmup",
+          "requestedIntervalMilliseconds": 100,
+          "samples": 23,
+          "maximumSampledBackends": 12,
+          "states": [
+            {
+              "identity": {
+                "state": "idle"
+              },
+              "samplesPresent": 23,
+              "backendObservations": 261,
+              "maximumConcurrentBackends": 12
+            }
+          ],
+          "waits": [
+            {
+              "identity": {
+                "waitEventType": "Client",
+                "waitEvent": "ClientRead"
+              },
+              "samplesPresent": 23,
+              "backendObservations": 261,
+              "maximumConcurrentBackends": 12
+            }
+          ],
+          "counterContinuity": true,
+          "databaseCounterDeltas": {
+            "xact_commit": 587.0,
+            "xact_rollback": 0.0,
+            "blks_read": 0.0,
+            "blks_hit": 4253.0,
+            "tup_returned": 2492.0,
+            "tup_fetched": 2469.0,
+            "tup_inserted": 0.0,
+            "tup_updated": 1.0,
+            "tup_deleted": 0.0,
+            "conflicts": 0.0,
+            "temp_files": 0.0,
+            "temp_bytes": 0.0,
+            "deadlocks": 0.0,
+            "sessions": 3.0,
+            "sessions_abandoned": 0.0,
+            "sessions_fatal": 0.0,
+            "sessions_killed": 0.0,
+            "active_time": 16.555,
+            "idle_in_transaction_time": 7.534
+          },
+          "rawSha256": "5818b6153478cfb8ab426154e84058039e55746762df135bcd39dcafb5e4efb2"
+        }
+      },
+      {
+        "ordinal": 4,
+        "runtime": "native-aot",
+        "sampleKind": "recorded",
+        "pair": 1,
+        "image": "127.0.0.1:64966/issue1645-admin-native@sha256:3adc5f56030e6c60d997ec3c882708b183791061807932991f23d6d76f6f6ec7",
+        "imageId": "sha256:3adc5f56030e6c60d997ec3c882708b183791061807932991f23d6d76f6f6ec7",
+        "containerId": "7fe97c2ae25364a952e14f5562ba86fc53efeba4a1620504ed96676d2c4f5745",
+        "workload": {
+          "id": "admin-setting-read",
+          "method": "GET",
+          "path": "/v1/admin/global-settings/by-key/{key}",
+          "authenticated": true,
+          "inputFingerprint": "066e5560271d3aad523f6fa8473868e3ff18639d2d007bde575dfe48a6d8aa58",
+          "requested": 1000,
+          "executed": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "elapsedMilliseconds": 644.786,
+          "throughputPerSecond": 1550.9021597863477,
+          "p50Milliseconds": 4.99586,
+          "p95Milliseconds": 6.664999,
+          "p99Milliseconds": 8.564862
+        },
+        "joinedRequests": 1100,
+        "serverMetrics": {
+          "scope": "brackets-full-probe-invocation-including-request-warmup",
+          "sampleCount": 25,
+          "statusCounts": {
+            "ok": 25,
+            "invalid": 0,
+            "unavailable": 0
+          },
+          "sampleWindowMilliseconds": 2420.294,
+          "maximumSampleGapMilliseconds": 101.7733,
+          "knownPoolCount": 2,
+          "poolConfiguredLimits": [
+            {
+              "poolOrdinal": 1,
+              "available": true,
+              "maximumObserved": 32
+            },
+            {
+              "poolOrdinal": 2,
+              "available": true,
+              "maximumObserved": 75
+            }
+          ],
+          "observations": {
+            "processCpuSecondsDelta": 1.700444,
+            "runtimeAllocatedBytesDelta": 35945856,
+            "runtimeGcPauseSecondsDelta": 0.0066949999999999996,
+            "runtimeThreadPoolCompletedDelta": 7317,
+            "runtimeThreadPoolMaximumObservedPending": 1,
+            "maximumObservedConnectionsAllKnownPools": 9,
+            "maximumObservedUsedInAnyPool": 4,
+            "operationHistogramObservationCountDeltaAvailablePools": 1135,
+            "operationHistogramMeanSecondsAvailablePools": 0.0012725822026431726,
+            "operationHistogramPoolsWithObservedDelta": 1,
+            "operationHistogramPoolsWithoutObservedDelta": 1,
+            "connectionPendingObservedPools": 0,
+            "connectionPendingMissingPools": 2,
+            "maximumObservedConnectionPending": null,
+            "connectionTimeoutObservedPools": 0,
+            "connectionTimeoutMissingPools": 2,
+            "connectionTimeoutDeltaAvailablePools": null
+          },
+          "rawSha256": "f692e6f29df19e86d06625be7d721131d50901438998f252c468ff4f451b125e"
+        },
+        "postgres": {
+          "scope": "full-probe-invocation-including-request-warmup",
+          "requestedIntervalMilliseconds": 100,
+          "samples": 20,
+          "maximumSampledBackends": 11,
+          "states": [
+            {
+              "identity": {
+                "state": "active"
+              },
+              "samplesPresent": 1,
+              "backendObservations": 1,
+              "maximumConcurrentBackends": 1
+            },
+            {
+              "identity": {
+                "state": "idle"
+              },
+              "samplesPresent": 20,
+              "backendObservations": 207,
+              "maximumConcurrentBackends": 11
+            }
+          ],
+          "waits": [
+            {
+              "identity": {
+                "waitEventType": "Client",
+                "waitEvent": "ClientRead"
+              },
+              "samplesPresent": 20,
+              "backendObservations": 206,
+              "maximumConcurrentBackends": 11
+            },
+            {
+              "identity": {
+                "waitEventType": null,
+                "waitEvent": null
+              },
+              "samplesPresent": 2,
+              "backendObservations": 2,
+              "maximumConcurrentBackends": 1
+            }
+          ],
+          "counterContinuity": true,
+          "databaseCounterDeltas": {
+            "xact_commit": 83.0,
+            "xact_rollback": 1.0,
+            "blks_read": 0.0,
+            "blks_hit": 3329.0,
+            "tup_returned": 6201.0,
+            "tup_fetched": 1973.0,
+            "tup_inserted": 0.0,
+            "tup_updated": 1.0,
+            "tup_deleted": 0.0,
+            "conflicts": 0.0,
+            "temp_files": 0.0,
+            "temp_bytes": 0.0,
+            "deadlocks": 0.0,
+            "sessions": 3.0,
+            "sessions_abandoned": 0.0,
+            "sessions_fatal": 0.0,
+            "sessions_killed": 0.0,
+            "active_time": 7.05,
+            "idle_in_transaction_time": 7.651
+          },
+          "rawSha256": "2e0b94787ecf7f6349691304bb84e561a047fbcad429a9765a4f514b1d6f53e9"
+        }
+      },
+      {
+        "ordinal": 5,
+        "runtime": "native-aot",
+        "sampleKind": "recorded",
+        "pair": 2,
+        "image": "127.0.0.1:64966/issue1645-admin-native@sha256:3adc5f56030e6c60d997ec3c882708b183791061807932991f23d6d76f6f6ec7",
+        "imageId": "sha256:3adc5f56030e6c60d997ec3c882708b183791061807932991f23d6d76f6f6ec7",
+        "containerId": "78cf108e0779e6d41a772f86bd9b7684a090ab6a8ffec069e511f3ca17a9f732",
+        "workload": {
+          "id": "admin-setting-read",
+          "method": "GET",
+          "path": "/v1/admin/global-settings/by-key/{key}",
+          "authenticated": true,
+          "inputFingerprint": "066e5560271d3aad523f6fa8473868e3ff18639d2d007bde575dfe48a6d8aa58",
+          "requested": 1000,
+          "executed": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "elapsedMilliseconds": 709.0463,
+          "throughputPerSecond": 1410.345135430507,
+          "p50Milliseconds": 5.269341,
+          "p95Milliseconds": 7.387923,
+          "p99Milliseconds": 19.200646
+        },
+        "joinedRequests": 1100,
+        "serverMetrics": {
+          "scope": "brackets-full-probe-invocation-including-request-warmup",
+          "sampleCount": 25,
+          "statusCounts": {
+            "ok": 25,
+            "invalid": 0,
+            "unavailable": 0
+          },
+          "sampleWindowMilliseconds": 2419.6777,
+          "maximumSampleGapMilliseconds": 101.4497,
+          "knownPoolCount": 2,
+          "poolConfiguredLimits": [
+            {
+              "poolOrdinal": 1,
+              "available": true,
+              "maximumObserved": 32
+            },
+            {
+              "poolOrdinal": 2,
+              "available": true,
+              "maximumObserved": 75
+            }
+          ],
+          "observations": {
+            "processCpuSecondsDelta": 1.760986,
+            "runtimeAllocatedBytesDelta": 36156440,
+            "runtimeGcPauseSecondsDelta": 0.027810999999999995,
+            "runtimeThreadPoolCompletedDelta": 7269,
+            "runtimeThreadPoolMaximumObservedPending": 4,
+            "maximumObservedConnectionsAllKnownPools": 9,
+            "maximumObservedUsedInAnyPool": 8,
+            "operationHistogramObservationCountDeltaAvailablePools": 1135,
+            "operationHistogramMeanSecondsAvailablePools": 0.0013500218502202645,
+            "operationHistogramPoolsWithObservedDelta": 1,
+            "operationHistogramPoolsWithoutObservedDelta": 1,
+            "connectionPendingObservedPools": 0,
+            "connectionPendingMissingPools": 2,
+            "maximumObservedConnectionPending": null,
+            "connectionTimeoutObservedPools": 0,
+            "connectionTimeoutMissingPools": 2,
+            "connectionTimeoutDeltaAvailablePools": null
+          },
+          "rawSha256": "8103b64ef349a1ccdd672804b62e6b0bcb9a180b8d8435ecf43b1354b9f61e0e"
+        },
+        "postgres": {
+          "scope": "full-probe-invocation-including-request-warmup",
+          "requestedIntervalMilliseconds": 100,
+          "samples": 20,
+          "maximumSampledBackends": 11,
+          "states": [
+            {
+              "identity": {
+                "state": "idle"
+              },
+              "samplesPresent": 20,
+              "backendObservations": 208,
+              "maximumConcurrentBackends": 11
+            }
+          ],
+          "waits": [
+            {
+              "identity": {
+                "waitEventType": "Client",
+                "waitEvent": "ClientRead"
+              },
+              "samplesPresent": 20,
+              "backendObservations": 205,
+              "maximumConcurrentBackends": 11
+            },
+            {
+              "identity": {
+                "waitEventType": null,
+                "waitEvent": null
+              },
+              "samplesPresent": 3,
+              "backendObservations": 3,
+              "maximumConcurrentBackends": 1
+            }
+          ],
+          "counterContinuity": true,
+          "databaseCounterDeltas": {
+            "xact_commit": 83.0,
+            "xact_rollback": 2.0,
+            "blks_read": 0.0,
+            "blks_hit": 4240.0,
+            "tup_returned": 8572.0,
+            "tup_fetched": 2511.0,
+            "tup_inserted": 8.0,
+            "tup_updated": 1.0,
+            "tup_deleted": 0.0,
+            "conflicts": 0.0,
+            "temp_files": 0.0,
+            "temp_bytes": 0.0,
+            "deadlocks": 0.0,
+            "sessions": 2.0,
+            "sessions_abandoned": 0.0,
+            "sessions_fatal": 0.0,
+            "sessions_killed": 0.0,
+            "active_time": 7.337,
+            "idle_in_transaction_time": 8.506
+          },
+          "rawSha256": "06661c86a534aead0296d72e583c87f7d178532f337790f98d3d8ae3d74e8538"
+        }
+      },
+      {
+        "ordinal": 6,
+        "runtime": "jit",
+        "sampleKind": "recorded",
+        "pair": 2,
+        "image": "127.0.0.1:64966/issue1645-admin-jit@sha256:1dd73b3e9cbdd4f4456d782ea376c283a19d19fdb202ccc82655742b4d91dc7e",
+        "imageId": "sha256:1dd73b3e9cbdd4f4456d782ea376c283a19d19fdb202ccc82655742b4d91dc7e",
+        "containerId": "1b18fa9c8d86566dd4228c2e12d1915ddac99f9cd2c1a0116170b71e5ae80702",
+        "workload": {
+          "id": "admin-setting-read",
+          "method": "GET",
+          "path": "/v1/admin/global-settings/by-key/{key}",
+          "authenticated": true,
+          "inputFingerprint": "066e5560271d3aad523f6fa8473868e3ff18639d2d007bde575dfe48a6d8aa58",
+          "requested": 1000,
+          "executed": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "elapsedMilliseconds": 788.8344,
+          "throughputPerSecond": 1267.693193907365,
+          "p50Milliseconds": 6.123336,
+          "p95Milliseconds": 7.178172,
+          "p99Milliseconds": 11.58781
+        },
+        "joinedRequests": 1100,
+        "serverMetrics": {
+          "scope": "brackets-full-probe-invocation-including-request-warmup",
+          "sampleCount": 29,
+          "statusCounts": {
+            "ok": 28,
+            "invalid": 1,
+            "unavailable": 0
+          },
+          "sampleWindowMilliseconds": 2826.7318,
+          "maximumSampleGapMilliseconds": 102.039,
+          "knownPoolCount": 2,
+          "poolConfiguredLimits": [
+            {
+              "poolOrdinal": 1,
+              "available": true,
+              "maximumObserved": 32
+            },
+            {
+              "poolOrdinal": 2,
+              "available": true,
+              "maximumObserved": 75
+            }
+          ],
+          "observations": {
+            "processCpuSecondsDelta": 3.953772,
+            "runtimeAllocatedBytesDelta": 117672576,
+            "runtimeGcPauseSecondsDelta": 0.014989000000000002,
+            "runtimeThreadPoolCompletedDelta": 6862,
+            "runtimeThreadPoolMaximumObservedPending": 0,
+            "maximumObservedConnectionsAllKnownPools": 9,
+            "maximumObservedUsedInAnyPool": 8,
+            "operationHistogramObservationCountDeltaAvailablePools": 1147,
+            "operationHistogramMeanSecondsAvailablePools": 0.0017085158674803843,
+            "operationHistogramPoolsWithObservedDelta": 1,
+            "operationHistogramPoolsWithoutObservedDelta": 1,
+            "connectionPendingObservedPools": 0,
+            "connectionPendingMissingPools": 2,
+            "maximumObservedConnectionPending": null,
+            "connectionTimeoutObservedPools": 0,
+            "connectionTimeoutMissingPools": 2,
+            "connectionTimeoutDeltaAvailablePools": null
+          },
+          "rawSha256": "1333151ea58752f76060f5ec521f2b8e437ac99c228c1bb562c7790df8dc15d4"
+        },
+        "postgres": {
+          "scope": "full-probe-invocation-including-request-warmup",
+          "requestedIntervalMilliseconds": 100,
+          "samples": 23,
+          "maximumSampledBackends": 11,
+          "states": [
+            {
+              "identity": {
+                "state": "active"
+              },
+              "samplesPresent": 1,
+              "backendObservations": 7,
+              "maximumConcurrentBackends": 7
+            },
+            {
+              "identity": {
+                "state": "idle"
+              },
+              "samplesPresent": 23,
+              "backendObservations": 228,
+              "maximumConcurrentBackends": 11
+            }
+          ],
+          "waits": [
+            {
+              "identity": {
+                "waitEventType": "Client",
+                "waitEvent": "ClientRead"
+              },
+              "samplesPresent": 23,
+              "backendObservations": 225,
+              "maximumConcurrentBackends": 11
+            },
+            {
+              "identity": {
+                "waitEventType": null,
+                "waitEvent": null
+              },
+              "samplesPresent": 3,
+              "backendObservations": 10,
+              "maximumConcurrentBackends": 8
+            }
+          ],
+          "counterContinuity": true,
+          "databaseCounterDeltas": {
+            "xact_commit": 255.0,
+            "xact_rollback": 0.0,
+            "blks_read": 0.0,
+            "blks_hit": 1163.0,
+            "tup_returned": 576.0,
+            "tup_fetched": 557.0,
+            "tup_inserted": 0.0,
+            "tup_updated": 1.0,
+            "tup_deleted": 0.0,
+            "conflicts": 0.0,
+            "temp_files": 0.0,
+            "temp_bytes": 0.0,
+            "deadlocks": 0.0,
+            "sessions": 3.0,
+            "sessions_abandoned": 0.0,
+            "sessions_fatal": 0.0,
+            "sessions_killed": 0.0,
+            "active_time": 6.909,
+            "idle_in_transaction_time": 2.058
+          },
+          "rawSha256": "9e5222cd974c5dc31495412b0c726a865dfa5b0438137ffdd62786bad7222d7f"
+        }
+      },
+      {
+        "ordinal": 7,
+        "runtime": "jit",
+        "sampleKind": "recorded",
+        "pair": 3,
+        "image": "127.0.0.1:64966/issue1645-admin-jit@sha256:1dd73b3e9cbdd4f4456d782ea376c283a19d19fdb202ccc82655742b4d91dc7e",
+        "imageId": "sha256:1dd73b3e9cbdd4f4456d782ea376c283a19d19fdb202ccc82655742b4d91dc7e",
+        "containerId": "9491c8631f4244adfa43cc8bb91c389a35472643f87d36d256492c08aaaf43c5",
+        "workload": {
+          "id": "admin-setting-read",
+          "method": "GET",
+          "path": "/v1/admin/global-settings/by-key/{key}",
+          "authenticated": true,
+          "inputFingerprint": "066e5560271d3aad523f6fa8473868e3ff18639d2d007bde575dfe48a6d8aa58",
+          "requested": 1000,
+          "executed": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "elapsedMilliseconds": 767.0101,
+          "throughputPerSecond": 1303.763796591466,
+          "p50Milliseconds": 5.894981,
+          "p95Milliseconds": 7.225002,
+          "p99Milliseconds": 12.86512
+        },
+        "joinedRequests": 1100,
+        "serverMetrics": {
+          "scope": "brackets-full-probe-invocation-including-request-warmup",
+          "sampleCount": 28,
+          "statusCounts": {
+            "ok": 28,
+            "invalid": 0,
+            "unavailable": 0
+          },
+          "sampleWindowMilliseconds": 2725.4724,
+          "maximumSampleGapMilliseconds": 106.0417,
+          "knownPoolCount": 2,
+          "poolConfiguredLimits": [
+            {
+              "poolOrdinal": 1,
+              "available": true,
+              "maximumObserved": 32
+            },
+            {
+              "poolOrdinal": 2,
+              "available": true,
+              "maximumObserved": 75
+            }
+          ],
+          "observations": {
+            "processCpuSecondsDelta": 3.731072,
+            "runtimeAllocatedBytesDelta": 117309440,
+            "runtimeGcPauseSecondsDelta": 0.017380000000000007,
+            "runtimeThreadPoolCompletedDelta": 6842,
+            "runtimeThreadPoolMaximumObservedPending": 1,
+            "maximumObservedConnectionsAllKnownPools": 9,
+            "maximumObservedUsedInAnyPool": 8,
+            "operationHistogramObservationCountDeltaAvailablePools": 1145,
+            "operationHistogramMeanSecondsAvailablePools": 0.0017564479475982526,
+            "operationHistogramPoolsWithObservedDelta": 1,
+            "operationHistogramPoolsWithoutObservedDelta": 1,
+            "connectionPendingObservedPools": 0,
+            "connectionPendingMissingPools": 2,
+            "maximumObservedConnectionPending": null,
+            "connectionTimeoutObservedPools": 0,
+            "connectionTimeoutMissingPools": 2,
+            "connectionTimeoutDeltaAvailablePools": null
+          },
+          "rawSha256": "5e0efb20a0d76bc96de32ead32b7b57e2669979d78dca6b334e1d928c811421d"
+        },
+        "postgres": {
+          "scope": "full-probe-invocation-including-request-warmup",
+          "requestedIntervalMilliseconds": 100,
+          "samples": 23,
+          "maximumSampledBackends": 12,
+          "states": [
+            {
+              "identity": {
+                "state": "active"
+              },
+              "samplesPresent": 1,
+              "backendObservations": 3,
+              "maximumConcurrentBackends": 3
+            },
+            {
+              "identity": {
+                "state": "idle"
+              },
+              "samplesPresent": 23,
+              "backendObservations": 258,
+              "maximumConcurrentBackends": 12
+            }
+          ],
+          "waits": [
+            {
+              "identity": {
+                "waitEventType": "Client",
+                "waitEvent": "ClientRead"
+              },
+              "samplesPresent": 23,
+              "backendObservations": 255,
+              "maximumConcurrentBackends": 12
+            },
+            {
+              "identity": {
+                "waitEventType": null,
+                "waitEvent": null
+              },
+              "samplesPresent": 2,
+              "backendObservations": 6,
+              "maximumConcurrentBackends": 3
+            }
+          ],
+          "counterContinuity": true,
+          "databaseCounterDeltas": {
+            "xact_commit": 615.0,
+            "xact_rollback": 0.0,
+            "blks_read": 0.0,
+            "blks_hit": 4743.0,
+            "tup_returned": 2837.0,
+            "tup_fetched": 2812.0,
+            "tup_inserted": 0.0,
+            "tup_updated": 1.0,
+            "tup_deleted": 0.0,
+            "conflicts": 0.0,
+            "temp_files": 0.0,
+            "temp_bytes": 0.0,
+            "deadlocks": 0.0,
+            "sessions": 3.0,
+            "sessions_abandoned": 0.0,
+            "sessions_fatal": 0.0,
+            "sessions_killed": 0.0,
+            "active_time": 16.033,
+            "idle_in_transaction_time": 3.387
+          },
+          "rawSha256": "097e5942cea14e60951987326820819c83338d7a6e3449dae203cd05f04f42fa"
+        }
+      },
+      {
+        "ordinal": 8,
+        "runtime": "native-aot",
+        "sampleKind": "recorded",
+        "pair": 3,
+        "image": "127.0.0.1:64966/issue1645-admin-native@sha256:3adc5f56030e6c60d997ec3c882708b183791061807932991f23d6d76f6f6ec7",
+        "imageId": "sha256:3adc5f56030e6c60d997ec3c882708b183791061807932991f23d6d76f6f6ec7",
+        "containerId": "449a56c547974fdb3b9cca430111b6dd09ff154cd8b4838d5c063c63d0015e47",
+        "workload": {
+          "id": "admin-setting-read",
+          "method": "GET",
+          "path": "/v1/admin/global-settings/by-key/{key}",
+          "authenticated": true,
+          "inputFingerprint": "066e5560271d3aad523f6fa8473868e3ff18639d2d007bde575dfe48a6d8aa58",
+          "requested": 1000,
+          "executed": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "elapsedMilliseconds": 675.4267,
+          "throughputPerSecond": 1480.5455573491543,
+          "p50Milliseconds": 5.14692,
+          "p95Milliseconds": 6.919929,
+          "p99Milliseconds": 12.812214
+        },
+        "joinedRequests": 1100,
+        "serverMetrics": {
+          "scope": "brackets-full-probe-invocation-including-request-warmup",
+          "sampleCount": 26,
+          "statusCounts": {
+            "ok": 26,
+            "invalid": 0,
+            "unavailable": 0
+          },
+          "sampleWindowMilliseconds": 2522.9819,
+          "maximumSampleGapMilliseconds": 102.3666,
+          "knownPoolCount": 2,
+          "poolConfiguredLimits": [
+            {
+              "poolOrdinal": 1,
+              "available": true,
+              "maximumObserved": 32
+            },
+            {
+              "poolOrdinal": 2,
+              "available": true,
+              "maximumObserved": 75
+            }
+          ],
+          "observations": {
+            "processCpuSecondsDelta": 1.7488530000000002,
+            "runtimeAllocatedBytesDelta": 37003024,
+            "runtimeGcPauseSecondsDelta": 0.007784000000000003,
+            "runtimeThreadPoolCompletedDelta": 7360,
+            "runtimeThreadPoolMaximumObservedPending": 1,
+            "maximumObservedConnectionsAllKnownPools": 9,
+            "maximumObservedUsedInAnyPool": 4,
+            "operationHistogramObservationCountDeltaAvailablePools": 1135,
+            "operationHistogramMeanSecondsAvailablePools": 0.0013500353303964746,
+            "operationHistogramPoolsWithObservedDelta": 1,
+            "operationHistogramPoolsWithoutObservedDelta": 1,
+            "connectionPendingObservedPools": 0,
+            "connectionPendingMissingPools": 2,
+            "maximumObservedConnectionPending": null,
+            "connectionTimeoutObservedPools": 0,
+            "connectionTimeoutMissingPools": 2,
+            "connectionTimeoutDeltaAvailablePools": null
+          },
+          "rawSha256": "206a1a0bb1ad02c499e888baff38ac12dc1a2483b14f21fa3bd37dc4641555da"
+        },
+        "postgres": {
+          "scope": "full-probe-invocation-including-request-warmup",
+          "requestedIntervalMilliseconds": 100,
+          "samples": 20,
+          "maximumSampledBackends": 12,
+          "states": [
+            {
+              "identity": {
+                "state": "idle"
+              },
+              "samplesPresent": 20,
+              "backendObservations": 214,
+              "maximumConcurrentBackends": 12
+            }
+          ],
+          "waits": [
+            {
+              "identity": {
+                "waitEventType": "Client",
+                "waitEvent": "ClientRead"
+              },
+              "samplesPresent": 20,
+              "backendObservations": 214,
+              "maximumConcurrentBackends": 12
+            }
+          ],
+          "counterContinuity": true,
+          "databaseCounterDeltas": {
+            "xact_commit": 91.0,
+            "xact_rollback": 2.0,
+            "blks_read": 0.0,
+            "blks_hit": 3943.0,
+            "tup_returned": 6614.0,
+            "tup_fetched": 2384.0,
+            "tup_inserted": 0.0,
+            "tup_updated": 1.0,
+            "tup_deleted": 0.0,
+            "conflicts": 0.0,
+            "temp_files": 0.0,
+            "temp_bytes": 0.0,
+            "deadlocks": 0.0,
+            "sessions": 4.0,
+            "sessions_abandoned": 0.0,
+            "sessions_fatal": 0.0,
+            "sessions_killed": 0.0,
+            "active_time": 8.031,
+            "idle_in_transaction_time": 10.417
+          },
+          "rawSha256": "904b7f3a28de663bae29cb22b35f3f12a7cc7ad6c530d41b4ceb899ae773463d"
+        }
+      },
+      {
+        "ordinal": 9,
+        "runtime": "native-aot",
+        "sampleKind": "recorded",
+        "pair": 4,
+        "image": "127.0.0.1:64966/issue1645-admin-native@sha256:3adc5f56030e6c60d997ec3c882708b183791061807932991f23d6d76f6f6ec7",
+        "imageId": "sha256:3adc5f56030e6c60d997ec3c882708b183791061807932991f23d6d76f6f6ec7",
+        "containerId": "fcf09d1bb0e4d58789624e68e78d625a2839e3e251c88e15c82417ef6e0411e0",
+        "workload": {
+          "id": "admin-setting-read",
+          "method": "GET",
+          "path": "/v1/admin/global-settings/by-key/{key}",
+          "authenticated": true,
+          "inputFingerprint": "066e5560271d3aad523f6fa8473868e3ff18639d2d007bde575dfe48a6d8aa58",
+          "requested": 1000,
+          "executed": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "elapsedMilliseconds": 687.7057,
+          "throughputPerSecond": 1454.110384718347,
+          "p50Milliseconds": 5.244748,
+          "p95Milliseconds": 7.06679,
+          "p99Milliseconds": 11.060489
+        },
+        "joinedRequests": 1100,
+        "serverMetrics": {
+          "scope": "brackets-full-probe-invocation-including-request-warmup",
+          "sampleCount": 28,
+          "statusCounts": {
+            "ok": 28,
+            "invalid": 0,
+            "unavailable": 0
+          },
+          "sampleWindowMilliseconds": 2730.5592,
+          "maximumSampleGapMilliseconds": 103.3198,
+          "knownPoolCount": 2,
+          "poolConfiguredLimits": [
+            {
+              "poolOrdinal": 1,
+              "available": true,
+              "maximumObserved": 32
+            },
+            {
+              "poolOrdinal": 2,
+              "available": true,
+              "maximumObserved": 75
+            }
+          ],
+          "observations": {
+            "processCpuSecondsDelta": 1.7951260000000002,
+            "runtimeAllocatedBytesDelta": 36519992,
+            "runtimeGcPauseSecondsDelta": 0.006423000000000002,
+            "runtimeThreadPoolCompletedDelta": 7325,
+            "runtimeThreadPoolMaximumObservedPending": 1,
+            "maximumObservedConnectionsAllKnownPools": 9,
+            "maximumObservedUsedInAnyPool": 4,
+            "operationHistogramObservationCountDeltaAvailablePools": 1136,
+            "operationHistogramMeanSecondsAvailablePools": 0.0013581441021126748,
+            "operationHistogramPoolsWithObservedDelta": 1,
+            "operationHistogramPoolsWithoutObservedDelta": 1,
+            "connectionPendingObservedPools": 0,
+            "connectionPendingMissingPools": 2,
+            "maximumObservedConnectionPending": null,
+            "connectionTimeoutObservedPools": 0,
+            "connectionTimeoutMissingPools": 2,
+            "connectionTimeoutDeltaAvailablePools": null
+          },
+          "rawSha256": "0b99500f830b76038cd2c9aa27ea9930f479f8519ca8527cc0262414f592e04f"
+        },
+        "postgres": {
+          "scope": "full-probe-invocation-including-request-warmup",
+          "requestedIntervalMilliseconds": 100,
+          "samples": 21,
+          "maximumSampledBackends": 11,
+          "states": [
+            {
+              "identity": {
+                "state": "active"
+              },
+              "samplesPresent": 2,
+              "backendObservations": 2,
+              "maximumConcurrentBackends": 1
+            },
+            {
+              "identity": {
+                "state": "idle"
+              },
+              "samplesPresent": 21,
+              "backendObservations": 214,
+              "maximumConcurrentBackends": 11
+            }
+          ],
+          "waits": [
+            {
+              "identity": {
+                "waitEventType": "Client",
+                "waitEvent": "ClientRead"
+              },
+              "samplesPresent": 21,
+              "backendObservations": 214,
+              "maximumConcurrentBackends": 11
+            },
+            {
+              "identity": {
+                "waitEventType": null,
+                "waitEvent": null
+              },
+              "samplesPresent": 2,
+              "backendObservations": 2,
+              "maximumConcurrentBackends": 1
+            }
+          ],
+          "counterContinuity": true,
+          "databaseCounterDeltas": {
+            "xact_commit": 74.0,
+            "xact_rollback": 2.0,
+            "blks_read": 0.0,
+            "blks_hit": 4132.0,
+            "tup_returned": 8524.0,
+            "tup_fetched": 2463.0,
+            "tup_inserted": 0.0,
+            "tup_updated": 1.0,
+            "tup_deleted": 0.0,
+            "conflicts": 0.0,
+            "temp_files": 0.0,
+            "temp_bytes": 0.0,
+            "deadlocks": 0.0,
+            "sessions": 3.0,
+            "sessions_abandoned": 0.0,
+            "sessions_fatal": 0.0,
+            "sessions_killed": 0.0,
+            "active_time": 7.334,
+            "idle_in_transaction_time": 6.843
+          },
+          "rawSha256": "73eeea5ec6847db7842456a4b8ecd75b08ff3193b00d59567120f31df73412f7"
+        }
+      },
+      {
+        "ordinal": 10,
+        "runtime": "jit",
+        "sampleKind": "recorded",
+        "pair": 4,
+        "image": "127.0.0.1:64966/issue1645-admin-jit@sha256:1dd73b3e9cbdd4f4456d782ea376c283a19d19fdb202ccc82655742b4d91dc7e",
+        "imageId": "sha256:1dd73b3e9cbdd4f4456d782ea376c283a19d19fdb202ccc82655742b4d91dc7e",
+        "containerId": "11e50fcddbbd48faf8679e3aa33edbcb6238580983c9152ba353236a4fdf8fb6",
+        "workload": {
+          "id": "admin-setting-read",
+          "method": "GET",
+          "path": "/v1/admin/global-settings/by-key/{key}",
+          "authenticated": true,
+          "inputFingerprint": "066e5560271d3aad523f6fa8473868e3ff18639d2d007bde575dfe48a6d8aa58",
+          "requested": 1000,
+          "executed": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "elapsedMilliseconds": 737.8874,
+          "throughputPerSecond": 1355.2203222334465,
+          "p50Milliseconds": 5.648716,
+          "p95Milliseconds": 7.177847,
+          "p99Milliseconds": 12.197272
+        },
+        "joinedRequests": 1100,
+        "serverMetrics": {
+          "scope": "brackets-full-probe-invocation-including-request-warmup",
+          "sampleCount": 28,
+          "statusCounts": {
+            "ok": 28,
+            "invalid": 0,
+            "unavailable": 0
+          },
+          "sampleWindowMilliseconds": 2726.8986,
+          "maximumSampleGapMilliseconds": 103.1952,
+          "knownPoolCount": 2,
+          "poolConfiguredLimits": [
+            {
+              "poolOrdinal": 1,
+              "available": true,
+              "maximumObserved": 32
+            },
+            {
+              "poolOrdinal": 2,
+              "available": true,
+              "maximumObserved": 75
+            }
+          ],
+          "observations": {
+            "processCpuSecondsDelta": 3.488023,
+            "runtimeAllocatedBytesDelta": 118025480,
+            "runtimeGcPauseSecondsDelta": 0.015884000000000002,
+            "runtimeThreadPoolCompletedDelta": 6820,
+            "runtimeThreadPoolMaximumObservedPending": 5,
+            "maximumObservedConnectionsAllKnownPools": 9,
+            "maximumObservedUsedInAnyPool": 0,
+            "operationHistogramObservationCountDeltaAvailablePools": 1147,
+            "operationHistogramMeanSecondsAvailablePools": 0.0017652642545771579,
+            "operationHistogramPoolsWithObservedDelta": 1,
+            "operationHistogramPoolsWithoutObservedDelta": 1,
+            "connectionPendingObservedPools": 0,
+            "connectionPendingMissingPools": 2,
+            "maximumObservedConnectionPending": null,
+            "connectionTimeoutObservedPools": 0,
+            "connectionTimeoutMissingPools": 2,
+            "connectionTimeoutDeltaAvailablePools": null
+          },
+          "rawSha256": "d8a9bcd43faf6c8c103df59dc9b62d10cf33e4d639ef26d17b30004f16eb1932"
+        },
+        "postgres": {
+          "scope": "full-probe-invocation-including-request-warmup",
+          "requestedIntervalMilliseconds": 100,
+          "samples": 22,
+          "maximumSampledBackends": 12,
+          "states": [
+            {
+              "identity": {
+                "state": "idle"
+              },
+              "samplesPresent": 22,
+              "backendObservations": 249,
+              "maximumConcurrentBackends": 12
+            }
+          ],
+          "waits": [
+            {
+              "identity": {
+                "waitEventType": "Client",
+                "waitEvent": "ClientRead"
+              },
+              "samplesPresent": 22,
+              "backendObservations": 248,
+              "maximumConcurrentBackends": 12
+            },
+            {
+              "identity": {
+                "waitEventType": null,
+                "waitEvent": null
+              },
+              "samplesPresent": 1,
+              "backendObservations": 1,
+              "maximumConcurrentBackends": 1
+            }
+          ],
+          "counterContinuity": true,
+          "databaseCounterDeltas": {
+            "xact_commit": 363.0,
+            "xact_rollback": 0.0,
+            "blks_read": 0.0,
+            "blks_hit": 3589.0,
+            "tup_returned": 2169.0,
+            "tup_fetched": 2145.0,
+            "tup_inserted": 0.0,
+            "tup_updated": 1.0,
+            "tup_deleted": 0.0,
+            "conflicts": 0.0,
+            "temp_files": 0.0,
+            "temp_bytes": 0.0,
+            "deadlocks": 0.0,
+            "sessions": 3.0,
+            "sessions_abandoned": 0.0,
+            "sessions_fatal": 0.0,
+            "sessions_killed": 0.0,
+            "active_time": 10.184,
+            "idle_in_transaction_time": 2.974
+          },
+          "rawSha256": "13479ef266fe99289463e4041c36fd28e90046c839f2acd69f08c48bd05ed34c"
+        }
+      },
+      {
+        "ordinal": 11,
+        "runtime": "jit",
+        "sampleKind": "recorded",
+        "pair": 5,
+        "image": "127.0.0.1:64966/issue1645-admin-jit@sha256:1dd73b3e9cbdd4f4456d782ea376c283a19d19fdb202ccc82655742b4d91dc7e",
+        "imageId": "sha256:1dd73b3e9cbdd4f4456d782ea376c283a19d19fdb202ccc82655742b4d91dc7e",
+        "containerId": "80e299747a8bf51c3b6592dbbfa82521de434e309b84ede495b5b4db0a20720b",
+        "workload": {
+          "id": "admin-setting-read",
+          "method": "GET",
+          "path": "/v1/admin/global-settings/by-key/{key}",
+          "authenticated": true,
+          "inputFingerprint": "066e5560271d3aad523f6fa8473868e3ff18639d2d007bde575dfe48a6d8aa58",
+          "requested": 1000,
+          "executed": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "elapsedMilliseconds": 834.4951,
+          "throughputPerSecond": 1198.329385037731,
+          "p50Milliseconds": 6.34512,
+          "p95Milliseconds": 9.018592,
+          "p99Milliseconds": 12.444424
+        },
+        "joinedRequests": 1100,
+        "serverMetrics": {
+          "scope": "brackets-full-probe-invocation-including-request-warmup",
+          "sampleCount": 31,
+          "statusCounts": {
+            "ok": 31,
+            "invalid": 0,
+            "unavailable": 0
+          },
+          "sampleWindowMilliseconds": 3026.8666,
+          "maximumSampleGapMilliseconds": 105.2223,
+          "knownPoolCount": 2,
+          "poolConfiguredLimits": [
+            {
+              "poolOrdinal": 1,
+              "available": true,
+              "maximumObserved": 32
+            },
+            {
+              "poolOrdinal": 2,
+              "available": true,
+              "maximumObserved": 75
+            }
+          ],
+          "observations": {
+            "processCpuSecondsDelta": 4.0482059999999995,
+            "runtimeAllocatedBytesDelta": 118550856,
+            "runtimeGcPauseSecondsDelta": 0.016125,
+            "runtimeThreadPoolCompletedDelta": 6865,
+            "runtimeThreadPoolMaximumObservedPending": 0,
+            "maximumObservedConnectionsAllKnownPools": 10,
+            "maximumObservedUsedInAnyPool": 7,
+            "operationHistogramObservationCountDeltaAvailablePools": 1150,
+            "operationHistogramMeanSecondsAvailablePools": 0.0020500361739130453,
+            "operationHistogramPoolsWithObservedDelta": 1,
+            "operationHistogramPoolsWithoutObservedDelta": 1,
+            "connectionPendingObservedPools": 0,
+            "connectionPendingMissingPools": 2,
+            "maximumObservedConnectionPending": null,
+            "connectionTimeoutObservedPools": 0,
+            "connectionTimeoutMissingPools": 2,
+            "connectionTimeoutDeltaAvailablePools": null
+          },
+          "rawSha256": "a2c97202609f0d2a820c4a0a559f91612559d4db68da150838c2dab72a5cd4eb"
+        },
+        "postgres": {
+          "scope": "full-probe-invocation-including-request-warmup",
+          "requestedIntervalMilliseconds": 100,
+          "samples": 24,
+          "maximumSampledBackends": 12,
+          "states": [
+            {
+              "identity": {
+                "state": "idle"
+              },
+              "samplesPresent": 24,
+              "backendObservations": 257,
+              "maximumConcurrentBackends": 12
+            }
+          ],
+          "waits": [
+            {
+              "identity": {
+                "waitEventType": "Client",
+                "waitEvent": "ClientRead"
+              },
+              "samplesPresent": 24,
+              "backendObservations": 257,
+              "maximumConcurrentBackends": 12
+            }
+          ],
+          "counterContinuity": true,
+          "databaseCounterDeltas": {
+            "xact_commit": 1303.0,
+            "xact_rollback": 0.0,
+            "blks_read": 0.0,
+            "blks_hit": 5184.0,
+            "tup_returned": 2853.0,
+            "tup_fetched": 2827.0,
+            "tup_inserted": 0.0,
+            "tup_updated": 0.0,
+            "tup_deleted": 0.0,
+            "conflicts": 0.0,
+            "temp_files": 0.0,
+            "temp_bytes": 0.0,
+            "deadlocks": 0.0,
+            "sessions": 3.0,
+            "sessions_abandoned": 0.0,
+            "sessions_fatal": 0.0,
+            "sessions_killed": 0.0,
+            "active_time": 35.191,
+            "idle_in_transaction_time": 3.121
+          },
+          "rawSha256": "364e601afc810cf46fb90226eed13daae0861d5a1d3ea575b56d9be744668c7a"
+        }
+      },
+      {
+        "ordinal": 12,
+        "runtime": "native-aot",
+        "sampleKind": "recorded",
+        "pair": 5,
+        "image": "127.0.0.1:64966/issue1645-admin-native@sha256:3adc5f56030e6c60d997ec3c882708b183791061807932991f23d6d76f6f6ec7",
+        "imageId": "sha256:3adc5f56030e6c60d997ec3c882708b183791061807932991f23d6d76f6f6ec7",
+        "containerId": "832403f47479f5c267f1e8ed08c53175302beda2f585e1f4c3d14b579beeeb63",
+        "workload": {
+          "id": "admin-setting-read",
+          "method": "GET",
+          "path": "/v1/admin/global-settings/by-key/{key}",
+          "authenticated": true,
+          "inputFingerprint": "066e5560271d3aad523f6fa8473868e3ff18639d2d007bde575dfe48a6d8aa58",
+          "requested": 1000,
+          "executed": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "elapsedMilliseconds": 681.4943,
+          "throughputPerSecond": 1467.3637035555544,
+          "p50Milliseconds": 5.162814,
+          "p95Milliseconds": 6.837786,
+          "p99Milliseconds": 12.585423
+        },
+        "joinedRequests": 1100,
+        "serverMetrics": {
+          "scope": "brackets-full-probe-invocation-including-request-warmup",
+          "sampleCount": 27,
+          "statusCounts": {
+            "ok": 27,
+            "invalid": 0,
+            "unavailable": 0
+          },
+          "sampleWindowMilliseconds": 2625.117,
+          "maximumSampleGapMilliseconds": 102.5304,
+          "knownPoolCount": 2,
+          "poolConfiguredLimits": [
+            {
+              "poolOrdinal": 1,
+              "available": true,
+              "maximumObserved": 32
+            },
+            {
+              "poolOrdinal": 2,
+              "available": true,
+              "maximumObserved": 75
+            }
+          ],
+          "observations": {
+            "processCpuSecondsDelta": 1.7134639999999999,
+            "runtimeAllocatedBytesDelta": 36384120,
+            "runtimeGcPauseSecondsDelta": 0.007901999999999996,
+            "runtimeThreadPoolCompletedDelta": 7362,
+            "runtimeThreadPoolMaximumObservedPending": 1,
+            "maximumObservedConnectionsAllKnownPools": 9,
+            "maximumObservedUsedInAnyPool": 3,
+            "operationHistogramObservationCountDeltaAvailablePools": 1137,
+            "operationHistogramMeanSecondsAvailablePools": 0.0013844733509234832,
+            "operationHistogramPoolsWithObservedDelta": 1,
+            "operationHistogramPoolsWithoutObservedDelta": 1,
+            "connectionPendingObservedPools": 0,
+            "connectionPendingMissingPools": 2,
+            "maximumObservedConnectionPending": null,
+            "connectionTimeoutObservedPools": 0,
+            "connectionTimeoutMissingPools": 2,
+            "connectionTimeoutDeltaAvailablePools": null
+          },
+          "rawSha256": "9c368fc576d40ac756101354952cd61b4bc8f5ddfa64f2ee919f61e5c299de9e"
+        },
+        "postgres": {
+          "scope": "full-probe-invocation-including-request-warmup",
+          "requestedIntervalMilliseconds": 100,
+          "samples": 21,
+          "maximumSampledBackends": 12,
+          "states": [
+            {
+              "identity": {
+                "state": "active"
+              },
+              "samplesPresent": 1,
+              "backendObservations": 1,
+              "maximumConcurrentBackends": 1
+            },
+            {
+              "identity": {
+                "state": "idle"
+              },
+              "samplesPresent": 21,
+              "backendObservations": 236,
+              "maximumConcurrentBackends": 12
+            }
+          ],
+          "waits": [
+            {
+              "identity": {
+                "waitEventType": "Client",
+                "waitEvent": "ClientRead"
+              },
+              "samplesPresent": 21,
+              "backendObservations": 235,
+              "maximumConcurrentBackends": 12
+            },
+            {
+              "identity": {
+                "waitEventType": null,
+                "waitEvent": null
+              },
+              "samplesPresent": 2,
+              "backendObservations": 2,
+              "maximumConcurrentBackends": 1
+            }
+          ],
+          "counterContinuity": true,
+          "databaseCounterDeltas": {
+            "xact_commit": 95.0,
+            "xact_rollback": 1.0,
+            "blks_read": 0.0,
+            "blks_hit": 3376.0,
+            "tup_returned": 6209.0,
+            "tup_fetched": 1979.0,
+            "tup_inserted": 0.0,
+            "tup_updated": 1.0,
+            "tup_deleted": 0.0,
+            "conflicts": 0.0,
+            "temp_files": 0.0,
+            "temp_bytes": 0.0,
+            "deadlocks": 0.0,
+            "sessions": 3.0,
+            "sessions_abandoned": 0.0,
+            "sessions_fatal": 0.0,
+            "sessions_killed": 0.0,
+            "active_time": 8.045,
+            "idle_in_transaction_time": 6.838
+          },
+          "rawSha256": "c6ec3bbe5f41e10fe2967259d3032d0a141bdcb83d79644e535f2460d7351fe5"
+        }
+      }
+    ]
+  },
+  "clientAndSpanSummary": {
+    "schemaVersion": 1,
+    "kind": "issue1645-client-span-compact-summary",
+    "analysisSha256": "1a8ac4f07d43662eeeb9c23cda04d8608ac6ad1db4e457277e577fe7271427a5",
+    "aggregation": "Median of five per-run statistics for each runtime; no pooled-request percentile and no raw clock-origin subtraction",
+    "variants": 12,
+    "requestsJoined": 13200,
+    "recordedVariants": 10,
+    "discardedWarmVariants": 2,
+    "runtimes": {
+      "jit": {
+        "medianThroughputPerSecond": 1267.693193907365,
+        "requestTimingMilliseconds": {
+          "clientTotalMilliseconds": {
+            "mean": 6.306537205,
+            "p50": 6.123336,
+            "p95": 7.225002,
+            "p99": 12.444424
+          },
+          "toHeadersMilliseconds": {
+            "mean": 6.222767753,
+            "p50": 6.054383,
+            "p95": 7.096884,
+            "p99": 12.370635
+          },
+          "bodyReadMilliseconds": {
+            "mean": 0.05747709300000001,
+            "p50": 0.02871,
+            "p95": 0.204228,
+            "p99": 0.484849
+          },
+          "validationMilliseconds": {
+            "mean": 0.028911107999999998,
+            "p50": 0.02564,
+            "p95": 0.053294,
+            "p99": 0.071317
+          },
+          "wholeServerMilliseconds": {
+            "mean": 4.6892985,
+            "p50": 4.522,
+            "p95": 5.3628,
+            "p99": 10.6138
+          }
+        },
+        "clientCpuMillisecondsMedian": 322.68,
+        "clientAllocatedBytesMedian": 23121864,
+        "clientGcPauseMillisecondsMedian": 1.337,
+        "clientGcGen0Counts": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "clientGcGen1Counts": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "clientGcGen2Counts": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "native-aot": {
+        "medianThroughputPerSecond": 1467.3637035555544,
+        "requestTimingMilliseconds": {
+          "clientTotalMilliseconds": {
+            "mean": 5.434670758,
+            "p50": 5.162814,
+            "p95": 6.919929,
+            "p99": 12.585423
+          },
+          "toHeadersMilliseconds": {
+            "mean": 5.242596994,
+            "p50": 5.019205,
+            "p95": 6.582234,
+            "p99": 12.387635
+          },
+          "bodyReadMilliseconds": {
+            "mean": 0.13525388100000002,
+            "p50": 0.030388,
+            "p95": 0.574451,
+            "p99": 0.953877
+          },
+          "validationMilliseconds": {
+            "mean": 0.027999903,
+            "p50": 0.026009,
+            "p95": 0.043395,
+            "p99": 0.057917
+          },
+          "wholeServerMilliseconds": {
+            "mean": 3.8918222,
+            "p50": 3.7143,
+            "p95": 5.1335,
+            "p99": 8.6497
+          }
+        },
+        "clientCpuMillisecondsMedian": 359.552,
+        "clientAllocatedBytesMedian": 23170896,
+        "clientGcPauseMillisecondsMedian": 1.18,
+        "clientGcGen0Counts": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "clientGcGen1Counts": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "clientGcGen2Counts": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "qualification": "not-recorded",
+    "causalAttribution": "none",
+    "throughputRatioOfMediansImprovementPercent": 15.750696667602382,
+    "receiverCounts": {
+      "requestsReceived": 36,
+      "requestsAccepted": 36,
+      "requestsRejected": 0,
+      "requestsMalformed": 0,
+      "requestsOversized": 0,
+      "requestsUnsupported": 0,
+      "requestsTimedOut": 0,
+      "spansReceived": 13236,
+      "spansAccepted": 13200,
+      "spansNonmatching": 36,
+      "spansInvalid": 0,
+      "spansCapacityDropped": 0,
+      "spansDuplicateDropped": 0,
+      "spansBatchDropped": 0,
+      "internalFailures": 0
+    }
+  },
+  "serverCounterMedians": {
+    "scope": "server-full1100-invocation-bracket",
+    "limits": [
+      "Windows include request warmup and sampler/guard edges, not exact measured1000-only intervals.",
+      "Sampled maxima are observed values, not exact peaks; missing fields are null, never zero.",
+      "Pool ordinals are local to one variant and do not identify a pool across variants.",
+      "Npgsql operation histogram observations are not SQL statement counts or pool-wait durations.",
+      "Missing pending/timeout metrics and zero sampled queues do not prove no wait occurred.",
+      "Endpoint counter deltas are withheld when fewer than two observations or a decrease was observed.",
+      "Server process counters include background work and metric scrapes; CPU/GC attribution is not per request."
+    ],
+    "statusTotals": {
+      "ok": 333,
+      "invalid": 1,
+      "unavailable": 0
+    },
+    "recordedRuntimeMedians": {
+      "jit": {
+        "processCpuSecondsDelta": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 3.9153630000000006
+        },
+        "runtimeAllocatedBytesDelta": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 117672576
+        },
+        "runtimeGcPauseSecondsDelta": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 0.016125
+        },
+        "runtimeThreadPoolCompletedDelta": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 6842
+        },
+        "runtimeThreadPoolMaximumObservedPending": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 1
+        },
+        "maximumObservedConnectionsAllKnownPools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 9
+        },
+        "maximumObservedUsedInAnyPool": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 8
+        },
+        "operationHistogramObservationCountDeltaAvailablePools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 1147
+        },
+        "operationHistogramMeanSecondsAvailablePools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 0.0017652642545771579
+        },
+        "operationHistogramPoolsWithObservedDelta": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 1
+        },
+        "operationHistogramPoolsWithoutObservedDelta": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 1
+        },
+        "connectionPendingObservedPools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 0
+        },
+        "connectionPendingMissingPools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 2
+        },
+        "maximumObservedConnectionPending": {
+          "observedVariants": 0,
+          "missingVariants": 5,
+          "median": null
+        },
+        "connectionTimeoutObservedPools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 0
+        },
+        "connectionTimeoutMissingPools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 2
+        },
+        "connectionTimeoutDeltaAvailablePools": {
+          "observedVariants": 0,
+          "missingVariants": 5,
+          "median": null
+        }
+      },
+      "native-aot": {
+        "processCpuSecondsDelta": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 1.7488530000000002
+        },
+        "runtimeAllocatedBytesDelta": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 36384120
+        },
+        "runtimeGcPauseSecondsDelta": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 0.007784000000000003
+        },
+        "runtimeThreadPoolCompletedDelta": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 7325
+        },
+        "runtimeThreadPoolMaximumObservedPending": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 1
+        },
+        "maximumObservedConnectionsAllKnownPools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 9
+        },
+        "maximumObservedUsedInAnyPool": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 4
+        },
+        "operationHistogramObservationCountDeltaAvailablePools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 1135
+        },
+        "operationHistogramMeanSecondsAvailablePools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 0.0013500353303964746
+        },
+        "operationHistogramPoolsWithObservedDelta": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 1
+        },
+        "operationHistogramPoolsWithoutObservedDelta": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 1
+        },
+        "connectionPendingObservedPools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 0
+        },
+        "connectionPendingMissingPools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 2
+        },
+        "maximumObservedConnectionPending": {
+          "observedVariants": 0,
+          "missingVariants": 5,
+          "median": null
+        },
+        "connectionTimeoutObservedPools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 0
+        },
+        "connectionTimeoutMissingPools": {
+          "observedVariants": 5,
+          "missingVariants": 0,
+          "median": 2
+        },
+        "connectionTimeoutDeltaAvailablePools": {
+          "observedVariants": 0,
+          "missingVariants": 5,
+          "median": null
+        }
+      }
+    }
+  },
+  "postgresInterpretation": [
+    "Activity buckets use a requested100ms interval; they are not continuous exact backend maxima or time-weighted utilization.",
+    "Database counters can lag and include background Wolverine, readiness, metrics and maintenance activity; their deltas are not exact statement or request counts.",
+    "Idle ClientRead denotes PostgreSQL waiting for a client; no database-client pool-wait attribution can be made from these views.",
+    "No statement text, parameters, usernames, client addresses, connection strings or pool-name tags are read or retained.",
+    "Discarded warmup variants are separate from the five recorded pairs."
+  ],
+  "sql": {
+    "passed": true,
+    "dataSha256": "153704e42f2075a74ea51c3ee21e5400316c2179afe8984f317e03df604bcb9a",
+    "ownedSettingCount": 1,
+    "migrationCount": 52,
+    "publicTableCount": 41,
+    "exactOwnedScalarFields": 6,
+    "independentIdentityFields": 10,
+    "finalTargetDatabaseBackends": 0
+  },
+  "retainedReceiptHashes": {
+    "baseline-offline-verification.json": "e7371dbfe8dbb90959197603b441ec45139b4327dc8b734ef75808443fe8f343",
+    "sql-baseline-comparison.json": "5cb4c65b76e902d01871d3ab82b01078d0d4bab1619ecb63ff60daab03150828",
+    "instrumented-client-span-analysis.json": "1a8ac4f07d43662eeeb9c23cda04d8608ac6ad1db4e457277e577fe7271427a5",
+    "instrumented-client-span-summary.json": "7928c55e2edb82d0c97097631a610a1cac0825332f7290ccb5842a48c0ed0113",
+    "admin-instrumented-r3/complete.json": "f9d56116dbf62cf5e75afff20936db80c825d8f919475f75576a52a42c064488",
+    "admin-instrumented-r3/server-metrics-analysis.json": "1e2bd75fcb54b1b0d7dd286c40c7b5aa21c0850a8cd68d7b774bbc3a48bff10b",
+    "admin-instrumented-r3/server-metrics-summary-r2.json": "29b65f5b59c641bb69f9625900a8dceb322dba2c3415052cc3ff2c0170d223b1",
+    "admin-instrumented-r3/postgres-analysis.json": "63da68f4ade4e16dc36e16c3f0665c04854b94ed629b9b2c197aebb6e19544a6",
+    "sql-instrumented-r3-comparison.json": "d17618c124086341c92da43b8be32a31f2c73846a1a5557df3d8352916a88787",
+    "instrumented-harness-freeze-r4.json": "5750dd15ffddb91155fd76b99bc748a21bc261595ea3c8a60cbe939b95ece114"
+  },
+  "retention": "Full raw frames, traces, images and scripts are task-local ignored artifacts; this committed summary is an inspection record, not a relocatable qualification bundle."
+}

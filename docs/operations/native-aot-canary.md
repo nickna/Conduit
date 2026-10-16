@@ -84,6 +84,30 @@ The collector replaces only `baseUrl` with its owned container's loopback origin
 The driver checks exact Admin values or provider content and usage through full
 response completion, including SSE's terminal event and EOF.
 
+For a separate instrumented investigation, invoke the published probe directly
+with `--benchmark-workload-diagnostics <configuration.json> <new-sidecar.json>`.
+Its normal schema-2 report remains on stdout; the additional schema-1 sidecar
+contains client request milestones, generated W3C trace/span IDs and client
+runtime snapshots for both warm-up and measured phases. The sidecar must not
+already exist. The ordinary `--benchmark-workload` command and production
+collector do not enable this instrumentation or send its correlation headers.
+
+Request offsets and phase elapsed ticks use `stopwatchFrequency`; CPU and GC
+pause ticks use `runtimeTickFrequency`. Runtime snapshots describe the probe
+process, including its GC mode, rather than the application container. Missing
+response milestones are null. Outputs contain no credentials, URLs, setting
+keys, request bodies or response content. Configuration, warm-up and caller
+cancellation failures produce no completed report; a newly created sidecar can
+remain empty. Output I/O failure or process termination can leave a partial file,
+so retain and validate exit status and both artifacts before analysis.
+
+An enabled server tracer can join its server span's trace ID and parent span ID
+to the sidecar's trace ID and span ID. Convert correlated durations to common
+units; client monotonic offsets and server Unix timestamps have different
+origins and cannot be subtracted directly. Instrumented results need their own
+provenance and alternating pairs because tracing and diagnostic collection can
+affect timings. Preserve the original uninstrumented report independently.
+
 Supply authentication only through `CONDUIT_NATIVE_BENCHMARK_API_KEY`: the Admin
 master key for Admin or an existing virtual key for Gateway. Do not put credentials
 in workload JSON. The collector gives the key to its private child process and

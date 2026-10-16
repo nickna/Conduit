@@ -153,3 +153,8 @@ representative production benchmarking, SBOM/security/provenance acceptance,
 excluded-worker parity, ordered Admin/Gateway soaks, an actual rollback, or approval
 of a successor persistence ADR. The [canary runbook](native-aot-canary.md) and
 blocked promotion policy continue to govern production deployment.
+
+The [2026-10-16 follow-up investigation](native-aot-admin-throughput-investigation.md)
+retains a fresh source-matched baseline and a separate instrumented arm. Neither
+reproduced this historical throughput loss; the original result and its unresolved
+causal question remain preserved.
