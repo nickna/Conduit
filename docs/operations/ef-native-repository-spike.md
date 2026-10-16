@@ -910,3 +910,61 @@ and the decimal-literal failure as [EF #39303](https://github.com/dotnet/efcore/
 work with a distinct custom-type binary-operator failure. Pinned source supports
 the unsafe-constructor/member-initializer and boxed-literal/converted-type leads;
 neither an upstream fix nor a tested current-main failure is asserted.
+
+## Nullable conditional lifting reduction (#1672)
+
+`NullableConditionalImplicit` and `NullableConditionalExplicit` in
+`tools/EfQueryPrecompilerRepro/Variants` reduce the conditional failure from
+Unit 138. The only difference is the nine-byte `(double?)` cast on the existing
+true `Average` branch. Both preserve `Any`, both completed-task filters, the
+type/time predicates, grouped state/count, nullable result and null arm. The
+minimal entity is unsealed, and context/scalar aliases avoid separate known
+translator failures.
+
+The fresh Linux SDK 10.0.401 matrix uses EF runtime/Relational/Design/Tasks/CLI
+10.0.12 and Npgsql/provider 10.0.3. Both initial builds pass. The implicit
+conditional fails generation at `Expression.Condition` through
+`VisitConditionalExpression`, producing no file. The explicit cast generates
+one file and its managed build passes with seven CS9270/CS8669 warnings.
+All nine child stages and their streams join; source copies remain unchanged.
+The retained matrix at
+`artifacts/issues-1469-1696/issue-1672/run-7028379e23184631b1db3e5c177c4c0a/`
+has SHA-256
+`c650e59a54363e692fd55fab5e0e60cbfe9677bae218bb19c7dbc338478d4af6`.
+
+A separate fresh Windows SDK 10.0.401 comparison uses the complete current
+metrics owner and an immutable copy of the current production model closure.
+Both inventories contain six methods, 49 query calls and eight terminals,
+with identical call signatures and multiplicities. The existing cast passes
+initial build, generation and generated managed build, producing one file.
+Deleting only the cast passes initial build but produces one owner-attributed
+conditional failure signature printed twice, with no generated file. The
+successful generated owner build retains 47 warnings: 39 CS9270, seven CS8669
+and one NU1510. All ten child stages and their streams join. The comparison
+receipt at `issue-1672/owner-b000dbcf25f64646a9aa74f2ac6cb3aa/comparison.json`
+has SHA-256
+`f39910e56d5cf7c5f18c145bd37f4e4bdff7b0dcbcfced26c9af7438f649c101`.
+Earlier harness-only setup failures are retained separately and excluded.
+
+The current production owner already contains the cast accepted in `70c22b547`;
+its SHA-256 remains
+`2760819a623e44d2a47e13dd3dce39880205c70c1a68a848a6931f4aa1f0a65d`.
+The same source and model assembly are bound to #1671's 14 passing managed
+PostgreSQL cases, including complete metrics fields, boundaries and cancellation.
+No production query changed and no runtime suite was repeated for this reduction.
+Neither compiler experiment connects to a database, executes generated queries
+or publishes a native executable. Full Configuration/application compilation,
+generated-query runtime coverage and #1373/#1375 qualification remain separate.
+
+Fourteen bounded all-state upstream searches and a final exact-signature recheck
+found no exact duplicate. The sanitized standalone report is filed as
+[EF #39304](https://github.com/dotnet/efcore/issues/39304), with exact public body
+and source readback. The actual package nuspecs identify commit
+`95017c711e6afc1085133d440e42b4bd78155701`; its
+[conditional visitor](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore.Design/Query/Internal/CSharpToLinqTranslator.cs#L348)
+visits branches independently, while its
+[cast visitor](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore.Design/Query/Internal/CSharpToLinqTranslator.cs#L339)
+adds a conversion. This supports the implicit nullable-lift lead, separately
+from #1667's literal/`Expression.Constant` failure. The inspected current-main
+source has the same visitor bodies; no current-main compiler run or upstream
+fix is asserted. The duplicate search was not exhaustive.

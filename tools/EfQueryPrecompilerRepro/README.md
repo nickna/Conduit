@@ -1,8 +1,9 @@
 # EF query-precompiler reductions
 
 Opt-in, design-time reproductions for Conduit [#1660](https://github.com/nickna/Conduit/issues/1660),
-[#1662](https://github.com/nickna/Conduit/issues/1662), and
-[#1667](https://github.com/nickna/Conduit/issues/1667).
+[#1662](https://github.com/nickna/Conduit/issues/1662),
+[#1667](https://github.com/nickna/Conduit/issues/1667), and
+[#1672](https://github.com/nickna/Conduit/issues/1672).
 This project is deliberately outside `Conduit.slnx`. It references no Conduit
 service, uses an inert design-time factory at loopback port 1, and its entrypoint
 does not call any query. Do not publish or execute its query methods to reproduce
@@ -11,7 +12,7 @@ these compiler failures.
 The local package file aligns EF runtime, Relational, Design and Tasks at
 10.0.12, with Npgsql/provider 10.0.3. It also retains the repository's patched
 MSBuild and cryptography dependencies without changing the service dependency
-graph. The #1660/#1662 commands used Windows x64; the #1667 matrix used Linux.
+graph. The #1660/#1662 commands used Windows x64; the #1667/#1672 matrices used Linux.
 Both used SDK 10.0.401.
 
 ## Repeat a case
@@ -253,3 +254,60 @@ reduction changes no production query. The separate
 PostgreSQL parity rows from `issue-1666-r3.trx`, including complete snapshots,
 touch isolation, cancellation, and connection reuse. Those existing production
 tests execute neither these generated interceptors nor a native EF runtime.
+
+## Nullable conditional lifting (#1672)
+
+Use the fresh-directory commands with `$context` set to
+`EfQueryPrecompilerRepro.NullableConditionalContext` and select either
+`NullableConditionalImplicit` or `NullableConditionalExplicit`. Both files
+contain the same minimal unsealed task entity and three-field generation-metric
+record. They retain the type/time filters, grouped state/count, `Any`, both
+completed-task filters, duration `Average` and null arm. The sole nine-byte
+difference is `(double?)` on the true branch. Local context/scalar aliases and
+an omitted optional token avoid unrelated translator failures.
+
+The Linux run used SDK 10.0.401, EF runtime/Relational/Design/Tasks/CLI 10.0.12
+and Npgsql/provider 10.0.3. Both initial builds exited zero.
+
+| Variant | Generation exit | Generated managed build | Observation |
+|---|---:|---|---|
+| `NullableConditionalImplicit` | 1 | Skipped; no generated file | `Argument types do not match` at `Expression.Condition` / `VisitConditionalExpression` |
+| `NullableConditionalExplicit` | 0 | 0; one generated file | Explicit nullable conversion preserves the complete grouped projection |
+
+The successful generated build retains seven warnings: five CS9270 and two
+CS8669. The actual runtime, Design, Tasks and CLI nuspecs identify source commit
+`95017c711e6afc1085133d440e42b4bd78155701`. Its
+[conditional visitor](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore.Design/Query/Internal/CSharpToLinqTranslator.cs#L348)
+visits both branches independently; the
+[cast visitor](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore.Design/Query/Internal/CSharpToLinqTranslator.cs#L339)
+constructs a conversion. This supports the missing implicit nullable-lift lead.
+It is separate from #1667's decimal literal failure at `Expression.Constant`.
+
+The sanitized standalone report is filed as
+[EF #39304](https://github.com/dotnet/efcore/issues/39304). Fourteen bounded
+all-state searches and a final exact-signature recheck found no exact duplicate.
+Related runtime conditional issues and precompiler literal/custom-type
+conversion failures were reviewed separately. The search was not exhaustive;
+the inspected current-main visitor source was not compiled or executed.
+
+The retained capture is
+`artifacts/issues-1469-1696/issue-1672/run-7028379e23184631b1db3e5c177c4c0a/`;
+the matrix SHA-256 is
+`c650e59a54363e692fd55fab5e0e60cbfe9677bae218bb19c7dbc338478d4af6`.
+All nine compiler stages and their streams joined, with source copies unchanged.
+Independent readback checks the copied sources, generated control and actual
+package assets. No query method ran, database connection opened or native
+executable was published or executed in this reduction.
+
+A separate fresh Windows SDK 10.0.401 comparison includes the complete current
+`EfGatewayMetricsStore` source and the current production model assembly. Both
+variants retain six methods, 49 query calls and eight terminals. The existing
+cast generates one complete-owner interceptor file that compiles; deleting only
+the cast produces one conditional failure signature, printed twice, and no
+generated file. The generated owner build retains 47 CS9270/CS8669/NU1510
+warnings. Its comparison receipt SHA-256 is
+`f39910e56d5cf7c5f18c145bd37f4e4bdff7b0dcbcfced26c9af7438f649c101`.
+Production already contains the cast accepted in `70c22b547`; this reduction
+changes no production query. The unchanged source/model also matches #1671's
+14 passing managed metrics cases against PostgreSQL. Those existing runtime
+cases execute the ordinary adapters; the generated interceptors remain unexecuted.
