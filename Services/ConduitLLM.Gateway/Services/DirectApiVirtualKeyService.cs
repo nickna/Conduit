@@ -2,6 +2,7 @@ using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Enums;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Extensions;
+using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
 using VirtualKeyUtilities = ConduitLLM.Configuration.Utilities.VirtualKeyUtilities;
@@ -74,8 +75,13 @@ namespace ConduitLLM.Gateway.Services
             UpdateSpendAsync(keyId, cost, billedAtUtc: null);
 
         /// <inheritdoc />
-        public async Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc)
+        public Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc) =>
+            UpdateSpendAsync(keyId, cost, billedAtUtc, Guid.NewGuid().ToString("N"));
+
+        /// <inheritdoc />
+        public async Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc, string requestId)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
             if (cost <= 0) return true; // No cost to add, consider it successful
 
             var virtualKey = await VirtualKeyRepository.GetByIdAsync(keyId);
@@ -92,26 +98,34 @@ namespace ConduitLLM.Gateway.Services
                 }
 
                 // Update the group balance
-                var newBalance = await GroupRepository.AdjustBalanceAsync(
+                var adjustment = await GroupRepository.AdjustBalanceIdempotentAsync(
                     group.Id,
                     -cost,
+                    SpendIdempotency.KeyFor(requestId),
                     $"API usage by virtual key #{keyId}",
                     "System",
                     ReferenceType.VirtualKey,
                     keyId.ToString(),
                     ConduitLLM.Configuration.Utilities.BillingTimeUtilities.GetBillingWindowStartUtc(billedAtUtc));
 
-                // Update virtual key timestamp
-                virtualKey.UpdatedAt = DateTime.UtcNow;
-                bool success = await VirtualKeyRepository.UpdateAsync(virtualKey);
-
-                if (success)
+                // The debit is durable. Timestamp maintenance must not turn it
+                // into a failed spend update that is charged again by recovery.
+                try
                 {
-                    Logger.LogInformation("Updated spend for key ID {KeyId} in group {GroupId}. New balance: {Balance}",
-                        keyId, group.Id, newBalance);
+                    virtualKey.UpdatedAt = DateTime.UtcNow;
+                    if (!await VirtualKeyRepository.UpdateAsync(virtualKey))
+                    {
+                        Logger.LogWarning("Spend was persisted for virtual key {KeyId}, but its timestamp could not be updated", keyId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Spend was persisted for virtual key {KeyId}, but its timestamp could not be updated", keyId);
                 }
 
-                return success;
+                Logger.LogInformation("Updated spend for key ID {KeyId} in group {GroupId}. New balance: {Balance}",
+                    keyId, group.Id, adjustment.NewBalance);
+                return true;
             }
             catch (Exception ex)
             {

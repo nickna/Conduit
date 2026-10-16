@@ -239,7 +239,7 @@ namespace ConduitLLM.Tests.Http.Middleware.Fixtures
         {
             var mock = new Mock<IVirtualKeyService>();
             // Default: successful spend updates
-            mock.Setup(x => x.UpdateSpendAsync(It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<DateTime?>()))
+            mock.Setup(x => x.UpdateSpendAsync(It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<DateTime?>(), It.IsAny<string>()))
                 .ReturnsAsync(true);
             return mock;
         }

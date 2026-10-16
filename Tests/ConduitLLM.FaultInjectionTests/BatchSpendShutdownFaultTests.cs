@@ -83,7 +83,7 @@ public sealed class BatchSpendShutdownFaultTests(BillingFaultFixture fixture)
                 string actor, ReferenceType referenceType, string referenceId, DateTime window) =>
             {
                 attempts.Add(new VirtualKeyBalanceAdjustment(groupId, amount, description, actor,
-                    VirtualKeyBalanceReferenceType.System, referenceId, identity, window));
+                    VirtualKeyBalanceReferenceType.VirtualKey, referenceId, identity, window));
                 var result = await realRepository.AdjustBalanceIdempotentAsync(groupId, amount, identity,
                     description, actor, referenceType, referenceId, window);
                 if (attempts.Count == 1)
