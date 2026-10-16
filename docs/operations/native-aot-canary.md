@@ -332,6 +332,29 @@ reviewer's decision; it does not authenticate that identity or change the blocke
 production policy. No production qualification, soak or rollback is claimed by
 the repository's synthetic contract tests.
 
+For the lifecycle and freshness requirements in
+[#1583](https://github.com/nickna/Conduit/issues/1583), apply these decisions before
+interpreting performance results:
+
+| Retained evidence | Qualification decision |
+| --- | --- |
+| Successful latest attempt, matching original report/archive bytes, accepted timeline and unexpired window | Eligible for the remaining promotion gates |
+| Prior success followed by an active or failed rerun | HOLD under the committed `latest-only` policy, even if the public report is unchanged |
+| Archived success after a failed rerun | Eligible only with `approved-archive`, explicit selection and acknowledgment of that exact newer failed attempt inside the accepted window |
+| New attempt after acceptance, changed hashes, mismatched identity or expired window | HOLD; review and accept the evidence again |
+| Report predating attempt tracking | Historical inspection only |
+
+`test-native-benchmark-collector.ps1` exercises real success-then-failed reruns,
+writer exclusion, atomic publication and retained original bytes.
+`test-native-promotion.ps1` covers the ordered accepted timeline, archive approval,
+expired windows, changed acknowledgment and mismatched attempt/report identities.
+These checks preserve the full soak timeline; extending the window is an explicit
+review decision, rather than an automatic consequence of rerunning collection.
+The [Linux contract job from run 38856125759](https://github.com/nickna/Conduit/actions/runs/38856125759/job/116827872074)
+passed all 204 promotion and 101 collector cases on merge
+`e340f3f940a8f9419384dbb4cc4b6d0b11d38a73`. Those results verify the machinery;
+they do not provide accepted production evidence.
+
 ## Canary procedure
 
 1. Record the JIT release digest and database schema version. Run the migrator before
