@@ -181,6 +181,29 @@ period, the aggregate cycle, and the last outcome of each phase. Prometheus metr
 purge, expiration, quota, and retention are limited to those groups and reconciliation is skipped because
 an untracked object no longer has group ownership that can be scoped safely.
 
+### Security settings in root Compose
+
+The root `docker-compose.yml` explicitly forwards the security settings published
+in `.env.example` to `admin` and `api` (Gateway). This includes the Gateway's
+aggregate security-header switch and request-limit values. Defaults match the
+template: rate limiting is enabled on both APIs, IP filtering is disabled, and
+Admin IP banning is disabled. Set the corresponding variables in the root `.env`
+to change the intended container's configuration.
+
+Admin's four numeric settings also accept their previously published aliases:
+
+| Canonical suffix after `CONDUIT_ADMIN_` | Legacy suffix |
+| --- | --- |
+| `RATE_LIMIT_MAX_REQUESTS` | `RATE_LIMITING_MAX_REQUESTS` |
+| `RATE_LIMIT_WINDOW_SECONDS` | `RATE_LIMITING_WINDOW_SECONDS` |
+| `MAX_FAILED_AUTH_ATTEMPTS` | `FAILED_AUTH_MAX_ATTEMPTS` |
+| `AUTH_BAN_DURATION_MINUTES` | `FAILED_AUTH_BAN_DURATION_MINUTES` |
+
+Compose chooses a nonempty canonical value first, then a nonempty alias, then the
+documented default. Remove the canonical entry when using an alias; a canonical
+default copied from the template still takes precedence. To add another process
+setting, include it in the intended service's `environment` map or a Compose override.
+
 ### Audit queues and retention
 
 Each JIT host starts and stops its own billing, request-log, function-call and

@@ -65,6 +65,12 @@ services:
       ConduitLLM__Messaging__Wolverine__AutoProvision: "false"
       # Customer error visibility: External (default, sanitized) or Internal (raw provider detail)
       CONDUIT_CUSTOMER_MODE: "${CONDUIT_CUSTOMER_MODE:-External}"
+      # Forward the published Gateway security settings explicitly.
+      CONDUIT_CORE_RATE_LIMITING_ENABLED: "${CONDUIT_CORE_RATE_LIMITING_ENABLED:-true}"
+      CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS: "${CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS:-1000}"
+      CONDUIT_CORE_RATE_LIMIT_WINDOW_SECONDS: "${CONDUIT_CORE_RATE_LIMIT_WINDOW_SECONDS:-60}"
+      CONDUIT_CORE_IP_FILTERING_ENABLED: "${CONDUIT_CORE_IP_FILTERING_ENABLED:-false}"
+      CONDUIT_CORE_SECURITY_HEADERS_ENABLED: "${CONDUIT_CORE_SECURITY_HEADERS_ENABLED:-true}"
       # Messaging runs on Wolverine (PostgreSQL transport) — the only backend as of #932.
       # Using new REDIS_URL format (old variables still work for backward compatibility)
       REDIS_URL: "redis://redis:6379"
@@ -140,6 +146,14 @@ services:
       ConduitLLM__Messaging__Wolverine__AutoProvision: "false"
       # Must match the api service — Admin reports this value on the System Info page
       CONDUIT_CUSTOMER_MODE: "${CONDUIT_CUSTOMER_MODE:-External}"
+      # Canonical numeric settings take precedence over supported legacy names.
+      CONDUIT_ADMIN_RATE_LIMITING_ENABLED: "${CONDUIT_ADMIN_RATE_LIMITING_ENABLED:-true}"
+      CONDUIT_ADMIN_RATE_LIMIT_MAX_REQUESTS: "${CONDUIT_ADMIN_RATE_LIMIT_MAX_REQUESTS:-${CONDUIT_ADMIN_RATE_LIMITING_MAX_REQUESTS:-100}}"
+      CONDUIT_ADMIN_RATE_LIMIT_WINDOW_SECONDS: "${CONDUIT_ADMIN_RATE_LIMIT_WINDOW_SECONDS:-${CONDUIT_ADMIN_RATE_LIMITING_WINDOW_SECONDS:-60}}"
+      CONDUIT_ADMIN_IP_FILTERING_ENABLED: "${CONDUIT_ADMIN_IP_FILTERING_ENABLED:-false}"
+      CONDUIT_ADMIN_IP_BANNING_ENABLED: "${CONDUIT_ADMIN_IP_BANNING_ENABLED:-false}"
+      CONDUIT_ADMIN_MAX_FAILED_AUTH_ATTEMPTS: "${CONDUIT_ADMIN_MAX_FAILED_AUTH_ATTEMPTS:-${CONDUIT_ADMIN_FAILED_AUTH_MAX_ATTEMPTS:-5}}"
+      CONDUIT_ADMIN_AUTH_BAN_DURATION_MINUTES: "${CONDUIT_ADMIN_AUTH_BAN_DURATION_MINUTES:-${CONDUIT_ADMIN_FAILED_AUTH_BAN_DURATION_MINUTES:-30}}"
       # Messaging runs on Wolverine (PostgreSQL transport) — the only backend as of #932.
       # API-to-API authentication key for backend services
       CONDUIT_API_TO_API_BACKEND_AUTH_KEY: alpha
@@ -197,8 +211,6 @@ services:
       # Synthetic active-model cost validation (#1036)
       BillingCostCanary__Enabled: "${BillingCostCanary__Enabled:-true}"
       BillingCostCanary__IntervalMinutes: "${BillingCostCanary__IntervalMinutes:-5}"
-      # Disable IP banning for development
-      CONDUIT_ADMIN_IP_BANNING_ENABLED: "false"
     ports:
       - "5002:8080"
     restart: on-failure
