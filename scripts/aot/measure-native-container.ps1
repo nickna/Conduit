@@ -33,12 +33,76 @@ $privateRoot = $null
 $collectionFailure = $null
 $attempt = $null
 $privateCleanupFailed = $false
+$diagnosticPhase = 'configuration'
+$diagnosticRuntime = 'unknown'
+$diagnosticSampleKind = 'none'
+$diagnosticPair = $null
+$primaryDiagnostic = $null
+$ownedContainerCleanup = [ordered]@{ status = 'not-attempted'; reason = 'none' }
+$privateFileCleanup = [ordered]@{ status = 'not-attempted'; reason = 'none' }
+
+function Set-PrimaryFailureDiagnostic([Exception] $Exception, [string] $Phase = $script:diagnosticPhase) {
+    if ($null -ne $script:primaryDiagnostic) { return }
+    # Only exact local constants can become public reason codes. In particular,
+    # child output and arbitrary exception text are never retained or formatted.
+    $reason = switch -CaseSensitive ($Exception.Message) {
+        'Container readiness deadline exceeded.' { 'readiness-deadline'; break }
+        'Container start failed.' { 'container-start'; break }
+        'Container ownership verification failed.' { 'ownership-verification'; break }
+        'Container memory sampling failed.' { 'memory-sample'; break }
+        'Invalid container memory sample.' { 'memory-value'; break }
+        'Workload probe failed.' { 'probe-exit'; break }
+        'Workload report is invalid.' { 'invalid-result'; break }
+        'Workload requests failed.' { 'request-failed'; break }
+        'Native benchmark image binding failed.' { 'image-binding'; break }
+        'Native benchmark container image binding failed.' { 'image-binding'; break }
+        'Native benchmark image changed during collection.' { 'image-binding'; break }
+        'Owned container shutdown failed.' { 'shutdown-failed'; break }
+        'Owned container cleanup failed.' { 'cleanup-verification-failed'; break }
+        'Owned container inspection failed.' { 'cleanup-verification-failed'; break }
+        'Owned container still exists after cleanup.' { 'cleanup-verification-failed'; break }
+        'Private benchmark file cleanup failed.' { 'private-cleanup-failed'; break }
+        'Native benchmark attempt publication failed.' { 'publication-failed'; break }
+        default { 'unknown' }
+    }
+    foreach ($tag in @('command-deadline', 'poll-command-deadline', 'poll-callback', 'poll-memory-sample', 'poll-memory-value')) {
+        foreach ($prefix in @('Private command failed.', 'Private command failed and its cleanup failed.')) {
+            if ($Exception.Message -ceq ($prefix + ' [stage=' + $tag + ']')) { $reason = $tag }
+        }
+    }
+    $script:primaryDiagnostic = [ordered]@{
+        phase = $Phase; reason = $reason; runtime = $script:diagnosticRuntime
+        sampleKind = $script:diagnosticSampleKind; pair = $script:diagnosticPair
+    }
+}
+
+function Get-CollectionFailureDiagnostic {
+    return ,([ordered]@{
+        phase = $script:primaryDiagnostic.phase; reason = $script:primaryDiagnostic.reason
+        runtime = $script:primaryDiagnostic.runtime; sampleKind = $script:primaryDiagnostic.sampleKind
+        pair = $script:primaryDiagnostic.pair
+        ownedContainerCleanup = $script:ownedContainerCleanup
+        privateFileCleanup = $script:privateFileCleanup
+    })
+}
+
+function Get-CollectionFailureDiagnosticMessage {
+    $diagnostic = Get-CollectionFailureDiagnostic
+    $pair = if ($null -eq $diagnostic.pair) { 'none' } else { [string]$diagnostic.pair }
+    return (' [phase=' + $diagnostic.phase + ';reason=' + $diagnostic.reason +
+        ';runtime=' + $diagnostic.runtime + ';sample=' + $diagnostic.sampleKind + ';pair=' + $pair +
+        ';owned-cleanup=' + $diagnostic.ownedContainerCleanup.status +
+        ';owned-cleanup-reason=' + $diagnostic.ownedContainerCleanup.reason +
+        ';private-cleanup=' + $diagnostic.privateFileCleanup.status +
+        ';private-cleanup-reason=' + $diagnostic.privateFileCleanup.reason + ']')
+}
 
 function Get-SafeFailureMessage([Exception] $Exception, [string] $Fallback) {
     $allowed = @(
         'Private command failed.', 'Private command failed and its cleanup failed.', 'Private command cleanup failed.',
         'Benchmark variant failed.', 'Benchmark variant failed and owned container cleanup failed.',
         'Owned benchmark container cleanup failed.', 'Container ownership verification failed.',
+        'Container readiness deadline exceeded.',
         'Native benchmark image binding failed.', 'Native benchmark container image binding failed.',
         'Native benchmark image changed during collection.'
     )
@@ -668,8 +732,16 @@ function Get-OwnedContainer($Record, [switch] $AllowMissing, [switch] $ValidateN
 }
 
 function Remove-OwnedContainer($Record) {
+    # Until a strict missing-container response is observed, cleanup is merely
+    # unverified. A failed inspection is not evidence that a resource leaked.
+    $script:ownedContainerCleanup.status = 'verification-failed'
+    $script:ownedContainerCleanup.reason = 'verification-failed'
     $container = Get-OwnedContainer $Record -AllowMissing
-    if ($null -eq $container) { return }
+    if ($null -eq $container) {
+        $script:ownedContainerCleanup.status = 'confirmed'
+        $script:ownedContainerCleanup.reason = 'none'
+        return
+    }
     $shutdownFailed = $false
     try {
         if ($container.State.Running -isnot [bool]) { throw 'Owned container state is invalid.' }
@@ -695,6 +767,8 @@ function Remove-OwnedContainer($Record) {
         if ($result.ExitCode -ne 0) { throw 'Owned container cleanup failed.' }
         if ($null -ne (Get-OwnedContainer $Record -AllowMissing)) { throw 'Owned container still exists after cleanup.' }
     }
+    $script:ownedContainerCleanup.status = 'confirmed'
+    $script:ownedContainerCleanup.reason = if ($shutdownFailed) { 'shutdown-failed' } else { 'none' }
     if ($shutdownFailed) { throw 'Owned container shutdown failed.' }
 }
 
@@ -762,6 +836,10 @@ function Test-WorkloadResult($Report, $Configuration) {
 }
 
 function Measure-Variant([string] $Runtime, [string] $Image, $ImageMetadata, [int] $HostPort) {
+    $script:diagnosticRuntime = $Runtime
+    $script:diagnosticPhase = 'container-start'
+    # This variant's result replaces prior successful variants' cleanup status.
+    $script:ownedContainerCleanup = [ordered]@{ status = 'not-attempted'; reason = 'none' }
     $owner = [guid]::NewGuid().ToString('N')
     $record = [pscustomobject]@{ Owner = $owner; Name = ('conduit-benchmark-' + $owner + '-' + $Runtime); Runtime = $Runtime; Id = $null }
     $attempted = $false
@@ -784,6 +862,7 @@ function Measure-Variant([string] $Runtime, [string] $Image, $ImageMetadata, [in
         $record.Id = $run.Stdout.Trim()
         $container = Get-OwnedContainer $record -ValidateNativeImage
         if ($container.State.Running -isnot [bool] -or -not $container.State.Running) { throw 'Container start failed.' }
+        $script:diagnosticPhase = 'readiness'
         $ready = $false
         $readyBudget = [System.Diagnostics.Stopwatch]::StartNew()
         while ($readyBudget.Elapsed.TotalSeconds -lt $ReadinessTimeoutSeconds) {
@@ -796,10 +875,12 @@ function Measure-Variant([string] $Runtime, [string] $Image, $ImageMetadata, [in
         }
         if (-not $ready) { throw 'Container readiness deadline exceeded.' }
         $watch.Stop()
+        $script:diagnosticPhase = 'memory-sample'
         $idle = Get-ContainerMemory $record.Id
         $samples.Add($idle)
         $rows = [System.Collections.Generic.List[object]]::new()
         foreach ($configuration in $configurations) {
+            $script:diagnosticPhase = 'workload'
             $privateConfiguration = [ordered]@{}
             foreach ($key in $configuration.Data.Keys) { $privateConfiguration[$key] = $configuration.Data[$key] }
             $privateConfiguration.baseUrl = 'http://127.0.0.1:' + $HostPort
@@ -818,16 +899,35 @@ function Measure-Variant([string] $Runtime, [string] $Image, $ImageMetadata, [in
                     CONDUIT_NATIVE_BENCHMARK_API_KEY = $apiKey
                 } $poll
                 if ($probe.ExitCode -ne 0) { throw 'Workload probe failed.' }
+                $script:diagnosticPhase = 'workload-result'
                 $report = $probe.Stdout | ConvertFrom-Json
                 $rows.Add((Test-WorkloadResult $report $configuration))
+                $script:diagnosticPhase = 'memory-sample'
                 $samples.Add((Get-ContainerMemory $record.Id))
             }
+            catch {
+                # The per-workload file cleanup below must not replace the
+                # primary workload or nested poll failure with a deletion error.
+                Set-PrimaryFailureDiagnostic $_.Exception
+                throw
+            }
             finally {
-                if ([System.IO.File]::Exists($configurationPath)) { Remove-Item -LiteralPath $configurationPath -Force }
+                try {
+                    if ([System.IO.File]::Exists($configurationPath)) { Remove-Item -LiteralPath $configurationPath -Force }
+                }
+                catch {
+                    $script:privateCleanupFailed = $true
+                    $script:privateFileCleanup.status = 'verification-failed'
+                    $script:privateFileCleanup.reason = 'cleanup-failed'
+                    Set-PrimaryFailureDiagnostic ([InvalidOperationException]::new('Private benchmark file cleanup failed.')) 'private-cleanup'
+                    throw 'Private benchmark file cleanup failed.'
+                }
             }
         }
+        $script:diagnosticPhase = 'memory-sample'
         $steady = Get-ContainerMemory $record.Id
         $samples.Add($steady)
+        $script:diagnosticPhase = 'collection-validation'
         $null = Get-OwnedContainer $record -ValidateNativeImage
         $measurement = [pscustomobject]@{
             runtime = $Runtime; image = $Image; imageRevision = $ImageMetadata.Revision
@@ -844,12 +944,16 @@ function Measure-Variant([string] $Runtime, [string] $Image, $ImageMetadata, [in
     }
     catch {
         $failed = $true
+        Set-PrimaryFailureDiagnostic $_.Exception
         $primaryMessage = Get-SafeFailureMessage $_.Exception 'Benchmark variant failed.'
     }
     finally {
         if ($attempted) {
             try { Remove-OwnedContainer $record }
-            catch { $cleanupFailed = $true }
+            catch {
+                $cleanupFailed = $true
+                Set-PrimaryFailureDiagnostic $_.Exception 'owned-cleanup'
+            }
         }
     }
     if ($failed -and $cleanupFailed) { throw 'Benchmark variant failed and owned container cleanup failed.' }
@@ -914,8 +1018,12 @@ try {
     if ($PSBoundParameters.ContainsKey('NativeBaselinePath') -or [string]::IsNullOrWhiteSpace($NativePackagingDirectory)) {
         throw 'Native benchmark image binding failed.'
     }
+    $diagnosticPhase = 'image-metadata'
+    $diagnosticRuntime = 'native-aot'
     try { $nativeEvidence = Read-NativeBenchmarkImageEvidence -Directory $NativePackagingDirectory -Service $Service -NativeImage $NativeImage }
     catch { throw 'Native benchmark image binding failed.' }
+    $diagnosticPhase = 'configuration'
+    $diagnosticRuntime = 'unknown'
     $WorkloadProbePath = [System.IO.Path]::GetFullPath($WorkloadProbePath)
     if (-not [System.IO.File]::Exists($WorkloadProbePath)) { throw 'Workload probe is missing.' }
     $apiKey = [Environment]::GetEnvironmentVariable('CONDUIT_NATIVE_BENCHMARK_API_KEY')
@@ -930,10 +1038,15 @@ try {
     if ((@($configurations.Id) -join '|') -cne (@($requiredIds | Sort-Object) -join '|')) { throw 'Workload configurations must match the service.' }
     $database = ConvertTo-ContainerUrl $DatabaseUrl @('postgres', 'postgresql')
     $redis = ConvertTo-ContainerUrl $RedisUrl @('redis', 'rediss')
+    $diagnosticPhase = 'image-metadata'
+    $diagnosticRuntime = 'jit'
     $jitMetadata = Get-ImageMetadata $JitImage
+    $diagnosticRuntime = 'native-aot'
     $nativeMetadata = Get-ImageMetadata $NativeImage $nativeEvidence
+    $diagnosticRuntime = 'unknown'
     if ($jitMetadata.Revision -cne $nativeMetadata.Revision) { throw 'JIT and native image revisions must match.' }
     $nativePublish = $nativeEvidence.nativePublish
+    $diagnosticPhase = 'configuration'
     $privateRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('conduit-benchmark-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $privateRoot | Out-Null
     Protect-PrivatePath $privateRoot -Directory
@@ -959,10 +1072,13 @@ try {
     [System.IO.File]::WriteAllLines($environmentFile, $environmentLines, [System.Text.UTF8Encoding]::new($false))
     Protect-PrivatePath $environmentFile
     # The first complete pair warms host/image caches and is never reported.
+    $diagnosticSampleKind = 'warmup'
     Measure-Variant 'jit' $JitImage $jitMetadata $Port | Out-Null
     Measure-Variant 'native-aot' $NativeImage $nativeMetadata ($Port + 1) | Out-Null
     $samples = [System.Collections.Generic.List[object]]::new()
     for ($pair = 1; $pair -le $PairedRuns; $pair++) {
+        $diagnosticSampleKind = 'recorded'
+        $diagnosticPair = $pair
         $order = if ($pair % 2 -eq 1) { @('jit', 'native-aot') } else { @('native-aot', 'jit') }
         $variants = @{}
         foreach ($runtime in $order) {
@@ -971,6 +1087,10 @@ try {
         }
         $samples.Add([pscustomobject]@{ pair = $pair; order = $order; jit = $variants['jit']; native = $variants['native-aot'] })
     }
+    $diagnosticPhase = 'collection-validation'
+    $diagnosticRuntime = 'unknown'
+    $diagnosticSampleKind = 'none'
+    $diagnosticPair = $null
     $jit = Get-MedianVariant $samples.ToArray() 'jit'
     $native = Get-MedianVariant $samples.ToArray() 'native'
     for ($index = 0; $index -lt $requiredIds.Count; $index++) {
@@ -995,11 +1115,13 @@ try {
         }
         $workloadComparisons.Add([pscustomobject]$row)
     }
+    $diagnosticRuntime = 'native-aot'
     try {
         $finalEvidence = Read-NativeBenchmarkImageEvidence -Directory $NativePackagingDirectory -Service $Service -NativeImage $NativeImage
         Assert-NativeBenchmarkImageEvidenceEqual -Expected $nativeEvidence.identity -Actual $finalEvidence.identity
     }
     catch { throw 'Native benchmark image changed during collection.' }
+    $diagnosticRuntime = 'unknown'
     $report = [pscustomobject]@{
         schemaVersion = 4; generatedAt = $null; collection = $null; service = $Service; platform = 'linux-x64'
         pairedRuns = $PairedRuns
@@ -1009,21 +1131,42 @@ try {
         comparison = [pscustomobject]@{ common = $comparisonCommon; workloads = @($workloadComparisons.ToArray()) }
     }
 }
-catch { $collectionFailure = Get-SafeFailureMessage $_.Exception 'Native benchmark collection failed.' }
+catch {
+    Set-PrimaryFailureDiagnostic $_.Exception
+    $collectionFailure = Get-SafeFailureMessage $_.Exception 'Native benchmark collection failed.'
+}
 finally {
     try {
-        if ($null -ne $privateRoot -and [System.IO.Directory]::Exists($privateRoot)) {
+        if ($null -ne $privateRoot) {
+            $privateFileCleanup.status = 'verification-failed'
+            $privateFileCleanup.reason = 'cleanup-failed'
             $resolved = [System.IO.Path]::GetFullPath($privateRoot)
             $expectedParent = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
             if ([System.IO.Path]::GetDirectoryName($resolved).TrimEnd([System.IO.Path]::DirectorySeparatorChar) -ne $expectedParent -or
                 [System.IO.Path]::GetFileName($resolved) -cnotmatch '^conduit-benchmark-[0-9a-f]{32}$') {
                 throw 'Private benchmark cleanup ownership could not be verified.'
             }
-            Remove-Item -LiteralPath $resolved -Recurse -Force
+            if ([System.IO.Directory]::Exists($resolved)) {
+                Remove-Item -LiteralPath $resolved -Recurse -Force
+            }
+            # Directory.Exists alone also returns false for inaccessible paths
+            # and non-directories. Confirm absence independently before saying
+            # private cleanup is complete; failed verification is not a leak claim.
+            try {
+                $null = [System.IO.File]::GetAttributes($resolved)
+                throw 'Private benchmark file cleanup failed.'
+            }
+            catch [System.IO.FileNotFoundException] { }
+            catch [System.IO.DirectoryNotFoundException] { }
+            $privateFileCleanup.status = 'confirmed'
+            $privateFileCleanup.reason = if ($privateCleanupFailed) { 'cleanup-failed' } else { 'none' }
         }
     }
     catch {
         $privateCleanupFailed = $true
+        $privateFileCleanup.status = 'verification-failed'
+        $privateFileCleanup.reason = 'cleanup-failed'
+        Set-PrimaryFailureDiagnostic ([InvalidOperationException]::new('Private benchmark file cleanup failed.')) 'private-cleanup'
         $collectionFailure = if ($null -ne $collectionFailure) {
             $collectionFailure + ' Private benchmark file cleanup also failed.'
         }
@@ -1038,14 +1181,21 @@ try {
                 Set-NativeBenchmarkAttemptFailed -Context $attempt -FailureCode $failureCode
             }
             catch { $collectionFailure += ' Attempt failure status could not be recorded.' }
+            try { Set-NativeBenchmarkAttemptFailureDiagnostic -Context $attempt -Diagnostic (Get-CollectionFailureDiagnostic) }
+            catch { $collectionFailure += ' Attempt failure diagnostic could not be recorded.' }
         }
-        throw ($collectionFailure + ' No qualification was recorded.')
+        throw ($collectionFailure + (Get-CollectionFailureDiagnosticMessage) + ' No qualification was recorded.')
     }
+    $diagnosticPhase = 'publication'
     try { Complete-NativeBenchmarkAttempt -Context $attempt -Report $report }
     catch {
+        Set-PrimaryFailureDiagnostic $_.Exception
         try { Set-NativeBenchmarkAttemptFailed -Context $attempt -FailureCode 'publication-failed' }
         catch { throw 'Native benchmark report and failure status could not be recorded.' }
-        throw 'Native benchmark report could not be recorded.'
+        $message = 'Native benchmark report could not be recorded.'
+        try { Set-NativeBenchmarkAttemptFailureDiagnostic -Context $attempt -Diagnostic (Get-CollectionFailureDiagnostic) }
+        catch { $message += ' Attempt failure diagnostic could not be recorded.' }
+        throw ($message + (Get-CollectionFailureDiagnosticMessage))
     }
     Write-Host 'Wrote matched authenticated JIT versus NativeAOT benchmark.'
 }
