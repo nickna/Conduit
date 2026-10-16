@@ -2,6 +2,7 @@ using System.Net;
 
 using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Enums;
+using ConduitLLM.Functions.Exceptions;
 using ConduitLLM.Functions.Interfaces;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Providers.Exa;
@@ -36,12 +37,16 @@ public sealed class FunctionSingleDispatchTransportTests
             ProviderType = providerType, ApiKey = "test-secret", IsEnabled = true
         };
         var httpFactory = new Mock<IHttpClientFactory>(MockBehavior.Strict);
+        using var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"requestId":"single-dispatch","query":"test","results":[]}""")
+        };
         var requestedClients = new List<string>();
         httpFactory.Setup(factory => factory.CreateClient(It.IsAny<string>()))
             .Returns((string name) =>
             {
                 requestedClients.Add(name);
-                return new HttpClient(new SuccessfulSearchHandler());
+                return new HttpClient(new ResponseHandler(response));
             });
         IFunctionClient client = providerType == FunctionProviderType.Exa
             ? new ExaClient(configuration, credential, httpFactory.Object, NullLogger<ExaClient>.Instance)
@@ -88,12 +93,58 @@ public sealed class FunctionSingleDispatchTransportTests
             keyed ? Times.Once() : Times.Never());
     }
 
-    private sealed class SuccessfulSearchHandler : HttpMessageHandler
+    [Theory]
+    [InlineData(FunctionProviderType.Exa, false, true)]
+    [InlineData(FunctionProviderType.Exa, false, false)]
+    [InlineData(FunctionProviderType.Exa, true, true)]
+    [InlineData(FunctionProviderType.Exa, true, false)]
+    [InlineData(FunctionProviderType.Tavily, false, true)]
+    [InlineData(FunctionProviderType.Tavily, false, false)]
+    public async Task ProviderDisposesResponseOnSuccessAndFailure(
+        FunctionProviderType providerType, bool contents, bool success)
+    {
+        using var content = new DisposalTrackingContent(success
+            ? """{"requestId":"dispose-response","query":"test","results":[]}"""
+            : """{"error":"invalid request"}""");
+        using var response = new HttpResponseMessage(success ? HttpStatusCode.OK : HttpStatusCode.BadRequest)
+        {
+            Content = content
+        };
+        var httpFactory = new Mock<IHttpClientFactory>();
+        httpFactory.Setup(factory => factory.CreateClient(It.IsAny<string>()))
+            .Returns(() => new HttpClient(new ResponseHandler(response)));
+        var configuration = new FunctionConfiguration { Id = 7, ConfigurationName = "Response disposal", ProviderType = providerType };
+        var credential = new FunctionCredential { ProviderType = providerType, ApiKey = "test-secret" };
+        IFunctionClient client = providerType == FunctionProviderType.Exa
+            ? new ExaClient(configuration, credential, httpFactory.Object, NullLogger<ExaClient>.Instance)
+            : new TavilyClient(configuration, credential, httpFactory.Object, NullLogger<TavilyClient>.Instance);
+        var parameters = contents
+            ? new Dictionary<string, object> { ["urls"] = new List<string> { "https://example.com" } }
+            : new Dictionary<string, object> { ["query"] = "test" };
+
+        if (success)
+            Assert.True((await client.ExecuteAsync(parameters)).IsSuccess);
+        else
+            await Assert.ThrowsAsync<FunctionCommunicationException>(() => client.ExecuteAsync(parameters));
+
+        // Assert before this test's fallback cleanup; HttpClient does not own its response.
+        Assert.True(content.IsDisposed);
+    }
+
+    private sealed class ResponseHandler(HttpResponseMessage response) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent("""{"requestId":"single-dispatch","query":"test","results":[]}""")
-            });
+            Task.FromResult(response);
+    }
+
+    private sealed class DisposalTrackingContent(string value) : StringContent(value)
+    {
+        public bool IsDisposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) IsDisposed = true;
+            base.Dispose(disposing);
+        }
     }
 }

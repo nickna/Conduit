@@ -32,7 +32,7 @@ public partial class TavilyClient
             using var client = CreateHttpClient(apiKey);
 
             // Make API request
-            var response = await client.PostAsJsonAsync(
+            using var response = await client.PostAsJsonAsync(
                 "/search",
                 tavilyRequest,
                 FunctionProviderJsonContext.Default.TavilySearchRequest,
