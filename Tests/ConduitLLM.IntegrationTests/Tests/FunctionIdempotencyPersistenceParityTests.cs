@@ -52,6 +52,59 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
     private const decimal Price = 0.12500001m;
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ExtraPrecisionProviderCostSettlesOnceAndReplaysAcrossHostsWithoutChangingTheSavedCost(
+        bool runtime, bool interruptedSettlement)
+    {
+        const decimal reportedCost = 0.125000015m;
+        const decimal billedCost = 0.12500002m;
+        await using var fixture = await Fixture.CreateAsync(postgres.ConnectionString, runtime);
+        fixture.Provider.ReportCost("precision", reportedCost);
+        fixture.FailSettlement = interruptedSettlement;
+        var body = fixture.Body("precision");
+        var first = await fixture.PostAsync(0, "precision-key", body);
+        if (interruptedSettlement)
+            first.AssertError(HttpStatusCode.ServiceUnavailable, "idempotency_unavailable");
+        else
+            first.AssertStatus(HttpStatusCode.OK);
+
+        var claim = await fixture.WaitForClaimAsync("precision-key", FunctionExecutionClaimState.Completed);
+        using (var saved = JsonDocument.Parse(claim.ResultJson!))
+            Assert.Equal(reportedCost, saved.RootElement.GetProperty("actualCost").GetDecimal());
+        if (interruptedSettlement)
+        {
+            Assert.Null(claim.BilledAtUtc);
+            await fixture.AssertAccountingAsync(fixture.Primary, 0);
+        }
+        else
+        {
+            Assert.Equal(claim.ExecutionId, first.Id);
+            Assert.Equal(reportedCost, first.Body.GetProperty("cost").GetProperty("actual").GetDecimal());
+        }
+
+        // Also covers already completed snapshots written by older hosts before the
+        // precision fix: replay must settle the saved raw cost without dispatching again.
+        fixture.FailSettlement = false;
+        var retries = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(index => fixture.PostAsync(index % 2, "precision-key", body)));
+        foreach (var retry in retries)
+        {
+            retry.AssertStatus(HttpStatusCode.OK);
+            Assert.True(retry.Replayed);
+            Assert.Equal(claim.ExecutionId, retry.Id);
+            Assert.Equal(reportedCost, retry.Body.GetProperty("cost").GetProperty("actual").GetDecimal());
+        }
+        var settled = await fixture.WaitForClaimAsync("precision-key", FunctionExecutionClaimState.Completed, billed: true);
+        Assert.Equal(claim.ResultJson, settled.ResultJson);
+        Assert.Equal(1, fixture.Provider.Count("precision"));
+        Assert.Equal(1, fixture.Provider.Total);
+        await fixture.AssertAccountingAsync(fixture.Primary, 1, billedCost);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task CanonicalReplayConflictsScopesAndIndependentOperationsPreserveProviderAndChargeCounts(bool runtime)
@@ -632,7 +685,7 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
             }
         }
 
-        internal async Task AssertAccountingAsync(NativeFunctionFixtureSnapshot identity, int operations)
+        internal async Task AssertAccountingAsync(NativeFunctionFixtureSnapshot identity, int operations, decimal unitPrice = Price)
         {
             await using var command = Source.CreateCommand("""
                 SELECT group_row."Balance", group_row."LifetimeSpent",
@@ -644,10 +697,10 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
             command.Parameters.AddWithValue("groupId", identity.GroupId);
             await using var reader = await command.ExecuteReaderAsync(Token);
             Assert.True(await reader.ReadAsync(Token));
-            Assert.Equal(100m - operations * Price, reader.GetDecimal(0));
-            Assert.Equal(operations * Price, reader.GetDecimal(1));
+            Assert.Equal(100m - operations * unitPrice, reader.GetDecimal(0));
+            Assert.Equal(operations * unitPrice, reader.GetDecimal(1));
             Assert.Equal(operations, reader.GetInt64(2));
-            Assert.Equal(operations * Price, reader.GetDecimal(3));
+            Assert.Equal(operations * unitPrice, reader.GetDecimal(3));
             Assert.Equal(operations, reader.GetInt64(4));
         }
 
@@ -704,6 +757,7 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
         private readonly ConcurrentDictionary<string, ProviderGate> _gates = new(StringComparer.Ordinal);
         private readonly ConcurrentDictionary<string, byte> _aborted = new(StringComparer.Ordinal);
         private readonly ConcurrentDictionary<string, byte> _rejected = new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, decimal> _reportedCosts = new(StringComparer.Ordinal);
         private readonly WebApplication _app;
         internal Uri Address => AddressOf(_app);
         internal int Total => _counts.Values.Sum();
@@ -744,7 +798,10 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
                     await context.Response.WriteAsync("""{"error":{"message":"counting provider private rejection"}}""");
                     return;
                 }
-                await context.Response.WriteAsync(NativeProviderStub.FunctionSuccessResponse);
+                var response = NativeProviderStub.FunctionSuccessResponse;
+                if (provider._reportedCosts.TryGetValue(query, out var reportedCost))
+                    response = $$"""{"costDollars":{"total":{{reportedCost.ToString(System.Globalization.CultureInfo.InvariantCulture)}}},{{response[1..]}}""";
+                await context.Response.WriteAsync(response);
             });
             await app.StartAsync();
             return provider;
@@ -753,6 +810,7 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
         internal ProviderGate Block(string query) => _gates.GetOrAdd(query, _ => new ProviderGate());
         internal void Abort(string query) => _aborted.TryAdd(query, 0);
         internal void Reject(string query) => _rejected.TryAdd(query, 0);
+        internal void ReportCost(string query, decimal cost) => _reportedCosts[query] = cost;
         internal void ReleaseAll()
         {
             foreach (var gate in _gates.Values) gate.Release.TrySetResult();

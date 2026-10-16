@@ -117,11 +117,15 @@ public sealed class NpgsqlFunctionExecutionIdempotencyStore : IFunctionExecution
         if (persisted.BilledAtUtc is not null)
             return;
 
-        if (cost > 0)
+        // Match the batch billing unit precision without changing the provider's exact
+        // saved cost. Applying this at settlement also recovers older completed claims
+        // whose snapshots contain more precision than the ledger can represent.
+        var billedCost = decimal.Round(cost, 8, MidpointRounding.AwayFromZero);
+        if (billedCost > 0)
         {
             await _virtualKeys.AdjustBalanceAsync(new VirtualKeyBalanceAdjustment(
                 persisted.BillingGroupId,
-                -cost,
+                -billedCost,
                 $"Function execution {persisted.ExecutionId:N}",
                 "function-execution",
                 VirtualKeyBalanceReferenceType.VirtualKey,
