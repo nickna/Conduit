@@ -288,6 +288,10 @@ jobs:
       - name: Run analyzer-only AOT audit
         shell: pwsh
         run: ./scripts/aot/aot-audit.ps1 -NoRestore
+      - name: Verify native evidence file type contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-evidence-file-types.ps1
+
       - name: Verify native promotion gate contract
         shell: pwsh
         run: ./scripts/aot/test-native-promotion.ps1

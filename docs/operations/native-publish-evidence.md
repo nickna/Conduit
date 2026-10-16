@@ -73,6 +73,84 @@ the build ID, relative path and manifest hash. Probe identity has its own refere
 The OpenAPI smoke may update timing metrics and the summary timestamp; it preserves
 these references and leaves the immutable manifests untouched.
 
+## Live Unix file-type checks
+
+Linux x64 and Arm64 evidence readers inspect file types through libc `statx`.
+The helper uses the [256-byte Linux UAPI buffer](https://github.com/torvalds/linux/blob/v6.12/include/uapi/linux/stat.h), requests `STATX_TYPE`, requires
+that returned mask bit, and reads `stx_mode` at offset 28. Strict UTF-8 encoding
+and a single NUL terminator preserve the requested path. The lookup uses
+`AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT` with default synchronization. Existing
+ancestor-link checks still run; no successful path or file-type result is cached
+between initial and final evidence reads.
+
+Missing interop, an unsupported process architecture, or native errors `EPERM`
+(1), `ENOSYS` (38), and `EOPNOTSUPP` (95) require an independent live lookup through
+the existing bounded `stat` subprocess. `EACCES` (13), `EINVAL` (22), other errors,
+missing returned type metadata, and unknown file types fail closed. Fallback must
+succeed independently; it never turns a native metadata failure into an assumed
+regular file. Its inspection and child cleanup retain their separate deadlines.
+Native metadata inspection does not open a FIFO or socket; it does not impose a
+universal deadline on filesystem metadata syscalls.
+
+`test-native-evidence-file-types.ps1` exercises source-derived ABI/error decisions
+and real bounded fallback children on both platforms. Linux adds actual UTF-8,
+FIFO, socket, character-device, symlink, ancestor-link, and late-replacement cases.
+The two CI workflows run this contract and emit non-gating native-versus-subprocess
+timings on the actual Linux runner. These checks supplement all eight existing
+promotion, collector, publish, image, runtime, archive, and OCI contract suites.
+
+### Measured verification overhead (#1639)
+
+One matched local comparison used independently copied source trees on the same
+Linux overlay filesystem in a network-isolated Ubuntu 24.04.5 x64 container on
+Docker Desktop/WSL2, with PowerShell 7.6.6, .NET 10.0.12, two CPU quota units and
+3 GiB memory. Both full
+promotion runs passed all **204 cases**. Elapsed time fell from **254.395 s** to
+**114.874 s** in that pair (54.8% lower). The committed baseline is `cb2aaf84c`;
+only the file-type helper changed in the candidate's promotion inputs.
+
+Separate component measurements use identical regular UTF-8 fixtures and operation
+counts. They include PowerShell loop overhead, are not additive, and do not
+constitute a hosted CPU profile or production request benchmark.
+
+| Operation | Count | Before (ms) | After (ms) |
+| --- | ---: | ---: | ---: |
+| First live type lookup, including initialization | 1 | 44.2 | 770.0 |
+| Warm live type helper | 500 | 1,294.8 | 57.3 |
+| `stat` command discovery alone | 200 | 301.2 | 303.1 |
+| Selected `stat` process and metadata lookup | 200 | 190.9 | 177.1 |
+| JSON read, parse and byte hash | 2,000 | 240.2 | 220.1 |
+| Complete evidence-file hash, including live guards | 200 | 628.3 | 104.4 |
+
+The first optimized lookup pays the interop compilation cost once per PowerShell
+process. Subsequent calls still inspect the filesystem each time. Retained local
+streams, timing JSON and component records are named `issue-1639-*`; baseline
+helper SHA-256 is `c981960b25093a32c566186472d404573b406e508b34f26cb0f398696989102c`
+and candidate helper SHA-256 is
+`25756eaba4a5b5405deb2e5ad9edb6beed69cd3ba5cb5c507c36b95a3a449098`.
+
+All existing suites were rerun after the change. Windows used PowerShell 7.6.5
+and .NET 10.0.11; Linux used the environment above. Every listed run exited zero
+with blank stderr. The collectors also passed 31 metadata cleanup boundaries.
+
+| Contract suite | Windows cases | Linux cases |
+| --- | ---: | ---: |
+| Promotion | 204 | 204 |
+| Collector | 101 | 101 |
+| Publish evidence | 64 | 67 |
+| Assembled image publisher | 40 | 40 |
+| Runtime archive | 56 | 56 |
+| Image verification | 41 | 41 |
+| Runtime evidence | 50 | 50 |
+| OCI association | 41 | 41 |
+| New file-type contract | 39 | 47 |
+
+The Windows file-type run explicitly excludes the Linux-only syscall and special
+file cases; Linux executes those cases against actual paths. All eight existing
+test sources are unchanged. The workflow validator passes all 89 policy checks
+for seven active workflows. Initial ABI-test overload binding and a sandbox ACL
+restriction were diagnosed and retained separately from the successful reruns.
+
 ## Qualification boundary
 
 Successful references are emitted only after all three publishes, symbol separation

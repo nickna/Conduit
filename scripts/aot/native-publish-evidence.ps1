@@ -42,7 +42,102 @@ function Assert-NativeEvidenceRelativePath([string] $Path, [switch] $Leaf) {
     }
 }
 
+function Get-NativeEvidenceStatxFileType([string] $Path) {
+    if (-not $IsLinux) { return $null }
+    if ($null -eq ('ConduitLLM.NativeEvidence.LinuxFileType' -as [type])) {
+        # Cache only whether this runtime can compile the interop helper. Every
+        # path observation below is a new no-follow lookup, never a cached type.
+        if ((Get-Variable -Name NativeEvidenceStatxUnavailable -Scope Script -ValueOnly -ErrorAction SilentlyContinue) -eq $true) {
+            return $null
+        }
+        try {
+            Add-Type -ErrorAction Stop -TypeDefinition @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace ConduitLLM.NativeEvidence
+{
+    // Linux UAPI struct statx is 256 bytes on the supported 64-bit ABIs.
+    // Preserve its entire writable buffer; only stx_mask and stx_mode are read.
+    // https://github.com/torvalds/linux/blob/v6.12/include/uapi/linux/stat.h
+    [StructLayout(LayoutKind.Explicit, Size = 256)]
+    public struct StatxBuffer
+    {
+        [FieldOffset(0)] public uint Mask;
+        [FieldOffset(28)] public ushort Mode;
+    }
+
+    public static class LinuxFileType
+    {
+        [DllImport("libc", EntryPoint = "statx", SetLastError = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int Statx(int directory, [In] byte[] pathname, int flags, uint mask, out StatxBuffer buffer);
+
+        // Null means the independent bounded stat fallback must perform its own
+        // live lookup. Missing or malformed successful metadata never falls back.
+        public static int? ReadFileType(string path)
+        {
+            if (!OperatingSystem.IsLinux() ||
+                (RuntimeInformation.ProcessArchitecture != Architecture.X64 &&
+                 RuntimeInformation.ProcessArchitecture != Architecture.Arm64))
+                return null;
+            if (string.IsNullOrEmpty(path) || path.IndexOf('\0') >= 0)
+                throw new IOException("Native publish regular-file inspection failed.");
+
+            // Explicit strict UTF-8 prevents replacement/truncation from changing
+            // which filesystem entry is inspected. The native pathname is NUL-terminated.
+            var pathname = new UTF8Encoding(false, true).GetBytes(path + "\0");
+            try
+            {
+                // AT_FDCWD, AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT, STATX_TYPE.
+                // Default stat synchronization is retained; no DONT_SYNC/cache mode.
+                var result = Statx(-100, pathname, 0x100 | 0x800, 0x00000001, out var buffer);
+                var error = result == -1 ? Marshal.GetLastPInvokeError() : 0;
+                if (result == -1 && (error == 1 || error == 38 || error == 95))
+                    return null; // EPERM (e.g. seccomp), ENOSYS, EOPNOTSUPP.
+                if (result != 0 || (buffer.Mask & 0x00000001) == 0)
+                    throw new IOException("Native publish regular-file inspection failed.");
+                var type = buffer.Mode & 0xF000;
+                switch (type)
+                {
+                    case 0x1000: // FIFO
+                    case 0x2000: // character device
+                    case 0x4000: // directory
+                    case 0x6000: // block device
+                    case 0x8000: // regular file
+                    case 0xA000: // symbolic link itself
+                    case 0xC000: // socket
+                        return type;
+                    default:
+                        throw new IOException("Native publish regular-file inspection failed.");
+                }
+            }
+            catch (DllNotFoundException) { return null; }
+            catch (EntryPointNotFoundException) { return null; }
+            catch (BadImageFormatException) { return null; }
+            catch (PlatformNotSupportedException) { return null; }
+        }
+    }
+}
+'@ | Out-Null
+        }
+        catch {
+            $script:NativeEvidenceStatxUnavailable = $true
+            return $null
+        }
+    }
+    return [ConduitLLM.NativeEvidence.LinuxFileType]::ReadFileType($Path)
+}
+
 function Get-NativeEvidenceUnixFileType([string] $Path) {
+    try { $nativeType = Get-NativeEvidenceStatxFileType $Path }
+    catch { throw 'Native publish regular-file inspection failed.' }
+    if ($null -ne $nativeType) { return $nativeType }
+    return Get-NativeEvidenceUnixFileTypeViaStat $Path
+}
+
+function Get-NativeEvidenceUnixFileTypeViaStat([string] $Path) {
     # FileInfo also represents Unix sockets, FIFOs and devices. Check the actual
     # type before FileStream.Open, which could otherwise block on a FIFO.
     $process = $null
@@ -84,6 +179,9 @@ function Get-NativeEvidenceUnixFileType([string] $Path) {
             throw 'Native publish regular-file inspection failed.'
         }
         $result = [Convert]::ToUInt32($output, 16) -band 0xF000
+        if ($result -notin @(0x1000, 0x2000, 0x4000, 0x6000, 0x8000, 0xA000, 0xC000)) {
+            throw 'Native publish regular-file inspection failed.'
+        }
     }
     catch { $failed = $true }
     finally {

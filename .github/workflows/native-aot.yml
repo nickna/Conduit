@@ -104,6 +104,10 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      - name: Verify native evidence file type contract
+        shell: pwsh
+        run: ./scripts/aot/test-native-evidence-file-types.ps1
+
       - name: Verify native promotion gate contract
         shell: pwsh
         run: ./scripts/aot/test-native-promotion.ps1
