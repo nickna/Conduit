@@ -194,16 +194,58 @@ internal static class PersistedValueConverterContract
         var snapshot = comparer.Snapshot(original) as Dictionary<string, string>
             ?? throw new InvalidOperationException("Dictionary snapshot type changed.");
         Ensure(!ReferenceEquals(original, snapshot), "dictionary snapshot aliases the caller");
-        Ensure(comparer.Equals(original, snapshot) && comparer.GetHashCode(original) == comparer.GetHashCode(snapshot),
-            "equal dictionary snapshot/hash changed");
+        AssertEquivalent(original, snapshot, "snapshot");
+        var reordered = new Dictionary<string, string> { ["unicode"] = "雪 🔎", ["region"] = "west" };
+        AssertEquivalent(snapshot, reordered, "reordered contents");
+        AssertEquivalent(snapshot, new Dictionary<string, string>(reordered, StringComparer.OrdinalIgnoreCase),
+            "identical contents with a caller-provided comparer");
+
+        var changedValue = new Dictionary<string, string>(snapshot) { ["region"] = "West" };
+        AssertDifferent(snapshot, changedValue, "case-sensitive values");
+        var changedKey = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["REGION"] = "west", ["unicode"] = "雪 🔎"
+        };
+        AssertDifferent(snapshot, changedKey, "ordinal keys independent of the caller-provided comparer");
+        AssertDifferent(snapshot, new Dictionary<string, string> { ["region"] = "west" }, "removed entry");
+        var caseDistinct = new Dictionary<string, string> { ["Case"] = "UPPER", ["case"] = "lower" };
+        AssertEquivalent(caseDistinct, new Dictionary<string, string> { ["case"] = "lower", ["Case"] = "UPPER" },
+            "distinct ordinal keys");
+
+        var empty = new Dictionary<string, string>();
+        AssertEquivalent(empty, new Dictionary<string, string>(), "empty dictionaries");
+        AssertDifferent(null, empty, "null and empty dictionaries");
+        var emptySnapshot = comparer.Snapshot(empty) as Dictionary<string, string>;
+        Ensure(emptySnapshot is { Count: 0 } && !ReferenceEquals(empty, emptySnapshot),
+            "empty dictionary snapshot aliases the caller");
+        var nullValue = new Dictionary<string, string> { ["nullable"] = null!, ["region"] = "west" };
+        var nullValueSnapshot = comparer.Snapshot(nullValue) as Dictionary<string, string>
+            ?? throw new InvalidOperationException("Null-valued dictionary snapshot type changed.");
+        Ensure(!ReferenceEquals(nullValue, nullValueSnapshot), "null-valued dictionary snapshot aliases the caller");
+        AssertEquivalent(nullValue, nullValueSnapshot, "null-valued snapshot");
+        AssertEquivalent(nullValue, new Dictionary<string, string> { ["region"] = "west", ["nullable"] = null! },
+            "reordered null-valued entries");
+        nullValue["nullable"] = "";
+        Ensure(nullValueSnapshot["nullable"] is null, "null-valued snapshot mutated with caller");
+        AssertDifferent(nullValue, nullValueSnapshot, "null and empty-string values");
+        AssertDifferent(new Dictionary<string, string> { ["nullable"] = null! }, empty, "null-valued and missing entries");
+
         original["region"] = "east";
+        AssertDifferent(original, snapshot, "in-place value change");
         original["added"] = "café";
         Ensure(snapshot["region"] == "west" && !snapshot.ContainsKey("added"), "snapshot mutated with caller");
-        Ensure(!comparer.Equals(original, snapshot), "in-place dictionary change was missed");
-        var reordered = new Dictionary<string, string> { ["unicode"] = "雪 🔎", ["region"] = "west" };
-        Ensure(!comparer.Equals(snapshot, reordered), "legacy insertion-order-sensitive comparison changed");
+        AssertDifferent(original, snapshot, "in-place entry addition");
         Ensure(comparer.Snapshot(null) is null && comparer.Equals(null, null) && comparer.GetHashCode(null) == 0,
             "dictionary null comparer changed");
+
+        void AssertEquivalent(Dictionary<string, string> left, Dictionary<string, string> right, string scenario)
+        {
+            Ensure(comparer.Equals(left, right) && comparer.Equals(right, left), "dictionary equality changed for " + scenario);
+            Ensure(comparer.GetHashCode(left) == comparer.GetHashCode(right), "equal dictionary hashes differ for " + scenario);
+        }
+
+        void AssertDifferent(Dictionary<string, string>? left, Dictionary<string, string>? right, string scenario) =>
+            Ensure(!comparer.Equals(left, right) && !comparer.Equals(right, left), "dictionary difference missed for " + scenario);
     }
 
     internal static async Task<int> ExercisePostgresAsync(

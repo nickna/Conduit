@@ -442,9 +442,9 @@ namespace ConduitLLM.Configuration.Data.CompiledModels
                     string (Dictionary<string, string> value) => ProviderSettingsJson.Serialize(value),
                     Dictionary<string, string> (string json) => ProviderSettingsJson.Deserialize(json))));
         settings.SetComparer(new ValueComparer<Dictionary<string, string>>(
-            bool (Dictionary<string, string> left, Dictionary<string, string> right) => ProviderSettingsJson.Serialize(left) == ProviderSettingsJson.Serialize(right),
-            int (Dictionary<string, string> value) => (value == null ? 0 : ((object)ProviderSettingsJson.Serialize(value)).GetHashCode()),
-            Dictionary<string, string> (Dictionary<string, string> value) => (value == null ? null : new Dictionary<string, string>(value))));
+            bool (Dictionary<string, string> left, Dictionary<string, string> right) => ProviderSettingsComparer.AreEqual(left, right),
+            int (Dictionary<string, string> value) => ProviderSettingsComparer.ComputeHashCode(value),
+            Dictionary<string, string> (Dictionary<string, string> value) => ProviderSettingsComparer.Snapshot(value)));
         settings.AddAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.None);
         settings.AddAnnotation("Relational:ColumnName", "Settings");
         settings.AddAnnotation("Relational:ColumnType", "jsonb");
