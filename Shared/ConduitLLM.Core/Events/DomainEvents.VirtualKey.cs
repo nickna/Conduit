@@ -142,8 +142,8 @@ namespace ConduitLLM.Core.Events
 
     /// <summary>
     /// Idempotency-key convention for spend processing (#927). A spend debit is applied
-    /// at most once per <see cref="SpendUpdateRequested.RequestId"/>, whether it arrives
-    /// via the event bus or the publish-failure direct-write fallback.
+    /// at most once per request ID across event delivery, direct writes, and
+    /// fallback recovery after an ambiguous database failure.
     /// </summary>
     public static class SpendIdempotency
     {

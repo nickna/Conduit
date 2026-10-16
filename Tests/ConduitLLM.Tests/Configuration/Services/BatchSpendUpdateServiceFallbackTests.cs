@@ -142,6 +142,58 @@ public class BatchSpendUpdateServiceFallbackTests
     }
 
     [Fact]
+    public async Task FlushPendingUpdatesAsync_WithOriginalDebitIdentity_RetainsIdentityAndMetadataAcrossRetry()
+    {
+        const string idempotencyKey = "spend:direct-commit-acknowledgement-lost";
+        var attempts = new List<VirtualKeyBalanceAdjustment>();
+        _runtimeStore.Setup(store => store.AdjustBalanceAsync(
+                It.IsAny<VirtualKeyBalanceAdjustment>(), It.IsAny<CancellationToken>()))
+            .Returns((VirtualKeyBalanceAdjustment adjustment, CancellationToken _) =>
+            {
+                attempts.Add(adjustment);
+                return attempts.Count == 1
+                    ? Task.FromException<VirtualKeyBalanceAdjustmentResult>(new IOException("commit acknowledgement lost"))
+                    : Task.FromResult(new VirtualKeyBalanceAdjustmentResult(97.25m, Cost, false));
+            });
+        using var service = CreateService();
+        service.QueueFallbackUpdate(KeyId, Cost, BilledAtUtc, idempotencyKey);
+
+        Assert.Equal(0, await service.FlushPendingUpdatesAsync());
+        Assert.Equal(1, (await service.GetStatisticsAsync())["FallbackPendingUpdates"]);
+        Assert.Equal(1, await service.FlushPendingUpdatesAsync());
+
+        Assert.Equal(2, attempts.Count);
+        Assert.All(attempts, adjustment =>
+        {
+            Assert.Equal(idempotencyKey, adjustment.IdempotencyKey);
+            Assert.Equal(VirtualKeyBalanceReferenceType.VirtualKey, adjustment.ReferenceType);
+            Assert.Equal(KeyId.ToString(), adjustment.ReferenceId);
+            Assert.Equal(BillingWindowUtc, adjustment.BillingWindowStartUtc);
+        });
+        Assert.Equal(0, (await service.GetStatisticsAsync())["FallbackPendingUpdates"]);
+        Assert.Equal([KeyHash], Assert.Single(_notifications));
+    }
+
+    [Fact]
+    public async Task FlushPendingUpdatesAsync_WithIndependentFallbackUpdates_UsesDistinctIdentities()
+    {
+        var identities = new List<string>();
+        _runtimeStore.Setup(store => store.AdjustBalanceAsync(
+                It.IsAny<VirtualKeyBalanceAdjustment>(), It.IsAny<CancellationToken>()))
+            .Callback((VirtualKeyBalanceAdjustment adjustment, CancellationToken _) =>
+                identities.Add(adjustment.IdempotencyKey))
+            .ReturnsAsync(new VirtualKeyBalanceAdjustmentResult(94.50m, Cost * 2, true));
+        using var service = CreateService();
+        service.QueueFallbackUpdate(KeyId, Cost, BilledAtUtc);
+        service.QueueFallbackUpdate(KeyId, Cost, BilledAtUtc);
+
+        Assert.Equal(2, await service.FlushPendingUpdatesAsync());
+
+        Assert.Equal(2, identities.Distinct().Count());
+        Assert.All(identities, identity => Assert.StartsWith("fallback-spend:", identity));
+    }
+
+    [Fact]
     public async Task FlushPendingUpdatesAsync_WithPartialFallbackFailure_NotifiesSuccessfulWrites()
     {
         _runtimeStore.SetupSequence(store => store.AdjustBalanceAsync(

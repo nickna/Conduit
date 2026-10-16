@@ -2,6 +2,7 @@ using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Configuration.Utilities;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Persistence;
 using ConduitLLM.Persistence.Interfaces;
@@ -51,8 +52,13 @@ public sealed class StoreBackedVirtualKeyRuntimeService : IVirtualKeyRuntimeServ
         UpdateSpendAsync(keyId, cost, billedAtUtc: null);
 
     /// <inheritdoc />
-    public async Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc)
+    public Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc) =>
+        UpdateSpendAsync(keyId, cost, billedAtUtc, Guid.NewGuid().ToString("N"));
+
+    /// <inheritdoc />
+    public async Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc, string requestId)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
         if (cost <= 0)
         {
             _logger.LogDebug(
@@ -79,6 +85,7 @@ public sealed class StoreBackedVirtualKeyRuntimeService : IVirtualKeyRuntimeServ
                     "System",
                     VirtualKeyBalanceReferenceType.VirtualKey,
                     keyId.ToString(),
+                    IdempotencyKey: SpendIdempotency.KeyFor(requestId),
                     BillingWindowStartUtc: BillingTimeUtilities.GetBillingWindowStartUtc(billedAtUtc)));
 
             // The charge is already durable at this point. Timestamp maintenance is

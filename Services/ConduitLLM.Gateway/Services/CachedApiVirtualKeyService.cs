@@ -95,8 +95,13 @@ namespace ConduitLLM.Gateway.Services
             UpdateSpendAsync(keyId, cost, billedAtUtc: null);
 
         /// <inheritdoc />
-        public async Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc)
+        public Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc) =>
+            UpdateSpendAsync(keyId, cost, billedAtUtc, Guid.NewGuid().ToString("N"));
+
+        /// <inheritdoc />
+        public async Task<bool> UpdateSpendAsync(int keyId, decimal cost, DateTime? billedAtUtc, string requestId)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
             if (cost <= 0)
             {
                 _logger.LogDebug("Spend update for key {KeyId} has zero or negative cost {Cost} - skipping", keyId, cost);
@@ -109,8 +114,6 @@ namespace ConduitLLM.Gateway.Services
                 if (IsEventPublishingEnabled)
                 {
                     // Event-driven approach - publish SpendUpdateRequested event
-                    var requestId = Guid.NewGuid().ToString();
-
                     var published = await TryPublishEventAsync(
                         new SpendUpdateRequested
                         {
@@ -145,7 +148,7 @@ namespace ConduitLLM.Gateway.Services
                     // FALLBACK: Direct database update approach when event bus not configured
                     _logger.LogDebug("Event publishing not configured - using direct database update for key {KeyId}", keyId);
 
-                    return await UpdateSpendDirectAsync(keyId, cost, idempotencyKey: null, billingTimestamp);
+                    return await UpdateSpendDirectAsync(keyId, cost, SpendIdempotency.KeyFor(requestId), billingTimestamp);
                 }
             }
             catch (Exception ex)
@@ -158,11 +161,11 @@ namespace ConduitLLM.Gateway.Services
         /// <summary>
         /// Adjusts the key's group balance directly, bypassing the event bus. Used when
         /// event publishing is not configured, and as the durability fallback when a
-        /// spend publish fails (#927) — in the latter case with the RequestId-derived
-        /// idempotency key so the adjustment applies at most once across both paths.
+        /// spend publish fails (#927). The RequestId-derived idempotency key ensures
+        /// the adjustment applies at most once across direct, event, and recovery paths.
         /// </summary>
         private async Task<bool> UpdateSpendDirectAsync(
-            int keyId, decimal cost, string? idempotencyKey, DateTime billedAtUtc)
+            int keyId, decimal cost, string idempotencyKey, DateTime billedAtUtc)
         {
             var virtualKey = await VirtualKeyRepository.GetByIdAsync(keyId);
             if (virtualKey == null)
@@ -179,38 +182,30 @@ namespace ConduitLLM.Gateway.Services
                 return false;
             }
 
-            decimal newBalance;
             var billingWindow = ConduitLLM.Configuration.Utilities.BillingTimeUtilities.GetBillingWindowStartUtc(billedAtUtc);
-            if (idempotencyKey != null)
-            {
-                var result = await GroupRepository.AdjustBalanceIdempotentAsync(
-                    group.Id,
-                    -cost,
-                    idempotencyKey,
-                    $"API usage by virtual key #{keyId}",
-                    "System",
-                    ReferenceType.VirtualKey,
-                    keyId.ToString(),
-                    billingWindow);
-                newBalance = result.NewBalance;
-            }
-            else
-            {
-                newBalance = await GroupRepository.AdjustBalanceAsync(
-                    group.Id,
-                    -cost,
-                    $"API usage by virtual key #{keyId}",
-                    "System",
-                    ReferenceType.VirtualKey,
-                    keyId.ToString(),
-                    billingWindow);
-            }
+            var result = await GroupRepository.AdjustBalanceIdempotentAsync(
+                group.Id,
+                -cost,
+                idempotencyKey,
+                $"API usage by virtual key #{keyId}",
+                "System",
+                ReferenceType.VirtualKey,
+                keyId.ToString(),
+                billingWindow);
 
-            // Invalidate cache after spend update
-            await _cache.InvalidateVirtualKeyAsync(virtualKey.KeyHash);
+            // The debit is durable. Cache maintenance failures must not queue a
+            // second charge; subsequent validation still checks the group balance.
+            try
+            {
+                await _cache.InvalidateVirtualKeyAsync(virtualKey.KeyHash);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Spend was persisted for virtual key {KeyId}, but its cache could not be invalidated", keyId);
+            }
 
             _logger.LogInformation("Updated spend for key ID {KeyId} in group {GroupId}. New balance: {NewBalance}",
-                keyId, group.Id, newBalance);
+                keyId, group.Id, result.NewBalance);
 
             return true;
         }

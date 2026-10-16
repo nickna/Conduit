@@ -158,7 +158,7 @@ public sealed class StoreBackedVirtualKeyRuntimeServiceTests
         Assert.Equal("System", adjustment.InitiatedBy);
         Assert.Equal(VirtualKeyBalanceReferenceType.VirtualKey, adjustment.ReferenceType);
         Assert.Equal(record.Id.ToString(), adjustment.ReferenceId);
-        Assert.Null(adjustment.IdempotencyKey);
+        Assert.StartsWith("spend:", adjustment.IdempotencyKey);
         Assert.NotNull(adjustment.BillingWindowStartUtc);
         Assert.Equal(0, adjustment.BillingWindowStartUtc.Value.Minute);
         Assert.Equal(0, adjustment.BillingWindowStartUtc.Value.Second);
@@ -226,7 +226,7 @@ public sealed class StoreBackedVirtualKeyRuntimeServiceTests
         _batchSpendService.Verify(value => value.QueueFallbackUpdate(
             It.IsAny<int>(),
             It.IsAny<decimal>(),
-            It.IsAny<DateTime?>()), Times.Never);
+            It.IsAny<DateTime?>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
