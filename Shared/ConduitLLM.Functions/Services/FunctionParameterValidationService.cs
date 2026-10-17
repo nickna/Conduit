@@ -27,6 +27,8 @@ namespace ConduitLLM.Functions.Services;
 /// Array fields accept JsonElement arrays, JsonArray nodes, CLR arrays, and IList
 /// collections. Other IEnumerable values must be materialized as an array or
 /// list; enumeration alone cannot distinguish sequences from generic maps.
+/// Unavailable JsonElement inputs fail validation without using the malformed
+/// schema fallback or discarding errors for other parameters.
 /// </remarks>
 public class FunctionParameterValidationService
 {
@@ -210,6 +212,12 @@ public class FunctionParameterValidationService
             }
 
             return null;
+        }
+        catch (ObjectDisposedException) when (value is JsonElement)
+        {
+            // The schema document belongs to this validation call. A disposed
+            // caller element is invalid input, including disposal during a read.
+            return $"Parameter '{paramName}' contains an unavailable JSON value";
         }
         catch (Exception ex)
         {

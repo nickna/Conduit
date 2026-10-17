@@ -291,6 +291,113 @@ public sealed class FunctionParameterValidationServiceTests
     }
 
     [Theory]
+    [InlineData("string", "\"accepted\"", "7")]
+    [InlineData("number", "7", "\"invalid\"")]
+    [InlineData("boolean", "true", "7")]
+    [InlineData("array", "[1,2]", "{\"count\":1}")]
+    [InlineData("select", "\"alpha\"", "\"outside-options\"")]
+    public void UnavailableJsonInputsAreRejectedForEveryNonObjectTypeWithoutMutationOrWarnings(
+        string type, string validJson, string invalidJson)
+    {
+        foreach (var (json, valid) in new[] { (validJson, true), (invalidJson, false), ("null", false) })
+        {
+            using var document = JsonDocument.Parse(json);
+            var value = document.RootElement;
+            AssertValidation(ValidateWithoutMutation(value, Schema(type)), valid);
+            var parameters = new Dictionary<string, object> { ["value"] = value, ["unmapped"] = new object() };
+            var original = parameters.ToArray();
+            document.Dispose();
+
+            var result = _validator.ValidateParameters(parameters, Schema(type));
+
+            AssertValidation(result, valid: false);
+            Assert.Equal("Parameter 'value' contains an unavailable JSON value", Assert.Single(result.Errors));
+            AssertUnchanged(parameters, original);
+        }
+    }
+
+    [Theory]
+    [InlineData("string")]
+    [InlineData("number")]
+    [InlineData("boolean")]
+    [InlineData("array")]
+    [InlineData("select")]
+    public void UnavailableJsonInputRetainsEarlierRequiredAndFieldErrorsAndLaterSchemaWarnings(string type)
+    {
+        var schema = "{\"required\":[\"missing\"],\"optional\":{"
+            + "\"bounded\":{\"type\":\"number\",\"min\":1},\"value\":{\"type\":\"" + type
+            + "\"},\"broken\":{\"type\":17}}}";
+        using var document = JsonDocument.Parse("7");
+        var parameters = new Dictionary<string, object>
+        {
+            ["bounded"] = 0, ["value"] = document.RootElement, ["broken"] = "unchanged"
+        };
+        var original = parameters.ToArray();
+        document.Dispose();
+
+        var result = _validator.ValidateParameters(parameters, schema);
+
+        Assert.False(result.IsValid);
+        Assert.Collection(result.Errors,
+            error => Assert.Equal("Missing required parameter: 'missing'", error),
+            error => Assert.Equal("Parameter 'bounded' must be at least 1", error),
+            error => Assert.Equal("Parameter 'value' contains an unavailable JSON value", error));
+        Assert.Contains("'broken'", Assert.Single(result.Warnings), StringComparison.Ordinal);
+        AssertUnchanged(parameters, original);
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData(" \t\r\n", false)]
+    [InlineData("{", true)]
+    [InlineData("[]", true)]
+    [InlineData("null", true)]
+    public void UnavailableJsonInputsPreserveMissingAndMalformedSchemaFallbacks(string? schema, bool warning)
+    {
+        using var document = JsonDocument.Parse("7");
+        var parameters = new Dictionary<string, object> { ["value"] = document.RootElement };
+        var original = parameters.ToArray();
+        document.Dispose();
+
+        var result = _validator.ValidateParameters(parameters, schema);
+
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
+        if (warning) Assert.Single(result.Warnings);
+        else Assert.Empty(result.Warnings);
+        AssertUnchanged(parameters, original);
+    }
+
+    [Theory]
+    [InlineData("null", true)]
+    [InlineData("17", true)]
+    [InlineData("{\"type\":17}", true)]
+    [InlineData("{}", false)]
+    public void UnavailableJsonInputPreservesMalformedOrUntypedFieldFallbackAndOtherErrors(
+        string definition, bool warning)
+    {
+        var schema = $$$$"""
+            {"required":["missing"],"optional":{
+                "value":{{{{definition}}}},"bounded":{"type":"number","min":1}}}
+            """;
+        using var document = JsonDocument.Parse("7");
+        var parameters = new Dictionary<string, object> { ["value"] = document.RootElement, ["bounded"] = 0 };
+        var original = parameters.ToArray();
+        document.Dispose();
+
+        var result = _validator.ValidateParameters(parameters, schema);
+
+        Assert.False(result.IsValid);
+        Assert.Collection(result.Errors,
+            error => Assert.Equal("Missing required parameter: 'missing'", error),
+            error => Assert.Equal("Parameter 'bounded' must be at least 1", error));
+        if (warning) Assert.Contains("'value'", Assert.Single(result.Warnings), StringComparison.Ordinal);
+        else Assert.Empty(result.Warnings);
+        AssertUnchanged(parameters, original);
+    }
+
+    [Theory]
     [InlineData("string", "\"snow 雪\"", true)]
     [InlineData("string", "\"\"", true)]
     [InlineData("string", "true", false)]
