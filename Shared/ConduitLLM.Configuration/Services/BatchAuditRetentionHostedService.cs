@@ -58,11 +58,6 @@ public sealed class BatchAuditRetentionHostedService : IHostedService, IDisposab
             await _run(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-        catch (Exception exception)
-        {
-            _logger.LogError(exception, "Audit retention worker failed");
-            throw;
-        }
     }
 
     private async Task StopGenerationAsync()

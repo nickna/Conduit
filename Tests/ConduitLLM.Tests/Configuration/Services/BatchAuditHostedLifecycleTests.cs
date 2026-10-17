@@ -222,7 +222,7 @@ public sealed class BatchAuditHostedLifecycleTests
             var failedToken = await failedEntered.Task.WaitAsync(TestTimeout);
             Assert.Same(original, await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 retention.StopAsync(CancellationToken.None).WaitAsync(TestTimeout)));
-            Assert.Contains(logger.Entries, entry => entry.Level >= LogLevel.Error && ReferenceEquals(entry.Exception, original));
+            Assert.Empty(logger.Entries);
 
             await retention.StartAsync(CancellationToken.None);
             var nextToken = await next.Entered.Task.WaitAsync(TestTimeout);
@@ -293,7 +293,9 @@ public sealed class BatchAuditHostedLifecycleTests
             await retention.StartAsync(CancellationToken.None);
             await entered.Task.WaitAsync(TestTimeout);
             await retention.DisposeAsync().AsTask().WaitAsync(TestTimeout);
-            Assert.Contains(logger.Entries, entry => entry.Level >= LogLevel.Error && ReferenceEquals(entry.Exception, original));
+            var entry = Assert.Single(logger.Entries);
+            Assert.Equal(LogLevel.Error, entry.Level);
+            Assert.Same(original, entry.Exception);
             await Assert.ThrowsAsync<ObjectDisposedException>(() => retention.StartAsync(CancellationToken.None));
         }
         finally { await retention.DisposeAsync().AsTask().WaitAsync(TestTimeout); }
