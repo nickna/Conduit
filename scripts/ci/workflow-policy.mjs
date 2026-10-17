@@ -23,6 +23,11 @@ export function validateWorkflows(workflows, required) {
   }
   require(array(workflows['native-aot.yml']?.on?.pull_request?.paths).includes('tools/ConduitLLM.HealthProbe/**'),
     'NativeAOT pull requests must explicitly include the packaged HealthProbe project');
+  const pricingProof = array(workflows['native-aot.yml']?.jobs?.['publish-and-smoke']?.steps)
+    .filter(step => step.uses === './.github/actions/run-tests' && step.with?.suite === 'native-persistence-parity');
+  require(pricingProof.length === 1 && pricingProof[0].with?.project === 'Tests/ConduitLLM.IntegrationTests' &&
+    pricingProof[0].with?.filter?.split('|').includes('FullyQualifiedName~FunctionCostCacheRedisTests'),
+    'Shared persistence parity must retain the real Redis function pricing cache regressions');
   const ci = workflows['ci.yml'];
   const packagedCheckout = array(ci.jobs.docker.steps).filter(step => step.uses?.startsWith('actions/checkout@'));
   require(packagedCheckout.length === 1 && packagedCheckout[0].with?.['persist-credentials'] === false,

@@ -10,6 +10,14 @@ function workflows() { return Object.fromEntries(readdirSync('.github/workflows'
 test('real workflows and cancellable validation jobs satisfy the policy without release warnings', () => {
   assert.equal(validateWorkflows(workflows(), inventory).requiredJobs, inventory.length);
 });
+test('rejects removal of real Redis function pricing cache regressions from shared persistence parity', () => {
+  const w = workflows();
+  const proof = w['native-aot.yml'].jobs['publish-and-smoke'].steps
+    .find(step => step.with?.suite === 'native-persistence-parity');
+  proof.with.filter = proof.with.filter.split('|')
+    .filter(clause => clause !== 'FullyQualifiedName~FunctionCostCacheRedisTests').join('|');
+  assert.throws(() => validateWorkflows(w, inventory), /real Redis function pricing cache regressions/);
+});
 for (const [name, key, value] of [
   ['function transport regression', 'filter', 'Component=MediaDispatch'],
   ['durable media regressions', 'filter', 'FullyQualifiedName~FunctionProviderRetryTransportTests'],
