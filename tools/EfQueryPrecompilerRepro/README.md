@@ -2,8 +2,9 @@
 
 Opt-in, design-time reproductions for Conduit [#1660](https://github.com/nickna/Conduit/issues/1660),
 [#1662](https://github.com/nickna/Conduit/issues/1662),
-[#1667](https://github.com/nickna/Conduit/issues/1667), and
-[#1672](https://github.com/nickna/Conduit/issues/1672).
+[#1667](https://github.com/nickna/Conduit/issues/1667),
+[#1672](https://github.com/nickna/Conduit/issues/1672), and
+[#1678](https://github.com/nickna/Conduit/issues/1678).
 This project is deliberately outside `Conduit.slnx`. It references no Conduit
 service, uses an inert design-time factory at loopback port 1, and its entrypoint
 does not call any query. Do not publish or execute its query methods to reproduce
@@ -12,7 +13,7 @@ these compiler failures.
 The local package file aligns EF runtime, Relational, Design and Tasks at
 10.0.12, with Npgsql/provider 10.0.3. It also retains the repository's patched
 MSBuild and cryptography dependencies without changing the service dependency
-graph. The #1660/#1662 commands used Windows x64; the #1667/#1672 matrices used Linux.
+graph. The #1660/#1662 commands used Windows x64; the #1667/#1672/#1678 matrices used Linux.
 Both used SDK 10.0.401.
 
 ## Repeat a case
@@ -39,13 +40,13 @@ Push-Location $scratch
 try {
     # The environment property also reaches EF's MSBuildWorkspace, unlike a build-only -p switch.
     $env:ReproVariant = $variant
-    dotnet build EfQueryPrecompilerRepro.csproj -c Release
+    dotnet build EfQueryPrecompilerRepro.csproj -c Release -m:1 --tl:off
     if ($LASTEXITCODE -ne 0) { throw 'Initial build failed before query analysis.' }
     dotnet ef dbcontext optimize --project EfQueryPrecompilerRepro.csproj --startup-project EfQueryPrecompilerRepro.csproj --context $context --configuration Release --output-dir Generated --namespace EfQueryPrecompilerRepro.Generated --no-scaffold --precompile-queries --nativeaot --no-build
     $optimizeExit = $LASTEXITCODE
     Write-Host "Query generation exit: $optimizeExit"
     # For generation-success controls, compile the generated interceptors as a separate gate.
-    if ($optimizeExit -eq 0) { dotnet build EfQueryPrecompilerRepro.csproj -c Release --no-restore }
+    if ($optimizeExit -eq 0) { dotnet build EfQueryPrecompilerRepro.csproj -c Release --no-restore -m:1 --tl:off }
 } finally {
     Pop-Location
     $env:ReproVariant = $previousVariant
@@ -311,3 +312,78 @@ Production already contains the cast accepted in `70c22b547`; this reduction
 changes no production query. The unchanged source/model also matches #1671's
 14 passing managed metrics cases against PostgreSQL. Those existing runtime
 cases execute the ordinary adapters; the generated interceptors remain unexecuted.
+
+## Guarded nullable ID and nullable-long coalesce (#1678)
+
+Use the fresh-directory commands above with these variant/context pairs. Each
+pair includes its own unsealed entity model and inert design-time factory.
+
+| Variants | `$context` |
+|---|---|
+| `GuardedNullableIdValue`, `GuardedNullableIdScalar` | `EfQueryPrecompilerRepro.GuardedNullableIdContext` |
+| `NullableLongCoalesce`, `NullableLongCoalesceExplicit` | `EfQueryPrecompilerRepro.MediaLongContext` |
+
+The guarded-ID pair preserves the complete `HasValue` ternary, filtered and
+unfiltered queries, and the same three-field anonymous projections. The original
+captures an unchanged nullable alias and accesses `.Value` inside the filtered
+query. The control captures `GetValueOrDefault()` into a nonnullable scalar and
+retains the original guard. Neither variant passes an optional query token.
+
+The coalesce pair preserves the media/key join, group filter, ignored deletion
+filter, anonymous `SizeBytes`, grouping, count, sum and explicitly aliased
+terminal token. Both use `0L`; the sole six-byte difference is the outer `(long)`
+cast. This separates it from #1667's integer-literal conversion and #1672's
+nullable conditional lifting.
+
+Both Linux matrices used SDK 10.0.401, .NET 10.0.12, EF runtime/Relational/
+Design/Tasks/CLI 10.0.12 and Npgsql/provider 10.0.3. All initial builds exited 0.
+
+| Variant | Generation exit | Generated managed build | Observation |
+|---|---:|---|---|
+| `GuardedNullableIdValue` | 1 | Skipped; no generated file | Wrapped parameter-evaluation failure, inner `Nullable object must have a value`, through `ExpressionTreeFuncletizer.EvaluateCore` |
+| `GuardedNullableIdScalar` | 0 | 0; one generated file | Nonnullable capture retains the complete guarded query |
+| `NullableLongCoalesce` | 1 | Skipped; no generated file | Nullable `Int64` argument does not match nonnullable anonymous member at `Expression.New` / `VisitAnonymousObjectCreationExpression` |
+| `NullableLongCoalesceExplicit` | 0 | 0; one generated file | Explicit outer conversion preserves the complete aggregate query |
+
+The guarded original's initial build retains one CS8629 warning; the other
+initial builds have none. The generated controls retain eight and seven
+CS9270/CS8669 warnings, respectively. Each matrix joins nine bounded compiler
+stages and their streams, six stable source inputs, actual package assets and
+the generated control's hash. The retained matrices are:
+
+- `artifacts/issues-1469-1696/issue-1678-id/run-57184abf66e14edf9c46aa26f5796cf2/matrix.json`,
+  SHA-256 `d84ae14da8941c79f988166f268c3d992889dd7ef92005f6d389d84b1556c898`.
+- `artifacts/issues-1469-1696/issue-1678-long/run-1974983702f7459a87b75f601a13291e/matrix.json`,
+  SHA-256 `94b9a7418c4a34532e93e69c662f503d7776f95f51c77697865def76c3526104`.
+
+Pinned source supports two leads. The translator's
+[dummy captured-field value](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore.Design/Query/Internal/CSharpToLinqTranslator.cs#L1314)
+and the funcletizer's
+[member evaluation](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore/Query/Internal/ExpressionTreeFuncletizer.cs#L2238)
+are consistent with evaluating the empty nullable during design time. The
+[binary visitor](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore.Design/Query/Internal/CSharpToLinqTranslator.cs#L258)
+lifts the coalesce RHS to the nullable LHS type before anonymous construction
+uses semantic member types. These are source leads, without a demonstrated
+upstream patch. Current-main source was inspected at immutable 2e8882748, without
+building or executing it.
+
+The separate reports are
+[EF #39308](https://github.com/dotnet/efcore/issues/39308) and
+[EF #39309](https://github.com/dotnet/efcore/issues/39309). Twenty-four bounded
+all-state issue/PR searches found no exact report duplicate. Further review of
+[proposed fix #39305](https://github.com/dotnet/efcore/pull/39305), which addresses
+#39272, found source-level overlap with the nullable-ID failure: its null-instance
+gate can also apply to an empty boxed nullable. The patch is open/unmerged at
+inspection, lacks an explicit `Nullable<T>.Value`/`HasValue` test, and was not
+executed here. It is a related candidate fix. #39309 differs from #39303's
+literal and #39304's conditional failures, and from the earlier runtime
+funcletizer coalesce fix #35122. The search was not exhaustive.
+
+Production `EfMediaRuntimeStore` already has both source workarounds. Its current
+source matches the complete #1677 local and hosted shared suites, including
+14 passing media parity cases. The separate `existing-workaround-parity.json`
+receipt has SHA-256
+`05a1cffc7419697c1fe88646e1e9d417f61f18a438ab1ef7dc538cb840003313`.
+Those cases execute the ordinary managed adapters. The reductions execute no
+query method, open no database connection and publish no native executable;
+generated-interceptor runtime execution remains unestablished. #1373 stays open.

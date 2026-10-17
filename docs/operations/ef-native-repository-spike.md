@@ -1279,3 +1279,42 @@ Independent hosted-artifact replay SHA-256:
 The workflow passes its configured native contract and image gates; native EF
 query execution and complete native application coverage remain unestablished.
 Production remains JIT.
+
+## Guarded nullable and coalesce compiler reductions (#1678)
+
+Four opt-in variants in the
+[standalone diagnostic project](../../tools/EfQueryPrecompilerRepro/README.md#guarded-nullable-id-and-nullable-long-coalesce-1678)
+reduce the two media-owner compiler failures. The nullable-ID pair retains both
+complete `HasValue` branches and their three-field projections. Captured
+`.Value` fails design-time parameter evaluation; capturing a nonnullable
+`GetValueOrDefault()` scalar generates and compiles successfully. The coalesce
+pair retains the join, filters, anonymous projection, grouping, count, sum and
+terminal token. Already-typed `0L` still produces a nullable-long argument for a
+nonnullable anonymous member at `Expression.New`; adding only the six-byte
+outer `(long)` cast generates and compiles successfully.
+
+All four initial managed builds pass on Linux SDK 10.0.401 with EF runtime,
+Relational, Design, Tasks and CLI 10.0.12 and Npgsql/provider 10.0.3. The guarded
+original retains one CS8629 warning. Each failed generation exits 1 with no
+interceptor; each control exits 0, emits one file and passes its generated
+managed build, retaining eight and seven CS9270/CS8669 warnings respectively.
+Both nine-stage matrices preserve six inputs, package identities, source copies,
+generated hashes and joined processes/streams. Their full receipts and commands
+are recorded in the project README.
+
+The sanitized reports are [EF #39308](https://github.com/dotnet/efcore/issues/39308)
+and [EF #39309](https://github.com/dotnet/efcore/issues/39309), following 24 bounded
+all-state issue/PR searches. Further inspection found that open
+[PR #39305](https://github.com/dotnet/efcore/pull/39305) has a proposed null-instance
+gate that may also cover the nullable-ID case. That patch was not executed and
+has no explicit guarded nullable test; its effect on this reproducer remains
+unestablished. The coalesce failure remains separate from the recorded literal,
+conditional and earlier runtime funcletizer fixes. Inspected current-main source
+was not built or executed.
+
+Production media queries already contain both workarounds and are unchanged.
+Their current source matches the just-completed #1677 suites, including
+14 passing ordinary managed media parity cases. These reductions execute no
+query methods, open no database connection and publish no native executable.
+Generated-interceptor execution and complete native EF/application coverage
+remain unestablished. Production remains JIT.
