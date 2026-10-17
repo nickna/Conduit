@@ -265,6 +265,20 @@ and `release/10.0` source still use
 the namespace-qualified name; no backport was identified. That source inspection
 does not test either a newer package or the fixed main-line code.
 
+The baseline and ledger above were merged in `e3f3f69fd`. A follow-up on
+2026-10-16 (America/Los_Angeles) reconfirmed the `12.0-preview1` milestone,
+the `main` merge target and the unchanged dotted-name construction in v10.0.13.
+These commands separate a merged fix from its release availability:
+
+```powershell
+gh api repos/dotnet/efcore/issues/37972 --jq '{state,milestone:.milestone.title,html_url}'
+gh api repos/dotnet/efcore/pulls/39208 --jq '{merged,merged_at,base:.base.ref,merge_commit_sha}'
+gh api repos/dotnet/efcore/releases/latest --jq '{tag_name,prerelease,html_url}'
+```
+
+Keep #1696 open while the applicable supported package is unavailable. An
+upstream preview milestone alone does not qualify the repository's 10.x graph.
+
 Track compatible package availability separately from merge status. When an
 upstream-fixed supported dependency becomes available, repeat generation and
 generated-code compilation in a fresh directory alongside the retained 10.0.12
