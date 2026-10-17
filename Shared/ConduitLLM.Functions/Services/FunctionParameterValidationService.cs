@@ -17,11 +17,13 @@ namespace ConduitLLM.Functions.Services;
 /// schemas skip validation; malformed schemas retain the provider-validation fallback
 /// with an explicit warning. Numbers must fit the finite double range; bounds use
 /// exact decimal digits without rounding. Required fields remain presence checks.
-/// Object fields accept JSON objects, object-valued string-key dictionaries (mutable
-/// or read-only), non-generic dictionaries with only string keys, and non-enumerable
-/// POCO reference objects. Strings, URI/version scalars, delegates, arrays, scalar
-/// JSON nodes, and value types are not objects. Caller object-inspection failures
-/// reject the parameter rather than invoking the malformed-schema fallback.
+/// Object fields accept JsonElement objects, JsonObject nodes, object-valued
+/// string-key dictionaries (mutable or read-only), non-generic dictionaries with
+/// only string keys, and non-enumerable POCO reference objects. JsonDocument is
+/// unsupported regardless of its root value. Strings, URI/version scalars,
+/// delegates, arrays, scalar JSON nodes, and value types are not objects. Caller
+/// object-inspection failures reject the parameter rather than invoking the
+/// malformed-schema fallback.
 /// </remarks>
 public class FunctionParameterValidationService
 {
@@ -234,6 +236,8 @@ public class FunctionParameterValidationService
                 };
             if (value is JsonNode)
                 return value is JsonObject ? null : error;
+            if (value is JsonDocument)
+                return error;
             if (value is IDictionary<string, object> or IReadOnlyDictionary<string, object>)
                 return null;
             if (value is IDictionary dictionary)

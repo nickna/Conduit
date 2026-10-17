@@ -133,6 +133,37 @@ public sealed class FunctionParameterValidationServiceTests
     }
 
     [Theory]
+    [InlineData("{\"count\":1}")]
+    [InlineData("\"plain string\"")]
+    [InlineData("1")]
+    [InlineData("true")]
+    [InlineData("false")]
+    [InlineData("[1,2]")]
+    [InlineData("null")]
+    public void ObjectSchemaRejectsUnsupportedJsonDocumentsWithoutMutationOrWarnings(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+
+        var result = ValidateWithoutMutation(document, Schema("object"));
+
+        AssertValidation(result, valid: false);
+        Assert.Contains("must be an object", Assert.Single(result.Errors), StringComparison.Ordinal);
+        Assert.Equal(json, document.RootElement.GetRawText());
+    }
+
+    [Fact]
+    public void ObjectSchemaRejectsDisposedJsonDocumentsWithoutMutationOrWarnings()
+    {
+        using var document = JsonDocument.Parse("{\"count\":1}");
+        document.Dispose();
+
+        var result = ValidateWithoutMutation(document, Schema("object"));
+
+        AssertValidation(result, valid: false);
+        Assert.Contains("must be an object", Assert.Single(result.Errors), StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("string", "\"snow 雪\"", true)]
     [InlineData("string", "\"\"", true)]
     [InlineData("string", "true", false)]
