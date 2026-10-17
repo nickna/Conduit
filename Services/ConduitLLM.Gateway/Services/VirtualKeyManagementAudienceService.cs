@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.ExceptionServices;
 
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Interfaces;
@@ -73,6 +74,7 @@ public sealed class VirtualKeyManagementAudienceService : BackgroundService, IVi
     {
         var connection = RequireConnection(connectionId);
         var outcome = new VirtualKeyManagementSubscription(false, false);
+        ExceptionDispatchInfo? targetLookupFailure = null;
         await WithConnectionAsync(connection, cancellationToken, async token =>
         {
             // Authorization and all audience changes share the revocation gate.
@@ -84,7 +86,15 @@ public sealed class VirtualKeyManagementAudienceService : BackgroundService, IVi
                 await RevokeAdministratorAsync(connection, token);
                 return;
             }
-            var target = await keys.GetVirtualKeyInfoForValidationAsync(targetKeyId, token);
+            VirtualKey? target;
+            try { target = await keys.GetVirtualKeyInfoForValidationAsync(targetKeyId, token); }
+            catch (Exception failure) when (failure is not OperationCanceledException && !token.IsCancellationRequested)
+            {
+                // A failed target read has not changed any audience. Preserve
+                // this connection and the hub's existing error/metrics path.
+                targetLookupFailure = ExceptionDispatchInfo.Capture(failure);
+                return;
+            }
             outcome = new VirtualKeyManagementSubscription(true, target is not null);
             if (target is null) return;
             await GrantAdministratorAsync(connection, token);
@@ -94,6 +104,7 @@ public sealed class VirtualKeyManagementAudienceService : BackgroundService, IVi
             // status and acknowledgement also finish before revocation can finish.
             await subscribed(target, token);
         });
+        targetLookupFailure?.Throw();
         return outcome;
     }
 

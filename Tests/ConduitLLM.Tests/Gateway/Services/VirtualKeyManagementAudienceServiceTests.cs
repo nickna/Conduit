@@ -65,6 +65,131 @@ public sealed class VirtualKeyManagementAudienceServiceTests
     }
 
     [Fact]
+    public async Task FailedTargetLookupPreservesExistingAudiencesAndAllowsRetryAndLaterRevocation()
+    {
+        await using var fixture = new Fixture();
+        await fixture.RegisterAsync("admin", 1);
+        fixture.Keys[2] = Key(2, administrator: false);
+        fixture.Keys[3] = Key(3, administrator: false);
+        await fixture.Service.SubscribeAsync("admin", 2, static (_, _) => Task.CompletedTask, CancellationToken.None);
+        var before = fixture.Memberships.Keys.ToHashSet();
+        var failure = new IOException("Owned target lookup failure");
+        var sent = 0;
+        fixture.Lookup = (id, _) => id == 3 ? Task.FromException<VirtualKey?>(failure)
+            : Task.FromResult(fixture.Keys.GetValueOrDefault(id));
+
+        var observed = await Assert.ThrowsAsync<IOException>(() => fixture.Service.SubscribeAsync("admin", 3,
+            (_, _) => { sent++; return Task.CompletedTask; }, CancellationToken.None));
+
+        Assert.Same(failure, observed);
+        Assert.Equal(0, sent);
+        Assert.Empty(fixture.Aborted);
+        Assert.Equal(1, fixture.Service.ConnectionCount);
+        Assert.True(before.SetEquals(fixture.Memberships.Keys));
+
+        fixture.Lookup = null;
+        var retried = await fixture.Service.SubscribeAsync("admin", 3,
+            (_, _) => { sent++; return Task.CompletedTask; }, CancellationToken.None);
+        Assert.True(retried.Authorized && retried.TargetExists);
+        Assert.Equal(1, sent);
+        Assert.True(fixture.Has("admin", "vkey-status-2"));
+        Assert.True(fixture.Has("admin", "vkey-status-3"));
+        fixture.Keys[1].Metadata = "{\"isAdmin\":false}";
+        await fixture.Service.AuditAsync();
+        Assert.False(fixture.Has("admin", "admin"));
+        Assert.False(fixture.Has("admin", "vkey-status-2"));
+        Assert.False(fixture.Has("admin", "vkey-status-3"));
+        Assert.True(fixture.Has("admin", "vkey-status-1"));
+        Assert.True(fixture.Has("admin", "vkey-lifecycle-owner-1"));
+        Assert.Empty(fixture.Aborted);
+    }
+
+    [Fact]
+    public async Task FailedTargetLookupDoesNotGrantANewlyPromotedAdministratorAudience()
+    {
+        await using var fixture = new Fixture();
+        await fixture.RegisterAsync("promoted", 1, administrator: false);
+        fixture.Keys[1] = Key(1);
+        var before = fixture.Memberships.Keys.ToHashSet();
+        var failure = new IOException("Owned target lookup failure");
+        fixture.Lookup = (id, _) => id == 2 ? Task.FromException<VirtualKey?>(failure)
+            : Task.FromResult(fixture.Keys.GetValueOrDefault(id));
+        var sent = 0;
+
+        Assert.Same(failure, await Assert.ThrowsAsync<IOException>(() => fixture.Service.SubscribeAsync("promoted", 2,
+            (_, _) => { sent++; return Task.CompletedTask; }, CancellationToken.None)));
+
+        Assert.Equal(0, sent);
+        Assert.Empty(fixture.Aborted);
+        Assert.Equal(1, fixture.Service.ConnectionCount);
+        Assert.True(before.SetEquals(fixture.Memberships.Keys));
+        Assert.False(fixture.Has("promoted", "admin"));
+        Assert.True(fixture.Has("promoted", "vkey-lifecycle-owner-1"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CancelledTargetLookupStillAbortsAndSuppressesLateSubscription(bool callerCancellation)
+    {
+        await using var fixture = new Fixture();
+        await fixture.RegisterAsync("admin", 1);
+        fixture.Keys[2] = Key(2, administrator: false);
+        using var caller = new CancellationTokenSource();
+        var started = Signal();
+        var target = new TaskCompletionSource<VirtualKey?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var drained = Signal();
+        fixture.Lookup = (id, _) =>
+        {
+            if (id != 2) return Task.FromResult(fixture.Keys.GetValueOrDefault(id));
+            started.TrySetResult();
+            return target.Task; // Deliberately ignores cancellation until the owned read drains.
+        };
+        fixture.ScopeDisposed = _ => drained.TrySetResult();
+        var sent = 0;
+        try
+        {
+            var subscribe = fixture.Service.SubscribeAsync("admin", 2,
+                (_, _) => { Interlocked.Increment(ref sent); return Task.CompletedTask; }, caller.Token);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            if (callerCancellation) caller.Cancel();
+            else fixture.Clock.Advance(VirtualKeyManagementAudienceService.OperationBudget);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => subscribe.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal(1, fixture.Aborted.GetValueOrDefault("admin"));
+            Assert.Equal(0, fixture.Service.ConnectionCount);
+            Assert.False(drained.Task.IsCompleted);
+            Assert.Empty(fixture.Memberships);
+            Assert.Equal(0, sent);
+        }
+        finally
+        {
+            target.TrySetResult(fixture.Keys[2]);
+            await drained.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        Assert.Equal(0, sent);
+        Assert.Empty(fixture.Memberships);
+        await Assert.ThrowsAsync<HubException>(() => fixture.Service.SubscribeAsync("admin", 2,
+            static (_, _) => Task.CompletedTask, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task TargetLookupOperationCancellationWithoutACancelledCallerStillAborts()
+    {
+        await using var fixture = new Fixture();
+        await fixture.RegisterAsync("admin", 1);
+        var failure = new OperationCanceledException("Owned target lookup cancellation");
+        fixture.Lookup = (id, _) => id == 2 ? Task.FromException<VirtualKey?>(failure)
+            : Task.FromResult(fixture.Keys.GetValueOrDefault(id));
+
+        Assert.Same(failure, await Assert.ThrowsAsync<OperationCanceledException>(() => fixture.Service.SubscribeAsync("admin", 2,
+            static (_, _) => Task.CompletedTask, CancellationToken.None)));
+
+        Assert.Equal(1, fixture.Aborted.GetValueOrDefault("admin"));
+        Assert.Equal(0, fixture.Service.ConnectionCount);
+        Assert.Empty(fixture.Memberships);
+    }
+
+    [Fact]
     public async Task HostedAuditUsesItsPeriodicClockAndStopsWithItsHost()
     {
         await using var fixture = new Fixture();
