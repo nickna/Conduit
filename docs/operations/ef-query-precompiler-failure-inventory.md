@@ -108,3 +108,21 @@ conditional compilation choice, reachable operation, or generated SQL plan.
 No new build, EF invocation, database fixture, or test execution was performed
 to create this index. All 224 planned native cases remain `NOT_EXECUTED`, and the
 additional nine cases remain outside that plan. Production remains JIT.
+
+## Independent generated-code compilation controls
+
+These later reductions are separate from the frozen 730-rendering/334-signature
+owner-pass index and do not change its counts or metadata JSON. Successful
+precompilation can still emit C# that does not compile.
+
+| Local tracker | Isolated variant | Initial build | Generation | Generated-code build | Upstream |
+|---|---|---:|---:|---|---|
+| [#1695](https://github.com/nickna/Conduit/issues/1695) | `ReadPredicate` | 0 | 0 | 1, `CS0030`: sealed `VirtualKey` to `IInjectableService` | [EF #37957](https://github.com/dotnet/efcore/issues/37957), open/Backlog in the 2026-10-17 UTC review |
+
+The fresh Linux SDK 10.0.401 / EF 10.0.12 / Npgsql 10.0.3
+[control and evidence identifiers](../../tools/EfQueryPrecompilerRepro/README.md#sealed-entity-generated-compilation-tracker-1695)
+retain the generated source, diagnostics and all three stage exits. No database
+or native query execution occurred. No supported fixed version was identified;
+the inspected 10.0.13 release was not tested. An available upstream fix must pass
+generation and generated-code compilation before this tracker changes status.
+Production seals, package pins and diagnostics remain intact.

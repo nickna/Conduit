@@ -3,8 +3,9 @@
 Opt-in, design-time reproductions for Conduit [#1660](https://github.com/nickna/Conduit/issues/1660),
 [#1662](https://github.com/nickna/Conduit/issues/1662),
 [#1667](https://github.com/nickna/Conduit/issues/1667),
-[#1672](https://github.com/nickna/Conduit/issues/1672), and
-[#1678](https://github.com/nickna/Conduit/issues/1678).
+[#1672](https://github.com/nickna/Conduit/issues/1672),
+[#1678](https://github.com/nickna/Conduit/issues/1678), and
+[#1695](https://github.com/nickna/Conduit/issues/1695).
 This project is deliberately outside `Conduit.slnx`. It references no Conduit
 service, uses an inert design-time factory at loopback port 1, and its entrypoint
 does not call any query. Do not publish or execute its query methods to reproduce
@@ -113,6 +114,37 @@ existing upstream issue rather than filing a duplicate there.
 The null-forgiven path in `ExpressionTreeFuncletizer.VisitUnary.EvaluateOperand`
 is a source lead, not a proven root cause. A successful value-lambda control is
 a diagnostic result, not a general workaround guarantee.
+
+## Sealed-entity generated compilation tracker (#1695)
+
+A fresh Linux repeat on 2026-10-17 UTC retained SDK 10.0.401, aligned EF
+runtime/Relational/Design/Tasks/tool 10.0.12 and Npgsql/provider 10.0.3. The unchanged
+`ReadPredicate` control produced these distinct stages:
+
+| Stage | Exit | Observation |
+|---|---:|---|
+| Initial Release build | 0 | Zero warnings; the entity remains sealed |
+| Query precompilation | 0 | One interceptor source generated |
+| Generated-code Release build | 1 | `CS0030` casting sealed `VirtualKey` to `IInjectableService` at generated line 116; four warnings also retained |
+
+The fresh matrix is retained under
+`artifacts/issues-1469-1696/issue-1695/run-e49759debacc42e598a1641751f36d94/`;
+its SHA-256 is `7c93558906865cccd695a756c7901e9ae5b30d999271425ed86453b7c222c890`.
+The interceptor SHA-256 is
+`929c495f7160e9afa24adece4af385f7f3bda86118d7be693b836a555994732b`.
+All five selected inputs stayed unchanged. No database connection, query
+execution or native publication occurred.
+
+The same-day official review found [EF #37957](https://github.com/dotnet/efcore/issues/37957)
+open in Backlog, with no identified linked merged fix or supported fixed version.
+The latest stable release inspected was 10.0.13; it was not built or tested here.
+Retain this independent post-generation failure in the
+[failure ledger](../../docs/operations/ef-query-precompiler-failure-inventory.md#independent-generated-code-compilation-controls).
+When a compatible upstream-fixed version becomes available, repeat both query
+generation and generated-code compilation in a fresh directory, retaining the
+10.0.12 baseline. Generation success alone cannot close the tracker. Do not remove
+production `sealed` modifiers or suppress diagnostics; repository dependencies
+and the broader #1373 qualification remain unchanged.
 
 ## Additional expression reductions (#1662)
 
