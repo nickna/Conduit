@@ -4,6 +4,8 @@ using System.Text.Json;
 
 using ConduitLLM.Configuration.Entities;
 
+using Microsoft.VisualBasic.FileIO;
+
 using Moq;
 
 namespace ConduitLLM.Tests.Admin.Services
@@ -142,6 +144,64 @@ namespace ConduitLLM.Tests.Admin.Services
                 Assert.Equal(1500.5, row.GetProperty("ResponseTimeMs").GetDouble());
                 Assert.Equal(200, row.GetProperty("StatusCode").GetInt32());
             }
+        }
+
+        [Theory]
+        [InlineData("ordinary-model")]
+        [InlineData("")]
+        [InlineData("雪 model")]
+        [InlineData("model,with-comma")]
+        [InlineData("\"quoted-model\"")]
+        [InlineData("model\rline")]
+        [InlineData("model\nline")]
+        [InlineData("model\r\nline")]
+        [InlineData("comma, quote\" and\r\nnewline")]
+        [InlineData(" leading and trailing spaces ")]
+        public async Task ExportAnalyticsAsync_TextFieldsRoundTripThroughCsvAndJson(string text)
+        {
+            using var culture = new ExportCultureScope("fr-FR");
+            var logs = new List<RequestLog>
+            {
+                new()
+                {
+                    VirtualKeyId = 1234, ModelName = text, RequestType = text,
+                    InputTokens = 100, OutputTokens = 50, Cost = 0.00000001m,
+                    ResponseTimeMs = 1500.5, StatusCode = 200,
+                    Timestamp = new DateTime(2026, 10, 16, 10, 30, 0, DateTimeKind.Utc)
+                },
+                new() { VirtualKeyId = 2, ModelName = "next-model", RequestType = "chat", StatusCode = 200 }
+            };
+            _mockRequestLogRepository
+                .Setup(repository => repository.GetByDateRangeFilteredAsync(
+                    It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(logs);
+
+            var csv = Encoding.UTF8.GetString(await _service.ExportAnalyticsAsync("csv"));
+            using var parser = new TextFieldParser(new StringReader(csv))
+            {
+                TextFieldType = FieldType.Delimited,
+                HasFieldsEnclosedInQuotes = true,
+                TrimWhiteSpace = false
+            };
+            parser.SetDelimiters(",");
+            Assert.Equal(9, parser.ReadFields()!.Length);
+            var row = parser.ReadFields()!;
+            Assert.Equal(9, row.Length);
+            Assert.Equal(text, row[2]);
+            Assert.Equal(text, row[3]);
+            Assert.Equal("0.00000001", row[6]);
+            Assert.Equal("1500.50", row[7]);
+            var next = parser.ReadFields()!;
+            Assert.Equal(9, next.Length);
+            Assert.Equal("next-model", next[2]);
+            Assert.Equal("chat", next[3]);
+            Assert.True(parser.EndOfData);
+
+            using var json = JsonDocument.Parse(await _service.ExportAnalyticsAsync("json"));
+            Assert.Equal(2, json.RootElement.GetArrayLength());
+            Assert.Equal(text, json.RootElement[0].GetProperty("ModelName").GetString());
+            Assert.Equal(text, json.RootElement[0].GetProperty("RequestType").GetString());
+            Assert.Equal(logs[0].Cost, json.RootElement[0].GetProperty("Cost").GetDecimal());
         }
 
         private sealed class ExportCultureScope : IDisposable

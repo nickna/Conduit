@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 [CmdletBinding()]
-param([switch] $DiagnosticSchemaOnly)
+param([switch] $DiagnosticSchemaOnly, [switch] $StrictCallerOnly)
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -702,7 +702,7 @@ function Assert-CollectorFailureDiagnostic($Metadata, [string] $Scenario, [strin
 }
 
 function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $ExpectedFailure,
-    [string] $ExistingOutputPath = '', [switch] $CaptureResult) {
+    [string] $ExistingOutputPath = '', [switch] $CaptureResult, [switch] $StrictCaller) {
     $caseRoot = New-CaseRoot $Scenario
     $indexedJit = $Scenario -cin @('jit-index', 'jit-index-ambiguous', 'jit-index-missing', 'jit-index-malformed')
     $jitRootImage = 'example.invalid/conduit-jit@sha256:' + $(if ($indexedJit) { '4' * 64 } else { '1' * 64 })
@@ -833,7 +833,14 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     $publicError = ''
     $publicRecords = [Collections.Generic.List[object]]::new()
     $caseStage = 'collector-invocation'
-    try { & $collectorToInvoke @parameters *>&1 | ForEach-Object { $publicRecords.Add($_) } }
+    try {
+        # Inherit StrictMode only at the real collector boundary. Fixture setup,
+        # child processes and the independent result oracles retain their scope.
+        & {
+            if ($StrictCaller) { Set-StrictMode -Version Latest }
+            & $collectorToInvoke @parameters
+        } *>&1 | ForEach-Object { $publicRecords.Add($_) }
+    }
     catch { $failure = $_.Exception.Message; $publicError = $_ | Out-String }
     $publicOutput = $publicRecords | Out-String
     $caseStage = 'privacy-assertions'
@@ -1809,10 +1816,12 @@ throw 'Unknown fixture mode.'
     $script:packages = @{}
     $script:packages['admin'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
     $script:packages['gateway'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'gateway'
+    if (-not $StrictCallerOnly) {
     $script:packages['admin-other'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
     $script:packages['admin-dirty'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -SourceDirty $true
     $script:packages['admin-unavailable'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -UnavailableSource
     $script:packages['admin-hold'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -Scenario 'oci-hold-no-descriptors'
+    }
     $environmentPath = Join-Path $temporaryRoot 'environment.json'
     @{
         schemaVersion = 1; environmentId = 'collector-contract-host'
@@ -1853,6 +1862,10 @@ throw 'Unknown fixture mode.'
         Assert-Contract ($null -ne $definition) ('Collector helper is missing: ' + $functionName)
         Invoke-Expression $definition.Extent.Text
     }
+    $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult -StrictCaller
+    Invoke-CollectorCase 'gateway' 'success' $null -StrictCaller
+    Invoke-CollectorCase 'admin' 'case-duplicate-environment' 'No qualification was recorded.' -StrictCaller
+    if (-not $StrictCallerOnly) {
     & (Join-Path $PSScriptRoot 'test-native-process-cleanup-metadata.ps1')
     # These are public fixture credentials, not a connection to any service.
     # Assert exact strings as well as parsed components: an invented slash on a
@@ -2145,18 +2158,15 @@ exit 0
         $cases++
     }
     Invoke-OwnedProcessCleanupContracts
-    $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult
     Invoke-CollectorCase 'admin' 'lowercase-missing-object' $null
     Invoke-CollectorCase 'admin' 'lowercase-missing-container' $null
     Invoke-CollectorCase 'admin' 'foreign-missing-identity' 'cleanup failed'
     Invoke-CollectorCase 'admin' 'missing-with-payload' 'cleanup failed'
-    Invoke-CollectorCase 'gateway' 'success' $null
     Invoke-CollectorCase 'admin' 'jit-index' $null
     foreach ($scenario in @('jit-index-ambiguous', 'jit-index-missing', 'jit-index-malformed')) {
         Invoke-CollectorCase 'admin' $scenario 'No qualification was recorded.'
     }
     Invoke-CollectorCase 'admin' 'even-pairs' 'No qualification was recorded.'
-    Invoke-CollectorCase 'admin' 'case-duplicate-environment' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'revision-mismatch' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'driver-nonzero' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'driver-timeout' 'No qualification was recorded.'
@@ -2189,6 +2199,7 @@ exit 0
     Invoke-CollectorCase 'admin' 'diagnostic-poll-memory' 'No qualification was recorded.'
     Invoke-AttemptLifecycleContracts $successfulAdmin
     Invoke-FailureDiagnosticSchemaContracts
+    }
     }
 }
 catch { $proofFailure = $_.Exception }
@@ -2247,6 +2258,9 @@ if ($cleanupFailures.Count -gt 0) {
 if ($null -ne $proofFailure) { throw $proofFailure }
 if ($DiagnosticSchemaOnly) {
     Write-Host ('PASS: ' + $cases + ' failure diagnostic schema/writer contracts; strict codes, immutable sidecars, privacy and failed eligibility; no Docker/driver workload cases ran.')
+}
+elseif ($StrictCallerOnly) {
+    Write-Host ('PASS: ' + $cases + ' strict-caller collector contracts; complete authenticated Admin/Gateway workload pairs, private configuration rejection, owned cleanup and latest-attempt evidence.')
 }
 else {
     Write-Host ('PASS: ' + $cases + ' collector contracts; owned mocked Docker/driver processes, authenticated workload pairs, warm exclusion, private deadlines, strict cleanup and latest-attempt evidence.')

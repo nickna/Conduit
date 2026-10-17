@@ -99,8 +99,12 @@ by this middleware, including custom headers and the `X-Content-Type` /
 Kestrel's default or an operator's explicit setting. This policy is fixed at
 startup; restart the host after changing the aggregate option.
 
-The Kestrel setting does not remove headers supplied by downstream middleware or
-endpoints; that middleware-order follow-up is tracked in [#1700](https://github.com/nickna/Conduit/issues/1700).
+The enabled middleware also removes application-supplied `Server` and
+`X-Powered-By` headers immediately and at response start. Its response-start
+callback runs after callbacks registered by downstream middleware or endpoints,
+covering their direct header additions, short circuits, handled errors, and
+responses started before the downstream delegate returns. Middleware earlier in
+the pipeline remains responsible for headers it adds after this callback.
 Response headers added by a reverse proxy are a separate deployment
 concern and must be configured at that proxy.
 

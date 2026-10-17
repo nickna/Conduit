@@ -173,3 +173,16 @@ third-party AOT warnings, so this is not clean-Git image promotion evidence.
 Both failed native attempts and their resource snapshots remain retained; a
 transient additional container ID was absent on a later exact read, without
 changing either original failed capture result.
+
+The #1685 authentication correction is already merged in commit `26a058ebe`.
+On 2026-10-16 (America/Los_Angeles), a fresh Release build at `cdcf9cf57`
+passed all 58 selected master-key authentication, ephemeral-key integration and
+native-profile middleware tests, with no skips:
+
+```powershell
+dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj -c Release -m:2 --filter 'FullyQualifiedName~MasterKeyAuthentication|FullyQualifiedName~EphemeralMasterKeyIntegration|FullyQualifiedName~NativeAdminRuntimeProfileMiddlewareTests'
+```
+
+This recheck does not rerun the native images or resolve #1706. Keep #1685's
+full recovery qualification pending that profile decision; preserve the strict
+200 assertions and rerun the opt-in gate after the incompatibility is resolved.

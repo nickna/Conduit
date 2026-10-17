@@ -42,6 +42,16 @@ namespace ConduitLLM.Security.Middleware
             if (_options.Enabled)
             {
                 AddSecurityHeaders(context);
+                // Callbacks run in reverse registration order. Register before the
+                // downstream pipeline so its header writers run before this removal,
+                // including when downstream code starts the response before returning.
+                context.Response.OnStarting(static state =>
+                {
+                    var headers = ((HttpResponse)state).Headers;
+                    headers.Remove("X-Powered-By");
+                    headers.Remove("Server");
+                    return Task.CompletedTask;
+                }, context.Response);
             }
 
             await _next(context);

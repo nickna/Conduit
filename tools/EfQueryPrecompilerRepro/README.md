@@ -147,6 +147,19 @@ generation and generated-code compilation in a fresh directory, retaining the
 production `sealed` modifiers or suppress diagnostics; repository dependencies
 and the broader #1373 qualification remain unchanged.
 
+The baseline and ledger above were merged in `6802b9d94`. A follow-up on
+2026-10-16 (America/Los_Angeles) reconfirmed the open upstream tracker. Check
+both fix status and supported release availability before scheduling a rerun:
+
+```powershell
+gh api repos/dotnet/efcore/issues/37957 --jq '{state,milestone:.milestone.title,html_url}'
+gh api repos/dotnet/efcore/releases/latest --jq '{tag_name,prerelease,html_url}'
+```
+
+A newer release by itself is not evidence that it fixes this cast. Keep #1695
+open until an applicable fix is available and both generated-code stages pass;
+retain the failing 10.0.12 baseline alongside that result.
+
 ## Additional expression reductions (#1662)
 
 Use the same fresh-directory commands, setting `$variant` and `$context` before
@@ -251,6 +264,20 @@ found its `ShortName()` fix on the 12.0.0-alpha main line, with issue milestone
 and `release/10.0` source still use
 the namespace-qualified name; no backport was identified. That source inspection
 does not test either a newer package or the fixed main-line code.
+
+The baseline and ledger above were merged in `e3f3f69fd`. A follow-up on
+2026-10-16 (America/Los_Angeles) reconfirmed the `12.0-preview1` milestone,
+the `main` merge target and the unchanged dotted-name construction in v10.0.13.
+These commands separate a merged fix from its release availability:
+
+```powershell
+gh api repos/dotnet/efcore/issues/37972 --jq '{state,milestone:.milestone.title,html_url}'
+gh api repos/dotnet/efcore/pulls/39208 --jq '{merged,merged_at,base:.base.ref,merge_commit_sha}'
+gh api repos/dotnet/efcore/releases/latest --jq '{tag_name,prerelease,html_url}'
+```
+
+Keep #1696 open while the applicable supported package is unavailable. An
+upstream preview milestone alone does not qualify the repository's 10.x graph.
 
 Track compatible package availability separately from merge status. When an
 upstream-fixed supported dependency becomes available, repeat generation and

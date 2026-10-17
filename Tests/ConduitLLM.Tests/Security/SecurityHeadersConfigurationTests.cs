@@ -80,7 +80,13 @@ public sealed class SecurityHeadersConfigurationTests
         context.Response.Headers["Server"] = "upstream-server";
         context.Response.Headers["X-Powered-By"] = "upstream-framework";
 
-        await CreatePipeline(provider, gateway)(context);
+        await CreatePipeline(provider, gateway, downstreamContext =>
+        {
+            // Keep eager removal as well as the response-start boundary guarantee.
+            Assert.False(downstreamContext.Response.Headers.ContainsKey("Server"));
+            Assert.False(downstreamContext.Response.Headers.ContainsKey("X-Powered-By"));
+            return Task.CompletedTask;
+        })(context);
 
         Assert.False(context.Response.Headers.ContainsKey("X-Content-Type-Options"));
         Assert.False(context.Response.Headers.ContainsKey("X-XSS-Protection"));

@@ -1,5 +1,9 @@
+using System.Collections;
+using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using ConduitLLM.Functions.Services;
 
@@ -11,6 +15,153 @@ public sealed class FunctionParameterValidationServiceTests
 {
     private readonly FunctionParameterValidationService _validator =
         new(NullLogger<FunctionParameterValidationService>.Instance);
+
+    [Theory]
+    [InlineData("dictionary")]
+    [InlineData("typed-dictionary")]
+    [InlineData("read-only-dictionary")]
+    [InlineData("read-only-object-dictionary")]
+    [InlineData("generic-dictionary")]
+    [InlineData("hashtable")]
+    [InlineData("empty-hashtable")]
+    [InlineData("poco")]
+    [InlineData("anonymous-object")]
+    [InlineData("json-object")]
+    [InlineData("json-node-object")]
+    public void ObjectSchemaAcceptsSupportedObjectRepresentationsWithoutMutation(string representation)
+    {
+        object value = representation switch
+        {
+            "dictionary" => new Dictionary<string, object> { ["count"] = 1 },
+            "typed-dictionary" => new Dictionary<string, int> { ["count"] = 1 },
+            "read-only-dictionary" => new ReadOnlyDictionary<string, int>(
+                new Dictionary<string, int> { ["count"] = 1 }),
+            "read-only-object-dictionary" => ImmutableDictionary<string, object>.Empty.Add("count", 1),
+            "generic-dictionary" => StringKeyDictionary(),
+            "hashtable" => new Hashtable { ["count"] = 1 },
+            "empty-hashtable" => new Hashtable(),
+            "poco" => new ObjectParameter { Count = 1 },
+            "anonymous-object" => new { Count = 1 },
+            "json-object" => JsonValue("{\"count\":1}"),
+            "json-node-object" => new JsonObject { ["count"] = 1 },
+            _ => throw new ArgumentOutOfRangeException(nameof(representation))
+        };
+        var nodeJson = (value as JsonNode)?.ToJsonString();
+
+        AssertValidation(ValidateWithoutMutation(value, Schema("object")), valid: true);
+
+        if (value is JsonNode node) Assert.Equal(nodeJson, node.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData("string")]
+    [InlineData("character")]
+    [InlineData("number")]
+    [InlineData("boolean")]
+    [InlineData("date")]
+    [InlineData("guid")]
+    [InlineData("uri")]
+    [InlineData("version")]
+    [InlineData("delegate")]
+    [InlineData("array")]
+    [InlineData("list")]
+    [InlineData("numeric-key-dictionary")]
+    [InlineData("numeric-key-hashtable")]
+    [InlineData("mixed-key-hashtable")]
+    [InlineData("json-string")]
+    [InlineData("json-number")]
+    [InlineData("json-boolean")]
+    [InlineData("json-array")]
+    [InlineData("json-node-string")]
+    [InlineData("json-node-number")]
+    [InlineData("json-node-boolean")]
+    [InlineData("json-node-array")]
+    public void ObjectSchemaRejectsScalarsArraysAndNonStringKeyMapsWithoutWarnings(string representation)
+    {
+        object value = representation switch
+        {
+            "string" => "plain string",
+            "character" => 'x',
+            "number" => 1,
+            "boolean" => true,
+            "date" => new DateTime(2026, 10, 16),
+            "guid" => Guid.Empty,
+            "uri" => new Uri("https://example.invalid/"),
+            "version" => new Version(1, 0),
+            "delegate" => (Action)(() => { }),
+            "array" => new[] { 1, 2 },
+            "list" => new List<int> { 1, 2 },
+            "numeric-key-dictionary" => new Dictionary<int, object> { [1] = "value" },
+            "numeric-key-hashtable" => new Hashtable { [1] = "value" },
+            "mixed-key-hashtable" => new Hashtable { ["count"] = 1, [2] = "value" },
+            "json-string" => JsonValue("\"plain string\""),
+            "json-number" => JsonValue("1"),
+            "json-boolean" => JsonValue("true"),
+            "json-array" => JsonValue("[1,2]"),
+            "json-node-string" => System.Text.Json.Nodes.JsonValue.Create("plain string")!,
+            "json-node-number" => System.Text.Json.Nodes.JsonValue.Create(1)!,
+            "json-node-boolean" => System.Text.Json.Nodes.JsonValue.Create(true)!,
+            "json-node-array" => new JsonArray(1, 2),
+            _ => throw new ArgumentOutOfRangeException(nameof(representation))
+        };
+
+        var result = ValidateWithoutMutation(value, Schema("object"));
+
+        AssertValidation(result, valid: false);
+        Assert.Contains("must be an object", Assert.Single(result.Errors), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ObjectSchemaRejectsThrowingDictionaryKeysInsteadOfSkippingValidation()
+    {
+        AssertValidation(ValidateWithoutMutation(new ThrowingKeysDictionary(), Schema("object")), valid: false);
+    }
+
+    [Fact]
+    public void ObjectSchemaRejectsDisposedJsonValuesInsteadOfSkippingValidation()
+    {
+        var document = JsonDocument.Parse("{\"count\":1}");
+        var value = document.RootElement;
+        document.Dispose();
+        var parameters = new Dictionary<string, object> { ["value"] = value };
+        var original = parameters.ToArray();
+
+        var result = _validator.ValidateParameters(parameters, Schema("object"));
+
+        AssertValidation(result, valid: false);
+        AssertUnchanged(parameters, original);
+    }
+
+    [Theory]
+    [InlineData("{\"count\":1}")]
+    [InlineData("\"plain string\"")]
+    [InlineData("1")]
+    [InlineData("true")]
+    [InlineData("false")]
+    [InlineData("[1,2]")]
+    [InlineData("null")]
+    public void ObjectSchemaRejectsUnsupportedJsonDocumentsWithoutMutationOrWarnings(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+
+        var result = ValidateWithoutMutation(document, Schema("object"));
+
+        AssertValidation(result, valid: false);
+        Assert.Contains("must be an object", Assert.Single(result.Errors), StringComparison.Ordinal);
+        Assert.Equal(json, document.RootElement.GetRawText());
+    }
+
+    [Fact]
+    public void ObjectSchemaRejectsDisposedJsonDocumentsWithoutMutationOrWarnings()
+    {
+        using var document = JsonDocument.Parse("{\"count\":1}");
+        document.Dispose();
+
+        var result = ValidateWithoutMutation(document, Schema("object"));
+
+        AssertValidation(result, valid: false);
+        Assert.Contains("must be an object", Assert.Single(result.Errors), StringComparison.Ordinal);
+    }
 
     [Theory]
     [InlineData("string", "\"snow 雪\"", true)]
@@ -310,6 +461,23 @@ public sealed class FunctionParameterValidationServiceTests
     {
         using var document = JsonDocument.Parse(json);
         return document.RootElement.Clone();
+    }
+
+    private static IDictionary<string, object> StringKeyDictionary()
+    {
+        IDictionary<string, object> value = new System.Dynamic.ExpandoObject();
+        value["count"] = 1;
+        return value;
+    }
+
+    private sealed class ObjectParameter
+    {
+        public int Count { get; init; }
+    }
+
+    private sealed class ThrowingKeysDictionary : Hashtable
+    {
+        public override ICollection Keys => throw new InvalidOperationException("Caller keys are unavailable.");
     }
 
     private static string Schema(string type) => type == "select"

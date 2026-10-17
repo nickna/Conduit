@@ -335,12 +335,20 @@ namespace ConduitLLM.Admin.Services
             foreach (var log in logs)
             {
                 csv.Append(CultureInfo.InvariantCulture,
-                        $"{log.Timestamp:yyyy-MM-dd HH:mm:ss},{log.VirtualKeyId},{log.ModelName},{log.RequestType},")
+                        $"{log.Timestamp:yyyy-MM-dd HH:mm:ss},{log.VirtualKeyId},{EscapeCsvField(log.ModelName)},{EscapeCsvField(log.RequestType)},")
                     .AppendLine(CultureInfo.InvariantCulture,
                         $"{log.InputTokens},{log.OutputTokens},{log.Cost:F8},{log.ResponseTimeMs:F2},{log.StatusCode}");
             }
 
             return Encoding.UTF8.GetBytes(csv.ToString());
+        }
+
+        private static string EscapeCsvField(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            return value.IndexOfAny([',', '"', '\r', '\n']) >= 0
+                ? "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\""
+                : value;
         }
 
         private static byte[] ExportToJson(IList<RequestLog> logs)
