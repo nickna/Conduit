@@ -74,6 +74,29 @@ an unprotected retry. A completed result can be retained while settlement is una
 retrying the same key resumes settlement without provider dispatch. Requests without the header
 retain their existing inline execution and accounting behavior.
 
+### Provider transport retries and uncertain charges
+
+The Exa and Tavily named HTTP clients automatically retry only GET, HEAD and
+OPTIONS requests. Function execution and credential verification use POST and
+are not automatically retried by this policy, including after transient HTTP
+responses or transport errors. Credential verification still performs its
+provider request; its minimal search POST is not assumed free or safe to repeat.
+Keyed executions retain their dedicated transport without request retries, and
+MCP retains its separate stateful transport.
+
+These adapters do not model or forward a provider idempotency contract. The
+Gateway's `Idempotency-Key` protects Conduit claims and settlement; it does not
+establish exactly-once remote effects. A provider can accept and charge a request
+before its response is lost. An unkeyed Exa/Tavily call can then return a failed
+execution while normal configured usage/cost calculation still runs. Its locally
+recorded cost is not confirmation of the provider's charge or absence of one.
+
+Reconcile the execution identity, time, parameters and available provider usage
+or request records before dispatching another unkeyed call or using a new key.
+Uncertain keyed claims require operator reconciliation and remain blocked from
+redispatch; repeating an unkeyed call is a new operation. Disabling transport
+retries does not supply durable replay protection for unkeyed requests.
+
 ## Configuration and discovery
 
 `providerSettings` and `parameterSchema` in Admin configuration requests and responses are

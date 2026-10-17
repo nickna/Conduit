@@ -265,6 +265,11 @@ For retryable HTTP operations, send `Idempotency-Key` and reuse it with the same
 parameters and metadata. PostgreSQL claims and execution-specific ledger settlement protect
 retries across Gateway instances and restarts. See [retry and recovery semantics](../../docs/api-guides/function-resources.md#retrying-an-execution), including permanent claim retention and uncertain provider outcomes.
 
+Exa/Tavily execution and credential-check POSTs have no automatic transport
+retries. A lost response can still follow a provider charge; use the documented
+[provider reconciliation guidance](../../docs/api-guides/function-resources.md#provider-transport-retries-and-uncertain-charges)
+before dispatching another operation.
+
 ## See Also
 
 - [Function Resources API](../../docs/api-guides/function-resources.md)

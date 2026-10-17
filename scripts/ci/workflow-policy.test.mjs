@@ -10,6 +10,18 @@ function workflows() { return Object.fromEntries(readdirSync('.github/workflows'
 test('real workflows and cancellable validation jobs satisfy the policy without release warnings', () => {
   assert.equal(validateWorkflows(workflows(), inventory).requiredJobs, inventory.length);
 });
+for (const [name, key, value] of [
+  ['function transport regression', 'filter', 'Component=MediaDispatch'],
+  ['durable media regressions', 'filter', 'FullyQualifiedName~FunctionProviderRetryTransportTests'],
+  ['Integration test project', 'project', 'Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj'],
+]) {
+  test(`rejects removal of ${name} from the shared integration job`, () => {
+    const w = workflows();
+    w['ci.yml'].jobs['media-dispatch-integration'].steps
+      .find(step => step.uses === './.github/actions/run-tests').with[key] = value;
+    assert.throws(() => validateWorkflows(w, inventory), /both durable media and function provider transport regressions/);
+  });
+}
 for (const replacement of [null, 'tools/ConduitLLM.OtherProbe/**']) {
   test(`rejects the NativeAOT HealthProbe path ${replacement ? 'replaced by another project' : 'removed'}`, () => {
     const w = workflows();

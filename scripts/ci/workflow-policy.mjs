@@ -56,6 +56,12 @@ export function validateWorkflows(workflows, required) {
       ci.jobs[id]?.if === `\${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['${id}'] }}`,
       `${id}: validation must use its own selector decision after successful classification`);
   }
+  const transportProof = array(ci.jobs['media-dispatch-integration'].steps)
+    .filter(step => step.uses === './.github/actions/run-tests');
+  require(transportProof.length === 1 &&
+    transportProof[0].with?.project === 'Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj' &&
+    transportProof[0].with?.filter === 'Component=MediaDispatch|FullyQualifiedName~FunctionProviderRetryTransportTests',
+    'Media dispatch integration must retain both durable media and function provider transport regressions');
   const timingInput = ci.on.workflow_dispatch?.inputs?.measure_previous_scheduling;
   require(timingInput?.type === 'boolean' && timingInput.default === false &&
     ci.jobs['distributed-lock'].with?.repeat_policy_tests === "${{ github.event_name == 'workflow_dispatch' && inputs.measure_previous_scheduling }}",
