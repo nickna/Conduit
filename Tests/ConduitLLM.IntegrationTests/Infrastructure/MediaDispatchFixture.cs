@@ -16,6 +16,8 @@ using ConduitLLM.Core.Services;
 using ConduitLLM.Core.Serialization;
 using ConduitLLM.Core.Validation;
 using ConduitLLM.Messaging.Wolverine;
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Networks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
@@ -42,9 +44,15 @@ public sealed class MediaDispatchCollection : ICollectionFixture<MediaDispatchFi
 
 public sealed class MediaDispatchFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
-        .WithDatabase("media_dispatch")
-        .WithUsername("conduit").WithPassword("conduitpass").Build();
+    private readonly PostgreSqlContainer _postgres;
+    public INetwork Network { get; } = new NetworkBuilder().Build();
+
+    public MediaDispatchFixture() =>
+        _postgres = new PostgreSqlBuilder("postgres:17-alpine")
+            .WithDatabase("media_dispatch")
+            .WithUsername("conduit").WithPassword("conduitpass")
+            .WithNetwork(Network).WithNetworkAliases("postgres").Build();
+
     public string ConnectionString => _postgres.GetConnectionString();
     public Mock<ILLMClient> Provider { get; } = new();
     public Mock<IDistributedCache> Cache { get; } = new();
@@ -62,6 +70,7 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     public IAsyncTaskRepository Repository() => new AsyncTaskRepository(new Factory(this), NullLogger<AsyncTaskRepository>.Instance);
     public async Task InitializeAsync()
     {
+        await Network.CreateAsync();
         await _postgres.StartAsync();
         await using var db = Db();
         await db.Database.MigrateAsync();
@@ -72,7 +81,23 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
         await host.StartAsync();
         await host.StopAsync();
     }
-    public async Task DisposeAsync() => await _postgres.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        // Dependent native app/Redis containers belong to the test method and are
+        // disposed before this collection fixture removes its PostgreSQL/network.
+        Exception? postgresFailure = null;
+        try { await _postgres.DisposeAsync(); }
+        catch (Exception exception) { postgresFailure = exception; }
+        try { await Network.DisposeAsync(); }
+        catch (Exception exception)
+        {
+            if (postgresFailure is not null)
+                throw new AggregateException("Media fixture PostgreSQL and network cleanup failed.", postgresFailure, exception);
+            throw;
+        }
+        if (postgresFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(postgresFailure).Throw();
+    }
 
     public IHost Host(bool worker, bool notificationsFail = false, bool webhooks = false, string durabilitySchema = "wolverine_media_test", bool reconciliation = false)
     {

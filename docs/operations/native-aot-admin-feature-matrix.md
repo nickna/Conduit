@@ -145,3 +145,31 @@ measurements, rollback and ordered actual soaks remain required by the
 before changing ADR 0006. Unsupported management queries and future worker
 extraction are tracked in the
 [persistence inventory](persistence-aot-query-inventory.md).
+
+## Opt-in webhook recovery gate qualification
+
+The authentication correction for [#1685](https://github.com/nickna/Conduit/issues/1685)
+retains strict successful Bearer/X-API-Key and invalid-credential assertions in
+`WebhookNativeRuntimeTests`. Image overrides
+`CONDUIT_WEBHOOK_NATIVE_GATEWAY_IMAGE` and
+`CONDUIT_WEBHOOK_NATIVE_ADMIN_IMAGE` allow the opt-in gate to select freshly built
+images. PostgreSQL, Redis and both native apps share a fixture-owned Docker
+network; fixture setup applies migrations through managed EF before native startup.
+
+A local run using both unmodified native Dockerfiles at production source
+`7a25d05e1aa9f5e7642a5876ceb4f9f08fa9d844` returned 200 for valid Bearer and
+X-API-Key requests to the supported global-settings route. Webhook backlog then
+returned 401 for absent and invalid Bearer credentials, followed by 501 for the
+valid Bearer request that requires 200. The native management boundary excludes
+the `Webhooks_*` operations. The run stopped before publishing a delivery request;
+it establishes no native delivery, inspection, dead-letter or replay result.
+
+The gate remains strict while this separate gate/profile incompatibility is
+tracked in [#1706](https://github.com/nickna/Conduit/issues/1706). Existing managed
+durable-delivery tests passed all four cases, and 17
+managed authentication cases passed; neither substitutes for the failed native
+gate. Fresh local images used a gitless source archive policy and retained
+third-party AOT warnings, so this is not clean-Git image promotion evidence.
+Both failed native attempts and their resource snapshots remain retained; a
+transient additional container ID was absent on a later exact read, without
+changing either original failed capture result.
