@@ -211,15 +211,15 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
         {
             await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
             var strategy = context.Database.CreateExecutionStrategy();
-            return await strategy.ExecuteAsync(async () =>
+            return await strategy.ExecuteAsync(async strategyToken =>
             {
                 context.ChangeTracker.Clear();
-                await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+                await using var transaction = await context.Database.BeginTransactionAsync(strategyToken);
 
                 if (adjustment.IdempotencyKey is not null)
                 {
                     var duplicateIdempotencyKey = adjustment.IdempotencyKey;
-                    var duplicateCancellationToken = cancellationToken;
+                    var duplicateCancellationToken = strategyToken;
                     var duplicate = await context.VirtualKeyGroupTransactions
                         .IgnoreQueryFilters()
                         .AsNoTracking()
@@ -230,7 +230,7 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
                     {
                         ValidateDuplicate(duplicate, adjustment);
                         var duplicateStateGroupId = adjustment.GroupId;
-                        var duplicateStateCancellationToken = cancellationToken;
+                        var duplicateStateCancellationToken = strategyToken;
                         var duplicateStateSnapshot = await context.VirtualKeyGroups
                             .AsNoTracking()
                             .Where(group => group.Id == duplicateStateGroupId)
@@ -242,7 +242,7 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
                                 duplicateStateSnapshot.Balance,
                                 duplicateStateSnapshot.LifetimeSpent,
                                 false);
-                        await transaction.CommitAsync(cancellationToken);
+                        await transaction.CommitAsync(strategyToken);
                         return current;
                     }
                 }
@@ -250,7 +250,7 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
                 var updatedAt = DateTime.UtcNow;
                 var updateGroupId = adjustment.GroupId;
                 var updateAmount = adjustment.Amount;
-                var updateCancellationToken = cancellationToken;
+                var updateCancellationToken = strategyToken;
                 var rowsAffected = await context.VirtualKeyGroups
                     .Where(group => group.Id == updateGroupId)
                     .ExecuteUpdateAsync(setters => setters
@@ -272,7 +272,7 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
                 }
 
                 var updatedStateGroupId = adjustment.GroupId;
-                var updatedStateCancellationToken = cancellationToken;
+                var updatedStateCancellationToken = strategyToken;
                 var updatedStateSnapshot = await context.VirtualKeyGroups
                     .AsNoTracking()
                     .Where(group => group.Id == updatedStateGroupId)
@@ -285,10 +285,10 @@ public sealed class EfVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
                         updatedStateSnapshot.LifetimeSpent,
                         true);
                 context.VirtualKeyGroupTransactions.Add(CreateLedgerEntry(adjustment, state.NewBalance));
-                await context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
+                await context.SaveChangesAsync(strategyToken);
+                await transaction.CommitAsync(strategyToken);
                 return state;
-            });
+            }, cancellationToken);
         }
         catch (DbUpdateException exception) when (
             adjustment.IdempotencyKey is not null &&

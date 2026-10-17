@@ -24,15 +24,24 @@ public sealed class VirtualKeyRuntimeRetryPersistenceTests(PostgresLockTestConta
     [InlineData(false)]
     [InlineData(true)]
     public Task RealSerializationFailureRetriesFreshAttemptScalarsOrHonorsCallerCancellation(bool cancelAtRetry) =>
+        RunSerializationRetryAsync(cancelAtRetry, failedAttempts: 1);
+
+    [Fact]
+    public Task CallerCancellationInterruptsRealNonzeroRetryBackoff() =>
+        RunSerializationRetryAsync(cancelAtRetry: true, failedAttempts: 2);
+
+    private Task RunSerializationRetryAsync(bool cancelAtRetry, int failedAttempts) =>
         VirtualKeyRuntimeRecoveryFixture.RunAsync(fixture.ConnectionString, async (owned, deadline) =>
         {
-            await InstallFirstInsertFailureAsync(owned, deadline);
+            await InstallInsertFailuresAsync(owned, failedAttempts, deadline);
             using var caller = CancellationTokenSource.CreateLinkedTokenSource(deadline);
-            var trace = new RetryTrace(cancelAtRetry ? caller : null);
-            var factory = new RetryContextFactory(owned.Source, trace);
+            var trace = new RetryTrace(cancelAtRetry ? caller : null, failedAttempts);
+            var factory = new RetryContextFactory(owned.Source, trace, failedAttempts);
             var store = new EfVirtualKeyRuntimeStore(factory);
             var adjustment = RetryAdjustment();
             var pending = store.AdjustBalanceAsync(adjustment, caller.Token);
+            var completedAt = pending.ContinueWith(_ => Stopwatch.GetTimestamp(), CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             await IntegrationProofCleanup.RunAsync(async () =>
             {
                 if (cancelAtRetry)
@@ -40,6 +49,18 @@ public sealed class VirtualKeyRuntimeRetryPersistenceTests(PostgresLockTestConta
                     var cancellation = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
                         pending.WaitAsync(TimeSpan.FromSeconds(10)));
                     Assert.Equal(caller.Token, cancellation.CancellationToken);
+                    if (failedAttempts > 1)
+                    {
+                        // Npgsql's first retry is immediate; the second has a real
+                        // nonzero backoff. Cancel synchronously in its typed retry
+                        // diagnostic and require completion before that delay ends.
+                        var scheduledDelay = trace.Retries[^1].Delay;
+                        Assert.True(scheduledDelay > TimeSpan.Zero);
+                        var cancellationElapsed = Stopwatch.GetElapsedTime(
+                            trace.CancellationStartedTimestamp, await completedAt);
+                        Assert.True(cancellationElapsed < scheduledDelay,
+                            $"Cancellation took {cancellationElapsed} for a scheduled {scheduledDelay} retry delay.");
+                    }
                 }
                 else
                 {
@@ -54,26 +75,33 @@ public sealed class VirtualKeyRuntimeRetryPersistenceTests(PostgresLockTestConta
             }, "Real EF retry work and its pending adjustment drain failed.");
 
             // These are real provider diagnostics, not a substituted execution strategy.
-            Assert.Single(trace.CommandFailures);
-            Assert.Equal(PostgresErrorCodes.SerializationFailure, trace.CommandFailures[0].SqlState);
+            Assert.Equal(failedAttempts, trace.CommandFailures.Count);
+            Assert.All(trace.CommandFailures, failure =>
+                Assert.Equal(PostgresErrorCodes.SerializationFailure, failure.SqlState));
             Assert.Contains("INSERT INTO \"VirtualKeyGroupTransactions\"", trace.FailedCommandText, StringComparison.Ordinal);
             Assert.Equal(1, trace.FailedTrackedLedgerCount);
-            Assert.Single(trace.Retries);
-            Assert.Equal(PostgresErrorCodes.SerializationFailure,
-                FindPostgres(trace.Retries[0].ExceptionsEncountered.Single())!.SqlState);
-            Assert.True(trace.Retries[0].IsAsync);
+            Assert.Equal(failedAttempts, trace.Retries.Count);
+            Assert.All(trace.Retries, retry =>
+            {
+                Assert.All(retry.ExceptionsEncountered, exception =>
+                    Assert.Equal(PostgresErrorCodes.SerializationFailure, FindPostgres(exception)!.SqlState));
+                Assert.True(retry.IsAsync);
+            });
             Assert.Equal(TimeSpan.Zero, trace.Retries[0].Delay);
             Assert.Single(trace.ContextsCreated);
             Assert.Equal(trace.ContextsCreated, trace.ContextsDisposed);
 
             var started = trace.Transactions.Where(row => row.Kind == "started").ToArray();
             var disposed = trace.Transactions.Where(row => row.Kind == "disposed").ToArray();
-            Assert.Equal(cancelAtRetry ? 1 : 2, started.Length);
+            var expectedAttempts = failedAttempts + (cancelAtRetry ? 0 : 1);
+            Assert.Equal(expectedAttempts, started.Length);
             Assert.Equal(started.Length, disposed.Length);
-            Assert.True(disposed[0].Order < trace.RetryOrder);
-            Assert.Equal(cancelAtRetry ? 1 : 2, trace.CompletedUpdates);
-            Assert.Equal(cancelAtRetry ? 1 : 2, trace.DuplicateReads.Count);
-            Assert.Equal(cancelAtRetry ? 1 : 2, trace.StateReads.Count);
+            Assert.Equal(started.Length, started.Select(row => row.Id).Distinct().Count());
+            Assert.Equal(started.Select(row => row.Id), disposed.Select(row => row.Id));
+            Assert.True(disposed[failedAttempts - 1].Order < trace.RetryOrder);
+            Assert.Equal(expectedAttempts, trace.CompletedUpdates);
+            Assert.Equal(expectedAttempts, trace.DuplicateReads.Count);
+            Assert.Equal(expectedAttempts, trace.StateReads.Count);
             Assert.All(trace.DuplicateReads, parameters => Assert.Contains(parameters,
                 parameter => Equals(parameter.Value, "retry-owned")));
             Assert.All(trace.StateReads, parameters => Assert.Contains(parameters,
@@ -91,9 +119,9 @@ public sealed class VirtualKeyRuntimeRetryPersistenceTests(PostgresLockTestConta
 
             if (cancelAtRetry)
             {
-                Assert.Single(trace.Updates); // No SQL attempt is sent after caller cancellation.
+                Assert.Equal(failedAttempts, trace.Updates.Count); // No SQL attempt follows caller cancellation.
                 Assert.DoesNotContain(trace.Transactions, row => row.Kind == "committed");
-                Assert.Equal(1L, await ReadAttemptSequenceAsync(owned, deadline));
+                Assert.Equal((long)failedAttempts, await ReadAttemptSequenceAsync(owned, deadline));
                 Assert.Equal(new RecoveryGroupSnapshot(100m, 100m, 0m), await owned.ReadGroupAsync(1, deadline));
                 await AssertRetryLedgerAsync(owned, expected: false, deadline);
             }
@@ -124,7 +152,7 @@ public sealed class VirtualKeyRuntimeRetryPersistenceTests(PostgresLockTestConta
                 recoveryStore.AdjustBalanceAsync(adjustment with { Amount = -4m }, deadline));
             Assert.Equal(new RecoveryGroupSnapshot(97m, 100m, 3m), await owned.ReadGroupAsync(1, deadline));
             Assert.Equal(new RecoveryGroupSnapshot(200m, 200m, 0m), await owned.ReadGroupAsync(2, deadline));
-            Assert.Equal(2L, await ReadAttemptSequenceAsync(owned, deadline));
+            Assert.Equal(failedAttempts + 1L, await ReadAttemptSequenceAsync(owned, deadline));
             await AssertRetryLedgerAsync(owned, expected: true, deadline);
             await AssertRetryPoolReusableAsync(owned.Source, deadline);
         });
@@ -135,22 +163,23 @@ public sealed class VirtualKeyRuntimeRetryPersistenceTests(PostgresLockTestConta
         1, -3m, "retry exact debit", "RetryTest", VirtualKeyBalanceReferenceType.System,
         ReferenceId: "retry-reference", IdempotencyKey: "retry-owned", BillingWindowStartUtc: BillingWindow);
 
-    private static Task InstallFirstInsertFailureAsync(VirtualKeyRuntimeRecoveryFixture owned, CancellationToken token) =>
+    private static Task InstallInsertFailuresAsync(
+        VirtualKeyRuntimeRecoveryFixture owned, int failedAttempts, CancellationToken token) =>
         owned.ExecuteAsync($"""
             CREATE SEQUENCE "{owned.Schema}"."retry_attempts";
-            CREATE FUNCTION "{owned.Schema}"."fail_first_ledger_insert"() RETURNS trigger
+            CREATE FUNCTION "{owned.Schema}"."fail_ledger_insert"() RETURNS trigger
             LANGUAGE plpgsql AS $body$
             BEGIN
-                IF nextval('"{owned.Schema}"."retry_attempts"') = 1 THEN
+                IF nextval('"{owned.Schema}"."retry_attempts"') <= {failedAttempts} THEN
                     RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'Owned deterministic serialization failure';
                 END IF;
                 RETURN NEW;
             END;
             $body$;
-            CREATE TRIGGER fail_first_ledger_insert BEFORE INSERT
+            CREATE TRIGGER fail_ledger_insert BEFORE INSERT
                 ON "{owned.Schema}"."VirtualKeyGroupTransactions"
                 FOR EACH ROW WHEN (NEW."IdempotencyKey" = 'retry-owned')
-                EXECUTE FUNCTION "{owned.Schema}"."fail_first_ledger_insert"();
+                EXECUTE FUNCTION "{owned.Schema}"."fail_ledger_insert"();
             """, token);
 
     private static async Task<long> ReadAttemptSequenceAsync(VirtualKeyRuntimeRecoveryFixture owned, CancellationToken token)
@@ -208,7 +237,7 @@ public sealed class VirtualKeyRuntimeRetryPersistenceTests(PostgresLockTestConta
         IReadOnlyList<ParameterCapture> Parameters);
     private sealed record TransactionCapture(string Kind, Guid Id, int Order);
 
-    private sealed class RetryTrace(CancellationTokenSource? cancelAtRetry) : DbCommandInterceptor
+    private sealed class RetryTrace(CancellationTokenSource? cancelAtRetry, int cancellationRetry) : DbCommandInterceptor
     {
         private int _order;
         public List<UpdateCapture> Updates { get; } = [];
@@ -224,6 +253,7 @@ public sealed class VirtualKeyRuntimeRetryPersistenceTests(PostgresLockTestConta
         public int FailedTrackedLedgerCount { get; private set; }
         public int RetryOrder { get; private set; }
         public DateTime RetryNotBeforeUtc { get; private set; }
+        public long CancellationStartedTimestamp { get; private set; }
 
         public static bool Includes(EventId id, LogLevel _) =>
             id == CoreEventId.ExecutionStrategyRetrying || id == RelationalEventId.CommandError ||
@@ -243,7 +273,7 @@ public sealed class VirtualKeyRuntimeRetryPersistenceTests(PostgresLockTestConta
             {
                 Retries.Add(retry);
                 RetryOrder = order;
-                var firstTimestamp = Assert.Single(Updates).UpdatedAt;
+                var firstTimestamp = Updates[^1].UpdatedAt;
                 var observation = Stopwatch.StartNew();
                 DateTime observed;
                 // A clock-value barrier distinguishes a fresh timestamp from an
@@ -255,7 +285,11 @@ public sealed class VirtualKeyRuntimeRetryPersistenceTests(PostgresLockTestConta
                     Thread.Yield();
                 }
                 RetryNotBeforeUtc = observed;
-                cancelAtRetry?.Cancel();
+                if (cancelAtRetry is not null && Retries.Count == cancellationRetry)
+                {
+                    CancellationStartedTimestamp = Stopwatch.GetTimestamp();
+                    cancelAtRetry.Cancel();
+                }
             }
             else if (data is TransactionEventData transaction)
             {
@@ -317,11 +351,12 @@ public sealed class VirtualKeyRuntimeRetryPersistenceTests(PostgresLockTestConta
     {
         private readonly DbContextOptions<ConduitDbContext> _options;
         private readonly RetryTrace _trace;
-        public RetryContextFactory(NpgsqlDataSource source, RetryTrace trace)
+        public RetryContextFactory(NpgsqlDataSource source, RetryTrace trace, int failedAttempts)
         {
             _trace = trace;
             _options = new DbContextOptionsBuilder<ConduitDbContext>()
-                .UseNpgsql(source, provider => provider.EnableRetryOnFailure(1, TimeSpan.Zero, null))
+                .UseNpgsql(source, provider => provider.EnableRetryOnFailure(
+                    failedAttempts, failedAttempts > 1 ? TimeSpan.FromSeconds(2) : TimeSpan.Zero, null))
                 .AddInterceptors(trace).LogTo(RetryTrace.Includes, trace.Observe).Options;
         }
         public ConduitDbContext CreateDbContext()
