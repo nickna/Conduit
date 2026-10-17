@@ -385,15 +385,43 @@ function Set-NativeBenchmarkAttemptFailed {
     catch { throw 'Native benchmark failed attempt could not be recorded.' }
 }
 
+function Get-NativeBenchmarkFailureWorkloadAggregate($Value, [string] $Service) {
+    $aggregate = Get-NativeEvidenceObject $Value
+    Assert-NativeEvidenceKeys $aggregate @('phase', 'id', 'requested', 'executed', 'completed', 'failures',
+        'warmupRequests', 'concurrency', 'timeoutSeconds') -Exact
+    $ids = if ($Service -ceq 'admin') { @('admin-setting-read') }
+        elseif ($Service -ceq 'gateway') { @('gateway-chat-nonstream', 'gateway-chat-sse') }
+        else { throw 'Invalid failure workload service.' }
+    if ($aggregate['phase'] -isnot [string] -or $aggregate['phase'] -cne 'measured' -or
+        $aggregate['id'] -isnot [string] -or $aggregate['id'] -cnotin $ids) {
+        throw 'Invalid failure workload identity.'
+    }
+    foreach ($field in @('requested', 'executed', 'completed', 'failures', 'warmupRequests', 'concurrency', 'timeoutSeconds')) {
+        Assert-NativeEvidenceInteger $aggregate[$field]
+    }
+    if ($aggregate['requested'] -lt 1 -or $aggregate['requested'] -gt 100000 -or
+        $aggregate['executed'] -ne $aggregate['requested'] -or
+        $aggregate['completed'] -gt $aggregate['executed'] -or
+        $aggregate['failures'] -ne ($aggregate['executed'] - $aggregate['completed']) -or
+        $aggregate['warmupRequests'] -gt 10000 -or $aggregate['concurrency'] -lt 1 -or
+        $aggregate['concurrency'] -gt 256 -or $aggregate['concurrency'] -gt $aggregate['requested'] -or
+        $aggregate['timeoutSeconds'] -lt 1 -or $aggregate['timeoutSeconds'] -gt 120) {
+        throw 'Invalid failure workload counts.'
+    }
+    return ,$aggregate
+}
+
 function Get-NativeBenchmarkAttemptFailureDiagnostic($Value) {
     # This is a closed public record, not an exception/output serialization
     # boundary. Reject unrecognized text rather than echoing it in validation.
     try {
         $diagnostic = Get-NativeEvidenceObject $Value
-        Assert-NativeEvidenceKeys $diagnostic @('schemaVersion', 'kind', 'attemptId', 'service',
-            'phase', 'reason', 'runtime', 'sampleKind', 'pair', 'ownedContainerCleanup', 'privateFileCleanup') -Exact
         Assert-NativeEvidenceInteger $diagnostic['schemaVersion'] -Positive
-        if ($diagnostic['schemaVersion'] -ne 1 -or $diagnostic['kind'] -isnot [string] -or
+        $fields = @('schemaVersion', 'kind', 'attemptId', 'service', 'phase', 'reason', 'runtime',
+            'sampleKind', 'pair', 'ownedContainerCleanup', 'privateFileCleanup')
+        if ($diagnostic['schemaVersion'] -eq 2) { $fields += 'workloadAggregate' }
+        Assert-NativeEvidenceKeys $diagnostic $fields -Exact
+        if ($diagnostic['schemaVersion'] -notin @(1, 2) -or $diagnostic['kind'] -isnot [string] -or
             $diagnostic['kind'] -cne 'conduit-native-benchmark-failure-diagnostic') {
             throw 'Invalid failure diagnostic version.'
         }
@@ -419,6 +447,14 @@ function Get-NativeBenchmarkAttemptFailureDiagnostic($Value) {
             if ($diagnostic['pair'] -gt 21) { throw 'Invalid failure diagnostic pair.' }
         }
         elseif ($null -ne $diagnostic['pair']) { throw 'Invalid failure diagnostic pair.' }
+
+        if ($diagnostic['schemaVersion'] -eq 2 -and $null -ne $diagnostic['workloadAggregate']) {
+            if ($diagnostic['phase'] -cne 'workload' -or $diagnostic['reason'] -cne 'probe-exit' -or
+                $diagnostic['runtime'] -ceq 'unknown' -or $diagnostic['sampleKind'] -ceq 'none') {
+                throw 'Invalid failure workload context.'
+            }
+            $diagnostic['workloadAggregate'] = Get-NativeBenchmarkFailureWorkloadAggregate $diagnostic['workloadAggregate'] $diagnostic['service']
+        }
 
         foreach ($field in @('ownedContainerCleanup', 'privateFileCleanup')) {
             $cleanup = Get-NativeEvidenceObject $diagnostic[$field]
@@ -453,10 +489,10 @@ function Set-NativeBenchmarkAttemptFailureDiagnostic {
         $record = Get-NativeBenchmarkAttemptLiveRecord $Context
         if ($record['status'] -cne 'failed') { throw 'Failure diagnostics require a failed attempt.' }
         $provided = Get-NativeEvidenceObject $Diagnostic
-        $fields = @('phase', 'reason', 'runtime', 'sampleKind', 'pair', 'ownedContainerCleanup', 'privateFileCleanup')
+        $fields = @('phase', 'reason', 'runtime', 'sampleKind', 'pair', 'ownedContainerCleanup', 'privateFileCleanup', 'workloadAggregate')
         Assert-NativeEvidenceKeys $provided $fields -Exact
         $value = [ordered]@{
-            schemaVersion = 1; kind = 'conduit-native-benchmark-failure-diagnostic'
+            schemaVersion = 2; kind = 'conduit-native-benchmark-failure-diagnostic'
             attemptId = $contextObject['attemptId']; service = $contextObject['service']
         }
         foreach ($field in $fields) { $value[$field] = $provided[$field] }

@@ -38,6 +38,7 @@ $diagnosticRuntime = 'unknown'
 $diagnosticSampleKind = 'none'
 $diagnosticPair = $null
 $primaryDiagnostic = $null
+$failedWorkloadAggregate = $null
 $ownedContainerCleanup = [ordered]@{ status = 'not-attempted'; reason = 'none' }
 $privateFileCleanup = [ordered]@{ status = 'not-attempted'; reason = 'none' }
 
@@ -83,6 +84,7 @@ function Get-CollectionFailureDiagnostic {
         pair = $script:primaryDiagnostic.pair
         ownedContainerCleanup = $script:ownedContainerCleanup
         privateFileCleanup = $script:privateFileCleanup
+        workloadAggregate = $script:failedWorkloadAggregate
     })
 }
 
@@ -888,6 +890,62 @@ function Test-WorkloadResult($Report, $Configuration) {
     return [pscustomobject]$public
 }
 
+function Get-FailedWorkloadAggregate([string] $Stdout, $Configuration) {
+    # Failure evidence is a separate closed projection, never a successful
+    # workload result. Malformed/private output yields no retained aggregate.
+    $document = $null
+    try {
+        if ([string]::IsNullOrWhiteSpace($Stdout) -or [Text.Encoding]::UTF8.GetByteCount($Stdout) -gt 16384) { return $null }
+        $options = [Text.Json.JsonDocumentOptions]::new()
+        $options.MaxDepth = 4
+        $document = [Text.Json.JsonDocument]::Parse($Stdout, $options)
+        $report = Get-JsonObjectMap $document.RootElement @('schemaVersion', 'service', 'generatedAt', 'workloads')
+        if ((Read-JsonInteger $report 'schemaVersion' 2 2) -ne 2 -or
+            (Read-JsonText $report 'service') -cne $Service -or
+            $report['workloads'].ValueKind -ne [Text.Json.JsonValueKind]::Array -or
+            $report['workloads'].GetArrayLength() -ne 1) { return $null }
+        $unusedDate = Get-NativeBenchmarkAttemptUtc (Read-JsonText $report 'generatedAt')
+        $row = Get-JsonObjectMap $report['workloads'][0] @('id', 'method', 'path', 'authenticated', 'inputFingerprint',
+            'requested', 'executed', 'completed', 'failures', 'warmupRequests', 'concurrency', 'timeoutSeconds',
+            'elapsedMilliseconds', 'throughputPerSecond', 'p50Milliseconds', 'p95Milliseconds', 'p99Milliseconds')
+        $admin = $Configuration.Id -ceq 'admin-setting-read'
+        $method = if ($admin) { 'GET' } else { 'POST' }
+        $path = if ($admin) { '/v1/admin/global-settings/by-key/{key}' } else { '/v1/chat/completions' }
+        $id = Read-JsonText $row 'id'
+        if ($id -cne $Configuration.Id -or (Read-JsonText $row 'method') -cne $method -or
+            (Read-JsonText $row 'path') -cne $path -or
+            $row['authenticated'].ValueKind -ne [Text.Json.JsonValueKind]::True) { return $null }
+        Assert-NativeEvidenceHash (Read-JsonText $row 'inputFingerprint')
+        $aggregate = [ordered]@{ phase = 'measured'; id = $id }
+        foreach ($name in @('requested', 'executed', 'completed', 'failures', 'warmupRequests', 'concurrency', 'timeoutSeconds')) {
+            $aggregate[$name] = Read-JsonInteger $row $name 0 100000
+        }
+        $validated = Get-NativeBenchmarkFailureWorkloadAggregate $aggregate $Service
+        foreach ($name in @('requests', 'warmupRequests', 'concurrency', 'timeoutSeconds')) {
+            $field = if ($name -ceq 'requests') { 'requested' } else { $name }
+            if ($validated[$field] -ne $Configuration.Data[$name]) { return $null }
+        }
+        # Only these five report metrics accept finite floating-point values;
+        # counts and the shared image/evidence readers retain their integer contract.
+        $metrics = [ordered]@{}
+        foreach ($name in @('elapsedMilliseconds', 'throughputPerSecond', 'p50Milliseconds', 'p95Milliseconds', 'p99Milliseconds')) {
+            if ($row[$name].ValueKind -ne [Text.Json.JsonValueKind]::Number) { return $null }
+            $metrics[$name] = $row[$name].GetDouble()
+        }
+        $values = [pscustomobject]$metrics
+        $elapsed = Get-ResultNumber $values 'elapsedMilliseconds' -Positive
+        $throughput = Get-ResultNumber $values 'throughputPerSecond'
+        $latencies = @()
+        foreach ($name in @('p50Milliseconds', 'p95Milliseconds', 'p99Milliseconds')) { $latencies += Get-ResultNumber $values $name }
+        if ($latencies[0] -gt $latencies[1] -or $latencies[1] -gt $latencies[2] -or
+            [Math]::Abs($throughput - ($validated['completed'] * 1000 / $elapsed)) -gt [Math]::Max(0.000001, $throughput * 0.000001)) { return $null }
+        # warmupRequests is configured size only; no warm-up completion is inferred.
+        return ,$validated
+    }
+    catch { return $null }
+    finally { if ($null -ne $document) { $document.Dispose() } }
+}
+
 function Measure-Variant([string] $Runtime, [string] $Image, $ImageMetadata, [int] $HostPort) {
     $script:diagnosticRuntime = $Runtime
     $script:diagnosticPhase = 'container-start'
@@ -951,7 +1009,10 @@ function Measure-Variant([string] $Runtime, [string] $Image, $ImageMetadata, [in
                 $probe = Invoke-BoundedProcess $command $probeArguments $WorkloadTimeoutSeconds @{
                     CONDUIT_NATIVE_BENCHMARK_API_KEY = $apiKey
                 } $poll
-                if ($probe.ExitCode -ne 0) { throw 'Workload probe failed.' }
+                if ($probe.ExitCode -ne 0) {
+                    $script:failedWorkloadAggregate = Get-FailedWorkloadAggregate $probe.Stdout $configuration
+                    throw 'Workload probe failed.'
+                }
                 $script:diagnosticPhase = 'workload-result'
                 $report = $probe.Stdout | ConvertFrom-Json
                 $rows.Add((Test-WorkloadResult $report $configuration))

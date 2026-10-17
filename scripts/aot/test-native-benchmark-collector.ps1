@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 [CmdletBinding()]
-param([switch] $DiagnosticSchemaOnly, [switch] $StrictCallerOnly)
+param([switch] $DiagnosticSchemaOnly, [switch] $StrictCallerOnly, [switch] $FailedWorkloadOnly)
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -60,7 +60,102 @@ function Assert-DiagnosticContractRejection([scriptblock] $Action, [string] $Exp
 function New-DiagnosticContractInput {
     return ,([ordered]@{ phase = 'unknown'; reason = 'unknown'; runtime = 'unknown'; sampleKind = 'none'; pair = $null;
         ownedContainerCleanup = @{ status = 'not-attempted'; reason = 'none' };
-        privateFileCleanup = @{ status = 'not-attempted'; reason = 'none' } })
+        privateFileCleanup = @{ status = 'not-attempted'; reason = 'none' }; workloadAggregate = $null })
+}
+
+function Invoke-FailedWorkloadAggregateContracts {
+    # Execute the collector's real validators without launching a workload.
+    $tokens = $null; $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile($collector, [ref]$tokens, [ref]$parseErrors)
+    Assert-Contract ($parseErrors.Count -eq 0) 'Collector syntax is invalid.'
+    foreach ($functionName in @('Get-JsonObjectMap', 'Read-JsonText', 'Read-JsonInteger', 'Get-ResultNumber', 'Test-WorkloadResult', 'Get-FailedWorkloadAggregate')) {
+        $definition = $ast.Find({
+            param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $functionName
+        }.GetNewClosure(), $true)
+        Assert-Contract ($null -ne $definition) ('Collector helper is missing: ' + $functionName)
+        Invoke-Expression $definition.Extent.Text
+    }
+    foreach ($id in @('admin-setting-read', 'gateway-chat-nonstream', 'gateway-chat-sse')) {
+        $Service = if ($id -ceq 'admin-setting-read') { 'admin' } else { 'gateway' }
+        $configuration = [pscustomobject]@{ Id = $id; Data = @{ requests = 4; warmupRequests = 2; concurrency = 2; timeoutSeconds = 5 } }
+        $report = [ordered]@{
+            schemaVersion = 2; service = $Service; generatedAt = '2026-10-17T00:00:00.0000000+00:00'
+            workloads = @([ordered]@{
+                id = $id; method = $(if ($Service -ceq 'admin') { 'GET' } else { 'POST' })
+                path = $(if ($Service -ceq 'admin') { '/v1/admin/global-settings/by-key/{key}' } else { '/v1/chat/completions' })
+                authenticated = $true; inputFingerprint = 'c' * 64
+                requested = 4; executed = 4; completed = 3; failures = 1
+                warmupRequests = 2; concurrency = 2; timeoutSeconds = 5
+                elapsedMilliseconds = 100.25; throughputPerSecond = 3000 / 100.25
+                p50Milliseconds = 1.125; p95Milliseconds = 2.25; p99Milliseconds = 3.5
+            })
+        }
+        foreach ($completed in @(0, 3, 4)) {
+            $report.workloads[0].completed = $completed
+            $report.workloads[0].failures = 4 - $completed
+            $report.workloads[0].throughputPerSecond = $completed * 1000 / 100.25
+            $stdout = $report | ConvertTo-Json -Depth 8 -Compress
+            $aggregate = Get-FailedWorkloadAggregate $stdout $configuration
+            Assert-Contract ($null -ne $aggregate -and $aggregate.Count -eq 9 -and $aggregate.phase -ceq 'measured' -and
+                $aggregate.id -ceq $id -and $aggregate.requested -eq 4 -and $aggregate.executed -eq 4 -and
+                $aggregate.completed -eq $completed -and $aggregate.failures -eq (4 - $completed) -and
+                $aggregate.warmupRequests -eq 2) 'A valid measured failure projection lost its counts or invented warm-up completion.'
+            $successFailure = $null
+            try { $unusedSuccess = Test-WorkloadResult ($stdout | ConvertFrom-Json) $configuration }
+            catch { $successFailure = $_.Exception.Message }
+            Assert-Contract (($completed -eq 4 -and $null -eq $successFailure) -or
+                ($completed -ne 4 -and $successFailure -ceq 'Workload report is invalid.')) 'Failure evidence relaxed the strict success gate.'
+            $script:cases++
+        }
+        $report.workloads[0].completed = 3; $report.workloads[0].failures = 1; $report.workloads[0].throughputPerSecond = 3000 / 100.25
+        foreach ($mutate in @(
+            { param($r) $r.schemaVersion = '2' },
+            { param($r) $r.service = 'other' },
+            { param($r) $r.generatedAt = $privateKey },
+            { param($r) $r.extra = $privateKey },
+            { param($r) $r.workloads = @($r.workloads[0], $r.workloads[0]) },
+            { param($r) $r.workloads[0].id = $privateKey },
+            { param($r) $r.workloads[0].method = 'DELETE' },
+            { param($r) $r.workloads[0].path = $privateKey },
+            { param($r) $r.workloads[0].authenticated = $false },
+            { param($r) $r.workloads[0].inputFingerprint = $privateKey },
+            { param($r) $r.workloads[0].extra = $privateKey },
+            { param($r) $r.workloads[0].Remove('failures') },
+            { param($r) $r.workloads[0].requested = 5; $r.workloads[0].executed = 5; $r.workloads[0].failures = 2 },
+            { param($r) $r.workloads[0].executed = 3 },
+            { param($r) $r.workloads[0].completed = '3' },
+            { param($r) $r.workloads[0].completed = $true },
+            { param($r) $r.workloads[0].completed = 3.5 },
+            { param($r) $r.workloads[0].completed = -1 },
+            { param($r) $r.workloads[0].failures = 0 },
+            { param($r) $r.workloads[0].warmupRequests = 1 },
+            { param($r) $r.workloads[0].concurrency = 1 },
+            { param($r) $r.workloads[0].timeoutSeconds = 4 },
+            { param($r) $r.workloads[0].elapsedMilliseconds = 0 },
+            { param($r) $r.workloads[0].elapsedMilliseconds = [double]::PositiveInfinity },
+            { param($r) $r.workloads[0].throughputPerSecond = 31 },
+            { param($r) $r.workloads[0].p50Milliseconds = [double]::NaN },
+            { param($r) $r.workloads[0].p95Milliseconds = -1 },
+            { param($r) $r.workloads[0].p95Milliseconds = 4 }
+        )) {
+            $invalid = $report | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+            & $mutate $invalid | Out-Null
+            $aggregate = Get-FailedWorkloadAggregate ($invalid | ConvertTo-Json -Depth 8 -Compress) $configuration
+            Assert-Contract ($null -eq $aggregate) 'Malformed, mismatched or private failed stdout produced retained evidence.'
+            $script:cases++
+        }
+        $stdout = $report | ConvertTo-Json -Depth 8 -Compress
+        foreach ($invalid in @(
+            ('private-child-diagnostic ' + $privateKey),
+            ($stdout.Replace('"schemaVersion":2', '"schemaVersion":2,"schemaVersion":2')),
+            ($stdout.Replace('"p50Milliseconds":1.125', '"p50Milliseconds":1e999')),
+            ((' ' * 16385) + $stdout)
+        )) {
+            Assert-Contract ($null -eq (Get-FailedWorkloadAggregate $invalid $configuration)) 'Unparseable, duplicate, nonfinite or oversized failed stdout was retained.'
+            $script:cases++
+        }
+    }
 }
 
 function Invoke-FailureDiagnosticSchemaContracts {
@@ -103,7 +198,7 @@ function Invoke-FailureDiagnosticSchemaContracts {
         $script:cases++
         Assert-Contract (@(Set-NativeBenchmarkAttemptFailureDiagnostic -Context $context -Diagnostic (New-DiagnosticContractInput)).Count -eq 0) 'Diagnostic writer emitted incidental output.'
         $full = Read-AttemptContractJson $diagnosticPath
-        Assert-Contract ($full.Count -eq 11 -and $full.schemaVersion -eq 1 -and
+        Assert-Contract ($full.Count -eq 12 -and $full.schemaVersion -eq 2 -and $null -eq $full.workloadAggregate -and
             $full.kind -ceq 'conduit-native-benchmark-failure-diagnostic' -and $full.attemptId -ceq $context.attemptId -and
             $full.service -ceq 'admin' -and $full.phase -ceq 'unknown' -and $full.reason -ceq 'unknown' -and
             [IO.FileInfo]::new($diagnosticPath).Length -le 4096) 'Unknown fallback diagnostic is not a bounded closed record.'
@@ -114,8 +209,17 @@ function Invoke-FailureDiagnosticSchemaContracts {
             (Get-AttemptContractHash $output) -ceq $aliasHash -and (Get-AttemptContractHash $archive) -ceq $archiveHash) 'Immutable diagnostic writer changed a sidecar, attempt, alias or archive.'
         $script:cases++
 
+        $legacy = $full | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+        $legacy.schemaVersion = 1
+        $legacy.Remove('workloadAggregate')
+        Assert-Contract (@(Get-NativeBenchmarkAttemptFailureDiagnostic $legacy).Count -eq 1) 'Original schema-1 failure evidence is no longer readable.'
+        $legacy.workloadAggregate = $null
+        Assert-DiagnosticContractRejection { Get-NativeBenchmarkAttemptFailureDiagnostic $legacy } $validationError
+        $script:cases++
+
         $mutations = @(
             { param($d) $d.schemaVersion = '1' },
+            { param($d) $d.schemaVersion = 3 },
             { param($d) $d.kind = 'Conduit-native-benchmark-failure-diagnostic' },
             { param($d) $d.attemptId = '0' * 32 },
             { param($d) $d.service = 'Admin' },
@@ -156,6 +260,41 @@ function Invoke-FailureDiagnosticSchemaContracts {
             $valid.ownedContainerCleanup = @{ status = 'confirmed'; reason = 'shutdown-failed' }
             $valid.privateFileCleanup = @{ status = 'confirmed'; reason = 'cleanup-failed' }
             Assert-Contract (@(Get-NativeBenchmarkAttemptFailureDiagnostic $valid).Count -eq 1) 'Valid recorded pair or confirmed cleanup reason was rejected.'
+            $script:cases++
+        }
+        $withAggregate = $full | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+        $withAggregate.phase = 'workload'; $withAggregate.reason = 'probe-exit'
+        $withAggregate.runtime = 'jit'; $withAggregate.sampleKind = 'warmup'
+        $withAggregate.workloadAggregate = @{ phase = 'measured'; id = 'admin-setting-read'; requested = 4;
+            executed = 4; completed = 0; failures = 4; warmupRequests = 2; concurrency = 2; timeoutSeconds = 5 }
+        Assert-Contract (@(Get-NativeBenchmarkAttemptFailureDiagnostic $withAggregate).Count -eq 1) 'A fully failed measured aggregate was rejected.'
+        $script:cases++
+        foreach ($mutate in @(
+            { param($d) $d.phase = 'workload-result' },
+            { param($d) $d.reason = 'unknown' },
+            { param($d) $d.runtime = 'unknown' },
+            { param($d) $d.sampleKind = 'none' },
+            { param($d) $d.workloadAggregate.phase = 'warmup' },
+            { param($d) $d.workloadAggregate.id = 'gateway-chat-sse' },
+            { param($d) $d.workloadAggregate.id = $privateKey },
+            { param($d) $d.workloadAggregate.requested = 0 },
+            { param($d) $d.workloadAggregate.requested = 100001 },
+            { param($d) $d.workloadAggregate.executed = 3 },
+            { param($d) $d.workloadAggregate.completed = 5 },
+            { param($d) $d.workloadAggregate.failures = 3 },
+            { param($d) $d.workloadAggregate.completed = '0' },
+            { param($d) $d.workloadAggregate.completed = $false },
+            { param($d) $d.workloadAggregate.completed = [double]::NaN },
+            { param($d) $d.workloadAggregate.warmupRequests = 10001 },
+            { param($d) $d.workloadAggregate.concurrency = 0 },
+            { param($d) $d.workloadAggregate.concurrency = 257 },
+            { param($d) $d.workloadAggregate.timeoutSeconds = 121 },
+            { param($d) $d.workloadAggregate.extra = $privateKey },
+            { param($d) $d.workloadAggregate.Remove('phase') }
+        )) {
+            $modified = $withAggregate | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+            & $mutate $modified | Out-Null
+            Assert-DiagnosticContractRejection { Get-NativeBenchmarkAttemptFailureDiagnostic $modified } $validationError
             $script:cases++
         }
     }
@@ -690,15 +829,31 @@ function Assert-CollectorFailureDiagnostic($Metadata, [string] $Scenario, [strin
         'diagnostic-private-child' { $phase = 'workload-result'; $reason = 'unknown' }
         'diagnostic-private-config' { $phase = 'workload-result'; $reason = 'unknown'; $privateReason = 'cleanup-failed' }
         'diagnostic-poll-memory' { $phase = 'workload'; $reason = 'poll-memory-sample' }
+        { $_.StartsWith('diagnostic-probe-', [StringComparison]::Ordinal) } { $phase = 'workload'; $reason = 'probe-exit' }
     }
     Assert-Contract ($diagnostic.phase -ceq $phase -and $diagnostic.reason -ceq $reason -and $diagnostic.runtime -ceq $runtime -and
         $diagnostic.sampleKind -ceq $sample -and $diagnostic.pair -ceq $pair -and
         $diagnostic.ownedContainerCleanup.status -ceq $ownedStatus -and $diagnostic.ownedContainerCleanup.reason -ceq $ownedReason -and
-        $diagnostic.privateFileCleanup.status -ceq $privateStatus -and $diagnostic.privateFileCleanup.reason -ceq $privateReason) 'Persisted primary phase, variant identity or independent cleanup outcome differs.'
+        $diagnostic.privateFileCleanup.status -ceq $privateStatus -and $diagnostic.privateFileCleanup.reason -ceq $privateReason) (
+        'Persisted diagnostic differs for ' + $Scenario + ': phase=' + $diagnostic.phase + ';reason=' + $diagnostic.reason +
+        ';runtime=' + $diagnostic.runtime + ';sample=' + $diagnostic.sampleKind + ';owned=' + $diagnostic.ownedContainerCleanup.status +
+        '/' + $diagnostic.ownedContainerCleanup.reason + ';private=' + $diagnostic.privateFileCleanup.status + '/' + $diagnostic.privateFileCleanup.reason + '.')
     $pairText = if ($null -eq $pair) { 'none' } else { [string]$pair }
     $expectedSuffix = '[phase=' + $phase + ';reason=' + $reason + ';runtime=' + $runtime + ';sample=' + $sample + ';pair=' + $pairText +
         ';owned-cleanup=' + $ownedStatus + ';owned-cleanup-reason=' + $ownedReason + ';private-cleanup=' + $privateStatus + ';private-cleanup-reason=' + $privateReason + ']'
     Assert-Contract ($Failure.Contains($expectedSuffix)) 'Public summary lost the same closed primary and independent cleanup codes.'
+    $expectedAggregate = $Scenario -cin @('diagnostic-probe-partial', 'diagnostic-probe-all-failed')
+    Assert-Contract ($diagnostic.schemaVersion -eq 2 -and ($null -ne $diagnostic.workloadAggregate) -eq $expectedAggregate) (
+        'Failed stdout aggregate availability differs for ' + $Scenario + '; expected ' + $expectedAggregate + ', observed ' + ($null -ne $diagnostic.workloadAggregate) + '.')
+    if ($expectedAggregate) {
+        $aggregate = $diagnostic.workloadAggregate
+        $completed = if ($Scenario -ceq 'diagnostic-probe-all-failed') { 0 } else { 3 }
+        $id = if ($Metadata.attempt.service -ceq 'admin') { 'admin-setting-read' } else { 'gateway-chat-nonstream' }
+        Assert-Contract ($aggregate.Count -eq 9 -and $aggregate.phase -ceq 'measured' -and $aggregate.id -ceq $id -and
+            $aggregate.requested -eq 4 -and $aggregate.executed -eq 4 -and $aggregate.completed -eq $completed -and
+            $aggregate.failures -eq (4 - $completed) -and $aggregate.warmupRequests -eq 2 -and
+            $aggregate.concurrency -eq 2 -and $aggregate.timeoutSeconds -eq 5) 'Failed client completion counts were not retained exactly.'
+    }
 }
 
 function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $ExpectedFailure,
@@ -1368,6 +1523,7 @@ $context = Start-NativeBenchmarkAttempt -OutputPath $OutputPath -Service 'admin'
 try {
     [IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
     if ($DiagnosticSchemaOnly) {
+        Invoke-FailedWorkloadAggregateContracts
         Invoke-FailureDiagnosticSchemaContracts
     }
     else {
@@ -1732,6 +1888,11 @@ if ($Mode -eq 'driver' -or $Mode -eq 'dotnet') {
         [Console]::Error.WriteLine('private-child-diagnostic: ' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)
         exit 0
     }
+    if ($scenario -ceq 'diagnostic-probe-malformed') {
+        [Console]::Out.WriteLine('private-child-diagnostic ' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)
+        [Console]::Error.WriteLine('private-child-diagnostic ' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)
+        exit 1
+    }
     if ($scenario -ceq 'diagnostic-poll-memory') {
         $descendant = Start-Child 'sleep' @()
         try {
@@ -1794,9 +1955,20 @@ if ($Mode -eq 'driver' -or $Mode -eq 'dotnet') {
         p95Milliseconds = $(if ($record.ordinal -le 2) { 200 } else { 2 })
         p99Milliseconds = $(if ($record.ordinal -le 2) { 300 } else { 3 })
     }
+    if ($scenario.StartsWith('diagnostic-probe-', [StringComparison]::Ordinal)) {
+        $row.completed = if ($scenario -ceq 'diagnostic-probe-all-failed') { 0 } else { $configuration.requests - 1 }
+        $row.failures = $configuration.requests - $row.completed
+        $row.throughputPerSecond = $row.completed * 1000.0 / $elapsed
+        if ($scenario -ceq 'diagnostic-probe-private') { $row.extra = $env:CONDUIT_NATIVE_BENCHMARK_API_KEY }
+    }
     $childSchemaVersion = if ($scenario -eq 'child-string-schema') { '2' } else { 2 }
-    @{ schemaVersion = $childSchemaVersion; service = $(if ($admin) { 'admin' } else { 'gateway' }); workloads = @($row) } |
+    @{ schemaVersion = $childSchemaVersion; service = $(if ($admin) { 'admin' } else { 'gateway' });
+        generatedAt = [DateTimeOffset]::UtcNow.ToString('O'); workloads = @($row) } |
         ConvertTo-Json -Depth 8 -Compress
+    if ($scenario.StartsWith('diagnostic-probe-', [StringComparison]::Ordinal)) {
+        [Console]::Error.WriteLine('private-child-diagnostic ' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)
+        exit 1
+    }
     exit 0
 }
 throw 'Unknown fixture mode.'
@@ -1816,7 +1988,7 @@ throw 'Unknown fixture mode.'
     $script:packages = @{}
     $script:packages['admin'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
     $script:packages['gateway'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'gateway'
-    if (-not $StrictCallerOnly) {
+    if (-not $StrictCallerOnly -and -not $FailedWorkloadOnly) {
     $script:packages['admin-other'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
     $script:packages['admin-dirty'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -SourceDirty $true
     $script:packages['admin-unavailable'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -UnavailableSource
@@ -1862,6 +2034,17 @@ throw 'Unknown fixture mode.'
         Assert-Contract ($null -ne $definition) ('Collector helper is missing: ' + $functionName)
         Invoke-Expression $definition.Extent.Text
     }
+    if ($FailedWorkloadOnly) {
+        $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult -StrictCaller
+        Invoke-CollectorCase 'admin' 'diagnostic-probe-partial' 'No qualification was recorded.' -ExistingOutputPath $successfulAdmin.outputPath
+        Invoke-CollectorCase 'gateway' 'diagnostic-probe-all-failed' 'No qualification was recorded.'
+        Invoke-CollectorCase 'gateway' 'diagnostic-probe-private' 'No qualification was recorded.'
+        Invoke-CollectorCase 'admin' 'diagnostic-probe-malformed' 'No qualification was recorded.'
+        Invoke-FailedWorkloadAggregateContracts
+        Invoke-AttemptLifecycleContracts $successfulAdmin
+        Invoke-FailureDiagnosticSchemaContracts
+    }
+    else {
     $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult -StrictCaller
     Invoke-CollectorCase 'gateway' 'success' $null -StrictCaller
     Invoke-CollectorCase 'admin' 'case-duplicate-environment' 'No qualification was recorded.' -StrictCaller
@@ -2197,8 +2380,14 @@ exit 0
     Invoke-CollectorCase 'admin' 'diagnostic-private-child' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'diagnostic-private-config' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'diagnostic-poll-memory' 'No qualification was recorded.'
+    Invoke-CollectorCase 'admin' 'diagnostic-probe-partial' 'No qualification was recorded.' -ExistingOutputPath $successfulAdmin.outputPath
+    Invoke-CollectorCase 'gateway' 'diagnostic-probe-all-failed' 'No qualification was recorded.'
+    Invoke-CollectorCase 'gateway' 'diagnostic-probe-private' 'No qualification was recorded.'
+    Invoke-CollectorCase 'admin' 'diagnostic-probe-malformed' 'No qualification was recorded.'
+    Invoke-FailedWorkloadAggregateContracts
     Invoke-AttemptLifecycleContracts $successfulAdmin
     Invoke-FailureDiagnosticSchemaContracts
+    }
     }
     }
 }
@@ -2257,10 +2446,13 @@ if ($cleanupFailures.Count -gt 0) {
 }
 if ($null -ne $proofFailure) { throw $proofFailure }
 if ($DiagnosticSchemaOnly) {
-    Write-Host ('PASS: ' + $cases + ' failure diagnostic schema/writer contracts; strict codes, immutable sidecars, privacy and failed eligibility; no Docker/driver workload cases ran.')
+    Write-Host ('PASS: ' + $cases + ' failure diagnostic schema/writer and failed-workload projection contracts; strict codes, immutable sidecars, privacy and failed eligibility; no Docker/driver workload cases ran.')
 }
 elseif ($StrictCallerOnly) {
     Write-Host ('PASS: ' + $cases + ' strict-caller collector contracts; complete authenticated Admin/Gateway workload pairs, private configuration rejection, owned cleanup and latest-attempt evidence.')
+}
+elseif ($FailedWorkloadOnly) {
+    Write-Host ('PASS: ' + $cases + ' failed-workload collector contracts; one successful setup, four failed process cases, prior-alias preservation, projections, lifecycle, schema and owned cleanup.')
 }
 else {
     Write-Host ('PASS: ' + $cases + ' collector contracts; owned mocked Docker/driver processes, authenticated workload pairs, warm exclusion, private deadlines, strict cleanup and latest-attempt evidence.')
