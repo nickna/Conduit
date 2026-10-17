@@ -1,5 +1,7 @@
 #nullable enable
 
+using System.Text.Json;
+
 using ConduitLLM.Admin.Middleware;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -44,6 +46,85 @@ public sealed class NativeAdminRuntimeProfileRouteInventoryTests
         ("IpFilter_Check", "/v1/admin/ip-filters/check/{ipAddress}", "GET"),
         ("Auth_GenerateEphemeralMasterKey", "/v1/admin/auth-tokens/ephemeral-master-key", "POST")
     ];
+
+    private static readonly (string Name, string Pattern, string Method)[] WebhookQualification =
+    [
+        ("Webhooks_Inspect", "/v1/admin/webhook-deliveries/", "GET"),
+        ("Webhooks_Backlog", "/v1/admin/webhook-deliveries/backlog", "GET"),
+        ("Webhooks_DeadLetters", "/v1/admin/webhook-deliveries/dead-letters", "GET"),
+        ("Webhooks_Replay", "/v1/admin/webhook-deliveries/{id}/replay", "POST")
+    ];
+
+    [Fact]
+    public async Task ExplicitWebhookQualificationAllowsExactlyTwentySevenProductionOperationsAndKeepsPurgeExcluded()
+    {
+        using var environment = new InventoryEnvironment();
+        await using var app = CreateProductionMap(webhookRecovery: true);
+        var routes = Routes(app);
+        var approved = Approved.Concat(WebhookQualification).ToArray();
+        Assert.Equal(27, approved.Length);
+        foreach (var operation in approved)
+        {
+            var endpoint = Assert.Single(routes, route =>
+                route.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == operation.Name);
+            Assert.Equal(operation.Pattern, endpoint.RoutePattern.RawText);
+            Assert.Equal(operation.Method, Assert.Single(endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods));
+            var calls = 0;
+            var boundary = new NativeAdminRuntimeProfileMiddleware(_ => { calls++; return Task.CompletedTask; },
+                NativeAdminRuntimeProfileMiddleware.ReadWebhookRecoveryEnabled(app.Configuration));
+            await boundary.InvokeAsync(Context(app, endpoint, operation.Method));
+            Assert.Equal(1, calls);
+        }
+        var names = approved.Select(operation => operation.Name).ToHashSet(StringComparer.Ordinal);
+        var excluded = routes.Where(route => route.RoutePattern.RawText?.StartsWith("/v1/admin/", StringComparison.Ordinal) == true
+            && !names.Contains(route.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName ?? "")).ToArray();
+        Assert.Contains(excluded, route => route.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == "Webhooks_Purge");
+        foreach (var endpoint in excluded)
+        {
+            var calls = 0;
+            var boundary = new NativeAdminRuntimeProfileMiddleware(_ => { calls++; return Task.CompletedTask; }, enableWebhookRecovery: true);
+            var context = Context(app, endpoint, "GET");
+            await boundary.InvokeAsync(context);
+            Assert.Equal(501, context.Response.StatusCode);
+            Assert.Equal(0, calls);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CapabilitiesAndBoundaryRetainTheirStartupQualificationSnapshot(bool webhookRecovery)
+    {
+        using var environment = new InventoryEnvironment();
+        await using var app = CreateProductionMap(webhookRecovery);
+        var routes = Routes(app);
+        var calls = 0;
+        var boundary = new NativeAdminRuntimeProfileMiddleware(_ => { calls++; return Task.CompletedTask; },
+            NativeAdminRuntimeProfileMiddleware.ReadWebhookRecoveryEnabled(app.Configuration));
+        app.Configuration[NativeAdminRuntimeProfileMiddleware.WebhookRecoveryConfigurationKey] = (!webhookRecovery).ToString();
+        var capabilityEndpoint = Assert.Single(routes, route => route.RoutePattern.RawText == "/health/runtime-capabilities");
+        var context = Context(app, capabilityEndpoint, "GET");
+        await capabilityEndpoint.RequestDelegate!(context);
+        using var document = JsonDocument.Parse(((MemoryStream)context.Response.Body).ToArray());
+        var capabilities = document.RootElement;
+        var included = capabilities.GetProperty("included_features").EnumerateArray().Select(feature => feature.GetString()).ToArray();
+#if CONDUIT_NATIVE_AOT
+        Assert.Equal("native-aot", capabilities.GetProperty("runtime_mode").GetString());
+        Assert.Equal(webhookRecovery ? 10 : 9, included.Length);
+        Assert.Equal(9, capabilities.GetProperty("excluded_features").GetArrayLength());
+        Assert.Equal(webhookRecovery, included.Contains("experimental-webhook-recovery"));
+#else
+        Assert.Equal("jit", capabilities.GetProperty("runtime_mode").GetString());
+        Assert.Equal(18, included.Length);
+        Assert.Empty(capabilities.GetProperty("excluded_features").EnumerateArray());
+        Assert.DoesNotContain("experimental-webhook-recovery", included);
+#endif
+        var webhook = Assert.Single(routes, route => route.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == "Webhooks_Backlog");
+        var request = Context(app, webhook, "GET");
+        await boundary.InvokeAsync(request);
+        Assert.Equal(webhookRecovery ? 1 : 0, calls);
+        if (!webhookRecovery) Assert.Equal(501, request.Response.StatusCode);
+    }
 
     [Fact]
     public async Task AllTwentyThreeApprovedOperationsMatchActualProductionMetadataAndContinue()
@@ -120,7 +201,7 @@ public sealed class NativeAdminRuntimeProfileRouteInventoryTests
 #endif
     }
 
-    private static WebApplication CreateProductionMap()
+    private static WebApplication CreateProductionMap(bool webhookRecovery = false)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -128,6 +209,7 @@ public sealed class NativeAdminRuntimeProfileRouteInventoryTests
             EnvironmentName = Environments.Production
         });
         builder.Logging.ClearProviders();
+        builder.Configuration[NativeAdminRuntimeProfileMiddleware.WebhookRecoveryConfigurationKey] = webhookRecovery.ToString();
         builder.WebHost.UseTestServer();
         AdminProgram.ConfigureHttpServices(builder);
         AdminProgram.ConfigureRuntimeServices(builder, NullLogger.Instance);

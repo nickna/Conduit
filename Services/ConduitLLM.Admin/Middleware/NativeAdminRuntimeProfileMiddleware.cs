@@ -9,7 +9,9 @@ namespace ConduitLLM.Admin.Middleware;
 /// <summary>Rejects excluded native management operations before endpoint binding or DI.</summary>
 public sealed class NativeAdminRuntimeProfileMiddleware
 {
+    internal const string WebhookRecoveryConfigurationKey = "NativeAdmin:EnableWebhookRecovery";
     private readonly RequestDelegate _next;
+    private readonly bool _enableWebhookRecovery;
 
     private static readonly IReadOnlyDictionary<string, (string Pattern, string Method)> SupportedOperations =
         new Dictionary<string, (string Pattern, string Method)>(StringComparer.Ordinal)
@@ -39,8 +41,27 @@ public sealed class NativeAdminRuntimeProfileMiddleware
             ["Auth_GenerateEphemeralMasterKey"] = ("/v1/admin/auth-tokens/ephemeral-master-key", "POST")
         };
 
-    public NativeAdminRuntimeProfileMiddleware(RequestDelegate next) =>
+    // These typed operations are selected only by the explicit qualification
+    // profile. Purge and all other management routes remain excluded.
+    private static readonly IReadOnlyDictionary<string, (string Pattern, string Method)> WebhookRecoveryOperations =
+        new Dictionary<string, (string Pattern, string Method)>(StringComparer.Ordinal)
+        {
+            ["Webhooks_Inspect"] = ("/v1/admin/webhook-deliveries/", "GET"),
+            ["Webhooks_Backlog"] = ("/v1/admin/webhook-deliveries/backlog", "GET"),
+            ["Webhooks_DeadLetters"] = ("/v1/admin/webhook-deliveries/dead-letters", "GET"),
+            ["Webhooks_Replay"] = ("/v1/admin/webhook-deliveries/{id}/replay", "POST")
+        };
+
+    public NativeAdminRuntimeProfileMiddleware(RequestDelegate next, bool enableWebhookRecovery = false)
+    {
         _next = next ?? throw new ArgumentNullException(nameof(next));
+        _enableWebhookRecovery = enableWebhookRecovery;
+    }
+
+    // Both the middleware and capability snapshot capture this startup setting;
+    // configuration reloads do not widen the running native management boundary.
+    internal static bool ReadWebhookRecoveryEnabled(IConfiguration configuration) =>
+        configuration.GetValue<bool>(WebhookRecoveryConfigurationKey);
 
     public Task InvokeAsync(HttpContext context)
     {
@@ -49,7 +70,9 @@ public sealed class NativeAdminRuntimeProfileMiddleware
 
         var name = endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName;
         var methods = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods;
-        if (name is not null && SupportedOperations.TryGetValue(name, out var operation) &&
+        if (name is not null &&
+            (SupportedOperations.TryGetValue(name, out var operation) ||
+                _enableWebhookRecovery && WebhookRecoveryOperations.TryGetValue(name, out operation)) &&
             string.Equals(endpoint.RoutePattern.RawText, operation.Pattern, StringComparison.Ordinal) &&
             methods is { Count: 1 } && string.Equals(methods[0], operation.Method, StringComparison.Ordinal))
             return _next(context);
