@@ -21,13 +21,16 @@ using Xunit.Abstractions;
 namespace ConduitLLM.IntegrationTests.Tests;
 
 [Collection("Postgres advisory locks")]
-public sealed class GlobalSettingMutationPersistenceParityTests(
+public sealed partial class GlobalSettingMutationPersistenceParityTests(
     PostgresLockTestContainerFixture fixture, ITestOutputHelper output)
 {
     private static readonly DateTime OriginalCreated = new(2021, 2, 3, 4, 5, 6, DateTimeKind.Utc);
     private static readonly DateTime OriginalUpdated = new(2022, 3, 4, 5, 6, 7, DateTimeKind.Utc);
     private static readonly TimeSpan CleanupLimit = TimeSpan.FromSeconds(5);
     private static readonly string[] MutationKinds = ["create-default", "create-supplied", "update-existing"];
+
+    private void WriteIdentityObservation(object value) => output.WriteLine(
+        "GLOBAL_SETTING_IDENTITY_CONFORMANCE=" + JsonSerializer.Serialize(value));
 
     [Theory]
     [InlineData("ef-default")]

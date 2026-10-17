@@ -28,7 +28,7 @@ public interface IGlobalSettingRepository
     Task<GlobalSetting?> GetByKeyAsync(string key, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Creates a setting and returns its generated identifier.
+    /// Creates a setting and returns its identifier.
     /// </summary>
     /// <remarks>
     /// Validation precedes cancellation. Before changing caller timestamps, the
@@ -38,17 +38,24 @@ public interface IGlobalSettingRepository
     /// supplies UpdatedAt and, when unset, CreatedAt, before the write acquires a
     /// database connection. Later cancellation or write failure does not restore
     /// those fields. A supplied CreatedAt is preserved.
+    /// A zero Id requests a generated identifier; every nonzero Id, including
+    /// negative values, is inserted unchanged. The caller's Id is assigned after
+    /// receiving the successful insert result and otherwise retains its value.
     /// </remarks>
     Task<int> CreateAsync(GlobalSetting setting, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Updates an existing setting.
+    /// Updates a setting by its nonzero identifier, or inserts one when Id is zero.
     /// </summary>
     /// <remarks>
     /// Uses the same cancellation and caller-mutation boundary as CreateAsync.
     /// UpdatedAt is sampled from the client UTC clock before database connection
     /// acquisition; CreatedAt is preserved. Later cancellation or write failure
     /// does not restore the caller's fields.
+    /// A zero Id inserts and receives a generated identifier, while preserving
+    /// CreatedAt even when it is the default value. A missing nonzero Id causes
+    /// a concurrency failure: EF uses DbUpdateConcurrencyException and the typed
+    /// adapter uses System.Data.DBConcurrencyException. No replacement is inserted.
     /// </remarks>
     Task<bool> UpdateAsync(GlobalSetting setting, CancellationToken cancellationToken = default);
 

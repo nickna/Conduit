@@ -1,3 +1,5 @@
+using System.Data;
+
 using AwesomeAssertions;
 
 using ConduitLLM.Configuration;
@@ -283,7 +285,7 @@ public sealed class GlobalSettingRepositoryParityTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ValidationPreCancellationAndBackendSpecificWritesRemainCharacterized(bool typed)
+    public async Task ValidationPreCancellationAndIdentityWritesShareTheContract(bool typed)
     {
         var schema = SettingSchema("backend", typed);
         using var deadline = new CancellationTokenSource(TestLimit);
@@ -355,20 +357,20 @@ public sealed class GlobalSettingRepositoryParityTests
             Assert.Equal(0, factory.AsyncDisposed);
             Assert.Equal(0, sql.Started);
 
-            // These are independent backend outcomes, not invented parity assertions.
+            // Both adapters retain EF's explicit and generated identity behavior.
             var explicitId = new GlobalSetting { Id = 90, Key = "explicit-id", Value = "value", CreatedAt = StoredInstant };
             var actualId = await repository.CreateAsync(explicitId, deadline.Token);
-            if (typed) Assert.NotEqual(90, actualId); else Assert.Equal(90, actualId);
+            Assert.Equal(90, actualId);
             Assert.Equal(actualId, explicitId.Id);
             Assert.Equal(actualId, (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Key == "explicit-id").Id);
             var zero = new GlobalSetting { Key = "zero-update", Value = "zero", CreatedAt = StoredInstant };
             var zeroResult = await repository.UpdateAsync(zero, deadline.Token);
-            Assert.Equal(!typed, zeroResult);
-            if (typed) { Assert.Equal(0, zero.Id); Assert.DoesNotContain(await IndependentRowsAsync(schema, deadline.Token), row => row.Key == "zero-update"); }
-            else { Assert.True(zero.Id > 0); Assert.Equal("zero", (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Id == zero.Id).Value); }
+            Assert.True(zeroResult);
+            Assert.True(zero.Id > 0);
+            Assert.Equal("zero", (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Id == zero.Id).Value);
             var missingBefore = DateTime.UtcNow;
             var missing = new GlobalSetting { Id = 900000, Key = "missing-update", Value = "missing", CreatedAt = StoredInstant, UpdatedAt = StoredInstant };
-            if (typed) Assert.False(await repository.UpdateAsync(missing, deadline.Token));
+            if (typed) await Assert.ThrowsAsync<DBConcurrencyException>(() => repository.UpdateAsync(missing, deadline.Token));
             else await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repository.UpdateAsync(missing, deadline.Token));
             AssertUtcBetween(missing.UpdatedAt, missingBefore, DateTime.UtcNow);
             Assert.Equal(900000, missing.Id);

@@ -787,7 +787,7 @@ The root's repaired actual run passed **12/12 selected TRX rows, zero failed and
 
 The retained Fact and eleven additional rows cover independent six-field persistence oracles, all eight methods, validation, caller mutations, factory-token/time/logging/disposal boundaries, pre-cancellation, occupied-pool recovery and observed server waits. Completion of twelve EF and nine typed SQL phases, eighteen pre-cancellation paths and thirty-six occupied-pool paths across capacities one and two is inferred from the strict frozen source and Passed rows; separate subcase event rows were not recorded. The runtime reader was authored by the coverage/harness producer; independent test, harness and reader source reviews are bound separately, and the replay is not another execution or an independently implemented test oracle.
 
-At the Unit 140 review, characterized adapter differences were filed in [#1675](https://github.com/nickna/Conduit/issues/1675) and [#1676](https://github.com/nickna/Conduit/issues/1676): pre-cancel caller timestamps, supplied create IDs, zero-ID updates and missing positive-ID updates differed. Upsert client/server clocks, two-statement versus atomic SQL and repository logging differences were source observations; that review had not reproduced a concurrent-upsert race. The later #1675 qualification below reconciles mutation and Upsert behavior. These follow-ups provide no waiver for the semantic reconciliation required by complete native coverage.
+At the Unit 140 review, characterized adapter differences were filed in [#1675](https://github.com/nickna/Conduit/issues/1675) and [#1676](https://github.com/nickna/Conduit/issues/1676): pre-cancel caller timestamps, supplied create IDs, zero-ID updates and missing positive-ID updates differed. Upsert client/server clocks, two-statement versus atomic SQL and repository logging differences were source observations; that review had not reproduced a concurrent-upsert race. The later #1675/#1676 qualifications below reconcile mutation, Upsert and identity behavior. These follow-ups provide no waiver for the semantic reconciliation required by complete native coverage.
 
 The retained report preimage and runtime copy preserve the original `7f500a24…` prefix. Runtime comparisons of that former current report path remain pre-append evidence; the appended document requires its new hash and later commit bindings. Generated-query execution, the complete native repository suite, current-head native artifacts, registry qualification and production readiness remain unestablished. #1373/#1375 and all remaining repository migrations/native coverage are still required. Production remains JIT under ADR 0006; this records the current state and grants no scope waiver.
 
@@ -1118,8 +1118,9 @@ runtime coverage does not inject a clock to force it.
 
 EF's existing slow-operation logger still includes factory time and reports
 successful delegates before context disposal. The typed adapter has no matching
-repository logger. No logging failure was established. Direct Create identifiers
-and Update zero/missing identifiers remain separately scoped to #1676.
+repository logger. No logging failure was established. At the #1675 review,
+direct Create identifiers and Update zero/missing identifiers remained separately
+scoped to #1676, qualified below.
 
 Final managed verification passed **41/41 tests with zero skips**: the retained
 12-row owner suite, nine caller-boundary rows and 20 controlled Upsert rows.
@@ -1146,3 +1147,67 @@ annotations, mechanically reconstructing the managed-tested helper bytes, and
 was followed by the fresh native publication and full run above. This qualifies
 the standalone typed leaf, without establishing native EF or application
 readiness. Production remains JIT.
+
+## Global-setting identifiers and missing updates (#1676)
+
+The retained #1675 owner suite had already measured the original three identity
+differences: EF preserved explicit Create IDs, inserted on zero-ID Update, and
+failed missing positive-ID updates; typed Npgsql generated a replacement ID or
+returned false. Those passing assertion branches and their binaries were
+rechecked without repeating the unchanged suite.
+
+Four additional unchanged-EF PostgreSQL facts passed with 297 stable inputs and
+no leftover owned schemas. Create and Update retained both `-7` and
+`int.MinValue`; a missing `-900` produced `DbUpdateConcurrencyException` after
+one statement. Zero-ID Update preserved supplied CreatedAt or the exact default
+`DateTime.MinValue` with `Unspecified` Kind. An independent reader and raw
+PostgreSQL text confirmed the latter was `-infinity`. Explicit ID 1 left the
+sequence at `(last_value=1, is_called=false)`; the first generated insert failed
+with `23505`, consumed 1, and the next insert succeeded at 2. Duplicate ID/key
+failures retained caller IDs, admitted timestamps and database rows. Baseline
+receipt SHA-256:
+`82cc8ddd770b47fc8e45ce8b74536a2c788a6888a31d284a7fcdf97ab784c93d`.
+
+The model's generated-key sentinel is zero. EF treats supplied
+[negative keys as real values unless explicitly marked temporary](https://learn.microsoft.com/en-us/ef/core/change-tracking/miscellaneous#temporary-values).
+The pinned Npgsql converter accepts
+[MinValue as the infinity sentinel](https://github.com/npgsql/npgsql/blob/v10.0.3/src/Npgsql/Internal/Converters/Temporal/DateTimeConverterResolver.cs#L41).
+PostgreSQL documents that
+[aborted writes do not reclaim sequence values](https://www.postgresql.org/docs/16/functions-sequence.html).
+The implementation preserves these measured behaviors without changing the
+sequence or promising gapless identifiers.
+
+Typed Create and zero-ID Update share an insert helper on their already-owned
+connection. Every nonzero Create ID is supplied explicitly; zero requests the
+database-generated ID. Only Create fills a default CreatedAt. Update samples
+UpdatedAt once and preserves CreatedAt, including its default, before deciding
+whether to insert or update. The caller ID is assigned after receiving a
+successful insert result. A missing nonzero Update now throws BCL
+`DBConcurrencyException`; EF keeps its existing `DbUpdateConcurrencyException`.
+Constraint failures retain their provider-specific wrappers. EF production code
+and Upsert remain unchanged by #1676.
+
+Final managed verification passed **55/55 tests**, with 55 independently
+discovered rows, zero skips and no new warnings. The 14 paired identity rows
+join the retained 41 caller/Upsert/owner rows. Exact caller fields and timestamp
+Kinds, independent persisted fields, actual sequence states, real constraint
+failures, caller tokens and same-backend recovery were checked. All 43 new
+schema-absence events joined their tests, and all owned schema prefixes were
+empty before and afterward. The stability catalog covered 769 files, including
+conditionally excluded owner sources; this does not claim every catalog entry
+was selected by the compiler. Managed receipt SHA-256:
+`4a0c8da997316edb0aea8ee366288a2c182bb9bbe00079f42b651f1239d47382`.
+The three existing nullable warnings remain scoped to #1690.
+
+Fresh Linux x64 publication passed with **zero warnings**, then the complete
+native ELF passed in 16.9 seconds. The identity extension covered six success
+cases, eight pre-cancellations, eight occupied-pool cancellations, eight observed
+SQL cancellations, ten failed writes and three sequence scenarios. Its closed
+sequence observations reproduce unchanged explicit-ID state and consumption on
+generated collision. The previous mutation, clock and metrics checks also
+passed. All 183 native inputs and the publish closure stayed stable; three
+restore assets were EF-free, schemas were absent, output and child tasks joined,
+and the owned builder was idle afterward. Native receipt SHA-256:
+`83773f4118daca7d933531bec98822948ea61ed6d51457b1da1173f4c39ec6f4`.
+This qualifies the standalone typed leaf and the selected managed contract,
+without establishing native EF or application readiness. Production remains JIT.

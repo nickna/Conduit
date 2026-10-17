@@ -88,16 +88,7 @@ public sealed class NpgsqlGlobalSettingRepository : IGlobalSettingRepository
         setting.UpdatedAt = now;
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT INTO "GlobalSettings" ("Key", "Value", "Description", "CreatedAt", "UpdatedAt")
-            VALUES (@key, @value, @description, @createdAt, @updatedAt)
-            RETURNING "Id"
-            """;
-        AddSettingParameters(command, setting, includeId: false);
-
-        setting.Id = (int)(await command.ExecuteScalarAsync(cancellationToken)
-            ?? throw new InvalidOperationException("Global setting insert returned no identifier."));
+        setting.Id = await InsertSettingAsync(connection, setting, cancellationToken);
         return setting.Id;
     }
 
@@ -112,6 +103,14 @@ public sealed class NpgsqlGlobalSettingRepository : IGlobalSettingRepository
         setting.UpdatedAt = DateTime.UtcNow;
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        if (setting.Id == 0)
+        {
+            // EF treats an unset generated key as Added even through Update.
+            // Keep Update's CreatedAt boundary, including its default value.
+            setting.Id = await InsertSettingAsync(connection, setting, cancellationToken);
+            return true;
+        }
+
         await using var command = connection.CreateCommand();
         command.CommandText = """
             UPDATE "GlobalSettings"
@@ -123,7 +122,12 @@ public sealed class NpgsqlGlobalSettingRepository : IGlobalSettingRepository
             WHERE "Id" = @id
             """;
         AddSettingParameters(command, setting, includeId: true);
-        return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+        if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
+        {
+            throw new DBConcurrencyException("The global setting to update no longer exists.");
+        }
+
+        return true;
     }
 
     /// <inheritdoc />
@@ -217,6 +221,29 @@ public sealed class NpgsqlGlobalSettingRepository : IGlobalSettingRepository
         command.CommandText = "DELETE FROM \"GlobalSettings\" WHERE \"Key\" = @key";
         command.Parameters.AddWithValue("key", NpgsqlDbType.Varchar, key);
         return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+    }
+
+    private static async Task<int> InsertSettingAsync(
+        NpgsqlConnection connection,
+        GlobalSetting setting,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        var includeId = setting.Id != 0;
+        command.CommandText = includeId
+            ? """
+                INSERT INTO "GlobalSettings" ("Id", "Key", "Value", "Description", "CreatedAt", "UpdatedAt")
+                VALUES (@id, @key, @value, @description, @createdAt, @updatedAt)
+                RETURNING "Id"
+                """
+            : """
+                INSERT INTO "GlobalSettings" ("Key", "Value", "Description", "CreatedAt", "UpdatedAt")
+                VALUES (@key, @value, @description, @createdAt, @updatedAt)
+                RETURNING "Id"
+                """;
+        AddSettingParameters(command, setting, includeId);
+        return (int)(await command.ExecuteScalarAsync(cancellationToken)
+            ?? throw new InvalidOperationException("Global setting insert returned no identifier."));
     }
 
     private static async Task<GlobalSetting?> ReadSingleAsync(

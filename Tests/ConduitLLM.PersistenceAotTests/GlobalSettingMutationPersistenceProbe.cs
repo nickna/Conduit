@@ -70,6 +70,7 @@ internal static class GlobalSettingMutationPersistenceProbe
                 await DeletedOriginalAsync(connectionString, replacement, deadline.Token);
             foreach (var inserted in new[] { false, true })
                 await UpsertClockAsync(connectionString, inserted, deadline.Token);
+            await IdentityContractsAsync(connectionString, deadline.Token);
         }
         catch (Exception error) { primary = error; }
         finally
@@ -88,6 +89,7 @@ internal static class GlobalSettingMutationPersistenceProbe
         }
         Rethrow(primary, cleanup, "fixture");
         Console.WriteLine("Global setting mutation persistence passed: success=5; preCancelled=5; occupiedPool=5; sqlWaits=7; failedWrites=4; races=7; clocks=2; caller fields, independent rows, original identity, client timestamp bindings and single-slot recovery; exact-clock no-delta branch source-only.");
+        Console.WriteLine("Global setting identity persistence passed: success=6; preCancelled=8; occupiedPool=8; sqlWaits=8; failedWrites=10; sequenceCases=3; explicit and generated IDs, original caller identities, supplied and default CreatedAt including PostgreSQL -infinity, observed cancellation and single-slot recovery.");
     }
 
     private static async Task CaseAsync(string connectionString, Func<NpgsqlDataSource, Gate, NpgsqlGlobalSettingRepository, int, Task> work, CancellationToken token,
@@ -333,6 +335,199 @@ internal static class GlobalSettingMutationPersistenceProbe
         }, token, new Target(1, "SELECT"), new Target(2, insert ? "INSERT" : "UPDATE"));
     }
 
+    private static readonly IdentityInput[] IdentityInputs =
+    [
+        new("create-generated",true,0,default),new("create-positive",true,900,default),new("create-negative",true,-900,Created),
+        new("update-zero-supplied",false,0,Created),new("update-zero-default",false,0,default),new("update-existing",false,100,Created),
+        new("update-missing-positive",false,900,Created),new("update-missing-negative",false,-900,Created)
+    ];
+
+    private static async Task IdentityContractsAsync(string cs,CancellationToken token)
+    {
+        foreach(var input in IdentityInputs)
+        {
+            if(!input.Name.StartsWith("update-missing",StringComparison.Ordinal))await IdentitySuccessAsync(cs,input,token);
+            await IdentityPreCancelledAsync(cs,input,token);
+            await IdentityCancelledAsync(cs,input,false,token);
+            await IdentityCancelledAsync(cs,input,true,token);
+        }
+        foreach(var failure in new[]
+        {
+            new IdentityFailure(IdentityInputs[6],"identity",null),new IdentityFailure(IdentityInputs[7],"identity",null),
+            new IdentityFailure(new("duplicate-id",true,100,Created),"identity","23505"),
+            new IdentityFailure(new("duplicate-key-explicit",true,900,Created),"seed","23505"),
+            new IdentityFailure(new("duplicate-key-create-zero",true,0,default),"seed","23505"),
+            new IdentityFailure(IdentityInputs[3],"seed","23505"),new IdentityFailure(IdentityInputs[4],"seed","23505"),
+            new IdentityFailure(IdentityInputs[5],"other","23505"),
+            new IdentityFailure(IdentityInputs[1],new string('k',101),"22001"),new IdentityFailure(IdentityInputs[4],new string('k',101),"22001")
+        })await IdentityFailedAsync(cs,failure,token);
+        // Explicit inserts do not advance the identity sequence. After explicit
+        // key1, the first generated insert fails at1 and the next can recover at2.
+        await CaseAsync(cs,async(source,gate,repository,_)=>
+        {
+            var initialSequence=await IdentitySequenceAsync(cs,token);Require(initialSequence==new IdentitySequence(1,false),"initial owned identity sequence state");
+            var explicitOne=IdentityEntity(new("explicit-one",true,1,Created));
+            Require(await repository.CreateAsync(explicitOne,token)==1,"explicit sequence collision seed");
+            var explicitSequence=await IdentitySequenceAsync(cs,token);Require(explicitSequence==initialSequence,"explicit1 does not advance sequence");
+            var generated=IdentityEntity(IdentityInputs[0]);generated.Key="generated-sequence";
+            var before=await RowsAsync(cs,token);var lower=DateTime.UtcNow;
+            try{await repository.CreateAsync(generated,token);throw new InvalidOperationException("Expected generated identity collision.");}
+            catch(PostgresException error){Require(error.SqlState=="23505","actual generated primary-key collision");}
+            Require(generated.Id==0,"generated collision retains zero caller ID");IdentityStamped(IdentityInputs[0],generated,lower,DateTime.UtcNow);
+            var failedSequence=await IdentitySequenceAsync(cs,token);Require(failedSequence==new IdentitySequence(1,true),"failed generated insert consumes actual nextval");
+            EqualRows(before,await RowsAsync(cs,token));
+            var retrySnapshot=IdentitySnapshot(generated);var retryBefore=DateTime.UtcNow;
+            Require(await repository.CreateAsync(generated,token)==2 && generated.Id==2,"sequence gap and same caller recover at next generated ID");
+            IdentityStamped(IdentityInputs[0] with{CreatedAt=retrySnapshot.Fields.CreatedAt},generated,retryBefore,DateTime.UtcNow);
+            Require(generated.Key==retrySnapshot.Fields.Key && generated.Value==retrySnapshot.Fields.Value && generated.Description==retrySnapshot.Fields.Description &&
+                generated.CreatedAt.Kind==retrySnapshot.CreatedKind && generated.UpdatedAt.Kind==DateTimeKind.Utc,"successful sequence retry caller fields/kinds/ID");
+            var retryRow=(await RowsAsync(cs,token)).Single(row=>row.Id==2);
+            Require(retryRow==new Row(generated.Id,generated.Key,generated.Value,generated.Description,Wire(generated.CreatedAt),Wire(generated.UpdatedAt)) &&
+                retryRow.CreatedAt.Kind==DateTimeKind.Utc && retryRow.UpdatedAt.Kind==DateTimeKind.Utc,"sequence retry complete independent six-field row and kinds");
+            var retrySequence=await IdentitySequenceAsync(cs,token);Require(retrySequence==new IdentitySequence(2,true),"retry actual sequence state");
+            Console.WriteLine($"Global setting identity sequence observed: case=collision; initialLast={initialSequence.LastValue}; initialCalled={initialSequence.IsCalled}; explicitLast={explicitSequence.LastValue}; explicitCalled={explicitSequence.IsCalled}; failedLast={failedSequence.LastValue}; failedCalled={failedSequence.IsCalled}; retryLast={retrySequence.LastValue}; retryCalled={retrySequence.IsCalled}; retryId={generated.Id}.");
+        },token);
+    }
+
+    private static async Task IdentitySuccessAsync(string cs,IdentityInput input,CancellationToken token)
+    {
+        await CaseAsync(cs,async(source,gate,repository,pid)=>
+        {
+            gate.AllowDefaultCreatedAt=DefaultIdentityCreated(input);
+            var initialSequence=input.Create && input.Id!=0?await IdentitySequenceAsync(cs,token):null;
+            var entity=IdentityEntity(input);var before=DateTime.UtcNow;
+            Require(await InvokeIdentityAsync(repository,input,entity,token),"successful identity branch");
+            IdentityStamped(input,entity,before,DateTime.UtcNow);
+            Require(input.Id!=0?entity.Id==input.Id:entity.Id==1,"explicit original or fresh generated ID");
+            var rows=await RowsAsync(cs,token);var row=rows.Single(row=>row.Id==entity.Id);
+            Require(rows.Length==(input.Id==100?2:3) && row.Key==entity.Key && row.Value==entity.Value && row.Description==entity.Description &&
+                row.CreatedAt==Wire(entity.CreatedAt) && row.UpdatedAt==Wire(entity.UpdatedAt),"six independent identity fields");
+            if(DefaultIdentityCreated(input))
+            {
+                Require(entity.CreatedAt==DateTime.MinValue && entity.CreatedAt.Kind==DateTimeKind.Unspecified &&
+                    row.CreatedAt==DateTime.MinValue && row.CreatedAt.Kind==DateTimeKind.Unspecified,"default CreatedAt value AND Kind preserved");
+                Require(await CreatedTextAsync(cs,entity.Id,token)=="-infinity","actual default PostgreSQL timestamp sentinel");
+            }
+            else Require(row.CreatedAt.Kind==DateTimeKind.Utc,"non-sentinel stored creation UTC");
+            Require(row.UpdatedAt.Kind==DateTimeKind.Utc,"stored update UTC");
+            var audit=(await AuditAsync(cs,pid,token)).Single();Require(audit.Id==entity.Id && audit.CreatedAt==row.CreatedAt && audit.UpdatedAt==row.UpdatedAt,"independent identity write audit");
+            if(input.Create && input.Id!=0)
+            {
+                var initial=initialSequence??throw new InvalidOperationException("Missing explicit identity sequence observation.");
+                Require(initial==new IdentitySequence(1,false),"initial positive/negative explicit sequence state");
+                var explicitSequence=await IdentitySequenceAsync(cs,token);Require(explicitSequence==initial,"explicit positive/negative sequence remains uncalled");
+                var generated=IdentityEntity(IdentityInputs[0]);generated.Key="generated-after-explicit";
+                Require(await repository.CreateAsync(generated,token)==1 && generated.Id==1,"explicit positive/negative insert does not advance sequence");
+                var generatedSequence=await IdentitySequenceAsync(cs,token);Require(generatedSequence==new IdentitySequence(1,true),"actual generated sequence after explicit ID");
+                Console.WriteLine($"Global setting identity sequence observed: case={(input.Id>0?"positive":"negative")}; initialLast={initial.LastValue}; initialCalled={initial.IsCalled}; explicitLast={explicitSequence.LastValue}; explicitCalled={explicitSequence.IsCalled}; generatedLast={generatedSequence.LastValue}; generatedCalled={generatedSequence.IsCalled}; generatedId={generated.Id}.");
+            }
+        },token);
+    }
+
+    private static async Task IdentityPreCancelledAsync(string cs,IdentityInput input,CancellationToken token)
+    {
+        await CaseAsync(cs,async(_,gate,repository,_)=>
+        {
+            var entity=IdentityEntity(input);var snapshot=IdentitySnapshot(entity);var rows=await RowsAsync(cs,token);
+            using var caller=new CancellationTokenSource();caller.Cancel();
+            await CancelledAsync(InvokeIdentityAsync(repository,input,entity,caller.Token),caller.Token);
+            Require(IdentitySnapshot(entity)==snapshot && gate.Started==0,"identity pre-cancel exact fields/kinds/ID and SQL0");
+            EqualRows(rows,await RowsAsync(cs,token));
+        },token);
+    }
+
+    private static async Task IdentityCancelledAsync(string cs,IdentityInput input,bool sql,CancellationToken token)
+    {
+        var kind=input.Create||input.Id==0?"INSERT":"UPDATE";
+        await CaseAsync(cs,async(source,gate,repository,pid)=>
+        {
+            gate.AllowDefaultCreatedAt=DefaultIdentityCreated(input);
+            var entity=IdentityEntity(input);var rows=await RowsAsync(cs,token);
+            using var caller=new CancellationTokenSource();NpgsqlConnection? held=null,blocker=null;NpgsqlTransaction? transaction=null;Task? pending=null;
+            Exception? primary=null;var failures=new List<Exception>();
+            try
+            {
+                if(sql){blocker=await OpenUnpooledAsync(cs,"identity_blocker",token);transaction=await blocker.BeginTransactionAsync(token);}
+                else held=await source.OpenConnectionAsync(token);
+                var before=DateTime.UtcNow;
+                pending=sql?Task.Run(()=>InvokeIdentityAsync(repository,input,entity,caller.Token),CancellationToken.None):InvokeIdentityAsync(repository,input,entity,caller.Token);
+                if(sql)
+                {
+                    var entry=await gate.AtAsync(1,token);Require(entry.CompletedBefore==0,"first identity write phase");
+                    await LockAsync(blocker!,transaction!,token);gate.Release(1);
+                    await WaitLockAsync(cs,source,pid,blocker!.ProcessID,"RowExclusiveLock",pending,token);
+                }
+                else Require(!pending.IsCompleted && gate.Started==0,"identity waits behind actual sole lease");
+                IdentityStamped(input,entity,before,DateTime.UtcNow);Require(entity.Id==input.Id,"pending identity still original");
+                var admitted=IdentitySnapshot(entity);caller.Cancel();await CancelledAsync(pending,caller.Token);
+                Require(IdentitySnapshot(entity)==admitted,"later cancellation retains exact admitted fields/kinds/original ID");
+                if(sql)Require(await PingAsync(source,token)==pid,"identity SQL cancellation releases slot before unlock");
+            }
+            catch(Exception error){primary=error;}
+            finally
+            {
+                gate.ReleaseAll();caller.Cancel();await DrainAsync(pending,failures);
+                if(held is not null)await AttemptAsync(()=>held.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)),failures);
+                if(transaction is not null)await AttemptAsync(()=>transaction.RollbackAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)),failures);
+                if(blocker is not null)await AttemptAsync(()=>blocker.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)),failures);
+                await DrainAsync(pending,failures);
+                if(transaction is not null)await AttemptAsync(()=>transaction.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)),failures);
+            }
+            Rethrow(primary,failures,"identity cancellation");EqualRows(rows,await RowsAsync(cs,token));
+        },token,sql ? new[] { new Target(1,kind) } : Array.Empty<Target>());
+    }
+
+    private static async Task IdentityFailedAsync(string cs,IdentityFailure failure,CancellationToken token)
+    {
+        await CaseAsync(cs,async(_,gate,repository,_)=>
+        {
+            var input=failure.Input;gate.AllowDefaultCreatedAt=DefaultIdentityCreated(input);
+            var entity=IdentityEntity(input);entity.Key=failure.Key;var rows=await RowsAsync(cs,token);var before=DateTime.UtcNow;
+            try{await InvokeIdentityAsync(repository,input,entity,token);throw new InvalidOperationException("Expected failed identity write.");}
+            catch(DBConcurrencyException)when(failure.SqlState is null){}
+            catch(PostgresException error)when(failure.SqlState is not null){Require(error.SqlState==failure.SqlState,"actual identity write SQLSTATE");}
+            IdentityStamped(input,entity,before,DateTime.UtcNow);Require(entity.Id==input.Id && gate.Started==1,"failed write keeps original explicit or zero ID");
+            EqualRows(rows,await RowsAsync(cs,token));
+        },token);
+    }
+
+    private static GlobalSetting IdentityEntity(IdentityInput input)=>new(){Id=input.Id,Key="identity-"+input.Name,Value="identity value",Description=null,CreatedAt=input.CreatedAt,UpdatedAt=Updated};
+    private static async Task<bool> InvokeIdentityAsync(NpgsqlGlobalSettingRepository repository,IdentityInput input,GlobalSetting entity,CancellationToken token)
+    {if(!input.Create)return await repository.UpdateAsync(entity,token);var result=await repository.CreateAsync(entity,token);return result!=0 && result==entity.Id;}
+    private static bool DefaultIdentityCreated(IdentityInput input)=>!input.Create && input.Id==0 && input.CreatedAt==default;
+    private static IdentityCaller IdentitySnapshot(GlobalSetting entity)=>new(Snapshot(entity),entity.CreatedAt.Kind,entity.UpdatedAt.Kind);
+    private static void IdentityStamped(IdentityInput input,GlobalSetting entity,DateTime before,DateTime after)
+    {
+        Require(entity.UpdatedAt.Kind==DateTimeKind.Utc && entity.UpdatedAt>=before && entity.UpdatedAt<=after,"identity admitted update UTC");
+        if(input.Create && input.CreatedAt==default)Require(entity.CreatedAt==entity.UpdatedAt && entity.CreatedAt.Kind==DateTimeKind.Utc,"only Create applies unset creation fallback");
+        else Require(entity.CreatedAt==input.CreatedAt && entity.CreatedAt.Kind==input.CreatedAt.Kind,"Update preserves supplied/default CreatedAt value and Kind");
+    }
+    private static async Task<string> CreatedTextAsync(string cs,int id,CancellationToken token)
+    {
+        await using var connection=await OpenUnpooledAsync(cs,"native_identity_text",token);await using var command=connection.CreateCommand();
+        command.CommandText="SELECT \"CreatedAt\"::text FROM \"GlobalSettings\" WHERE \"Id\"=@id";command.Parameters.AddWithValue("id",id);
+        return (string)(await command.ExecuteScalarAsync(token)??throw new InvalidOperationException("Missing identity timestamp row."));
+    }
+    private static async Task<IdentitySequence> IdentitySequenceAsync(string cs,CancellationToken token)
+    {
+        await using var connection=await OpenUnpooledAsync(cs,"native_identity_sequence",token);await using var command=connection.CreateCommand();
+        var schema=new NpgsqlConnectionStringBuilder(cs).SearchPath!;
+        command.CommandText="SELECT n.nspname,c.relname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE c.oid=pg_catalog.pg_get_serial_sequence(@table,'Id')::regclass AND c.relkind='S'";
+        command.Parameters.AddWithValue("table",$"\"{schema}\".\"GlobalSettings\"");string sequence;
+        await using(var reader=await command.ExecuteReaderAsync(token))
+        {
+            Require(await reader.ReadAsync(token) && reader.GetString(0)==schema,"actual sequence belongs to owned schema");sequence=reader.GetString(1);
+            Require(sequence=="GlobalSettings_Id_seq" && !await reader.ReadAsync(token),"exact single owned identity sequence");
+        }
+        command.Parameters.Clear();command.CommandText=$"SELECT last_value,is_called FROM \"{schema}\".\"{sequence}\"";
+        await using(var reader=await command.ExecuteReaderAsync(token))
+        {Require(await reader.ReadAsync(token),"actual sequence state row");var state=new IdentitySequence(reader.GetInt64(0),reader.GetBoolean(1));Require(!await reader.ReadAsync(token),"single sequence state");return state;}
+    }
+    private sealed record IdentityInput(string Name,bool Create,int Id,DateTime CreatedAt);
+    private sealed record IdentityFailure(IdentityInput Input,string Key,string? SqlState);
+    private sealed record IdentityCaller(Row Fields,DateTimeKind CreatedKind,DateTimeKind UpdatedKind);
+    private sealed record IdentitySequence(long LastValue,bool IsCalled);
+
     private static GlobalSetting Entity(string operation) => new()
     {
         Id = operation == "update" ? 100 : 0, Key = operation == "update" || operation == "upsert-update" ? "seed" : "created",
@@ -470,6 +665,7 @@ internal static class GlobalSettingMutationPersistenceProbe
         private readonly List<Entry> _entries=[];private int _armed,_started,_completed;
         internal Gate(Target[] targets) => _targets=targets.ToDictionary(target=>target.Ordinal,target=>(target,new ManualResetEventSlim(false),new TaskCompletionSource<Entry>(TaskCreationOptions.RunContinuationsAsynchronously)));
         internal int Started=>Volatile.Read(ref _started);
+        internal bool AllowDefaultCreatedAt {get;set;}
         internal Entry[] Entries {get{lock(_entries)return _entries.ToArray();}}
         internal void Arm()=>Volatile.Write(ref _armed,1);
         internal Task<Entry> AtAsync(int ordinal,CancellationToken token)=>_targets[ordinal].Entered.Task.WaitAsync(token);
@@ -482,7 +678,10 @@ internal static class GlobalSettingMutationPersistenceProbe
             // Inspect typed UTC scalar values directly in this owned command;
             // never enable parameter logging or retain arbitrary field values.
             var dateParameters=command.Parameters.Cast<NpgsqlParameter>().Where(parameter=>parameter.Value is DateTime).ToArray();
-            Require(dateParameters.All(parameter=>parameter.NpgsqlDbType==NpgsqlDbType.TimestampTz && ((DateTime)parameter.Value!).Kind==DateTimeKind.Utc),"every bound DateTime is explicit UTC TimestampTz");
+            Require(dateParameters.All(parameter=>parameter.NpgsqlDbType==NpgsqlDbType.TimestampTz &&
+                (((DateTime)parameter.Value!).Kind==DateTimeKind.Utc || AllowDefaultCreatedAt && parameter.ParameterName=="createdAt" &&
+                    (DateTime)parameter.Value! == DateTime.MinValue && ((DateTime)parameter.Value!).Kind==DateTimeKind.Unspecified)),
+                "every DateTime is explicit UTC TimestampTz except armed identity createdAt default sentinel");
             var times=dateParameters.Select(parameter=>(DateTime)parameter.Value!).ToArray();
             var entry=new Entry(ordinal,Volatile.Read(ref _completed),DateTime.UtcNow,times);lock(_entries)_entries.Add(entry);
             if(_targets.TryGetValue(ordinal,out var gate))
