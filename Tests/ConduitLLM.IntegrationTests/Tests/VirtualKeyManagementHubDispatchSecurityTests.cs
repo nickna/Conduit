@@ -142,8 +142,10 @@ public sealed class VirtualKeyManagementHubDispatchSecurityTests
         foreach (var message in ownerA.Inbox.Messages.Concat(admin.Inbox.Messages)) AssertPayload(message, message.Name);
     }
 
-    [Fact]
-    public async Task AuthorizedManagementSubscriberReceivesEveryTargetedEventAndGeneralAdminGetsOnlyItsOwnAudience()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OverlappingManagementOwnerAndAdminAudiencesReceiveOneLogicalEvent(bool administratorsOwnKey)
     {
         await using var host = new GatewaySignalRDispatchHost();
         await host.StartAsync();
@@ -151,29 +153,138 @@ public sealed class VirtualKeyManagementHubDispatchSecurityTests
         using var ownerB = await ConnectAsync(host, GatewaySignalRDispatchHost.TokenB);
         using var generalAdmin = await ConnectAsync(host, GatewaySignalRDispatchHost.AdminToken);
         using var manager = await ConnectAsync(host, GatewaySignalRDispatchHost.AdminToken);
-        await GatewaySignalRDispatchHost.InvokeAsync(manager.Connection, "SubscribeToKeyManagement", GatewaySignalRDispatchHost.OwnerA);
+        var keyId = administratorsOwnKey ? GatewaySignalRDispatchHost.AdminKey : GatewaySignalRDispatchHost.OwnerA;
+        await GatewaySignalRDispatchHost.InvokeAsync(manager.Connection, "SubscribeToKeyManagement", keyId);
         await host.FlushAsync<VirtualKeyManagementHub>(manager.Connection);
+        Assert.Equal(new[] { "VirtualKeyStatus", "SubscribedToKeyManagement" },
+            manager.Inbox.Messages.Select(message => message.Name));
+        Assert.Equal(keyId, manager.Inbox.Messages[0].Payload.GetProperty("keyId").GetInt32());
+        Assert.Equal(keyId, manager.Inbox.Messages[1].Payload.GetInt32());
         Clear(manager);
 
         var broadcaster = host.CreateKeyBroadcaster();
-        await PublishLifecycleAsync(broadcaster);
-        await broadcaster.NotifyKeyStatusChangedAsync(GatewaySignalRDispatchHost.OwnerA, Status("enabled"));
+        await PublishLifecycleAsync(broadcaster, keyId);
+        await broadcaster.NotifyKeyStatusChangedAsync(keyId, Status("enabled", keyId));
+        await broadcaster.NotifyKeyStatusChangedAsync(keyId, Status("expired", keyId));
         await host.FlushAsync<VirtualKeyManagementHub>(ownerA.Connection, ownerB.Connection, generalAdmin.Connection, manager.Connection);
 
-        Assert.Equal(LifecycleEvents, generalAdmin.Inbox.Messages.Select(message => message.Name));
-        Assert.Equal(new[] { "VirtualKeyUpdated", "VirtualKeyDeleted", "VirtualKeyStatusChanged", "VirtualKeyStatusChanged" },
-            ownerA.Inbox.Messages.Select(message => message.Name));
-        // Existing publication sends once per audience. A manager also belongs to admin,
-        // so updates/deletions/critical status arrive through both authorized groups.
-        Assert.Equal(new[] { "VirtualKeyCreated", "VirtualKeyUpdated", "VirtualKeyUpdated", "VirtualKeyDeleted",
-            "VirtualKeyDeleted", "VirtualKeyStatusChanged", "VirtualKeyStatusChanged", "VirtualKeyStatusChanged" },
-            manager.Inbox.Messages.Select(message => message.Name));
-        Assert.Equal(new[] { "disabled", "disabled", "enabled" }, manager.Inbox.Messages
-            .Where(message => message.Name == "VirtualKeyStatusChanged").Select(message => message.Payload.GetProperty("newStatus").GetString()));
+        // Owner, management and general administration may overlap. Membership in
+        // more than one authorized audience must still produce one logical event.
+        var allNames = LifecycleEvents.Concat(new[] { "VirtualKeyStatusChanged", "VirtualKeyStatusChanged" }).ToArray();
+        AssertMessages(manager, allNames);
+        AssertStatuses(manager, "disabled", "enabled", "expired");
+        AssertMessages(generalAdmin, administratorsOwnKey ? allNames : LifecycleEvents);
+        AssertStatuses(generalAdmin, administratorsOwnKey ? ["disabled", "enabled", "expired"] : ["disabled"]);
+        AssertMessages(ownerA, administratorsOwnKey ? [] : allNames.Skip(1).ToArray());
+        AssertStatuses(ownerA, administratorsOwnKey ? [] : ["disabled", "enabled", "expired"]);
         Assert.Empty(ownerB.Inbox.Messages);
-        foreach (var message in manager.Inbox.Messages)
-            AssertPayload(message, message.Name, message.Name == "VirtualKeyStatusChanged"
-                ? message.Payload.GetProperty("newStatus").GetString()! : "disabled");
+
+        await GatewaySignalRDispatchHost.InvokeAsync(manager.Connection, "UnsubscribeFromKeyManagement", keyId);
+        await host.FlushAsync<VirtualKeyManagementHub>(manager.Connection);
+        Assert.Equal(keyId, Assert.Single(manager.Inbox.Messages,
+            message => message.Name == "UnsubscribedFromKeyManagement").Payload.GetInt32());
+        Clear(ownerA, ownerB, generalAdmin, manager);
+
+        await broadcaster.NotifyKeyStatusChangedAsync(keyId, Status("enabled", keyId));
+        await broadcaster.NotifyKeyStatusChangedAsync(keyId, Status("expired", keyId));
+        await broadcaster.NotifyKeyStatusChangedAsync(keyId, Status("suspended", keyId));
+        await host.FlushAsync<VirtualKeyManagementHub>(ownerA.Connection, ownerB.Connection, generalAdmin.Connection, manager.Connection);
+        // Unsubscribing removes management visibility, while authenticated ownership
+        // and the critical-status administrator audience remain effective.
+        var threeStatuses = new[] { "VirtualKeyStatusChanged", "VirtualKeyStatusChanged", "VirtualKeyStatusChanged" };
+        AssertMessages(manager, administratorsOwnKey ? threeStatuses : ["VirtualKeyStatusChanged"]);
+        AssertStatuses(manager, administratorsOwnKey ? ["enabled", "expired", "suspended"] : ["suspended"]);
+        AssertMessages(generalAdmin, administratorsOwnKey ? threeStatuses : ["VirtualKeyStatusChanged"]);
+        AssertStatuses(generalAdmin, administratorsOwnKey ? ["enabled", "expired", "suspended"] : ["suspended"]);
+        AssertMessages(ownerA, administratorsOwnKey ? [] : threeStatuses);
+        AssertStatuses(ownerA, administratorsOwnKey ? [] : ["enabled", "expired", "suspended"]);
+        Assert.Empty(ownerB.Inbox.Messages);
+
+        // Keep its handlers installed while closing the actual transport. Subsequent
+        // publications must reach the remaining audiences without adding stale events.
+        await manager.Connection.StopAsync().WaitAsync(TimeSpan.FromSeconds(15));
+        Assert.Equal(HubConnectionState.Disconnected, manager.Connection.State);
+        Clear(ownerA, ownerB, generalAdmin, manager);
+        await broadcaster.NotifyKeyUpdatedAsync(keyId, Updated(keyId));
+        await broadcaster.NotifyKeyDeletedAsync(keyId, Deleted(keyId));
+        await broadcaster.NotifyKeyStatusChangedAsync(keyId, Status("enabled", keyId));
+        await broadcaster.NotifyKeyStatusChangedAsync(keyId, Status("disabled", keyId));
+        await host.FlushAsync<VirtualKeyManagementHub>(ownerA.Connection, ownerB.Connection, generalAdmin.Connection);
+        var remaining = new[] { "VirtualKeyUpdated", "VirtualKeyDeleted", "VirtualKeyStatusChanged", "VirtualKeyStatusChanged" };
+        AssertMessages(generalAdmin, administratorsOwnKey ? remaining : ["VirtualKeyUpdated", "VirtualKeyDeleted", "VirtualKeyStatusChanged"]);
+        AssertStatuses(generalAdmin, administratorsOwnKey ? ["enabled", "disabled"] : ["disabled"]);
+        AssertMessages(ownerA, administratorsOwnKey ? [] : remaining);
+        AssertStatuses(ownerA, administratorsOwnKey ? [] : ["enabled", "disabled"]);
+        Assert.Empty(ownerB.Inbox.Messages);
+        Assert.Empty(manager.Inbox.Messages);
+
+        void AssertMessages(Client client, params string[] expected)
+        {
+            Assert.Equal(expected, client.Inbox.Messages.Select(message => message.Name));
+            foreach (var message in client.Inbox.Messages)
+                AssertPayload(message, message.Name, message.Name == "VirtualKeyStatusChanged"
+                    ? message.Payload.GetProperty("newStatus").GetString()! : "disabled", keyId);
+        }
+
+        static void AssertStatuses(Client client, params string[] expected) =>
+            Assert.Equal(expected, client.Inbox.Messages.Where(message => message.Name == "VirtualKeyStatusChanged")
+                .Select(message => message.Payload.GetProperty("newStatus").GetString()));
+    }
+
+    [Fact]
+    public async Task AdministratorPromotionAtSubscriptionPreservesForeignManagementAndDeduplicatesOwnLifecycle()
+    {
+        await using var host = new GatewaySignalRDispatchHost();
+        await host.StartAsync();
+        using var promoted = await ConnectAsync(host, GatewaySignalRDispatchHost.TokenA);
+        using var ownerB = await ConnectAsync(host, GatewaySignalRDispatchHost.TokenB);
+        using var generalAdmin = await ConnectAsync(host, GatewaySignalRDispatchHost.AdminToken);
+
+        // Change the trusted persisted-key boundary after connection, rather than
+        // forging a role on the client. Subscribe performs a fresh admin check.
+        var key = await host.RuntimeKeys.Object.GetVirtualKeyInfoForValidationAsync(GatewaySignalRDispatchHost.OwnerA);
+        Assert.NotNull(key);
+        key.Metadata = """{"isAdmin":true}""";
+        await GatewaySignalRDispatchHost.InvokeAsync(promoted.Connection, "SubscribeToKeyManagement", GatewaySignalRDispatchHost.OwnerB);
+        await host.FlushAsync<VirtualKeyManagementHub>(promoted.Connection);
+        Assert.Equal(new[] { "VirtualKeyStatus", "SubscribedToKeyManagement" },
+            promoted.Inbox.Messages.Select(message => message.Name));
+        Assert.Equal(GatewaySignalRDispatchHost.OwnerB, promoted.Inbox.Messages[1].Payload.GetInt32());
+        Clear(promoted, ownerB, generalAdmin);
+
+        var broadcaster = host.CreateKeyBroadcaster();
+        await PublishLifecycleAsync(broadcaster, GatewaySignalRDispatchHost.OwnerB);
+        await broadcaster.NotifyKeyStatusChangedAsync(GatewaySignalRDispatchHost.OwnerB,
+            Status("enabled", GatewaySignalRDispatchHost.OwnerB));
+        await host.FlushAsync<VirtualKeyManagementHub>(promoted.Connection, ownerB.Connection, generalAdmin.Connection);
+        var withNoncriticalStatus = LifecycleEvents.Concat(new[] { "VirtualKeyStatusChanged" }).ToArray();
+        AssertMessages(promoted, GatewaySignalRDispatchHost.OwnerB, withNoncriticalStatus);
+        AssertMessages(ownerB, GatewaySignalRDispatchHost.OwnerB, withNoncriticalStatus.Skip(1).ToArray());
+        AssertMessages(generalAdmin, GatewaySignalRDispatchHost.OwnerB, LifecycleEvents);
+        Assert.Equal(new[] { "disabled", "enabled" }, promoted.Inbox.Messages
+            .Where(message => message.Name == "VirtualKeyStatusChanged")
+            .Select(message => message.Payload.GetProperty("newStatus").GetString()));
+
+        Clear(promoted, ownerB, generalAdmin);
+        await PublishLifecycleAsync(broadcaster);
+        await broadcaster.NotifyKeyStatusChangedAsync(GatewaySignalRDispatchHost.OwnerA, Status("enabled"));
+        await host.FlushAsync<VirtualKeyManagementHub>(promoted.Connection, ownerB.Connection, generalAdmin.Connection);
+        // Role normalization must remove the old nonadmin-owner lifecycle route,
+        // while retaining the connection's own noncritical status subscription.
+        AssertMessages(promoted, GatewaySignalRDispatchHost.OwnerA, withNoncriticalStatus);
+        AssertMessages(generalAdmin, GatewaySignalRDispatchHost.OwnerA, LifecycleEvents);
+        Assert.Empty(ownerB.Inbox.Messages);
+        Assert.Equal(new[] { "disabled", "enabled" }, promoted.Inbox.Messages
+            .Where(message => message.Name == "VirtualKeyStatusChanged")
+            .Select(message => message.Payload.GetProperty("newStatus").GetString()));
+
+        static void AssertMessages(Client client, int keyId, params string[] expected)
+        {
+            Assert.Equal(expected, client.Inbox.Messages.Select(message => message.Name));
+            foreach (var message in client.Inbox.Messages)
+                AssertPayload(message, message.Name, message.Name == "VirtualKeyStatusChanged"
+                    ? message.Payload.GetProperty("newStatus").GetString()! : "disabled", keyId);
+        }
     }
 
     private static async Task<Client> ConnectAsync(GatewaySignalRDispatchHost host, string token)
@@ -192,12 +303,13 @@ public sealed class VirtualKeyManagementHubDispatchSecurityTests
         foreach (var client in clients) client.Inbox.Clear();
     }
 
-    private static async Task PublishLifecycleAsync(VirtualKeyManagementNotificationService broadcaster)
+    private static async Task PublishLifecycleAsync(VirtualKeyManagementNotificationService broadcaster,
+        int keyId = GatewaySignalRDispatchHost.OwnerA)
     {
-        await broadcaster.NotifyKeyCreatedAsync(Created());
-        await broadcaster.NotifyKeyUpdatedAsync(GatewaySignalRDispatchHost.OwnerA, Updated());
-        await broadcaster.NotifyKeyDeletedAsync(GatewaySignalRDispatchHost.OwnerA, Deleted());
-        await broadcaster.NotifyKeyStatusChangedAsync(GatewaySignalRDispatchHost.OwnerA, Status("disabled"));
+        await broadcaster.NotifyKeyCreatedAsync(Created(keyId));
+        await broadcaster.NotifyKeyUpdatedAsync(keyId, Updated(keyId));
+        await broadcaster.NotifyKeyDeletedAsync(keyId, Deleted(keyId));
+        await broadcaster.NotifyKeyStatusChangedAsync(keyId, Status("disabled", keyId));
     }
 
     private static object[] ForgedArguments(string method) => method switch
@@ -209,38 +321,47 @@ public sealed class VirtualKeyManagementHubDispatchSecurityTests
         _ => throw new ArgumentOutOfRangeException(nameof(method))
     };
 
-    private static VirtualKeyCreatedNotification Created() => new()
+    private static VirtualKeyCreatedNotification Created(int keyId = GatewaySignalRDispatchHost.OwnerA) => new()
     {
-        KeyId = GatewaySignalRDispatchHost.OwnerA, KeyName = "Owner A fixture", IsEnabled = true,
+        KeyId = keyId, KeyName = KeyName(keyId), IsEnabled = true,
         MaxBudget = 123.12345678m, AllowedModels = "model-a,model-b", RateLimitPerMinute = 12,
         CreatedAt = Instant, ExpiresAt = null, Timestamp = Instant
     };
 
-    private static VirtualKeyUpdatedNotification Updated() => new()
+    private static VirtualKeyUpdatedNotification Updated(int keyId = GatewaySignalRDispatchHost.OwnerA) => new()
     {
-        KeyId = GatewaySignalRDispatchHost.OwnerA, KeyName = "Owner A fixture", UpdatedProperties = ["AllowedModels", "MaxBudget"],
+        KeyId = keyId, KeyName = KeyName(keyId), UpdatedProperties = ["AllowedModels", "MaxBudget"],
         IsEnabled = false, MaxBudget = 0.12345678m, AllowedModels = "model-b", RateLimitPerMinute = 0,
         ExpiresAt = null, UpdatedAt = Instant, Timestamp = Instant
     };
 
-    private static VirtualKeyDeletedNotification Deleted() => new()
+    private static VirtualKeyDeletedNotification Deleted(int keyId = GatewaySignalRDispatchHost.OwnerA) => new()
     {
-        KeyId = GatewaySignalRDispatchHost.OwnerA, KeyName = "Owner A fixture", DeletedAt = Instant,
+        KeyId = keyId, KeyName = KeyName(keyId), DeletedAt = Instant,
         DeletionReason = "Retained reason 雪", Timestamp = Instant
     };
 
-    private static VirtualKeyStatusChangedNotification Status(string status) => new()
+    private static VirtualKeyStatusChangedNotification Status(string status,
+        int keyId = GatewaySignalRDispatchHost.OwnerA) => new()
     {
-        KeyId = GatewaySignalRDispatchHost.OwnerA, KeyName = "Owner A fixture", PreviousStatus = "pending",
+        KeyId = keyId, KeyName = KeyName(keyId), PreviousStatus = "pending",
         NewStatus = status, StatusChangeReason = "Retained reason 雪", ChangedAt = Instant, Timestamp = Instant
     };
 
-    private static void AssertPayload(CapturedEvent message, string name, string status = "disabled")
+    private static string KeyName(int keyId) => keyId switch
+    {
+        GatewaySignalRDispatchHost.OwnerA => "Owner A fixture",
+        GatewaySignalRDispatchHost.OwnerB => "Owner B fixture",
+        _ => "Administrator fixture"
+    };
+
+    private static void AssertPayload(CapturedEvent message, string name, string status = "disabled",
+        int keyId = GatewaySignalRDispatchHost.OwnerA)
     {
         Assert.Equal(name, message.Name);
         var payload = message.Payload;
-        Assert.Equal(GatewaySignalRDispatchHost.OwnerA, payload.GetProperty("keyId").GetInt32());
-        Assert.Equal("Owner A fixture", payload.GetProperty("keyName").GetString());
+        Assert.Equal(keyId, payload.GetProperty("keyId").GetInt32());
+        Assert.Equal(KeyName(keyId), payload.GetProperty("keyName").GetString());
         Assert.Equal(Instant, payload.GetProperty("timestamp").GetDateTime());
         switch (name)
         {

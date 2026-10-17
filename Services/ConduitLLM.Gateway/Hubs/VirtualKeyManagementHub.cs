@@ -5,6 +5,14 @@ using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Interfaces;
 namespace ConduitLLM.Gateway.Hubs
 {
+    // SignalR group-union sends do not deduplicate connections. Broad lifecycle
+    // recipients therefore partition into non-admin owners and administrators.
+    internal static class VirtualKeyManagementGroups
+    {
+        internal static string NonAdminOwner(int keyId) => $"vkey-lifecycle-owner-{keyId}";
+        internal static string Status(int keyId) => $"vkey-status-{keyId}";
+    }
+
     /// <summary>
     /// SignalR hub for real-time virtual key management notifications.
     /// Provides real-time updates for virtual key operations, status changes, and spend tracking.
@@ -48,7 +56,7 @@ namespace ConduitLLM.Gateway.Hubs
             await base.OnConnectedAsync();
             
             var virtualKeyId = GetVirtualKeyId();
-            if (virtualKeyId.HasValue)
+            if (virtualKeyId is > 0)
             {
                 // Lifecycle publication is server-only. Administrative recipients join
                 // through trusted authentication, never a caller-supplied group name.
@@ -56,6 +64,15 @@ namespace ConduitLLM.Gateway.Hubs
                 {
                     await Groups.AddToGroupAsync(Context.ConnectionId, "admin", Context.ConnectionAborted);
                 }
+                else
+                {
+                    await Groups.AddToGroupAsync(Context.ConnectionId,
+                        VirtualKeyManagementGroups.NonAdminOwner(virtualKeyId.Value), Context.ConnectionAborted);
+                }
+                // Owners and authorized management subscribers share one status
+                // group, so an administrator monitoring its own key gets one event.
+                await Groups.AddToGroupAsync(Context.ConnectionId,
+                    VirtualKeyManagementGroups.Status(virtualKeyId.Value), Context.ConnectionAborted);
 
                 // Send initial virtual key status to the connected client
                 await SendInitialKeyStatus(virtualKeyId.Value);
@@ -106,8 +123,17 @@ namespace ConduitLLM.Gateway.Hubs
                         return;
                     }
                     
-                    // Add to management group for the target key
-                    var groupName = $"vkey-mgmt-{targetKeyId}";
+                    // Authorization is rechecked on subscription. Reconcile a
+                    // connection promoted since it connected before joining its
+                    // target audience, without overlapping owner/admin groups.
+                    var ownerId = GetVirtualKeyId();
+                    if (ownerId is > 0)
+                        await Groups.RemoveFromGroupAsync(Context.ConnectionId,
+                            VirtualKeyManagementGroups.NonAdminOwner(ownerId.Value), Context.ConnectionAborted);
+                    await Groups.AddToGroupAsync(Context.ConnectionId, "admin", Context.ConnectionAborted);
+
+                    // Add to the canonical status group for the target key.
+                    var groupName = VirtualKeyManagementGroups.Status(targetKeyId);
                     await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
                     
                     _logger.LogInformation(
@@ -142,8 +168,13 @@ namespace ConduitLLM.Gateway.Hubs
         {
             try
             {
-                var groupName = $"vkey-mgmt-{targetKeyId}";
-                await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
+                // Unsubscribing from management must not remove the owner's
+                // connection-time status audience for its own key.
+                if (GetVirtualKeyId() != targetKeyId)
+                {
+                    var groupName = VirtualKeyManagementGroups.Status(targetKeyId);
+                    await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
+                }
                 
                 _logger.LogInformation(
                     "Unsubscribed from management updates for virtual key {TargetKeyId}",

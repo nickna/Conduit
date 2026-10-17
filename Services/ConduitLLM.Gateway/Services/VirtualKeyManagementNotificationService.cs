@@ -58,8 +58,7 @@ namespace ConduitLLM.Gateway.Services
 
         public async Task NotifyKeyUpdatedAsync(int virtualKeyId, VirtualKeyUpdatedNotification notification)
         {
-            await SendToGroupAsync($"vkey-{virtualKeyId}", "VirtualKeyUpdated", notification);
-            await SendToGroupAsync($"vkey-mgmt-{virtualKeyId}", "VirtualKeyUpdated", notification);
+            await SendToGroupAsync(VirtualKeyManagementGroups.NonAdminOwner(virtualKeyId), "VirtualKeyUpdated", notification);
             await SendToGroupAsync("admin", "VirtualKeyUpdated", notification);
 
             Logger.LogInformation(
@@ -70,8 +69,7 @@ namespace ConduitLLM.Gateway.Services
 
         public async Task NotifyKeyDeletedAsync(int virtualKeyId, VirtualKeyDeletedNotification notification)
         {
-            await SendToGroupAsync($"vkey-{virtualKeyId}", "VirtualKeyDeleted", notification);
-            await SendToGroupAsync($"vkey-mgmt-{virtualKeyId}", "VirtualKeyDeleted", notification);
+            await SendToGroupAsync(VirtualKeyManagementGroups.NonAdminOwner(virtualKeyId), "VirtualKeyDeleted", notification);
             await SendToGroupAsync("admin", "VirtualKeyDeleted", notification);
 
             Logger.LogInformation(
@@ -82,13 +80,15 @@ namespace ConduitLLM.Gateway.Services
 
         public async Task NotifyKeyStatusChangedAsync(int virtualKeyId, VirtualKeyStatusChangedNotification notification)
         {
-            await SendToGroupAsync($"vkey-{virtualKeyId}", "VirtualKeyStatusChanged", notification);
-            await SendToGroupAsync($"vkey-mgmt-{virtualKeyId}", "VirtualKeyStatusChanged", notification);
-
             // Notify admin group if it's a critical status change
             if (notification.NewStatus == "disabled" || notification.NewStatus == "suspended")
             {
+                await SendToGroupAsync(VirtualKeyManagementGroups.NonAdminOwner(virtualKeyId), "VirtualKeyStatusChanged", notification);
                 await SendToGroupAsync("admin", "VirtualKeyStatusChanged", notification);
+            }
+            else
+            {
+                await SendToGroupAsync(VirtualKeyManagementGroups.Status(virtualKeyId), "VirtualKeyStatusChanged", notification);
             }
 
             Logger.LogInformation(
