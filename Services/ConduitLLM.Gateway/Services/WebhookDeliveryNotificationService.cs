@@ -369,7 +369,8 @@ namespace ConduitLLM.Gateway.Services
             {
                 var stats = await GetStatisticsAsync(cancellationToken);
                 ThrowIfStatisticsStopped(cancellationToken);
-                await _hubContext.Clients.All.SendAsync("DeliveryStatisticsUpdated", stats, cancellationToken);
+                // Retained backlog totals span all owners and are administrator-only.
+                await _hubContext.Clients.Group("admin").SendAsync("DeliveryStatisticsUpdated", stats, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || Volatile.Read(ref _disposed) != 0) { }
             catch (Exception exception)

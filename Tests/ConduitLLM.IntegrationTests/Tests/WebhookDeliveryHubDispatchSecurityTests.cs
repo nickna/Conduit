@@ -2,12 +2,17 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 
 using ConduitLLM.Configuration.DTOs.SignalR;
+using ConduitLLM.Configuration.Entities;
+using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Gateway.Hubs;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.IntegrationTests.Infrastructure;
 
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.DependencyInjection;
+
+using Moq;
 
 namespace ConduitLLM.IntegrationTests.Tests;
 
@@ -20,6 +25,101 @@ public sealed class WebhookDeliveryHubDispatchSecurityTests
     private const string ForeignUrl = "https://owner-b.example/private-callback?secret=tenant-b";
     private static readonly string[] DeliveryEvents =
         ["DeliveryAttempted", "DeliverySucceeded", "DeliveryFailed", "RetryScheduled", "CircuitBreakerStateChanged"];
+
+    [Fact]
+    public async Task HostedInstallationStatisticsReachOnlyTheAuthenticatedAdministrator()
+    {
+        var deliveries = new[]
+        {
+            Delivery(GatewaySignalRDispatchHost.OwnerA, "a-pending", "Pending"),
+            Delivery(GatewaySignalRDispatchHost.OwnerA, "a-success-1", "Delivered"),
+            Delivery(GatewaySignalRDispatchHost.OwnerA, "a-success-2", "Delivered"),
+            Delivery(GatewaySignalRDispatchHost.OwnerB, "b-pending-1", "Pending"),
+            Delivery(GatewaySignalRDispatchHost.OwnerB, "b-pending-2", "Pending"),
+            Delivery(GatewaySignalRDispatchHost.OwnerB, "b-pending-3", "Pending"),
+            Delivery(GatewaySignalRDispatchHost.OwnerB, "b-pending-4", "Pending"),
+            Delivery(GatewaySignalRDispatchHost.OwnerB, "b-success", "Delivered"),
+            Delivery(GatewaySignalRDispatchHost.OwnerB, "b-failure-1", "Exhausted"),
+            Delivery(GatewaySignalRDispatchHost.OwnerB, "b-failure-2", "Exhausted")
+        };
+        var recovery = new Mock<IWebhookRecovery>(MockBehavior.Strict);
+        recovery.Setup(service => service.BacklogAsync(It.IsAny<CancellationToken>()))
+            .Returns((CancellationToken token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                return Task.FromResult(new WebhookBacklog(
+                    deliveries.LongCount(row => row.State == "Pending"),
+                    deliveries.LongCount(row => row.State == "Delivered"),
+                    deliveries.LongCount(row => row.State == "Exhausted"), 0, 0));
+            });
+        Action? tick = null;
+        var timer = new Mock<ITimer>();
+        var clock = new Mock<TimeProvider> { CallBase = true };
+        clock.Setup(provider => provider.CreateTimer(It.IsAny<TimerCallback>(), It.IsAny<object?>(),
+                It.IsAny<TimeSpan>(), It.IsAny<TimeSpan>()))
+            .Returns((TimerCallback callback, object? state, TimeSpan due, TimeSpan period) =>
+            {
+                Assert.Equal(TimeSpan.FromMinutes(1), due);
+                Assert.Equal(TimeSpan.FromMinutes(1), period);
+                tick = () => callback(state);
+                return timer.Object;
+            });
+        await using var host = new GatewaySignalRDispatchHost();
+        await host.StartAsync(services =>
+        {
+            services.AddSingleton(recovery.Object);
+            services.AddSingleton(clock.Object);
+            services.AddSingleton<WebhookDeliveryNotificationService>();
+            services.AddSingleton<IWebhookDeliveryNotificationService>(provider =>
+                provider.GetRequiredService<WebhookDeliveryNotificationService>());
+            services.AddHostedService(provider => provider.GetRequiredService<WebhookDeliveryNotificationService>());
+        });
+        var ownerA = await host.ConnectAsync(GatewaySignalRDispatchHost.TokenA, GatewaySignalRDispatchHost.WebhookPath);
+        var ownerB = await host.ConnectAsync(GatewaySignalRDispatchHost.TokenB, GatewaySignalRDispatchHost.WebhookPath);
+        var unsubscribed = await host.ConnectAsync(GatewaySignalRDispatchHost.TokenA, GatewaySignalRDispatchHost.WebhookPath);
+        var administrator = await host.ConnectAsync(GatewaySignalRDispatchHost.AdminToken, GatewaySignalRDispatchHost.WebhookPath);
+        using var eventsA = new StatisticsInbox(ownerA);
+        using var eventsB = new StatisticsInbox(ownerB);
+        using var unsubscribedEvents = new StatisticsInbox(unsubscribed);
+        using var adminEvents = new StatisticsInbox(administrator);
+        await SubscribeAsync(ownerA, OwnerAUrl);
+        await SubscribeAsync(ownerB, ForeignUrl);
+        // Invocation round trips complete OnConnected and its trusted group join.
+        // This placeholder acknowledgement does not add any URL subscription.
+        await GatewaySignalRDispatchHost.InvokeAsync(unsubscribed, "RequestStatistics");
+        await GatewaySignalRDispatchHost.InvokeAsync(administrator, "RequestStatistics");
+        Assert.Empty(await host.WebhookTracker.GetConnectionWebhooksAsync(unsubscribed.ConnectionId!));
+        Assert.Empty(await host.WebhookTracker.GetConnectionWebhooksAsync(administrator.ConnectionId!));
+
+        var began = DateTime.UtcNow;
+        Assert.NotNull(tick);
+        tick(); // Wake the actual PeriodicTimer/hosted worker, not a broadcast method.
+        var statistics = await adminEvents.First.WaitAsync(TimeSpan.FromSeconds(15));
+        await host.Services.GetRequiredService<WebhookDeliveryNotificationService>()
+            .StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15));
+        await host.FlushAsync<WebhookDeliveryHub>(ownerA, ownerB, unsubscribed, administrator);
+
+        Assert.Empty(eventsA.Messages);
+        Assert.Empty(eventsB.Messages);
+        Assert.Empty(unsubscribedEvents.Messages);
+        Assert.Single(adminEvents.Messages);
+        AssertFields(statistics, "averageResponseTimeMs", "failedDeliveries", "pendingDeliveries", "period",
+            "successRate", "successfulDeliveries", "timestamp", "totalDeliveries", "urlStatistics");
+        Assert.Equal("retained", statistics.GetProperty("period").GetString());
+        Assert.Equal(10, statistics.GetProperty("totalDeliveries").GetInt32());
+        Assert.Equal(5, statistics.GetProperty("pendingDeliveries").GetInt32());
+        Assert.Equal(3, statistics.GetProperty("successfulDeliveries").GetInt32());
+        Assert.Equal(2, statistics.GetProperty("failedDeliveries").GetInt32());
+        Assert.Equal(30, statistics.GetProperty("successRate").GetDouble());
+        Assert.Equal(0, statistics.GetProperty("averageResponseTimeMs").GetDouble());
+        Assert.Empty(statistics.GetProperty("urlStatistics").EnumerateArray());
+        Assert.Equal(DateTimeKind.Utc, statistics.GetProperty("timestamp").GetDateTime().Kind);
+        Assert.InRange(statistics.GetProperty("timestamp").GetDateTime(), began, DateTime.UtcNow);
+        recovery.Verify(service => service.BacklogAsync(It.IsAny<CancellationToken>()), Times.Once);
+
+        static WebhookDeliveryRecord Delivery(int owner, string id, string state) =>
+            new() { Id = id, VirtualKeyId = owner, State = state };
+    }
 
     [Fact]
     public async Task SharedDestinationKeepsEveryDeliveryNotificationWithinItsAuthenticatedOwner()
@@ -273,6 +373,25 @@ public sealed class WebhookDeliveryHubDispatchSecurityTests
         Assert.Equal(names, payload.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
 
     private sealed record CapturedEvent(string Name, JsonElement Payload);
+
+    private sealed class StatisticsInbox : IDisposable
+    {
+        private readonly ConcurrentQueue<JsonElement> _messages = new();
+        private readonly TaskCompletionSource<JsonElement> _first = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly IDisposable _handler;
+        public IReadOnlyList<JsonElement> Messages => _messages.ToArray();
+        public Task<JsonElement> First => _first.Task;
+
+        public StatisticsInbox(HubConnection connection) =>
+            _handler = connection.On<JsonElement>("DeliveryStatisticsUpdated", payload =>
+            {
+                var copy = payload.Clone();
+                _messages.Enqueue(copy);
+                _first.TrySetResult(copy);
+            });
+
+        public void Dispose() => _handler.Dispose();
+    }
 
     private sealed class EventInbox : IDisposable
     {

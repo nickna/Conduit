@@ -17,6 +17,36 @@ public sealed class WebhookDeliveryHubTests : HubTestBase
 
     public WebhookDeliveryHubTests(ITestOutputHelper output) : base(output) { }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnConnectedAsync_JoinsStatisticsGroupOnlyForTrustedAdministrator(bool administrator)
+    {
+        SetupAuthServiceIsAdmin(administrator);
+        var hub = CreateHub();
+
+        await hub.OnConnectedAsync();
+
+        VerifyAddedToGroup($"vkey-{DefaultVirtualKeyId}");
+        MockGroups.Verify(groups => groups.AddToGroupAsync(DefaultConnectionId, "admin",
+            It.IsAny<CancellationToken>()), administrator ? Times.Once() : Times.Never());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task OnConnectedAsync_MissingOrNonpositiveOwnerCannotJoinStatisticsGroup(int? virtualKeyId)
+    {
+        SetupAuthServiceIsAdmin(true);
+        var hub = CreateHub(virtualKeyId);
+
+        await hub.OnConnectedAsync();
+
+        MockGroups.Verify(groups => groups.AddToGroupAsync(It.IsAny<string>(), "admin",
+            It.IsAny<CancellationToken>()), Times.Never());
+    }
+
     [Fact]
     public async Task UnsubscribeFromWebhooks_RemovesTrackerEntriesAndSignalRGroups()
     {
