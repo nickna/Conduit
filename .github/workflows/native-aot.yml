@@ -108,6 +108,10 @@ jobs:
         shell: pwsh
         run: ./scripts/aot/test-native-evidence-file-types.ps1
 
+      - name: Verify Linux process cleanup lifecycle
+        shell: pwsh
+        run: ./scripts/aot/test-native-process-cleanup-lifecycle.ps1
+
       - name: Verify native promotion gate contract
         shell: pwsh
         run: ./scripts/aot/test-native-promotion.ps1

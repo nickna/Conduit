@@ -363,6 +363,10 @@ function Invoke-BoundedProcess(
     }
     finally {
         $reap = [System.Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds(5))
+        # End the work reads before attempting any cleanup read on the same reader.
+        # The work failure/stage has already been classified; this does not make a
+        # successful command fail merely because its work token is now cancelled.
+        try { $deadline.Cancel() } catch { $cleanupFailed = $true }
         try {
             if ($started) {
                 if ($IsLinux) {
@@ -397,22 +401,71 @@ function Invoke-BoundedProcess(
         }
         catch { $cleanupFailed = $true }
         finally {
+            foreach ($stream in $streams) {
+                try {
+                    $reap.Token.ThrowIfCancellationRequested()
+                    $discardedCharacters = 0
+                    if ($null -ne $stream.Pending) {
+                        $workRead = $stream.Pending
+                        $length = $null
+                        try { $length = $workRead.WaitAsync($reap.Token).GetAwaiter().GetResult() }
+                        catch {
+                            # Only the completed work-token cancellation is expected.
+                            # Cancellation, failure and disposal never establish EOF.
+                            $cancellation = $_.Exception
+                            while ($null -ne $cancellation -and $cancellation -isnot [OperationCanceledException]) {
+                                $cancellation = $cancellation.InnerException
+                            }
+                            if (-not $deadline.IsCancellationRequested -or -not $workRead.IsCanceled -or
+                                $null -eq $cancellation -or -not $cancellation.CancellationToken.Equals($deadline.Token)) { throw }
+                        }
+                        if (-not $workRead.IsCompleted) { throw 'Private command work read did not complete.' }
+                        $reap.Token.ThrowIfCancellationRequested()
+                        $stream.Pending = $null
+                        if ($null -ne $length) {
+                            if ($length -eq 0) { $stream.Ended = $true }
+                            else { $discardedCharacters += $length }
+                        }
+                    }
+                    # A root can exit before capture, or a later fork can escape the
+                    # retained set while still holding these inherited pipe endpoints.
+                    # Require actual EOF within the same cleanup budget. This is pipe
+                    # completion evidence, not containment of descendants that close pipes.
+                    while (-not $stream.Ended) {
+                        $reap.Token.ThrowIfCancellationRequested()
+                        if ($discardedCharacters -gt 4194304) { throw 'Private cleanup output exceeded its character limit.' }
+                        $stream.Pending = $stream.Reader.ReadAsync([System.Memory[char]]::new($stream.Buffer), $reap.Token).AsTask()
+                        $length = $stream.Pending.WaitAsync($reap.Token).GetAwaiter().GetResult()
+                        $reap.Token.ThrowIfCancellationRequested()
+                        $stream.Pending = $null
+                        if ($length -eq 0) { $stream.Ended = $true }
+                        else { $discardedCharacters += $length }
+                    }
+                    if ($discardedCharacters -gt 4194304) { throw 'Private cleanup output exceeded its character limit.' }
+                    $reap.Token.ThrowIfCancellationRequested()
+                }
+                catch { $cleanupFailed = $true }
+            }
             if ($started) {
-                try { $process.StandardOutput.Dispose(); $process.StandardError.Dispose() }
+                try { $process.StandardOutput.Dispose() }
+                catch { $cleanupFailed = $true }
+                try { $process.StandardError.Dispose() }
                 catch { $cleanupFailed = $true }
             }
             foreach ($task in @($streams | ForEach-Object { $_.Pending })) {
                 if ($null -eq $task) { continue }
                 try { $task.WaitAsync($reap.Token).GetAwaiter().GetResult() | Out-Null }
                 catch {
-                    # Cancellation/reader disposal is expected after a command timeout.
+                    # The EOF loop already marked an incomplete drain as failed.
+                    # Observe an aborted read within the remaining budget; neither
+                    # its cancellation nor reader disposal establishes EOF.
                     if (-not $failed -or -not $task.IsCompleted) { $cleanupFailed = $true }
                 }
             }
             foreach ($record in $linuxDescendants) { try { $record.Process.Dispose() } catch { $cleanupFailed = $true } }
-            $process.Dispose()
-            $deadline.Dispose()
-            $reap.Dispose()
+            foreach ($resource in @($process, $deadline, $reap)) {
+                try { $resource.Dispose() } catch { $cleanupFailed = $true }
+            }
         }
     }
     if ($failed) {

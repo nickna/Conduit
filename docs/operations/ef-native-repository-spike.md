@@ -996,7 +996,7 @@ successfully. Its collector, shared parity, two-host and protocol steps passed.
 Those statuses qualify only their recorded source and selected workflow scope;
 artifact bytes were not downloaded or independently qualified for this review.
 
-The current collector, test and attempt-evidence bytes exactly match #1642's
+At the #1673 review, the collector, test and attempt-evidence bytes exactly matched #1642's
 retained Windows and Linux runs, each passing 144 collector cases plus all
 31 metadata boundaries with exit zero and whitespace-only stderr. The
 transitive collector inputs remain unchanged, and all 12 promotion inputs
@@ -1007,3 +1007,70 @@ SHA-256 `55d1b5abed249fc777da41f79d2059d58365d97fc98c607eed7be5f886e22303`.
 The final PR must still run the current branch's native workflow and address
 its failures. Neither ancestor CI nor retained local checks qualify later
 branch changes, the complete native repository suite or production readiness.
+
+## Collector completion after root exit and late forks (#1674)
+
+Two synchronized Linux regressions reproduce the snapshot limit in the unchanged
+helper. In one, the root exits after its child's PID, parent, start token and
+inherited output pipes are latched. In the other, a single disclosed callback
+after the actual descendant snapshot lets the captured child fork a grandchild
+and exit; the grandchild is independently identified and reparented before root
+termination continues. Both returned an ordinary command timeout after about
+five seconds while the independently observed descendant still held both output
+pipes. An unrelated control actor remained alive in each case. Cooperative
+fixture teardown verified completion of all known actors, and the fresh container's exact ID and
+name were absent afterward.
+
+The inspected Linux `6.18.54.1` target has `setsid` from util-linux `2.39.3`,
+but a process group alone does not prevent descendants from creating another
+session. The launcher also has a
+[conditional fork](https://raw.githubusercontent.com/util-linux/util-linux/v2.39.3/sys-utils/setsid.c)
+whose ownership would need handling. The exposed cgroup v2 mount is read-only;
+no writable delegation was established. A pidfd design must acquire identity at
+launch before the original process can be reaped. The
+[documented PID-recycling conditions](https://man7.org/linux/man-pages/man2/pidfd_open.2.html)
+also describe atomic creation with `CLONE_PIDFD` as an alternative to a launch
+handshake.
+The documented
+[pidfd group-signaling flag](https://man7.org/linux/man-pages/man2/pidfd_send_signal.2.html)
+is available since Linux 6.9, but syscall permission under the target's seccomp
+policy was not probed. None of these
+observations establishes a safe launch-time containment implementation.
+
+The bounded helper instead requires actual output-pipe EOF before treating
+stream cleanup as complete. It cancels and observes each outstanding work read
+before starting a fresh read, uses the original shared five-second cleanup
+deadline, and discards further private output with a separate per-stream limit
+of 4,194,304 UTF-16 characters. Cancellation, read failure and reader disposal do
+not count as EOF. Missing EOF produces the existing closed cleanup-failure
+classification. Existing process identity checks and termination targets remain
+unchanged.
+
+The maintained lifecycle test runs in Linux CI after .NET setup and
+builds its dependency-free actor in an isolated private directory. Its default
+self-build path passed both timelines with the exact cleanup-failure message
+after about ten seconds, zero compiler warnings or errors, unrelated control
+actors still alive, and all cooperative teardown checks complete. The private
+build directory is removed, so its recorded DLL hash cannot be independently
+rechecked afterward. Independent replay accepted 99 retained source, log,
+timeline and cleanup checks; the workflow policy suite passed all 89 tests.
+
+Fresh full runs passed **144 collector cases plus 31 metadata cases on each
+platform**: Windows in 1,088.6 seconds and Linux in 976.3 seconds. Both roots and
+output tasks joined with actual EOF and zero-byte stderr; all 42 frozen inputs
+matched before, after and on independent reread. The Linux fixture's ten Docker
+commands joined, and its exact container ID and name were absent after removal.
+Final file-only verification passed 600 checks across 56 retained files, receipt
+SHA-256 `cda60636582cdd7c2ef5ac6eb319fb96eeaedcc90491a7bc708ddb2a12322e65`.
+
+An earlier Linux preflight rejected a verification-runner hash mismatch before
+either test workload started; that attempt and its successful teardown remain
+preserved. The runner correction changed only freeze setup. Exact reconstruction
+and AST comparison established identical execution code for the already-loaded
+Windows runner and the separately rebound Linux runner; neither full suite was
+repeated. The final PR still requires current-branch CI.
+
+This proves redirected endpoint completion or reports cleanup failure for the
+covered timelines. It does not prove containment of every descendant, including
+one that closes its inherited pipes and escapes the captured tree. It also does
+not identify the historical #1673 CI cause or qualify native service artifacts.
