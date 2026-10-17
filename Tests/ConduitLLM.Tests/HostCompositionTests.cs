@@ -169,6 +169,7 @@ public sealed class HostCompositionTests
         {
             AssertAdminGlobalSettingComposition(builder.Services, app.Services);
             AssertAdminIpFilterComposition(builder.Services, app.Services);
+            Assert.Null(app.Services.GetService<IVirtualKeyManagementAudienceService>());
         }
         Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(StackExchange.Redis.IConnectionMultiplexer));
         if (gateway)
@@ -176,6 +177,10 @@ public sealed class HostCompositionTests
             Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(SignalRMetrics));
             Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(ISignalRMetrics));
             Assert.Same(app.Services.GetRequiredService<SignalRMetrics>(), app.Services.GetRequiredService<ISignalRMetrics>());
+            var audiences = app.Services.GetRequiredService<VirtualKeyManagementAudienceService>();
+            Assert.Same(audiences, app.Services.GetRequiredService<IVirtualKeyManagementAudienceService>());
+            Assert.Same(audiences, Assert.Single(app.Services.GetServices<IHostedService>()
+                .OfType<VirtualKeyManagementAudienceService>()));
             AssertRequestScopedRateLimiting(builder.Services, app.Services);
         }
     }

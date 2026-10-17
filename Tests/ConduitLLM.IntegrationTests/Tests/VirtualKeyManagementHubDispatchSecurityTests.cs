@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.SignalR.Client;
 
 using Moq;
 
+using Testcontainers.Redis;
+
 namespace ConduitLLM.IntegrationTests.Tests;
 
 [Trait("Category", "Integration")]
@@ -20,6 +22,170 @@ public sealed class VirtualKeyManagementHubDispatchSecurityTests
     private static readonly DateTime Instant = new(2026, 10, 15, 1, 2, 3, DateTimeKind.Utc);
     private static readonly string[] LifecycleEvents =
         ["VirtualKeyCreated", "VirtualKeyUpdated", "VirtualKeyDeleted", "VirtualKeyStatusChanged"];
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TrustedDemotionRevokesAllForeignAudiencesWhilePreservingOwnKeyAndDisconnectCleanup(bool denySubscription)
+    {
+        await using var host = new GatewaySignalRDispatchHost();
+        await host.StartAsync();
+        using var ownerA = await ConnectAsync(host, GatewaySignalRDispatchHost.TokenA);
+        using var ownerB = await ConnectAsync(host, GatewaySignalRDispatchHost.TokenB);
+        using var manager = await ConnectAsync(host, GatewaySignalRDispatchHost.AdminToken);
+        Assert.Equal(3, host.KeyAudiences.ConnectionCount);
+        await SubscribeAsync(host, manager, GatewaySignalRDispatchHost.OwnerA);
+
+        var broadcaster = host.CreateKeyBroadcaster();
+        await broadcaster.NotifyKeyStatusChangedAsync(GatewaySignalRDispatchHost.OwnerA, Status("enabled"));
+        await host.FlushAsync<VirtualKeyManagementHub>(ownerA.Connection, ownerB.Connection, manager.Connection);
+        AssertKeyEvents(manager, GatewaySignalRDispatchHost.OwnerA, "VirtualKeyStatusChanged");
+        Clear(ownerA, ownerB, manager);
+
+        await SetAdministratorAsync(host, GatewaySignalRDispatchHost.AdminKey, administrator: false);
+        if (denySubscription)
+        {
+            await GatewaySignalRDispatchHost.InvokeAsync(manager.Connection, "SubscribeToKeyManagement", GatewaySignalRDispatchHost.OwnerB);
+            await host.FlushAsync<VirtualKeyManagementHub>(manager.Connection);
+            var denied = Assert.Single(manager.Inbox.Messages);
+            Assert.Equal("Error", denied.Name);
+            Assert.Equal("Unauthorized: Admin privileges required", denied.Payload.GetProperty("message").GetString());
+        }
+        else
+        {
+            // A silent connection must also lose privileges. Await the production
+            // audit itself, rather than treating elapsed time as a revocation oracle.
+            await host.KeyAudiences.AuditAsync().WaitAsync(TimeSpan.FromSeconds(15));
+        }
+        Assert.Equal(3, host.KeyAudiences.ConnectionCount);
+        Clear(ownerA, ownerB, manager);
+
+        await PublishLifecycleAsync(broadcaster);
+        await broadcaster.NotifyKeyStatusChangedAsync(GatewaySignalRDispatchHost.OwnerA, Status("enabled"));
+        await host.FlushAsync<VirtualKeyManagementHub>(ownerA.Connection, ownerB.Connection, manager.Connection);
+        Assert.Empty(manager.Inbox.Messages);
+        Assert.Empty(ownerB.Inbox.Messages);
+        var ownerEvents = LifecycleEvents.Skip(1).Concat(new[] { "VirtualKeyStatusChanged" }).ToArray();
+        AssertKeyEvents(ownerA, GatewaySignalRDispatchHost.OwnerA, ownerEvents);
+        Clear(ownerA, ownerB, manager);
+
+        await PublishLifecycleAsync(broadcaster, GatewaySignalRDispatchHost.AdminKey);
+        await broadcaster.NotifyKeyStatusChangedAsync(GatewaySignalRDispatchHost.AdminKey,
+            Status("enabled", GatewaySignalRDispatchHost.AdminKey));
+        await host.FlushAsync<VirtualKeyManagementHub>(ownerA.Connection, ownerB.Connection, manager.Connection);
+        AssertKeyEvents(manager, GatewaySignalRDispatchHost.AdminKey, ownerEvents);
+        Assert.Empty(ownerA.Inbox.Messages);
+        Assert.Empty(ownerB.Inbox.Messages);
+
+        var disconnectedId = manager.Connection.ConnectionId!;
+        await manager.Connection.StopAsync().WaitAsync(TimeSpan.FromSeconds(15));
+        await host.WaitForDisconnectAsync(disconnectedId);
+        Assert.Equal(2, host.KeyAudiences.ConnectionCount);
+        Clear(ownerA, ownerB, manager);
+        await PublishLifecycleAsync(broadcaster);
+        await PublishLifecycleAsync(broadcaster, GatewaySignalRDispatchHost.AdminKey);
+        await host.FlushAsync<VirtualKeyManagementHub>(ownerA.Connection, ownerB.Connection);
+        Assert.Empty(manager.Inbox.Messages);
+        Assert.Empty(ownerB.Inbox.Messages);
+        AssertKeyEvents(ownerA, GatewaySignalRDispatchHost.OwnerA, LifecycleEvents.Skip(1).ToArray());
+    }
+
+    [Fact]
+    public async Task RecipientNodeRevokesDemotedManagementAudiencesForRedisPublicationsFromAnotherNode()
+    {
+        await using var redis = new RedisBuilder("redis:7.4-alpine").Build();
+        using var startup = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        await redis.StartAsync(startup.Token);
+        var prefix = $"management-revocation-{Guid.NewGuid():N}:";
+        await using var publisher = new GatewaySignalRDispatchHost();
+        await using var recipient = new GatewaySignalRDispatchHost();
+        await publisher.StartAsync(redisConnectionString: redis.GetConnectionString(), redisChannelPrefix: prefix);
+        await recipient.StartAsync(redisConnectionString: redis.GetConnectionString(), redisChannelPrefix: prefix);
+        // The two fixtures model the same trusted runtime snapshots. A distinct
+        // administrator remains an authorized sentinel on the recipient node.
+        await SetAdministratorAsync(publisher, GatewaySignalRDispatchHost.OwnerB, administrator: true);
+        await SetAdministratorAsync(recipient, GatewaySignalRDispatchHost.OwnerB, administrator: true);
+        using var ownerA = await ConnectAsync(publisher, GatewaySignalRDispatchHost.TokenA);
+        using var manager = await ConnectAsync(recipient, GatewaySignalRDispatchHost.AdminToken);
+        using var sentinel = await ConnectAsync(recipient, GatewaySignalRDispatchHost.TokenB);
+        await SubscribeAsync(recipient, manager, GatewaySignalRDispatchHost.OwnerA);
+        await SubscribeAsync(recipient, sentinel, GatewaySignalRDispatchHost.OwnerA);
+        var broadcaster = publisher.CreateKeyBroadcaster();
+        var allEvents = LifecycleEvents.Concat(new[] { "VirtualKeyStatusChanged" }).ToArray();
+        var ownerEvents = allEvents.Skip(1).ToArray();
+        Clear(ownerA, manager, sentinel);
+
+        await PublishForeignAsync();
+        await DrainForeignChannelsAsync();
+        AssertKeyEventSet(manager, GatewaySignalRDispatchHost.OwnerA, allEvents);
+        AssertKeyEventSet(sentinel, GatewaySignalRDispatchHost.OwnerA, allEvents);
+        AssertKeyEventSet(ownerA, GatewaySignalRDispatchHost.OwnerA, ownerEvents);
+
+        await SetAdministratorAsync(publisher, GatewaySignalRDispatchHost.AdminKey, administrator: false);
+        await SetAdministratorAsync(recipient, GatewaySignalRDispatchHost.AdminKey, administrator: false);
+        // Only the recipient's local registry knows these connections. The
+        // publisher still uses the unchanged production Redis group sends.
+        await recipient.KeyAudiences.AuditAsync().WaitAsync(TimeSpan.FromSeconds(15));
+        Assert.Equal(2, recipient.KeyAudiences.ConnectionCount);
+        Clear(ownerA, manager, sentinel);
+        await PublishForeignAsync();
+        await DrainForeignChannelsAsync();
+        Assert.Empty(manager.Inbox.Messages);
+        AssertKeyEventSet(sentinel, GatewaySignalRDispatchHost.OwnerA, allEvents);
+        AssertKeyEventSet(ownerA, GatewaySignalRDispatchHost.OwnerA, ownerEvents);
+
+        using var ownSentinel = await ConnectAsync(recipient, GatewaySignalRDispatchHost.AdminToken);
+        Clear(ownerA, manager, sentinel, ownSentinel);
+        await PublishLifecycleAsync(broadcaster, GatewaySignalRDispatchHost.AdminKey);
+        await broadcaster.NotifyKeyStatusChangedAsync(GatewaySignalRDispatchHost.AdminKey,
+            Status("enabled", GatewaySignalRDispatchHost.AdminKey));
+        await publisher.FlushGroupAsync<VirtualKeyManagementHub>("admin", sentinel.Connection);
+        await publisher.FlushGroupAsync<VirtualKeyManagementHub>(
+            VirtualKeyManagementGroups.NonAdminOwner(GatewaySignalRDispatchHost.AdminKey), ownSentinel.Connection);
+        await publisher.FlushGroupAsync<VirtualKeyManagementHub>(
+            VirtualKeyManagementGroups.Status(GatewaySignalRDispatchHost.AdminKey), ownSentinel.Connection);
+        await publisher.FlushAsync<VirtualKeyManagementHub>(ownerA.Connection, manager.Connection, sentinel.Connection, ownSentinel.Connection);
+        AssertKeyEventSet(manager, GatewaySignalRDispatchHost.AdminKey, ownerEvents);
+        AssertKeyEventSet(ownSentinel, GatewaySignalRDispatchHost.AdminKey, ownerEvents);
+        AssertKeyEventSet(sentinel, GatewaySignalRDispatchHost.AdminKey, LifecycleEvents);
+        Assert.Empty(ownerA.Inbox.Messages);
+
+        var disconnectedId = manager.Connection.ConnectionId!;
+        await manager.Connection.StopAsync().WaitAsync(TimeSpan.FromSeconds(15));
+        await recipient.WaitForDisconnectAsync(disconnectedId);
+        Assert.Equal(2, recipient.KeyAudiences.ConnectionCount);
+        Clear(ownerA, manager, sentinel, ownSentinel);
+        await PublishForeignAsync();
+        await publisher.FlushGroupAsync<VirtualKeyManagementHub>(
+            VirtualKeyManagementGroups.NonAdminOwner(GatewaySignalRDispatchHost.OwnerA), ownerA.Connection);
+        await publisher.FlushGroupAsync<VirtualKeyManagementHub>("admin", sentinel.Connection);
+        await publisher.FlushGroupAsync<VirtualKeyManagementHub>(
+            VirtualKeyManagementGroups.Status(GatewaySignalRDispatchHost.OwnerA), sentinel.Connection, ownerA.Connection);
+        await publisher.FlushAsync<VirtualKeyManagementHub>(ownerA.Connection, sentinel.Connection, ownSentinel.Connection);
+        Assert.Empty(manager.Inbox.Messages);
+        Assert.Empty(ownSentinel.Inbox.Messages);
+        AssertKeyEventSet(sentinel, GatewaySignalRDispatchHost.OwnerA, allEvents);
+        AssertKeyEventSet(ownerA, GatewaySignalRDispatchHost.OwnerA, ownerEvents);
+
+        async Task PublishForeignAsync()
+        {
+            await PublishLifecycleAsync(broadcaster);
+            await broadcaster.NotifyKeyStatusChangedAsync(GatewaySignalRDispatchHost.OwnerA, Status("enabled"));
+        }
+
+        async Task DrainForeignChannelsAsync()
+        {
+            // A direct-client marker could overtake Redis's group channels. The
+            // recipient-local authorized sentinel first acknowledges each group;
+            // only then do direct markers drain all recipient transport queues.
+            await publisher.FlushGroupAsync<VirtualKeyManagementHub>(
+                VirtualKeyManagementGroups.NonAdminOwner(GatewaySignalRDispatchHost.OwnerA), ownerA.Connection);
+            await publisher.FlushGroupAsync<VirtualKeyManagementHub>("admin", sentinel.Connection);
+            await publisher.FlushGroupAsync<VirtualKeyManagementHub>(
+                VirtualKeyManagementGroups.Status(GatewaySignalRDispatchHost.OwnerA), sentinel.Connection, ownerA.Connection);
+            await publisher.FlushAsync<VirtualKeyManagementHub>(ownerA.Connection, manager.Connection, sentinel.Connection);
+        }
+    }
 
     [Theory]
     [InlineData("BroadcastKeyCreated")]
@@ -285,6 +451,47 @@ public sealed class VirtualKeyManagementHubDispatchSecurityTests
                 AssertPayload(message, message.Name, message.Name == "VirtualKeyStatusChanged"
                     ? message.Payload.GetProperty("newStatus").GetString()! : "disabled", keyId);
         }
+    }
+
+    private static async Task SetAdministratorAsync(GatewaySignalRDispatchHost host, int keyId, bool administrator)
+    {
+        var key = await host.RuntimeKeys.Object.GetVirtualKeyInfoForValidationAsync(keyId);
+        Assert.NotNull(key);
+        key.Metadata = administrator ? """{"isAdmin":true}""" : """{"isAdmin":false}""";
+    }
+
+    private static async Task SubscribeAsync(GatewaySignalRDispatchHost host, Client client, int keyId)
+    {
+        await GatewaySignalRDispatchHost.InvokeAsync(client.Connection, "SubscribeToKeyManagement", keyId);
+        await host.FlushAsync<VirtualKeyManagementHub>(client.Connection);
+        Assert.Equal(new[] { "VirtualKeyStatus", "SubscribedToKeyManagement" },
+            client.Inbox.Messages.Select(message => message.Name));
+        Assert.Equal(keyId, client.Inbox.Messages[0].Payload.GetProperty("keyId").GetInt32());
+        Assert.Equal(keyId, client.Inbox.Messages[1].Payload.GetInt32());
+        client.Inbox.Clear();
+    }
+
+    private static void AssertKeyEvents(Client client, int keyId, params string[] names)
+    {
+        Assert.Equal(names, client.Inbox.Messages.Select(message => message.Name));
+        foreach (var message in client.Inbox.Messages)
+            AssertPayload(message, message.Name, message.Name == "VirtualKeyStatusChanged"
+                ? message.Payload.GetProperty("newStatus").GetString()! : "disabled", keyId);
+    }
+
+    private static void AssertKeyEventSet(Client client, int keyId, params string[] names)
+    {
+        // Separate Redis group channels can interleave. Require exact event
+        // multiplicity and payloads without imposing ordering between channels.
+        Assert.Equal(names.Order(StringComparer.Ordinal),
+            client.Inbox.Messages.Select(message => message.Name).Order(StringComparer.Ordinal));
+        foreach (var message in client.Inbox.Messages)
+            AssertPayload(message, message.Name, message.Name == "VirtualKeyStatusChanged"
+                ? message.Payload.GetProperty("newStatus").GetString()! : "disabled", keyId);
+        var expectedStatuses = names.Count(name => name == "VirtualKeyStatusChanged") == 2
+            ? new[] { "disabled", "enabled" } : new[] { "disabled" };
+        Assert.Equal(expectedStatuses, client.Inbox.Messages.Where(message => message.Name == "VirtualKeyStatusChanged")
+            .Select(message => message.Payload.GetProperty("newStatus").GetString()).Order(StringComparer.Ordinal));
     }
 
     private static async Task<Client> ConnectAsync(GatewaySignalRDispatchHost host, string token)

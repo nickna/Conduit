@@ -65,6 +65,12 @@ public partial class Program
 
         // Register virtual key management notification service
         builder.Services.AddSingleton<IVirtualKeyManagementNotificationService, VirtualKeyManagementNotificationService>();
+        // Every Gateway node revalidates its own connected management audiences,
+        // including clients receiving publications from the Redis backplane.
+        builder.Services.AddSingleton<VirtualKeyManagementAudienceService>();
+        builder.Services.AddSingleton<IVirtualKeyManagementAudienceService>(sp =>
+            sp.GetRequiredService<VirtualKeyManagementAudienceService>());
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<VirtualKeyManagementAudienceService>());
 
         // Register billing alerting service for critical failure notifications
         builder.Services.AddSingleton<ConduitLLM.Configuration.Interfaces.IBillingAlertingService, ConduitLLM.Configuration.Services.BillingAlertingService>();
