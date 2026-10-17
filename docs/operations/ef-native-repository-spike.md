@@ -1211,3 +1211,71 @@ and the owned builder was idle afterward. Native receipt SHA-256:
 `83773f4118daca7d933531bec98822948ea61ed6d51457b1da1173f4c39ec6f4`.
 This qualifies the standalone typed leaf and the selected managed contract,
 without establishing native EF or application readiness. Production remains JIT.
+
+## Shared persistence pool qualification (#1677)
+
+The current source retains the seventeen schema-owned fixture pool repairs from
+[2a528784](https://github.com/nickna/Conduit/commit/2a5287841ebceb9421883f7ef8040bfa8b55a467)
+and the independent cleanup regressions added for #1634. In the repaired fixtures,
+EF borrows the owned data source through `UseNpgsql(dataSource)`; consumers finish
+before their sources dispose and their GUID schemas are removed. The audit distinguishes older
+private-key `ClearPool` helpers, unpooled management connections and common
+base-string pools. This verification introduced no capacity increase, global
+pool clearing, reduced assertions or additional serialization.
+
+Fresh captures retain both original failed hosted jobs: 275/289 and 284/300
+passed, with 14 and 16 failures, SQLSTATE 53300 errors and zero skips. The second job's
+new raw-log representation has a different checksum from the historical ticket
+capture; the exact cited bytes were not recovered. Later full hosted workflows
+at 09a02d43 and 15e187483 passed their then-current 332 and 375 shared rows.
+Unit 142's 310/313-row pressure comparison remains committed historical reporting;
+its original primary receipts were not located during this audit. These facts
+establish chronology and source ownership without retrospectively proving the
+original hosted failures' cause.
+
+At 52f89fe63, the complete unchanged 21-clause CI selector passed **504/504 tests,
+zero failures or skips**, in 125.2 seconds on Linux Release/JIT, including six
+published-native cleanup subprocess cases. Discovery matched all 504 names,
+110 more than the earlier #1634 inventory. The run reused the exact retained
+85.4-second managed build, six assembly hashes and dependency metadata; the
+three existing nullable warnings remain scoped to #1690. All 2,703 build/test
+catalog inputs and three private runners stayed stable. This catalog includes
+conditionally excluded files and does not claim that every entry was compiled.
+The native cleanup cases used the retained #1676 ELF, rather than a new publish.
+
+The independently owned PostgreSQL 16.15 server retained
+`max_connections=100`, zero general reserved slots and three superuser reserved
+slots. A persistent unpooled observer collected 1,209 samples at a requested
+100 ms interval: sampled peak **10 client connections including the observer**,
+nine other clients and nine in the test database. Maximum sample gap was
+159.7 ms; these sampled peaks are lower bounds with observer overhead. Actual
+`conduit` schema inventories were empty before and afterward. An independent
+post-observer query found only its own connection, no test clients or schemas,
+and no previous observer PID. All child processes and output streams joined.
+Primary receipt SHA-256:
+`350970d86afb9edda71bcf94b34eac54348f206b8795aa0079107640150417a8`.
+Independent replay SHA-256:
+`50551ead89e2dcd72aba1b0c94148d04c464158f602e44d47046ced89b9e4cb1`.
+
+Two rejected local attempts remain preserved. The first executed 504 rows with
+seven failures: five directly exposed unreachable IPv6 connections, and two
+HTTP 503 responses omitted their original exceptions. The IPv4 attempt executed
+all 504 with one connection timeout before the intended injected exception.
+Both HTTP rows passed in that attempt; their original causes remain unestablished.
+The first attempt's one leftover converter schema was archived and only that
+proved-owned GUID schema was removed. The second ended with no owned schemas or
+test backends. [#1704](https://github.com/nickna/Conduit/issues/1704) tracks the
+fixture's discarded exception diagnostics. The passing run used the existing
+owned Docker bridge directly, a separate transport context that does not
+diagnose either historical incident.
+
+[NativeAOT run 38990109216](https://github.com/nickna/Conduit/actions/runs/38990109216)
+at exact 52f89fe63 passed **all three jobs**: Linux publish/process smoke and both
+Admin and Gateway native images. The hosted shared suite also passed
+**504/504, zero failures or skips**. Its official test artifact matches every
+local display name and stable test ID, including the six native cleanup cases.
+Independent hosted-artifact replay SHA-256:
+`6032d379323ed4839c8313d7eb61f402e1c91ed396e0b363c11ad8b554494df0`.
+The workflow passes its configured native contract and image gates; native EF
+query execution and complete native application coverage remain unestablished.
+Production remains JIT.
