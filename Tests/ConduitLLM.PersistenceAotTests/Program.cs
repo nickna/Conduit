@@ -504,6 +504,7 @@ async Task RunProbeAsync()
         await ExerciseVirtualKeyRuntimeStoreAsync(dataSource, new NpgsqlVirtualKeyRuntimeStore(dataSource));
         await ExerciseMediaRuntimeStoreAsync(new NpgsqlMediaRuntimeStore(dataSource));
         await ExerciseAsyncTaskRuntimeStoreAsync(new NpgsqlAsyncTaskRuntimeStore(dataSource));
+        await AsyncTaskGuardPersistenceProbe.RunAsync(connectionString);
         await ExerciseRequestLogRuntimeStoreAsync(
             dataSource,
             new NpgsqlRequestLogRuntimeStore(dataSource));

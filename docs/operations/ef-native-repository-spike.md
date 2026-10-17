@@ -1318,3 +1318,43 @@ Their current source matches the just-completed #1677 suites, including
 query methods, open no database connection and publish no native executable.
 Generated-interceptor execution and complete native EF/application coverage
 remain unestablished. Production remains JIT.
+
+### Async-task guard conformance (#1679)
+
+The typed store now applies the EF reference's archive, live-lease and provider
+phase predicates. Clean claims require both provider timestamps to be absent;
+pending or expired-processing tasks with either timestamp become indeterminate
+only when unarchived. Provider start requires no prior evidence, completion
+requires a start, and lease extension requires unarchived processing state.
+Existing timestamp sampling, operation-ID rules, version increments, retry
+methods and fallback ordering are unchanged.
+
+An unchanged-source PostgreSQL 16.15 baseline reproduced all nine reported
+differences: nine EF rows passed, nine typed rows failed, and all 18 independent
+26-field before/after snapshots and owned-schema removals were retained. After
+the correction, the new 30-row guard class and existing five-row async-task
+contract class pass together (35/35, no skips). Positive transitions, repeat
+completion, null/empty operation IDs, all five completion rejection conditions,
+and exact full-row preservation are checked. Four concurrency rows observe two
+distinct PostgreSQL update waiters behind the owned table-lock blocker before
+release, then require exactly one winner. A first final run failed four rows
+because fixture cleanup repeated a completed rollback; its evidence is retained,
+and the explicit lock-release flag repair passes the complete rerun. Only the
+three existing nullable fixture warnings tracked by #1690 remain.
+
+A fresh EF-free Linux native publish on SDK 10.0.401 emits no warnings and its
+full persistence probe passes. The new helper executes all nine regressions,
+three transition groups and two observed concurrency cases, retaining 31
+explicit 26-field witnesses. Its ELF SHA256 is
+`b3a731784db031c8b45048caae5d443febf34aca8aa5609ce4411584bfa002b3`.
+All 184 native inputs and the four-file publish closure remain stable; owned
+schemas are absent before and after. The managed receipt SHA256 is
+`dd86260e6feb97bec8d1841f1d32cd8b914bd3935b18db3fce620b145d35498c`,
+and the native receipt SHA256 is
+`5dfc8520c64c21ed2c36ca2bbf610214f98e67363bc93c5759e32a4c5242027f`.
+
+The separate retry fallback was reproduced waiting for its own connection with
+`MaxPoolSize=1`, while a two-slot control returned `UnsupportedTaskType`; it is
+filed as [#1705](https://github.com/nickna/Conduit/issues/1705). That method is
+unchanged here. These results qualify the corrected guard contract; complete
+native EF/application coverage remains unestablished and production remains JIT.
