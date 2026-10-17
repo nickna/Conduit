@@ -4,8 +4,9 @@ Opt-in, design-time reproductions for Conduit [#1660](https://github.com/nickna/
 [#1662](https://github.com/nickna/Conduit/issues/1662),
 [#1667](https://github.com/nickna/Conduit/issues/1667),
 [#1672](https://github.com/nickna/Conduit/issues/1672),
-[#1678](https://github.com/nickna/Conduit/issues/1678), and
-[#1695](https://github.com/nickna/Conduit/issues/1695).
+[#1678](https://github.com/nickna/Conduit/issues/1678),
+[#1695](https://github.com/nickna/Conduit/issues/1695), and
+[#1696](https://github.com/nickna/Conduit/issues/1696).
 This project is deliberately outside `Conduit.slnx`. It references no Conduit
 service, uses an inert design-time factory at loopback port 1, and its entrypoint
 does not call any query. Do not publish or execute its query methods to reproduce
@@ -221,6 +222,43 @@ new runs preserve explicit argument lists and actual child working directories.
 Successful generated builds retain experimental/nullable warnings. No sensitive
 data logging, database connection, query execution, native publication, or
 repository-suite qualification occurred in these reductions. #1373 remains open.
+
+## Dotted local-name generated compilation tracker (#1696)
+
+A fresh Linux repeat on 2026-10-17 UTC selected `DiscoveryIncludeOnly` with
+`EfQueryPrecompilerRepro.DiscoveryContext`, retaining SDK 10.0.401, EF 10.0.12 and
+Npgsql/provider 10.0.3. Initial Release build and query generation each exited 0;
+one interceptor was emitted. Its generated-code Release build exited 1 with
+`CS1003`/`CS1002` at line 90, containing the invalid local identifier
+`efQueryPrecompilerRepro.DiscoveryMappingPrimaryKeyProperties`. This is separate
+from the `ThenInclude` generation failure and the sealed-entity compilation
+failure. No model or production entity was renamed.
+
+The fresh matrix is retained under
+`artifacts/issues-1469-1696/issue-1696/run-bff2ec75d6774b77b0c311ec2f75498c/`;
+its SHA-256 is `69d363f82c4ec6fd2597e2bf7fce712f8ec56333c0312785aec6a5b86557bb3d`.
+The interceptor SHA-256 is
+`cd68a98f7c6b4bc8253a2910cf6e78c6981272f5698ea016a284248822290573`.
+All five selected inputs stayed unchanged. No database connection, query
+execution or native publication occurred.
+
+[EF #37972](https://github.com/dotnet/efcore/issues/37972) is closed by
+[PR #39208](https://github.com/dotnet/efcore/pull/39208), merged into `main` on
+2026-10-09 at `b62c52f21921e1114c0144c2f77c18395b29cf5e`. The 2026-10-17 UTC review
+found its `ShortName()` fix on the 12.0.0-alpha main line, with issue milestone
+`12.0-preview1`. The inspected
+[10.0.13 tag](https://github.com/dotnet/efcore/blob/v10.0.13/src/EFCore/Query/ShapedQueryCompilingExpressionVisitor.cs)
+and `release/10.0` source still use
+the namespace-qualified name; no backport was identified. That source inspection
+does not test either a newer package or the fixed main-line code.
+
+Track compatible package availability separately from merge status. When an
+upstream-fixed supported dependency becomes available, repeat generation and
+generated-code compilation in a fresh directory alongside the retained 10.0.12
+baseline. Inspect the emitted identifier and keep the original failure stage in
+the [independent ledger](../../docs/operations/ef-query-precompiler-failure-inventory.md#independent-generated-code-compilation-controls).
+Do not suppress compiler errors or change repository package pins to declare
+this diagnostic control, or the wider #1373 workload, qualified.
 
 ## Required-member and decimal-literal reductions (#1667)
 
