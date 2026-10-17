@@ -1,5 +1,7 @@
+using System.Collections;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ConduitLLM.Functions.Serialization;
 using Microsoft.Extensions.Logging;
 
@@ -15,6 +17,11 @@ namespace ConduitLLM.Functions.Services;
 /// schemas skip validation; malformed schemas retain the provider-validation fallback
 /// with an explicit warning. Numbers must fit the finite double range; bounds use
 /// exact decimal digits without rounding. Required fields remain presence checks.
+/// Object fields accept JSON objects, object-valued string-key dictionaries (mutable
+/// or read-only), non-generic dictionaries with only string keys, and non-enumerable
+/// POCO reference objects. Strings, URI/version scalars, delegates, arrays, scalar
+/// JSON nodes, and value types are not objects. Caller object-inspection failures
+/// reject the parameter rather than invoking the malformed-schema fallback.
 /// </remarks>
 public class FunctionParameterValidationService
 {
@@ -120,6 +127,9 @@ public class FunctionParameterValidationService
             }
 
             var expectedType = typeElement.GetString();
+            if (expectedType == "object")
+                return ValidateObjectParameter(paramName, value);
+
             if (value is null or JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined })
                 return $"Parameter '{paramName}' must not be null or undefined";
 
@@ -177,20 +187,6 @@ public class FunctionParameterValidationService
                     }
                     break;
 
-                case "object":
-                    if (value is not JsonElement objElement || objElement.ValueKind != JsonValueKind.Object)
-                    {
-                        if (value is not Dictionary<string, object> && value.GetType().IsClass && !value.GetType().IsPrimitive)
-                        {
-                            // Might be a complex object, allow it
-                        }
-                        else
-                        {
-                            return $"Parameter '{paramName}' must be an object";
-                        }
-                    }
-                    break;
-
                 case "select":
                     if (!TryGetString(value, out var strValue))
                         return $"Parameter '{paramName}' must be a string";
@@ -218,6 +214,43 @@ public class FunctionParameterValidationService
             _logger.LogWarning(ex, "Error validating parameter type for {ParamName}", paramName);
             warnings.Add($"Schema validation error for parameter '{paramName}', proceeding without validation for this parameter");
             return null;
+        }
+    }
+
+    private static string? ValidateObjectParameter(string paramName, object? value)
+    {
+        var error = $"Parameter '{paramName}' must be an object";
+        try
+        {
+            if (value is null)
+                return $"Parameter '{paramName}' must not be null or undefined";
+            if (value is JsonElement element)
+                return element.ValueKind switch
+                {
+                    JsonValueKind.Object => null,
+                    JsonValueKind.Null or JsonValueKind.Undefined =>
+                        $"Parameter '{paramName}' must not be null or undefined",
+                    _ => error
+                };
+            if (value is JsonNode)
+                return value is JsonObject ? null : error;
+            if (value is IDictionary<string, object> or IReadOnlyDictionary<string, object>)
+                return null;
+            if (value is IDictionary dictionary)
+            {
+                foreach (var key in dictionary.Keys)
+                    if (key is not string) return error;
+                return null;
+            }
+
+            return value is not IEnumerable and not string and not Uri and not Version and not Delegate &&
+                value.GetType().IsClass ? null : error;
+        }
+        catch (Exception)
+        {
+            // Caller containers and JSON document lifetimes are input failures,
+            // not malformed schemas that may use the provider-validation fallback.
+            return error;
         }
     }
 
