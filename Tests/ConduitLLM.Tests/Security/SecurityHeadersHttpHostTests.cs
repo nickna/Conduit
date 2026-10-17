@@ -1,6 +1,9 @@
 using System.Net;
+using System.Text.Json;
 
 using ConduitLLM.Admin.Extensions;
+using ConduitLLM.Admin.Middleware;
+using ConduitLLM.Core.Middleware;
 using ConduitLLM.Gateway.Extensions;
 using ConduitLLM.Security.Middleware;
 
@@ -27,6 +30,32 @@ namespace ConduitLLM.Tests.Security;
 public sealed class SecurityHeadersHttpHostTests
 {
     private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(15);
+    private const string DownstreamServer = "controlled-downstream-server";
+    private const string DownstreamPoweredBy = "controlled-downstream-runtime";
+
+    public enum ResponsePath
+    {
+        Endpoint,
+        Middleware,
+        StartingCallback,
+        StartedBeforeReturn,
+        HandledException,
+        ShortCircuit,
+        NoContent
+    }
+
+    public static TheoryData<bool, bool, ResponsePath> ApplicationResponseCases
+    {
+        get
+        {
+            var cases = new TheoryData<bool, bool, ResponsePath>();
+            foreach (var gateway in new[] { true, false })
+            foreach (var enabled in new[] { true, false })
+            foreach (var path in Enum.GetValues<ResponsePath>())
+                cases.Add(gateway, enabled, path);
+            return cases;
+        }
+    }
 
     [Theory]
     [InlineData(true)]
@@ -89,10 +118,125 @@ public sealed class SecurityHeadersHttpHostTests
         Assert.Null(response.ApiVersion);
     }
 
+    [Theory]
+    [MemberData(nameof(ApplicationResponseCases))]
+    public async Task PartialSecurityHost_AggregateControlsDownstreamIdentificationAtResponseStart(
+        bool gateway, bool enabled, ResponsePath path)
+    {
+        var response = await SendAsync(gateway, new Dictionary<string, string>
+        {
+            [$"{Prefix(gateway)}SECURITY_HEADERS_ENABLED"] = enabled.ToString()
+        }, configureDownstream: app => ConfigureApplicationResponse(app, gateway, path));
+
+        if (enabled)
+        {
+            Assert.Empty(response.Server);
+            Assert.Empty(response.PoweredBy);
+        }
+        else
+        {
+            Assert.Equal(DownstreamServer, Assert.Single(response.Server));
+            Assert.Equal(DownstreamPoweredBy, Assert.Single(response.PoweredBy));
+        }
+        Assert.Equal(!enabled, response.AddServerHeader);
+        Assert.Equal(enabled ? "nosniff" : null, response.ContentTypeOptions);
+        Assert.Equal(enabled ? "v1" : null, response.ApiVersion);
+        Assert.Equal(path == ResponsePath.StartingCallback ? "ran" : null, response.DownstreamCallback);
+
+        if (path == ResponsePath.HandledException)
+        {
+            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+            Assert.Equal(gateway ? "application/json" : "application/problem+json", response.ContentType);
+            using var json = JsonDocument.Parse(response.Body);
+            if (gateway) Assert.Equal(JsonValueKind.Object, json.RootElement.GetProperty("error").ValueKind);
+            else Assert.Equal(500, json.RootElement.GetProperty("status").GetInt32());
+        }
+        else if (path == ResponsePath.NoContent)
+        {
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            Assert.Empty(response.Body);
+        }
+        else
+        {
+            Assert.Equal(path == ResponsePath.ShortCircuit ? HttpStatusCode.Forbidden : HttpStatusCode.OK,
+                response.StatusCode);
+            Assert.Equal(path == ResponsePath.ShortCircuit ? "short-circuit response" : "application response",
+                response.Body);
+        }
+    }
+
+    private static void ConfigureApplicationResponse(IApplicationBuilder app, bool gateway, ResponsePath path)
+    {
+        if (path == ResponsePath.HandledException)
+        {
+            if (gateway) app.UseOpenAIErrorHandling();
+            else app.UseAdminExceptionHandling();
+        }
+
+        if (path == ResponsePath.Middleware)
+        {
+            app.Use(next => context =>
+            {
+                AddIdentification(context);
+                return next(context);
+            });
+        }
+
+        if (path == ResponsePath.ShortCircuit)
+        {
+            app.Use(_ => context =>
+            {
+                AddIdentification(context);
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return context.Response.WriteAsync("short-circuit response", context.RequestAborted);
+            });
+            app.Run(_ => throw new InvalidOperationException("The short circuit must not invoke its endpoint."));
+            return;
+        }
+
+        app.Run(async context =>
+        {
+            if (path == ResponsePath.StartingCallback)
+            {
+                context.Response.OnStarting(() =>
+                {
+                    AddIdentification(context);
+                    context.Response.Headers["X-Downstream-Callback"] = "ran";
+                    return Task.CompletedTask;
+                });
+            }
+            else if (path != ResponsePath.Middleware)
+            {
+                AddIdentification(context);
+            }
+
+            if (path == ResponsePath.HandledException)
+                throw new Exception("Controlled downstream exception.");
+            if (path == ResponsePath.NoContent)
+            {
+                context.Response.StatusCode = StatusCodes.Status204NoContent;
+                return;
+            }
+            if (path == ResponsePath.StartedBeforeReturn)
+            {
+                await context.Response.StartAsync(context.RequestAborted);
+                Assert.True(context.Response.HasStarted);
+            }
+            await context.Response.WriteAsync("application response", context.RequestAborted);
+        });
+    }
+
+    private static void AddIdentification(HttpContext context)
+    {
+        context.Response.Headers["Server"] = DownstreamServer;
+        context.Response.Headers["X-Powered-By"] = DownstreamPoweredBy;
+    }
+
     private static string Prefix(bool gateway) => gateway ? "CONDUIT_CORE_" : "CONDUIT_ADMIN_";
 
     private static async Task<ObservedHeaders> SendAsync(
-        bool gateway, Dictionary<string, string> configuration, bool? addServerHeader = null)
+        bool gateway, Dictionary<string, string> configuration, bool? addServerHeader = null,
+        Action<IApplicationBuilder> configureDownstream = null)
     {
         // No default environment/configuration providers: a developer's API settings
         // must not alter the security options exercised by this isolated host.
@@ -123,7 +267,10 @@ public sealed class SecurityHeadersHttpHostTests
                 {
                     if (gateway) app.UseGatewaySecurityHeaders();
                     else app.UseAdminSecurityHeaders();
-                    app.Run(context => context.Response.WriteAsync("partial security host", context.RequestAborted));
+                    if (configureDownstream is null)
+                        app.Run(context => context.Response.WriteAsync("partial security host", context.RequestAborted));
+                    else
+                        configureDownstream(app);
                 });
             });
 
@@ -148,12 +295,19 @@ public sealed class SecurityHeadersHttpHostTests
                 VersionPolicy = HttpVersionPolicy.RequestVersionExact
             };
             using var response = await client.SendAsync(request, deadline.Token);
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            Assert.Equal("partial security host", await response.Content.ReadAsStringAsync(deadline.Token));
+            var body = await response.Content.ReadAsStringAsync(deadline.Token);
+            if (configureDownstream is null)
+            {
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                Assert.Equal("partial security host", body);
+            }
             return new ObservedHeaders(response.Headers.Server.Select(value => value.ToString()).ToArray(),
+                response.Headers.TryGetValues("X-Powered-By", out var poweredBy) ? poweredBy.ToArray() : [],
                 response.Headers.TryGetValues("X-Content-Type-Options", out var contentType) ? Assert.Single(contentType) : null,
                 response.Headers.TryGetValues("X-API-Version", out var apiVersion) ? Assert.Single(apiVersion) : null,
-                host.Services.GetRequiredService<IOptions<KestrelServerOptions>>().Value.AddServerHeader);
+                host.Services.GetRequiredService<IOptions<KestrelServerOptions>>().Value.AddServerHeader,
+                response.Headers.TryGetValues("X-Downstream-Callback", out var callback) ? Assert.Single(callback) : null,
+                response.StatusCode, body, response.Content.Headers.ContentType?.MediaType);
         }
         finally
         {
@@ -169,5 +323,7 @@ public sealed class SecurityHeadersHttpHostTests
         }
     }
 
-    private sealed record ObservedHeaders(string[] Server, string? ContentTypeOptions, string? ApiVersion, bool AddServerHeader);
+    private sealed record ObservedHeaders(string[] Server, string[] PoweredBy, string? ContentTypeOptions,
+        string? ApiVersion, bool AddServerHeader, string? DownstreamCallback, HttpStatusCode StatusCode,
+        string Body, string? ContentType);
 }
