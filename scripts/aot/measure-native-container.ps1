@@ -1085,7 +1085,7 @@ try {
     }
     $environment = Read-EnvironmentEvidence $EnvironmentEvidencePath
     $containerEnvironment = Read-ContainerEnvironment $ContainerEnvironmentPath
-    $requiredIds = if ($Service -eq 'admin') { @('admin-setting-read') } else { @('gateway-chat-nonstream', 'gateway-chat-sse') }
+    $requiredIds = @(if ($Service -eq 'admin') { @('admin-setting-read') } else { @('gateway-chat-nonstream', 'gateway-chat-sse') })
     if ($WorkloadConfigurationPaths.Count -ne $requiredIds.Count) { throw 'Required workload configurations are missing.' }
     $configurations = @($WorkloadConfigurationPaths | ForEach-Object { Read-WorkloadConfiguration $_ } | Sort-Object Id)
     if ((@($configurations.Id) -join '|') -cne (@($requiredIds | Sort-Object) -join '|')) { throw 'Workload configurations must match the service.' }
