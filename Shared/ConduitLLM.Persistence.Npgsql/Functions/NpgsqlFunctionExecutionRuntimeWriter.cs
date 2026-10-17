@@ -43,25 +43,34 @@ public sealed class NpgsqlFunctionExecutionRuntimeWriter : IFunctionExecutionRun
         RequireScalarSnapshot(execution);
         var originalVersion = execution.Version;
         execution.Version = unchecked(originalVersion + 1);
-        // EF's Attach generates the value-generated key for an empty detached ID.
-        if (execution.Id == Guid.Empty) execution.Id = Guid.CreateVersion7();
-        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = """
-            UPDATE "FunctionExecutions" SET
-                "FunctionConfigurationId" = @configuration, "VirtualKeyId" = @virtualKey,
-                "ExecutionMode" = @mode, "State" = @state, "RequestedAt" = @requested,
-                "StartedAt" = @started, "CompletedAt" = @completed, "Duration" = @duration,
-                "RequestJson" = @request, "ResponseJson" = @response, "ErrorMessage" = @error,
-                "EstimatedCost" = @estimatedCost, "ActualCost" = @actualCost, "CostCalculationDetails" = @costDetails,
-                "RetryCount" = @retries, "NextRetryAt" = @nextRetry, "LeasedBy" = @leasedBy,
-                "LeaseExpiryTime" = @leaseExpiry, "Version" = @version, "WebhookUrl" = @webhook,
-                "WebhookDelivered" = @delivered, "ProgressPercentage" = @progress, "StatusMessage" = @status
-            WHERE "Id" = @id AND "Version" = @originalVersion
-            """;
-        BindSnapshot(command, execution);
-        command.Parameters.AddWithValue("originalVersion", NpgsqlDbType.Integer, originalVersion);
-        return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+        var saved = false;
+        try
+        {
+            // EF's Attach generates the value-generated key for an empty detached ID.
+            if (execution.Id == Guid.Empty) execution.Id = Guid.CreateVersion7();
+            await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE "FunctionExecutions" SET
+                    "FunctionConfigurationId" = @configuration, "VirtualKeyId" = @virtualKey,
+                    "ExecutionMode" = @mode, "State" = @state, "RequestedAt" = @requested,
+                    "StartedAt" = @started, "CompletedAt" = @completed, "Duration" = @duration,
+                    "RequestJson" = @request, "ResponseJson" = @response, "ErrorMessage" = @error,
+                    "EstimatedCost" = @estimatedCost, "ActualCost" = @actualCost, "CostCalculationDetails" = @costDetails,
+                    "RetryCount" = @retries, "NextRetryAt" = @nextRetry, "LeasedBy" = @leasedBy,
+                    "LeaseExpiryTime" = @leaseExpiry, "Version" = @version, "WebhookUrl" = @webhook,
+                    "WebhookDelivered" = @delivered, "ProgressPercentage" = @progress, "StatusMessage" = @status
+                WHERE "Id" = @id AND "Version" = @originalVersion
+                """;
+            BindSnapshot(command, execution);
+            command.Parameters.AddWithValue("originalVersion", NpgsqlDbType.Integer, originalVersion);
+            saved = await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+            return saved;
+        }
+        finally
+        {
+            if (!saved) execution.Version = originalVersion;
+        }
     }
 
     private static void BindSnapshot(NpgsqlCommand command, FunctionExecution execution)

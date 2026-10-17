@@ -61,6 +61,23 @@ public interface IGlobalSettingsCacheService
     /// Broadcasts a full reload to every process-local cache. Redis pub/sub is used when
     /// configured; a Redis-less development process reloads itself.
     /// </summary>
+    /// <remarks>
+    /// Each receiver records the request ID only after a successful reload. Concurrent
+    /// duplicates share the in-flight result; failed or canceled IDs remain retryable.
+    /// Completed IDs are limited to 10,000 per process in successful-completion FIFO order.
+    /// Deduplication expires after 24 hours of monotonic TimeProvider elapsed time from completion;
+    /// duplicate hits do not extend expiry or reorder entries. Expired entries are pruned
+    /// on the next request or completion, and the count cap is enforced immediately.
+    /// In-flight requests are tracked separately and never evicted by this retention policy.
+    /// A late or out-of-order duplicate from either durable Admin or Gateway queue can
+    /// reload after expiry, eviction or restart. Reloading reads the current full database
+    /// snapshot rather than reapplying an event payload; permanent exactly-once execution
+    /// is not promised. These contracts bound ID tracking, not measured heap usage.
+    /// Without Redis, this task propagates load failures. With Redis, it acknowledges
+    /// publication only; receiver failures are logged without recording success.
+    /// Redis pub/sub does not provide durable redelivery.
+    /// </remarks>
+    /// <param name="requestId">The duplicate-correlation ID; a blank value creates a fresh ID.</param>
     Task PublishReloadAsync(string requestId);
 
     /// <summary>

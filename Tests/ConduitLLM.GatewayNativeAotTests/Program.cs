@@ -13,13 +13,18 @@ using NpgsqlTypes;
 
 using StackExchange.Redis;
 
-if (args.Length > 0 && args[0] == "--benchmark-workload")
+if (args.Length > 0 && args[0] is "--benchmark-workload" or "--benchmark-workload-diagnostics")
 {
     try
     {
-        if (args.Length != 2) { throw new InvalidOperationException(); }
+        var instrumented = args[0] == "--benchmark-workload-diagnostics";
+        if (args.Length != (instrumented ? 3 : 2)) { throw new InvalidOperationException(); }
+        await using var diagnostics = instrumented
+            ? new FileStream(args[2], FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                bufferSize: 4096, useAsync: true)
+            : null;
         Environment.ExitCode = await NativeBenchmarkWorkloadProbe.RunAsync(
-            args[1], Console.OpenStandardOutput());
+            args[1], Console.OpenStandardOutput(), diagnostics: diagnostics);
     }
     catch (Exception error)
     {

@@ -36,7 +36,8 @@ public sealed class NativeFunctionFixtureRedisCleanupTests(FunctionCredentialRed
         var owned = OwnedKeys(snapshot).ToArray();
         var sentinels = SentinelKeys(snapshot).ToArray();
         var shared = new[] { "Conduit-DataProtection-Keys", "conduit-tasks:FunctionCost:All",
-            "conduit-tasks:FunctionCost:All_Active", RedisKeys.Spend.HistoryStream, CacheKeys.IpFilter.GlobalFilters };
+            "conduit-tasks:FunctionCost:All_Active", "conduit-tasks:FunctionCost:Generation:v1",
+            RedisKeys.Spend.HistoryStream, CacheKeys.IpFilter.GlobalFilters };
         var beforeShared = new List<byte[]?>();
         foreach (var key in shared)
             beforeShared.Add((byte[]?)await database.ExecuteAsync("DUMP", key).WaitAsync(TimeSpan.FromSeconds(5)));
@@ -155,6 +156,11 @@ public sealed class NativeFunctionFixtureRedisCleanupTests(FunctionCredentialRed
             yield return RedisKeys.RateLimit.WindowSum(window);
         }
         yield return $"conduit-tasks:FunctionCost:Config:{snapshot.ConfigurationId}";
+        foreach (var generation in new[] { snapshot.Owner.ToString("N"), Guid.NewGuid().ToString("N") })
+        {
+            yield return $"conduit-tasks:FunctionCost:v2:{generation}:Config:{snapshot.ConfigurationId}";
+            yield return $"conduit-tasks:FunctionCost:v2:{generation}:Id:{snapshot.CostId}";
+        }
         yield return RedisKeys.Spend.Patterns(key.ToString(CultureInfo.InvariantCulture));
         yield return RedisKeys.Spend.SentAlert(key.ToString(CultureInfo.InvariantCulture), "80");
         yield return RedisKeys.Spend.Cooldown(key.ToString(CultureInfo.InvariantCulture), "budget");
@@ -203,6 +209,11 @@ public sealed class NativeFunctionFixtureRedisCleanupTests(FunctionCredentialRed
         yield return $"spend:alerts:sent:{key}3:80";
         yield return $"conduit-tasks:FunctionCost:Config:{snapshot.ConfigurationId}3";
         yield return $"conduit-tasks:FunctionCost:Config:{snapshot.ConfigurationId}:suffix";
+        yield return $"conduit-tasks:FunctionCost:v2:{snapshot.Owner:N}:Config:{snapshot.ConfigurationId}3";
+        yield return $"conduit-tasks:FunctionCost:v2:{snapshot.Owner:N}:Config:{snapshot.ConfigurationId}:suffix";
+        yield return $"conduit-tasks:FunctionCost:v2:{snapshot.Owner:N}:Id:{snapshot.CostId}3";
+        yield return $"conduit-tasks:FunctionCost:v2:{snapshot.Owner:N}:All";
+        yield return $"conduit-tasks:FunctionCost:v2:{snapshot.Owner:N}:All_Active";
         yield return $"Conduit-DataProtection-Keys:cleanup-sentinel:{snapshot.Owner:N}";
         yield return $"conduit-tasks:FunctionCost:All:cleanup-sentinel:{snapshot.Owner:N}";
         yield return $"spend:history:cleanup-sentinel:{snapshot.Owner:N}";

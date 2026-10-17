@@ -198,6 +198,9 @@ offline checks can recompute request/elapsed/throughput arithmetic, percentile
 order and five-run medians, but cannot reconstruct each run's quantiles. No cause
 is assigned. Any follow-up must preserve this adverse result rather than replace
 it with a favorable rerun. [Issue #1647](https://github.com/nickna/Conduit/issues/1647) tracks the complete-SSE performance regression.
+The [2026-10-16 investigation](native-aot-gateway-throughput-investigation.md)
+retains a separate failed follow-up and its accounting; it establishes no new
+complete-SSE performance comparison.
 
 ## Independent financial and provider settlement
 

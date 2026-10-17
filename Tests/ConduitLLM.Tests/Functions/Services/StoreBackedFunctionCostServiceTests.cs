@@ -17,10 +17,10 @@ using Moq;
 
 namespace ConduitLLM.Tests.Functions.Services;
 
+[Collection("Function cost cache")]
 public sealed class StoreBackedFunctionCostServiceTests
 {
     private const int ConfigurationId = 9027;
-    private const string Key = "FunctionCost:Config:9027";
 
     [Fact]
     public async Task CacheMissUsesUtcInstantAndCallerTokenThenCachesForBothTiers()
@@ -28,31 +28,44 @@ public sealed class StoreBackedFunctionCostServiceTests
         var cost = Cost();
         var store = Store(cost);
         var memory = new Mock<IMemoryCache>();
-        var entry = new Mock<ICacheEntry>();
-        entry.SetupAllProperties();
-        memory.Setup(cache => cache.CreateEntry(Key)).Returns(entry.Object);
-        var distributed = new Mock<IDistributedCache>();
-        var service = Service(store.Object, memory.Object, distributed.Object);
+        var entries = new Dictionary<object, Mock<ICacheEntry>>();
+        memory.Setup(cache => cache.CreateEntry(It.IsAny<object>())).Returns((object key) =>
+        {
+            var entry = new Mock<ICacheEntry>();
+            entry.SetupAllProperties();
+            entries.Add(key, entry);
+            return entry.Object;
+        });
+        var distributed = new RecordingDistributedCache();
+        var service = Service(store.Object, memory.Object, distributed);
         using var cancellation = new CancellationTokenSource();
         var before = DateTime.UtcNow;
         Assert.Same(cost, await service.GetCostForConfigurationAsync(ConfigurationId, cancellation.Token));
         var after = DateTime.UtcNow;
         store.Verify(value => value.FindEligibleCostAsync(ConfigurationId,
             It.Is<DateTime>(instant => instant.Kind == DateTimeKind.Utc && instant >= before && instant <= after), cancellation.Token), Times.Once);
-        Assert.Equal(TimeSpan.FromMinutes(15), entry.Object.AbsoluteExpirationRelativeToNow);
-        Assert.Same(cost, entry.Object.Value);
-        distributed.Verify(cache => cache.SetAsync(Key,
-            It.Is<byte[]>(payload => JsonSerializer.Deserialize(payload, FunctionsJsonContext.Default.FunctionCost)!.Id == cost.Id),
-            It.Is<DistributedCacheEntryOptions>(options => options.AbsoluteExpirationRelativeToNow == TimeSpan.FromHours(1)),
-            cancellation.Token), Times.Once);
+        var payload = Assert.Single(distributed.PayloadWrites);
+        Assert.Equal(cost.Id, JsonSerializer.Deserialize(payload.Value, FunctionsJsonContext.Default.FunctionCost)!.Id);
+        Assert.Equal(TimeSpan.FromHours(1), payload.Options.AbsoluteExpirationRelativeToNow);
+        Assert.Equal(cancellation.Token, payload.Token);
+        var cachedEntry = entries[payload.Key].Object;
+        Assert.Equal(TimeSpan.FromMinutes(15), cachedEntry.AbsoluteExpirationRelativeToNow);
+        Assert.Same(cost, cachedEntry.Value);
+        var marker = Assert.Single(distributed.MarkerWrites);
+        Assert.NotEqual(marker.Key, payload.Key);
+        Assert.True(Guid.TryParseExact(System.Text.Encoding.UTF8.GetString(marker.Value), "N", out var generation));
+        Assert.NotEqual(Guid.Empty, generation);
+        Assert.Null(marker.Options.AbsoluteExpiration);
+        Assert.Null(marker.Options.AbsoluteExpirationRelativeToNow);
+        Assert.Null(marker.Options.SlidingExpiration);
     }
 
     [Fact]
-    public async Task ExistingLegacyPayloadReturnsDirectlyAndPopulatesMemoryWithoutExpiryRecheck()
+    public async Task LegacyServiceGeneratedPayloadReturnsDirectlyAndPopulatesMemoryWithoutExpiryRecheck()
     {
         using var legacyMemory = new MemoryCache(new MemoryCacheOptions());
         using var newMemory = new MemoryCache(new MemoryCacheOptions());
-        var distributed = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+        var distributed = new RecordingDistributedCache();
         var cost = Cost();
         var repository = new Mock<IFunctionCostRepository>();
         repository.Setup(value => value.GetByIdAsync(cost.Id, It.IsAny<CancellationToken>())).ReturnsAsync(cost);
@@ -62,11 +75,11 @@ public sealed class StoreBackedFunctionCostServiceTests
         var legacy = new FunctionCostService(repository.Object, mappings.Object, legacyMemory,
             NullLogger<FunctionCostService>.Instance, distributed);
         Assert.Same(cost, await legacy.GetCostForConfigurationAsync(ConfigurationId));
-        var payload = (await distributed.GetAsync(Key))!;
-        var persisted = JsonSerializer.Deserialize(payload, FunctionsJsonContext.Default.FunctionCost)!;
+        var payload = Assert.Single(distributed.PayloadWrites);
+        var persisted = JsonSerializer.Deserialize(payload.Value, FunctionsJsonContext.Default.FunctionCost)!;
         persisted.IsActive = false;
         persisted.ExpiryDate = DateTime.UtcNow.AddDays(-1);
-        await distributed.SetAsync(Key, JsonSerializer.SerializeToUtf8Bytes(persisted, FunctionsJsonContext.Default.FunctionCost),
+        await distributed.ReplaceAsync(payload.Key, JsonSerializer.SerializeToUtf8Bytes(persisted, FunctionsJsonContext.Default.FunctionCost),
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1) });
         var store = new Mock<IFunctionPricingRuntimeStore>(MockBehavior.Strict);
         var service = Service(store.Object, newMemory, distributed);
@@ -81,70 +94,88 @@ public sealed class StoreBackedFunctionCostServiceTests
     }
 
     [Fact]
-    public async Task NullResultsAreNotCachedAndLegacyUpdatesInvalidateTheSharedKey()
+    public async Task NullResultsAreNotCached()
     {
         using var memory = new MemoryCache(new MemoryCacheOptions());
-        var distributed = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+        var distributed = new RecordingDistributedCache();
         var store = Store(null);
         var service = Service(store.Object, memory, distributed);
         Assert.Null(await service.GetCostForConfigurationAsync(ConfigurationId));
         Assert.Null(await service.GetCostForConfigurationAsync(ConfigurationId));
         store.Verify(value => value.FindEligibleCostAsync(ConfigurationId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
-        Assert.Null(await distributed.GetAsync(Key));
-        store.Setup(value => value.FindEligibleCostAsync(ConfigurationId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(Cost());
-        Assert.NotNull(await service.GetCostForConfigurationAsync(ConfigurationId));
-        var cost = Cost();
-        cost.FunctionMappings.Add(new FunctionCostMapping { FunctionConfigurationId = ConfigurationId, FunctionCostId = cost.Id });
-        var repository = new Mock<IFunctionCostRepository>();
-        repository.Setup(value => value.GetByIdAsync(cost.Id, It.IsAny<CancellationToken>())).ReturnsAsync(cost);
-        repository.Setup(value => value.UpdateAsync(It.IsAny<FunctionCost>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
-        var legacy = new FunctionCostService(repository.Object, Mock.Of<IFunctionCostMappingRepository>(),
-            memory, NullLogger<FunctionCostService>.Instance, distributed);
-        await legacy.UpdateCostAsync(cost);
-        Assert.False(memory.TryGetValue(Key, out _));
-        Assert.Null(await distributed.GetAsync(Key));
-        Assert.NotNull(await service.GetCostForConfigurationAsync(ConfigurationId));
-        // Match the existing list-only clear behavior; this inherited quirk is separate.
-        await SeedListsAsync();
-        await legacy.ClearCacheAsync();
-        await AssertListsRemovedAsync();
-        Assert.True(memory.TryGetValue(Key, out _));
-        await SeedListsAsync();
-        await service.ClearCacheAsync();
-        await AssertListsRemovedAsync();
-        Assert.True(memory.TryGetValue(Key, out _));
-        Assert.NotNull(await distributed.GetAsync(Key));
-
-        async Task SeedListsAsync()
-        {
-            foreach (var key in new[] { "FunctionCost:All", "FunctionCost:All_Active" })
-            {
-                memory.Set(key, new List<FunctionCost> { cost });
-                await distributed.SetAsync(key, "[]"u8.ToArray(), new DistributedCacheEntryOptions());
-            }
-        }
-
-        async Task AssertListsRemovedAsync()
-        {
-            foreach (var key in new[] { "FunctionCost:All", "FunctionCost:All_Active" })
-            {
-                Assert.False(memory.TryGetValue(key, out _));
-                Assert.Null(await distributed.GetAsync(key));
-            }
-        }
+        Assert.Empty(distributed.PayloadWrites);
     }
 
     [Fact]
-    public async Task RedisReadAndWriteFailuresStillUseDatabaseThenMemory()
+    public async Task LegacyUpdatesAndBothExplicitClearsRefreshConfigurationPricing()
     {
         using var memory = new MemoryCache(new MemoryCacheOptions());
-        var distributed = new Mock<IDistributedCache>();
-        distributed.Setup(cache => cache.GetAsync(Key, It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("Redis unavailable"));
-        distributed.Setup(cache => cache.SetAsync(Key, It.IsAny<byte[]>(), It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("Redis unavailable"));
+        using var legacyMemory = new MemoryCache(new MemoryCacheOptions());
+        var distributed = new RecordingDistributedCache();
+        var currentCost = Cost();
+        var store = new Mock<IFunctionPricingRuntimeStore>(MockBehavior.Strict);
+        store.Setup(value => value.FindEligibleCostAsync(ConfigurationId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => currentCost);
+        var service = Service(store.Object, memory, distributed);
+        Assert.Same(currentCost, await service.GetCostForConfigurationAsync(ConfigurationId));
+        var repository = new Mock<IFunctionCostRepository>();
+        repository.Setup(value => value.GetByIdAsync(currentCost.Id, It.IsAny<CancellationToken>())).ReturnsAsync(() => currentCost);
+        repository.Setup(value => value.UpdateAsync(It.IsAny<FunctionCost>(), It.IsAny<CancellationToken>()))
+            .Callback<FunctionCost, CancellationToken>((cost, _) => currentCost = cost).ReturnsAsync(true);
+        var legacy = new FunctionCostService(repository.Object, Mock.Of<IFunctionCostMappingRepository>(),
+            legacyMemory, NullLogger<FunctionCostService>.Instance, distributed);
+
+        var updated = Cost();
+        updated.BaseCost = 0.25m;
+        await legacy.UpdateCostAsync(updated);
+        Assert.Same(updated, await service.GetCostForConfigurationAsync(ConfigurationId));
+
+        currentCost = Cost();
+        currentCost.BaseCost = 0.5m;
+        await legacy.ClearCacheAsync();
+        Assert.Same(currentCost, await service.GetCostForConfigurationAsync(ConfigurationId));
+
+        currentCost = Cost();
+        currentCost.BaseCost = 0.75m;
+        await service.ClearCacheAsync();
+        Assert.Same(currentCost, await service.GetCostForConfigurationAsync(ConfigurationId));
+        store.Verify(value => value.FindEligibleCostAsync(ConfigurationId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Exactly(4));
+    }
+
+    [Fact]
+    public async Task MarkerReadFailureBypassesWarmMemoryAndDistributedPayloads()
+    {
+        using var memory = new MemoryCache(new MemoryCacheOptions());
         var cost = Cost();
         var store = Store(cost);
-        var service = Service(store.Object, memory, distributed.Object);
+        var distributed = new RecordingDistributedCache();
+        var service = Service(store.Object, memory, distributed);
+        Assert.Same(cost, await service.GetCostForConfigurationAsync(ConfigurationId));
+        var payloadReads = distributed.Reads.Count(value => value.Key != distributed.MarkerKey);
+        var payloadWrites = distributed.PayloadWrites.Count();
+        var fresh = Cost();
+        fresh.BaseCost = 0.25m;
+        store.Setup(value => value.FindEligibleCostAsync(ConfigurationId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).ReturnsAsync(fresh);
+        distributed.FailMarkerReads = true;
+        Assert.Same(fresh, await service.GetCostForConfigurationAsync(ConfigurationId));
+        Assert.Same(fresh, await service.GetCostForConfigurationAsync(ConfigurationId));
+        Assert.Equal(payloadReads, distributed.Reads.Count(value => value.Key != distributed.MarkerKey));
+        Assert.Equal(payloadWrites, distributed.PayloadWrites.Count());
+        store.Verify(value => value.FindEligibleCostAsync(ConfigurationId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
+    }
+
+    [Fact]
+    public async Task PayloadReadAndWriteFailuresStillUseDatabaseThenMemory()
+    {
+        using var bootstrapMemory = new MemoryCache(new MemoryCacheOptions());
+        using var memory = new MemoryCache(new MemoryCacheOptions());
+        var distributed = new RecordingDistributedCache();
+        await Service(Store(Cost()).Object, bootstrapMemory, distributed).GetCostForConfigurationAsync(ConfigurationId);
+        distributed.FailPayloadReads = true;
+        distributed.FailPayloadWrites = true;
+        var cost = Cost();
+        var store = Store(cost);
+        var service = Service(store.Object, memory, distributed);
         Assert.Same(cost, await service.GetCostForConfigurationAsync(ConfigurationId));
         Assert.Same(cost, await service.GetCostForConfigurationAsync(ConfigurationId));
         store.Verify(value => value.FindEligibleCostAsync(ConfigurationId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Once);
@@ -157,14 +188,15 @@ public sealed class StoreBackedFunctionCostServiceTests
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();
         var store = new Mock<IFunctionPricingRuntimeStore>(MockBehavior.Strict);
-        store.Setup(value => value.FindEligibleCostAsync(ConfigurationId, It.IsAny<DateTime>(), cancelled.Token))
-            .ThrowsAsync(new OperationCanceledException(cancelled.Token));
         var service = Service(store.Object, memory);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.GetCostForConfigurationAsync(ConfigurationId, cancelled.Token));
-        Assert.False(memory.TryGetValue(Key, out _));
+        store.VerifyNoOtherCalls();
         var cost = Cost();
-        memory.Set(Key, cost);
+        store.Setup(value => value.FindEligibleCostAsync(ConfigurationId, It.IsAny<DateTime>(), CancellationToken.None)).ReturnsAsync(cost);
+        Assert.Same(cost, await service.GetCostForConfigurationAsync(ConfigurationId));
         Assert.Same(cost, await service.GetCostForConfigurationAsync(ConfigurationId, cancelled.Token));
+        store.Verify(value => value.FindEligibleCostAsync(ConfigurationId, It.IsAny<DateTime>(), cancelled.Token), Times.Never);
+        store.Verify(value => value.FindEligibleCostAsync(ConfigurationId, It.IsAny<DateTime>(), CancellationToken.None), Times.Once);
     }
 
     [Theory]
@@ -210,18 +242,20 @@ public sealed class StoreBackedFunctionCostServiceTests
     [Fact]
     public async Task MalformedRedisFallsThroughButStoreFailuresPropagateWithoutCaching()
     {
+        using var bootstrapMemory = new MemoryCache(new MemoryCacheOptions());
         using var memory = new MemoryCache(new MemoryCacheOptions());
-        var distributed = new Mock<IDistributedCache>();
-        distributed.Setup(cache => cache.GetAsync(Key, It.IsAny<CancellationToken>())).ReturnsAsync("invalid json"u8.ToArray());
+        var distributed = new RecordingDistributedCache();
+        await Service(Store(Cost()).Object, bootstrapMemory, distributed).GetCostForConfigurationAsync(ConfigurationId);
+        var payload = Assert.Single(distributed.PayloadWrites);
+        await distributed.ReplaceAsync(payload.Key, "invalid json"u8.ToArray(), payload.Options);
         var store = new Mock<IFunctionPricingRuntimeStore>(MockBehavior.Strict);
         store.Setup(value => value.FindEligibleCostAsync(ConfigurationId, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("pricing store unavailable"));
-        var service = Service(store.Object, memory, distributed.Object);
+        var service = Service(store.Object, memory, distributed);
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => service.GetCostForConfigurationAsync(ConfigurationId));
         Assert.Equal("pricing store unavailable", error.Message);
-        Assert.False(memory.TryGetValue(Key, out _));
-        distributed.Verify(cache => cache.SetAsync(It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<DistributedCacheEntryOptions>(),
-            It.IsAny<CancellationToken>()), Times.Never);
+        Assert.False(memory.TryGetValue(payload.Key, out _));
+        Assert.Single(distributed.PayloadWrites);
     }
 
     [Fact]
@@ -246,6 +280,58 @@ public sealed class StoreBackedFunctionCostServiceTests
 
     private static StoreBackedFunctionCostService Service(IFunctionPricingRuntimeStore store, IMemoryCache memory, IDistributedCache? distributed = null) =>
         new(store, memory, NullLogger<StoreBackedFunctionCostService>.Instance, distributed);
+
+    private sealed record CacheWrite(string Key, byte[] Value, DistributedCacheEntryOptions Options, CancellationToken Token, bool IsPayload);
+
+    private sealed class RecordingDistributedCache : IDistributedCache
+    {
+        private readonly MemoryDistributedCache _inner = new(Options.Create(new MemoryDistributedCacheOptions()));
+        private readonly List<CacheWrite> _writes = [];
+
+        public List<(string Key, CancellationToken Token)> Reads { get; } = [];
+        public IEnumerable<CacheWrite> PayloadWrites => _writes.Where(value => value.IsPayload);
+        public IEnumerable<CacheWrite> MarkerWrites => _writes.Where(value => !value.IsPayload);
+        public string? MarkerKey => MarkerWrites.FirstOrDefault()?.Key;
+        public bool FailMarkerReads { get; set; }
+        public bool FailPayloadReads { get; set; }
+        public bool FailPayloadWrites { get; set; }
+
+        public byte[]? Get(string key) => GetAsync(key).GetAwaiter().GetResult();
+
+        public Task<byte[]?> GetAsync(string key, CancellationToken token = default)
+        {
+            Reads.Add((key, token));
+            if ((FailMarkerReads && key == MarkerKey) ||
+                (FailPayloadReads && MarkerKey is { } marker && key != marker))
+                throw new InvalidOperationException("Redis read unavailable");
+            return _inner.GetAsync(key, token);
+        }
+
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options) =>
+            SetAsync(key, value, options).GetAwaiter().GetResult();
+
+        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+        {
+            var payload = IsCostPayload(value);
+            _writes.Add(new CacheWrite(key, value.ToArray(), options, token, payload));
+            if (FailPayloadWrites && payload) throw new InvalidOperationException("Redis payload write unavailable");
+            return _inner.SetAsync(key, value, options, token);
+        }
+
+        public Task ReplaceAsync(string key, byte[] value, DistributedCacheEntryOptions options) =>
+            _inner.SetAsync(key, value, options);
+
+        public void Refresh(string key) => _inner.Refresh(key);
+        public Task RefreshAsync(string key, CancellationToken token = default) => _inner.RefreshAsync(key, token);
+        public void Remove(string key) => _inner.Remove(key);
+        public Task RemoveAsync(string key, CancellationToken token = default) => _inner.RemoveAsync(key, token);
+
+        private static bool IsCostPayload(byte[] value)
+        {
+            try { return JsonSerializer.Deserialize(value, FunctionsJsonContext.Default.FunctionCost) is not null; }
+            catch (JsonException) { return false; }
+        }
+    }
 
     private static FunctionCost Cost() => new()
     {

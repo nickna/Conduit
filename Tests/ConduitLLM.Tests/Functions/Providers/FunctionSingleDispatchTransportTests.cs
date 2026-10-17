@@ -25,7 +25,7 @@ public sealed class FunctionSingleDispatchTransportTests
     [InlineData(FunctionProviderType.Exa, true)]
     [InlineData(FunctionProviderType.Tavily, false)]
     [InlineData(FunctionProviderType.Tavily, true)]
-    public async Task OnlyKeyedProviderCallsUseTheTransportWithoutAutomaticRetries(FunctionProviderType providerType, bool keyed)
+    public async Task KeyedProviderCallsSelectTheSingleDispatchNamedTransport(FunctionProviderType providerType, bool keyed)
     {
         var configuration = new FunctionConfiguration
         {

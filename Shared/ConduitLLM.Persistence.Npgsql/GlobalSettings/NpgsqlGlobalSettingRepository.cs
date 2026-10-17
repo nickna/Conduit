@@ -1,3 +1,5 @@
+using System.Data;
+
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Interfaces;
 
@@ -76,6 +78,7 @@ public sealed class NpgsqlGlobalSettingRepository : IGlobalSettingRepository
         ArgumentNullException.ThrowIfNull(setting);
         ValidateSetting(setting);
 
+        cancellationToken.ThrowIfCancellationRequested();
         var now = DateTime.UtcNow;
         if (setting.CreatedAt == default)
         {
@@ -85,16 +88,7 @@ public sealed class NpgsqlGlobalSettingRepository : IGlobalSettingRepository
         setting.UpdatedAt = now;
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT INTO "GlobalSettings" ("Key", "Value", "Description", "CreatedAt", "UpdatedAt")
-            VALUES (@key, @value, @description, @createdAt, @updatedAt)
-            RETURNING "Id"
-            """;
-        AddSettingParameters(command, setting, includeId: false);
-
-        setting.Id = (int)(await command.ExecuteScalarAsync(cancellationToken)
-            ?? throw new InvalidOperationException("Global setting insert returned no identifier."));
+        setting.Id = await InsertSettingAsync(connection, setting, cancellationToken);
         return setting.Id;
     }
 
@@ -105,9 +99,18 @@ public sealed class NpgsqlGlobalSettingRepository : IGlobalSettingRepository
     {
         ArgumentNullException.ThrowIfNull(setting);
         ValidateSetting(setting);
+        cancellationToken.ThrowIfCancellationRequested();
         setting.UpdatedAt = DateTime.UtcNow;
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        if (setting.Id == 0)
+        {
+            // EF treats an unset generated key as Added even through Update.
+            // Keep Update's CreatedAt boundary, including its default value.
+            setting.Id = await InsertSettingAsync(connection, setting, cancellationToken);
+            return true;
+        }
+
         await using var command = connection.CreateCommand();
         command.CommandText = """
             UPDATE "GlobalSettings"
@@ -119,7 +122,12 @@ public sealed class NpgsqlGlobalSettingRepository : IGlobalSettingRepository
             WHERE "Id" = @id
             """;
         AddSettingParameters(command, setting, includeId: true);
-        return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+        if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
+        {
+            throw new DBConcurrencyException("The global setting to update no longer exists.");
+        }
+
+        return true;
     }
 
     /// <inheritdoc />
@@ -133,19 +141,62 @@ public sealed class NpgsqlGlobalSettingRepository : IGlobalSettingRepository
         ArgumentNullException.ThrowIfNull(value);
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        GlobalSetting? existing;
+        await using (var read = connection.CreateCommand())
+        {
+            read.CommandText = $"SELECT {SelectColumns} FROM \"GlobalSettings\" WHERE \"Key\" = @key";
+            read.Parameters.AddWithValue("key", NpgsqlDbType.Varchar, key);
+            existing = await ReadSingleAsync(read, cancellationToken);
+        }
+
+        // Match EF's read snapshot and client clock boundary. No transaction
+        // spans the read and write, and an absent-row race remains a conflict.
+        var now = DateTime.UtcNow;
         await using var command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT INTO "GlobalSettings" ("Key", "Value", "Description", "CreatedAt", "UpdatedAt")
-            VALUES (@key, @value, @description, now(), now())
-            ON CONFLICT ("Key") DO UPDATE
-            SET "Value" = EXCLUDED."Value",
-                "Description" = COALESCE(EXCLUDED."Description", "GlobalSettings"."Description"),
-                "UpdatedAt" = now()
-            """;
-        command.Parameters.AddWithValue("key", NpgsqlDbType.Varchar, key);
+        if (existing is null)
+        {
+            command.CommandText = """
+                INSERT INTO "GlobalSettings" ("Key", "Value", "Description", "CreatedAt", "UpdatedAt")
+                VALUES (@key, @value, @description, @updatedAt, @updatedAt)
+                """;
+            command.Parameters.AddWithValue("key", NpgsqlDbType.Varchar, key);
+        }
+        else
+        {
+            var valueChanged = !string.Equals(existing.Value, value, StringComparison.Ordinal);
+            var descriptionChanged = description is not null &&
+                !string.Equals(existing.Description, description, StringComparison.Ordinal);
+            var updatedAtChanged = existing.UpdatedAt != now;
+            if (!valueChanged && !descriptionChanged && !updatedAtChanged)
+            {
+                return false;
+            }
+
+            // Unchanged snapshot properties must retain concurrent DB values.
+            // Use the original primary key even if another row takes its key.
+            command.CommandText = """
+                UPDATE "GlobalSettings"
+                SET "Value" = CASE WHEN @valueChanged THEN @value ELSE "Value" END,
+                    "Description" = CASE WHEN @descriptionChanged THEN @description ELSE "Description" END,
+                    "UpdatedAt" = CASE WHEN @updatedAtChanged THEN @updatedAt ELSE "UpdatedAt" END
+                WHERE "Id" = @id
+                """;
+            command.Parameters.AddWithValue("id", NpgsqlDbType.Integer, existing.Id);
+            command.Parameters.AddWithValue("valueChanged", NpgsqlDbType.Boolean, valueChanged);
+            command.Parameters.AddWithValue("descriptionChanged", NpgsqlDbType.Boolean, descriptionChanged);
+            command.Parameters.AddWithValue("updatedAtChanged", NpgsqlDbType.Boolean, updatedAtChanged);
+        }
+
         command.Parameters.AddWithValue("value", NpgsqlDbType.Varchar, value);
         AddNullableText(command, "description", description);
-        return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+        command.Parameters.AddWithValue("updatedAt", NpgsqlDbType.TimestampTz, now);
+        var affected = await command.ExecuteNonQueryAsync(cancellationToken);
+        if (existing is not null && affected == 0)
+        {
+            throw new DBConcurrencyException("The global setting read for update no longer exists.");
+        }
+
+        return affected > 0;
     }
 
     /// <inheritdoc />
@@ -170,6 +221,29 @@ public sealed class NpgsqlGlobalSettingRepository : IGlobalSettingRepository
         command.CommandText = "DELETE FROM \"GlobalSettings\" WHERE \"Key\" = @key";
         command.Parameters.AddWithValue("key", NpgsqlDbType.Varchar, key);
         return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+    }
+
+    private static async Task<int> InsertSettingAsync(
+        NpgsqlConnection connection,
+        GlobalSetting setting,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        var includeId = setting.Id != 0;
+        command.CommandText = includeId
+            ? """
+                INSERT INTO "GlobalSettings" ("Id", "Key", "Value", "Description", "CreatedAt", "UpdatedAt")
+                VALUES (@id, @key, @value, @description, @createdAt, @updatedAt)
+                RETURNING "Id"
+                """
+            : """
+                INSERT INTO "GlobalSettings" ("Key", "Value", "Description", "CreatedAt", "UpdatedAt")
+                VALUES (@key, @value, @description, @createdAt, @updatedAt)
+                RETURNING "Id"
+                """;
+        AddSettingParameters(command, setting, includeId);
+        return (int)(await command.ExecuteScalarAsync(cancellationToken)
+            ?? throw new InvalidOperationException("Global setting insert returned no identifier."));
     }
 
     private static async Task<GlobalSetting?> ReadSingleAsync(

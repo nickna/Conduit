@@ -117,13 +117,156 @@ the NativeAOT workflow.
 | Billing-audit batch writes / `IBillingAuditRuntimeWriter` | `BillingAuditPersistenceParityTests`, `BillingAuditServicePersistenceTests` | [Linux run 38149774358](https://github.com/nickna/Conduit/actions/runs/38149774358) passes the standalone probe's 17 scalars, generated defaults, ordered immutable results, 129-row atomic rollback/retry, constraints and SQL/pool cancellation with reuse. Its host gate checks independent subthreshold timers on two quiet Gateways, then a fresh timer marker and pending shutdown tail on each host in turn, owned graceful exits, exclusive final-flush witnesses and all 17 stored fields. Real PostgreSQL service cases also cover failed-write requeue/retry and shutdown cancellation/reuse. Native Admin uses the same hosted writer; no controlled Admin HTTP enqueue is claimed. Scheduled native retention is disabled; audit reads, retention and billing reconciliation remain separate. |
 | Async tasks / `IAsyncTaskRuntimeStore` | `AsyncTaskRuntimePersistenceParityTests` | Persistence probe exercises CRUD, claim/provider phases and archival; Gateway probe reads and cancels a durable task across hosts. Native lease recovery/retry and video/provider workloads require additional process tests. |
 | Media ownership/quota / `IMediaRuntimeStore` | `MediaRuntimePersistenceParityTests` | Persistence probe covers ownership, tombstones, aggregates, and quota reads; Gateway probe generates, stores, reads, and downloads an identical PNG through S3-compatible storage. Assigned/unlimited-policy cases have shared-contract evidence. Admin cleanup/reconciliation remains EF. |
-| Gateway operational aggregates / `IGatewayMetricsStore` | `GatewayMetricsPersistenceParityTests` | Gateway process gate checks seeded $0.40/min cost rate, 0.20s mean latency and one active mapping on an elected metrics host, plus two pending notification tasks on each Gateway. [Linux run 38121134709](https://github.com/nickna/Conduit/actions/runs/38121134709) passes these assertions. Broader Admin reporting remains separate. |
+| Gateway operational aggregates / `IGatewayMetricsStore` | `GatewayMetricsPersistenceParityTests`, independent published `GatewayMetricsPersistenceProbe` | The #1671 proof below covers all six repository methods and eight SQL cancellation phases. The earlier Gateway process gate checks seeded $0.40/min cost rate, 0.20s mean latency and one active mapping on an elected metrics host, plus two pending notification tasks on each Gateway. [Linux run 38121134709](https://github.com/nickna/Conduit/actions/runs/38121134709) passes those host assertions. Broader Admin reporting remains separate. |
 | Function catalog / `IFunctionDiscoveryRuntimeStore` | `FunctionDiscoveryPersistenceParityTests` | Published persistence probe verifies scalar enabled-row/filter/schema reads. [Linux run 38124571584](https://github.com/nickna/Conduit/actions/runs/38124571584) also proves authenticated function catalog/parameter HTTP on both Gateways, including filters, private-field omission and error contracts. This is metadata discovery, not LLM tool discovery or execution. |
-| Function execution configuration / `IFunctionExecutionConfigurationStore` | `FunctionExecutionConfigurationPersistenceParityTests` | [Linux run 38122760993](https://github.com/nickna/Conduit/actions/runs/38122760993) proves scalar configuration and opaque credential reads, ordering and pool cancellation/reuse. Native Gateway selects the store for client construction, HTTP preflight and Core tool/route configuration reads; paired managed tests and host composition cover those selections. [Linux run 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143) also passes native execution authentication/configuration/required-parameter preflight on both Gateways. The published Exa process job linked below proves configured search dispatch and Core LLM tool discovery on both Gateways; other provider workflows remain separate. |
+| Function execution configuration / `IFunctionExecutionConfigurationStore` | `FunctionExecutionConfigurationPersistenceParityTests` | [Linux run 38122760993](https://github.com/nickna/Conduit/actions/runs/38122760993) proves scalar configuration and opaque credential reads, ordering and pool cancellation/reuse. It predates the SQL-in-flight cancellation additions described below. Native Gateway selects the store for client construction, HTTP preflight and Core tool/route configuration reads; paired managed tests and host composition cover those selections. [Linux run 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143) also passes native execution authentication/configuration/required-parameter preflight on both Gateways. The published Exa process job linked below proves configured search dispatch and Core LLM tool discovery on both Gateways; other provider workflows remain separate. |
 | Function pricing / `IFunctionPricingRuntimeStore` | `FunctionPricingPersistenceParityTests` | [Linux run 38124571584](https://github.com/nickna/Conduit/actions/runs/38124571584) proves canonical mapping/cost eligibility reads. Native Gateway selects the cached configuration-pricing adapter; JIT/Admin retain cost management. Selected Exa function accounting is qualified by the published process job linked below; Admin CRUD and other providers remain separate. |
 | Scalar function execution writes / `IFunctionExecutionRuntimeWriter` | `FunctionExecutionPersistenceParityTests` | [Linux run 38126684370](https://github.com/nickna/Conduit/actions/runs/38126684370) proves native scalar create/update, persisted mappings and optimistic concurrency in the standalone probe. Native Gateway selects the writer in its prepared execution service; The published Exa process job linked below verifies execution writes and settled charges over HTTP. Leases, audits and workers are outside this port. |
 | Function execution reads / `IFunctionExecutionRuntimeReader` | `FunctionExecutionPersistenceParityTests` | The successful publish/process job in [Linux run 38128502143](https://github.com/nickna/Conduit/actions/runs/38128502143) includes the native persistence probe's 39 scalar fields, included configuration/inverse graph and 105-row virtual-key list, plus the shared PostgreSQL parity suite. Native Gateway selects the reader in its prepared execution service after that proof; the published Exa process job linked below verifies opposite-host execution-by-ID reads and ownership. Execution-list HTTP remains separate. |
 | Stateless inline MCP execution | `NativeMcpFunctionProviderTests`, shared function configuration/pricing/execution contracts | [Linux run 38147134135](https://github.com/nickna/Conduit/actions/runs/38147134135) passes actual configured MCP execution on both native Gateways, production-protected scoped credentials, modern request metadata, structured/Unicode results, all 24 persisted fields, opposite-host ownership and exact configured pricing/accounting. Stateful sessions, agentic MCP and broader server interoperability remain separate. |
+
+The #1670 metrics contract requires a nonblank generation task type and a
+positive spend limit. Both adapters validate before context/pool access or
+cancellation; nonblank task types retain their original case and whitespace,
+and positive limits are not capped. EF now uses the typed adapter's existing
+guards without changing grouping, time predicates or decimal sums.
+Twenty-four unchanged-source PostgreSQL observations measured the discrepancy:
+EF returned no rows for null/empty/whitespace task types and limit zero,
+negative limits raised SQLSTATE `2201W`, and pre-cancelled calls canceled first.
+Typed Npgsql raised the corresponding argument exception in both token states.
+The reconciled PostgreSQL class passes all 13 cases without skips, including
+14 invalid-input/token combinations per adapter with a held sole pool lease,
+exact exception/parameter assertions, no context entry or SQL dispatch, and
+positive recovery controls. Valid cases preserve the aggregate matrix, original
+string matching, maximum positive limit and caller cancellation. All four new
+owned input schemas were verified absent after independent bounded cleanup.
+Published native metrics coverage is recorded separately below for #1671.
+
+For #1671, both managed metrics partials explicitly use
+`#if !CONDUIT_NATIVE_AOT` and identify the independent typed native replacement.
+All 13 prior managed cases remain discovered and executed; the added production
+schema equality case brings the passing managed total to 14 without skips.
+An isolated compile includes both actual files with the native symbol and no
+package dependencies; its unsymbolized control fails as expected. That focused
+guard proof covers these two files. Full integration-project native compatibility
+and application qualification remain under #1373/#1375.
+
+The fresh EF-free Linux native driver executes all six metrics methods against
+a separate owned schema using embedded production-model DDL, checked for drift
+by the managed case. Independent expectations cover every output field, empty
+results, grouping, UTC/time boundaries, nullable duration averages, decimal sums
+and spend ties. Six pre-cancelled calls, six occupied-pool cancellations,
+14 invalid-input/token combinations and all eight observed SQL lock waits verify
+caller tokens and single-slot recovery. SQL recovery uses the same backend while
+the blocker still holds its lock; bounded cleanup drains, releases and joins again.
+The full driver published in 22.040 seconds with zero warnings and ran in 10.803
+seconds with exit zero and empty stderr. All 182 source/resource inputs and four
+published files remained unchanged; three restored graphs contain no EF packages.
+Owned schema sets were empty before and after execution. The embedded schema has
+SHA-256 `d058f5531627940e3622a586422dc89f35894f601d6eab926b10f1c8090e5c01`;
+the executable has SHA-256
+`dc2695ef24e379e0c30c29ebef523bca31522e38165705500ea174a2b9dbeaf7`.
+The retained complete execution receipt has SHA-256
+`6362777d709294c8dd7aa2f0336e02821618891282a5b2801f1f1e09e9b05bb1`.
+
+The #1669 model-cost contract captures one UTC eligibility timestamp after
+identifier validation and before awaiting a context or connection. The typed
+adapter now matches EF's existing boundary; effective bounds remain inclusive,
+expiry bounds exclusive, and active/enabled filtering and priority/effective
+ordering are unchanged. Two unchanged-source PostgreSQL reproductions held the
+sole pool slot across controlled effective/expiry boundaries: EF retained the
+invocation winner while typed Npgsql selected the later winner. Fresh reads
+selected the later winner in both adapters; both producers joined, the slot was
+reused and the owned schemas were removed.
+
+With the fix, all 31 managed model-routing cases pass without skips. Sixteen
+new rows include the two paired clock crossings, twelve EF/typed exact-boundary
+cases at equality and plus/minus one microsecond, and cancellation/reuse in the
+sole-slot pool and observed SQL waits. A scoped Npgsql pre-send tracing filter
+reads the actual bound UTC value without changing query parameters; an
+independent unpooled fixture update/readback establishes the exact PostgreSQL
+microsecond boundary. EF's nullable/nonnullable parameters must share that same
+logical timestamp. No production clock injection or constructor change is added.
+
+A fresh Linux publish passes with zero warnings, followed by the full EF-free
+native driver in 8.89 seconds. The native proof records dispatch 6.32 seconds
+before and release 1.01 seconds after its boundary, the expected queued/fresh
+winners, cancellation and slot reuse. All 180 compile inputs and the publish
+closure remain stable; three assets are EF-free and owned-schema sets are empty
+before/after. Receipt `issue-1669/native-2b182a2f599a460fafd8774a318c7f53/complete.json`
+has SHA-256 `ac52cbb59a1c4998f3a616715ac9f7e0937d75015d463057e1ab71a8863e8660`.
+The rejected first native attempt retains its exact source and executable: its
+five-second pool timeout expired during the deliberately longer hold, before
+clock selection ran. The corrected fixture uses twenty seconds, retaining all
+operation/join bounds. This is a standalone typed repository proof, not native
+EF or Gateway qualification.
+
+The #1668 typed pagination fix reuses the count connection for the graph read.
+Count and page remain separate statements with the original SQL, typed
+parameters, ordering, normalization and graph materializer. Two unchanged-source
+PostgreSQL reproductions observed the sole backend idle after count while each
+page API waited for another pool slot; cancellation joined each producer and
+reused that same slot. With the fix, all 15 managed model-routing rows pass
+without skips. Eight new rows cover both one-slot regressions, both adapters'
+complete graphs/counts/filtering/normalized ordering, and caller cancellation
+before dispatch, in an occupied pool and at observed count/graph SQL waits.
+Independent cleanup releases held resources, joins producers again, disposes
+sources and verifies owned schema absence. The ordering oracle uses PostgreSQL's
+collation rather than assuming ordinal mixed-case ordering.
+
+A fresh Linux native publish also passes the full EF-free persistence driver,
+including both typed page APIs with complete populated/null graphs, provider
+filters, ordering ties, normalized bounds, occupied-pool cancellation and all
+four observed count/graph SQL cancellation cases. Publish takes 20.29 seconds
+with zero warnings; execution takes 1.53 seconds with empty stderr. All 179
+compile inputs, including four linked Configuration files, remain unchanged;
+three dependency assets are EF-free. Owned-schema sets are empty before and
+after execution. The retained `issue-1668/native-08ecf24dc1224f8b8e5dbdf51449010c/complete.json`
+receipt has SHA-256 `bfabcec4650e7f579169d11c1e173ed394812f8428da635000cc3d5754e5580e`.
+This standalone repository proof does not establish native EF or Gateway
+qualification.
+
+The #1666 EF recovery additions provide ten deterministic PostgreSQL rows in
+`VirtualKeyRuntimeRetryPersistenceTests` and
+`VirtualKeyRuntimeUniqueConflictPersistenceTests`. A real `40001` after the
+balance update and tracked ledger creation proves provider-strategy retry,
+fresh attempt scalars/transactions, rollback and one committed debit. A real
+`23505` proves disposal before fresh-context recovery, current-state return,
+six conflicting replay identities and cancellation at recovery-query dispatch.
+The tests also verify exact ledger/totals and single-slot connection reuse.
+All 26 selected recovery and existing virtual-key/legacy replay cases passed
+locally without skips. The NativeAOT workflow explicitly includes the two new
+classes in its managed shared-contract gate; this is not EF native execution.
+Immediate-retry cancellation is covered here. Cancellation during nonzero retry
+backoff remains a separate defect, [#1703](https://github.com/nickna/Conduit/issues/1703).
+
+The #1665 configuration-read additions retain the four original parity rows and
+add six `SqlInFlightCancellationReleasesTheSingleConnectionSlot` rows: EF and
+typed Npgsql implementations of `GetConfigurationAsync`, `GetConfigurationsAsync`
+and `ListCredentialsForProviderAsync`. Each row requires its own real PostgreSQL
+schema, an observed exact reader PID/relation lock wait behind its unpooled
+blocker, bounded cancellation/reaping and single-slot recovery. Pre-cancelled
+null/empty ID lists retain their no-query fast return.
+
+`FunctionExecutionConfigurationPersistenceProbe` adds the three typed counterparts
+to the standalone persistence driver, within its caller-owned GUID schema. It
+also checks caller-token cancellation and obtains the sole pooled slot for
+`SELECT 1` while the table lock is still held, then recovers all three reads after
+unlock. Running that driver with `dotnet` is managed evidence. Executing these
+additions as native code requires a fresh published Linux executable and its own
+process/cleanup receipt; the historical process links above do not supply it.
+Neither form executes the EF reference implementation natively or completes the
+full repository-suite qualification.
+
+Local verification on 2026-10-16 passed all ten managed PostgreSQL 16 parity rows
+with zero skips. A fresh Linux x64 NativeAOT publish with `ConduitAotAudit=true`
+had zero warnings. Its standalone executable
+(`fe2e22ba6bcecba30d5ab9a2da56fb544cda1f553f63f9943f05fe6b8fe79e79`)
+ran the full persistence driver, including the three typed SQL cancellation
+cases, and exited zero with empty stderr. Independent before/after observations
+found zero native-driver and configuration-test schemas. The retained execution
+receipt SHA-256 is
+`1f1fc45e62b10b65077fdcc75463cfeb9e002257d6302fc3dce49a581fe5b9e3`.
 
 The published persistence probe is `Tests/ConduitLLM.PersistenceAotTests/Program.cs`,
 launched by `scripts/aot/persistence-native-smoke.ps1`. Its isolated schema also

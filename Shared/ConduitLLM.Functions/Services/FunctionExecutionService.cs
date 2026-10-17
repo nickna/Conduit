@@ -27,6 +27,8 @@ namespace ConduitLLM.Functions.Services;
 ///
 /// Unkeyed requests are billed by the calling layer. Keyed requests settle their
 /// durable execution identity before returning a result.
+/// A result-write concurrency miss returns a failed, billable snapshot for reconciliation;
+/// it never re-dispatches the provider or overwrites the competing stored snapshot.
 /// </remarks>
 public partial class FunctionExecutionService : IFunctionExecutionService
 {
@@ -277,7 +279,8 @@ public partial class FunctionExecutionService : IFunctionExecutionService
                 FunctionsJsonContext.Default.FunctionExecutionCostDetails);
             execution.ActualCost = actualCost;
 
-            await UpdateExecutionAsync(execution, cancellationToken);
+            if (!await UpdateExecutionAsync(execution, cancellationToken))
+                ReportPersistenceConflict(execution, providerExecutionCompleted: true);
 
             return execution;
         }
@@ -351,7 +354,8 @@ public partial class FunctionExecutionService : IFunctionExecutionService
                             FunctionsJsonContext.Default.FunctionExecutionCostDetails);
                     }
 
-                    await UpdateExecutionAsync(execution, cancellationToken);
+                    if (!await UpdateExecutionAsync(execution, cancellationToken))
+                        ReportPersistenceConflict(execution, providerExecutionCompleted);
                 }
             }
             catch (Exception recordEx)
@@ -376,6 +380,22 @@ public partial class FunctionExecutionService : IFunctionExecutionService
 
             throw;
         }
+    }
+
+    private void ReportPersistenceConflict(FunctionExecution execution, bool providerExecutionCompleted)
+    {
+        var diagnostic = $"Execution {execution.Id} could not be saved because of a concurrency conflict. " +
+            (providerExecutionCompleted
+                ? "The provider operation already ran and remains billable. Reconcile this execution before dispatching a replacement operation."
+                : "Reconcile the persisted execution before retrying.");
+        var original = execution.ErrorMessage;
+        execution.State = ExecutionState.Failed;
+        // Keep the original provider/bookkeeping diagnostic while fitting the entity's limit.
+        execution.ErrorMessage = string.IsNullOrEmpty(original) ? diagnostic :
+            original[..Math.Min(original.Length, 2000 - diagnostic.Length - 1)] + " " + diagnostic;
+        _logger.LogWarning(
+            "Execution result persistence conflict for {ExecutionId}; provider completed: {ProviderCompleted}, incurred cost: {ActualCost}. The competing snapshot was preserved. {Reconciliation}",
+            execution.Id, providerExecutionCompleted, execution.ActualCost, diagnostic);
     }
 
     /// <summary>

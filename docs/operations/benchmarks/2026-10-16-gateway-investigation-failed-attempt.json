@@ -1,0 +1,1 @@
+{"schemaVersion":1,"kind":"conduit-native-benchmark-attempt","attemptId":"db78cc2b445a4493b1fec5017941cdef","service":"gateway","status":"failed","startedAt":"2026-10-16T21:28:07.3985013+00:00","completedAt":"2026-10-16T21:29:10.7590298+00:00","reportSha256":null,"failureCode":"collection-failed"}

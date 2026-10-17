@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 [CmdletBinding()]
-param()
+param([switch] $DiagnosticSchemaOnly)
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -44,8 +44,157 @@ function Get-AttemptContractHash([string] $Path) {
 function Assert-AttemptContractPrivacy([string] $OutputPath) {
     foreach ($file in Get-ChildItem -LiteralPath ($OutputPath + '.attempts') -File -Recurse -Filter '*.json') {
         $text = [IO.File]::ReadAllText($file.FullName)
-        foreach ($secret in @($privateKey, $privateDatabasePassword, $privateRedisPassword, 'private-child-diagnostic')) {
+        foreach ($secret in @($privateKey, $privateDatabasePassword, $privateRedisPassword, 'private-child-diagnostic', 'private-cleanup-sentinel')) {
             Assert-Contract (-not $text.Contains($secret)) 'Benchmark attempt evidence retained private configuration.'
+        }
+    }
+}
+
+function Assert-DiagnosticContractRejection([scriptblock] $Action, [string] $ExpectedMessage) {
+    $failure = $null
+    try { & $Action | Out-Null } catch { $failure = $_ }
+    Assert-Contract ($null -ne $failure -and $failure.Exception.Message -ceq $ExpectedMessage -and
+        -not (($failure | Out-String).Contains($privateKey))) 'Diagnostic rejection exposed private input or lost its fixed message.'
+}
+
+function New-DiagnosticContractInput {
+    return ,([ordered]@{ phase = 'unknown'; reason = 'unknown'; runtime = 'unknown'; sampleKind = 'none'; pair = $null;
+        ownedContainerCleanup = @{ status = 'not-attempted'; reason = 'none' };
+        privateFileCleanup = @{ status = 'not-attempted'; reason = 'none' } })
+}
+
+function Invoke-FailureDiagnosticSchemaContracts {
+    $output = Join-Path $temporaryRoot 'diagnostic-schema.json'
+    $context = $null
+    $writeError = 'Native benchmark failure diagnostic could not be recorded.'
+    $validationError = 'Native benchmark failure diagnostic is invalid.'
+    try {
+        $context = Start-NativeBenchmarkAttempt -OutputPath $output -Service 'admin'
+        $runningHash = Get-AttemptContractHash $context.attemptPath
+        Assert-DiagnosticContractRejection { Set-NativeBenchmarkAttemptFailureDiagnostic -Context $context -Diagnostic (New-DiagnosticContractInput) } $writeError
+        Assert-Contract ((Get-AttemptContractHash $context.attemptPath) -ceq $runningHash -and
+            -not [IO.File]::Exists((Join-Path $context.attemptDirectory 'diagnostics.json'))) 'Rejected running diagnostic changed the attempt.'
+        $script:cases++
+        # A minimal public helper report establishes an actual succeeded state;
+        # this is a schema/writer fixture, not a measured benchmark qualification.
+        Complete-NativeBenchmarkAttempt -Context $context -Report @{ service = 'admin' }
+        $archive = Join-Path $context.attemptDirectory 'benchmark.json'
+        $aliasHash = Get-AttemptContractHash $output
+        $archiveHash = Get-AttemptContractHash $archive
+        $succeededHash = Get-AttemptContractHash $context.attemptPath
+        Assert-DiagnosticContractRejection { Set-NativeBenchmarkAttemptFailureDiagnostic -Context $context -Diagnostic (New-DiagnosticContractInput) } $writeError
+        Assert-Contract ((Get-AttemptContractHash $context.attemptPath) -ceq $succeededHash -and
+            (Get-AttemptContractHash $output) -ceq $aliasHash -and (Get-AttemptContractHash $archive) -ceq $archiveHash) 'Rejected succeeded diagnostic changed original bytes.'
+        $script:cases++
+    }
+    finally { if ($null -ne $context) { Close-NativeBenchmarkAttempt -Context $context } }
+
+    $context = $null
+    try {
+        $context = Start-NativeBenchmarkAttempt -OutputPath $output -Service 'admin'
+        Set-NativeBenchmarkAttemptFailed -Context $context -FailureCode 'collection-failed'
+        $attemptHash = Get-AttemptContractHash $context.attemptPath
+        $latestHash = Get-AttemptContractHash $context.latestPath
+        $diagnosticPath = Join-Path $context.attemptDirectory 'diagnostics.json'
+        $invalid = New-DiagnosticContractInput
+        $invalid.reason = $privateKey
+        Assert-DiagnosticContractRejection { Set-NativeBenchmarkAttemptFailureDiagnostic -Context $context -Diagnostic $invalid } $writeError
+        Assert-Contract (-not [IO.File]::Exists($diagnosticPath)) 'Invalid diagnostic created a sidecar.'
+        $script:cases++
+        Assert-Contract (@(Set-NativeBenchmarkAttemptFailureDiagnostic -Context $context -Diagnostic (New-DiagnosticContractInput)).Count -eq 0) 'Diagnostic writer emitted incidental output.'
+        $full = Read-AttemptContractJson $diagnosticPath
+        Assert-Contract ($full.Count -eq 11 -and $full.schemaVersion -eq 1 -and
+            $full.kind -ceq 'conduit-native-benchmark-failure-diagnostic' -and $full.attemptId -ceq $context.attemptId -and
+            $full.service -ceq 'admin' -and $full.phase -ceq 'unknown' -and $full.reason -ceq 'unknown' -and
+            [IO.FileInfo]::new($diagnosticPath).Length -le 4096) 'Unknown fallback diagnostic is not a bounded closed record.'
+        $diagnosticHash = Get-AttemptContractHash $diagnosticPath
+        Assert-DiagnosticContractRejection { Set-NativeBenchmarkAttemptFailureDiagnostic -Context $context -Diagnostic (New-DiagnosticContractInput) } $writeError
+        Assert-Contract ((Get-AttemptContractHash $diagnosticPath) -ceq $diagnosticHash -and
+            (Get-AttemptContractHash $context.attemptPath) -ceq $attemptHash -and (Get-AttemptContractHash $context.latestPath) -ceq $latestHash -and
+            (Get-AttemptContractHash $output) -ceq $aliasHash -and (Get-AttemptContractHash $archive) -ceq $archiveHash) 'Immutable diagnostic writer changed a sidecar, attempt, alias or archive.'
+        $script:cases++
+
+        $mutations = @(
+            { param($d) $d.schemaVersion = '1' },
+            { param($d) $d.kind = 'Conduit-native-benchmark-failure-diagnostic' },
+            { param($d) $d.attemptId = '0' * 32 },
+            { param($d) $d.service = 'Admin' },
+            { param($d) $d.phase = $privateKey },
+            { param($d) $d.phase = 'Readiness' },
+            { param($d) $d.reason = $privateKey },
+            { param($d) $d.reason = @('unknown') },
+            { param($d) $d.runtime = 'native' },
+            { param($d) $d.sampleKind = 'Warmup' },
+            { param($d) $d.extra = $privateKey },
+            { param($d) $value = $d.phase; $d.Remove('phase'); $d['Phase'] = $value },
+            { param($d) $d.sampleKind = 'recorded'; $d.pair = $null },
+            { param($d) $d.sampleKind = 'recorded'; $d.pair = 0 },
+            { param($d) $d.sampleKind = 'recorded'; $d.pair = 22 },
+            { param($d) $d.sampleKind = 'recorded'; $d.pair = '1' },
+            { param($d) $d.sampleKind = 'recorded'; $d.pair = $true },
+            { param($d) $d.sampleKind = 'warmup'; $d.pair = 1 },
+            { param($d) $d.pair = 1 },
+            { param($d) $d.ownedContainerCleanup.status = 'confirmed-leak' },
+            { param($d) $d.ownedContainerCleanup.status = 'not-attempted'; $d.ownedContainerCleanup.reason = 'shutdown-failed' },
+            { param($d) $d.ownedContainerCleanup.status = 'verification-failed'; $d.ownedContainerCleanup.reason = 'none' },
+            { param($d) $d.ownedContainerCleanup.reason = $privateKey },
+            { param($d) $d.privateFileCleanup.status = 'not-attempted'; $d.privateFileCleanup.reason = 'cleanup-failed' },
+            { param($d) $d.privateFileCleanup.status = 'verification-failed'; $d.privateFileCleanup.reason = 'none' },
+            { param($d) $d.privateFileCleanup.reason = 'verification-failed' },
+            { param($d) $d.privateFileCleanup.extra = $privateKey }
+        )
+        foreach ($mutate in $mutations) {
+            $modified = $full | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+            & $mutate $modified | Out-Null
+            Assert-DiagnosticContractRejection { Get-NativeBenchmarkAttemptFailureDiagnostic $modified } $validationError
+            Assert-Contract ((Get-AttemptContractHash $diagnosticPath) -ceq $diagnosticHash) 'Validator changed retained diagnostic bytes.'
+            $script:cases++
+        }
+        foreach ($pair in @(1, 21)) {
+            $valid = $full | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+            $valid.runtime = 'native-aot'; $valid.sampleKind = 'recorded'; $valid.pair = $pair
+            $valid.ownedContainerCleanup = @{ status = 'confirmed'; reason = 'shutdown-failed' }
+            $valid.privateFileCleanup = @{ status = 'confirmed'; reason = 'cleanup-failed' }
+            Assert-Contract (@(Get-NativeBenchmarkAttemptFailureDiagnostic $valid).Count -eq 1) 'Valid recorded pair or confirmed cleanup reason was rejected.'
+            $script:cases++
+        }
+    }
+    finally { if ($null -ne $context) { Close-NativeBenchmarkAttempt -Context $context } }
+    Assert-AttemptContractReaderRejected $output 'admin'
+    Assert-AttemptContractPrivacy $output
+    $script:cases++
+
+    foreach ($kind in @('directory', 'symlink')) {
+        $context = $null
+        $path = $null
+        try {
+            $context = Start-NativeBenchmarkAttempt -OutputPath (Join-Path $temporaryRoot ('diagnostic-' + $kind + '.json')) -Service 'admin'
+            Set-NativeBenchmarkAttemptFailed -Context $context -FailureCode 'collection-failed'
+            $path = Join-Path $context.attemptDirectory 'diagnostics.json'
+            $target = Join-Path $context.attemptDirectory 'sentinel.json'
+            [IO.File]::WriteAllText($target, 'owned diagnostic sentinel')
+            $targetHash = Get-AttemptContractHash $target
+            if ($kind -ceq 'directory') { [IO.Directory]::CreateDirectory($path) | Out-Null }
+            else {
+                try { [IO.File]::CreateSymbolicLink($path, $target) | Out-Null }
+                catch {
+                    if ($IsWindows) {
+                        Write-Host 'SKIP: Windows diagnostic file symbolic-link setup unavailable; rejection not claimed.'
+                        continue
+                    }
+                    throw 'Mandatory diagnostic file symbolic-link fixture could not be created.'
+                }
+            }
+            Assert-DiagnosticContractRejection { Set-NativeBenchmarkAttemptFailureDiagnostic -Context $context -Diagnostic (New-DiagnosticContractInput) } $writeError
+            Assert-Contract ((Get-AttemptContractHash $target) -ceq $targetHash) 'Rejected diagnostic path changed its sentinel target.'
+            $script:cases++
+        }
+        finally {
+            if ($null -ne $context) { Close-NativeBenchmarkAttempt -Context $context }
+            if ($null -ne $path) {
+                if ($kind -ceq 'directory' -and [IO.Directory]::Exists($path)) { [IO.Directory]::Delete($path) }
+                elseif ($kind -ceq 'symlink' -and [IO.File]::Exists($path)) { [IO.File]::Delete($path) }
+            }
         }
     }
 }
@@ -495,16 +644,22 @@ function Get-CaseFailureDiagnostic([string] $CaseRoot, [object[]] $Commands, [ob
         }
     })
     $safeFailure = 'unclassified'
+    # Preserve the old console-classification oracle while accepting only the
+    # new closed diagnostic suffix. The full sidecar is validated separately.
+    $classificationFailure = $Failure -creplace (' \[phase=[a-z-]+;reason=[a-z-]+;runtime=(?:unknown|jit|native-aot);' +
+        'sample=(?:none|warmup|recorded);pair=(?:none|[1-9]|1[0-9]|2[01]);' +
+        'owned-cleanup=(?:not-attempted|confirmed|verification-failed);owned-cleanup-reason=(?:none|shutdown-failed|verification-failed);' +
+        'private-cleanup=(?:not-attempted|confirmed|verification-failed);private-cleanup-reason=(?:none|cleanup-failed)\]'), ''
     foreach ($allowed in @('Private command failed.', 'Private command failed and its cleanup failed.',
         'Private command cleanup failed.', 'Benchmark variant failed.',
         'Benchmark variant failed and owned container cleanup failed.',
         'Owned benchmark container cleanup failed.', 'Container ownership verification failed.')) {
-        if ($Failure -ceq ($allowed + ' No qualification was recorded.')) { $safeFailure = $allowed }
+        if ($classificationFailure -ceq ($allowed + ' No qualification was recorded.')) { $safeFailure = $allowed }
     }
     foreach ($tag in @('command-deadline', 'poll-command-deadline', 'poll-callback', 'poll-memory-sample', 'poll-memory-value')) {
         foreach ($prefix in @('Private command failed.', 'Private command failed and its cleanup failed.')) {
             $allowed = $prefix + ' [stage=' + $tag + ']'
-            if ($Failure -ceq ($allowed + ' No qualification was recorded.')) { $safeFailure = $allowed }
+            if ($classificationFailure -ceq ($allowed + ' No qualification was recorded.')) { $safeFailure = $allowed }
         }
     }
     $traces = @{}
@@ -518,6 +673,32 @@ function Get-CaseFailureDiagnostic([string] $CaseRoot, [object[]] $Commands, [ob
             ', operations ' + ($operations -join '|') + ', controlled failure ' + $safeFailure +
             ', safe driver trace ' + $traces.driver + ', safe run trace ' + $traces.run + '.'
     }
+}
+
+function Assert-CollectorFailureDiagnostic($Metadata, [string] $Scenario, [string] $Failure) {
+    $path = Join-Path ([IO.Path]::GetDirectoryName($Metadata.attemptPath)) 'diagnostics.json'
+    Assert-Contract ([IO.File]::Exists($path) -and [IO.FileInfo]::new($path).Length -le 4096) 'Failed collection did not retain bounded diagnostics.'
+    $diagnostic = Get-NativeBenchmarkAttemptFailureDiagnostic (Read-AttemptContractJson $path)
+    Assert-Contract ($diagnostic.attemptId -ceq $Metadata.attempt.attemptId -and $diagnostic.service -ceq $Metadata.attempt.service -and
+        $null -eq $Metadata.attempt.reportSha256 -and -not [IO.File]::Exists((Join-Path ([IO.Path]::GetDirectoryName($Metadata.attemptPath)) 'benchmark.json'))) 'Failure diagnostic changed failed eligibility or created a report archive.'
+    $phase = 'readiness'; $reason = 'readiness-deadline'; $runtime = 'jit'; $sample = 'warmup'; $pair = $null
+    $ownedStatus = 'confirmed'; $ownedReason = 'none'; $privateStatus = 'confirmed'; $privateReason = 'none'
+    switch ($Scenario) {
+        'diagnostic-readiness-cleanup' { $runtime = 'native-aot'; $sample = 'recorded'; $pair = 1; $ownedStatus = 'verification-failed'; $ownedReason = 'verification-failed' }
+        'diagnostic-private-cleanup' { $phase = 'private-cleanup'; $reason = 'private-cleanup-failed'; $runtime = 'unknown'; $sample = 'none'; $privateStatus = 'verification-failed'; $privateReason = 'cleanup-failed' }
+        'diagnostic-readiness-private-cleanup' { $privateStatus = 'verification-failed'; $privateReason = 'cleanup-failed' }
+        'diagnostic-private-child' { $phase = 'workload-result'; $reason = 'unknown' }
+        'diagnostic-private-config' { $phase = 'workload-result'; $reason = 'unknown'; $privateReason = 'cleanup-failed' }
+        'diagnostic-poll-memory' { $phase = 'workload'; $reason = 'poll-memory-sample' }
+    }
+    Assert-Contract ($diagnostic.phase -ceq $phase -and $diagnostic.reason -ceq $reason -and $diagnostic.runtime -ceq $runtime -and
+        $diagnostic.sampleKind -ceq $sample -and $diagnostic.pair -ceq $pair -and
+        $diagnostic.ownedContainerCleanup.status -ceq $ownedStatus -and $diagnostic.ownedContainerCleanup.reason -ceq $ownedReason -and
+        $diagnostic.privateFileCleanup.status -ceq $privateStatus -and $diagnostic.privateFileCleanup.reason -ceq $privateReason) 'Persisted primary phase, variant identity or independent cleanup outcome differs.'
+    $pairText = if ($null -eq $pair) { 'none' } else { [string]$pair }
+    $expectedSuffix = '[phase=' + $phase + ';reason=' + $reason + ';runtime=' + $runtime + ';sample=' + $sample + ';pair=' + $pairText +
+        ';owned-cleanup=' + $ownedStatus + ';owned-cleanup-reason=' + $ownedReason + ';private-cleanup=' + $privateStatus + ';private-cleanup-reason=' + $privateReason + ']'
+    Assert-Contract ($Failure.Contains($expectedSuffix)) 'Public summary lost the same closed primary and independent cleanup codes.'
 }
 
 function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $ExpectedFailure,
@@ -582,6 +763,9 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     if ($Scenario -eq 'candidate-config') { $parameters.NativeImage = 'example.invalid/conduit-' + $Service + '@' + $packageFixture.oci.configDigest }
     if ($Scenario -eq 'candidate-selected-swap') { $parameters.NativeImage = 'example.invalid/conduit-' + $Service + '@' + $packageFixture.oci.selectedDescriptor.digest }
     if ($Scenario -eq 'driver-timeout') { $parameters.WorkloadTimeoutSeconds = 5 }
+    if ($Scenario -cin @('diagnostic-readiness', 'diagnostic-readiness-cleanup', 'diagnostic-readiness-private-cleanup')) {
+        $parameters.ReadinessTimeoutSeconds = 1
+    }
     if ($Scenario -eq 'even-pairs') { $parameters.PairedRuns = 6 }
     $priorAliasHash = if ([IO.File]::Exists($parameters.OutputPath)) { Get-AttemptContractHash $parameters.OutputPath } else { $null }
     $priorEvidence = $null
@@ -598,6 +782,24 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     $casePrimaryFailure = $null
     $caseStage = 'readiness-setup'
     $failureDiagnostic = $null
+    $collectorToInvoke = $collector
+    $privateCleanupMarker = Join-Path $caseRoot 'injected-private-cleanup.path'
+    if ($Scenario -cin @('diagnostic-private-cleanup', 'diagnostic-readiness-private-cleanup', 'diagnostic-private-config')) {
+        $copyRoot = Join-Path $caseRoot 'collector-source'
+        [IO.Directory]::CreateDirectory($copyRoot) | Out-Null
+        foreach ($sourceFile in Get-ChildItem -LiteralPath $PSScriptRoot -File -Filter '*.ps1') {
+            Copy-Item -LiteralPath $sourceFile.FullName -Destination (Join-Path $copyRoot $sourceFile.Name)
+        }
+        $collectorToInvoke = Join-Path $copyRoot 'measure-native-container.ps1'
+        $copy = [IO.File]::ReadAllText($collectorToInvoke)
+        $delete = if ($Scenario -ceq 'diagnostic-private-config') { 'Remove-Item -LiteralPath $configurationPath -Force' }
+            else { 'Remove-Item -LiteralPath $resolved -Recurse -Force' }
+        Assert-Contract ($copy.Split($delete, [StringSplitOptions]::None).Length -eq 2) 'Exact private cleanup fault seam differs.'
+        $markerValue = if ($Scenario -ceq 'diagnostic-private-config') { '$configurationPath' } else { '$resolved' }
+        $fault = '[IO.File]::WriteAllText((Join-Path $env:CONDUIT_COLLECTOR_TEST_ROOT ''injected-private-cleanup.path''), ' + $markerValue +
+            '); throw (''private-cleanup-sentinel:'' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)'
+        [IO.File]::WriteAllText($collectorToInvoke, $copy.Replace($delete, $fault), [Text.UTF8Encoding]::new($false))
+    }
     try {
     if ($Scenario -cnotin @('even-pairs', 'case-duplicate-environment', 'revision-mismatch', 'package-absent', 'legacy-baseline',
         'package-wrong-service', 'package-cross-build', 'package-dirty', 'package-unavailable', 'package-hold', 'candidate-config', 'candidate-selected-swap')) {
@@ -628,15 +830,19 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     $watch = [Diagnostics.Stopwatch]::StartNew()
     $failure = $null
     $publicOutput = ''
+    $publicError = ''
+    $publicRecords = [Collections.Generic.List[object]]::new()
     $caseStage = 'collector-invocation'
-    try { $publicOutput = (& $collector @parameters 6>&1 | Out-String) }
-    catch { $failure = $_.Exception.Message }
+    try { & $collectorToInvoke @parameters *>&1 | ForEach-Object { $publicRecords.Add($_) } }
+    catch { $failure = $_.Exception.Message; $publicError = $_ | Out-String }
+    $publicOutput = $publicRecords | Out-String
     $caseStage = 'privacy-assertions'
     foreach ($name in $environmentNames) {
         Assert-Contract ([Environment]::GetEnvironmentVariable($name) -ceq $before[$name]) ('Collector mutated parent environment: ' + $name)
     }
-    foreach ($secret in @($privateKey, $privateDatabasePassword, $privateRedisPassword, 'private-child-diagnostic')) {
-        Assert-Contract (-not $publicOutput.Contains($secret) -and ($null -eq $failure -or -not $failure.Contains($secret))) 'Collector exposed private command configuration.'
+    foreach ($secret in @($privateKey, $privateDatabasePassword, $privateRedisPassword, 'private-child-diagnostic', 'private-cleanup-sentinel')) {
+        Assert-Contract (-not $publicOutput.Contains($secret) -and -not $publicError.Contains($secret) -and
+            ($null -eq $failure -or -not $failure.Contains($secret))) 'Collector exposed private command configuration.'
     }
     $commands = Read-Records (Join-Path $caseRoot 'commands')
     $drivers = Read-Records (Join-Path $caseRoot 'drivers')
@@ -652,13 +858,22 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
             $environmentIndex = [Array]::IndexOf([object[]]$command.arguments, '--env-file')
             Assert-Contract ($environmentIndex -ge 0) 'Docker did not receive a private environment file.'
             $environmentFile = [string]$command.arguments[$environmentIndex + 1]
-            Assert-Contract (-not [IO.File]::Exists($environmentFile) -and
-                -not [IO.Directory]::Exists([IO.Path]::GetDirectoryName($environmentFile))) 'Collector retained its private container environment.'
+            if ($Scenario -cin @('diagnostic-private-cleanup', 'diagnostic-readiness-private-cleanup')) {
+                Assert-Contract ([IO.File]::Exists($environmentFile)) 'Injected private cleanup failure was not reached.'
+            }
+            else {
+                Assert-Contract (-not [IO.File]::Exists($environmentFile) -and
+                    -not [IO.Directory]::Exists([IO.Path]::GetDirectoryName($environmentFile))) 'Collector retained its private container environment.'
+            }
+            Assert-Contract (-not $publicOutput.Contains($environmentFile) -and -not $publicError.Contains($environmentFile) -and
+                ($null -eq $failure -or -not $failure.Contains($environmentFile))) 'Public diagnostics exposed a private environment path.'
         }
     }
     foreach ($driver in $drivers) {
         Assert-Contract $driver.benchmarkCredentialPresent 'Driver did not receive its private credential.'
         Assert-Contract (-not [IO.File]::Exists($driver.configurationPath)) 'Collector retained a private workload configuration.'
+        Assert-Contract (-not $publicOutput.Contains($driver.configurationPath) -and -not $publicError.Contains($driver.configurationPath) -and
+            ($null -eq $failure -or -not $failure.Contains($driver.configurationPath))) 'Public diagnostics exposed a private workload configuration path.'
     }
     $caseStage = 'failure-oracle'
     if (-not [string]::IsNullOrEmpty($ExpectedFailure)) {
@@ -672,6 +887,40 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         }
         $failedAttempt = Get-AttemptContractMetadata $parameters.OutputPath $Service 'failed'
         Assert-AttemptContractReaderRejected $parameters.OutputPath $Service
+        if ($Scenario.StartsWith('diagnostic-', [StringComparison]::Ordinal)) {
+            Assert-CollectorFailureDiagnostic $failedAttempt $Scenario $failure
+            Assert-Contract ((Read-Records (Join-Path $caseRoot 'active')).Count -eq 0) 'A diagnostic case left an owned fake container.'
+            if ($Scenario -cin @('diagnostic-readiness', 'diagnostic-readiness-private-cleanup')) {
+                Assert-Contract ($created.Count -eq 1 -and $drivers.Count -eq 0 -and
+                    [IO.File]::Exists((Join-Path $caseRoot 'readiness-failure-observed'))) 'Readiness failure did not occur before its first workload.'
+            }
+            elseif ($Scenario -ceq 'diagnostic-readiness-cleanup') {
+                Assert-Contract ($created.Count -eq 4 -and $drivers.Count -eq 3 -and
+                    [IO.File]::Exists((Join-Path $caseRoot 'cleanup-verification-injected'))) 'Recorded native readiness or post-removal verification failure was not reached.'
+            }
+            elseif ($Scenario -ceq 'diagnostic-private-cleanup') {
+                Assert-Contract ($created.Count -eq 12 -and $drivers.Count -eq 12) 'Private-only cleanup fault occurred before complete successful workload collection.'
+            }
+            elseif ($Scenario -ceq 'diagnostic-poll-memory') {
+                foreach ($name in @('diagnostic-workload.identity', 'diagnostic-descendant.identity')) {
+                    $identity = Join-Path $caseRoot ('processes/' + $name)
+                    Assert-Contract ([IO.File]::Exists($identity)) 'Nested poll did not reach a latched sleeping workload and descendant.'
+                    Test-OwnedProcessStopped $identity
+                }
+                Assert-Contract ($watch.Elapsed.TotalSeconds -lt 25 -and $created.Count -eq 1 -and $drivers.Count -eq 1) 'Nested poll failure did not remain bounded in its first workload.'
+            }
+            if ($Scenario -cin @('diagnostic-private-cleanup', 'diagnostic-readiness-private-cleanup', 'diagnostic-private-config')) {
+                Assert-Contract ([IO.File]::Exists($privateCleanupMarker)) 'Exact private cleanup fault was not invoked.'
+            }
+            foreach ($file in Get-ChildItem -LiteralPath ($parameters.OutputPath + '.attempts') -File -Recurse -Filter '*.json') {
+                $text = [IO.File]::ReadAllText($file.FullName)
+                foreach ($driver in $drivers) { Assert-Contract (-not $text.Contains($driver.configurationPath)) 'Retained diagnostics exposed a private workload path.' }
+                foreach ($command in $commands | Where-Object { $_.arguments[0] -ceq 'run' }) {
+                    $index = [Array]::IndexOf([object[]]$command.arguments, '--env-file')
+                    Assert-Contract (-not $text.Contains([string]$command.arguments[$index + 1])) 'Retained diagnostics exposed a private environment path.'
+                }
+            }
+        }
         if ($null -ne $priorEvidence) {
             Assert-Contract ($failedAttempt.latest.attemptId -cne $priorLatestId) 'Failed rerun did not supersede the prior latest attempt.'
         }
@@ -843,6 +1092,17 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
                 else { 'cleanup-unclassified:' + $_.Exception.GetType().FullName }
                 $caseCleanupFailures.Add($safeDetails)
             }
+        }
+        if ([IO.File]::Exists($privateCleanupMarker)) {
+            try {
+                $privatePath = [IO.Path]::GetFullPath([IO.File]::ReadAllText($privateCleanupMarker))
+                $privateDirectory = if ($Scenario -ceq 'diagnostic-private-config') { [IO.Path]::GetDirectoryName($privatePath) } else { $privatePath }
+                $expectedParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar)
+                Assert-Contract ([IO.Path]::GetDirectoryName($privateDirectory).TrimEnd([IO.Path]::DirectorySeparatorChar) -ceq $expectedParent -and
+                    [IO.Path]::GetFileName($privateDirectory) -cmatch '^conduit-benchmark-[0-9a-f]{32}$') 'Injected cleanup fixture refused an unowned private directory.'
+                if ([IO.Directory]::Exists($privateDirectory)) { Remove-Item -LiteralPath $privateDirectory -Recurse -Force }
+            }
+            catch { $caseCleanupFailures.Add('Injected owned private directory cleanup failed.') }
         }
         if ($caseCleanupFailures.Count -gt 0) {
             $primaryType = if ($null -ne $casePrimaryFailure) { $casePrimaryFailure.GetType().FullName } else { 'none' }
@@ -1100,6 +1360,10 @@ $context = Start-NativeBenchmarkAttempt -OutputPath $OutputPath -Service 'admin'
 
 try {
     [IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
+    if ($DiagnosticSchemaOnly) {
+        Invoke-FailureDiagnosticSchemaContracts
+    }
+    else {
     [Environment]::SetEnvironmentVariable('CONDUIT_NATIVE_BENCHMARK_API_KEY', $privateKey)
     [Environment]::SetEnvironmentVariable('CONDUIT_COLLECTOR_TEST_PWSH', (Get-Command pwsh -CommandType Application | Select-Object -First 1).Source)
     [Environment]::SetEnvironmentVariable('CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS', '1000')
@@ -1186,9 +1450,20 @@ if ($Mode -eq 'health') {
                     if ($previous.Count -gt 4) { $null = $previous.Dequeue() }
                     if ($previous.Count -eq 4 -and (($previous.ToArray() -join ',') -eq '13,10,13,10')) { break }
                 }
-                $response = [Text.Encoding]::ASCII.GetBytes("HTTP/1.1 200 OK" + [char]13 + [char]10 +
-                    "Content-Type: application/json" + [char]13 + [char]10 + "Content-Length: 2" + [char]13 +
-                    [char]10 + "Connection: close" + [char]13 + [char]10 + [char]13 + [char]10 + "{}")
+                $active = @(Read-Active | Where-Object port -EQ $port)
+                $rejectReadiness = $active.Count -eq 1 -and (
+                    ($scenario -cin @('diagnostic-readiness', 'diagnostic-readiness-private-cleanup') -and $active[0].ordinal -eq 1) -or
+                    ($scenario -ceq 'diagnostic-readiness-cleanup' -and $active[0].ordinal -eq 4))
+                $status = if ($rejectReadiness) { '503 Service Unavailable' } else { '200 OK' }
+                $body = '{}'
+                if ($rejectReadiness) {
+                    [IO.File]::WriteAllText((Join-Path $root 'readiness-failure-observed'), [string]$active[0].ordinal)
+                    $body = 'private-child-diagnostic:' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY +
+                        [IO.File]::ReadAllText((Join-Path $root 'expected-redis.url'))
+                }
+                $response = [Text.Encoding]::ASCII.GetBytes(('HTTP/1.1 ' + $status) + [char]13 + [char]10 +
+                    "Content-Type: application/json" + [char]13 + [char]10 + ('Content-Length: ' + $body.Length) + [char]13 +
+                    [char]10 + "Connection: close" + [char]13 + [char]10 + [char]13 + [char]10 + $body)
                 $stream.Write($response)
             }
             catch { }
@@ -1361,6 +1636,11 @@ if ($Mode -eq 'docker') {
                 'foreign-missing-identity' { 'error: no such object: foreign-container' }
                 default { 'Error: No such object: ' + $identity }
             }
+            $missingFault = Join-Path $root 'cleanup-verification-injected'
+            if ($scenario -ceq 'diagnostic-readiness-cleanup' -and [IO.File]::Exists($missingFault) -and
+                [IO.File]::ReadAllText($missingFault) -ceq $identity) {
+                $missingMessage = 'private-child-diagnostic: missing verification denied'
+            }
             if ($scenario -ceq 'missing-with-payload') { [Console]::Out.WriteLine('{"Id":"foreign-container"}') }
             [Console]::Error.WriteLine($missingMessage)
             exit 1
@@ -1381,6 +1661,12 @@ if ($Mode -eq 'docker') {
     }
     if ($CommandArguments[0] -eq 'stats') {
         $record = @(Read-Active | Where-Object id -CEQ $CommandArguments[1])[0]
+        if ($scenario -ceq 'diagnostic-poll-memory' -and
+            [IO.File]::Exists((Join-Path $root 'processes/diagnostic-workload.identity')) -and
+            [IO.File]::Exists((Join-Path $root 'processes/diagnostic-descendant.identity'))) {
+            [Console]::Out.WriteLine('private-child-diagnostic: invalid memory ' + [IO.File]::ReadAllText((Join-Path $root 'expected-redis.url')))
+            exit 0
+        }
         $memory = if ($record.ordinal -le 2) { '99 GiB' } elseif ($record.runtime -ceq 'jit') { '1 MiB' } else { '512 KiB' }
         [Console]::Out.WriteLine($memory + ' / 128 GiB')
         exit 0
@@ -1406,6 +1692,9 @@ if ($Mode -eq 'docker') {
         # Containers are synthetic records. The parent owns both reusable
         # readiness listeners and joins them after this complete case.
         Remove-Item -LiteralPath (Join-Path $root ('active/' + $matches[0].id + '.json')) -Force
+        if ($scenario -ceq 'diagnostic-readiness-cleanup' -and $matches[0].ordinal -eq 4) {
+            [IO.File]::WriteAllText((Join-Path $root 'cleanup-verification-injected'), [string]$matches[0].id)
+        }
         exit 0
     }
     throw 'Unexpected fake Docker command.'
@@ -1430,6 +1719,27 @@ if ($Mode -eq 'driver' -or $Mode -eq 'dotnet') {
     Save-Record 'drivers' @{ dotnetRoute = $dotnetRoute; ordinal = $record.ordinal; runtime = $record.runtime;
         workload = $configuration.workload; configurationPath = $CommandArguments[$marker + 1];
         benchmarkCredentialPresent = -not [string]::IsNullOrEmpty($env:CONDUIT_NATIVE_BENCHMARK_API_KEY) }
+    if ($scenario -cin @('diagnostic-private-child', 'diagnostic-private-config')) {
+        [Console]::Out.WriteLine('private-child-diagnostic: not JSON ' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY +
+            [IO.File]::ReadAllText((Join-Path $root 'expected-redis.url')) + ' ' + $CommandArguments[$marker + 1])
+        [Console]::Error.WriteLine('private-child-diagnostic: ' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)
+        exit 0
+    }
+    if ($scenario -ceq 'diagnostic-poll-memory') {
+        $descendant = Start-Child 'sleep' @()
+        try {
+            [IO.File]::WriteAllText((Join-Path $root 'processes/diagnostic-descendant.identity'),
+                ($descendant.Id.ToString() + '|' + (Get-OwnedProcessIdentityToken $descendant)))
+        }
+        finally { $descendant.Dispose() }
+        $self = [Diagnostics.Process]::GetCurrentProcess()
+        try {
+            [IO.File]::WriteAllText((Join-Path $root 'processes/diagnostic-workload.identity'),
+                ($self.Id.ToString() + '|' + (Get-OwnedProcessIdentityToken $self)))
+        }
+        finally { $self.Dispose() }
+        Start-Sleep -Seconds 60
+    }
     if ($scenario -ceq 'package-late-mutation' -and $record.ordinal -eq 12 -and
         -not [IO.File]::Exists((Join-Path $root 'package-mutated'))) {
         [IO.File]::AppendAllText((Join-Path $root 'package/extracted/conduit-evidence/application.json'), ' ')
@@ -1870,7 +2180,16 @@ exit 0
     # Readers must reject the newly failed latest attempt even though A survives.
     Invoke-CollectorCase 'admin' 'even-pairs' 'No qualification was recorded.' -ExistingOutputPath $successfulAdmin.outputPath
     Invoke-CollectorCase 'admin' 'driver-nonzero' 'No qualification was recorded.' -ExistingOutputPath $successfulAdmin.outputPath
+    Invoke-CollectorCase 'admin' 'diagnostic-readiness' 'No qualification was recorded.'
+    Invoke-CollectorCase 'admin' 'diagnostic-readiness-cleanup' 'No qualification was recorded.' -ExistingOutputPath $successfulAdmin.outputPath
+    Invoke-CollectorCase 'admin' 'diagnostic-private-cleanup' 'No qualification was recorded.'
+    Invoke-CollectorCase 'admin' 'diagnostic-readiness-private-cleanup' 'No qualification was recorded.'
+    Invoke-CollectorCase 'admin' 'diagnostic-private-child' 'No qualification was recorded.'
+    Invoke-CollectorCase 'admin' 'diagnostic-private-config' 'No qualification was recorded.'
+    Invoke-CollectorCase 'admin' 'diagnostic-poll-memory' 'No qualification was recorded.'
     Invoke-AttemptLifecycleContracts $successfulAdmin
+    Invoke-FailureDiagnosticSchemaContracts
+    }
 }
 catch { $proofFailure = $_.Exception }
 finally {
@@ -1926,4 +2245,9 @@ if ($cleanupFailures.Count -gt 0) {
     throw ('Collector contract fixture cleanup failed; cleanup failures ' + $cleanupFailures.Count + '.')
 }
 if ($null -ne $proofFailure) { throw $proofFailure }
-Write-Host ('PASS: ' + $cases + ' collector contracts; owned mocked Docker/driver processes, authenticated workload pairs, warm exclusion, private deadlines, strict cleanup and latest-attempt evidence.')
+if ($DiagnosticSchemaOnly) {
+    Write-Host ('PASS: ' + $cases + ' failure diagnostic schema/writer contracts; strict codes, immutable sidecars, privacy and failed eligibility; no Docker/driver workload cases ran.')
+}
+else {
+    Write-Host ('PASS: ' + $cases + ' collector contracts; owned mocked Docker/driver processes, authenticated workload pairs, warm exclusion, private deadlines, strict cleanup and latest-attempt evidence.')
+}

@@ -51,14 +51,24 @@ A single `SecurityMiddleware` handles all security checks in one pass:
 - X-Content-Type-Options: nosniff
 - X-XSS-Protection: 1; mode=block
 - Strict-Transport-Security (HTTPS only)
-- Removes server identification headers
+- Suppresses Kestrel's own `Server` identification header when enabled
 
-`CONDUIT_ADMIN_SECURITY_HEADERS_ENABLED` defaults to `true`. Setting it to `false`
-disables all header additions and removals by the security headers middleware,
-including custom headers and the `X-Content-Type` / `X-API-Version` headers. Existing
-headers and headers supplied by other middleware, endpoints, or the hosting server
-are preserved. The aggregate switch takes precedence over individual switches;
-when enabled, those switches still control their respective headers.
+`CONDUIT_ADMIN_SECURITY_HEADERS_ENABLED` controls the aggregate `Headers.Enabled`
+option and defaults to `true`. When enabled, the host sets
+`KestrelServerOptions.AddServerHeader=false` to suppress Kestrel's own `Server`
+header. Individual switches still control their respective middleware headers;
+HSTS is emitted only for HTTPS.
+
+Setting the aggregate option to `false` disables all header additions and removals
+by the security headers middleware, including custom headers and the
+`X-Content-Type` / `X-API-Version` headers. The host leaves `AddServerHeader`
+unchanged, preserving Kestrel's default or an operator's explicit setting. This
+policy is fixed at startup; restart the host after changing the aggregate option.
+
+The Kestrel setting does not remove headers supplied by downstream middleware or
+endpoints; that middleware-order follow-up is tracked in [#1700](https://github.com/nickna/Conduit/issues/1700).
+Response headers added by a reverse proxy are a separate deployment
+concern and must be configured at that proxy.
 
 ### 7. Ephemeral Master Key (EMK)
 

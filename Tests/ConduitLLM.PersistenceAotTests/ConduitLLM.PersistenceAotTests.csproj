@@ -9,6 +9,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Managed parity checks these exact production-model DDL bytes for drift. -->
+    <EmbeddedResource Include="Fixtures\GatewayMetricsSchema.sql" LogicalName="ConduitLLM.PersistenceAotTests.GatewayMetricsSchema.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Abstractions\ConduitLLM.Persistence.Abstractions.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Npgsql\ConduitLLM.Persistence.Npgsql.csproj" />
   </ItemGroup>

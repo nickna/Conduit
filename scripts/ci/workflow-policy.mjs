@@ -21,6 +21,13 @@ export function validateWorkflows(workflows, required) {
         `${name}/${id}: missing bounded timeout`);
     }
   }
+  require(array(workflows['native-aot.yml']?.on?.pull_request?.paths).includes('tools/ConduitLLM.HealthProbe/**'),
+    'NativeAOT pull requests must explicitly include the packaged HealthProbe project');
+  const pricingProof = array(workflows['native-aot.yml']?.jobs?.['publish-and-smoke']?.steps)
+    .filter(step => step.uses === './.github/actions/run-tests' && step.with?.suite === 'native-persistence-parity');
+  require(pricingProof.length === 1 && pricingProof[0].with?.project === 'Tests/ConduitLLM.IntegrationTests' &&
+    pricingProof[0].with?.filter?.split('|').includes('FullyQualifiedName~FunctionCostCacheRedisTests'),
+    'Shared persistence parity must retain the real Redis function pricing cache regressions');
   const ci = workflows['ci.yml'];
   const packagedCheckout = array(ci.jobs.docker.steps).filter(step => step.uses?.startsWith('actions/checkout@'));
   require(packagedCheckout.length === 1 && packagedCheckout[0].with?.['persist-credentials'] === false,
@@ -54,6 +61,12 @@ export function validateWorkflows(workflows, required) {
       ci.jobs[id]?.if === `\${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['${id}'] }}`,
       `${id}: validation must use its own selector decision after successful classification`);
   }
+  const transportProof = array(ci.jobs['media-dispatch-integration'].steps)
+    .filter(step => step.uses === './.github/actions/run-tests');
+  require(transportProof.length === 1 &&
+    transportProof[0].with?.project === 'Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj' &&
+    transportProof[0].with?.filter === 'Component=MediaDispatch|FullyQualifiedName~FunctionProviderRetryTransportTests',
+    'Media dispatch integration must retain both durable media and function provider transport regressions');
   const timingInput = ci.on.workflow_dispatch?.inputs?.measure_previous_scheduling;
   require(timingInput?.type === 'boolean' && timingInput.default === false &&
     ci.jobs['distributed-lock'].with?.repeat_policy_tests === "${{ github.event_name == 'workflow_dispatch' && inputs.measure_previous_scheduling }}",

@@ -45,3 +45,20 @@ Advisory locks continue to use their independently owned lock pool. Long-lived
 lock sessions must not compete with routine database queries or health probes for
 the application pool's connections. This change does not replace the lock
 provider's pool or alter lock ownership lifetimes.
+
+## Persistence test fixtures
+
+Schema-isolated parity fixtures own their `NpgsqlDataSource` instances explicitly.
+EF receives its fixture's source through `UseNpgsql(dataSource)`; disposing an EF
+context returns its connection lease without disposing that source. Mixed EF and
+typed tests can own separate sources with the same schema connection string, and
+must dispose both after their consumers and leases finish. Shared management
+connections are borrowed separately; fixture cleanup must never clear all pools.
+
+The async-task fixture uses unpooled management connections and gives each owned
+schema drop its own cancellation deadline. A failed first drop cannot skip the
+second, and cleanup failures retain an earlier work failure. Billing, discovery,
+and async-task lifetime regressions observe exact backend PIDs from inside the
+still-running test process, then require those PIDs and owned schemas to disappear
+while an unrelated pooled sentinel connection remains usable. This distinguishes
+source disposal from connections merely closing when a test process exits.

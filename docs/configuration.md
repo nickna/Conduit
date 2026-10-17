@@ -181,6 +181,52 @@ period, the aggregate cycle, and the last outcome of each phase. Prometheus metr
 purge, expiration, quota, and retention are limited to those groups and reconciliation is skipped because
 an untracked object no longer has group ownership that can be scoped safely.
 
+### Security settings in root Compose
+
+The root `docker-compose.yml` explicitly forwards the security settings published
+in `.env.example` to `admin` and `api` (Gateway). This includes the Gateway's
+aggregate security-header switch and request-limit values. Defaults match the
+template: rate limiting is enabled on both APIs, IP filtering is disabled, and
+Admin IP banning is disabled. Set the corresponding variables in the root `.env`
+to change the intended container's configuration.
+
+Admin's four numeric settings also accept their previously published aliases:
+
+| Canonical suffix after `CONDUIT_ADMIN_` | Legacy suffix |
+| --- | --- |
+| `RATE_LIMIT_MAX_REQUESTS` | `RATE_LIMITING_MAX_REQUESTS` |
+| `RATE_LIMIT_WINDOW_SECONDS` | `RATE_LIMITING_WINDOW_SECONDS` |
+| `MAX_FAILED_AUTH_ATTEMPTS` | `FAILED_AUTH_MAX_ATTEMPTS` |
+| `AUTH_BAN_DURATION_MINUTES` | `FAILED_AUTH_BAN_DURATION_MINUTES` |
+
+Compose chooses a nonempty canonical value first, then a nonempty alias, then the
+documented default. Remove the canonical entry when using an alias; a canonical
+default copied from the template still takes precedence. To add another process
+setting, include it in the intended service's `environment` map or a Compose override.
+
+### Audit queues and retention
+
+Each JIT host starts and stops its own billing, request-log, function-call and
+pricing audit queues when those services are registered. Queues flush at 100 events
+or every 10 seconds, and graceful shutdown drains the remaining events. A host that
+never acquires leadership still flushes its queue. Failed database writes retain
+their existing requeue and retry behavior.
+
+Shared retention has a separate leader-owned worker. Its leadership names remain
+`BillingAuditService`, `RequestLogService`, `FunctionCallAuditService` and
+`PricingAuditService`, including during rolling upgrades. Billing, request-log and
+pricing retention keep their five-minute initial delay and daily schedule;
+function-call retention runs once on acquiring leadership. Losing leadership cancels
+and joins retention while local queues continue running. Host shutdown joins
+retention before the queue's final drain.
+The queue and retention adapters borrow the DI-owned audit singleton; only the
+retention adapter owns its worker task and cancellation source.
+
+Native hosts retain their separately supported typed billing-audit/request-log
+writers and do not enable these JIT retention workers. These local queues buffer
+events in memory; graceful-drain verification does not establish durability after
+abrupt process termination.
+
 ## Runtime configuration (in the Admin UI)
 
 Everything about *how Conduit behaves per request* is data in Postgres, created and edited live
@@ -197,6 +243,33 @@ through the Admin API and the WebAdmin UI — no restart, no redeploy. This is w
 The clearest illustration of the deploy-vs-runtime split is the **routing kill switch**: it reads
 like an infrastructure toggle, but it is a *runtime* setting stored in the database, so you can flip
 routing off during an incident without touching a deployment.
+
+### Global-settings reload requests
+
+Each process records successful global-settings reload IDs to suppress duplicate
+work. It keeps at most 10,000 completed IDs, evicting the oldest by successful
+completion order as soon as the count exceeds that limit. Deduplication also
+expires after 24 hours of elapsed time from successful completion, measured with
+a monotonic clock. Duplicate hits do not extend that window or change FIFO order.
+Expired records are pruned on the next reload request or completion.
+
+In-flight requests are tracked separately and are never evicted by completed-ID
+retention. Concurrent deliveries of the same ID join the same result. Failed or
+canceled reloads are not retained as completed, so a later delivery can retry;
+failed loads preserve the previous cache snapshot.
+
+A delayed or out-of-order duplicate from either durable Admin or Gateway queue
+may therefore trigger another reload after expiry, capacity eviction, or process
+restart. That is safe because every reload reads a fresh full database snapshot;
+it never reapplies the event's payload or restores an older event value. This is
+bounded duplicate suppression, with no permanent exactly-once guarantee.
+
+When Redis is configured, the bridge broadcasts reload IDs through Redis pub/sub.
+Publication acknowledges sending the notification, not successful reloads on all
+receivers; pub/sub itself does not provide durable delivery or redelivery. A
+Redis-less process reloads locally and propagates load errors to its caller. The
+count, ordering and elapsed-time contracts are testable bounds on completed-ID
+tracking, not measurements or guarantees of heap usage.
 
 ## Where to go next
 

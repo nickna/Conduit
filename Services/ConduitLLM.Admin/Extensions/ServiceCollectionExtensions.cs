@@ -149,7 +149,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ConduitLLM.Functions.Interfaces.IFunctionClientFactory, ConduitLLM.Functions.Services.FunctionClientFactory>();
         services.AddScoped<ConduitLLM.Functions.Interfaces.IFunctionExecutionService, ConduitLLM.Functions.Services.FunctionExecutionService>();
 
-        // Each native host flushes its own in-memory billing audit queue.
+        // Each host flushes its own in-memory billing audit queue.
 #if CONDUIT_NATIVE_AOT
         services.AddSingleton<IBillingAuditRuntimeWriter, NpgsqlBillingAuditRuntimeWriter>();
         services.AddSingleton<IBillingAuditService>(provider => ConduitLLM.Configuration.Services.BillingAuditService.CreateWithRuntimePersistence(
@@ -160,10 +160,13 @@ public static class ServiceCollectionExtensions
             (ConduitLLM.Configuration.Services.BillingAuditService)provider.GetRequiredService<IBillingAuditService>());
 #else
         services.AddSingleton<ConduitLLM.Configuration.Interfaces.IBillingAuditService, ConduitLLM.Configuration.Services.BillingAuditService>();
-        services.AddLeaderElectedHostedService<ConduitLLM.Configuration.Services.BillingAuditService>(
-            provider => provider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IBillingAuditService>() as ConduitLLM.Configuration.Services.BillingAuditService
-            ?? throw new InvalidOperationException("BillingAuditService must implement IHostedService"),
-            "BillingAuditService", ownsInnerService: false);
+        services.AddSingleton<IHostedService>(provider => new ConduitLLM.Configuration.Services.BatchAuditQueueHostedService(
+            (ConduitLLM.Configuration.Services.BillingAuditService)provider.GetRequiredService<IBillingAuditService>()));
+        services.AddLeaderElectedHostedService<ConduitLLM.Configuration.Services.BatchAuditRetentionHostedService>(
+            provider => new ConduitLLM.Configuration.Services.BatchAuditRetentionHostedService(
+                ((ConduitLLM.Configuration.Services.BillingAuditService)provider.GetRequiredService<IBillingAuditService>()).RunDataRetentionAsync,
+                provider.GetRequiredService<ILogger<ConduitLLM.Configuration.Services.BatchAuditRetentionHostedService>>()),
+            "BillingAuditService", ownsInnerService: true);
 #endif
 #if !CONDUIT_NATIVE_AOT
         services.AddHostedService<ConduitLLM.Admin.Services.PricingConfigurationAuditHostedService>();
@@ -176,15 +179,18 @@ public static class ServiceCollectionExtensions
         // Register cached pricing rules service for parsed configuration caching (uses the shared application FusionCache)
         services.AddPricingRulesCache();
 
-        // Register pricing audit service for rules-based pricing event tracking - with leader election
+        // Local pricing audit flushing is independent of shared retention leadership.
 #if !CONDUIT_NATIVE_AOT
         // The optional evaluator dependency can flush at the batch threshold even
         // without hosted startup, so native hosts omit the audit service itself.
         services.AddSingleton<ConduitLLM.Configuration.Interfaces.IPricingAuditService, ConduitLLM.Configuration.Services.PricingAuditService>();
-        services.AddLeaderElectedHostedService<ConduitLLM.Configuration.Services.PricingAuditService>(
-            provider => provider.GetRequiredService<ConduitLLM.Configuration.Interfaces.IPricingAuditService>() as ConduitLLM.Configuration.Services.PricingAuditService
-            ?? throw new InvalidOperationException("PricingAuditService must implement IHostedService"),
-            "PricingAuditService", ownsInnerService: false);
+        services.AddSingleton<IHostedService>(provider => new ConduitLLM.Configuration.Services.BatchAuditQueueHostedService(
+            (ConduitLLM.Configuration.Services.PricingAuditService)provider.GetRequiredService<IPricingAuditService>()));
+        services.AddLeaderElectedHostedService<ConduitLLM.Configuration.Services.BatchAuditRetentionHostedService>(
+            provider => new ConduitLLM.Configuration.Services.BatchAuditRetentionHostedService(
+                ((ConduitLLM.Configuration.Services.PricingAuditService)provider.GetRequiredService<IPricingAuditService>()).RunDataRetentionAsync,
+                provider.GetRequiredService<ILogger<ConduitLLM.Configuration.Services.BatchAuditRetentionHostedService>>()),
+            "PricingAuditService", ownsInnerService: true);
 #endif
 
         services.AddAdminRedisServices(!string.IsNullOrEmpty(

@@ -239,9 +239,10 @@ public sealed class NpgsqlAsyncTaskRuntimeStore : IAsyncTaskRuntimeStore
                 UPDATE "AsyncTasks" SET "State" = 1, "LeasedBy" = @workerId,
                     "LeaseExpiryTime" = @leaseExpiry, "UpdatedAt" = @now,
                     "Version" = "Version" + 1
-                WHERE "Id" = @taskId AND NOT "IsArchived" AND
-                    ("State" = 0 OR ("State" = 1
-                        AND "ProviderInvocationStartedAt" IS NULL
+                WHERE "Id" = @taskId AND NOT "IsArchived"
+                    AND "ProviderInvocationStartedAt" IS NULL
+                    AND "ProviderInvocationCompletedAt" IS NULL
+                    AND ("State" = 0 OR ("State" = 1
                         AND "LeaseExpiryTime" < @now))
                 """;
             AddClaimParameters(claim, taskId, workerId, now);
@@ -260,9 +261,11 @@ public sealed class NpgsqlAsyncTaskRuntimeStore : IAsyncTaskRuntimeStore
                     "Error" = 'Provider outcome is unknown after the processing lease expired.',
                     "LeasedBy" = NULL, "LeaseExpiryTime" = NULL, "CompletedAt" = @now,
                     "UpdatedAt" = @now, "Version" = "Version" + 1
-                WHERE "Id" = @taskId AND "State" = 1
-                    AND "ProviderInvocationStartedAt" IS NOT NULL
-                    AND "LeaseExpiryTime" < @now
+                WHERE "Id" = @taskId AND NOT "IsArchived"
+                    AND ("State" = 0 OR ("State" = 1
+                        AND "LeaseExpiryTime" < @now))
+                    AND ("ProviderInvocationStartedAt" IS NOT NULL
+                        OR "ProviderInvocationCompletedAt" IS NOT NULL)
                 """;
             uncertain.Parameters.AddWithValue("taskId", NpgsqlDbType.Varchar, taskId);
             uncertain.Parameters.AddWithValue("now", NpgsqlDbType.TimestampTz, now);
@@ -316,6 +319,7 @@ public sealed class NpgsqlAsyncTaskRuntimeStore : IAsyncTaskRuntimeStore
             UPDATE "AsyncTasks" SET "LeaseExpiryTime" = @leaseExpiry,
                 "UpdatedAt" = @now, "Version" = "Version" + 1
             WHERE "Id" = @taskId AND "LeasedBy" = @workerId
+                AND "State" = 1 AND NOT "IsArchived"
                 AND "LeaseExpiryTime" IS NOT NULL AND "LeaseExpiryTime" > @now
             """;
         AddClaimParameters(command, taskId, workerId, now);
@@ -425,12 +429,19 @@ public sealed class NpgsqlAsyncTaskRuntimeStore : IAsyncTaskRuntimeStore
             ? """
                 UPDATE "AsyncTasks" SET "ProviderInvocationCompletedAt" = @now,
                     "ProviderOperationId" = COALESCE(@providerOperationId, "ProviderOperationId"), "UpdatedAt" = @now
-                WHERE "Id" = @taskId AND "State" = 1 AND "LeasedBy" = @workerId
+                WHERE "Id" = @taskId AND NOT "IsArchived"
+                    AND "State" = 1 AND "LeasedBy" = @workerId
+                    AND "LeaseExpiryTime" > @now
+                    AND "ProviderInvocationStartedAt" IS NOT NULL
                 """
             : """
                 UPDATE "AsyncTasks" SET "ProviderInvocationStartedAt" = @now,
                     "UpdatedAt" = @now
-                WHERE "Id" = @taskId AND "State" = 1 AND "LeasedBy" = @workerId
+                WHERE "Id" = @taskId AND NOT "IsArchived"
+                    AND "State" = 1 AND "LeasedBy" = @workerId
+                    AND "LeaseExpiryTime" > @now
+                    AND "ProviderInvocationStartedAt" IS NULL
+                    AND "ProviderInvocationCompletedAt" IS NULL
                 """;
         AddClaimParameters(command, taskId, workerId, now);
         if (completed) AddNullableText(command, "providerOperationId", providerOperationId);

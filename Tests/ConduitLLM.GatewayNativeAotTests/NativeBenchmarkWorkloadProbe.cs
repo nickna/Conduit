@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Runtime;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -15,6 +16,7 @@ internal static class NativeBenchmarkWorkloadProbe
     internal const int MaximumConcurrency = 256;
     internal const int MaximumWarmupRequests = 10_000;
     internal const int MaximumTimeoutSeconds = 120;
+    internal const int MaximumDiagnosticBytes = 64 * 1024 * 1024;
     private const int MaximumSseLineCharacters = 64 * 1024;
     private const string SecretEnvironmentVariable = "CONDUIT_NATIVE_BENCHMARK_API_KEY";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -24,11 +26,14 @@ internal static class NativeBenchmarkWorkloadProbe
     /// and caller cancellation failures produce no report. The caller owns the output stream.
     /// </summary>
     internal static async Task<int> RunAsync(
-        string configurationPath, Stream output, CancellationToken cancellationToken = default)
+        string configurationPath, Stream output, CancellationToken cancellationToken = default,
+        Stream? diagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(output);
         if (!output.CanWrite)
             throw new ArgumentException("Benchmark output must be writable.", nameof(output));
+        if (diagnostics is not null && (!diagnostics.CanWrite || ReferenceEquals(output, diagnostics)))
+            throw new ArgumentException("Benchmark diagnostic output must be separate and writable.", nameof(diagnostics));
 
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromMinutes(15));
@@ -48,14 +53,29 @@ internal static class NativeBenchmarkWorkloadProbe
                 PooledConnectionLifetime = TimeSpan.FromMinutes(2)
             };
             using var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+            var origin = diagnostics is null ? 0 : Stopwatch.GetTimestamp();
+            var phases = diagnostics is null ? null : new List<PhaseDiagnostic>(2);
             var warmup = await RunPhaseAsync(configuration, client, apiKey,
-                configuration.WarmupRequests, deadline.Token);
+                configuration.WarmupRequests, deadline.Token, phases, "warmup", origin);
             if (warmup.Completed != configuration.WarmupRequests || warmup.Failures != 0)
                 throw new InvalidOperationException("Benchmark warm-up failed.");
 
             var measured = await RunPhaseAsync(configuration, client, apiKey,
-                configuration.Requests, deadline.Token);
+                configuration.Requests, deadline.Token, phases, "measured", origin);
             deadline.Token.ThrowIfCancellationRequested();
+            // Retain original schema-2 stdout. Diagnostic rows are a separate,
+            // explicitly client-scoped artifact written outside both batch timers.
+            if (diagnostics is not null)
+            {
+                using var bytes = new MemoryStream();
+                using (var diagnosticWriter = new Utf8JsonWriter(bytes))
+                    WriteDiagnostics(diagnosticWriter, configuration, phases!);
+                if (bytes.Length > MaximumDiagnosticBytes)
+                    throw new InvalidDataException("Benchmark diagnostic output exceeds its limit.");
+                deadline.Token.ThrowIfCancellationRequested();
+                await diagnostics.WriteAsync(bytes.GetBuffer().AsMemory(0, checked((int)bytes.Length)), deadline.Token);
+                await diagnostics.FlushAsync(deadline.Token);
+            }
             using var writer = new Utf8JsonWriter(output);
             WriteReport(writer, configuration, measured);
             await writer.FlushAsync(deadline.Token);
@@ -148,24 +168,39 @@ internal static class NativeBenchmarkWorkloadProbe
     private static InvalidDataException InvalidConfiguration() => new("Benchmark configuration is invalid.");
 
     private static async Task<Phase> RunPhaseAsync(
-        Configuration configuration, HttpClient client, string apiKey, int requests, CancellationToken token)
+        Configuration configuration, HttpClient client, string apiKey, int requests, CancellationToken token,
+        List<PhaseDiagnostic>? diagnostics, string name, long origin)
     {
-        if (requests == 0)
+        if (requests == 0 && diagnostics is null)
             return new Phase(0, 0, 0, 0, TimeSpan.Zero, []);
         var samples = new long[requests];
+        // Allocate rows and generated correlation IDs before the batch window;
+        // each claimed index has one writer, so no timing-path locks are needed.
+        var timings = diagnostics is null ? null : new RequestDiagnostic[requests];
+        if (timings is not null)
+            for (var index = 0; index < timings.Length; index++)
+                timings[index] = new RequestDiagnostic(index, configuration.IsStream);
+        var before = diagnostics is null ? null : RuntimeSnapshot.Capture();
+        var phaseStart = diagnostics is null ? 0 : Stopwatch.GetTimestamp() - origin;
         var next = -1;
         var executed = 0;
         var completed = 0;
         var elapsed = Stopwatch.StartNew();
         var workers = new Task[Math.Min(configuration.Concurrency, requests)];
         for (var worker = 0; worker < workers.Length; worker++)
-            workers[worker] = WorkAsync();
+            workers[worker] = WorkAsync(worker);
         await Task.WhenAll(workers);
         elapsed.Stop();
+        if (diagnostics is not null)
+        {
+            var phaseEnd = Stopwatch.GetTimestamp() - origin;
+            diagnostics.Add(new PhaseDiagnostic(name, requests, executed, completed, executed - completed,
+                elapsed.ElapsedTicks, phaseStart, phaseEnd, before!, RuntimeSnapshot.Capture(), timings!));
+        }
         Array.Sort(samples);
         return new Phase(requests, executed, completed, executed - completed, elapsed.Elapsed, samples);
 
-        async Task WorkAsync()
+        async Task WorkAsync(int worker)
         {
             while (true)
             {
@@ -175,21 +210,33 @@ internal static class NativeBenchmarkWorkloadProbe
                     return;
                 Interlocked.Increment(ref executed);
                 var start = Stopwatch.GetTimestamp();
+                var timing = timings?[index];
+                if (timing is not null)
+                {
+                    timing.Worker = worker;
+                    timing.StartOffsetTicks = start - origin;
+                }
                 try
                 {
-                    if (await ExecuteRequestAsync(configuration, client, apiKey, token))
+                    if (await ExecuteRequestAsync(configuration, client, apiKey, token, timing, origin))
+                    {
                         Interlocked.Increment(ref completed);
+                        if (timing is not null) timing.Succeeded = true;
+                    }
                 }
                 finally
                 {
-                    samples[index] = Stopwatch.GetTimestamp() - start;
+                    var end = Stopwatch.GetTimestamp();
+                    samples[index] = end - start;
+                    if (timing is not null) timing.EndOffsetTicks = end - origin;
                 }
             }
         }
     }
 
     private static async Task<bool> ExecuteRequestAsync(
-        Configuration configuration, HttpClient client, string apiKey, CancellationToken token)
+        Configuration configuration, HttpClient client, string apiKey, CancellationToken token,
+        RequestDiagnostic? diagnostic, long origin)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(TimeSpan.FromSeconds(configuration.TimeoutSeconds));
@@ -206,12 +253,15 @@ internal static class NativeBenchmarkWorkloadProbe
                 VersionPolicy = HttpVersionPolicy.RequestVersionExact
             };
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            if (diagnostic is not null)
+                request.Headers.TryAddWithoutValidation("traceparent", "00-" + diagnostic.TraceId + "-" + diagnostic.SpanId + "-01");
             if (!configuration.IsAdmin)
             {
                 request.Content = new ByteArrayContent(CreateChatRequest(configuration));
                 request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
             }
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
+            if (diagnostic is not null) diagnostic.HeadersOffsetTicks = Stopwatch.GetTimestamp() - origin;
             if (response.StatusCode != HttpStatusCode.OK)
                 return false;
             var mediaType = response.Content.Headers.ContentType?.MediaType;
@@ -219,7 +269,13 @@ internal static class NativeBenchmarkWorkloadProbe
                 response.Content.Headers.ContentLength is > MaximumResponseBytes)
                 return false;
             await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
-            var bytes = await ReadBoundedAsync(stream, MaximumResponseBytes, deadline.Token);
+            var bytes = await ReadBoundedAsync(stream, MaximumResponseBytes, deadline.Token,
+                diagnostic?.Streaming, origin);
+            if (diagnostic is not null)
+            {
+                diagnostic.BodyOffsetTicks = Stopwatch.GetTimestamp() - origin;
+                diagnostic.ResponseBytes = bytes.Length;
+            }
             if (configuration.IsStream)
                 ValidateStream(configuration, StrictUtf8.GetString(bytes));
             else
@@ -230,6 +286,7 @@ internal static class NativeBenchmarkWorkloadProbe
                 else
                     ValidateChat(configuration, document.RootElement);
             }
+            if (diagnostic is not null) diagnostic.ValidatedOffsetTicks = Stopwatch.GetTimestamp() - origin;
             return true;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -269,7 +326,8 @@ internal static class NativeBenchmarkWorkloadProbe
         return bytes.ToArray();
     }
 
-    private static async Task<byte[]> ReadBoundedAsync(Stream stream, int maximumBytes, CancellationToken token)
+    private static async Task<byte[]> ReadBoundedAsync(Stream stream, int maximumBytes, CancellationToken token,
+        StreamingDiagnostic? streaming = null, long origin = 0)
     {
         using var bytes = new MemoryStream();
         var buffer = new byte[16 * 1024];
@@ -280,6 +338,7 @@ internal static class NativeBenchmarkWorkloadProbe
                 return bytes.ToArray();
             if (bytes.Length + read > maximumBytes)
                 throw new InvalidDataException("Benchmark input or response exceeds its limit.");
+            streaming?.Observe(buffer.AsSpan(0, read), Stopwatch.GetTimestamp() - origin);
             await bytes.WriteAsync(buffer.AsMemory(0, read), token);
         }
     }
@@ -522,6 +581,233 @@ internal static class NativeBenchmarkWorkloadProbe
     private static double Percentile(long[] samples, double percentile) =>
         samples[Math.Clamp((int)Math.Ceiling(samples.Length * percentile) - 1, 0, samples.Length - 1)] *
         1000d / Stopwatch.Frequency;
+
+    private static void WriteDiagnostics(Utf8JsonWriter writer, Configuration configuration, List<PhaseDiagnostic> phases)
+    {
+        writer.WriteStartObject();
+        writer.WriteNumber("schemaVersion", configuration.IsStream ? 2 : 1);
+        writer.WriteString("kind", "conduit-native-benchmark-workload-diagnostics");
+        writer.WriteString("scope", "client");
+        writer.WriteString("service", configuration.IsAdmin ? "admin" : "gateway");
+        writer.WriteString("workload", configuration.Workload);
+        writer.WriteString("inputFingerprint", Fingerprint(configuration));
+        writer.WriteNumber("stopwatchFrequency", Stopwatch.Frequency);
+        writer.WriteNumber("runtimeTickFrequency", TimeSpan.TicksPerSecond);
+        writer.WriteStartArray("phases");
+        foreach (var phase in phases)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("name", phase.Name);
+            writer.WriteNumber("requested", phase.Requested);
+            writer.WriteNumber("executed", phase.Executed);
+            writer.WriteNumber("completed", phase.Completed);
+            writer.WriteNumber("failures", phase.Failures);
+            writer.WriteNumber("elapsedTicks", phase.ElapsedTicks);
+            writer.WriteNumber("startOffsetTicks", phase.StartOffsetTicks);
+            writer.WriteNumber("endOffsetTicks", phase.EndOffsetTicks);
+            WriteRuntime("runtimeBefore", phase.RuntimeBefore);
+            WriteRuntime("runtimeAfter", phase.RuntimeAfter);
+            writer.WriteStartArray("requests");
+            foreach (var request in phase.Requests)
+            {
+                writer.WriteStartObject();
+                writer.WriteNumber("index", request.Index);
+                writer.WriteNumber("worker", request.Worker);
+                writer.WriteString("traceId", request.TraceId);
+                writer.WriteString("spanId", request.SpanId);
+                writer.WriteNumber("startOffsetTicks", request.StartOffsetTicks);
+                WriteNullable("headersOffsetTicks", request.HeadersOffsetTicks);
+                WriteNullable("bodyOffsetTicks", request.BodyOffsetTicks);
+                WriteNullable("validatedOffsetTicks", request.ValidatedOffsetTicks);
+                writer.WriteNumber("endOffsetTicks", request.EndOffsetTicks);
+                WriteNullable("responseBytes", request.ResponseBytes);
+                writer.WriteBoolean("succeeded", request.Succeeded);
+                if (request.Streaming is { } streaming)
+                {
+                    writer.WriteStartObject("streaming");
+                    WriteNullable("firstBodyReadOffsetTicks", streaming.FirstBodyReadOffsetTicks);
+                    WriteNullable("lastBodyReadOffsetTicks", streaming.LastBodyReadOffsetTicks);
+                    WriteNullable("firstDataEventOffsetTicks", streaming.FirstDataEventOffsetTicks);
+                    WriteNullable("doneEventOffsetTicks", streaming.DoneEventOffsetTicks);
+                    writer.WriteNumber("bodyReadCount", streaming.BodyReadCount);
+                    writer.WriteNumber("dataEventCount", streaming.DataEventCount);
+                    writer.WriteNumber("doneEventCount", streaming.DoneEventCount);
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+
+        void WriteNullable(string name, long? value)
+        {
+            if (value.HasValue) writer.WriteNumber(name, value.Value);
+            else writer.WriteNull(name);
+        }
+
+        void WriteRuntime(string name, RuntimeSnapshot snapshot)
+        {
+            writer.WriteStartObject(name);
+            writer.WriteNumber("cpuTimeTicks", snapshot.CpuTimeTicks);
+            writer.WriteNumber("totalAllocatedBytes", snapshot.TotalAllocatedBytes);
+            writer.WriteNumber("gcGen0", snapshot.GcGen0);
+            writer.WriteNumber("gcGen1", snapshot.GcGen1);
+            writer.WriteNumber("gcGen2", snapshot.GcGen2);
+            writer.WriteNumber("gcPauseTicks", snapshot.GcPauseTicks);
+            writer.WriteNumber("threadPoolThreads", snapshot.ThreadPoolThreads);
+            writer.WriteNumber("threadPoolPending", snapshot.ThreadPoolPending);
+            writer.WriteNumber("threadPoolCompleted", snapshot.ThreadPoolCompleted);
+            writer.WriteNumber("minWorkerThreads", snapshot.MinWorkerThreads);
+            writer.WriteNumber("maxWorkerThreads", snapshot.MaxWorkerThreads);
+            writer.WriteNumber("availableWorkerThreads", snapshot.AvailableWorkerThreads);
+            writer.WriteBoolean("serverGc", snapshot.ServerGc);
+            writer.WriteEndObject();
+        }
+    }
+
+    private sealed class RequestDiagnostic(int index, bool streaming)
+    {
+        internal int Index { get; } = index;
+        internal int Worker { get; set; }
+        internal string TraceId { get; } = NewTraceId();
+        internal string SpanId { get; } = NewSpanId();
+        internal long StartOffsetTicks { get; set; }
+        internal long? HeadersOffsetTicks { get; set; }
+        internal long? BodyOffsetTicks { get; set; }
+        internal long? ValidatedOffsetTicks { get; set; }
+        internal long EndOffsetTicks { get; set; }
+        internal long? ResponseBytes { get; set; }
+        internal bool Succeeded { get; set; }
+        internal StreamingDiagnostic? Streaming { get; } = streaming ? new() : null;
+
+        private static string NewTraceId()
+        {
+            ActivityTraceId id;
+            do { id = ActivityTraceId.CreateRandom(); } while (id == default);
+            return id.ToHexString();
+        }
+
+        private static string NewSpanId()
+        {
+            ActivitySpanId id;
+            do { id = ActivitySpanId.CreateRandom(); } while (id == default);
+            return id.ToHexString();
+        }
+    }
+
+    /// <summary>
+    /// Observes byte-read completion and SSE framing, without decoding or retaining payload.
+    /// Events within one read share its observation timestamp. These are not wire-arrival
+    /// times or content/usage validation; the complete original validator still runs at EOF.
+    /// </summary>
+    private sealed class StreamingDiagnostic
+    {
+        private int _lineLength;
+        private bool _lineIsData = true;
+        private int _lineDataLength;
+        private bool _lineIsDone = true;
+        private int _eventDataLength;
+        private bool _eventIsDone = true;
+        private bool _previousCr;
+
+        internal long? FirstBodyReadOffsetTicks { get; private set; }
+        internal long? LastBodyReadOffsetTicks { get; private set; }
+        internal long? FirstDataEventOffsetTicks { get; private set; }
+        internal long? DoneEventOffsetTicks { get; private set; }
+        internal int BodyReadCount { get; private set; }
+        internal int DataEventCount { get; private set; }
+        internal int DoneEventCount { get; private set; }
+
+        internal void Observe(ReadOnlySpan<byte> bytes, long timestamp)
+        {
+            FirstBodyReadOffsetTicks ??= timestamp;
+            LastBodyReadOffsetTicks = timestamp;
+            BodyReadCount++;
+            foreach (var value in bytes)
+            {
+                if (_previousCr)
+                {
+                    _previousCr = false;
+                    if (value == (byte)'\n') continue;
+                }
+                if (value is (byte)'\r' or (byte)'\n')
+                {
+                    EndLine(timestamp);
+                    _previousCr = value == (byte)'\r';
+                    continue;
+                }
+                if (_lineLength < 5)
+                    _lineIsData &= value == "data:"u8[_lineLength];
+                else if (_lineIsData && !(_lineLength == 5 && value == (byte)' '))
+                {
+                    _lineIsDone &= _lineDataLength < 6 && value == "[DONE]"u8[_lineDataLength];
+                    _lineDataLength++;
+                }
+                _lineLength++;
+            }
+        }
+
+        private void EndLine(long timestamp)
+        {
+            if (_lineLength == 0)
+            {
+                if (_eventDataLength != 0)
+                {
+                    DataEventCount++;
+                    FirstDataEventOffsetTicks ??= timestamp;
+                    if (_eventIsDone && _eventDataLength == 6)
+                    {
+                        DoneEventCount++;
+                        DoneEventOffsetTicks ??= timestamp;
+                    }
+                }
+                _eventDataLength = 0;
+                _eventIsDone = true;
+            }
+            else if (_lineIsData && _lineLength >= 5)
+            {
+                if (_eventDataLength != 0)
+                {
+                    _eventDataLength++;
+                    _eventIsDone = false;
+                }
+                else
+                    _eventIsDone = _lineIsDone;
+                _eventDataLength += _lineDataLength;
+            }
+            _lineLength = 0;
+            _lineIsData = true;
+            _lineDataLength = 0;
+            _lineIsDone = true;
+        }
+    }
+
+    private sealed record PhaseDiagnostic(
+        string Name, int Requested, int Executed, int Completed, int Failures,
+        long ElapsedTicks, long StartOffsetTicks, long EndOffsetTicks,
+        RuntimeSnapshot RuntimeBefore, RuntimeSnapshot RuntimeAfter, RequestDiagnostic[] Requests);
+
+    private sealed record RuntimeSnapshot(
+        long CpuTimeTicks, long TotalAllocatedBytes, int GcGen0, int GcGen1, int GcGen2,
+        long GcPauseTicks, int ThreadPoolThreads, long ThreadPoolPending, long ThreadPoolCompleted,
+        int MinWorkerThreads, int MaxWorkerThreads, int AvailableWorkerThreads, bool ServerGc)
+    {
+        internal static RuntimeSnapshot Capture()
+        {
+            using var process = Process.GetCurrentProcess();
+            var cpuTime = process.TotalProcessorTime.Ticks;
+            ThreadPool.GetMinThreads(out var minimum, out _);
+            ThreadPool.GetMaxThreads(out var maximum, out _);
+            ThreadPool.GetAvailableThreads(out var available, out _);
+            return new RuntimeSnapshot(cpuTime, GC.GetTotalAllocatedBytes(),
+                GC.CollectionCount(0), GC.CollectionCount(1), GC.CollectionCount(2),
+                GC.GetTotalPauseDuration().Ticks, ThreadPool.ThreadCount, ThreadPool.PendingWorkItemCount,
+                ThreadPool.CompletedWorkItemCount, minimum, maximum, available, GCSettings.IsServerGC);
+        }
+    }
 
     private sealed record Configuration(
         string Workload, Uri Origin, int Requests, int Concurrency, int WarmupRequests, int TimeoutSeconds,

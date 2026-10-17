@@ -400,11 +400,12 @@ Independent source, TRX-identity, raw-command, ownership, and cleanup replay is
 `03eef96022e2b287b9bfbc1e2410a6d1bb4cefc016cd755e287f0f57ff8827b1`;
 it verifies all 34 joined commands and their 68 captured output streams.
 
-Existing coverage cancels before execution and during pool acquisition. Adding
-observed SQL-in-flight cancellation cases for all three reads is tracked as a
-non-blocking coverage improvement in
-[#1665](https://github.com/nickna/Conduit/issues/1665); no current cancellation
-failure has been demonstrated.
+That four-row run cancels before execution and during pool acquisition. The
+[#1665](https://github.com/nickna/Conduit/issues/1665) additions provide six
+observed SQL-in-flight cases and three typed persistence-driver counterparts,
+reconciled in the [current query inventory](persistence-aot-query-inventory.md).
+They do not alter the historical four-row receipt or establish EF published-native
+execution; no current cancellation failure has been demonstrated.
 
 Removing these translation errors does not establish generated-query execution,
 complete native repository-suite qualification, or production readiness.
@@ -786,7 +787,7 @@ The root's repaired actual run passed **12/12 selected TRX rows, zero failed and
 
 The retained Fact and eleven additional rows cover independent six-field persistence oracles, all eight methods, validation, caller mutations, factory-token/time/logging/disposal boundaries, pre-cancellation, occupied-pool recovery and observed server waits. Completion of twelve EF and nine typed SQL phases, eighteen pre-cancellation paths and thirty-six occupied-pool paths across capacities one and two is inferred from the strict frozen source and Passed rows; separate subcase event rows were not recorded. The runtime reader was authored by the coverage/harness producer; independent test, harness and reader source reviews are bound separately, and the replay is not another execution or an independently implemented test oracle.
 
-Characterized adapter differences remain open in [#1675](https://github.com/nickna/Conduit/issues/1675) and [#1676](https://github.com/nickna/Conduit/issues/1676): pre-cancel caller timestamps, supplied create IDs, zero-ID updates and missing positive-ID updates differ. Upsert client/server clocks, two-statement versus atomic SQL and repository logging differences remain qualified source observations; no concurrent-upsert race was reproduced. These follow-ups provide no waiver for the semantic reconciliation required by complete native coverage.
+At the Unit 140 review, characterized adapter differences were filed in [#1675](https://github.com/nickna/Conduit/issues/1675) and [#1676](https://github.com/nickna/Conduit/issues/1676): pre-cancel caller timestamps, supplied create IDs, zero-ID updates and missing positive-ID updates differed. Upsert client/server clocks, two-statement versus atomic SQL and repository logging differences were source observations; that review had not reproduced a concurrent-upsert race. The later #1675/#1676 qualifications below reconcile mutation, Upsert and identity behavior. These follow-ups provide no waiver for the semantic reconciliation required by complete native coverage.
 
 The retained report preimage and runtime copy preserve the original `7f500a24…` prefix. Runtime comparisons of that former current report path remain pre-append evidence; the appended document requires its new hash and later commit bindings. Generated-query execution, the complete native repository suite, current-head native artifacts, registry qualification and production readiness remain unestablished. #1373/#1375 and all remaining repository migrations/native coverage are still required. Production remains JIT under ADR 0006; this records the current state and grants no scope waiver.
 
@@ -818,6 +819,36 @@ The three new Passed Billing rows assert backend disappearance after successful 
 
 The 313-row result was measured on 6695b390 with 17 uncommitted fixture changes; later remote integration requires separate verification. The local host uses the current JIT cleanup probe DLL; Linux CI uses the native probe, so this comparison grants no current-head native qualification. [#1677](https://github.com/nickna/Conduit/issues/1677) still requires fresh native workflow and merge CI evidence. #1373/#1375 and all remaining repository migrations/native coverage remain required. Production remains JIT under ADR 0006; generated-query execution, complete native repository coverage, registry qualification and production readiness remain unestablished.
 
+### #1634 follow-up: fixture ownership and independent cleanup
+
+The 2026-10-16 audit confirms Unit 142's explicit source ownership in both
+billing fixture families, function discovery, and async-task parity. EF borrows
+the owned source through `UseNpgsql(dataSource)`; closing a context alone is not
+treated as closing its pool. The remaining async-task management operations now
+use unpooled, bounded connections. Its two schema drops receive independent
+deadlines, and their cleanup failures preserve an earlier work failure. No global
+pool clearing or PostgreSQL capacity increase is used. See
+[database pool ownership](database-pool-ownership.md#persistence-test-fixtures).
+
+New discovery and async-task regressions complement the existing billing
+success/query/setup-failure cases. They verify owned backend PID and schema
+disappearance inside the live test process and preserve an unrelated idle source.
+Discovery observes a blocked production EF query before cancellation; the
+async-task cancellation case covers pre-canceled typed work after both pools have
+been used. A real table lock also proves the first async-task drop can expire
+without skipping the second or replacing the primary failure.
+
+On an independently owned PostgreSQL **16.15** server with unchanged
+`max_connections=100`, the current shared CI persistence selector passed the same
+**394/394 tests twice, zero failures or skips**, using Windows Release/JIT and the
+managed cleanup probe. Each run retained 49 live `pg_stat_activity` samples, with peaks
+of 18 and 7 client backends respectively, including the observer. These sampled
+peaks are lower bounds and do not establish the cause of historical R2 failures.
+Both runs finished with zero owned schemas. The retained `issue-1634-shared-1.trx`,
+`issue-1634-shared-2.trx`, `issue-1634-pg16-samples.jsonl`, and tested-input hashes
+record this local verification; published-native execution remains a separate
+hosted check.
+
 ### Unit 143: incoming integration after fixture-pool repair
 
 After Unit 142 commit 2a528784, incoming 48119ec9 was integrated with six reviewed source fixes while preserving the tested fixture bytes. The chat runtime factory now forwards both optional pricing services through its existing constructors, and native-only endpoint registration resolves them; the single public repository constructor remains intact. Configuration tests retain explicit flags and validation ordering while aligning omitted options with intended global defaults. Twelve runtime-factory pricing cases cover the nonstreaming cost path. Security tests require exact 401/429 outcomes and cache-read counts during the existing memory-fallback/legacy-cache-outage scenario; worker tests require the leader/lifecycle adapters to borrow the registered singleton instances.
@@ -833,3 +864,497 @@ R1 remains REJECT at 424/196: guarded nullable Value evaluation and two integer/
 Actual Windows Release verification passes **326 shared PostgreSQL persistence cases** (the original 313 names/test IDs plus thirteen new media rows), zero failures/skips, and **62 existing media consumer/dependency-boundary cases**, zero failures/skips. New cases exercise provider-observed first/later-query cancellation, no tracking, borrowed-context/scoped transaction visibility and disposal, inactive/missing/default policy selection, null-size/tombstone aggregation, generated identity and durable replay/concurrent-winner failure paths. Shared receipt `d15a6f44…` has 81 valid observer samples, zero observer errors and a sampled peak of six connections including the observer / five excluding it; all 38 commands join, both owned fixtures are removed and protected images remain unchanged. Consumer receipt `97f7a9e9…` is independently replayed by `7fdeef95…`. These are managed behavior and focused compiler results, not generated-query execution or complete published-native repository qualification.
 
 At head `9f6ad048`, regular hosted CI passes all twenty jobs. Native run [38357642205](https://github.com/nickna/Conduit/actions/runs/38357642205) passes publishing, PostgreSQL/converter proofs, shared persistence parity and the two-host proof, then fails the final Gateway boundary probe's zero-LLM-cost agentic response assertion (exit 134). Its exact failed log is retained as `376964f3…`; a separate next unit will align that assertion with the fixture's already-required configured token settlement. No native workflow success or promotion is claimed. Complete repository migration/native coverage and operational rollout remain required under #1373, #1375 and #1368.
+
+## Required-member and decimal-literal reductions (#1667)
+
+Four isolated cases in `tools/EfQueryPrecompilerRepro/Variants` now reduce the
+replacement failures described above. Fresh Linux directories use SDK 10.0.401,
+EF runtime/Relational/Design/Tasks/CLI 10.0.12 and Npgsql/provider 10.0.3. All four
+initial managed builds pass. Query generation and generated-code compilation
+remain separate gates:
+
+| Variant | Generation exit | Generated managed build |
+|---|---:|---|
+| `RequiredProjection` | 1 | Skipped: `VisitMemberInit` expects object creation but receives an invocation |
+| `RequiredProjectionAfterMaterialization` | 0 | 0; one generated query source |
+| `DecimalImplicitZero` | 1 | Skipped: `Expression.Constant` rejects argument types in `VisitLiteralExpression` |
+| `DecimalExplicitZero` | 0 | 0; one generated query source |
+
+The required-member control projects every scalar in its minimal key/group
+model before constructing the original required init-only DTO graph. The decimal
+pair uses a scalar SELECT with integer `0` versus decimal `0m`, isolating literal
+translation from the separate bulk-update setter failures. Unsealed entities
+and local context/scalar aliases avoid the unrelated known failures. The two
+generated builds retain five and four CS9270/CS8669 warnings respectively.
+
+The matrix and logs are retained under
+`artifacts/issues-1469-1696/issue-1667/run-532425a80a474ab0adaa4aec888ea8ee/`;
+`matrix.json` SHA-256 is
+`19b92f7d6a448355486bae23177df04e796580ebd8018db498d899a7403e81d9`.
+Independent replay verifies 77 source, generated-file, package and log bindings;
+all fourteen child stages and their streams joined. The actual Design package
+identifies source commit `95017c711e6afc1085133d440e42b4bd78155701`.
+
+The existing production scalar snapshots and explicit decimal literals remain
+unchanged from branch base `15e187483`. Five current managed virtual-key runtime
+parity rows pass against PostgreSQL, including complete snapshots and
+cancellation/reuse. This reduction adds no production workaround and does not
+replace the earlier owner compiler comparison. The minimal methods were not
+executed, no database connection was made by the reductions, and no native EF
+publication or generated-query runtime qualification is claimed.
+
+Bounded all-state upstream searches found no exact duplicates. The reduced
+required-member failure is filed as [EF #39302](https://github.com/dotnet/efcore/issues/39302),
+and the decimal-literal failure as [EF #39303](https://github.com/dotnet/efcore/issues/39303).
+[EF #38012](https://github.com/dotnet/efcore/issues/38012) is related conversion
+work with a distinct custom-type binary-operator failure. Pinned source supports
+the unsafe-constructor/member-initializer and boxed-literal/converted-type leads;
+neither an upstream fix nor a tested current-main failure is asserted.
+
+## Nullable conditional lifting reduction (#1672)
+
+`NullableConditionalImplicit` and `NullableConditionalExplicit` in
+`tools/EfQueryPrecompilerRepro/Variants` reduce the conditional failure from
+Unit 138. The only difference is the nine-byte `(double?)` cast on the existing
+true `Average` branch. Both preserve `Any`, both completed-task filters, the
+type/time predicates, grouped state/count, nullable result and null arm. The
+minimal entity is unsealed, and context/scalar aliases avoid separate known
+translator failures.
+
+The fresh Linux SDK 10.0.401 matrix uses EF runtime/Relational/Design/Tasks/CLI
+10.0.12 and Npgsql/provider 10.0.3. Both initial builds pass. The implicit
+conditional fails generation at `Expression.Condition` through
+`VisitConditionalExpression`, producing no file. The explicit cast generates
+one file and its managed build passes with seven CS9270/CS8669 warnings.
+All nine child stages and their streams join; source copies remain unchanged.
+The retained matrix at
+`artifacts/issues-1469-1696/issue-1672/run-7028379e23184631b1db3e5c177c4c0a/`
+has SHA-256
+`c650e59a54363e692fd55fab5e0e60cbfe9677bae218bb19c7dbc338478d4af6`.
+
+A separate fresh Windows SDK 10.0.401 comparison uses the complete current
+metrics owner and an immutable copy of the current production model closure.
+Both inventories contain six methods, 49 query calls and eight terminals,
+with identical call signatures and multiplicities. The existing cast passes
+initial build, generation and generated managed build, producing one file.
+Deleting only the cast passes initial build but produces one owner-attributed
+conditional failure signature printed twice, with no generated file. The
+successful generated owner build retains 47 warnings: 39 CS9270, seven CS8669
+and one NU1510. All ten child stages and their streams join. The comparison
+receipt at `issue-1672/owner-b000dbcf25f64646a9aa74f2ac6cb3aa/comparison.json`
+has SHA-256
+`f39910e56d5cf7c5f18c145bd37f4e4bdff7b0dcbcfced26c9af7438f649c101`.
+Earlier harness-only setup failures are retained separately and excluded.
+
+The current production owner already contains the cast accepted in `70c22b547`;
+its SHA-256 remains
+`2760819a623e44d2a47e13dd3dce39880205c70c1a68a848a6931f4aa1f0a65d`.
+The same source and model assembly are bound to #1671's 14 passing managed
+PostgreSQL cases, including complete metrics fields, boundaries and cancellation.
+No production query changed and no runtime suite was repeated for this reduction.
+Neither compiler experiment connects to a database, executes generated queries
+or publishes a native executable. Full Configuration/application compilation,
+generated-query runtime coverage and #1373/#1375 qualification remain separate.
+
+Fourteen bounded all-state upstream searches and a final exact-signature recheck
+found no exact duplicate. The sanitized standalone report is filed as
+[EF #39304](https://github.com/dotnet/efcore/issues/39304), with exact public body
+and source readback. The actual package nuspecs identify commit
+`95017c711e6afc1085133d440e42b4bd78155701`; its
+[conditional visitor](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore.Design/Query/Internal/CSharpToLinqTranslator.cs#L348)
+visits branches independently, while its
+[cast visitor](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore.Design/Query/Internal/CSharpToLinqTranslator.cs#L339)
+adds a conversion. This supports the implicit nullable-lift lead, separately
+from #1667's literal/`Expression.Constant` failure. The inspected current-main
+source has the same visitor bodies; no current-main compiler run or upstream
+fix is asserted. The duplicate search was not exhaustive.
+
+## Collector descendant cleanup verification (#1673)
+
+The repair in `f1e97a167` is already an ancestor of this branch. The bounded
+process helper and live-owned-descendant assertion retain that repair: capture
+verified descendants of a live root, signal only the original root, and wait
+for captured identities and streams within the shared five-second cleanup
+budget. Start-token/ancestry mismatch, foreign processes and invalid metadata
+remain failures. Matching zombie state and strictly verified latched absence
+retain their existing completion rules. The originating historical CI case
+and particular race remain unknown. The already-exited-root/late-fork limit
+continues separately in #1674.
+
+Official GitHub records now confirm that
+[fixing run 38331227243](https://github.com/nickna/Conduit/actions/runs/38331227243/job/115081177180)
+passed the collector step at the exact fixing commit: 101 collector cases and
+31 metadata boundaries. Native publication and the selected persistence and
+converter steps also passed. The workflow then failed the separate shared
+PostgreSQL parity step: 275 of 289 passed, 14 failed with SQLSTATE `53300`, zero
+skipped. Later release/two-host/protocol steps, runtime/symbol uploads and the
+image job were skipped. That failure remains part of the #1677 history.
+
+The later [native run 38939591595](https://github.com/nickna/Conduit/actions/runs/38939591595)
+at this branch's starting commit `15e187483` completed all three jobs
+successfully. Its collector, shared parity, two-host and protocol steps passed.
+Those statuses qualify only their recorded source and selected workflow scope;
+artifact bytes were not downloaded or independently qualified for this review.
+
+At the #1673 review, the collector, test and attempt-evidence bytes exactly matched #1642's
+retained Windows and Linux runs, each passing 144 collector cases plus all
+31 metadata boundaries with exit zero and whitespace-only stderr. The
+transitive collector inputs remain unchanged, and all 12 promotion inputs
+match the retained 204-case runs. Current source hashes, immutable logs and
+Git ancestry were checked; no unchanged suite was repeated and no cleanup
+assertion or budget was weakened. The official hosted-status receipt has
+SHA-256 `55d1b5abed249fc777da41f79d2059d58365d97fc98c607eed7be5f886e22303`.
+The final PR must still run the current branch's native workflow and address
+its failures. Neither ancestor CI nor retained local checks qualify later
+branch changes, the complete native repository suite or production readiness.
+
+## Collector completion after root exit and late forks (#1674)
+
+Two synchronized Linux regressions reproduce the snapshot limit in the unchanged
+helper. In one, the root exits after its child's PID, parent, start token and
+inherited output pipes are latched. In the other, a single disclosed callback
+after the actual descendant snapshot lets the captured child fork a grandchild
+and exit; the grandchild is independently identified and reparented before root
+termination continues. Both returned an ordinary command timeout after about
+five seconds while the independently observed descendant still held both output
+pipes. An unrelated control actor remained alive in each case. Cooperative
+fixture teardown verified completion of all known actors, and the fresh container's exact ID and
+name were absent afterward.
+
+The inspected Linux `6.18.54.1` target has `setsid` from util-linux `2.39.3`,
+but a process group alone does not prevent descendants from creating another
+session. The launcher also has a
+[conditional fork](https://raw.githubusercontent.com/util-linux/util-linux/v2.39.3/sys-utils/setsid.c)
+whose ownership would need handling. The exposed cgroup v2 mount is read-only;
+no writable delegation was established. A pidfd design must acquire identity at
+launch before the original process can be reaped. The
+[documented PID-recycling conditions](https://man7.org/linux/man-pages/man2/pidfd_open.2.html)
+also describe atomic creation with `CLONE_PIDFD` as an alternative to a launch
+handshake.
+The documented
+[pidfd group-signaling flag](https://man7.org/linux/man-pages/man2/pidfd_send_signal.2.html)
+is available since Linux 6.9, but syscall permission under the target's seccomp
+policy was not probed. None of these
+observations establishes a safe launch-time containment implementation.
+
+The bounded helper instead requires actual output-pipe EOF before treating
+stream cleanup as complete. It cancels and observes each outstanding work read
+before starting a fresh read, uses the original shared five-second cleanup
+deadline, and discards further private output with a separate per-stream limit
+of 4,194,304 UTF-16 characters. Cancellation, read failure and reader disposal do
+not count as EOF. Missing EOF produces the existing closed cleanup-failure
+classification. Existing process identity checks and termination targets remain
+unchanged.
+
+The maintained lifecycle test runs in Linux CI after .NET setup and
+builds its dependency-free actor in an isolated private directory. Its default
+self-build path passed both timelines with the exact cleanup-failure message
+after about ten seconds, zero compiler warnings or errors, unrelated control
+actors still alive, and all cooperative teardown checks complete. The private
+build directory is removed, so its recorded DLL hash cannot be independently
+rechecked afterward. Independent replay accepted 99 retained source, log,
+timeline and cleanup checks; the workflow policy suite passed all 89 tests.
+
+Fresh full runs passed **144 collector cases plus 31 metadata cases on each
+platform**: Windows in 1,088.6 seconds and Linux in 976.3 seconds. Both roots and
+output tasks joined with actual EOF and zero-byte stderr; all 42 frozen inputs
+matched before, after and on independent reread. The Linux fixture's ten Docker
+commands joined, and its exact container ID and name were absent after removal.
+Final file-only verification passed 600 checks across 56 retained files, receipt
+SHA-256 `cda60636582cdd7c2ef5ac6eb319fb96eeaedcc90491a7bc708ddb2a12322e65`.
+
+An earlier Linux preflight rejected a verification-runner hash mismatch before
+either test workload started; that attempt and its successful teardown remain
+preserved. The runner correction changed only freeze setup. Exact reconstruction
+and AST comparison established identical execution code for the already-loaded
+Windows runner and the separately rebound Linux runner; neither full suite was
+repeated. The final PR still requires current-branch CI.
+
+This proves redirected endpoint completion or reports cleanup failure for the
+covered timelines. It does not prove containment of every descendant, including
+one that closes its inherited pipes and escapes the captured tree. It also does
+not identify the historical #1673 CI cause or qualify native service artifacts.
+
+## Global-setting mutation and Upsert boundaries (#1675)
+
+The original three-provider PostgreSQL baseline corrected an assumption in Unit
+140's checking factory. The actual EF `AddDbContextFactory` implementation
+[returns a synchronously constructed context without checking its token](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore/Internal/DbContextFactory.cs).
+Consequently both production-style EF and typed Npgsql changed caller timestamps
+on pre-cancelled writes; only the checking test factory preserved them. All nine
+observations retained unchanged database rows and recovered the same single-slot
+backend. The original SQL counter recorded zero starts but lacked positive
+calibration; the final caller tests calibrate it with an actual settings SELECT.
+The retained baseline receipt has SHA-256
+`f568d3c8c9ddc47d2564e0d9091899e95e0d87e0fd9175a4a1b183722fa4a3d3`.
+
+Create and Update now explicitly check cancellation after validation and before
+caller mutation. EF keeps context acquisition before that check. After admission,
+timestamps are sampled before physical connection acquisition; later pool
+cancellation, observed SQL cancellation or write failure retains those fields.
+Default Create uses one client UTC instant for both timestamps; supplied
+CreatedAt values remain intact. This intentionally extends the checking
+factory's accepted pre-cancel behavior to the production factory.
+
+A second unchanged-Upsert baseline passed all 20 controlled PostgreSQL cases.
+It reproduced the typed atomic statement overwriting a committed absent-row
+winner, overwriting unchanged snapshot fields, and retargeting a replacement key.
+Its timestamps equalled the independently observed PostgreSQL transaction start;
+EF bound client UTC parameters after its blocked read completed. All 295 frozen
+inputs stayed stable, all 20 owned schemas were absent afterward, and the child
+and output streams joined with exit zero and empty stderr. Receipt SHA-256:
+`76018291c94171c2f873c64eebee9e8d4df6dccafc95c472c77ff300bb2ccba9`.
+
+Typed Upsert now follows EF's completed read, client UTC sample and write without
+a transaction spanning both statements. It uses one connection, a plain INSERT
+for an absent row, and the original primary key for an existing row. Snapshot
+comparisons preserve concurrent values of unchanged fields. An absent-row winner
+causes SQLSTATE `23505`; a disappeared original causes a concurrency failure.
+EF retains `DbUpdateException`/`DbUpdateConcurrencyException`, while the EF-free
+typed adapter uses `PostgresException`/BCL `DBConcurrencyException`. No retry,
+replacement-key lookup or new transaction is introduced. The rare no-change
+branch, including an identical newly sampled timestamp, is source-qualified;
+runtime coverage does not inject a clock to force it.
+
+EF's existing slow-operation logger still includes factory time and reports
+successful delegates before context disposal. The typed adapter has no matching
+repository logger. No logging failure was established. At the #1675 review,
+direct Create identifiers and Update zero/missing identifiers remained separately
+scoped to #1676, qualified below.
+
+Final managed verification passed **41/41 tests with zero skips**: the retained
+12-row owner suite, nine caller-boundary rows and 20 controlled Upsert rows.
+The SQL counters were positively calibrated; caller snapshots, independent
+six-field database rows, exact waiter/blocker/relation identity and same-backend
+recovery were checked. All 296 inputs stayed stable during the run, all 29 new
+schema-absence markers joined their tests, and the three owned schema families
+were empty before and afterward. Receipt SHA-256:
+`a7c2f1d197170faad72e8967f39e05dab71fb0ee8efc3c217c48159824fe616f`.
+Three existing managed nullable warnings remain scoped to #1690.
+
+A fresh Linux x64 native publication passed with **zero warnings**, followed by
+the complete ELF driver in 13.2 seconds. The new helper covered five successes,
+five pre-cancellations, five occupied-pool cancellations, seven observed SQL
+cancellation phases, four failed writes, seven controlled races and two actual
+client-parameter/server-transaction clock observations. All 183 native inputs and
+the publish closure stayed stable, all three restore assets were EF-free, owned
+schemas were absent, and every child and output stream joined with empty stderr.
+Receipt SHA-256:
+`220c694f462dec9c2ebf26ce9de7181a5f14a02444380a7c451fc85a327b97b5`.
+An earlier successful native run exposed two new helper nullable warnings; its
+evidence is retained. The final correction added only two null-forgiving
+annotations, mechanically reconstructing the managed-tested helper bytes, and
+was followed by the fresh native publication and full run above. This qualifies
+the standalone typed leaf, without establishing native EF or application
+readiness. Production remains JIT.
+
+## Global-setting identifiers and missing updates (#1676)
+
+The retained #1675 owner suite had already measured the original three identity
+differences: EF preserved explicit Create IDs, inserted on zero-ID Update, and
+failed missing positive-ID updates; typed Npgsql generated a replacement ID or
+returned false. Those passing assertion branches and their binaries were
+rechecked without repeating the unchanged suite.
+
+Four additional unchanged-EF PostgreSQL facts passed with 297 stable inputs and
+no leftover owned schemas. Create and Update retained both `-7` and
+`int.MinValue`; a missing `-900` produced `DbUpdateConcurrencyException` after
+one statement. Zero-ID Update preserved supplied CreatedAt or the exact default
+`DateTime.MinValue` with `Unspecified` Kind. An independent reader and raw
+PostgreSQL text confirmed the latter was `-infinity`. Explicit ID 1 left the
+sequence at `(last_value=1, is_called=false)`; the first generated insert failed
+with `23505`, consumed 1, and the next insert succeeded at 2. Duplicate ID/key
+failures retained caller IDs, admitted timestamps and database rows. Baseline
+receipt SHA-256:
+`82cc8ddd770b47fc8e45ce8b74536a2c788a6888a31d284a7fcdf97ab784c93d`.
+
+The model's generated-key sentinel is zero. EF treats supplied
+[negative keys as real values unless explicitly marked temporary](https://learn.microsoft.com/en-us/ef/core/change-tracking/miscellaneous#temporary-values).
+The pinned Npgsql converter accepts
+[MinValue as the infinity sentinel](https://github.com/npgsql/npgsql/blob/v10.0.3/src/Npgsql/Internal/Converters/Temporal/DateTimeConverterResolver.cs#L41).
+PostgreSQL documents that
+[aborted writes do not reclaim sequence values](https://www.postgresql.org/docs/16/functions-sequence.html).
+The implementation preserves these measured behaviors without changing the
+sequence or promising gapless identifiers.
+
+Typed Create and zero-ID Update share an insert helper on their already-owned
+connection. Every nonzero Create ID is supplied explicitly; zero requests the
+database-generated ID. Only Create fills a default CreatedAt. Update samples
+UpdatedAt once and preserves CreatedAt, including its default, before deciding
+whether to insert or update. The caller ID is assigned after receiving a
+successful insert result. A missing nonzero Update now throws BCL
+`DBConcurrencyException`; EF keeps its existing `DbUpdateConcurrencyException`.
+Constraint failures retain their provider-specific wrappers. EF production code
+and Upsert remain unchanged by #1676.
+
+Final managed verification passed **55/55 tests**, with 55 independently
+discovered rows, zero skips and no new warnings. The 14 paired identity rows
+join the retained 41 caller/Upsert/owner rows. Exact caller fields and timestamp
+Kinds, independent persisted fields, actual sequence states, real constraint
+failures, caller tokens and same-backend recovery were checked. All 43 new
+schema-absence events joined their tests, and all owned schema prefixes were
+empty before and afterward. The stability catalog covered 769 files, including
+conditionally excluded owner sources; this does not claim every catalog entry
+was selected by the compiler. Managed receipt SHA-256:
+`4a0c8da997316edb0aea8ee366288a2c182bb9bbe00079f42b651f1239d47382`.
+The three existing nullable warnings remain scoped to #1690.
+
+Fresh Linux x64 publication passed with **zero warnings**, then the complete
+native ELF passed in 16.9 seconds. The identity extension covered six success
+cases, eight pre-cancellations, eight occupied-pool cancellations, eight observed
+SQL cancellations, ten failed writes and three sequence scenarios. Its closed
+sequence observations reproduce unchanged explicit-ID state and consumption on
+generated collision. The previous mutation, clock and metrics checks also
+passed. All 183 native inputs and the publish closure stayed stable; three
+restore assets were EF-free, schemas were absent, output and child tasks joined,
+and the owned builder was idle afterward. Native receipt SHA-256:
+`83773f4118daca7d933531bec98822948ea61ed6d51457b1da1173f4c39ec6f4`.
+This qualifies the standalone typed leaf and the selected managed contract,
+without establishing native EF or application readiness. Production remains JIT.
+
+## Shared persistence pool qualification (#1677)
+
+The current source retains the seventeen schema-owned fixture pool repairs from
+[2a528784](https://github.com/nickna/Conduit/commit/2a5287841ebceb9421883f7ef8040bfa8b55a467)
+and the independent cleanup regressions added for #1634. In the repaired fixtures,
+EF borrows the owned data source through `UseNpgsql(dataSource)`; consumers finish
+before their sources dispose and their GUID schemas are removed. The audit distinguishes older
+private-key `ClearPool` helpers, unpooled management connections and common
+base-string pools. This verification introduced no capacity increase, global
+pool clearing, reduced assertions or additional serialization.
+
+Fresh captures retain both original failed hosted jobs: 275/289 and 284/300
+passed, with 14 and 16 failures, SQLSTATE 53300 errors and zero skips. The second job's
+new raw-log representation has a different checksum from the historical ticket
+capture; the exact cited bytes were not recovered. Later full hosted workflows
+at 09a02d43 and 15e187483 passed their then-current 332 and 375 shared rows.
+Unit 142's 310/313-row pressure comparison remains committed historical reporting;
+its original primary receipts were not located during this audit. These facts
+establish chronology and source ownership without retrospectively proving the
+original hosted failures' cause.
+
+At 52f89fe63, the complete unchanged 21-clause CI selector passed **504/504 tests,
+zero failures or skips**, in 125.2 seconds on Linux Release/JIT, including six
+published-native cleanup subprocess cases. Discovery matched all 504 names,
+110 more than the earlier #1634 inventory. The run reused the exact retained
+85.4-second managed build, six assembly hashes and dependency metadata; the
+three existing nullable warnings remain scoped to #1690. All 2,703 build/test
+catalog inputs and three private runners stayed stable. This catalog includes
+conditionally excluded files and does not claim that every entry was compiled.
+The native cleanup cases used the retained #1676 ELF, rather than a new publish.
+
+The independently owned PostgreSQL 16.15 server retained
+`max_connections=100`, zero general reserved slots and three superuser reserved
+slots. A persistent unpooled observer collected 1,209 samples at a requested
+100 ms interval: sampled peak **10 client connections including the observer**,
+nine other clients and nine in the test database. Maximum sample gap was
+159.7 ms; these sampled peaks are lower bounds with observer overhead. Actual
+`conduit` schema inventories were empty before and afterward. An independent
+post-observer query found only its own connection, no test clients or schemas,
+and no previous observer PID. All child processes and output streams joined.
+Primary receipt SHA-256:
+`350970d86afb9edda71bcf94b34eac54348f206b8795aa0079107640150417a8`.
+Independent replay SHA-256:
+`50551ead89e2dcd72aba1b0c94148d04c464158f602e44d47046ced89b9e4cb1`.
+
+Two rejected local attempts remain preserved. The first executed 504 rows with
+seven failures: five directly exposed unreachable IPv6 connections, and two
+HTTP 503 responses omitted their original exceptions. The IPv4 attempt executed
+all 504 with one connection timeout before the intended injected exception.
+Both HTTP rows passed in that attempt; their original causes remain unestablished.
+The first attempt's one leftover converter schema was archived and only that
+proved-owned GUID schema was removed. The second ended with no owned schemas or
+test backends. [#1704](https://github.com/nickna/Conduit/issues/1704) tracks the
+fixture's discarded exception diagnostics. The passing run used the existing
+owned Docker bridge directly, a separate transport context that does not
+diagnose either historical incident.
+
+[NativeAOT run 38990109216](https://github.com/nickna/Conduit/actions/runs/38990109216)
+at exact 52f89fe63 passed **all three jobs**: Linux publish/process smoke and both
+Admin and Gateway native images. The hosted shared suite also passed
+**504/504, zero failures or skips**. Its official test artifact matches every
+local display name and stable test ID, including the six native cleanup cases.
+Independent hosted-artifact replay SHA-256:
+`6032d379323ed4839c8313d7eb61f402e1c91ed396e0b363c11ad8b554494df0`.
+The workflow passes its configured native contract and image gates; native EF
+query execution and complete native application coverage remain unestablished.
+Production remains JIT.
+
+## Guarded nullable and coalesce compiler reductions (#1678)
+
+Four opt-in variants in the
+[standalone diagnostic project](../../tools/EfQueryPrecompilerRepro/README.md#guarded-nullable-id-and-nullable-long-coalesce-1678)
+reduce the two media-owner compiler failures. The nullable-ID pair retains both
+complete `HasValue` branches and their three-field projections. Captured
+`.Value` fails design-time parameter evaluation; capturing a nonnullable
+`GetValueOrDefault()` scalar generates and compiles successfully. The coalesce
+pair retains the join, filters, anonymous projection, grouping, count, sum and
+terminal token. Already-typed `0L` still produces a nullable-long argument for a
+nonnullable anonymous member at `Expression.New`; adding only the six-byte
+outer `(long)` cast generates and compiles successfully.
+
+All four initial managed builds pass on Linux SDK 10.0.401 with EF runtime,
+Relational, Design, Tasks and CLI 10.0.12 and Npgsql/provider 10.0.3. The guarded
+original retains one CS8629 warning. Each failed generation exits 1 with no
+interceptor; each control exits 0, emits one file and passes its generated
+managed build, retaining eight and seven CS9270/CS8669 warnings respectively.
+Both nine-stage matrices preserve six inputs, package identities, source copies,
+generated hashes and joined processes/streams. Their full receipts and commands
+are recorded in the project README.
+
+The sanitized reports are [EF #39308](https://github.com/dotnet/efcore/issues/39308)
+and [EF #39309](https://github.com/dotnet/efcore/issues/39309), following 24 bounded
+all-state issue/PR searches. Further inspection found that open
+[PR #39305](https://github.com/dotnet/efcore/pull/39305) has a proposed null-instance
+gate that may also cover the nullable-ID case. That patch was not executed and
+has no explicit guarded nullable test; its effect on this reproducer remains
+unestablished. The coalesce failure remains separate from the recorded literal,
+conditional and earlier runtime funcletizer fixes. Inspected current-main source
+was not built or executed.
+
+Production media queries already contain both workarounds and are unchanged.
+Their current source matches the just-completed #1677 suites, including
+14 passing ordinary managed media parity cases. These reductions execute no
+query methods, open no database connection and publish no native executable.
+Generated-interceptor execution and complete native EF/application coverage
+remain unestablished. Production remains JIT.
+
+### Async-task guard conformance (#1679)
+
+The typed store now applies the EF reference's archive, live-lease and provider
+phase predicates. Clean claims require both provider timestamps to be absent;
+pending or expired-processing tasks with either timestamp become indeterminate
+only when unarchived. Provider start requires no prior evidence, completion
+requires a start, and lease extension requires unarchived processing state.
+Existing timestamp sampling, operation-ID rules, version increments, retry
+methods and fallback ordering are unchanged.
+
+An unchanged-source PostgreSQL 16.15 baseline reproduced all nine reported
+differences: nine EF rows passed, nine typed rows failed, and all 18 independent
+26-field before/after snapshots and owned-schema removals were retained. After
+the correction, the new 30-row guard class and existing five-row async-task
+contract class pass together (35/35, no skips). Positive transitions, repeat
+completion, null/empty operation IDs, all five completion rejection conditions,
+and exact full-row preservation are checked. Four concurrency rows observe two
+distinct PostgreSQL update waiters behind the owned table-lock blocker before
+release, then require exactly one winner. A first final run failed four rows
+because fixture cleanup repeated a completed rollback; its evidence is retained,
+and the explicit lock-release flag repair passes the complete rerun. Only the
+three existing nullable fixture warnings tracked by #1690 remain.
+
+A fresh EF-free Linux native publish on SDK 10.0.401 emits no warnings and its
+full persistence probe passes. The new helper executes all nine regressions,
+three transition groups and two observed concurrency cases, retaining 31
+explicit 26-field witnesses. Its ELF SHA256 is
+`b3a731784db031c8b45048caae5d443febf34aca8aa5609ce4411584bfa002b3`.
+All 184 native inputs and the four-file publish closure remain stable; owned
+schemas are absent before and after. The managed receipt SHA256 is
+`dd86260e6feb97bec8d1841f1d32cd8b914bd3935b18db3fce620b145d35498c`,
+and the native receipt SHA256 is
+`5dfc8520c64c21ed2c36ca2bbf610214f98e67363bc93c5759e32a4c5242027f`.
+
+The separate retry fallback was reproduced waiting for its own connection with
+`MaxPoolSize=1`, while a two-slot control returned `UnsupportedTaskType`; it is
+filed as [#1705](https://github.com/nickna/Conduit/issues/1705). That method is
+unchanged here. These results qualify the corrected guard contract; complete
+native EF/application coverage remains unestablished and production remains JIT.

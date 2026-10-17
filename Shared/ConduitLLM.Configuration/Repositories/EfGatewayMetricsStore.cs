@@ -111,6 +111,7 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
         DateTime since,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(taskType);
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var queryTaskType = taskType;
         var querySince = since;
@@ -135,6 +136,7 @@ public sealed class EfGatewayMetricsStore : IGatewayMetricsStore
         int limit,
         CancellationToken cancellationToken = default)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var queryFrom = from;
         var queryBefore = before;

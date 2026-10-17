@@ -22,7 +22,7 @@ New-Item -ItemType Directory -Path $temporaryRoot | Out-Null
 $ownedProcesses = [Collections.Generic.List[Diagnostics.Process]]::new()
 $descendant = $null
 $pidPath = Join-Path $temporaryRoot 'descendant.pid'
-$pwsh = (Get-Command pwsh).Source
+$pwsh = (Get-Command pwsh -CommandType Application | Select-Object -First 1).Source
 $parentValue = [Environment]::GetEnvironmentVariable('CONDUIT_PROCESS_TEST_SECRET')
 try {
     $child = Join-Path $temporaryRoot 'child.ps1'

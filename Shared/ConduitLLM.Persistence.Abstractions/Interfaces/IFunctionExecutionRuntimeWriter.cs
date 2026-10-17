@@ -15,10 +15,11 @@ public interface IFunctionExecutionRuntimeWriter
 
     /// <summary>
     /// Replaces all non-key scalars when ID and the supplied version match. Increments the
-    /// supplied instance's version before saving, including on a concurrency miss; integer
-    /// overflow follows unchecked .NET arithmetic. An empty ID is generated as with the
-    /// JIT repository. These input mutations precede the database attempt, including
-    /// cancellation. Returns false for missing/stale rows. Does not derive lifecycle fields,
+    /// supplied instance's version before saving and restores it if saving fails or returns
+    /// a concurrency miss; integer overflow follows unchecked .NET arithmetic. An empty ID
+    /// is generated as with the JIT repository and retained even if the attempt fails.
+    /// Returns false for missing/stale rows; retry requires reloading a fresh snapshot.
+    /// Database failures and cancellation propagate. Does not derive lifecycle fields,
     /// insert missing rows, save navigation graphs or create audit events.
     /// </summary>
     Task<bool> UpdateAsync(FunctionExecution execution, CancellationToken cancellationToken = default);

@@ -16,6 +16,73 @@ namespace ConduitLLM.Tests.Gateway.Services;
 
 public sealed class WebhookDeliveryNotificationServiceTests
 {
+    [Theory]
+    [InlineData(0L, 0L, 0L)]
+    [InlineData(3L, 7L, 2L)]
+    public async Task RetainedStatisticsKeepTheirContractAndPeriodicPublicationTargetsOnlyAdministrators(
+        long pending, long delivered, long exhausted)
+    {
+        var clock = new FakeTimeProvider();
+        var recovery = new Mock<IWebhookRecovery>();
+        recovery.Setup(value => value.BacklogAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new WebhookBacklog(pending, delivered, exhausted, 4, 13));
+        using var provider = new ServiceCollection().AddSingleton(recovery.Object).BuildServiceProvider();
+        var sent = new TaskCompletionSource<WebhookStatistics>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var proxy = new Mock<IClientProxy>(MockBehavior.Strict);
+        CancellationToken broadcastToken = default;
+        proxy.Setup(value => value.SendCoreAsync("DeliveryStatisticsUpdated", It.IsAny<object?[]>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, object?[], CancellationToken>((_, arguments, token) =>
+            {
+                broadcastToken = token;
+                sent.TrySetResult(Assert.IsType<WebhookStatistics>(Assert.Single(arguments)));
+            }).Returns(Task.CompletedTask);
+        var clients = new Mock<IHubClients>(MockBehavior.Strict);
+        clients.Setup(value => value.Group("admin")).Returns(proxy.Object);
+        var hub = new Mock<IHubContext<WebhookDeliveryHub>>();
+        hub.SetupGet(value => value.Clients).Returns(clients.Object);
+        using var service = new WebhookDeliveryNotificationService(hub.Object, provider,
+            NullLogger<WebhookDeliveryNotificationService>.Instance, clock);
+
+        // Reading the service directly preserves the existing retained aggregate
+        // contract and does not publish anything to hub clients.
+        var direct = await service.GetStatisticsAsync("last_day");
+        AssertStatistics(direct);
+        clients.VerifyNoOtherCalls();
+
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+            clock.Advance(TimeSpan.FromMinutes(1));
+            var published = await sent.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            AssertStatistics(published);
+        }
+        finally { await service.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)); }
+
+        Assert.True(broadcastToken.IsCancellationRequested);
+        recovery.Verify(value => value.BacklogAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+        clients.Verify(value => value.Group("admin"), Times.Once);
+        clients.VerifyGet(value => value.All, Times.Never);
+        proxy.Verify(value => value.SendCoreAsync("DeliveryStatisticsUpdated", It.IsAny<object?[]>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        proxy.VerifyNoOtherCalls();
+        clients.VerifyNoOtherCalls();
+
+        void AssertStatistics(WebhookStatistics stats)
+        {
+            var total = pending + delivered + exhausted;
+            Assert.Equal("retained", stats.Period);
+            Assert.Equal((int)total, stats.TotalDeliveries);
+            Assert.Equal((int)pending, stats.PendingDeliveries);
+            Assert.Equal((int)delivered, stats.SuccessfulDeliveries);
+            Assert.Equal((int)exhausted, stats.FailedDeliveries);
+            Assert.Equal(total == 0 ? 0 : 100.0 * delivered / total, stats.SuccessRate);
+            Assert.Equal(0, stats.AverageResponseTimeMs);
+            Assert.Empty(stats.UrlStatistics);
+            Assert.Equal(DateTimeKind.Utc, stats.Timestamp.Kind);
+        }
+    }
+
     [Fact]
     public async Task DisposeBeforeStop_CancelsAndJoinsHeldBroadcastWithoutAnotherGeneration()
     {
@@ -36,8 +103,8 @@ public sealed class WebhookDeliveryNotificationServiceTests
                 entered.TrySetResult();
                 return release.Task;
             });
-        var clients = new Mock<IHubClients>();
-        clients.SetupGet(value => value.All).Returns(proxy.Object);
+        var clients = new Mock<IHubClients>(MockBehavior.Strict);
+        clients.Setup(value => value.Group("admin")).Returns(proxy.Object);
         var hub = new Mock<IHubContext<WebhookDeliveryHub>>();
         hub.SetupGet(value => value.Clients).Returns(clients.Object);
         using var service = new WebhookDeliveryNotificationService(hub.Object, provider,
@@ -60,6 +127,9 @@ public sealed class WebhookDeliveryNotificationServiceTests
         recovery.Verify(value => value.BacklogAsync(It.IsAny<CancellationToken>()), Times.Once);
         proxy.Verify(value => value.SendCoreAsync("DeliveryStatisticsUpdated", It.IsAny<object?[]>(),
             It.IsAny<CancellationToken>()), Times.Once);
+        clients.Verify(value => value.Group("admin"), Times.Once);
+        clients.VerifyGet(value => value.All, Times.Never);
+        clients.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -86,8 +156,8 @@ public sealed class WebhookDeliveryNotificationServiceTests
         proxy.Setup(value => value.SendCoreAsync("DeliveryStatisticsUpdated", It.IsAny<object?[]>(),
                 It.IsAny<CancellationToken>()))
             .Callback(() => sent.TrySetResult()).Returns(Task.CompletedTask);
-        var clients = new Mock<IHubClients>();
-        clients.SetupGet(value => value.All).Returns(proxy.Object);
+        var clients = new Mock<IHubClients>(MockBehavior.Strict);
+        clients.Setup(value => value.Group("admin")).Returns(proxy.Object);
         var hub = new Mock<IHubContext<WebhookDeliveryHub>>();
         hub.SetupGet(value => value.Clients).Returns(clients.Object);
         using var service = new WebhookDeliveryNotificationService(hub.Object, provider,
@@ -116,6 +186,9 @@ public sealed class WebhookDeliveryNotificationServiceTests
         Assert.Equal(2, queries);
         proxy.Verify(value => value.SendCoreAsync("DeliveryStatisticsUpdated", It.IsAny<object?[]>(),
             It.IsAny<CancellationToken>()), Times.Once);
+        clients.Verify(value => value.Group("admin"), Times.Once);
+        clients.VerifyGet(value => value.All, Times.Never);
+        clients.VerifyNoOtherCalls();
     }
 
     [Fact]

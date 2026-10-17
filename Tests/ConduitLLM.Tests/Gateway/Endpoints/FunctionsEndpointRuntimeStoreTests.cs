@@ -197,50 +197,135 @@ public sealed class FunctionsEndpointRuntimeStoreTests
         fixture.AssertBoundary(1, 1, 0);
     }
 
+    public static IEnumerable<object[]> JsonPrimitiveValidationCases()
+    {
+        var cases = new (string Type, string Json, string? Error)[]
+        {
+            ("string", "\"fixture \\u96ea\"", null),
+            ("boolean", "true", null),
+            ("boolean", "false", null),
+            ("number", "1", null),
+            ("number", "1.5", null),
+            ("number", "2", null),
+            ("select", "\"allowed\"", null),
+            ("string", "7", "Parameter 'value' must be a string"),
+            ("boolean", "\"true\"", "Parameter 'value' must be a boolean"),
+            ("number", "\"1.5\"", "Parameter 'value' must be a number"),
+            ("number", "0", "Parameter 'value' must be at least 1"),
+            ("number", "3", "Parameter 'value' must be at most 2"),
+            ("select", "\"not-listed\"", "Parameter 'value' must be one of: allowed"),
+            ("select", "true", "Parameter 'value' must be a string"),
+            ("string", "null", "Parameter 'value' must not be null or undefined"),
+            ("boolean", "null", "Parameter 'value' must not be null or undefined"),
+            ("number", "null", "Parameter 'value' must not be null or undefined"),
+            ("select", "null", "Parameter 'value' must not be null or undefined")
+        };
+        foreach (var runtime in new[] { false, true })
+            foreach (var (type, json, error) in cases)
+                yield return [runtime, type, json, error!];
+    }
+
     [Theory]
-    [InlineData(false, "string")]
-    [InlineData(true, "string")]
-    [InlineData(false, "boolean")]
-    [InlineData(true, "boolean")]
-    [InlineData(false, "bounded-number")]
-    [InlineData(true, "bounded-number")]
-    [InlineData(false, "select")]
-    [InlineData(true, "select")]
-    public async Task JsonBoundValuesPreserveTheInheritedTypeAndNumericBoundValidationBehavior(bool runtime, string type)
+    [MemberData(nameof(JsonPrimitiveValidationCases))]
+    public async Task JsonBoundPrimitiveValidationPreservesWireValuesAndRejectsInvalidRequestsBeforeExecution(
+        bool runtime, string type, string json, string? error)
     {
         using var fixture = new Fixture(runtime);
-        var value = type switch { "string" => "\"fixture\"", "boolean" => "true", "select" => "\"not-listed\"", _ => "999" };
-        fixture.Request = JsonSerializer.Deserialize<FunctionsEndpoints.FunctionExecutionRequest>(
-            "{\"function_configuration_id\":" + Fixture.ConfigurationId + ",\"parameters\":{\"value\":" + value + "}}",
-            fixture.WireOptions);
-        fixture.Configuration.ParameterSchema = type switch
-        {
-            "bounded-number" => """{"optional":{"value":{"type":"number","min":1,"max":2}}}""",
-            "select" => """{"optional":{"value":{"type":"select","options":["allowed"]}}}""",
-            _ => "{\"optional\":{\"value\":{\"type\":\"" + type + "\"}}}"
-        };
-        Assert.IsType<JsonElement>(fixture.Request.Parameters["value"]);
-        var accepted = type is "bounded-number" or "select";
+        ConfigurePrimitiveRequest(fixture, type, json);
+        var originalParameters = fixture.Request.Parameters!;
+        JsonElement? originalValue = originalParameters["value"] is null
+            ? null : Assert.IsType<JsonElement>(originalParameters["value"]);
+        var originalWire = JsonSerializer.Serialize(originalParameters, FunctionsJsonContext.Default.DictionaryStringObject);
+        if (originalValue.HasValue) Assert.Equal(json, originalValue.Value.GetRawText());
+        else Assert.Equal("null", json);
+        var accepted = error is null;
+
         using var body = await fixture.RenderAsync(await fixture.ExecuteAsync(), accepted ? 200 : 400);
+
+        Assert.Same(originalParameters, fixture.Request.Parameters);
+        if (originalValue.HasValue)
+        {
+            var retainedValue = Assert.IsType<JsonElement>(fixture.Request.Parameters!["value"]);
+            Assert.Equal(originalValue.Value.ValueKind, retainedValue.ValueKind);
+            Assert.Equal(json, retainedValue.GetRawText());
+        }
+        else Assert.Null(fixture.Request.Parameters!["value"]);
+        Assert.Equal(originalWire, JsonSerializer.Serialize(fixture.Request.Parameters, FunctionsJsonContext.Default.DictionaryStringObject));
+        Assert.DoesNotContain(fixture.ValidationLog.Entries, entry =>
+            entry.Message.Contains("Error validating parameter type", StringComparison.Ordinal));
         if (accepted)
         {
-            if (type == "bounded-number")
-            {
-                Assert.Equal(999, ((JsonElement)fixture.ExecutedParameters["value"]).GetInt32());
-                Assert.Contains(fixture.ValidationLog.Entries, entry => entry.Level == LogLevel.Warning &&
-                    entry.Message.Contains("Error validating parameter type for value"));
-            }
-            else
-                Assert.Equal("not-listed", ((JsonElement)fixture.ExecutedParameters["value"]).GetString());
+            var forwarded = Assert.IsType<JsonElement>(fixture.ExecutedParameters!["value"]);
+            Assert.Equal(Assert.IsType<JsonElement>(originalParameters["value"]).ValueKind, forwarded.ValueKind);
+            Assert.Equal(json, forwarded.GetRawText());
+            Assert.DoesNotContain(fixture.ValidationLog.Entries, entry => entry.Level >= LogLevel.Warning);
             fixture.AssertForwardedRequest();
             fixture.AssertBoundary(1, 1, 0);
         }
         else
         {
-            AssertError(body, $"Parameter validation failed: Parameter 'value' must be a {(type == "string" ? "string" : "boolean")}",
+            AssertError(body, "Parameter validation failed: " + error,
                 "invalid_request", "invalid_request_error");
+            Assert.Null(fixture.ExecutedParameters);
+            Assert.Null(fixture.Context.GetRequestAccountingSnapshot());
             fixture.AssertBoundary(1, 0, 0);
         }
+    }
+
+    public static IEnumerable<object[]> InMemoryNullPrimitiveCases()
+    {
+        foreach (var runtime in new[] { false, true })
+            foreach (var type in new[] { "string", "boolean", "number", "select" })
+                foreach (var representation in new[] { "clr-null", "json-null", "undefined" })
+                    yield return [runtime, type, representation];
+    }
+
+    [Theory]
+    [MemberData(nameof(InMemoryNullPrimitiveCases))]
+    public async Task NullAndUndefinedElementsRejectWithoutMutatingTheParameterDictionary(
+        bool runtime, string type, string representation)
+    {
+        using var fixture = new Fixture(runtime);
+        ConfigurePrimitiveRequest(fixture, type, "null");
+        var originalParameters = fixture.Request.Parameters!;
+        // Undefined has no JSON literal. Start from the generated wire request,
+        // then explicitly exercise all three in-memory null/undefined forms.
+        using var nullDocument = JsonDocument.Parse("null");
+        object? value = representation switch
+        {
+            "clr-null" => null,
+            "json-null" => nullDocument.RootElement.Clone(),
+            _ => default(JsonElement)
+        };
+        originalParameters["value"] = value!;
+
+        using var body = await fixture.RenderAsync(await fixture.ExecuteAsync(), 400);
+
+        AssertError(body, "Parameter validation failed: Parameter 'value' must not be null or undefined",
+            "invalid_request", "invalid_request_error");
+        Assert.Same(originalParameters, fixture.Request.Parameters);
+        Assert.Equal(2, originalParameters.Count);
+        if (representation == "clr-null") Assert.Null(originalParameters["value"]);
+        else Assert.Equal(representation == "json-null" ? JsonValueKind.Null : JsonValueKind.Undefined,
+            Assert.IsType<JsonElement>(originalParameters["value"]).ValueKind);
+        Assert.Equal(JsonValueKind.Object, Assert.IsType<JsonElement>(originalParameters["retained"]).ValueKind);
+        Assert.Null(fixture.ExecutedParameters);
+        Assert.Null(fixture.Context.GetRequestAccountingSnapshot());
+        fixture.AssertBoundary(1, 0, 0);
+    }
+
+    private static void ConfigurePrimitiveRequest(Fixture fixture, string type, string json)
+    {
+        fixture.Request = JsonSerializer.Deserialize<FunctionsEndpoints.FunctionExecutionRequest>(
+            "{\"function_configuration_id\":" + Fixture.ConfigurationId +
+            ",\"parameters\":{\"value\":" + json + ",\"retained\":{\"values\":[true,null,\"wire\"]}}}",
+            fixture.WireOptions)!;
+        fixture.Configuration!.ParameterSchema = type switch
+        {
+            "number" => """{"optional":{"value":{"type":"number","min":1,"max":2}}}""",
+            "select" => """{"optional":{"value":{"type":"select","options":["allowed"]}}}""",
+            _ => "{\"optional\":{\"value\":{\"type\":\"" + type + "\"}}}"
+        };
     }
 
     [Theory]

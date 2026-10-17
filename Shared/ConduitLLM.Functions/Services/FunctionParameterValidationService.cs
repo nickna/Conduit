@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using ConduitLLM.Functions.Serialization;
 using Microsoft.Extensions.Logging;
@@ -8,6 +9,13 @@ namespace ConduitLLM.Functions.Services;
 /// Service for validating function execution parameters against parameter schemas.
 /// Provides basic validation of required parameters and type checking.
 /// </summary>
+/// <remarks>
+/// CLR and JSON primitive values obey the same type and bound checks without changing
+/// the supplied dictionary. Null/undefined values do not satisfy typed fields. Missing
+/// schemas skip validation; malformed schemas retain the provider-validation fallback
+/// with an explicit warning. Numbers must fit the finite double range; bounds use
+/// exact decimal digits without rounding. Required fields remain presence checks.
+/// </remarks>
 public class FunctionParameterValidationService
 {
     private readonly ILogger<FunctionParameterValidationService> _logger;
@@ -39,7 +47,7 @@ public class FunctionParameterValidationService
         try
         {
             // Parse the schema
-            var schemaDoc = JsonDocument.Parse(schemaJson);
+            using var schemaDoc = JsonDocument.Parse(schemaJson);
             var schema = schemaDoc.RootElement;
 
             // Validate required parameters
@@ -70,7 +78,7 @@ public class FunctionParameterValidationService
                 {
                     if (optionalSchema.TryGetProperty(param.Key, out var paramDef))
                     {
-                        var validationError = ValidateParameterType(param.Key, param.Value, paramDef);
+                        var validationError = ValidateParameterType(param.Key, param.Value, paramDef, result.Warnings);
                         if (validationError != null)
                         {
                             result.IsValid = false;
@@ -90,8 +98,7 @@ public class FunctionParameterValidationService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error validating parameters against schema");
-            // On validation error, fail safe and allow the request
-            // (provider will do its own validation)
+            // Preserve the malformed-schema fallback; the provider validates the request.
             return new ParameterValidationResult
             {
                 IsValid = true,
@@ -103,7 +110,7 @@ public class FunctionParameterValidationService
     /// <summary>
     /// Validates a single parameter against its definition.
     /// </summary>
-    private string? ValidateParameterType(string paramName, object value, JsonElement paramDef)
+    private string? ValidateParameterType(string paramName, object? value, JsonElement paramDef, List<string> warnings)
     {
         try
         {
@@ -113,44 +120,48 @@ public class FunctionParameterValidationService
             }
 
             var expectedType = typeElement.GetString();
+            if (value is null or JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined })
+                return $"Parameter '{paramName}' must not be null or undefined";
 
             switch (expectedType)
             {
                 case "number":
-                    if (!IsNumeric(value))
+                    if (!TryGetNumber(value, out var numValue))
                     {
                         return $"Parameter '{paramName}' must be a number";
                     }
 
                     // Check min/max constraints
-                    if (paramDef.TryGetProperty("min", out var minElement) && minElement.TryGetDouble(out var min))
+                    if (paramDef.TryGetProperty("min", out var minElement))
                     {
-                        var numValue = Convert.ToDouble(value);
-                        if (numValue < min)
+                        if (!TryGetNumber(minElement, out var min))
+                            throw new InvalidOperationException("Numeric minimum is outside the supported range.");
+                        if (numValue.CompareTo(min) < 0)
                         {
-                            return $"Parameter '{paramName}' must be at least {min}";
+                            return $"Parameter '{paramName}' must be at least {minElement.GetRawText()}";
                         }
                     }
 
-                    if (paramDef.TryGetProperty("max", out var maxElement) && maxElement.TryGetDouble(out var max))
+                    if (paramDef.TryGetProperty("max", out var maxElement))
                     {
-                        var numValue = Convert.ToDouble(value);
-                        if (numValue > max)
+                        if (!TryGetNumber(maxElement, out var max))
+                            throw new InvalidOperationException("Numeric maximum is outside the supported range.");
+                        if (numValue.CompareTo(max) > 0)
                         {
-                            return $"Parameter '{paramName}' must be at most {max}";
+                            return $"Parameter '{paramName}' must be at most {maxElement.GetRawText()}";
                         }
                     }
                     break;
 
                 case "string":
-                    if (value is not string)
+                    if (!TryGetString(value, out _))
                     {
                         return $"Parameter '{paramName}' must be a string";
                     }
                     break;
 
                 case "boolean":
-                    if (value is not bool)
+                    if (value is not bool and not JsonElement { ValueKind: JsonValueKind.True or JsonValueKind.False })
                     {
                         return $"Parameter '{paramName}' must be a boolean";
                     }
@@ -181,13 +192,15 @@ public class FunctionParameterValidationService
                     break;
 
                 case "select":
+                    if (!TryGetString(value, out var strValue))
+                        return $"Parameter '{paramName}' must be a string";
                     // Validate against options if provided
                     if (paramDef.TryGetProperty("options", out var optionsElement))
                     {
                         var options = JsonSerializer.Deserialize(
                             optionsElement.GetRawText(),
                             FunctionsJsonContext.Default.ListString);
-                        if (options != null && value is string strValue)
+                        if (options != null)
                         {
                             if (!options.Contains(strValue))
                             {
@@ -203,18 +216,88 @@ public class FunctionParameterValidationService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Error validating parameter type for {ParamName}", paramName);
-            return null; // Fail safe
+            warnings.Add($"Schema validation error for parameter '{paramName}', proceeding without validation for this parameter");
+            return null;
         }
     }
 
     /// <summary>
-    /// Checks if a value is numeric.
+    /// Reads primitive values without replacing the caller's JSON elements.
     /// </summary>
-    private static bool IsNumeric(object value)
+    private static bool TryGetNumber(object value, out ParameterNumber number)
     {
-        return value is int || value is long || value is float || value is double ||
-               value is decimal || value is short || value is byte ||
-               (value is JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.Number);
+        number = default;
+        string? text;
+        var underflowCheck = false;
+        if (value is JsonElement { ValueKind: JsonValueKind.Number } element)
+        {
+            if (!element.TryGetDouble(out var finite) || !double.IsFinite(finite)) return false;
+            underflowCheck = finite == 0;
+            text = element.GetRawText();
+        }
+        else text = value switch
+        {
+            byte or sbyte or short or ushort or int or uint or long or ulong or decimal =>
+                ((IFormattable)value).ToString(null, CultureInfo.InvariantCulture),
+            float numeric when float.IsFinite(numeric) => numeric.ToString("R", CultureInfo.InvariantCulture),
+            double numeric when double.IsFinite(numeric) => numeric.ToString("R", CultureInfo.InvariantCulture),
+            _ => null
+        };
+        if (text is null) return false;
+        var negative = text[0] == '-';
+        if (negative) text = text[1..];
+        var exponentAt = text.AsSpan().IndexOfAny('e', 'E');
+        var significand = exponentAt < 0 ? text : text[..exponentAt];
+        var pointAt = significand.IndexOf('.');
+        var fractionalDigits = pointAt < 0 ? 0 : significand.Length - pointAt - 1;
+        var digits = significand.Replace(".", "", StringComparison.Ordinal).TrimStart('0');
+        if (digits.Length == 0)
+        {
+            number = new("0", 0, false);
+            return true;
+        }
+        // JSON underflow must not turn a nonzero argument or bound into zero.
+        if (underflowCheck) return false;
+        long exponent = 0;
+        if (exponentAt >= 0 && !long.TryParse(text.AsSpan(exponentAt + 1),
+            NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent)) return false;
+        // Comparing digit strings avoids double rounding and constructing huge powers of ten.
+        number = new(digits.TrimEnd('0'), exponent + digits.Length - fractionalDigits, negative);
+        return true;
+    }
+
+    private readonly record struct ParameterNumber(string Digits, long Magnitude, bool Negative)
+    {
+        public int CompareTo(ParameterNumber other)
+        {
+            var sign = Digits == "0" ? 0 : Negative ? -1 : 1;
+            var otherSign = other.Digits == "0" ? 0 : other.Negative ? -1 : 1;
+            if (sign != otherSign) return sign.CompareTo(otherSign);
+            if (sign == 0) return 0;
+            var comparison = Magnitude.CompareTo(other.Magnitude);
+            if (comparison == 0)
+            {
+                for (var index = 0; index < Math.Max(Digits.Length, other.Digits.Length); index++)
+                {
+                    var digit = index < Digits.Length ? Digits[index] : '0';
+                    var otherDigit = index < other.Digits.Length ? other.Digits[index] : '0';
+                    comparison = digit.CompareTo(otherDigit);
+                    if (comparison != 0) break;
+                }
+            }
+            return sign * comparison;
+        }
+    }
+
+    private static bool TryGetString(object value, out string? text)
+    {
+        text = value switch
+        {
+            string str => str,
+            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+            _ => null
+        };
+        return text is not null;
     }
 }
 

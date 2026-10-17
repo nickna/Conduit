@@ -32,11 +32,20 @@ public sealed class EfFunctionExecutionRuntimeWriter : IFunctionExecutionRuntime
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var originalVersion = execution.Version;
         execution.Version = unchecked(originalVersion + 1);
-        context.FunctionExecutions.Attach(execution);
-        context.Entry(execution).State = EntityState.Modified;
-        context.Entry(execution).Property(row => row.Version).OriginalValue = originalVersion;
-        try { return await context.SaveChangesAsync(cancellationToken) > 0; }
+        var saved = false;
+        try
+        {
+            context.FunctionExecutions.Attach(execution);
+            context.Entry(execution).State = EntityState.Modified;
+            context.Entry(execution).Property(row => row.Version).OriginalValue = originalVersion;
+            saved = await context.SaveChangesAsync(cancellationToken) > 0;
+            return saved;
+        }
         catch (DbUpdateConcurrencyException) { return false; }
+        finally
+        {
+            if (!saved) execution.Version = originalVersion;
+        }
     }
 
     private static void RequireScalarSnapshot(FunctionExecution execution)

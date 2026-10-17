@@ -34,6 +34,13 @@ namespace ConduitLLM.Gateway.Hubs
         /// <returns>The hub name.</returns>
         protected override string GetHubName() => "WebhookDeliveryHub";
 
+        protected override async Task OnVirtualKeyConnectedAsync(int virtualKeyId, string virtualKeyName)
+        {
+            // Installation-wide statistics are available only to trusted administrators.
+            if (virtualKeyId > 0 && await IsAdminAsync())
+                await Groups.AddToGroupAsync(Context.ConnectionId, "admin", Context.ConnectionAborted);
+        }
+
         /// <summary>
         /// Called when a client connects to the hub.
         /// </summary>

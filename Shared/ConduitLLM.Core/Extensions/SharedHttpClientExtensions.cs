@@ -3,6 +3,8 @@ using ConduitLLM.Core.Services;
 
 using Microsoft.Extensions.DependencyInjection;
 
+using Polly;
+
 namespace ConduitLLM.Core.Extensions;
 
 /// <summary>
@@ -53,7 +55,7 @@ public static class SharedHttpClientExtensions
 
         // MCP uses Streamable HTTP / SSE: it manages its own Accept negotiation, keeps long-lived
         // streams open, and must not be wrapped in a request-level retry policy, so it gets a
-        // dedicated client distinct from the fixed-Accept, 30s-timeout, retrying one above.
+        // dedicated client distinct from the fixed-Accept, 30s-timeout clients above.
         AddMcpFunctionHttpClient(services, "MCPFunctionClient");
 
         return services;
@@ -99,6 +101,16 @@ public static class SharedHttpClientExtensions
             MaxConnectionsPerServer = 10,
             EnableMultipleHttp2Connections = true
         });
-        if (retry) builder.AddPolicyHandler(HttpRetryPolicies.GetStandardRetryPolicy());
+        if (retry)
+        {
+            var safeMethodRetry = HttpRetryPolicies.GetStandardRetryPolicy();
+            var singleAttempt = Policy.NoOpAsync<HttpResponseMessage>();
+            // Exa/Tavily POSTs, including authentication probes, can consume credits.
+            // Without provider-supported idempotency, a lost response is not safe to replay.
+            builder.AddPolicyHandler(request =>
+                request.Method == HttpMethod.Get || request.Method == HttpMethod.Head || request.Method == HttpMethod.Options
+                    ? safeMethodRetry
+                    : singleAttempt);
+        }
     }
 }

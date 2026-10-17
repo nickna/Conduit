@@ -166,27 +166,23 @@ namespace ConduitLLM.Core.Services
                 var connectionKey = RedisKeys.WebhookConnection.ConnectionWebhooks(connectionId);
                 var webhooks = await db.SetMembersAsync(connectionKey);
                 
-                if (webhooks.Length > 0)
+                var transaction = db.CreateTransaction();
+
+                // Remove connection from all webhook sets without deleting other members.
+                foreach (var webhook in webhooks)
                 {
-                    var transaction = db.CreateTransaction();
-                    
-                    // Remove connection from all webhook sets
-                    foreach (var webhook in webhooks)
-                    {
-                        var webhookKey = RedisKeys.WebhookConnection.WebhookConnections(
-                            GetUrlHash(webhook.ToString()));
-                        _ = transaction.SetRemoveAsync(webhookKey, connectionId);
-                    }
-                    
-                    // Remove connection's webhook set
-                    _ = transaction.KeyDeleteAsync(connectionKey);
-                    
-                    // Remove connection timestamp
-                    var timestampKey = RedisKeys.WebhookConnection.ConnectionTimestamp(connectionId);
-                    _ = transaction.KeyDeleteAsync(timestampKey);
-                    
-                    await transaction.ExecuteAsync();
+                    var webhookKey = RedisKeys.WebhookConnection.WebhookConnections(
+                        GetUrlHash(webhook.ToString()));
+                    _ = transaction.SetRemoveAsync(webhookKey, connectionId);
                 }
+
+                // Redis removes empty sets; always remove the connection-owned keys
+                // even when the client unsubscribed from its final webhook already.
+                _ = transaction.KeyDeleteAsync(connectionKey);
+                var timestampKey = RedisKeys.WebhookConnection.ConnectionTimestamp(connectionId);
+                _ = transaction.KeyDeleteAsync(timestampKey);
+
+                await transaction.ExecuteAsync();
                 
                 Logger.LogDebug("Removed connection {ConnectionId} and its {Count} webhook subscriptions", 
                     connectionId, webhooks.Length);

@@ -212,23 +212,43 @@ passes the typed pricing-store probe before runtime selection. Native Gateway no
 selects this scoped adapter over the singleton typed pricing store; host composition
 tests run both build profiles and exercise estimate/actual billing through the resolved
 calculator. JIT Gateway and Admin retain the legacy service, and calculator constructors
-are unchanged. Cost management methods are outside this adapter. Both implementations
-retain the inherited list-only explicit cache clear, tracked separately in
-[#1570](https://github.com/nickna/Conduit/issues/1570).
+are unchanged. Cost management methods are outside this adapter. The subsequent
+[#1570](https://github.com/nickna/Conduit/issues/1570) correction replaces the inherited
+list-only clear with a shared, non-expiring random generation marker. Both services
+check the marker before every L1/L2 lookup and pin database results to that generation.
+Explicit clears and cost mutations rotate the namespace, including list, ID and
+configuration entries across hosts; unreachable payloads retain their 15-minute L1
+and one-hour L2 expiration. Without L2, one process-wide generation serves memory
+instances. Marker read failures bypass both tiers; failed marker writes make clear
+fail visibly. A lost marker initializes a fresh random generation rather than
+resurrecting an earlier namespace. An overlapping old read may return its snapshot
+but cannot populate the new namespace. This correction changes the cache keys;
+the earlier published run above does not establish its hosted native verification.
 
 `IFunctionExecutionRuntimeWriter` adds scalar execution inserts and full snapshot
 updates guarded by ID and the caller's original version. It preserves all 24 fields,
-empty-ID generation, unchecked integer version increments and caller mutations before
-database attempts, including cancellation and concurrency misses. Navigation graphs
-are explicitly outside this new port; the full legacy repository remains unchanged.
+empty-ID generation and unchecked successful integer version increments. Navigation
+graphs are explicitly outside this new port. At extraction, the adapters preserved
+the legacy repository's caller-version increments even after cancellation or a
+concurrency miss; that inherited behavior was the subject of
+[#1569](https://github.com/nickna/Conduit/issues/1569).
 Real PostgreSQL tests compare the actual repository with both adapters, including
 three-way concurrent writes, invalid JSON/FK/duplicate failures, occupied pools and
 observed SQL lock cancellation. The native persistence probe independently reads all
 24 fields and checks scalar writes, CAS, failure atomicity and single-slot recovery.
-Published Linux run 38126684370 proves this writer before Gateway selection.
-Lease/retry/retention operations and audit writes remain separate boundaries. The
-inherited stale-snapshot retry behavior is tracked in
-[#1569](https://github.com/nickna/Conduit/issues/1569).
+Published Linux run 38126684370 proved the extracted writer before Gateway selection
+under that historical contract; it does not verify the subsequent #1569 correction.
+Lease/retry/retention operations and audit writes remain separate boundaries.
+
+The #1569 correction changes all three writers: a false update or an exception,
+including cancellation, restores the caller's original `Version`. An in-flight
+attempt may temporarily increment it, successful increments retain unchecked
+overflow, and existing empty-ID generation remains visible after failure. Regression
+checks require repeated stale retries to stay false without changing the durable
+winner, one concurrent version-8 winner with version-7 losers, and original versions
+after invalid JSON, missing rows, pre-cancellation, occupied-pool cancellation and
+observed SQL-wait cancellation. The native probe carries the same changed contract.
+These regression changes do not by themselves establish a new hosted native proof.
 
 `IFunctionExecutionRuntimeReader` follows with exact-ID and virtual-key execution
 reads. It includes all 24 execution scalars and the 15 configuration scalars through
@@ -253,13 +273,25 @@ post-provider billable failure behavior. Paired tests exercise both construction
 read and list results retain the existing public return types. Complete host
 composition verifies exact port/calculator/client identities and empty legacy
 repository fields on native, while JIT/Admin retain their scoped repositories.
+The subsequent [#1572](https://github.com/nickna/Conduit/issues/1572) policy treats an
+inline result-write concurrency miss as an explicit failed, billable service result.
+It retains the actual provider response, usage and incurred cost, adds the execution
+ID and a reconciliation diagnostic, and leaves the competing durable snapshot
+unchanged. It does not reload and replace the winner or call the provider again.
+An error-record concurrency miss is logged and included in any returned failed
+result; an original provider exception remains the exception thrown to the caller.
+Unkeyed billing remains the caller's responsibility, while keyed claims retain
+their existing durable result/settlement flow. The returned snapshot can therefore
+differ from the winning stored execution, and operators must reconcile that ID
+before dispatching a replacement operation. Earlier hosted proofs below predate
+this policy correction.
 Published Linux run 38133326127 proves the bounded inline Exa path on two native
 Gateways: successful and failed execution, opposite-host status retrieval,
 ownership denial and settled accounting. Configured non-streaming Exa agentic chat
 is qualified below. Execution-list HTTP, stateful/agentic MCP and function
 audit/retention remain separate workload proofs.
-The inherited ignored concurrency-update result remains tracked separately in
-[#1572](https://github.com/nickna/Conduit/issues/1572).
+The ignored concurrency-update result from extraction is corrected by the #1572
+policy above.
 
 `FunctionsEndpoints.CreateWithRuntimePersistence` follows with the HTTP handler's
 single configuration preflight read. Native Gateway constructs it explicitly over
@@ -270,8 +302,16 @@ contracts retain their existing behavior. Paired handler tests use production JS
 metadata, and the native two-host probe exercises requests rejected before provider
 invocation. The preflight cases alone do not establish native execution or chat
 workflow support; the complete selected Exa workload below supplies that proof.
-Inherited validation of JSON-bound primitive parameters is preserved and tracked in
-[#1573](https://github.com/nickna/Conduit/issues/1573).
+The subsequent [#1573](https://github.com/nickna/Conduit/issues/1573) correction checks
+JSON-bound and CLR strings, booleans, numbers and select values consistently without
+changing the supplied dictionary or wire values. Numeric bounds are inclusive and
+compare decimal digits exactly within the finite double range, rejecting overflow
+and underflow. Typed null/undefined inputs are rejected. Missing schemas
+still skip validation, while malformed schemas or field definitions produce explicit
+warnings and retain their existing provider-validation fallback; independent required
+parameter errors are preserved when a field definition is malformed. Generated-wire
+endpoint tests cover both preflight constructions. These local corrections do not
+constitute a new published-native workload proof.
 
 `FunctionDiscoveryService.CreateWithRuntimePersistence` reuses the proven scalar
 configuration store for Core's tool and routing-map reads. Native Gateway selects

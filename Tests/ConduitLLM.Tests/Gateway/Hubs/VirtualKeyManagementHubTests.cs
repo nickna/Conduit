@@ -31,6 +31,10 @@ public sealed class VirtualKeyManagementHubTests(ITestOutputHelper output) : Hub
         VerifyAddedToGroup($"vkey-{DefaultVirtualKeyId}");
         MockGroups.Verify(service => service.AddToGroupAsync(DefaultConnectionId, "admin",
             It.IsAny<CancellationToken>()), administrator ? Times.Once() : Times.Never());
+        MockGroups.Verify(service => service.AddToGroupAsync(DefaultConnectionId, $"vkey-lifecycle-owner-{DefaultVirtualKeyId}",
+            It.IsAny<CancellationToken>()), administrator ? Times.Never() : Times.Once());
+        VerifyAddedToGroup($"vkey-status-{DefaultVirtualKeyId}");
+        MockAuthService.Verify(service => service.IsAdminAsync(It.IsAny<HubCallerContext>()), Times.Once);
         _caller.Verify(client => client.SendCoreAsync("VirtualKeyStatus",
             It.Is<object[]>(args => args.Length == 1 && args[0] is VirtualKeyStatusNotification &&
                 ((VirtualKeyStatusNotification)args[0]).KeyId == DefaultVirtualKeyId),
@@ -62,13 +66,54 @@ public sealed class VirtualKeyManagementHubTests(ITestOutputHelper output) : Hub
 
         await hub.SubscribeToKeyManagement(456);
 
-        VerifyAddedToGroup("vkey-mgmt-456");
+        VerifyAddedToGroup("vkey-status-456");
+        VerifyAddedToGroup("admin");
+        VerifyRemovedFromGroup($"vkey-lifecycle-owner-{DefaultVirtualKeyId}");
         _keys.Verify(service => service.GetVirtualKeyInfoForValidationAsync(456), Times.Once);
         _caller.Verify(client => client.SendCoreAsync("VirtualKeyStatus",
             It.Is<object[]>(args => args.Length == 1 && args[0] is VirtualKeyStatusNotification &&
                 ((VirtualKeyStatusNotification)args[0]).KeyId == 456), It.IsAny<CancellationToken>()), Times.Once);
         _caller.Verify(client => client.SendCoreAsync("SubscribedToKeyManagement",
             It.Is<object[]>(args => args.Length == 1 && (int)args[0] == 456),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SubscribeToKeyManagement_ReconcilesAConnectionPromotedAfterItConnected()
+    {
+        SetupAuthServiceIsAdmin(false);
+        var hub = CreateHub();
+        _keys.Setup(service => service.GetVirtualKeyInfoForValidationAsync(DefaultVirtualKeyId))
+            .ReturnsAsync(Key(DefaultVirtualKeyId));
+        _keys.Setup(service => service.GetVirtualKeyInfoForValidationAsync(456)).ReturnsAsync(Key(456));
+        await hub.OnConnectedAsync();
+        SetupAuthServiceIsAdmin(true);
+
+        await hub.SubscribeToKeyManagement(456);
+
+        VerifyAddedToGroup($"vkey-lifecycle-owner-{DefaultVirtualKeyId}");
+        VerifyRemovedFromGroup($"vkey-lifecycle-owner-{DefaultVirtualKeyId}");
+        VerifyAddedToGroup("admin");
+        VerifyAddedToGroup($"vkey-status-{DefaultVirtualKeyId}");
+        VerifyAddedToGroup("vkey-status-456");
+        MockGroups.Verify(service => service.RemoveFromGroupAsync(DefaultConnectionId,
+            $"vkey-status-{DefaultVirtualKeyId}", It.IsAny<CancellationToken>()), Times.Never());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnsubscribeFromKeyManagement_RetainsOwnKeyStatusMembership(bool ownKey)
+    {
+        var hub = CreateHub();
+        var target = ownKey ? DefaultVirtualKeyId : 456;
+
+        await hub.UnsubscribeFromKeyManagement(target);
+
+        MockGroups.Verify(service => service.RemoveFromGroupAsync(DefaultConnectionId, $"vkey-status-{target}",
+            It.IsAny<CancellationToken>()), ownKey ? Times.Never() : Times.Once());
+        _caller.Verify(client => client.SendCoreAsync("UnsubscribedFromKeyManagement",
+            It.Is<object[]>(args => args.Length == 1 && (int)args[0] == target),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -333,8 +334,10 @@ namespace ConduitLLM.Admin.Services
 
             foreach (var log in logs)
             {
-                csv.AppendLine($"{log.Timestamp:yyyy-MM-dd HH:mm:ss},{log.VirtualKeyId},{log.ModelName},{log.RequestType}," +
-                              $"{log.InputTokens},{log.OutputTokens},{log.Cost:F6},{log.ResponseTimeMs:F2},{log.StatusCode}");
+                csv.Append(CultureInfo.InvariantCulture,
+                        $"{log.Timestamp:yyyy-MM-dd HH:mm:ss},{log.VirtualKeyId},{log.ModelName},{log.RequestType},")
+                    .AppendLine(CultureInfo.InvariantCulture,
+                        $"{log.InputTokens},{log.OutputTokens},{log.Cost:F8},{log.ResponseTimeMs:F2},{log.StatusCode}");
             }
 
             return Encoding.UTF8.GetBytes(csv.ToString());

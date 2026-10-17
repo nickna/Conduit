@@ -58,6 +58,15 @@ docker build --file Services/ConduitLLM.Gateway/Dockerfile.native --tag conduit-
 Do not add `linux-arm64` until that RID is published and receives the same process,
 image-content, protocol, and canary coverage.
 
+The packaged-entrypoint runtime proof stops a running owned container with
+`docker container stop --timeout <calculated-grace> <exact-id>`. It keeps the
+command deadline and reap allowance within the cleanup budget, rechecks ownership
+and stopped state, removes without force, and independently confirms absence.
+A zero exit alone is insufficient: stop stdout must contain only the exact ID
+after trimming. Warning text or a different ID prevents removal and success
+evidence. The supported spelling avoids Docker 29's deprecated `--time` warning
+without relaxing this check ([#1664](https://github.com/nickna/Conduit/issues/1664)).
+
 ## Reproducible comparison
 
 The release-owned migrator must prepare the database before either application
@@ -83,6 +92,40 @@ and one `gateway-chat-nonstream` plus one `gateway-chat-sse` file for Gateway.
 The collector replaces only `baseUrl` with its owned container's loopback origin.
 The driver checks exact Admin values or provider content and usage through full
 response completion, including SSE's terminal event and EOF.
+
+For a separate instrumented investigation, invoke the published probe directly
+with `--benchmark-workload-diagnostics <configuration.json> <new-sidecar.json>`.
+Its normal schema-2 report remains on stdout; the additional sidecar contains
+client request milestones, generated W3C trace/span IDs and client runtime
+snapshots for both warm-up and measured phases. Admin and non-streaming sidecars
+use schema 1. Complete-SSE sidecars use schema 2 and also retain first/last body
+read, first nonempty data event and `[DONE]` observation offsets, plus read and
+event counts. These offsets describe completed client reads; multiple events in
+one read share its timestamp. They are neither wire-arrival times nor validation
+results. The original content/usage/framing validator still runs after EOF, and
+receiving `[DONE]` does not stop body consumption or relax the request deadline.
+The sidecar must not
+already exist. The ordinary `--benchmark-workload` command and production
+collector do not enable this instrumentation or send its correlation headers.
+
+Request offsets and phase elapsed ticks use `stopwatchFrequency`; CPU and GC
+pause ticks use `runtimeTickFrequency`. Runtime snapshots describe the probe
+process, including its GC mode, rather than the application container. Missing
+response milestones are null. Outputs contain no credentials, URLs, setting
+keys, request bodies or response content. Configuration, warm-up and caller
+cancellation failures produce no completed report; a newly created sidecar can
+remain empty. Output I/O failure or process termination can leave a partial file,
+so retain and validate exit status and both artifacts before analysis.
+Sidecars are limited to 64 MiB, including SSE schema 2. A sufficiently large
+diagnostic workload can exceed that bound even when its request configuration is
+valid; the invocation fails rather than truncating the evidence.
+
+An enabled server tracer can join its server span's trace ID and parent span ID
+to the sidecar's trace ID and span ID. Convert correlated durations to common
+units; client monotonic offsets and server Unix timestamps have different
+origins and cannot be subtracted directly. Instrumented results need their own
+provenance and alternating pairs because tracing and diagnostic collection can
+affect timings. Preserve the original uninstrumented report independently.
 
 Supply authentication only through `CONDUIT_NATIVE_BENCHMARK_API_KEY`: the Admin
 master key for Admin or an existing virtual key for Gateway. Do not put credentials
@@ -160,6 +203,18 @@ It rejects the old service-only `-NativeBaselinePath` argument. Both container
 variants run by their observed immutable local image IDs on Linux/amd64. Every
 native sample records its actual container ID and verifies the packaged selected
 manifest before and after workloads; cleanup still uses verified ownership.
+
+For a multi-platform JIT index, metadata selection requires exactly one valid
+Linux/amd64 descriptor, then inspects that exact digest and sums its layer sizes.
+Missing or ambiguous platform descriptors and invalid selected digests fail before
+container/workload launch.
+The `jit-index` collector regression uses distinct index and selected-manifest
+digests, a synthetic selected-layer total of 518 bytes, and checks all six warm
+and measured launches use the observed immutable local ID
+([#1619](https://github.com/nickna/Conduit/issues/1619)). Keep descriptor collections
+in an ordinary variable such as `platformCandidates`: PowerShell's scalar regex
+operators can overwrite the automatic, case-insensitive `$Matches` variable.
+
 After collecting metrics, the collector stops each owned host with a bounded
 deadline (30 seconds by default, configurable with `-ShutdownTimeoutSeconds`).
 It requires a stopped host with exit code zero before ordinary removal. A failed
@@ -200,13 +255,63 @@ controlled error message:
 | `[stage=poll-memory-value]` | The memory sampler reported an invalid numeric value. |
 | `[stage=poll-callback]` | Another poll callback failed. |
 
-Unknown failures retain the generic message, and cleanup failure retains its
-separate controlled wording. Tags exclude private exception text, arguments,
-environment values and captured output. Polling intervals, deadlines, output
-caps and process cleanup remain unchanged; a callback failure still terminates
-its owned workload and fails collection. Preserve earlier unclassified attempts:
-a later tag cannot establish their cause. Full persisted per-phase diagnostics
-remain tracked in [#1642](https://github.com/nickna/Conduit/issues/1642).
+Unknown failures retain the generic message. Tags exclude private exception
+text, arguments, environment values and captured output. A callback failure
+still terminates its owned workload and fails collection. Preserve earlier
+unclassified attempts: later diagnostics cannot establish their cause.
+
+Failed collections also retain a versioned `diagnostics.json` alongside their
+`attempt.json` ([#1642](https://github.com/nickna/Conduit/issues/1642)). This
+sidecar records closed phase and reason codes, service, runtime and the warm-up
+or recorded-pair identity when known. The primary failure remains independent
+of owned-container and private-file cleanup outcomes. A cleanup verification
+failure does not establish that a resource leaked. Only explicit constant codes
+and typed values enter the sidecar or its console summary; private paths,
+connection URLs, credentials, child output and exception messages are excluded.
+Retain both files when investigating an unsuccessful collection.
+
+The immutable sidecar uses schema 1 and kind
+`conduit-native-benchmark-failure-diagnostic`, with its attempt ID and service
+derived from the owned failed attempt. Its UTF-8 JSON is limited to 4,096 bytes.
+`phase` and `reason` identify the first failure. `runtime` is `jit`, `native-aot`
+or `unknown`; `sampleKind` is `warmup`, `recorded` or `none`. Only a recorded
+sample has a positive integer `pair`. Both `ownedContainerCleanup` and
+`privateFileCleanup` contain independent `status` and `reason` fields:
+
+| Cleanup status | Meaning |
+| --- | --- |
+| `not-attempted` | This resource's cleanup was not reached. |
+| `confirmed` | The owned resource was confirmed absent. A retained failure reason can still indicate an earlier shutdown or deletion failure. |
+| `verification-failed` | Cleanup or absence verification failed. Absence was not confirmed; this outcome alone does not establish a leak. |
+
+The sidecar supplies diagnostics only. Existing attempt schemas, failed-attempt
+eligibility, successful report hashes, original archives, ownership checks,
+deadlines and cleanup retries retain their contracts. A failed attempt has a
+null report hash and cannot qualify, including when cleanup is confirmed or
+diagnostic persistence fails. Historical attempts without a sidecar remain valid
+historical records; no failure phase is inferred for them.
+
+`test-native-benchmark-collector.ps1` exercises readiness, nested memory-poll,
+unknown child and independent cleanup failures, including preservation of a
+previous successful alias and archive. It checks public streams, error records
+and retained JSON for private sentinels and configuration paths. Use
+`-DiagnosticSchemaOnly` for the focused sidecar validation and immutable-writer
+contracts; the default invocation includes these and the full collector suite.
+On 2026-10-16, the unchanged collector inputs passed all 144 cases and 31 metadata
+cleanup boundaries on Windows PowerShell 7.6.5/.NET 10.0.11 and Linux PowerShell
+7.6.6/.NET 10.0.12. The original 204 promotion contracts also passed on both
+platforms. These controlled fixtures establish diagnostic and eligibility
+contracts; they do not supply production benchmark measurements.
+
+`Invoke-BoundedProcess` has one pipeline result for either a successful or a
+nonzero child exit: a `PSCustomObject` containing only `ExitCode` (`int`),
+`Stdout` and `Stderr` (`string`). Cleanup awaits and pending stream reads suppress
+their incidental .NET task results so callers cannot accidentally accept an array
+through PowerShell property enumeration ([#1589](https://github.com/nickna/Conduit/issues/1589)).
+Captured streams remain private; a timeout or cleanup failure throws a controlled
+error instead of returning a command record. The collector contract suite checks
+single-object cardinality, exact property names and types, stdout/stderr content,
+nonzero exit codes, UTF-8 decoding and bounded process-tree cleanup.
 
 The evaluator independently recomputes the medians and comparisons, validates
 complete zero-failure workloads and identical load parameters and fingerprints
@@ -331,6 +436,29 @@ expiry again before returning its decision. The acceptance record documents a
 reviewer's decision; it does not authenticate that identity or change the blocked
 production policy. No production qualification, soak or rollback is claimed by
 the repository's synthetic contract tests.
+
+For the lifecycle and freshness requirements in
+[#1583](https://github.com/nickna/Conduit/issues/1583), apply these decisions before
+interpreting performance results:
+
+| Retained evidence | Qualification decision |
+| --- | --- |
+| Successful latest attempt, matching original report/archive bytes, accepted timeline and unexpired window | Eligible for the remaining promotion gates |
+| Prior success followed by an active or failed rerun | HOLD under the committed `latest-only` policy, even if the public report is unchanged |
+| Archived success after a failed rerun | Eligible only with `approved-archive`, explicit selection and acknowledgment of that exact newer failed attempt inside the accepted window |
+| New attempt after acceptance, changed hashes, mismatched identity or expired window | HOLD; review and accept the evidence again |
+| Report predating attempt tracking | Historical inspection only |
+
+`test-native-benchmark-collector.ps1` exercises real success-then-failed reruns,
+writer exclusion, atomic publication and retained original bytes.
+`test-native-promotion.ps1` covers the ordered accepted timeline, archive approval,
+expired windows, changed acknowledgment and mismatched attempt/report identities.
+These checks preserve the full soak timeline; extending the window is an explicit
+review decision, rather than an automatic consequence of rerunning collection.
+The [Linux contract job from run 38856125759](https://github.com/nickna/Conduit/actions/runs/38856125759/job/116827872074)
+passed all 204 promotion and 101 collector cases on merge
+`e340f3f940a8f9419384dbb4cc4b6d0b11d38a73`. Those results verify the machinery;
+they do not provide accepted production evidence.
 
 ## Canary procedure
 

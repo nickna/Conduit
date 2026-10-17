@@ -20,7 +20,7 @@ public sealed class NativeWebhookFactAttribute : FactAttribute
     public NativeWebhookFactAttribute()
     {
         if (Environment.GetEnvironmentVariable("CONDUIT_WEBHOOK_NATIVE_TEST") != "1")
-            Skip = "Requires current conduit-http-native:epic-1419 and conduit-admin-native:epic-1419 images and CONDUIT_WEBHOOK_NATIVE_TEST=1.";
+            Skip = "Requires native Gateway/Admin images (optional CONDUIT_WEBHOOK_NATIVE_GATEWAY_IMAGE and CONDUIT_WEBHOOK_NATIVE_ADMIN_IMAGE overrides) and CONDUIT_WEBHOOK_NATIVE_TEST=1.";
     }
 }
 
@@ -36,21 +36,27 @@ public sealed class WebhookNativeRuntimeTests(MediaDispatchFixture fixture, ITes
         await using var receiver = await WebhookReceiver.StartAsync(containerAccessible: true);
         // Exercise the native scheduled retry, then permanent exhaustion/replay.
         receiver.Respond = context => { context.Response.StatusCode = receiver.Posts.Count == 1 ? 503 : 400; return Task.CompletedTask; };
-        await using var redis = new RedisBuilder("redis:7.4-alpine").Build();
+        await using var redis = new RedisBuilder("redis:7.4-alpine")
+            .WithNetwork(fixture.Network).WithNetworkAliases("redis").Build();
         await redis.StartAsync();
         var connection = new NpgsqlConnectionStringBuilder(fixture.ConnectionString);
-        var database = $"postgresql://{Uri.EscapeDataString(connection.Username!)}:{Uri.EscapeDataString(connection.Password!)}@host.docker.internal:{connection.Port}/{connection.Database}";
+        var database = $"postgresql://{Uri.EscapeDataString(connection.Username!)}:{Uri.EscapeDataString(connection.Password!)}@postgres:5432/{connection.Database}";
         const string master = "native-webhook-test-master-key-32-bytes";
-        IContainer Container(string image, string schema) => new ContainerBuilder(image).WithPortBinding(8080, true)
+        IContainer Container(string image, string schema) => new ContainerBuilder(image)
+            .WithNetwork(fixture.Network).WithPortBinding(8080, true)
             .WithEnvironment("DATABASE_URL", database)
-            .WithEnvironment("REDIS_URL", $"host.docker.internal:{redis.GetMappedPublicPort(6379)}")
+            .WithEnvironment("REDIS_URL", "redis:6379")
             .WithEnvironment("CONDUIT_API_TO_API_BACKEND_AUTH_KEY", master).WithEnvironment("CONDUIT_MIGRATION_MODE", "Wait")
             .WithEnvironment("CONDUIT_ENABLE_HTTPS_REDIRECTION", "false")
             .WithEnvironment("ConduitLLM__Messaging__Wolverine__SchemaName", schema)
             .WithEnvironment("ConduitLLM__Messaging__Wolverine__AutoProvision", "true")
             .WithEnvironment("Webhooks__GatewayDurabilitySchema", "wolverine_media_test").Build();
-        await using var gateway = Container("conduit-http-native:epic-1419", "wolverine_media_test");
-        await using var admin = Container("conduit-admin-native:epic-1419", "wolverine_native_admin_test");
+        var gatewayImage = Environment.GetEnvironmentVariable("CONDUIT_WEBHOOK_NATIVE_GATEWAY_IMAGE")
+            ?? "conduit-http-native:epic-1419";
+        var adminImage = Environment.GetEnvironmentVariable("CONDUIT_WEBHOOK_NATIVE_ADMIN_IMAGE")
+            ?? "conduit-admin-native:epic-1419";
+        await using var gateway = Container(gatewayImage, "wolverine_media_test");
+        await using var admin = Container(adminImage, "wolverine_native_admin_test");
         using var publisher = fixture.Host(worker: false);
         await publisher.StartAsync();
         using (var provision = fixture.Host(worker: false, durabilitySchema: "wolverine_native_admin_test"))
@@ -64,11 +70,46 @@ public sealed class WebhookNativeRuntimeTests(MediaDispatchFixture fixture, ITes
             using var gatewayClient = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{gateway.GetMappedPublicPort(8080)}"), Timeout = TimeSpan.FromSeconds(5) };
             foreach (var serviceClient in new[] { client, gatewayClient })
                 await MediaDispatchFixture.EventuallyAsync(async () => { try { return (await serviceClient.GetAsync("/health/ready")).IsSuccessStatusCode; } catch (HttpRequestException) { return false; } });
-            Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/v1/admin/webhook-deliveries/backlog")).StatusCode);
-            client.DefaultRequestHeaders.Authorization = new("Bearer", master);
-            Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/v1/admin/webhook-deliveries/backlog")).StatusCode); // #1448
-            client.DefaultRequestHeaders.Authorization = null;
-            client.DefaultRequestHeaders.Add("X-API-Key", master);
+            await AssertAuthenticationMatrixAsync("/v1/admin/global-settings/", "global-settings", includeRejections: false);
+            await AssertAuthenticationMatrixAsync("/v1/admin/webhook-deliveries/backlog", "webhook-backlog");
+
+            async Task AssertAuthenticationMatrixAsync(string path, string endpoint, bool includeRejections = true)
+            {
+                ClearCredentials();
+                if (includeRejections)
+                {
+                    await AssertStatusAsync("none", HttpStatusCode.Unauthorized);
+                    ClearCredentials();
+                    client.DefaultRequestHeaders.Authorization = new("Bearer", "invalid-native-webhook-master-key");
+                    await AssertStatusAsync("invalid-bearer", HttpStatusCode.Unauthorized);
+                    ClearCredentials();
+                }
+                client.DefaultRequestHeaders.Authorization = new("Bearer", master);
+                await AssertStatusAsync("valid-bearer", HttpStatusCode.OK);
+                ClearCredentials();
+                if (includeRejections)
+                {
+                    client.DefaultRequestHeaders.Add("X-API-Key", "invalid-native-webhook-master-key");
+                    await AssertStatusAsync("invalid-api-key", HttpStatusCode.Unauthorized);
+                    ClearCredentials();
+                }
+                client.DefaultRequestHeaders.Add("X-API-Key", master);
+                await AssertStatusAsync("valid-api-key", HttpStatusCode.OK);
+
+                void ClearCredentials()
+                {
+                    client.DefaultRequestHeaders.Authorization = null;
+                    client.DefaultRequestHeaders.Remove("X-API-Key");
+                }
+
+                async Task AssertStatusAsync(string credential, HttpStatusCode expected)
+                {
+                    using var response = await client.GetAsync(path);
+                    output.WriteLine($"NATIVE_WEBHOOK_AUTH_CHECKPOINT endpoint={endpoint}; path={path}; credential={credential}; expected={(int)expected}; actual={(int)response.StatusCode}");
+                    Assert.Equal(expected, response.StatusCode);
+                }
+            }
+
             var request = new WebhookDeliveryRequested { TaskId = "native-webhook", VirtualKeyId = 1,
                 WebhookUrl = receiver.Url.Replace("0.0.0.0", "host.docker.internal"), PayloadJson = "{\"status\":\"completed\"}",
                 Headers = new() { ["Authorization"] = "Bearer native-receiver" } };

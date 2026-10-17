@@ -21,14 +21,20 @@ if (string.IsNullOrWhiteSpace(configured))
 var connectionString = NormalizeConnectionString(configured);
 if (args.Length > 0 && args[0] == "--cleanup-fixture")
 {
-    if (args.Length > 2 || (args.Length == 2 && args[1] != "--fail-work"))
-        throw new ArgumentException("Cleanup fixture accepts only --fail-work.");
-    return await PersistenceProbeCleanupFixture.RunAsync(connectionString, args.Length == 2);
+    // These fault-injection options belong only to the short cleanup fixture.
+    // Either option, or both options in either order, may occur at most once.
+    var fixtureArguments = args.Skip(1).ToArray();
+    if (fixtureArguments.Length > 2 ||
+        fixtureArguments.Distinct(StringComparer.Ordinal).Count() != fixtureArguments.Length ||
+        fixtureArguments.Any(argument => argument is not ("--fail-work" or "--read-only-cleanup")))
+        throw new ArgumentException("Cleanup fixture accepts --fail-work and --read-only-cleanup at most once each.");
+    return await PersistenceProbeCleanupFixture.RunAsync(connectionString,
+        fixtureArguments.Contains("--fail-work"), fixtureArguments.Contains("--read-only-cleanup"));
 }
 var schema = $"{PersistenceProbeLifecycle.SchemaPrefix}{Guid.NewGuid():N}";
 return await PersistenceProbeLifecycle.RunAsync(schema, RunProbeAsync,
     () => PersistenceProbeLifecycle.CleanupOwnedSchemaAsync(connectionString, schema),
-    () => Console.WriteLine("Native persistence probe passed: schema readiness, pool warming/cancellation/reuse, reads, writes, rollback, concurrency, retry, PostgreSQL mappings, and the global-settings, IP-filter, provider/credential, model-routing, virtual-key, media, async-task, function-discovery, function-execution configuration/writes, function-pricing, billing-audit and request-log runtime stores; owned schema removed."),
+    () => Console.WriteLine("Native persistence probe passed: schema readiness, pool warming/cancellation/reuse, reads, writes, rollback, concurrency, retry, PostgreSQL mappings, and the global-settings, IP-filter, provider/credential, model-routing, Gateway-metrics, virtual-key, media, async-task, function-discovery, function-execution configuration/writes, function-pricing, billing-audit and request-log runtime stores; owned schema removed."),
     Console.Error);
 
 async Task RunProbeAsync()
@@ -477,13 +483,14 @@ async Task RunProbeAsync()
             await ExerciseSchemaVersionProbeAsync(schemaDataSource, storeConnectionString);
             await ExerciseConnectionPoolWarmupAsync(schemaDataSource);
             await FunctionDiscoveryPersistenceProbe.RunAsync(schemaDataSource);
-            await FunctionExecutionConfigurationPersistenceProbe.RunAsync(schemaDataSource);
+            await FunctionExecutionConfigurationPersistenceProbe.RunAsync(schemaDataSource, storeConnectionString);
             await FunctionPricingPersistenceProbe.RunAsync(schemaDataSource);
-            await FunctionExecutionPersistenceProbe.RunAsync(schemaDataSource);
+            await FunctionExecutionPersistenceProbe.RunAsync(schemaDataSource, storeConnectionString);
             await FunctionExecutionReaderPersistenceProbe.RunAsync(schemaDataSource);
             await BillingAuditPersistenceProbe.RunAsync(schemaDataSource, storeConnectionString);
         }
         await ExerciseGlobalSettingRepositoryAsync(new NpgsqlGlobalSettingRepository(dataSource));
+        await GlobalSettingMutationPersistenceProbe.RunAsync(storeConnectionString);
         await ExerciseIpFilterRepositoryAsync(new NpgsqlIpFilterRepository(dataSource));
         await ExerciseProviderPersistenceAsync(
             new NpgsqlProviderRepository(dataSource),
@@ -491,9 +498,13 @@ async Task RunProbeAsync()
         await ExerciseModelRoutingRuntimeStoreAsync(
             dataSource,
             new NpgsqlModelProviderMappingRuntimeStore(dataSource));
+        await ModelRoutingPaginationPersistenceProbe.RunAsync(storeConnectionString);
+        await ModelRoutingEligibilityClockPersistenceProbe.RunAsync(storeConnectionString);
+        await GatewayMetricsPersistenceProbe.RunAsync(connectionString);
         await ExerciseVirtualKeyRuntimeStoreAsync(dataSource, new NpgsqlVirtualKeyRuntimeStore(dataSource));
         await ExerciseMediaRuntimeStoreAsync(new NpgsqlMediaRuntimeStore(dataSource));
         await ExerciseAsyncTaskRuntimeStoreAsync(new NpgsqlAsyncTaskRuntimeStore(dataSource));
+        await AsyncTaskGuardPersistenceProbe.RunAsync(connectionString);
         await ExerciseRequestLogRuntimeStoreAsync(
             dataSource,
             new NpgsqlRequestLogRuntimeStore(dataSource));

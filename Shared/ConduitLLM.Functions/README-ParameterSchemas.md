@@ -243,9 +243,20 @@ The `FunctionParameterValidationService` validates parameters against the schema
 2. **Type Checking**: Validates parameter types (string, number, boolean, etc.)
 3. **Range Validation**: Checks min/max constraints for numbers
 4. **Option Validation**: Ensures select parameters match allowed options
-5. **Pattern Validation**: Validates strings against regex patterns (if specified)
+String `pattern` metadata is available to clients and providers; this basic server
+validator does not enforce regex patterns.
 
-**Fail-Safe Behavior**: If schema validation fails due to a malformed schema, the system proceeds without validation and lets the provider validate the parameters.
+CLR and JSON-bound primitives follow the same rules. Strings and booleans retain
+their types, select values must be strings in the configured options, and numeric
+min/max bounds are inclusive and compare decimal digits without rounding through
+double. Numbers must fit the finite double range; overflow and underflow are rejected.
+Validation does not normalize or replace the submitted values.
+Null and undefined values fail a declared type check. Required entries check for
+presence; add a type definition to reject a present null value.
+
+Missing schemas skip validation. A malformed schema produces a warning and leaves
+validation to the provider. A malformed field definition produces a warning for that
+field while retaining other field errors and missing-required errors.
 
 ### Client-Side Validation
 

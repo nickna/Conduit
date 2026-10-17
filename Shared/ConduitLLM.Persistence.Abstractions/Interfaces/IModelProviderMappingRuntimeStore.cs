@@ -42,6 +42,11 @@ public interface IModelProviderMappingRuntimeStore
         int modelCostId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Resolves an eligible cost using one UTC timestamp captured after identifier
+    /// validation and before waiting for a context or connection. The effective
+    /// bound is inclusive and the expiry bound is exclusive.
+    /// </summary>
     Task<ModelCostRuntimeRecord?> GetModelCostForIdentifierAsync(
         string modelIdentifier,
         CancellationToken cancellationToken = default);

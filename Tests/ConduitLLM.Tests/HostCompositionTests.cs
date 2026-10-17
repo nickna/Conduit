@@ -19,6 +19,7 @@ using ConduitLLM.Functions.Entities;
 using ConduitLLM.Functions.Enums;
 using ConduitLLM.Functions.Models;
 using ConduitLLM.Functions.Services;
+using ConduitLLM.Functions.Serialization;
 using ConduitLLM.Gateway.Billing;
 using ConduitLLM.Gateway.Endpoints;
 using ConduitLLM.Gateway.Interfaces;
@@ -33,6 +34,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -431,15 +433,25 @@ public sealed class HostCompositionTests
         var calculator = Assert.IsType<FunctionCostCalculationService>(
             first.ServiceProvider.GetRequiredService<IFunctionCostCalculationService>());
         var configurationId = Random.Shared.Next(1, int.MaxValue);
-        var key = $"FunctionCost:Config:{configurationId}";
         var memory = provider.GetRequiredService<IMemoryCache>();
-        memory.Set(key, new FunctionCost
+        var cache = service.GetType().GetField("_cache",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(service)!;
+        var capture = (Task)cache.GetType().GetMethod("CaptureAsync")!.Invoke(cache, [CancellationToken.None])!;
+        await capture;
+        var snapshot = capture.GetType().GetProperty("Result")!.GetValue(capture)!;
+        var key = (string)snapshot.GetType().GetMethod("BuildKey",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(snapshot, [$"Config:{configurationId}"])!;
+        var cost = new FunctionCost
         {
             Id = 91, CostName = "Composition pricing", PricingModel = FunctionPricingModel.FlatRate,
             CostPerExecution = 0.12500001m, BaseCost = 0.12500001m
-        });
+        };
         try
         {
+            await (Task)snapshot.GetType().GetMethod("SetAsync")!.MakeGenericMethod(typeof(FunctionCost))
+                .Invoke(snapshot, [$"Config:{configurationId}", cost, FunctionsJsonContext.Default.FunctionCost, CancellationToken.None])!;
+            Assert.True(memory.TryGetValue(key, out _));
             Assert.Equal(0.12500001m, await calculator.EstimateCostAsync(configurationId,
                 new Dictionary<string, object> { ["query"] = "snow" }));
             Assert.Equal(0.12500001m, await calculator.CalculateCostAsync(configurationId, new FunctionExecutionUsage()));
@@ -447,6 +459,8 @@ public sealed class HostCompositionTests
         finally
         {
             memory.Remove(key);
+            if (provider.GetService<IDistributedCache>() is { } distributed)
+                await distributed.RemoveAsync(key);
         }
     }
 
@@ -656,9 +670,14 @@ public sealed class HostCompositionTests
         var innerField = typeof(LeaderElectedServiceWrapper).GetField("_innerService",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(innerField);
+        var queueInnerField = typeof(BatchAuditQueueHostedService).GetField("_innerService",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(queueInnerField);
         var workers = hosted.Select(service => service is LeaderElectedServiceWrapper
             ? Assert.IsAssignableFrom<IHostedService>(innerField.GetValue(service))
-            : service).ToArray();
+            : service is BatchAuditQueueHostedService
+                ? Assert.IsAssignableFrom<IHostedService>(queueInnerField.GetValue(service))
+                : service).ToArray();
         Type[] unsupportedWorkers = gateway
             ? [typeof(RequestLogService), typeof(FunctionCallAuditService), typeof(BillingReconciliationService),
                 typeof(PricingAuditService), typeof(DiscoveryCacheWarmingService)]
@@ -680,6 +699,8 @@ public sealed class HostCompositionTests
                 Assert.DoesNotContain(descriptors, descriptor => descriptor.ServiceType == type);
         }
         Assert.DoesNotContain(descriptors, descriptor => descriptor.ServiceType == typeof(IPricingAuditService));
+        Assert.Empty(hosted.OfType<BatchAuditQueueHostedService>());
+        Assert.Empty(workers.OfType<BatchAuditRetentionHostedService>());
         Assert.Null(auditField.GetValue(evaluator));
         if (gateway)
         {
@@ -709,13 +730,18 @@ public sealed class HostCompositionTests
         var audit = Assert.IsType<PricingAuditService>(provider.GetRequiredService<IPricingAuditService>());
         Assert.Same(audit, auditField.GetValue(evaluator));
         Assert.Same(audit, Assert.Single(workers.OfType<PricingAuditService>()));
+        AssertAuditQueueComposition(hosted, audit, nameof(PricingAuditService));
+        Assert.Equal(gateway ? 4 : 2, hosted.OfType<BatchAuditQueueHostedService>().Count());
         if (gateway)
         {
             var requestLog = Assert.IsType<RequestLogService>(provider.GetRequiredService<IRequestLogService>());
             Assert.Same(requestLog, provider.GetRequiredService<IRequestLogRuntimeWriter>());
             Assert.Same(requestLog, Assert.Single(workers.OfType<RequestLogService>()));
+            AssertAuditQueueComposition(hosted, requestLog, nameof(RequestLogService));
             Assert.Same(provider.GetRequiredService<IFunctionCallAuditService>(),
                 Assert.Single(workers.OfType<FunctionCallAuditService>()));
+            AssertAuditQueueComposition(hosted, provider.GetRequiredService<IFunctionCallAuditService>(),
+                nameof(FunctionCallAuditService));
             Assert.Same(provider.GetRequiredService<BillingReconciliationService>(),
                 Assert.Single(workers.OfType<BillingReconciliationService>()));
         }
@@ -802,10 +828,28 @@ public sealed class HostCompositionTests
 #else
         Assert.Null(runtimeField.GetValue(audit));
         Assert.DoesNotContain(descriptors, descriptor => descriptor.ServiceType == typeof(IBillingAuditRuntimeWriter));
-        Assert.DoesNotContain(hosted, service => ReferenceEquals(service, audit));
-        Assert.Single(hosted.OfType<LeaderElectedServiceWrapper>(),
-            wrapper => ReferenceEquals(innerField.GetValue(wrapper), audit));
+        AssertAuditQueueComposition(hosted, audit, nameof(BillingAuditService));
 #endif
+    }
+
+    private static void AssertAuditQueueComposition(IHostedService[] hosted, object audit, string serviceName)
+    {
+        var fields = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var queueField = typeof(BatchAuditQueueHostedService).GetField("_innerService", fields)!;
+        var queue = Assert.Single(hosted.OfType<BatchAuditQueueHostedService>(),
+            adapter => ReferenceEquals(queueField.GetValue(adapter), audit));
+        Assert.False(typeof(IDisposable).IsAssignableFrom(queue.GetType()));
+        var wrapper = Assert.Single(hosted.OfType<LeaderElectedServiceWrapper>(),
+            service => service.ServiceName == serviceName);
+        var innerField = typeof(LeaderElectedServiceWrapper).GetField("_innerService", fields)!;
+        var retention = Assert.IsType<BatchAuditRetentionHostedService>(innerField.GetValue(wrapper));
+        var runnerField = Assert.Single(typeof(BatchAuditRetentionHostedService).GetFields(fields),
+            field => field.FieldType == typeof(Func<CancellationToken, Task>));
+        Assert.Same(audit, ((Delegate)runnerField.GetValue(retention)!).Target);
+        Assert.True((bool)typeof(LeaderElectedServiceWrapper).GetField("_ownsInnerService", fields)!.GetValue(wrapper)!);
+        // Reverse hosted shutdown joins retention before draining this process's queue.
+        Assert.True(Array.IndexOf(hosted, queue) < Array.IndexOf(hosted, wrapper));
+        Assert.DoesNotContain(hosted, service => ReferenceEquals(service, audit));
     }
 
     private static void AssertDatabaseComposition(IServiceCollection descriptors, IServiceProvider provider)

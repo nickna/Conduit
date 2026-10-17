@@ -64,4 +64,9 @@
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="../ConduitLLM.PersistenceAotTests/Fixtures/GatewayMetricsSchema.sql"
+                      LogicalName="ConduitLLM.PersistenceAotTests.GatewayMetricsSchema.sql" />
+  </ItemGroup>
+
 </Project>

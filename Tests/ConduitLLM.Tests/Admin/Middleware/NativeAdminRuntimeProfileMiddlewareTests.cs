@@ -301,7 +301,7 @@ public sealed class NativeAdminRuntimeProfileMiddlewareTests
                 Assert.Equal(HttpStatusCode.OK, created.StatusCode);
                 using var body = JsonDocument.Parse(await created.Content.ReadAsStringAsync(deadline.Token));
                 var key = body.RootElement.GetProperty("ephemeralMasterKey").GetString()!;
-                Assert.True(key.StartsWith("emk_", StringComparison.Ordinal));
+                Assert.StartsWith("emk_", key, StringComparison.Ordinal);
                 using var read = Request("GET", "/v1/admin/global-settings/definitions");
                 read.Headers.Add("X-Master-Key", key);
                 using var readResult = await client.SendAsync(read, deadline.Token);

@@ -73,6 +73,84 @@ the build ID, relative path and manifest hash. Probe identity has its own refere
 The OpenAPI smoke may update timing metrics and the summary timestamp; it preserves
 these references and leaves the immutable manifests untouched.
 
+## Live Unix file-type checks
+
+Linux x64 and Arm64 evidence readers inspect file types through libc `statx`.
+The helper uses the [256-byte Linux UAPI buffer](https://github.com/torvalds/linux/blob/v6.12/include/uapi/linux/stat.h), requests `STATX_TYPE`, requires
+that returned mask bit, and reads `stx_mode` at offset 28. Strict UTF-8 encoding
+and a single NUL terminator preserve the requested path. The lookup uses
+`AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT` with default synchronization. Existing
+ancestor-link checks still run; no successful path or file-type result is cached
+between initial and final evidence reads.
+
+Missing interop, an unsupported process architecture, or native errors `EPERM`
+(1), `ENOSYS` (38), and `EOPNOTSUPP` (95) require an independent live lookup through
+the existing bounded `stat` subprocess. `EACCES` (13), `EINVAL` (22), other errors,
+missing returned type metadata, and unknown file types fail closed. Fallback must
+succeed independently; it never turns a native metadata failure into an assumed
+regular file. Its inspection and child cleanup retain their separate deadlines.
+Native metadata inspection does not open a FIFO or socket; it does not impose a
+universal deadline on filesystem metadata syscalls.
+
+`test-native-evidence-file-types.ps1` exercises source-derived ABI/error decisions
+and real bounded fallback children on both platforms. Linux adds actual UTF-8,
+FIFO, socket, character-device, symlink, ancestor-link, and late-replacement cases.
+The two CI workflows run this contract and emit non-gating native-versus-subprocess
+timings on the actual Linux runner. These checks supplement all eight existing
+promotion, collector, publish, image, runtime, archive, and OCI contract suites.
+
+### Measured verification overhead (#1639)
+
+One matched local comparison used independently copied source trees on the same
+Linux overlay filesystem in a network-isolated Ubuntu 24.04.5 x64 container on
+Docker Desktop/WSL2, with PowerShell 7.6.6, .NET 10.0.12, two CPU quota units and
+3 GiB memory. Both full
+promotion runs passed all **204 cases**. Elapsed time fell from **254.395 s** to
+**114.874 s** in that pair (54.8% lower). The committed baseline is `cb2aaf84c`;
+only the file-type helper changed in the candidate's promotion inputs.
+
+Separate component measurements use identical regular UTF-8 fixtures and operation
+counts. They include PowerShell loop overhead, are not additive, and do not
+constitute a hosted CPU profile or production request benchmark.
+
+| Operation | Count | Before (ms) | After (ms) |
+| --- | ---: | ---: | ---: |
+| First live type lookup, including initialization | 1 | 44.2 | 770.0 |
+| Warm live type helper | 500 | 1,294.8 | 57.3 |
+| `stat` command discovery alone | 200 | 301.2 | 303.1 |
+| Selected `stat` process and metadata lookup | 200 | 190.9 | 177.1 |
+| JSON read, parse and byte hash | 2,000 | 240.2 | 220.1 |
+| Complete evidence-file hash, including live guards | 200 | 628.3 | 104.4 |
+
+The first optimized lookup pays the interop compilation cost once per PowerShell
+process. Subsequent calls still inspect the filesystem each time. Retained local
+streams, timing JSON and component records are named `issue-1639-*`; baseline
+helper SHA-256 is `c981960b25093a32c566186472d404573b406e508b34f26cb0f398696989102c`
+and candidate helper SHA-256 is
+`25756eaba4a5b5405deb2e5ad9edb6beed69cd3ba5cb5c507c36b95a3a449098`.
+
+All existing suites were rerun after the change. Windows used PowerShell 7.6.5
+and .NET 10.0.11; Linux used the environment above. Every listed run exited zero
+with blank stderr. The collectors also passed 31 metadata cleanup boundaries.
+
+| Contract suite | Windows cases | Linux cases |
+| --- | ---: | ---: |
+| Promotion | 204 | 204 |
+| Collector | 101 | 101 |
+| Publish evidence | 64 | 67 |
+| Assembled image publisher | 40 | 40 |
+| Runtime archive | 56 | 56 |
+| Image verification | 41 | 41 |
+| Runtime evidence | 50 | 50 |
+| OCI association | 41 | 41 |
+| New file-type contract | 39 | 47 |
+
+The Windows file-type run explicitly excludes the Linux-only syscall and special
+file cases; Linux executes those cases against actual paths. All eight existing
+test sources are unchanged. The workflow validator passes all 89 policy checks
+for seven active workflows. Initial ABI-test overload binding and a sandbox ACL
+restriction were diagnosed and retained separately from the successful reruns.
+
 ## Qualification boundary
 
 Successful references are emitted only after all three publishes, symbol separation
@@ -87,6 +165,13 @@ image now carries its own complete sealed publish manifests and OCI association;
 the benchmark reader requires a digest-pinned candidate and replays that binding.
 Existing historical schema-1 baselines have no manifest identity. Production
 promotion remains blocked by the [canary policy](native-aot-canary.md).
+
+The document kind distinguishes the two uses of schema 1: a current
+`conduit-native-publish` manifest contains source, toolchain and file identity;
+a historical `native-baselines.json` report contains unbound metrics. A version
+number alone does not make the historical report qualify. The container collector
+rejects the legacy `NativeBaselinePath` argument and reads metrics from exactly
+one completed image package, avoiding first-match selection from a service list.
 
 ## Assembled image payloads
 
@@ -177,6 +262,23 @@ and confirms absence before `runtime/evidence.json` records success. The evidenc
 binds the execution to the original packaging report and OpenAPI bytes. Failed
 execution leaves its diagnostic files without successful execution evidence.
 
+The runtime verifier addresses uncertain creation
+([#1595](https://github.com/nickna/Conduit/issues/1595)) by recording its create
+attempt before launching Docker. A fresh GUID supplies the exact container name
+and owner label. Cleanup can recover that name when creation accepted the request
+but returned an error, timed out or produced an unusable ID. Inspection must agree
+on name, owner, service and immutable image before cleanup pins or acts on the ID.
+An ownership mismatch fails verification and leaves that container untouched.
+
+Execution and cleanup have independent budgets. Cleanup inspects again, stops an
+owned running container, verifies its stopped state, removes it without force and
+confirms absence. Successful evidence is created only after that sequence and a
+final replay of the package and OpenAPI identity. A retry requires a fresh artifact
+directory; diagnostic files from a failed invocation cannot become a successful
+report from a later run. `test-native-image-runtime-evidence.ps1` exercises these
+boundaries with real child commands; packaged entrypoint evidence is supplied by
+the hosted image jobs described below.
+
 Each invocation retains a fresh parent directory with `packaging` and `runtime`
 children. The Node command `native-container-smoke.mjs IMAGE SERVICE` calls this
 same PowerShell driver; an optional third argument selects the fresh parent
@@ -188,6 +290,25 @@ in Docker's containerd image store. It preserves the actual available or unavail
 source record and records registry digest qualification as false. The completed
 package association below verifies local descriptor roles; production qualification
 still requires the canary policy.
+
+When a runtime contract fails, retain its scenario-specific diagnostic
+([#1609](https://github.com/nickna/Conduit/issues/1609)). Command-failure assertions
+report `scenario`, `elapsedSeconds`, `maximumSeconds`, `latch`, `targetCommandCount`,
+`expectedStage` and `controlledFailureStage`:
+
+| Negative fixture | Expected controlled stage |
+| --- | --- |
+| `create-timeout` | `runtime-create` |
+| `cp-timeout` | `runtime-openapi-copy` |
+| `logs-overflow` | `runtime-logs` |
+
+The invocation stopwatch stops before fingerprinting and assertions. Its bound
+includes OCI preflight, reached commands and reap budgets, execution and independent
+cleanup. `maximumSeconds` is a conservative whole-invocation fixture bound;
+individual command and cleanup deadlines retain their own limits.
+Separate `wait-timeout` coverage checks the execution deadline and
+`runtime-execution` stage. A later successful rerun does not establish the cause of
+an earlier failure whose scenario and timing were not retained.
 
 ## Offline OCI archive association
 
@@ -242,6 +363,23 @@ calculations. Changed files, source, build, digest roles or metrics produce HOLD
 This binding leaves the operational promotion policy and its provenance,
 benchmark, soak and rollback requirements in force.
 
+The following contracts exercise the build association required by
+[#1582](https://github.com/nickna/Conduit/issues/1582):
+
+| Association | Validator and regression suite |
+| --- | --- |
+| Exact source, selected toolchain, fresh outputs and full runtime inventory | `native-publish-evidence.ps1`, `native-publish-build.ps1`; `test-native-publish-evidence.ps1` |
+| Independently compiled application and health probe belong to one sealed image build | `native-image-publish-evidence.ps1`; `test-native-image-publish.ps1`, including a substituted child manifest with its reference hash updated |
+| Requested index, selected platform manifest, config and observed local image/container retain their distinct roles | `native-image-oci-association.ps1`; `test-native-image-oci-association.ps1` |
+| Every measured sample and publish metric belongs to the retained package | `native-benchmark-image-evidence.ps1`, collector and evaluator; `test-native-benchmark-collector.ps1` and `test-native-promotion.ps1` |
+
+The promotion suite rejects a different sealed build even when its source,
+runtime bytes and metric values match, and rejects a single cold sample borrowed
+from another build. Collector regressions reject the cross-build package before
+launching the workload. Mutated retained payloads, manifests and OCI archives also
+fail validation. These are contract fixtures; their synthetic promotion decisions
+do not supply production measurements or operational approval.
+
 Schema 4 also seals collection attempts and atomic report publication. The evaluator
 requires the latest successful attempt, or an explicitly approved historical
 selection inside an accepted qualification window. It rechecks original report,
@@ -271,9 +409,17 @@ The earlier successful
 at `e0f9f9904df187460ab338bd86619d912f653d60` retains clean-Git payloads and
 successful Admin/Gateway packaged OpenAPI documents (191/35 paths). Both packages
 honestly report missing image/container descriptors and OCI association HOLD from
-the classic image store. A new run of the required descriptor gate must supply
-verified association before that evidence gap can be closed; the final PR records
-the exact tested commit and run rather than altering historical reports.
+the classic image store.
+
+[Linux run 38856125759](https://github.com/nickna/Conduit/actions/runs/38856125759)
+subsequently passed the required OCI association gate for both Admin and Gateway,
+with packaged OpenAPI exports of 191 and 35 paths and confirmed runtime cleanup.
+The run's PR head is `bc9a0741fa68ed3a401161b633825cc76a6fbe94`; its actual
+checkout and image source are the synthetic merge
+`e340f3f940a8f9419384dbb4cc4b6d0b11d38a73`. The gate verified each clean package
+against that merge's `GITHUB_SHA`. This supplies hosted local descriptor-chain
+evidence for those builds. Registry digest qualification and operational promotion
+remain separate, and later source changes require their own CI verification.
 
 ## Native build source
 

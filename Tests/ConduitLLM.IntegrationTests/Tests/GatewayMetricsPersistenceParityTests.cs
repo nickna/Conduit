@@ -1,3 +1,6 @@
+#if !CONDUIT_NATIVE_AOT
+// Managed EF/typed reference suite. Published native execution is provided by
+// ConduitLLM.PersistenceAotTests/GatewayMetricsPersistenceProbe.cs without EF.
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Persistence;
 using Microsoft.Extensions.Logging;
@@ -15,6 +18,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 using Xunit;
+using Xunit.Abstractions;
 
 namespace ConduitLLM.IntegrationTests.Tests;
 
@@ -22,13 +26,33 @@ namespace ConduitLLM.IntegrationTests.Tests;
 /// Runs Gateway operational metrics queries against EF and typed Npgsql.
 /// </summary>
 [Collection("Postgres advisory locks")]
-public sealed class GatewayMetricsPersistenceParityTests
+public sealed partial class GatewayMetricsPersistenceParityTests
 {
     private readonly PostgresLockTestContainerFixture _fixture;
+    private readonly ITestOutputHelper _output;
 
-    public GatewayMetricsPersistenceParityTests(PostgresLockTestContainerFixture fixture)
+    public GatewayMetricsPersistenceParityTests(PostgresLockTestContainerFixture fixture, ITestOutputHelper output)
     {
         _fixture = fixture;
+        _output = output;
+    }
+
+    [Fact]
+    public async Task PublishedNativeMetricsSchemaMatchesTheCurrentProductionModel()
+    {
+        // Model SQL generation opens no connection; port1 makes an accidental
+        // database dependency fail rather than borrow a real fixture backend.
+        await using var source = NpgsqlDataSource.Create("Host=127.0.0.1;Port=1;Database=metrics_schema_model;Pooling=false;Timeout=1");
+        await using var context = new TestDbContextFactory(source).CreateDbContext();
+        var expected = context.Database.GenerateCreateScript().ReplaceLineEndings("\n");
+        using var resource = typeof(GatewayMetricsPersistenceParityTests).Assembly.GetManifestResourceStream(
+            "ConduitLLM.PersistenceAotTests.GatewayMetricsSchema.sql");
+        resource.Should().NotBeNull();
+        using var reader = new StreamReader(resource!, new System.Text.UTF8Encoding(false, true),
+            detectEncodingFromByteOrderMarks: false);
+        var actual = await reader.ReadToEndAsync();
+        actual.ReplaceLineEndings("\n").Should().Be(expected,
+            "the EF-free native fixture must track the current production schema across checkout line endings");
     }
 
     [Fact]
@@ -153,11 +177,16 @@ public sealed class GatewayMetricsPersistenceParityTests
 
     private async Task DropSchemaAsync(string schema)
     {
-        await using var connection = new NpgsqlConnection(_fixture.ConnectionString);
-        await connection.OpenAsync();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(_fixture.ConnectionString)
+            { Pooling = false, Timeout = 5, CommandTimeout = 5 }.ConnectionString);
+        await connection.OpenAsync(deadline.Token);
         await using var command = connection.CreateCommand();
         command.CommandText = $"DROP SCHEMA IF EXISTS \"{schema}\" CASCADE";
-        await command.ExecuteNonQueryAsync();
+        await command.ExecuteNonQueryAsync(deadline.Token);
+        command.CommandText = "SELECT count(*) FROM pg_catalog.pg_namespace WHERE nspname = @schema";
+        command.Parameters.AddWithValue("schema", schema);
+        (await command.ExecuteScalarAsync(deadline.Token)).Should().Be(0L);
     }
 
     private string WithSearchPath(string schema) =>
@@ -260,47 +289,10 @@ public sealed class GatewayMetricsPersistenceParityTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task MetricsValidationRetainsTheDocumentedAdapterDifferences(bool typedNpgsql)
-    {
-        // #1670 tracks reconciliation separately; the compiler rewrite preserves the EF baseline.
-        var schema = $"gm_inputs_{Guid.NewGuid():N}";
-        try
-        {
-            await CreateMetricsMatrixAsync(schema, seed: true);
-            await using var source = NpgsqlDataSource.Create(WithSearchPath(schema));
-            var store = CreateMetricsStore(source, typedNpgsql);
-            foreach (var invalid in new[] { null, "", " \t\r\n" })
-            {
-                if (typedNpgsql)
-                    await Assert.ThrowsAnyAsync<ArgumentException>(() =>
-                        store.GetGenerationTaskMetricsAsync(invalid!, MetricsFrom));
-                else
-                    (await store.GetGenerationTaskMetricsAsync(invalid!, MetricsFrom)).Should().BeEmpty();
-            }
-            if (typedNpgsql)
-            {
-                foreach (var limit in new[] { 0, -1 })
-                    await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-                        store.GetTopVirtualKeySpendAsync(MetricsFrom, MetricsInstant, limit));
-            }
-            else
-            {
-                (await store.GetTopVirtualKeySpendAsync(MetricsFrom, MetricsInstant, 0)).Should().BeEmpty();
-                // Negative EF Take is deliberately not assigned an unobserved provider-specific outcome.
-            }
-            await AssertMetricsReadAsync(store, MetricsRead.Generation, CancellationToken.None);
-            await AssertMetricsReadAsync(store, MetricsRead.Spend, CancellationToken.None);
-        }
-        finally { await DropSchemaAsync(schema); }
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
     public async Task AllSixMetricsReadsCancelBeforeExecutionAndInOccupiedPoolThenRecover(bool typedNpgsql)
     {
         var schema = $"gm_pool_{Guid.NewGuid():N}";
-        try
+        await IntegrationProofCleanup.RunAsync(async () =>
         {
             await CreateMetricsMatrixAsync(schema, seed: true);
             foreach (var operation in Enum.GetValues<MetricsRead>())
@@ -312,32 +304,39 @@ public sealed class GatewayMetricsPersistenceParityTests
                 using (var cancelled = new CancellationTokenSource())
                 {
                     cancelled.Cancel();
-                    await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                    var cancellation = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
                         InvokeMetricsReadAsync(store, operation, cancelled.Token));
+                    Assert.Equal(cancelled.Token, cancellation.CancellationToken);
                 }
                 await AssertMetricsPoolReusableAsync(source, deadline.Token);
                 await AssertMetricsReadAsync(store, operation, deadline.Token);
 
                 // EF and typed share this exact data source, so this occupies the sole pool slot.
-                await using (var occupied = await source.OpenConnectionAsync(deadline.Token))
+                NpgsqlConnection? occupied = null;
+                Task? pending = null;
+                using (var cancelled = new CancellationTokenSource())
                 {
-                    occupied.ProcessID.Should().BeGreaterThan(0);
-                    using var cancelled = new CancellationTokenSource();
-                    var pending = InvokeMetricsReadAsync(store, operation, cancelled.Token);
-                    try
+                    await IntegrationProofCleanup.RunAsync(async () =>
                     {
+                        occupied = await source.OpenConnectionAsync(deadline.Token);
+                        occupied.ProcessID.Should().BeGreaterThan(0);
+                        pending = InvokeMetricsReadAsync(store, operation, cancelled.Token);
                         pending.IsCompleted.Should().BeFalse("the only matching pool connection is occupied");
                         cancelled.Cancel();
-                        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                        var cancellation = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
                             pending.WaitAsync(TimeSpan.FromSeconds(5)));
-                    }
-                    finally { await ReapMetricsReadAsync(pending, cancelled); }
+                        Assert.Equal(cancelled.Token, cancellation.CancellationToken);
+                    }, () => IntegrationProofCleanup.DrainIndependentlyAsync(
+                        [async cleanup => { cancelled.Cancel(); if (pending is not null) await ReapMetricsReadAsync(pending, cleanup); },
+                         async cleanup => { if (occupied is not null) await occupied.DisposeAsync().AsTask().WaitAsync(cleanup); },
+                         async cleanup => { if (pending is not null) await ReapMetricsReadAsync(pending, cleanup); }],
+                        TimeSpan.FromSeconds(5), "Metrics occupied-pool producer and held lease could not be drained."),
+                        "Metrics occupied-pool cancellation and cleanup failed.");
                 }
                 await AssertMetricsPoolReusableAsync(source, deadline.Token);
                 await AssertMetricsReadAsync(store, operation, deadline.Token);
             }
-        }
-        finally { await DropSchemaAsync(schema); }
+        }, () => DropSchemaAsync(schema), "Metrics pool cancellation and schema cleanup failed.");
     }
 
     [Theory]
@@ -346,7 +345,7 @@ public sealed class GatewayMetricsPersistenceParityTests
     public async Task AllEightMetricsSqlStatementsCancelAfterObservedRelationWaitThenRecover(bool typedNpgsql)
     {
         var schema = $"gm_sql_{Guid.NewGuid():N}";
-        try
+        await IntegrationProofCleanup.RunAsync(async () =>
         {
             await CreateMetricsMatrixAsync(schema, seed: true);
             var targets = new[]
@@ -373,13 +372,12 @@ public sealed class GatewayMetricsPersistenceParityTests
                 var store = CreateMetricsStore(source, typedNpgsql);
                 var readerPid = await AssertMetricsPoolReusableAsync(source, deadline.Token);
                 gate.Arm();
-                await CancelMetricsSqlWaitAsync(store, target, gate, schema, connectionString,
+                await CancelMetricsSqlWaitAsync(source, store, target, gate, schema, connectionString,
                     application, readerPid, deadline.Token);
                 await AssertMetricsPoolReusableAsync(source, deadline.Token);
                 await AssertMetricsReadAsync(store, target.Operation, deadline.Token);
             }
-        }
-        finally { await DropSchemaAsync(schema); }
+        }, () => DropSchemaAsync(schema), "Metrics SQL cancellation and schema cleanup failed.");
     }
 
     private enum MetricsRead { Usage, Cost, Active, Queue, Generation, Spend }
@@ -502,24 +500,25 @@ public sealed class GatewayMetricsPersistenceParityTests
         }
     }
 
-    private async Task CreateMetricsMatrixAsync(string schema, bool seed)
+    private async Task CreateMetricsMatrixAsync(string schema, bool seed, CancellationToken cancellationToken = default)
     {
-        await using (var connection = new NpgsqlConnection(_fixture.ConnectionString))
+        await using (var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(_fixture.ConnectionString)
+            { Pooling = false }.ConnectionString))
         {
-            await connection.OpenAsync();
+            await connection.OpenAsync(cancellationToken);
             await using var command = connection.CreateCommand();
             command.CommandText = $"CREATE SCHEMA \"{schema}\"";
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
         await using var efSource = NpgsqlDataSource.Create(WithSearchPath(schema));
         await using var context = new TestDbContextFactory(efSource).CreateDbContext();
         // Use the actual production model, including FK and unique indexes. EnsureCreated would
         // see unrelated shared fixture tables, so execute its creation script in this owned schema.
-        await context.Database.OpenConnectionAsync();
+        await context.Database.OpenConnectionAsync(cancellationToken);
         await using (var command = context.Database.GetDbConnection().CreateCommand())
         {
             command.CommandText = context.Database.GenerateCreateScript();
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
         if (!seed) return;
 
@@ -614,7 +613,7 @@ public sealed class GatewayMetricsPersistenceParityTests
             MatrixSpend(101, 99m, MetricsFrom.AddTicks(-10)),
             MatrixSpend(101, 100m, MetricsInstant),
             MatrixSpend(101, 100m, MetricsInstant.AddMinutes(1)));
-        await context.SaveChangesAsync();
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     private static RequestLog MatrixRequest(string model, string? provider, double latency, decimal cost,
@@ -646,19 +645,23 @@ public sealed class GatewayMetricsPersistenceParityTests
         return connection.ProcessID;
     }
 
-    private static async Task CancelMetricsSqlWaitAsync(IGatewayMetricsStore store, MetricsSqlTarget target,
+    private static async Task CancelMetricsSqlWaitAsync(NpgsqlDataSource source, IGatewayMetricsStore store, MetricsSqlTarget target,
         MetricsCommandGate gate, string schema, string connectionString, string application, int readerPid,
         CancellationToken token)
     {
-        await using var blocker = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(connectionString)
-            { Pooling = false, ApplicationName = $"{application}_blocker" }.ConnectionString);
-        await blocker.OpenAsync(token);
-        await using var transaction = await blocker.BeginTransactionAsync(token);
+        NpgsqlConnection? blocker = null;
+        NpgsqlTransaction? transaction = null;
+        Task? pending = null;
+        var released = false;
         using var cancelled = new CancellationTokenSource();
-        // ExecutingCommand logging is synchronous before Npgsql sends bytes. Keep the test caller free.
-        var pending = Task.Run(() => InvokeMetricsReadAsync(store, target.Operation, cancelled.Token));
-        try
+        await IntegrationProofCleanup.RunAsync(async () =>
         {
+            blocker = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(connectionString)
+                { Pooling = false, ApplicationName = $"{application}_blocker", Timeout = 5, CommandTimeout = 5 }.ConnectionString);
+            await blocker.OpenAsync(token);
+            transaction = await blocker.BeginTransactionAsync(token);
+            // ExecutingCommand logging is synchronous before Npgsql sends bytes. Keep the test caller free.
+            pending = Task.Run(() => InvokeMetricsReadAsync(store, target.Operation, cancelled.Token));
             var entered = await gate.Entered.WaitAsync(token);
             entered.Ordinal.Should().Be(target.Second ? 2 : 1);
             entered.CompletedBefore.Should().Be(target.Second ? 1 : 0);
@@ -674,14 +677,22 @@ public sealed class GatewayMetricsPersistenceParityTests
             await WaitForMetricsRelationWaitAsync(connectionString, application, readerPid, blocker.ProcessID,
                 schema, target.Table, pending, token);
             cancelled.Cancel();
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
-        }
-        finally
-        {
-            gate.Release();
-            try { await ReapMetricsReadAsync(pending, cancelled); }
-            finally { await transaction.RollbackAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)); }
-        }
+            var cancellation = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal(cancelled.Token, cancellation.CancellationToken);
+            // The blocker still owns its table lock. Reusing the only source
+            // slot proves the command was reaped before unlocking that table.
+            using var recovery = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            (await AssertMetricsPoolReusableAsync(source, recovery.Token)).Should().Be(readerPid);
+            await transaction.RollbackAsync(recovery.Token);
+            released = true;
+        }, () => IntegrationProofCleanup.DrainIndependentlyAsync(
+            [async cleanup => { gate.Release(); cancelled.Cancel(); if (pending is not null) await ReapMetricsReadAsync(pending, cleanup); },
+             async cleanup => { if (transaction is not null && !released) await transaction.RollbackAsync(cleanup); },
+             async cleanup => { if (blocker is not null) await blocker.DisposeAsync().AsTask().WaitAsync(cleanup); },
+             async cleanup => { if (pending is not null) await ReapMetricsReadAsync(pending, cleanup); },
+             async cleanup => { if (transaction is not null) await transaction.DisposeAsync().AsTask().WaitAsync(cleanup); }],
+            TimeSpan.FromSeconds(5), "Metrics SQL producer/blocker/transaction could not all be drained."),
+            "Metrics observed SQL cancellation and cleanup failed.");
     }
 
     private static async Task WaitForMetricsRelationWaitAsync(string connectionString, string application,
@@ -730,11 +741,10 @@ public sealed class GatewayMetricsPersistenceParityTests
         }
     }
 
-    private static async Task ReapMetricsReadAsync(Task pending, CancellationTokenSource cancelled)
+    private static async Task ReapMetricsReadAsync(Task pending, CancellationToken cleanupToken)
     {
-        cancelled.Cancel();
-        try { await pending.WaitAsync(TimeSpan.FromSeconds(5)); }
-        catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+        try { await pending.WaitAsync(cleanupToken); }
+        catch (OperationCanceledException) when (pending.IsCanceled) { }
     }
 
     private sealed class MetricsDataSourceContextFactory(NpgsqlDataSource source) : IDbContextFactory<ConduitDbContext>
@@ -811,3 +821,4 @@ public sealed class GatewayMetricsPersistenceParityTests
 
 
 }
+#endif

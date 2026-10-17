@@ -14,7 +14,7 @@ namespace ConduitLLM.Functions.Services;
 public sealed class StoreBackedFunctionCostService : IFunctionCostService
 {
     private readonly IFunctionPricingRuntimeStore _store;
-    private readonly HybridCacheAccessor _cache;
+    private readonly FunctionCostCache _cache;
 
     public StoreBackedFunctionCostService(
         IFunctionPricingRuntimeStore store,
@@ -24,8 +24,7 @@ public sealed class StoreBackedFunctionCostService : IFunctionCostService
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         ArgumentNullException.ThrowIfNull(logger);
-        _cache = new HybridCacheAccessor(memoryCache, distributedCache, logger,
-            "FunctionCost:", TimeSpan.FromMinutes(15), TimeSpan.FromHours(1));
+        _cache = new FunctionCostCache(memoryCache, distributedCache, logger);
     }
 
     public async Task<FunctionCost?> GetCostForConfigurationAsync(
@@ -34,17 +33,16 @@ public sealed class StoreBackedFunctionCostService : IFunctionCostService
         if (functionConfigurationId <= 0)
             throw new ArgumentException("Function configuration ID must be greater than zero", nameof(functionConfigurationId));
         var key = $"Config:{functionConfigurationId}";
-        var cached = await _cache.GetAsync(key, FunctionsJsonContext.Default.FunctionCost, cancellationToken);
+        var cache = await _cache.CaptureAsync(cancellationToken);
+        var cached = await cache.GetAsync(key, FunctionsJsonContext.Default.FunctionCost, cancellationToken);
         if (cached is not null) return cached;
         var cost = await _store.FindEligibleCostAsync(functionConfigurationId, DateTime.UtcNow, cancellationToken);
         if (cost is not null)
-            await _cache.SetAsync(key, cost, FunctionsJsonContext.Default.FunctionCost, cancellationToken);
+            await cache.SetAsync(key, cost, FunctionsJsonContext.Default.FunctionCost, cancellationToken);
         return cost;
     }
 
-    // Retain the existing service's list-only clear contract. Per-configuration
-    // invalidation accompanies Admin writes; broad invalidation is a separate change.
-    public Task ClearCacheAsync() => _cache.RemoveAsync(["All", "All_Active"]);
+    public Task ClearCacheAsync() => _cache.ClearAsync();
 
     public Task<FunctionCost?> GetCostByIdAsync(int costId, CancellationToken cancellationToken = default) =>
         throw ManagementNotSupported();

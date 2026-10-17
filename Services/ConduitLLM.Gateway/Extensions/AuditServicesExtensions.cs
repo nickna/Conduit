@@ -11,7 +11,7 @@ namespace ConduitLLM.Gateway.Extensions;
 public static class AuditServicesExtensions
 {
     /// <summary>
-    /// Adds audit services including request log and function call audit services with leader election
+    /// Hosts each local audit queue and coordinates only their shared retention work.
     /// </summary>
     public static IServiceCollection AddAuditServices(this IServiceCollection services)
     {
@@ -20,15 +20,23 @@ public static class AuditServicesExtensions
         services.AddSingleton<IRequestLogService, RequestLogService>();
         services.AddSingleton<IRequestLogRuntimeWriter>(provider =>
             provider.GetRequiredService<IRequestLogService>());
-        services.AddLeaderElectedHostedService<RequestLogService>(
-            provider => (RequestLogService)provider.GetRequiredService<IRequestLogService>(),
-            "RequestLogService", ownsInnerService: false);
+        services.AddSingleton<IHostedService>(provider => new BatchAuditQueueHostedService(
+            (RequestLogService)provider.GetRequiredService<IRequestLogService>()));
+        services.AddLeaderElectedHostedService<BatchAuditRetentionHostedService>(
+            provider => new BatchAuditRetentionHostedService(
+                ((RequestLogService)provider.GetRequiredService<IRequestLogService>()).RunDataRetentionAsync,
+                provider.GetRequiredService<ILogger<BatchAuditRetentionHostedService>>()),
+            "RequestLogService", ownsInnerService: true);
 
-        // Register Function Call Audit service with leader election
+        // Each process owns its queued events; only shared retention needs leadership.
         services.AddSingleton<IFunctionCallAuditService, FunctionCallAuditService>();
-        services.AddLeaderElectedHostedService<FunctionCallAuditService>(
-            provider => (FunctionCallAuditService)provider.GetRequiredService<IFunctionCallAuditService>(),
-            "FunctionCallAuditService", ownsInnerService: false);
+        services.AddSingleton<IHostedService>(provider => new BatchAuditQueueHostedService(
+            (FunctionCallAuditService)provider.GetRequiredService<IFunctionCallAuditService>()));
+        services.AddLeaderElectedHostedService<BatchAuditRetentionHostedService>(
+            provider => new BatchAuditRetentionHostedService(
+                ((FunctionCallAuditService)provider.GetRequiredService<IFunctionCallAuditService>()).RunDataRetentionAsync,
+                provider.GetRequiredService<ILogger<BatchAuditRetentionHostedService>>()),
+            "FunctionCallAuditService", ownsInnerService: true);
 #endif
 
         return services;

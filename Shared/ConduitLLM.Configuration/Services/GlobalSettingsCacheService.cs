@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,13 +15,18 @@ namespace ConduitLLM.Configuration.Services;
 public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheService
 {
     private const string ReloadChannelName = "conduit:global-settings:reload";
+    private const int CompletedReloadLimit = 10_000;
+    private static readonly TimeSpan CompletedReloadRetention = TimeSpan.FromHours(24);
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<GlobalSettingsCacheService> _logger;
     private readonly IConnectionMultiplexer? _redis;
     private readonly TimeProvider _timeProvider;
     private readonly CancellationTokenSource _stopping = new();
     private readonly object _lifecycleGate = new();
-    private readonly ConcurrentDictionary<string, byte> _processedReloads = new();
+    private readonly object _reloadGate = new();
+    private readonly HashSet<string> _processedReloads = new(StringComparer.Ordinal);
+    private readonly Queue<CompletedReload> _processedReloadOrder = new();
+    private readonly Dictionary<string, TaskCompletionSource> _reloadsInFlight = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _lock = new(1, 1);
     private CacheSnapshot _snapshot = CacheSnapshot.Empty;
     private Task _recoveryTask = Task.CompletedTask;
@@ -30,6 +34,8 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
     private ISubscriber? _subscriber;
     private bool _stopRequested;
     private bool _hasLoaded;
+
+    private readonly record struct CompletedReload(string RequestId, long CompletedTimestamp);
 
     private sealed record CacheSnapshot(IReadOnlyDictionary<string, string> Values, DateTime LastLoadTime)
     {
@@ -345,10 +351,7 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
             : requestId;
         if (_redis == null)
         {
-            if (_processedReloads.TryAdd(id, 0))
-            {
-                await ReloadAllSettingsAsync();
-            }
+            await ProcessReloadRequestAsync(id);
             return;
         }
 
@@ -359,14 +362,14 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
 
     private async Task HandleReloadBroadcastAsync(string requestId)
     {
-        if (Volatile.Read(ref _stopRequested) || string.IsNullOrWhiteSpace(requestId) || !_processedReloads.TryAdd(requestId, 0))
+        if (Volatile.Read(ref _stopRequested) || string.IsNullOrWhiteSpace(requestId))
         {
             return;
         }
 
         try
         {
-            await ReloadAllSettingsAsync();
+            await ProcessReloadRequestAsync(requestId);
         }
         catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
         {
@@ -379,6 +382,84 @@ public class GlobalSettingsCacheService : IHostedService, IGlobalSettingsCacheSe
             _logger.LogError(ex,
                 "Failed to process cluster-wide global settings reload {RequestId}",
                 requestId);
+        }
+    }
+
+    private Task ProcessReloadRequestAsync(string requestId)
+    {
+        TaskCompletionSource completion;
+        lock (_reloadGate)
+        {
+            EvictCompletedReloads(_timeProvider.GetTimestamp());
+            if (_processedReloads.Contains(requestId))
+                return Task.CompletedTask;
+            if (_reloadsInFlight.TryGetValue(requestId, out var existing))
+                return existing.Task;
+
+            completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _reloadsInFlight.Add(requestId, completion);
+        }
+
+        // Every outcome is delivered through the shared completion. Concurrent
+        // deliveries await the same work and observe the same failure for retry.
+        _ = CompleteReloadRequestAsync(requestId, completion);
+        return completion.Task;
+    }
+
+    private async Task CompleteReloadRequestAsync(string requestId, TaskCompletionSource completion)
+    {
+        try
+        {
+            ThrowIfReloadStopping();
+            await ReloadAllSettingsAsync();
+            lock (_reloadGate)
+            {
+                // ReloadAllSettingsAsync deliberately becomes a no-op after stop;
+                // that skipped operation must never acknowledge a new request ID.
+                ThrowIfReloadStopping();
+                var completedTimestamp = _timeProvider.GetTimestamp();
+                if (_processedReloads.Add(requestId))
+                    _processedReloadOrder.Enqueue(new CompletedReload(requestId, completedTimestamp));
+                EvictCompletedReloads(completedTimestamp);
+                _reloadsInFlight.Remove(requestId);
+                completion.TrySetResult();
+            }
+        }
+        catch (OperationCanceledException ex)
+        {
+            lock (_reloadGate)
+            {
+                _reloadsInFlight.Remove(requestId);
+                completion.TrySetCanceled(ex.CancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            lock (_reloadGate)
+            {
+                _reloadsInFlight.Remove(requestId);
+                completion.TrySetException(ex);
+            }
+        }
+    }
+
+    private void ThrowIfReloadStopping()
+    {
+        _stopping.Token.ThrowIfCancellationRequested();
+        if (Volatile.Read(ref _stopRequested))
+            throw new OperationCanceledException(_stopping.Token);
+    }
+
+    // Caller holds _reloadGate. Each completion is enqueued and removed once;
+    // duplicate hits neither extend its lifetime nor require scanning the set.
+    private void EvictCompletedReloads(long now)
+    {
+        while (_processedReloadOrder.TryPeek(out var oldest) &&
+            (_processedReloadOrder.Count > CompletedReloadLimit ||
+                _timeProvider.GetElapsedTime(oldest.CompletedTimestamp, now) >= CompletedReloadRetention))
+        {
+            _processedReloadOrder.Dequeue();
+            _processedReloads.Remove(oldest.RequestId);
         }
     }
 

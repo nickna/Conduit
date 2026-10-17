@@ -385,6 +385,92 @@ function Set-NativeBenchmarkAttemptFailed {
     catch { throw 'Native benchmark failed attempt could not be recorded.' }
 }
 
+function Get-NativeBenchmarkAttemptFailureDiagnostic($Value) {
+    # This is a closed public record, not an exception/output serialization
+    # boundary. Reject unrecognized text rather than echoing it in validation.
+    try {
+        $diagnostic = Get-NativeEvidenceObject $Value
+        Assert-NativeEvidenceKeys $diagnostic @('schemaVersion', 'kind', 'attemptId', 'service',
+            'phase', 'reason', 'runtime', 'sampleKind', 'pair', 'ownedContainerCleanup', 'privateFileCleanup') -Exact
+        Assert-NativeEvidenceInteger $diagnostic['schemaVersion'] -Positive
+        if ($diagnostic['schemaVersion'] -ne 1 -or $diagnostic['kind'] -isnot [string] -or
+            $diagnostic['kind'] -cne 'conduit-native-benchmark-failure-diagnostic') {
+            throw 'Invalid failure diagnostic version.'
+        }
+        Assert-NativeBenchmarkAttemptIdentity $diagnostic['attemptId'] $diagnostic['service']
+        $phases = @('configuration', 'image-metadata', 'container-start', 'readiness', 'memory-sample',
+            'workload', 'workload-result', 'collection-validation', 'owned-cleanup', 'private-cleanup',
+            'publication', 'unknown')
+        $reasons = @('unknown', 'readiness-deadline', 'command-deadline', 'poll-command-deadline',
+            'poll-callback', 'poll-memory-sample', 'poll-memory-value', 'memory-sample', 'memory-value',
+            'probe-exit', 'invalid-result', 'request-failed', 'image-binding', 'container-start',
+            'ownership-verification', 'shutdown-failed', 'cleanup-verification-failed',
+            'private-cleanup-failed', 'publication-failed')
+        foreach ($field in @('phase', 'reason', 'runtime', 'sampleKind')) {
+            if ($diagnostic[$field] -isnot [string]) { throw 'Invalid failure diagnostic code.' }
+        }
+        if ($diagnostic['phase'] -cnotin $phases -or $diagnostic['reason'] -cnotin $reasons -or
+            $diagnostic['runtime'] -cnotin @('unknown', 'jit', 'native-aot') -or
+            $diagnostic['sampleKind'] -cnotin @('none', 'warmup', 'recorded')) {
+            throw 'Invalid failure diagnostic code.'
+        }
+        if ($diagnostic['sampleKind'] -ceq 'recorded') {
+            Assert-NativeEvidenceInteger $diagnostic['pair'] -Positive
+            if ($diagnostic['pair'] -gt 21) { throw 'Invalid failure diagnostic pair.' }
+        }
+        elseif ($null -ne $diagnostic['pair']) { throw 'Invalid failure diagnostic pair.' }
+
+        foreach ($field in @('ownedContainerCleanup', 'privateFileCleanup')) {
+            $cleanup = Get-NativeEvidenceObject $diagnostic[$field]
+            Assert-NativeEvidenceKeys $cleanup @('status', 'reason') -Exact
+            $reasons = if ($field -ceq 'ownedContainerCleanup') {
+                @('none', 'shutdown-failed', 'verification-failed')
+            } else { @('none', 'cleanup-failed') }
+            if ($cleanup['status'] -isnot [string] -or
+                $cleanup['status'] -cnotin @('not-attempted', 'confirmed', 'verification-failed') -or
+                $cleanup['reason'] -isnot [string] -or $cleanup['reason'] -cnotin $reasons -or
+                ($cleanup['status'] -ceq 'not-attempted' -and $cleanup['reason'] -cne 'none') -or
+                ($cleanup['status'] -ceq 'verification-failed' -and $cleanup['reason'] -ceq 'none')) {
+                throw 'Invalid failure diagnostic cleanup outcome.'
+            }
+            # A confirmed absence may follow an earlier shutdown/file-delete
+            # failure. Keep that reason without claiming the resource leaked.
+            $diagnostic[$field] = $cleanup
+        }
+        $bytes = ConvertTo-NativeBenchmarkAttemptJsonBytes $diagnostic
+        if ($bytes.Length -gt 4096) { throw 'Failure diagnostic exceeds its bound.' }
+        return ,$diagnostic
+    }
+    catch { throw 'Native benchmark failure diagnostic is invalid.' }
+}
+
+function Set-NativeBenchmarkAttemptFailureDiagnostic {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)] $Context, [Parameter(Mandatory)] $Diagnostic)
+    $ErrorActionPreference = 'Stop'
+    try {
+        $contextObject = Get-NativeBenchmarkAttemptContext $Context
+        $record = Get-NativeBenchmarkAttemptLiveRecord $Context
+        if ($record['status'] -cne 'failed') { throw 'Failure diagnostics require a failed attempt.' }
+        $provided = Get-NativeEvidenceObject $Diagnostic
+        $fields = @('phase', 'reason', 'runtime', 'sampleKind', 'pair', 'ownedContainerCleanup', 'privateFileCleanup')
+        Assert-NativeEvidenceKeys $provided $fields -Exact
+        $value = [ordered]@{
+            schemaVersion = 1; kind = 'conduit-native-benchmark-failure-diagnostic'
+            attemptId = $contextObject['attemptId']; service = $contextObject['service']
+        }
+        foreach ($field in $fields) { $value[$field] = $provided[$field] }
+        $validated = Get-NativeBenchmarkAttemptFailureDiagnostic $value
+        $bytes = ConvertTo-NativeBenchmarkAttemptJsonBytes $validated
+        $unusedRecord = Get-NativeBenchmarkAttemptLiveRecord $Context
+        # Sidecars are immutable and cannot replace an original diagnostic or
+        # alter attempt.json, historical reports, or the successful alias.
+        $path = [IO.Path]::Combine($contextObject['attemptDirectory'], 'diagnostics.json')
+        Write-NativeBenchmarkAttemptNewFile $path $bytes
+    }
+    catch { throw 'Native benchmark failure diagnostic could not be recorded.' }
+}
+
 function Close-NativeBenchmarkAttempt {
     [CmdletBinding()]
     param([Parameter(Mandatory)] $Context)

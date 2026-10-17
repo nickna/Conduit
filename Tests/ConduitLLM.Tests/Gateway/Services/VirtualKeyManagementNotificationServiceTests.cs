@@ -17,13 +17,18 @@ public sealed class VirtualKeyManagementNotificationServiceTests
     [InlineData("enabled")]
     [InlineData("disabled")]
     [InlineData("suspended")]
+    [InlineData("Disabled")]
+    [InlineData("Suspended")]
+    [InlineData("expired")]
     public async Task ServerPublication_PreservesLifecyclePayloadAndIntendedRecipientGroups(string notificationType)
     {
         var delivered = new List<(string Group, string Event, object Payload)>();
-        var clients = new Mock<IHubClients>();
+        var proxies = new List<Mock<IClientProxy>>();
+        var clients = new Mock<IHubClients>(MockBehavior.Strict);
         clients.Setup(service => service.Group(It.IsAny<string>())).Returns((string group) =>
         {
             var proxy = new Mock<IClientProxy>();
+            proxies.Add(proxy);
             proxy.Setup(client => client.SendCoreAsync(
                     It.IsAny<string>(), It.IsAny<object[]>(), It.IsAny<CancellationToken>()))
                 .Callback<string, object[], CancellationToken>((name, args, _) =>
@@ -51,14 +56,14 @@ public sealed class VirtualKeyManagementNotificationServiceTests
                 var updated = new VirtualKeyUpdatedNotification { KeyId = 42, UpdatedProperties = ["keyName"] };
                 payload = updated;
                 eventName = "VirtualKeyUpdated";
-                groups = ["vkey-42", "vkey-mgmt-42", "admin"];
+                groups = ["vkey-lifecycle-owner-42", "admin"];
                 await notifications.NotifyKeyUpdatedAsync(42, updated);
                 break;
             case "deleted":
                 var deleted = new VirtualKeyDeletedNotification { KeyId = 42, KeyName = "server-deleted" };
                 payload = deleted;
                 eventName = "VirtualKeyDeleted";
-                groups = ["vkey-42", "vkey-mgmt-42", "admin"];
+                groups = ["vkey-lifecycle-owner-42", "admin"];
                 await notifications.NotifyKeyDeletedAsync(42, deleted);
                 break;
             default:
@@ -68,8 +73,8 @@ public sealed class VirtualKeyManagementNotificationServiceTests
                 };
                 payload = status;
                 eventName = "VirtualKeyStatusChanged";
-                groups = notificationType == "enabled"
-                    ? ["vkey-42", "vkey-mgmt-42"] : ["vkey-42", "vkey-mgmt-42", "admin"];
+                groups = notificationType is "disabled" or "suspended"
+                    ? ["vkey-lifecycle-owner-42", "admin"] : ["vkey-status-42"];
                 await notifications.NotifyKeyStatusChangedAsync(42, status);
                 break;
         }
@@ -81,5 +86,16 @@ public sealed class VirtualKeyManagementNotificationServiceTests
             Assert.Same(payload, item.Payload);
         });
         clients.VerifyGet(service => service.All, Times.Never);
+        clients.Verify(service => service.Groups(It.IsAny<IReadOnlyList<string>>()), Times.Never);
+        foreach (var group in groups)
+            clients.Verify(service => service.Group(group), Times.Once);
+        foreach (var proxy in proxies)
+        {
+            proxy.Verify(client => client.SendCoreAsync(eventName,
+                It.Is<object[]>(args => args.Length == 1 && ReferenceEquals(args[0], payload)),
+                It.IsAny<CancellationToken>()), Times.Once);
+            proxy.VerifyNoOtherCalls();
+        }
+        clients.VerifyNoOtherCalls();
     }
 }

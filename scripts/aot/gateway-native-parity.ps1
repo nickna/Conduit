@@ -154,7 +154,7 @@ function Invoke-PrivateFixtureProcess(
 }
 
 function Invoke-FunctionCredentialFixture([string]$fixtureDll, [string]$redisConnectionString, [string]$plaintext) {
-        $output = Invoke-PrivateFixtureProcess (Get-Command dotnet).Source @($fixtureDll, 'protect-function-key') @{
+        $output = Invoke-PrivateFixtureProcess (Get-Command dotnet -CommandType Application | Select-Object -First 1).Source @($fixtureDll, 'protect-function-key') @{
             CONDUIT_NATIVE_FUNCTION_PLAINTEXT_KEY = $plaintext
             CONDUIT_NATIVE_FUNCTION_REDIS_CONNECTION_STRING = $redisConnectionString
         } 'Function credential fixture'
@@ -249,7 +249,7 @@ function Invoke-BillingAuditLifecycle([string]$argument, [string]$expected, [str
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
         $output = Invoke-PrivateFixtureProcess $nativeProbe $arguments @{} 'Native BillingAudit lifecycle'
     } else {
-        $output = Invoke-PrivateFixtureProcess (Get-Command dotnet).Source (@($probeDll) + $arguments) @{} 'Native BillingAudit lifecycle'
+        $output = Invoke-PrivateFixtureProcess (Get-Command dotnet -CommandType Application | Select-Object -First 1).Source (@($probeDll) + $arguments) @{} 'Native BillingAudit lifecycle'
     }
     if ($timerWitness) {
         $witness = [regex]::Match($output, '\A' + [regex]::Escape($expected) + ' ([1-9][0-9]*) ([1-9][0-9]*)(?:\r?\n)?\z')
@@ -401,7 +401,7 @@ try {
     }
     if ($LASTEXITCODE -ne 0) { throw 'Native Gateway parity fixture seed failed.' }
 
-    $dotnet = (Get-Command dotnet).Source
+    $dotnet = (Get-Command dotnet -CommandType Application | Select-Object -First 1).Source
     # Capture credential-bearing configuration privately, never into report logs.
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
         $proxies = Start-LoggedProcess 'dependency-proxies' $nativeProbe @('--dependency-proxies') (Split-Path $nativeProbe) $null
@@ -419,7 +419,7 @@ try {
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
         $provider = Start-LoggedProcess 'provider' $nativeProbe @('--mock-provider') (Split-Path $nativeProbe) $null
     } else {
-        $dotnet = (Get-Command dotnet).Source
+        $dotnet = (Get-Command dotnet -CommandType Application | Select-Object -First 1).Source
         $probeDll = Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll'
         $provider = Start-LoggedProcess 'provider' $dotnet @($probeDll, '--mock-provider') $probeProject $null
     }
@@ -520,7 +520,7 @@ try {
         $benchmarkArguments = @('--benchmark-workload', $configurationPath)
         $benchmarkFile = $nativeProbe
         if (-not (Test-Path -LiteralPath $nativeProbe -PathType Leaf)) {
-            $benchmarkFile = (Get-Command dotnet).Source
+            $benchmarkFile = (Get-Command dotnet -CommandType Application | Select-Object -First 1).Source
             $benchmarkArguments = @($probeDll) + $benchmarkArguments
         }
         $benchmarkOutput = Invoke-PrivateFixtureProcess $benchmarkFile $benchmarkArguments @{
@@ -653,7 +653,7 @@ finally {
                 if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
                     $cleanupOutput = Invoke-PrivateFixtureProcess $nativeProbe @($cleanup.Argument) @{} $cleanup.Label
                 } else {
-                    $cleanupOutput = Invoke-PrivateFixtureProcess (Get-Command dotnet).Source @($probeDll, $cleanup.Argument) @{} $cleanup.Label
+                    $cleanupOutput = Invoke-PrivateFixtureProcess (Get-Command dotnet -CommandType Application | Select-Object -First 1).Source @($probeDll, $cleanup.Argument) @{} $cleanup.Label
                 }
                 $expected = '\A' + [regex]::Escape($cleanup.Label + ': PASS') + '(?:\r?\n)?\z'
                 if ($cleanupOutput -cnotmatch $expected) { throw ($cleanup.Label + ' returned an invalid result.') }
