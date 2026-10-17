@@ -87,6 +87,13 @@ Parameter schemas are stored as JSONB in the `ParameterSchema` column of the `Fu
 ```
 
 #### Array
+
+Array validation accepts CLR arrays and `IList` collections (including `List<T>`,
+`ArrayList`, and `ReadOnlyCollection<T>`), `JsonElement` arrays, and `JsonArray`
+nodes. Dictionaries and other object representations are rejected. Materialize
+other `IEnumerable` values, such as sets or generators, as a list or array before
+validation.
+
 ```json
 {
   "type": "array",

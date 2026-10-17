@@ -24,6 +24,9 @@ namespace ConduitLLM.Functions.Services;
 /// delegates, arrays, scalar JSON nodes, and value types are not objects. Caller
 /// object-inspection failures reject the parameter rather than invoking the
 /// malformed-schema fallback.
+/// Array fields accept JsonElement arrays, JsonArray nodes, CLR arrays, and IList
+/// collections. Other IEnumerable values must be materialized as an array or
+/// list; enumeration alone cannot distinguish sequences from generic maps.
 /// </remarks>
 public class FunctionParameterValidationService
 {
@@ -180,13 +183,10 @@ public class FunctionParameterValidationService
                     break;
 
                 case "array":
-                    if (value is not JsonElement jsonElement || jsonElement.ValueKind != JsonValueKind.Array)
-                    {
-                        if (value is not System.Collections.IEnumerable || value is string)
-                        {
-                            return $"Parameter '{paramName}' must be an array";
-                        }
-                    }
+                    if (value is IDictionary or IDictionary<string, object> or IReadOnlyDictionary<string, object> or JsonObject
+                        || value is not JsonElement { ValueKind: JsonValueKind.Array }
+                            and not JsonArray and not Array and not IList)
+                        return $"Parameter '{paramName}' must be an array";
                     break;
 
                 case "select":

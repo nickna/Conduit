@@ -17,6 +17,133 @@ public sealed class FunctionParameterValidationServiceTests
         new(NullLogger<FunctionParameterValidationService>.Instance);
 
     [Theory]
+    [InlineData("array")]
+    [InlineData("empty-array")]
+    [InlineData("list")]
+    [InlineData("empty-list")]
+    [InlineData("array-list")]
+    [InlineData("empty-array-list")]
+    [InlineData("read-only-list")]
+    [InlineData("empty-read-only-list")]
+    [InlineData("json-array")]
+    [InlineData("empty-json-array")]
+    [InlineData("json-node-array")]
+    [InlineData("empty-json-node-array")]
+    public void ArraySchemaAcceptsSupportedSequenceRepresentationsWithoutMutation(string representation)
+    {
+        object value = representation switch
+        {
+            "array" => new[] { 1, 2 },
+            "empty-array" => Array.Empty<int>(),
+            "list" => new List<int> { 1, 2 },
+            "empty-list" => new List<int>(),
+            "array-list" => new ArrayList { 1, 2 },
+            "empty-array-list" => new ArrayList(),
+            "read-only-list" => new ReadOnlyCollection<int>(new[] { 1, 2 }),
+            "empty-read-only-list" => new ReadOnlyCollection<int>(Array.Empty<int>()),
+            "json-array" => JsonValue("[1,2]"),
+            "empty-json-array" => JsonValue("[]"),
+            "json-node-array" => new JsonArray(1, 2),
+            "empty-json-node-array" => new JsonArray(),
+            _ => throw new ArgumentOutOfRangeException(nameof(representation))
+        };
+        var items = (value as IList)?.Cast<object>().ToArray();
+        var nodeJson = (value as JsonNode)?.ToJsonString();
+
+        AssertValidation(ValidateWithoutMutation(value, Schema("array")), valid: true);
+
+        if (value is IList list) Assert.Equal(items, list.Cast<object>().ToArray());
+        if (value is JsonNode node) Assert.Equal(nodeJson, node.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData("dictionary")]
+    [InlineData("empty-dictionary")]
+    [InlineData("typed-dictionary")]
+    [InlineData("empty-typed-dictionary")]
+    [InlineData("read-only-dictionary")]
+    [InlineData("empty-read-only-dictionary")]
+    [InlineData("immutable-dictionary")]
+    [InlineData("empty-immutable-dictionary")]
+    [InlineData("custom-read-only-dictionary")]
+    [InlineData("empty-custom-read-only-dictionary")]
+    [InlineData("map-list")]
+    [InlineData("generic-dictionary")]
+    [InlineData("hashtable")]
+    [InlineData("empty-hashtable")]
+    [InlineData("json-object")]
+    [InlineData("json-node-object")]
+    [InlineData("string")]
+    [InlineData("json-string")]
+    [InlineData("json-number")]
+    [InlineData("json-boolean")]
+    [InlineData("poco")]
+    [InlineData("set")]
+    [InlineData("empty-set")]
+    [InlineData("generator")]
+    [InlineData("empty-generator")]
+    public void ArraySchemaRejectsMapsObjectsAndUnsupportedEnumerablesWithoutWarnings(string representation)
+    {
+        object value = representation switch
+        {
+            "dictionary" => new Dictionary<string, object> { ["count"] = 1 },
+            "empty-dictionary" => new Dictionary<string, object>(),
+            "typed-dictionary" => new Dictionary<string, int> { ["count"] = 1 },
+            "empty-typed-dictionary" => new Dictionary<string, int>(),
+            "read-only-dictionary" => new ReadOnlyDictionary<string, int>(
+                new Dictionary<string, int> { ["count"] = 1 }),
+            "empty-read-only-dictionary" => new ReadOnlyDictionary<string, int>(new Dictionary<string, int>()),
+            "immutable-dictionary" => ImmutableDictionary<string, int>.Empty.Add("count", 1),
+            "empty-immutable-dictionary" => ImmutableDictionary<string, int>.Empty,
+            "custom-read-only-dictionary" => new ReadOnlyIntMap(new Dictionary<string, int> { ["count"] = 1 }),
+            "empty-custom-read-only-dictionary" => new ReadOnlyIntMap(new Dictionary<string, int>()),
+            "map-list" => new ReadOnlyObjectMapList(),
+            "generic-dictionary" => StringKeyDictionary(),
+            "hashtable" => new Hashtable { ["count"] = 1 },
+            "empty-hashtable" => new Hashtable(),
+            "json-object" => JsonValue("{\"count\":1}"),
+            "json-node-object" => new JsonObject { ["count"] = 1 },
+            "string" => "plain string",
+            "json-string" => JsonValue("\"plain string\""),
+            "json-number" => JsonValue("1"),
+            "json-boolean" => JsonValue("true"),
+            "poco" => new ObjectParameter { Count = 1 },
+            "set" => new HashSet<int> { 1, 2 },
+            "empty-set" => new HashSet<int>(),
+            "generator" => GenerateArrayValues(empty: false),
+            "empty-generator" => GenerateArrayValues(empty: true),
+            _ => throw new ArgumentOutOfRangeException(nameof(representation))
+        };
+        var originalMap = (value as IReadOnlyDictionary<string, int>)?.ToArray();
+        var dictionary = value as IDictionary;
+        var originalEntries = dictionary is null ? null : dictionary.Keys.Cast<object>()
+            .Select(key => new KeyValuePair<object, object?>(key, dictionary[key])).ToArray();
+        var nodeJson = (value as JsonNode)?.ToJsonString();
+
+        var result = ValidateWithoutMutation(value, Schema("array"));
+
+        AssertValidation(result, valid: false);
+        Assert.Equal("Parameter 'value' must be an array", Assert.Single(result.Errors));
+        if (value is IReadOnlyDictionary<string, int> map) Assert.Equal(originalMap, map.ToArray());
+        if (dictionary is not null)
+            Assert.Equal(originalEntries, dictionary.Keys.Cast<object>()
+                .Select(key => new KeyValuePair<object, object?>(key, dictionary[key])).ToArray());
+        if (value is JsonNode node) Assert.Equal(nodeJson, node.ToJsonString());
+    }
+
+    [Fact]
+    public void ArraySchemaRejectsCallerContainersWithoutInspectingOrEnumeratingThem()
+    {
+        object[] values = [new ThrowingKeysDictionary(), new ThrowingEnumerable()];
+        foreach (var value in values)
+        {
+            var result = ValidateWithoutMutation(value, Schema("array"));
+            AssertValidation(result, valid: false);
+            Assert.Equal("Parameter 'value' must be an array", Assert.Single(result.Errors));
+        }
+    }
+
+    [Theory]
     [InlineData("dictionary")]
     [InlineData("typed-dictionary")]
     [InlineData("read-only-dictionary")]
@@ -478,6 +605,44 @@ public sealed class FunctionParameterValidationServiceTests
     private sealed class ThrowingKeysDictionary : Hashtable
     {
         public override ICollection Keys => throw new InvalidOperationException("Caller keys are unavailable.");
+    }
+
+    private sealed class ReadOnlyIntMap(IReadOnlyDictionary<string, int> values) : IReadOnlyDictionary<string, int>
+    {
+        public int this[string key] => values[key];
+        public IEnumerable<string> Keys => values.Keys;
+        public IEnumerable<int> Values => values.Values;
+        public int Count => values.Count;
+        public bool ContainsKey(string key) => values.ContainsKey(key);
+        public bool TryGetValue(string key, out int value) => values.TryGetValue(key, out value);
+        public IEnumerator<KeyValuePair<string, int>> GetEnumerator() => values.GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    private sealed class ThrowingEnumerable : IEnumerable
+    {
+        public IEnumerator GetEnumerator() => throw new InvalidOperationException("Caller enumeration is unavailable.");
+    }
+
+    private static IEnumerable<int> GenerateArrayValues(bool empty)
+    {
+        if (empty) yield break;
+        yield return 1;
+        yield return 2;
+    }
+
+    private sealed class ReadOnlyObjectMapList : List<KeyValuePair<string, object>>, IReadOnlyDictionary<string, object>
+    {
+        public ReadOnlyObjectMapList() => Add(new KeyValuePair<string, object>("count", 1));
+        public object this[string key] => key == "count" ? 1 : throw new KeyNotFoundException();
+        public IEnumerable<string> Keys => new[] { "count" };
+        public IEnumerable<object> Values => new object[] { 1 };
+        public bool ContainsKey(string key) => key == "count";
+        public bool TryGetValue(string key, out object value)
+        {
+            value = 1;
+            return ContainsKey(key);
+        }
     }
 
     private static string Schema(string type) => type == "select"
