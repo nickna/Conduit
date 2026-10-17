@@ -838,7 +838,7 @@ public sealed class GlobalSettingRepositoryParityTests
             """;
         command.Parameters.AddWithValue("reader", readerPid);
         command.Parameters.AddWithValue("blocker", blockerPid);
-        command.Parameters.AddWithValue("application", application);
+        command.Parameters.AddWithValue("application", NpgsqlTypes.NpgsqlDbType.Text, (object?)application ?? DBNull.Value);
         command.Parameters.AddWithValue("mode", mode);
         command.Parameters.AddWithValue("relation", $"\"{schema}\".\"GlobalSettings\"");
         command.Parameters.AddWithValue("schema", schema);

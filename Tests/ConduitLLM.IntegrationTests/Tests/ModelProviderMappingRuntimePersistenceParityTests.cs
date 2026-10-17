@@ -106,8 +106,10 @@ public sealed partial class ModelProviderMappingRuntimePersistenceParityTests
             aliases[0].Provider.Should().NotBeSameAs(aliases[1].Provider);
             aliases[0].Provider.Settings.Should().NotBeSameAs(aliases[1].Provider.Settings);
             aliases[0].Provider.ProviderName = "mutated returned provider";
-            aliases[0].Provider.Settings!["region"] = "mutated returned setting";
-            aliases[0].Provider.Settings["new"] = "caller-only";
+            var returnedSettings = aliases[0].Provider.Settings;
+            Assert.NotNull(returnedSettings);
+            returnedSettings["region"] = "mutated returned setting";
+            returnedSettings["new"] = "caller-only";
             AssertGraphSnapshot(aliases[1], aliases[1].Id == matrix.Populated.Id ? matrix.Populated : matrix.Shared);
             AssertGraphSnapshot(await store.GetByIdAsync(matrix.Populated.Id), matrix.Populated);
 
