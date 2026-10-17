@@ -349,6 +349,68 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
         await fixture.AssertAccountingAsync(fixture.Primary, 1);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task UnexpectedStatusRetainsOriginalExceptionTypesAndSqlStateWithoutSecrets(
+        bool runtime, bool failClaimRead)
+    {
+        await using var fixture = await Fixture.CreateAsync(postgres.ConnectionString, runtime);
+        const string privateFailure = "Password=private-diagnostic-password; SELECT private_diagnostic_sql";
+        const string privateQuery = "private-diagnostic-request";
+        const string privateKey = "private-diagnostic-idempotency-key";
+        var failure = new IOException(privateFailure, new PostgresException(
+            privateFailure, "ERROR", "ERROR", PostgresErrorCodes.ConnectionFailure,
+            detail: privateFailure, internalQuery: privateFailure));
+        failure.Data["request"] = fixture.Body(privateQuery);
+        if (failClaimRead) fixture.SecondClaimReadFailure = failure;
+        else fixture.SettlementFailure = failure;
+
+        var body = fixture.Body(privateQuery);
+        var first = await fixture.PostAsync(0, privateKey, body);
+        first.AssertError(HttpStatusCode.ServiceUnavailable, "idempotency_unavailable");
+        Assert.Equal("server_error", first.Body.GetProperty("error").GetProperty("type").GetString());
+        var assertion = Record.Exception(() => first.AssertStatus(HttpStatusCode.OK));
+        Assert.NotNull(assertion);
+        Assert.Contains("Fixture-wide recent exception diagnostics", assertion.Message);
+        Assert.Contains(failClaimRead ? typeof(FunctionsEndpoints).FullName!
+            : typeof(FunctionExecutionService).FullName!, assertion.Message);
+        Assert.Contains(typeof(IOException).FullName!, assertion.Message);
+        Assert.Contains(typeof(PostgresException).FullName!, assertion.Message);
+        Assert.Contains("SQLSTATE=" + PostgresErrorCodes.ConnectionFailure, assertion.Message);
+        foreach (var secret in new[] { privateFailure, privateQuery, privateKey,
+                     fixture.Primary.VirtualKey, NativeFunctionFixture.ApiKey })
+        {
+            Assert.DoesNotContain(secret, assertion.Message);
+            Assert.DoesNotContain(secret, first.Body.GetRawText());
+        }
+        Assert.Equal(failClaimRead ? 0 : 1, fixture.Provider.Total);
+        Assert.Equal(failClaimRead ? 0 : 1, await fixture.CountClaimsAsync());
+        if (!failClaimRead)
+        {
+            var claim = await fixture.WaitForClaimAsync(privateKey, FunctionExecutionClaimState.Completed);
+            Assert.Null(claim.BilledAtUtc);
+            Assert.Equal(claim.ExecutionId, first.HeaderId);
+        }
+        else Assert.Null(first.HeaderId);
+        await fixture.AssertAccountingAsync(fixture.Primary, 0);
+
+        fixture.SecondClaimReadFailure = null;
+        fixture.SettlementFailure = null;
+        var recovered = await fixture.PostAsync(1, privateKey, body);
+        recovered.AssertStatus(HttpStatusCode.OK);
+        Assert.Equal(!failClaimRead, recovered.Replayed);
+        var replay = await fixture.PostAsync(0, privateKey, body);
+        replay.AssertStatus(HttpStatusCode.OK);
+        Assert.True(replay.Replayed);
+        Assert.Equal(recovered.Id, replay.Id);
+        Assert.Equal(1, fixture.Provider.Total);
+        Assert.Equal(1, await fixture.CountClaimsAsync());
+        await fixture.AssertAccountingAsync(fixture.Primary, 1);
+    }
+
     [Fact]
     public async Task MigratedSchemaEnforcesScopedKeyAndGlobalExecutionIdentityUniqueness()
     {
@@ -400,12 +462,14 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
     }
 
     private sealed record Response(HttpStatusCode Status, JsonElement Body, string? Replay, Guid? HeaderId,
-        string? Location, string? RetryAfter)
+        string? Location, string? RetryAfter, string Diagnostics)
     {
         internal Guid Id => Body.GetProperty("id").GetGuid();
         internal bool Replayed => string.Equals(Replay, "true", StringComparison.OrdinalIgnoreCase);
         internal void AssertStatus(HttpStatusCode expected) => Assert.True(Status == expected,
-            $"Expected {(int)expected}, received {(int)Status}: {Body.GetRawText()}");
+            $"Expected {(int)expected}, received {(int)Status}: {Body.GetRawText()}" + Environment.NewLine +
+            $"Fixture-wide recent exception diagnostics (last {BoundedExceptionDiagnostics.MaximumRecords}):" +
+            Environment.NewLine + Diagnostics);
         internal void AssertError(HttpStatusCode status, string code)
         {
             AssertStatus(status);
@@ -420,6 +484,7 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
         private readonly bool _runtime;
         private readonly List<WebApplication> _apps = [];
         private readonly List<HttpClient> _clients = [];
+        private readonly BoundedExceptionDiagnostics _diagnostics = new();
         private readonly CancellationTokenSource _deadline = new(TimeSpan.FromMinutes(3));
         private readonly IFunctionCredentialProtector _protector = new FunctionCredentialProtector(
             new EphemeralDataProtectionProvider(), NullLogger<FunctionCredentialProtector>.Instance);
@@ -429,6 +494,8 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
         internal NativeFunctionFixtureSnapshot Other { get; private set; } = null!;
         internal bool FailCompletion;
         internal bool FailSettlement;
+        internal Exception? SecondClaimReadFailure;
+        internal Exception? SettlementFailure;
         internal CancellationToken Token => _deadline.Token;
 
         private Fixture(string management, SchemaStartupDatabase database, bool runtime, CountingProvider provider)
@@ -521,7 +588,7 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
             return await ReadAsync(response, Token);
         }
 
-        private static async Task<Response> ReadAsync(HttpResponseMessage response, CancellationToken token)
+        private async Task<Response> ReadAsync(HttpResponseMessage response, CancellationToken token)
         {
             var content = await response.Content.ReadAsStringAsync(token);
             Assert.False(string.IsNullOrWhiteSpace(content), $"HTTP {(int)response.StatusCode} returned an empty response.");
@@ -529,7 +596,7 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
             string? Header(string name) => response.Headers.TryGetValues(name, out var values) ? values.Single() : null;
             return new Response(response.StatusCode, body.RootElement.Clone(), Header("Idempotency-Replayed"),
                 Guid.TryParse(Header("Function-Execution-Id"), out var id) ? id : null,
-                Header("Location"), Header("Retry-After"));
+                Header("Location"), Header("Retry-After"), _diagnostics.Snapshot());
         }
 
         internal async Task RestartAsync(int index)
@@ -558,6 +625,7 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
             builder.Services.ConfigureHttpJsonOptions(options => GatewayJsonOptions.Configure(options.SerializerOptions));
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddMemoryCache();
+            builder.Services.AddSingleton(_diagnostics.CreateLogger<RequireBalanceEndpointFilter>());
             // Use the production policy registrations so the uncertain-outcome
             // assertion also detects any hidden provider HTTP retry.
             builder.Services.AddSharedHttpClients();
@@ -638,13 +706,13 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
                     services.GetRequiredService<IFunctionExecutionConfigurationStore>(),
                     services.GetRequiredService<IFunctionExecutionRuntimeWriter>(),
                     services.GetRequiredService<IFunctionExecutionRuntimeReader>(), costs, clients, _protector,
-                    NullLogger<FunctionExecutionService>.Instance, claims);
+                    _diagnostics.CreateLogger<FunctionExecutionService>(), claims);
             var factory = new ContextFactory(_database.ConnectionString);
             return FunctionExecutionService.CreateWithIdempotency(
                 new FunctionConfigurationRepository(factory, NullLogger<FunctionConfigurationRepository>.Instance),
                 new FunctionCredentialRepository(factory, NullLogger<FunctionCredentialRepository>.Instance),
                 new FunctionExecutionRepository(factory, NullLogger<FunctionExecutionRepository>.Instance), costs, clients,
-                _protector, NullLogger<FunctionExecutionService>.Instance, claims);
+                _protector, _diagnostics.CreateLogger<FunctionExecutionService>(), claims);
         }
 
         private FunctionsEndpoints CreateHandler(IServiceProvider services)
@@ -656,11 +724,11 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
             var errors = new ProviderErrorTranslator(new CustomerErrorOptions { Mode = CustomerErrorMode.External });
             return _runtime ? FunctionsEndpoints.CreateWithRuntimePersistence(service,
                 services.GetRequiredService<IFunctionExecutionConfigurationStore>(), validation, events,
-                accessor, NullLogger<FunctionsEndpoints>.Instance, errors)
+                accessor, _diagnostics.CreateLogger<FunctionsEndpoints>(), errors)
                 : new FunctionsEndpoints(service,
                     new FunctionConfigurationRepository(new ContextFactory(_database.ConnectionString),
                         NullLogger<FunctionConfigurationRepository>.Instance), validation, events,
-                    accessor, NullLogger<FunctionsEndpoints>.Instance, errors);
+                    accessor, _diagnostics.CreateLogger<FunctionsEndpoints>(), errors);
         }
 
         internal async Task<int> CountClaimsAsync()
@@ -735,10 +803,17 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
 
     private sealed class FaultStore(Fixture fixture, IFunctionExecutionIdempotencyStore inner) : IFunctionExecutionIdempotencyStore
     {
+        private int _claimReads;
         public Task<FunctionExecutionClaim> ClaimAsync(int keyId, string keyHash, string fingerprint, CancellationToken cancellationToken = default) =>
             inner.ClaimAsync(keyId, keyHash, fingerprint, cancellationToken);
-        public Task<FunctionExecutionClaim?> FindAsync(int keyId, string keyHash, CancellationToken cancellationToken = default) =>
-            inner.FindAsync(keyId, keyHash, cancellationToken);
+        public Task<FunctionExecutionClaim?> FindAsync(int keyId, string keyHash, CancellationToken cancellationToken = default)
+        {
+            // The balance filter reads first. Fail the handler's own read to
+            // exercise its explicit logger rather than the filter's DI logger.
+            if (Interlocked.Increment(ref _claimReads) == 2 && fixture.SecondClaimReadFailure is { } failure)
+                throw failure;
+            return inner.FindAsync(keyId, keyHash, cancellationToken);
+        }
         public Task<bool> MarkDispatchedAsync(FunctionExecutionClaim claim, CancellationToken cancellationToken = default) =>
             inner.MarkDispatchedAsync(claim, cancellationToken);
         public Task<bool> CompleteAsync(FunctionExecutionClaim claim, string json, CancellationToken cancellationToken = default) =>
@@ -747,7 +822,8 @@ public sealed class FunctionIdempotencyPersistenceParityTests(PostgresLockTestCo
         public Task<bool> MarkUncertainAsync(FunctionExecutionClaim claim, CancellationToken cancellationToken = default) =>
             inner.MarkUncertainAsync(claim, cancellationToken);
         public Task SettleBillingAsync(FunctionExecutionClaim claim, decimal cost, CancellationToken cancellationToken = default) =>
-            fixture.FailSettlement ? throw new IOException("Injected settlement outage after durable completion")
+            fixture.SettlementFailure is { } failure ? throw failure
+                : fixture.FailSettlement ? throw new IOException("Injected settlement outage after durable completion")
                 : inner.SettleBillingAsync(claim, cost, cancellationToken);
     }
 
