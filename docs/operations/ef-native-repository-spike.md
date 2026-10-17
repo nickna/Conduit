@@ -787,7 +787,7 @@ The root's repaired actual run passed **12/12 selected TRX rows, zero failed and
 
 The retained Fact and eleven additional rows cover independent six-field persistence oracles, all eight methods, validation, caller mutations, factory-token/time/logging/disposal boundaries, pre-cancellation, occupied-pool recovery and observed server waits. Completion of twelve EF and nine typed SQL phases, eighteen pre-cancellation paths and thirty-six occupied-pool paths across capacities one and two is inferred from the strict frozen source and Passed rows; separate subcase event rows were not recorded. The runtime reader was authored by the coverage/harness producer; independent test, harness and reader source reviews are bound separately, and the replay is not another execution or an independently implemented test oracle.
 
-Characterized adapter differences remain open in [#1675](https://github.com/nickna/Conduit/issues/1675) and [#1676](https://github.com/nickna/Conduit/issues/1676): pre-cancel caller timestamps, supplied create IDs, zero-ID updates and missing positive-ID updates differ. Upsert client/server clocks, two-statement versus atomic SQL and repository logging differences remain qualified source observations; no concurrent-upsert race was reproduced. These follow-ups provide no waiver for the semantic reconciliation required by complete native coverage.
+At the Unit 140 review, characterized adapter differences were filed in [#1675](https://github.com/nickna/Conduit/issues/1675) and [#1676](https://github.com/nickna/Conduit/issues/1676): pre-cancel caller timestamps, supplied create IDs, zero-ID updates and missing positive-ID updates differed. Upsert client/server clocks, two-statement versus atomic SQL and repository logging differences were source observations; that review had not reproduced a concurrent-upsert race. The later #1675 qualification below reconciles mutation and Upsert behavior. These follow-ups provide no waiver for the semantic reconciliation required by complete native coverage.
 
 The retained report preimage and runtime copy preserve the original `7f500a24…` prefix. Runtime comparisons of that former current report path remain pre-append evidence; the appended document requires its new hash and later commit bindings. Generated-query execution, the complete native repository suite, current-head native artifacts, registry qualification and production readiness remain unestablished. #1373/#1375 and all remaining repository migrations/native coverage are still required. Production remains JIT under ADR 0006; this records the current state and grants no scope waiver.
 
@@ -1074,3 +1074,75 @@ This proves redirected endpoint completion or reports cleanup failure for the
 covered timelines. It does not prove containment of every descendant, including
 one that closes its inherited pipes and escapes the captured tree. It also does
 not identify the historical #1673 CI cause or qualify native service artifacts.
+
+## Global-setting mutation and Upsert boundaries (#1675)
+
+The original three-provider PostgreSQL baseline corrected an assumption in Unit
+140's checking factory. The actual EF `AddDbContextFactory` implementation
+[returns a synchronously constructed context without checking its token](https://github.com/dotnet/dotnet/blob/95017c711e6afc1085133d440e42b4bd78155701/src/efcore/src/EFCore/Internal/DbContextFactory.cs).
+Consequently both production-style EF and typed Npgsql changed caller timestamps
+on pre-cancelled writes; only the checking test factory preserved them. All nine
+observations retained unchanged database rows and recovered the same single-slot
+backend. The original SQL counter recorded zero starts but lacked positive
+calibration; the final caller tests calibrate it with an actual settings SELECT.
+The retained baseline receipt has SHA-256
+`f568d3c8c9ddc47d2564e0d9091899e95e0d87e0fd9175a4a1b183722fa4a3d3`.
+
+Create and Update now explicitly check cancellation after validation and before
+caller mutation. EF keeps context acquisition before that check. After admission,
+timestamps are sampled before physical connection acquisition; later pool
+cancellation, observed SQL cancellation or write failure retains those fields.
+Default Create uses one client UTC instant for both timestamps; supplied
+CreatedAt values remain intact. This intentionally extends the checking
+factory's accepted pre-cancel behavior to the production factory.
+
+A second unchanged-Upsert baseline passed all 20 controlled PostgreSQL cases.
+It reproduced the typed atomic statement overwriting a committed absent-row
+winner, overwriting unchanged snapshot fields, and retargeting a replacement key.
+Its timestamps equalled the independently observed PostgreSQL transaction start;
+EF bound client UTC parameters after its blocked read completed. All 295 frozen
+inputs stayed stable, all 20 owned schemas were absent afterward, and the child
+and output streams joined with exit zero and empty stderr. Receipt SHA-256:
+`76018291c94171c2f873c64eebee9e8d4df6dccafc95c472c77ff300bb2ccba9`.
+
+Typed Upsert now follows EF's completed read, client UTC sample and write without
+a transaction spanning both statements. It uses one connection, a plain INSERT
+for an absent row, and the original primary key for an existing row. Snapshot
+comparisons preserve concurrent values of unchanged fields. An absent-row winner
+causes SQLSTATE `23505`; a disappeared original causes a concurrency failure.
+EF retains `DbUpdateException`/`DbUpdateConcurrencyException`, while the EF-free
+typed adapter uses `PostgresException`/BCL `DBConcurrencyException`. No retry,
+replacement-key lookup or new transaction is introduced. The rare no-change
+branch, including an identical newly sampled timestamp, is source-qualified;
+runtime coverage does not inject a clock to force it.
+
+EF's existing slow-operation logger still includes factory time and reports
+successful delegates before context disposal. The typed adapter has no matching
+repository logger. No logging failure was established. Direct Create identifiers
+and Update zero/missing identifiers remain separately scoped to #1676.
+
+Final managed verification passed **41/41 tests with zero skips**: the retained
+12-row owner suite, nine caller-boundary rows and 20 controlled Upsert rows.
+The SQL counters were positively calibrated; caller snapshots, independent
+six-field database rows, exact waiter/blocker/relation identity and same-backend
+recovery were checked. All 296 inputs stayed stable during the run, all 29 new
+schema-absence markers joined their tests, and the three owned schema families
+were empty before and afterward. Receipt SHA-256:
+`a7c2f1d197170faad72e8967f39e05dab71fb0ee8efc3c217c48159824fe616f`.
+Three existing managed nullable warnings remain scoped to #1690.
+
+A fresh Linux x64 native publication passed with **zero warnings**, followed by
+the complete ELF driver in 13.2 seconds. The new helper covered five successes,
+five pre-cancellations, five occupied-pool cancellations, seven observed SQL
+cancellation phases, four failed writes, seven controlled races and two actual
+client-parameter/server-transaction clock observations. All 183 native inputs and
+the publish closure stayed stable, all three restore assets were EF-free, owned
+schemas were absent, and every child and output stream joined with empty stderr.
+Receipt SHA-256:
+`220c694f462dec9c2ebf26ce9de7181a5f14a02444380a7c451fc85a327b97b5`.
+An earlier successful native run exposed two new helper nullable warnings; its
+evidence is retained. The final correction added only two null-forgiving
+annotations, mechanically reconstructing the managed-tested helper bytes, and
+was followed by the fresh native publication and full run above. This qualifies
+the standalone typed leaf, without establishing native EF or application
+readiness. Production remains JIT.

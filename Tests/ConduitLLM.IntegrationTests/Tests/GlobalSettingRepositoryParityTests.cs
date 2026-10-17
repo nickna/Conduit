@@ -233,9 +233,9 @@ public sealed class GlobalSettingRepositoryParityTests
             AssertEntityMatchesIndependentRow((await repository.GetByKeyAsync("renamed", deadline.Token))!,
                 (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Id == id));
 
-            var lower = typed ? await ServerClockAsync(schema, deadline.Token) : DateTime.UtcNow;
+            var lower = DateTime.UtcNow;
             Assert.True(await repository.UpsertAsync("inserted", "upsert-one", null, deadline.Token));
-            var upper = typed ? await ServerClockAsync(schema, deadline.Token) : DateTime.UtcNow;
+            var upper = DateTime.UtcNow;
             var inserted = (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Key == "inserted");
             Assert.True(inserted.Id > 0);
             Assert.Equal("upsert-one", inserted.Value);
@@ -244,9 +244,9 @@ public sealed class GlobalSettingRepositoryParityTests
             AssertUtcBetween(inserted.CreatedAt, lower, upper);
             Assert.True(await repository.UpsertAsync("inserted", "upsert-two", "kept", deadline.Token));
             var previous = (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Key == "inserted");
-            lower = typed ? await ServerClockAsync(schema, deadline.Token) : DateTime.UtcNow;
+            lower = DateTime.UtcNow;
             Assert.True(await repository.UpsertAsync("inserted", "upsert-three", null, deadline.Token));
-            upper = typed ? await ServerClockAsync(schema, deadline.Token) : DateTime.UtcNow;
+            upper = DateTime.UtcNow;
             var preserved = (await IndependentRowsAsync(schema, deadline.Token)).Single(row => row.Key == "inserted");
             Assert.Equal(previous.Id, preserved.Id);
             Assert.Equal(previous.CreatedAt, preserved.CreatedAt);
@@ -334,21 +334,19 @@ public sealed class GlobalSettingRepositoryParityTests
             foreach (var operation in SettingOperations)
             {
                 var entity = OperationEntity(operation);
-                var before = DateTime.UtcNow;
-                await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
                     InvokeSettingOperationAsync(repository, operation, entity, cancelled.Token));
-                var after = DateTime.UtcNow;
+                Assert.Equal(cancelled.Token, error.CancellationToken);
                 if (operation == SettingOperation.Create)
                 {
                     Assert.Equal(0, entity.Id);
-                    if (typed) { Assert.Equal(entity.CreatedAt, entity.UpdatedAt); AssertUtcBetween(entity.CreatedAt, before, after); }
-                    else { Assert.Equal(default, entity.CreatedAt); Assert.Equal(StoredInstant, entity.UpdatedAt); }
+                    Assert.Equal(default, entity.CreatedAt);
+                    Assert.Equal(StoredInstant, entity.UpdatedAt);
                 }
                 if (operation == SettingOperation.Update)
                 {
                     Assert.Equal(StoredInstant.AddDays(-1), entity.CreatedAt);
-                    if (typed) AssertUtcBetween(entity.UpdatedAt, before, after);
-                    else Assert.Equal(StoredInstant, entity.UpdatedAt);
+                    Assert.Equal(StoredInstant, entity.UpdatedAt);
                 }
                 if (!typed) Assert.Equal(cancelled.Token, factory.LastToken);
                 await AssertSeedUnchangedAsync(schema, deadline.Token);
@@ -419,7 +417,7 @@ public sealed class GlobalSettingRepositoryParityTests
                 var holds = new List<NpgsqlConnection>();
                 using var cancelled = new CancellationTokenSource();
                 Task<object?>? pending = null;
-                try
+                await IntegrationProofCleanup.RunAsync(async () =>
                 {
                     for (var slot = 0; slot < capacity; slot++) holds.Add(await source.OpenConnectionAsync(deadline.Token));
                     Assert.Equal(capacity, holds.Select(connection => connection.ProcessID).Distinct().Count());
@@ -429,15 +427,22 @@ public sealed class GlobalSettingRepositoryParityTests
                     Assert.False(pending.IsCompleted);
                     Assert.Equal(beforeSql, sql.Started);
                     cancelled.Cancel();
-                    await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+                    var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+                    Assert.Equal(cancelled.Token, error.CancellationToken);
+                    Assert.True(pending.IsCanceled);
                     if (!typed) { Assert.Equal(cancelled.Token, factory.LastToken); Assert.Equal(beforeDisposed + 1, factory.AsyncDisposed); }
-                }
-                finally
+                }, async () =>
                 {
-                    cancelled.Cancel();
-                    try { if (pending is not null) await ReapSettingOperationAsync(pending, cancelled); }
-                    finally { foreach (var hold in holds) await hold.DisposeAsync(); }
-                }
+                    var drains = new List<Func<CancellationToken, Task>>
+                    {
+                        async token => { cancelled.Cancel(); if (pending is not null) await ReapSettingOperationAsync(pending, cancelled, token); }
+                    };
+                    drains.AddRange(holds.Select(hold => new Func<CancellationToken, Task>(async token =>
+                        await hold.DisposeAsync().AsTask().WaitAsync(token))));
+                    drains.Add(async token => { if (pending is not null) await ReapSettingOperationAsync(pending, cancelled, token); });
+                    await IntegrationProofCleanup.DrainIndependentlyAsync(drains, TimeSpan.FromSeconds(5),
+                        "The occupied setting leases and caller were not independently released and joined.");
+                }, "The setting pool cancellation failed and its cleanup also failed.");
                 await AssertSeedUnchangedAsync(schema, deadline.Token);
                 await SettingsPoolUsableAsync(source, deadline.Token);
                 await AssertSettingRecoveryAsync(repository, operation, schema, deadline.Token);
@@ -475,7 +480,7 @@ public sealed class GlobalSettingRepositoryParityTests
                 // Synchronous before-send logging never blocks the test's orchestration thread.
                 var pending = Task.Run(() => InvokeSettingOperationAsync(repository, target.Operation,
                     OperationEntity(target.Operation), cancelled.Token));
-                try
+                await IntegrationProofCleanup.RunAsync(async () =>
                 {
                     var entry = await gate.Entered.WaitAsync(deadline.Token);
                     Assert.Equal(target.Ordinal, entry.Ordinal);
@@ -491,15 +496,23 @@ public sealed class GlobalSettingRepositoryParityTests
                     await WaitForSettingRelationWaitAsync(connectionString, readerPid, blocker.ProcessID,
                         schema, target.SqlKind == "SELECT" ? "AccessShareLock" : "RowExclusiveLock", pending, deadline.Token);
                     cancelled.Cancel();
-                    await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+                    var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+                    Assert.Equal(cancelled.Token, error.CancellationToken);
+                    Assert.True(pending.IsCanceled);
                     if (!typed) { Assert.Equal(cancelled.Token, factory.LastToken); Assert.Equal(1, factory.Created); Assert.Equal(1, factory.AsyncDisposed); }
-                }
-                finally
+                    Assert.Equal(readerPid, await SettingsPoolUsableAsync(source, deadline.Token));
+                    Assert.NotNull(transaction.Connection);
+                }, async () =>
                 {
                     gate.Release();
-                    try { await ReapSettingOperationAsync(pending, cancelled); }
-                    finally { await transaction.RollbackAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)); }
-                }
+                    await IntegrationProofCleanup.DrainIndependentlyAsync(
+                    [
+                        token => ReapSettingOperationAsync(pending, cancelled, token),
+                        token => transaction.RollbackAsync(token),
+                        async token => await blocker.DisposeAsync().AsTask().WaitAsync(token),
+                        token => ReapSettingOperationAsync(pending, cancelled, token)
+                    ], TimeSpan.FromSeconds(5), "The setting SQL caller, blocker and transaction were not independently joined.");
+                }, "The setting SQL cancellation failed and its cleanup also failed.");
                 await AssertSeedUnchangedAsync(schema, deadline.Token);
                 await SettingsPoolUsableAsync(source, deadline.Token);
                 await AssertSettingRecoveryAsync(repository, target.Operation, schema, deadline.Token);
@@ -632,8 +645,10 @@ public sealed class GlobalSettingRepositoryParityTests
             new SettingSqlTarget(SettingOperation.Key, 1, "SELECT"),
             new SettingSqlTarget(SettingOperation.Create, 1, "INSERT"),
             new SettingSqlTarget(SettingOperation.Update, 1, "UPDATE"),
-            new SettingSqlTarget(SettingOperation.UpsertInsert, 1, "INSERT"),
-            new SettingSqlTarget(SettingOperation.UpsertUpdate, 1, "INSERT"),
+            new SettingSqlTarget(SettingOperation.UpsertInsert, 1, "SELECT"),
+            new SettingSqlTarget(SettingOperation.UpsertInsert, 2, "INSERT"),
+            new SettingSqlTarget(SettingOperation.UpsertUpdate, 1, "SELECT"),
+            new SettingSqlTarget(SettingOperation.UpsertUpdate, 2, "UPDATE"),
             new SettingSqlTarget(SettingOperation.DeleteId, 1, "DELETE"),
             new SettingSqlTarget(SettingOperation.DeleteKey, 1, "DELETE")
         }
@@ -644,6 +659,7 @@ public sealed class GlobalSettingRepositoryParityTests
             new SettingSqlTarget(SettingOperation.Key, 1, "SELECT"),
             new SettingSqlTarget(SettingOperation.Create, 1, "INSERT"),
             new SettingSqlTarget(SettingOperation.Update, 1, "UPDATE"),
+            new SettingSqlTarget(SettingOperation.UpsertInsert, 1, "SELECT"),
             new SettingSqlTarget(SettingOperation.UpsertUpdate, 1, "SELECT"),
             new SettingSqlTarget(SettingOperation.UpsertInsert, 2, "INSERT"),
             new SettingSqlTarget(SettingOperation.UpsertUpdate, 2, "UPDATE"),
@@ -679,15 +695,6 @@ public sealed class GlobalSettingRepositoryParityTests
         while (await reader.ReadAsync(token)) rows.Add(new(reader.GetInt32(0), reader.GetString(1), reader.GetString(2),
             reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetDateTime(4), reader.GetDateTime(5)));
         return rows.ToArray();
-    }
-
-    private async Task<DateTime> ServerClockAsync(string schema, CancellationToken token)
-    {
-        await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(WithSearchPath(schema)) { Pooling = false }.ConnectionString);
-        await connection.OpenAsync(token);
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT clock_timestamp()";
-        return (DateTime)(await command.ExecuteScalarAsync(token))!;
     }
 
     private async Task AssertSeedUnchangedAsync(string schema, CancellationToken token)
@@ -795,11 +802,12 @@ public sealed class GlobalSettingRepositoryParityTests
         return connection.ProcessID;
     }
 
-    private static async Task ReapSettingOperationAsync(Task pending, CancellationTokenSource cancelled)
+    private static async Task ReapSettingOperationAsync(Task pending, CancellationTokenSource cancelled,
+        CancellationToken cleanup)
     {
         cancelled.Cancel();
-        try { await pending.WaitAsync(TimeSpan.FromSeconds(5)); }
-        catch (OperationCanceledException) when (cancelled.IsCancellationRequested) { }
+        try { await pending.WaitAsync(cleanup); }
+        catch (OperationCanceledException) when (pending.IsCanceled) { }
     }
 
     private static async Task WaitForSettingRelationWaitAsync(string connectionString, int readerPid,
@@ -868,8 +876,8 @@ public sealed class GlobalSettingRepositoryParityTests
     {
         public override async ValueTask DisposeAsync()
         {
-            try { await base.DisposeAsync(); }
-            finally { disposed(); }
+            await base.DisposeAsync();
+            disposed();
         }
     }
 

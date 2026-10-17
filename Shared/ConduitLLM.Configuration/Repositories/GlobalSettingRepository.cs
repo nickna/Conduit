@@ -95,6 +95,7 @@ public sealed class GlobalSettingRepository : IGlobalSettingRepository
 
         return await ExecuteAsync(async context =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var now = DateTime.UtcNow;
             if (setting.CreatedAt == default)
             {
@@ -120,6 +121,7 @@ public sealed class GlobalSettingRepository : IGlobalSettingRepository
 
         return await ExecuteAsync(async context =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             setting.UpdatedAt = DateTime.UtcNow;
             context.GlobalSettings.Update(setting);
             var saveCancellationToken = cancellationToken;

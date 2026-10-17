@@ -490,6 +490,7 @@ async Task RunProbeAsync()
             await BillingAuditPersistenceProbe.RunAsync(schemaDataSource, storeConnectionString);
         }
         await ExerciseGlobalSettingRepositoryAsync(new NpgsqlGlobalSettingRepository(dataSource));
+        await GlobalSettingMutationPersistenceProbe.RunAsync(storeConnectionString);
         await ExerciseIpFilterRepositoryAsync(new NpgsqlIpFilterRepository(dataSource));
         await ExerciseProviderPersistenceAsync(
             new NpgsqlProviderRepository(dataSource),
