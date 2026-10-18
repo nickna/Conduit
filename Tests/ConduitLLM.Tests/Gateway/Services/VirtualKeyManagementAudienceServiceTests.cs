@@ -317,18 +317,17 @@ public sealed class VirtualKeyManagementAudienceServiceTests
         var releaseCancellation = Signal();
         var aborted = Signal();
         var scopeDisposed = Signal();
-        CancellationTokenRegistration cancellationBarrier = default;
         fixture.AbortedConnection = _ => aborted.TrySetResult();
         fixture.ScopeDisposed = _ => scopeDisposed.TrySetResult();
-        fixture.Lookup = (_, token) =>
+        fixture.Lookup = async (_, token) =>
         {
-            cancellationBarrier = token.Register(() =>
+            using var cancellationBarrier = token.Register(() =>
             {
                 cancellationBlocked.TrySetResult();
                 releaseCancellation.Task.GetAwaiter().GetResult();
             });
             lookupStarted.TrySetResult();
-            return pending.Task;
+            return await pending.Task;
         };
 
         var audit = fixture.Service.AuditAsync(caller.Token);
@@ -356,7 +355,6 @@ public sealed class VirtualKeyManagementAudienceServiceTests
             releaseCancellation.TrySetResult();
             pending.TrySetResult(Key(1));
             await Task.WhenAll(audit, cancellation, scopeDisposed.Task).WaitAsync(TimeSpan.FromSeconds(5));
-            cancellationBarrier.Dispose();
         }
     }
 
