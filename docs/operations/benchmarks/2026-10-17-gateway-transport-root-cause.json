@@ -1,0 +1,373 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "dc06e59a84821ef13ab9806bdf5762692204c87f",
+  "scope": "provider-only-causal-transport-controls",
+  "workload": {
+    "requestBodyBytes": 129,
+    "requestBodySha256": "24947705c1aaba84a3e7e7be545c0002ada755baece1d39b9323b143e939bee2",
+    "concurrency": 8,
+    "requestDeadlineSeconds": 30,
+    "warmupRequestsPerBatch": 100,
+    "measuredRequestsPerBatch": 1000,
+    "firstClientBatches": 2,
+    "secondClientBatches": 1,
+    "actualFrozenHttpClientHelper": true,
+    "actualFrozenNamedHttpClientRegistration": true,
+    "originalChatValidator": true,
+    "originalProviderAndRelayImplementations": true,
+    "requestAuthorityChangesWithRoute": true,
+    "networkEventsEnabled": false
+  },
+  "controls": [
+    {
+      "control": "forwarded-reused-client-ip",
+      "route": "host-published",
+      "sourceIpReused": true,
+      "clients": [
+        {
+          "runtime": "10.0.13",
+          "requested": 2200,
+          "completed": 2200,
+          "failed": 0
+        },
+        {
+          "runtime": "10.0.13",
+          "requested": 1100,
+          "completed": 1084,
+          "failed": 16
+        }
+      ],
+      "providerAccepted": 3284,
+      "captures": [
+        {
+          "role": "provider-capture",
+          "sha256": "bae9e181d17bada32026b1b5ed416bd7c0756269eb538805043ec5da46f66545",
+          "packets": 72740,
+          "receivedByFilter": 112172,
+          "kernelDrops": 0,
+          "legs": [
+            {
+              "leg": "outer",
+              "sessions": 3286,
+              "synPackets": 3286,
+              "synAckPackets": 3286,
+              "synOnlySessions": 0,
+              "postRequests": 3284,
+              "stateReads": 2,
+              "http200": 3286
+            },
+            {
+              "leg": "loopback",
+              "sessions": 3286,
+              "synPackets": 3286,
+              "synAckPackets": 3286,
+              "synOnlySessions": 0,
+              "postRequests": 3284,
+              "stateReads": 2,
+              "http200": 3286
+            }
+          ]
+        },
+        {
+          "role": "client1-capture",
+          "sha256": "4eae93d491bd57e2372e983819d51e710b5488043be2697dff6c69b23ce342f1",
+          "packets": 22545,
+          "receivedByFilter": 22545,
+          "kernelDrops": 0,
+          "legs": [
+            {
+              "leg": "client",
+              "sessions": 2200,
+              "synPackets": 2200,
+              "synAckPackets": 2200,
+              "synOnlySessions": 0,
+              "postRequests": 2200,
+              "stateReads": 0,
+              "http200": 2200
+            }
+          ]
+        },
+        {
+          "role": "client2-capture",
+          "sha256": "88fc80f2d52be3b01c7a045cc772a225cfe2d86c9707c60a931e556b6a25ae26",
+          "packets": 11254,
+          "receivedByFilter": 11254,
+          "kernelDrops": 0,
+          "legs": [
+            {
+              "leg": "client",
+              "sessions": 1100,
+              "synPackets": 1228,
+              "synAckPackets": 1084,
+              "synOnlySessions": 16,
+              "postRequests": 1084,
+              "stateReads": 0,
+              "http200": 1084
+            }
+          ]
+        }
+      ],
+      "providerPacketAccounting": {
+        "filePackets": 72740,
+        "loopbackPackets": 39432,
+        "outerPackets": 33308,
+        "receivedByFilter": 112172,
+        "kernelDrops": 0
+      }
+    },
+    {
+      "control": "forwarded-reserved-prior-client-ip",
+      "route": "host-published",
+      "sourceIpReused": false,
+      "clients": [
+        {
+          "runtime": "10.0.13",
+          "requested": 2200,
+          "completed": 2200,
+          "failed": 0
+        },
+        {
+          "runtime": "10.0.13",
+          "requested": 1100,
+          "completed": 1100,
+          "failed": 0
+        }
+      ],
+      "providerAccepted": 3300
+    },
+    {
+      "control": "forwarded-matched-reused-client-ip",
+      "route": "host-published",
+      "sourceIpReused": true,
+      "clients": [
+        {
+          "runtime": "10.0.13",
+          "requested": 2200,
+          "completed": 2200,
+          "failed": 0
+        },
+        {
+          "runtime": "10.0.13",
+          "requested": 1100,
+          "completed": 1092,
+          "failed": 8
+        }
+      ],
+      "providerAccepted": 3292,
+      "captures": [
+        {
+          "role": "provider-capture",
+          "sha256": "cf76707b3d05d0f847f2ce7d1989cc8c83c04473d81d242e31d0b5f1b491178c",
+          "packets": 72922,
+          "receivedByFilter": 112450,
+          "kernelDrops": 0,
+          "legs": [
+            {
+              "leg": "outer",
+              "sessions": 3294,
+              "synPackets": 3294,
+              "synAckPackets": 3294,
+              "synOnlySessions": 0,
+              "postRequests": 3292,
+              "stateReads": 2,
+              "http200": 3294
+            },
+            {
+              "leg": "loopback",
+              "sessions": 3294,
+              "synPackets": 3294,
+              "synAckPackets": 3294,
+              "synOnlySessions": 0,
+              "postRequests": 3292,
+              "stateReads": 2,
+              "http200": 3294
+            }
+          ]
+        },
+        {
+          "role": "client1-capture",
+          "sha256": "e5e03a7c170571b332e51ac079503023db395f0044c7a3e825e7187599e7404b",
+          "packets": 22674,
+          "receivedByFilter": 22674,
+          "kernelDrops": 0,
+          "legs": [
+            {
+              "leg": "client",
+              "sessions": 2200,
+              "synPackets": 2200,
+              "synAckPackets": 2200,
+              "synOnlySessions": 0,
+              "postRequests": 2200,
+              "stateReads": 0,
+              "http200": 2200
+            }
+          ]
+        },
+        {
+          "role": "client2-capture",
+          "sha256": "aa7f50b0180201d6e389f5f0dbbca8aea5b24f8e41aaa424a06d406f7e09a73f",
+          "packets": 11355,
+          "receivedByFilter": 11355,
+          "kernelDrops": 0,
+          "legs": [
+            {
+              "leg": "client",
+              "sessions": 1100,
+              "synPackets": 1228,
+              "synAckPackets": 1092,
+              "synOnlySessions": 8,
+              "postRequests": 1092,
+              "stateReads": 0,
+              "http200": 1092
+            }
+          ]
+        }
+      ],
+      "providerPacketAccounting": {
+        "filePackets": 72922,
+        "loopbackPackets": 39528,
+        "outerPackets": 33394,
+        "receivedByFilter": 112450,
+        "kernelDrops": 0
+      }
+    },
+    {
+      "control": "direct-bridge-reused-client-ip",
+      "route": "user-bridge-relay",
+      "sourceIpReused": true,
+      "clients": [
+        {
+          "runtime": "10.0.13",
+          "requested": 2200,
+          "completed": 2200,
+          "failed": 0
+        },
+        {
+          "runtime": "10.0.13",
+          "requested": 1100,
+          "completed": 1100,
+          "failed": 0
+        }
+      ],
+      "providerAccepted": 3300,
+      "captures": [
+        {
+          "role": "provider-capture",
+          "sha256": "50178ee33682c9a3c6604518267b6afbfb1882fd1d4bb81d811655de6df71d79",
+          "packets": 73047,
+          "receivedByFilter": 112671,
+          "kernelDrops": 0,
+          "legs": [
+            {
+              "leg": "outer",
+              "sessions": 3302,
+              "synPackets": 3302,
+              "synAckPackets": 3302,
+              "synOnlySessions": 0,
+              "postRequests": 3300,
+              "stateReads": 2,
+              "http200": 3302
+            },
+            {
+              "leg": "loopback",
+              "sessions": 3302,
+              "synPackets": 3302,
+              "synAckPackets": 3302,
+              "synOnlySessions": 0,
+              "postRequests": 3300,
+              "stateReads": 2,
+              "http200": 3302
+            }
+          ]
+        },
+        {
+          "role": "client1-capture",
+          "sha256": "ef415ba486c59f26bd2102409ae391b8b14e3937cb95fa80afdf7519dd645d38",
+          "packets": 22238,
+          "receivedByFilter": 22238,
+          "kernelDrops": 0,
+          "legs": [
+            {
+              "leg": "client",
+              "sessions": 2200,
+              "synPackets": 2200,
+              "synAckPackets": 2200,
+              "synOnlySessions": 0,
+              "postRequests": 2200,
+              "stateReads": 0,
+              "http200": 2200
+            }
+          ]
+        },
+        {
+          "role": "client2-capture",
+          "sha256": "51d33ca2a5bca85384bb964a339dc402ca806f6aadc7b884f73b7b82ce2b700e",
+          "packets": 11165,
+          "receivedByFilter": 11165,
+          "kernelDrops": 0,
+          "legs": [
+            {
+              "leg": "client",
+              "sessions": 1100,
+              "synPackets": 1100,
+              "synAckPackets": 1100,
+              "synOnlySessions": 0,
+              "postRequests": 1100,
+              "stateReads": 0,
+              "http200": 1100
+            }
+          ]
+        }
+      ],
+      "providerPacketAccounting": {
+        "filePackets": 73047,
+        "loopbackPackets": 39624,
+        "outerPackets": 33423,
+        "receivedByFilter": 112671,
+        "kernelDrops": 0
+      }
+    }
+  ],
+  "closedTupleReuse": {
+    "forwardedCrossClient": {
+      "reusedTuples": 26,
+      "failed": 16,
+      "succeeded": 10,
+      "failedAgeMinimumUs": 9975106,
+      "failedAgeMaximumUs": 39223940,
+      "successAgeMinimumUs": 68928806,
+      "successAgeMaximumUs": 68940711,
+      "allOldBothFinsAcknowledged": true
+    },
+    "forwardedWithinSingleClient": {
+      "reusedAfterCompletedFlow": 187,
+      "failed": 18,
+      "succeeded": 169,
+      "failedAgeMinimumUs": 14890,
+      "failedAgeMaximumUs": 35364603,
+      "successAgeMinimumUs": 65116159,
+      "successAgeMaximumUs": 65305755
+    },
+    "directBridgeCrossClient": {
+      "reusedTuples": 138,
+      "succeeded": 138,
+      "failed": 0,
+      "reuseAgeMinimumUs": 9134185,
+      "reuseAgeMaximumUs": 9252323,
+      "synAckMinimumUs": 11,
+      "synAckMaximumUs": 38,
+      "allOldBothFinsAcknowledged": true,
+      "businessSynTupleAndIsnMatches": 3300
+    }
+  },
+  "inferenceBounds": {
+    "stallBoundary": "client-handshake-before-provider-ingress-on-host-published-path",
+    "retainedClosedTupleStateSupported": true,
+    "directBridgeBypassObserved": true,
+    "exactRetainingComponentEstablished": false,
+    "exactRetentionSecondsEstablished": false,
+    "nativeRuntimeSpecificCauseEstablished": false,
+    "historicalIncidentCauseEstablished": false,
+    "performanceComparison": false
+  }
+}

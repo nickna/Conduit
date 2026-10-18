@@ -395,7 +395,12 @@ public sealed class NpgsqlAsyncTaskRuntimeStore : IAsyncTaskRuntimeStore
         if (prepared is not null)
             return new AsyncTaskRuntimeRetryPreparation(AsyncTaskRuntimeRetryStatus.Prepared, prepared);
 
-        var current = await GetByIdAsync(taskId, cancellationToken);
+        // Read the classification on the connection already held by this call.
+        // Acquiring another lease here can exhaust even an otherwise idle pool.
+        await using var lookup = connection.CreateCommand();
+        lookup.CommandText = $"SELECT {Columns} FROM \"AsyncTasks\" WHERE \"Id\" = @id";
+        lookup.Parameters.AddWithValue("id", NpgsqlDbType.Varchar, taskId);
+        var current = await ReadSingleAsync(lookup, cancellationToken);
         if (current is null)
             return new AsyncTaskRuntimeRetryPreparation(AsyncTaskRuntimeRetryStatus.Missing);
         if (current.State == 0 && current.RetryDispatchId == dispatchId)

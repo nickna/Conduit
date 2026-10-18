@@ -3,6 +3,7 @@ using ConduitLLM.Configuration.DTOs.SignalR;
 using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Gateway.Services;
 namespace ConduitLLM.Gateway.Hubs
 {
     // SignalR group-union sends do not deduplicate connections. Broad lifecycle
@@ -22,6 +23,7 @@ namespace ConduitLLM.Gateway.Hubs
         private readonly SignalRMetrics _metrics;
         private readonly ILogger<VirtualKeyManagementHub> _logger;
         private readonly IVirtualKeyRuntimeService _virtualKeyService;
+        private readonly IVirtualKeyManagementAudienceService _audiences;
         
         /// <summary>
         /// Initializes a new instance of the <see cref="VirtualKeyManagementHub"/> class.
@@ -39,6 +41,7 @@ namespace ConduitLLM.Gateway.Hubs
             _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _virtualKeyService = virtualKeyService ?? throw new ArgumentNullException(nameof(virtualKeyService));
+            _audiences = serviceProvider.GetRequiredService<IVirtualKeyManagementAudienceService>();
         }
 
         /// <summary>
@@ -58,21 +61,9 @@ namespace ConduitLLM.Gateway.Hubs
             var virtualKeyId = GetVirtualKeyId();
             if (virtualKeyId is > 0)
             {
-                // Lifecycle publication is server-only. Administrative recipients join
-                // through trusted authentication, never a caller-supplied group name.
-                if (await IsAdminAsync())
-                {
-                    await Groups.AddToGroupAsync(Context.ConnectionId, "admin", Context.ConnectionAborted);
-                }
-                else
-                {
-                    await Groups.AddToGroupAsync(Context.ConnectionId,
-                        VirtualKeyManagementGroups.NonAdminOwner(virtualKeyId.Value), Context.ConnectionAborted);
-                }
-                // Owners and authorized management subscribers share one status
-                // group, so an administrator monitoring its own key gets one event.
-                await Groups.AddToGroupAsync(Context.ConnectionId,
-                    VirtualKeyManagementGroups.Status(virtualKeyId.Value), Context.ConnectionAborted);
+                var connection = Context;
+                await _audiences.RegisterAsync(connection.ConnectionId, virtualKeyId.Value,
+                    connection.Abort, connection.ConnectionAborted);
 
                 // Send initial virtual key status to the connected client
                 await SendInitialKeyStatus(virtualKeyId.Value);
@@ -82,6 +73,12 @@ namespace ConduitLLM.Gateway.Hubs
                     Context.ConnectionId,
                     virtualKeyId.Value);
             }
+        }
+
+        public override async Task OnDisconnectedAsync(Exception? exception)
+        {
+            try { await _audiences.RemoveAsync(Context.ConnectionId); }
+            finally { await base.OnDisconnectedAsync(exception); }
         }
 
         /// <summary>
@@ -102,8 +99,13 @@ namespace ConduitLLM.Gateway.Hubs
             {
                 try
                 {
-                    // Check if the requesting key has admin privileges
-                    if (!await IsAdminAsync())
+                    var subscription = await _audiences.SubscribeAsync(Context.ConnectionId, targetKeyId,
+                        async (target, token) =>
+                        {
+                            await SendKeyStatusToClient(target, token);
+                            await Clients.Caller.SendAsync("SubscribedToKeyManagement", targetKeyId, token);
+                        }, Context.ConnectionAborted);
+                    if (!subscription.Authorized)
                     {
                         await Clients.Caller.SendAsync("Error", new HubErrorNotification
                         {
@@ -112,9 +114,7 @@ namespace ConduitLLM.Gateway.Hubs
                         return;
                     }
                     
-                    // Verify the target key exists
-                    var targetKey = await _virtualKeyService.GetVirtualKeyInfoForValidationAsync(targetKeyId);
-                    if (targetKey == null)
+                    if (!subscription.TargetExists)
                     {
                         await Clients.Caller.SendAsync("Error", new HubErrorNotification
                         {
@@ -123,27 +123,10 @@ namespace ConduitLLM.Gateway.Hubs
                         return;
                     }
                     
-                    // Authorization is rechecked on subscription. Reconcile a
-                    // connection promoted since it connected before joining its
-                    // target audience, without overlapping owner/admin groups.
-                    var ownerId = GetVirtualKeyId();
-                    if (ownerId is > 0)
-                        await Groups.RemoveFromGroupAsync(Context.ConnectionId,
-                            VirtualKeyManagementGroups.NonAdminOwner(ownerId.Value), Context.ConnectionAborted);
-                    await Groups.AddToGroupAsync(Context.ConnectionId, "admin", Context.ConnectionAborted);
-
-                    // Add to the canonical status group for the target key.
-                    var groupName = VirtualKeyManagementGroups.Status(targetKeyId);
-                    await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
-                    
                     _logger.LogInformation(
                         "Admin key subscribed to management updates for virtual key {TargetKeyId}",
                         targetKeyId);
                     
-                    // Send current status of the target key
-                    await SendKeyStatusToClient(targetKey);
-                    
-                    await Clients.Caller.SendAsync("SubscribedToKeyManagement", targetKeyId);
                 }
                 catch (Exception ex)
                 {
@@ -168,13 +151,7 @@ namespace ConduitLLM.Gateway.Hubs
         {
             try
             {
-                // Unsubscribing from management must not remove the owner's
-                // connection-time status audience for its own key.
-                if (GetVirtualKeyId() != targetKeyId)
-                {
-                    var groupName = VirtualKeyManagementGroups.Status(targetKeyId);
-                    await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
-                }
+                await _audiences.UnsubscribeAsync(Context.ConnectionId, targetKeyId, Context.ConnectionAborted);
                 
                 _logger.LogInformation(
                     "Unsubscribed from management updates for virtual key {TargetKeyId}",
@@ -243,7 +220,7 @@ namespace ConduitLLM.Gateway.Hubs
         /// <summary>
         /// Sends the key status to the calling client.
         /// </summary>
-        private async Task SendKeyStatusToClient(VirtualKey virtualKey)
+        private async Task SendKeyStatusToClient(VirtualKey virtualKey, CancellationToken cancellationToken = default)
         {
             // Runtime key snapshots already carry the complete group balance needed by
             // this notification. Re-querying the management repository here pulled EF
@@ -265,7 +242,7 @@ namespace ConduitLLM.Gateway.Hubs
                 ExpiresAt = virtualKey.ExpiresAt
             };
             
-            await Clients.Caller.SendAsync("VirtualKeyStatus", status);
+            await Clients.Caller.SendAsync("VirtualKeyStatus", status, cancellationToken);
         }
     }
 }

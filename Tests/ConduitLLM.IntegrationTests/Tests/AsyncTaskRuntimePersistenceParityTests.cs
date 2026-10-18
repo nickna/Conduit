@@ -46,6 +46,191 @@ public sealed class AsyncTaskRuntimePersistenceParityTests
     }
 
     [Theory]
+    [InlineData("unsupported", AsyncTaskRuntimeRetryStatus.UnsupportedTaskType)]
+    [InlineData("missing", AsyncTaskRuntimeRetryStatus.Missing)]
+    [InlineData("already-prepared", AsyncTaskRuntimeRetryStatus.AlreadyPrepared)]
+    [InlineData("retry-limit", AsyncTaskRuntimeRetryStatus.RetryLimitExceeded)]
+    [InlineData("not-indeterminate", AsyncTaskRuntimeRetryStatus.NotIndeterminate)]
+    [InlineData("reconcile-leased", AsyncTaskRuntimeRetryStatus.NotIndeterminate)]
+    [InlineData("prepared-image", AsyncTaskRuntimeRetryStatus.Prepared)]
+    [InlineData("prepared-video", AsyncTaskRuntimeRetryStatus.Prepared)]
+    public async Task TypedRetryPreparationAndZeroRowClassificationsReuseTheirOnlyPoolSlot(
+        string scenario, AsyncTaskRuntimeRetryStatus expectedStatus)
+    {
+        var schema = $"task_retry_single_{Guid.NewGuid():N}";
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await IntegrationProofCleanup.RunAsync(async () =>
+        {
+            await CreateSchemaAsync(schema);
+            await using var source = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(WithSearchPath(schema))
+            {
+                MaxPoolSize = 1, Timeout = 10, CommandTimeout = 5, CancellationTimeout = 1000
+            }.ConnectionString);
+            var store = new NpgsqlAsyncTaskRuntimeStore(source);
+            const string taskId = "single-slot-retry";
+            const string dispatchId = "new-dispatch";
+            const string reason = "owned retry reason";
+            if (scenario != "missing")
+            {
+                var instant = new DateTime(2026, 10, 12, 12, 0, 0, DateTimeKind.Utc);
+                var seed = NewTask(taskId, state: 6,
+                    type: scenario == "unsupported" ? "audio_generation"
+                        : scenario == "prepared-video" ? "video_generation" : "image_generation");
+                seed.Payload = "{\"prompt\":\"owned retry input\"}";
+                seed.Progress = 37;
+                seed.ProgressMessage = "preserve progress";
+                seed.Result = "{\"original\":true}";
+                seed.Error = "preserve original error";
+                seed.CreatedAt = instant;
+                seed.CompletedAt = instant.AddMinutes(1);
+                seed.VirtualKeyId = 137;
+                seed.Metadata = "{\"source\":\"single-slot retry\"}";
+                seed.LeasedBy = scenario == "reconcile-leased" ? "reconcile:owned" : null;
+                seed.LeaseExpiryTime = instant.AddYears(5);
+                seed.ProviderInvocationStartedAt = instant.AddSeconds(1);
+                seed.ProviderInvocationCompletedAt = instant.AddSeconds(2);
+                seed.ProviderOperationId = "original-operation";
+                seed.RetryDispatchId = "original-dispatch";
+                seed.Version = 11;
+                seed.RetryCount = scenario == "retry-limit" ? seed.MaxRetries : 1;
+                seed.IsRetryable = false;
+                seed.NextRetryAt = instant.AddYears(5);
+                if (scenario == "already-prepared")
+                {
+                    seed.State = 0;
+                    seed.RetryDispatchId = dispatchId;
+                }
+                if (scenario == "not-indeterminate") seed.State = 1;
+                await store.CreateAsync(seed, deadline.Token);
+            }
+
+            // Independent raw reads witness all 26 durable columns, including
+            // fields unrelated to retry preparation and missing-row absence.
+            var before = await ReadRetryRowAsync(schema, taskId, deadline.Token);
+            var began = DateTime.UtcNow.AddMilliseconds(-1);
+            var prepared = await PrepareSingleSlotRetryAsync(store, taskId, dispatchId, reason, scenario, deadline.Token);
+            var ended = DateTime.UtcNow.AddMilliseconds(1);
+            var after = await ReadRetryRowAsync(schema, taskId, deadline.Token);
+            Assert.Equal(expectedStatus, prepared.Status);
+            if (expectedStatus == AsyncTaskRuntimeRetryStatus.Prepared)
+            {
+                Assert.NotNull(before);
+                Assert.NotNull(after);
+                var expected = new Dictionary<string, object?>(before)
+                {
+                    ["State"] = 0, ["IsRetryable"] = true,
+                    ["Error"] = reason, ["RetryDispatchId"] = dispatchId,
+                    ["LeasedBy"] = null, ["LeaseExpiryTime"] = null,
+                    ["ProviderInvocationStartedAt"] = null,
+                    ["ProviderInvocationCompletedAt"] = null, ["ProviderOperationId"] = null,
+                    ["CompletedAt"] = null, ["NextRetryAt"] = null,
+                    ["UpdatedAt"] = after["UpdatedAt"],
+                    ["RetryCount"] = (int)before["RetryCount"]! + 1,
+                    ["Version"] = (int)before["Version"]! + 1
+                };
+                var updatedAt = Assert.IsType<DateTime>(after["UpdatedAt"]);
+                Assert.Equal(DateTimeKind.Utc, updatedAt.Kind);
+                Assert.InRange(updatedAt, began, ended);
+                AssertRetryRow(expected, after, scenario);
+                Assert.NotNull(prepared.Task);
+                AssertRetryRow(after, RetryRecordFields(prepared.Task), scenario);
+
+                var redelivery = await PrepareSingleSlotRetryAsync(
+                    store, taskId, dispatchId, "redelivery reason", scenario, deadline.Token);
+                Assert.Equal(AsyncTaskRuntimeRetryStatus.AlreadyPrepared, redelivery.Status);
+                Assert.NotNull(redelivery.Task);
+                AssertRetryRow(after, RetryRecordFields(redelivery.Task), scenario);
+                AssertRetryRow(after, await ReadRetryRowAsync(schema, taskId, deadline.Token), scenario);
+            }
+            else
+            {
+                AssertRetryRow(before, after, scenario);
+                if (expectedStatus == AsyncTaskRuntimeRetryStatus.Missing) Assert.Null(prepared.Task);
+                else
+                {
+                    Assert.NotNull(prepared.Task);
+                    AssertRetryRow(before, RetryRecordFields(prepared.Task), scenario);
+                }
+            }
+
+            // A fresh command must lease the same single-slot source after every
+            // return path, including the zero-row fallback and replay lookup.
+            using var reuseDeadline = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token);
+            reuseDeadline.CancelAfter(TimeSpan.FromSeconds(5));
+            await using var reusable = await source.OpenConnectionAsync(reuseDeadline.Token);
+            await using var probe = new NpgsqlCommand("SELECT 1", reusable);
+            Assert.Equal(1, await probe.ExecuteScalarAsync(reuseDeadline.Token));
+        }, () => DropSchemaWithRetryBudgetAsync(schema),
+            $"Single-slot async-task retry case '{scenario}' and owned schema cleanup failed.");
+    }
+
+    private static async Task<AsyncTaskRuntimeRetryPreparation> PrepareSingleSlotRetryAsync(
+        NpgsqlAsyncTaskRuntimeStore store, string taskId, string dispatchId, string reason,
+        string scenario, CancellationToken token)
+    {
+        using var caller = CancellationTokenSource.CreateLinkedTokenSource(token);
+        caller.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            return await store.PrepareIndeterminateTaskRetryAsync(taskId, dispatchId, reason, caller.Token);
+        }
+        catch (Exception failure)
+        {
+            throw NativeFixtureDiagnostics.Failure(
+                $"PrepareIndeterminateTaskRetryAsync MaxPoolSize=1 case '{scenario}' must finish within its caller budget.", failure);
+        }
+    }
+
+    private async Task<Dictionary<string, object?>?> ReadRetryRowAsync(string schema, string id, CancellationToken token)
+    {
+        await using var observer = new NpgsqlConnection(ManagementConnectionString($"{schema}_snapshot"));
+        await observer.OpenAsync(token);
+        await using var command = new NpgsqlCommand($"SELECT * FROM \"{schema}\".\"AsyncTasks\" WHERE \"Id\" = @id", observer);
+        command.Parameters.AddWithValue("id", id);
+        await using var reader = await command.ExecuteReaderAsync(token);
+        Assert.Equal(26, reader.FieldCount);
+        if (!await reader.ReadAsync(token)) return null;
+        var fields = new Dictionary<string, object?>(StringComparer.Ordinal);
+        for (var index = 0; index < reader.FieldCount; index++)
+            fields.Add(reader.GetName(index), reader.IsDBNull(index) ? null : reader.GetValue(index));
+        Assert.False(await reader.ReadAsync(token));
+        return fields;
+    }
+
+    private static Dictionary<string, object?> RetryRecordFields(AsyncTaskRuntimeRecord task) => new()
+    {
+        ["Id"] = task.Id, ["Type"] = task.Type, ["State"] = task.State,
+        ["Payload"] = task.Payload, ["Progress"] = task.Progress, ["ProgressMessage"] = task.ProgressMessage,
+        ["Result"] = task.Result, ["Error"] = task.Error, ["CreatedAt"] = task.CreatedAt,
+        ["UpdatedAt"] = task.UpdatedAt, ["CompletedAt"] = task.CompletedAt, ["VirtualKeyId"] = task.VirtualKeyId,
+        ["Metadata"] = task.Metadata, ["IsArchived"] = task.IsArchived, ["ArchivedAt"] = task.ArchivedAt,
+        ["LeasedBy"] = task.LeasedBy, ["LeaseExpiryTime"] = task.LeaseExpiryTime,
+        ["ProviderInvocationStartedAt"] = task.ProviderInvocationStartedAt,
+        ["ProviderInvocationCompletedAt"] = task.ProviderInvocationCompletedAt,
+        ["ProviderOperationId"] = task.ProviderOperationId, ["RetryDispatchId"] = task.RetryDispatchId,
+        ["Version"] = task.Version, ["RetryCount"] = task.RetryCount, ["MaxRetries"] = task.MaxRetries,
+        ["IsRetryable"] = task.IsRetryable, ["NextRetryAt"] = task.NextRetryAt
+    };
+
+    private static void AssertRetryRow(
+        Dictionary<string, object?>? expected, Dictionary<string, object?>? actual, string scenario)
+    {
+        if (expected is null) { Assert.Null(actual); return; }
+        Assert.NotNull(actual);
+        Assert.Equal(26, expected.Count);
+        Assert.Equal(26, actual.Count);
+        foreach (var (name, value) in expected)
+            Assert.True(actual.TryGetValue(name, out var stored) && Equals(value, stored),
+                $"Single-slot retry '{scenario}' changed or omitted durable field '{name}'.");
+    }
+
+    private async Task DropSchemaWithRetryBudgetAsync(string schema)
+    {
+        using var cleanup = new CancellationTokenSource(CleanupTimeout);
+        await DropSchemaAsync(schema, cleanup.Token);
+    }
+
+    [Theory]
     [InlineData("success")]
     [InlineData("failure")]
     [InlineData("cancellation")]

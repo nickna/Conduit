@@ -96,10 +96,13 @@ namespace ConduitLLM.Gateway.Authentication
         
         public async Task<bool> IsAdminAsync(HubCallerContext context)
         {
-            // Check if this is a master key by looking for a special claim or metadata
-            // For now, we'll consider a key as admin if it has a specific metadata tag
             var virtualKey = await GetAuthenticatedVirtualKeyAsync(context);
-            if (virtualKey?.Metadata != null)
+            return IsTrustedAdministrator(virtualKey);
+        }
+
+        internal static bool IsTrustedAdministrator(VirtualKey? virtualKey)
+        {
+            if (virtualKey is { IsEnabled: true, Metadata: not null })
             {
                 try
                 {

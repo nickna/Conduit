@@ -132,7 +132,7 @@ successful-request debits are not equated with full settlement of the attempt.
 
 These counts are consistent with 100 JSON warmups, 992 successful measured JSON
 operations and eight measured failures, beyond the separate preflights. The
-collector throws on the probe's nonzero exit before retaining its structured
+collector used in that attempt threw on the probe's nonzero exit before retaining its structured
 stdout report. Individual client results and latencies therefore cannot be
 reconstructed from this failed attempt. Provider counters count accepted fixture
 operations; persisted successful logs do not independently prove client EOF.
@@ -189,8 +189,8 @@ cannot establish their cause or a Gateway performance comparison.
 The [opt-in client diagnostic sidecar](native-aot-canary.md#reproducible-comparison)
 now supports schema-2 complete-SSE observations: first/last completed body reads,
 first nonempty data event, exact DONE-frame observation, read/event counts, and
-the existing header/body/validated/end boundaries. Default schema-2 stdout and
-the production collector remain unchanged. Admin/non-streaming sidecars retain
+the existing header/body/validated/end boundaries. That extension left default
+schema-2 stdout and the production collector unchanged. Admin/non-streaming sidecars retain
 schema 1. The full validator still runs after EOF; seeing DONE cannot bypass a
 deadline, malformed usage, duplicate/trailing events or incomplete consumption.
 
@@ -205,10 +205,73 @@ provider stream from relay time. The planned SSE-only diagnostic arm would also
 omit the baseline's preceding JSON phase; any difference would not isolate
 tracing overhead.
 
-The failed collection is retained as a separate blocker, tracked in
-[issue #1702](https://github.com/nickna/Conduit/issues/1702). Current-head
-reproduction and the cause of those 502 responses remain unestablished. No application or
-persistence optimization was selected, and the historical causal question remains
-open. This investigation establishes no accepted qualification window, canary,
+## Current investigation tooling
+
+The collector now writes schema-2 failure diagnostics with a nullable
+`workloadAggregate`. On a nonzero probe exit, it validates the bounded, complete
+schema-2 stdout report against the selected workload and configuration before
+retaining only its workload ID, explicit `measured` phase, requested/executed/
+completed/failure counts, and configured warmup size, concurrency and request
+deadline. `warmupRequests` describes configuration; it does not independently
+observe warmup completion. Malformed, mismatched or extra output produces a null
+aggregate. Original schema-1 failure diagnostics remain readable. The default
+probe report and strict successful-result validator are unchanged: nonzero exit
+still fails collection, creates no performance report and cannot update the
+successful alias. Retained diagnostics exclude raw child stdout/stderr, private
+configuration, URLs, credentials, request/response content and exception text.
+
+Typed `HttpClientHelper.SendJsonRequestAsync` also emits warning event 1702,
+`ProviderJsonFailureDiagnostic`, with only closed `Stage` and `Category` codes,
+numeric or null `ObservedStatus`, a closed `HttpRequestError` code and a W3C hex
+`TraceId` when available (`none` otherwise). Stages distinguish request creation,
+buffered send and response processing. An actual returned HTTP response records
+its status; an exception from the default buffered send leaves observed status
+unknown, because that await includes body buffering and does not establish
+whether headers arrived before failure. Exception status metadata is not treated
+as an observed response. GET and SSE helpers are unchanged. A request can emit
+multiple diagnostic records, for example an upstream error response followed by
+a translator failure; correlate by trace when available rather than counting
+records as requests. These tooling changes do not establish a current-head
+reproduction or the cause of the historical failures.
+
+The tooling passed 86 focused helper, endpoint and reservation tests. A focused
+collector run passed 186 contracts, including actual failed child processes,
+fractional timing values, strict aggregate projection, prior successful-report
+preservation and owned cleanup. An earlier complete collector run exposed an
+integer-only parsing mistake in the new failure projection; the corrected
+projection has the focused proof above. That earlier failure is retained and is
+not a complete-suite pass.
+
+A fresh local fixture used clean source revision
+`efd79af0879f2ff6755a8fb2b21da70c5b7f937f`, frozen JSON/SSE validators and a Windows
+.NET 10.0.13 client. This source predates the diagnostic event above. One JIT JSON
+preflight and one native SSE preflight passed their complete validators. Three
+live observations, more than 30 seconds apart, and a post-shutdown observation
+agreed on two usage logs/audits, 20 input and 10 output tokens, cost/spend/debits
+`0.00015000`, balance `99.99985000`, zero error audits and zero unresolved financial
+obligations. No accounting or provider state was reset. Other host workloads
+remained present, so this setup does not establish a performance comparison.
+
+The standard collector attempt `b27c1b4ef1c544c985a27ad093d9dad4` then stopped at
+JIT image metadata validation, before creating a measured host or sending a
+workload. The local JIT image lacked a registry manifest accessible through the
+collector's normal `docker manifest inspect` command. Its schema-2 failed-attempt
+receipt has a null workload aggregate and no performance report. Independent
+post-failure readback still showed exactly the two settled preflights and zero
+database backends. This metadata failure is separate from the historical
+provider-communication failure and supplies no evidence about its cause.
+
+The failed collection is retained separately in
+[issue #1702](https://github.com/nickna/Conduit/issues/1702). A
+[2026-10-17 networking follow-up](native-benchmark-container-networking.md)
+reproduces the current communication failure and isolates unanswered TCP SYNs
+when recently closed frontend four-tuples are reused through Docker Desktop's
+host-gateway/published-port path. Direct fixture-bridge controls pass, including
+138 recent tuple reuses. The collector now supports a verified existing bridge
+so containerized backing services can communicate directly. The unavailable
+original packet evidence still prevents retrospective attribution of the
+historical failure, and the historical SSE performance question remains open.
+No application or persistence optimization was selected. This investigation
+establishes no accepted qualification window, canary,
 ordered Admin/Gateway soak, rollback, successor ADR approval or production
 promotion. Production remains on JIT under the existing blocked policy.

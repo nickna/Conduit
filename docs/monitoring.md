@@ -69,6 +69,15 @@ transports). The streams fall into two groups by audience:
 For horizontal scale, SignalR uses a **Redis backplane** so a client connected to any instance
 receives events raised on any other. The Gateway requires Redis even in a single-node deployment;
 Admin streams stay local to their instance when Admin runs without Redis.
+
+Virtual-key management connections receive administrator and foreign-key notifications only while
+their trusted key metadata grants that role. Each Gateway checks its local privileged connections
+every five seconds, with a shared five-second audit deadline, including connections receiving events
+from other nodes through Redis. A denied management subscription revokes those audiences before
+returning its error. Demotion retains the authenticated key's own lifecycle and status notifications;
+promotion requires a fresh authorized subscription. Unavailable role lookups revoke access, and a
+connection is closed if revocation cannot finish within its deadline.
+
 The exact set of hubs and their events is declared in the Gateway and Admin service code — treat that
 as the source of truth rather than a list here, which would drift.
 

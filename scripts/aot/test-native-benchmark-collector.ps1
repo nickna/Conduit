@@ -1,6 +1,8 @@
 #!/usr/bin/env pwsh
 [CmdletBinding()]
-param([switch] $DiagnosticSchemaOnly, [switch] $StrictCallerOnly)
+param([switch] $DiagnosticSchemaOnly, [switch] $StrictCallerOnly, [switch] $FailedWorkloadOnly,
+    [switch] $NetworkBindingOnly, [switch] $DockerNetworkOnly, [switch] $CollectorTimingOnly,
+    [switch] $DeadlineOnly)
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -60,7 +62,232 @@ function Assert-DiagnosticContractRejection([scriptblock] $Action, [string] $Exp
 function New-DiagnosticContractInput {
     return ,([ordered]@{ phase = 'unknown'; reason = 'unknown'; runtime = 'unknown'; sampleKind = 'none'; pair = $null;
         ownedContainerCleanup = @{ status = 'not-attempted'; reason = 'none' };
-        privateFileCleanup = @{ status = 'not-attempted'; reason = 'none' } })
+        privateFileCleanup = @{ status = 'not-attempted'; reason = 'none' }; workloadAggregate = $null })
+}
+
+function Invoke-CollectorTimingContracts {
+    # Execute the real invocation boundary, including its catch/finally, with
+    # an in-memory collector. Later oracle work must not change its measurement.
+    $tokens = $null; $parseErrors = $null
+    $contractPath = Join-Path ([IO.Path]::GetDirectoryName($collector)) 'test-native-benchmark-collector.ps1'
+    $ast = [Management.Automation.Language.Parser]::ParseFile($contractPath, [ref]$tokens, [ref]$parseErrors)
+    Assert-Contract ($parseErrors.Count -eq 0) 'Collector contract syntax is invalid.'
+    $definition = $ast.Find({ param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Invoke-CollectorCase'
+    }, $true)
+    Assert-Contract ($null -ne $definition) 'Collector case definition is missing.'
+    $boundaries = @($definition.FindAll({ param($node)
+        $node -is [Management.Automation.Language.TryStatementAst] -and $node.CatchClauses.Count -eq 1 -and
+        $node.CatchClauses[0].Body.Extent.Text.Contains('$failure = $_.Exception.Message; $publicError = $_ | Out-String')
+    }, $true))
+    Assert-Contract ($boundaries.Count -eq 1) 'Actual collector invocation boundary is ambiguous.'
+    $boundary = [scriptblock]::Create($boundaries[0].Extent.Text)
+    foreach ($shouldFail in @($false, $true)) {
+        $parameters = @{}; $StrictCaller = $true
+        $publicRecords = [Collections.Generic.List[object]]::new()
+        $failure = $null; $publicError = ''
+        $collectorToInvoke = if ($shouldFail) { { throw [InvalidOperationException]::new($privateKey) } }
+            else { { 'first-result'; 'second-result' } }
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        $boundaryOutput = @(. $boundary)
+        $measuredTicks = $watch.ElapsedTicks
+        $stoppedAtBoundary = -not $watch.IsRunning
+        # This deliberately happens after the actual invocation and its catch.
+        # Exact tick equality avoids a scheduler-dependent elapsed-time bound.
+        [Threading.Thread]::SpinWait(100000)
+        $oracleResult = @($publicRecords | ForEach-Object { [string]$_ })
+        Assert-Contract ($boundaryOutput.Count -eq 0 -and $stoppedAtBoundary -and $watch.ElapsedTicks -eq $measuredTicks) 'Oracle work changed the collector invocation measurement.'
+        if ($shouldFail) {
+            Assert-Contract ($failure -ceq $privateKey -and $publicError.Contains($privateKey)) 'Timing boundary lost the controlled collector failure.'
+        }
+        else {
+            Assert-Contract ($null -eq $failure -and ($oracleResult -join '|') -ceq 'first-result|second-result') 'Timing boundary lost successful collector records.'
+        }
+        $script:cases++
+    }
+}
+
+function Invoke-NetworkBindingContracts {
+    # These contracts execute the real collector helpers with an in-memory
+    # Docker boundary. They never start Docker, readiness listeners or probes.
+    $tokens = $null; $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile($collector, [ref]$tokens, [ref]$parseErrors)
+    Assert-Contract ($parseErrors.Count -eq 0) 'Collector syntax is invalid.'
+    foreach ($functionName in @('Read-BenchmarkFixtureNetwork', 'Assert-BenchmarkFixtureNetworkAttachment')) {
+        $definition = $ast.Find({
+            param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $functionName
+        }.GetNewClosure(), $true)
+        Assert-Contract ($null -ne $definition) 'Collector network helper is missing.'
+        Invoke-Expression $definition.Extent.Text
+    }
+    $networkName = 'owned-fixture-bridge'
+    $networkId = 'a' * 64
+    $networkExit = 0; $networkThrows = $false
+    $networkText = ConvertTo-Json -InputObject @{ Id = $networkId; Name = $networkName; Driver = 'bridge'; Scope = 'local' } -Compress
+    $networkCalls = [Collections.Generic.List[object]]::new()
+    function Invoke-Docker([string[]] $Arguments) {
+        $networkCalls.Add(@($Arguments))
+        if ($networkThrows) { throw ('private-child-diagnostic:' + $privateKey) }
+        return @{ ExitCode = $networkExit; Stdout = $networkText; Stderr = 'private-child-diagnostic:' + $privateKey }
+    }
+    $pin = Read-BenchmarkFixtureNetwork $networkName
+    Assert-Contract ($pin.Id -ceq $networkId -and $pin.Name -ceq $networkName -and $pin.Count -eq 2 -and
+        $networkCalls.Count -eq 1 -and ($networkCalls[0] -join '|') -ceq ('network|inspect|--format|{{json .}}|' + $networkName)) 'Network inspection did not pin the exact existing bridge.'
+    $script:cases++
+    foreach ($invalidName in @('', ' ', '-leading', 'with/slash', 'with:colon', 'nonascii-雪', ('x' * 129), ($privateKey + "`n"))) {
+        $networkCalls.Clear()
+        Assert-DiagnosticContractRejection { Read-BenchmarkFixtureNetwork $invalidName } 'Benchmark fixture network binding failed.'
+        Assert-Contract ($networkCalls.Count -eq 0) 'Invalid network name reached Docker.'
+        $script:cases++
+    }
+    $networkName = 'x' * 128
+    $networkText = ConvertTo-Json -InputObject @{ Id = $networkId; Name = $networkName; Driver = 'bridge'; Scope = 'local' } -Compress
+    Assert-Contract ((Read-BenchmarkFixtureNetwork $networkName).Name -ceq $networkName) 'Maximum bounded ASCII network name was rejected.'
+    $script:cases++
+    $networkName = $pin.Name
+    foreach ($mutation in @(
+        { param($d) $d.Id = 'A' * 64 }, { param($d) $d.Id = 'a' * 63 }, { param($d) $d.Id = 42 },
+        { param($d) $d.Name = 'foreign-fixture' }, { param($d) $d.Name = @($networkName) },
+        { param($d) $d.Driver = 'host' }, { param($d) $d.Driver = 'null' }, { param($d) $d.Driver = 'overlay' },
+        { param($d) $d.Scope = 'swarm' }, { param($d) $d.Remove('Scope') | Out-Null })) {
+        $data = @{ Id = $networkId; Name = $networkName; Driver = 'bridge'; Scope = 'local' }
+        & $mutation $data
+        $networkText = ConvertTo-Json -InputObject $data -Compress
+        Assert-DiagnosticContractRejection { Read-BenchmarkFixtureNetwork $networkName } 'Benchmark fixture network binding failed.'
+        $script:cases++
+    }
+    foreach ($invalidJson in @('[]', 'null', '{', ('{"Id":"' + $networkId + '","Id":"' + $networkId + '","Name":"' + $networkName + '","Driver":"bridge","Scope":"local"}'),
+        ('{"Id":"' + $networkId + '","Name":"' + $networkName + '","Driver":"bridge","Scope":"local","private":{"key":1,"key":2}}'))) {
+        $networkText = $invalidJson
+        Assert-DiagnosticContractRejection { Read-BenchmarkFixtureNetwork $networkName } 'Benchmark fixture network binding failed.'
+        $script:cases++
+    }
+    $networkExit = 17
+    Assert-DiagnosticContractRejection { Read-BenchmarkFixtureNetwork $networkName } 'Benchmark fixture network binding failed.'
+    $networkThrows = $true
+    Assert-DiagnosticContractRejection { Read-BenchmarkFixtureNetwork $networkName } 'Benchmark fixture network binding failed.'
+    $script:cases += 2
+    $valid = @{ HostConfig = @{ NetworkMode = $networkId }; State = @{ Running = $true };
+        NetworkSettings = @{ Networks = @{ $networkName = @{ NetworkID = $networkId; IPAddress = '172.29.0.8' } } } }
+    $validText = ConvertTo-Json -InputObject $valid -Depth 8 -Compress
+    Assert-Contract (@(Assert-BenchmarkFixtureNetworkAttachment $valid $pin).Count -eq 0) 'Valid actual bridge attachment emitted output.'
+    Assert-Contract ((ConvertTo-Json -InputObject $valid -Depth 8 -Compress) -ceq $validText) 'Network validation mutated Docker inspection data.'
+    Assert-Contract (@(Assert-BenchmarkFixtureNetworkAttachment $null $null).Count -eq 0) 'Default transport unexpectedly required network metadata.'
+    $script:cases += 2
+    foreach ($mutation in @(
+        { param($d) $d.HostConfig.NetworkMode = $networkName }, { param($d) $d.HostConfig.NetworkMode = 'b' * 64 },
+        { param($d) $d.Remove('HostConfig') | Out-Null }, { param($d) $d.State.Running = $false }, { param($d) $d.State.Running = 'true' },
+        { param($d) $d.NetworkSettings.Networks[$networkName].NetworkID = 'b' * 64 },
+        { param($d) $d.NetworkSettings.Networks['foreign-network'] = $d.NetworkSettings.Networks[$networkName]; $d.NetworkSettings.Networks.Remove($networkName) | Out-Null },
+        { param($d) $d.NetworkSettings.Networks['second-network'] = @{ NetworkID = 'b' * 64; IPAddress = '172.30.0.8' } },
+        { param($d) $d.NetworkSettings.Networks = @{} })) {
+        $data = Read-NativeImageVerificationJson $validText
+        & $mutation $data
+        Assert-DiagnosticContractRejection { Assert-BenchmarkFixtureNetworkAttachment $data $pin } 'Benchmark fixture network binding failed.'
+        $script:cases++
+    }
+    foreach ($address in @('', '::1', '172.29.0.256', '172.29.0', '172.029.0.8', '0.0.0.0', '127.0.0.1', '224.0.0.1', '255.255.255.255', 42, $null, ($privateKey + "`n"))) {
+        $data = Read-NativeImageVerificationJson $validText
+        $data.NetworkSettings.Networks[$networkName].IPAddress = $address
+        Assert-DiagnosticContractRejection { Assert-BenchmarkFixtureNetworkAttachment $data $pin } 'Benchmark fixture network binding failed.'
+        $script:cases++
+    }
+}
+
+function Invoke-FailedWorkloadAggregateContracts {
+    # Execute the collector's real validators without launching a workload.
+    $tokens = $null; $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile($collector, [ref]$tokens, [ref]$parseErrors)
+    Assert-Contract ($parseErrors.Count -eq 0) 'Collector syntax is invalid.'
+    foreach ($functionName in @('Get-JsonObjectMap', 'Read-JsonText', 'Read-JsonInteger', 'Get-ResultNumber', 'Test-WorkloadResult', 'Get-FailedWorkloadAggregate')) {
+        $definition = $ast.Find({
+            param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $functionName
+        }.GetNewClosure(), $true)
+        Assert-Contract ($null -ne $definition) ('Collector helper is missing: ' + $functionName)
+        Invoke-Expression $definition.Extent.Text
+    }
+    foreach ($id in @('admin-setting-read', 'gateway-chat-nonstream', 'gateway-chat-sse')) {
+        $Service = if ($id -ceq 'admin-setting-read') { 'admin' } else { 'gateway' }
+        $configuration = [pscustomobject]@{ Id = $id; Data = @{ requests = 4; warmupRequests = 2; concurrency = 2; timeoutSeconds = 5 } }
+        $report = [ordered]@{
+            schemaVersion = 2; service = $Service; generatedAt = '2026-10-17T00:00:00.0000000+00:00'
+            workloads = @([ordered]@{
+                id = $id; method = $(if ($Service -ceq 'admin') { 'GET' } else { 'POST' })
+                path = $(if ($Service -ceq 'admin') { '/v1/admin/global-settings/by-key/{key}' } else { '/v1/chat/completions' })
+                authenticated = $true; inputFingerprint = 'c' * 64
+                requested = 4; executed = 4; completed = 3; failures = 1
+                warmupRequests = 2; concurrency = 2; timeoutSeconds = 5
+                elapsedMilliseconds = 100.25; throughputPerSecond = 3000 / 100.25
+                p50Milliseconds = 1.125; p95Milliseconds = 2.25; p99Milliseconds = 3.5
+            })
+        }
+        foreach ($completed in @(0, 3, 4)) {
+            $report.workloads[0].completed = $completed
+            $report.workloads[0].failures = 4 - $completed
+            $report.workloads[0].throughputPerSecond = $completed * 1000 / 100.25
+            $stdout = $report | ConvertTo-Json -Depth 8 -Compress
+            $aggregate = Get-FailedWorkloadAggregate $stdout $configuration
+            Assert-Contract ($null -ne $aggregate -and $aggregate.Count -eq 9 -and $aggregate.phase -ceq 'measured' -and
+                $aggregate.id -ceq $id -and $aggregate.requested -eq 4 -and $aggregate.executed -eq 4 -and
+                $aggregate.completed -eq $completed -and $aggregate.failures -eq (4 - $completed) -and
+                $aggregate.warmupRequests -eq 2) 'A valid measured failure projection lost its counts or invented warm-up completion.'
+            $successFailure = $null
+            try { $unusedSuccess = Test-WorkloadResult ($stdout | ConvertFrom-Json) $configuration }
+            catch { $successFailure = $_.Exception.Message }
+            Assert-Contract (($completed -eq 4 -and $null -eq $successFailure) -or
+                ($completed -ne 4 -and $successFailure -ceq 'Workload report is invalid.')) 'Failure evidence relaxed the strict success gate.'
+            $script:cases++
+        }
+        $report.workloads[0].completed = 3; $report.workloads[0].failures = 1; $report.workloads[0].throughputPerSecond = 3000 / 100.25
+        foreach ($mutate in @(
+            { param($r) $r.schemaVersion = '2' },
+            { param($r) $r.service = 'other' },
+            { param($r) $r.generatedAt = $privateKey },
+            { param($r) $r.extra = $privateKey },
+            { param($r) $r.workloads = @($r.workloads[0], $r.workloads[0]) },
+            { param($r) $r.workloads[0].id = $privateKey },
+            { param($r) $r.workloads[0].method = 'DELETE' },
+            { param($r) $r.workloads[0].path = $privateKey },
+            { param($r) $r.workloads[0].authenticated = $false },
+            { param($r) $r.workloads[0].inputFingerprint = $privateKey },
+            { param($r) $r.workloads[0].extra = $privateKey },
+            { param($r) $r.workloads[0].Remove('failures') },
+            { param($r) $r.workloads[0].requested = 5; $r.workloads[0].executed = 5; $r.workloads[0].failures = 2 },
+            { param($r) $r.workloads[0].executed = 3 },
+            { param($r) $r.workloads[0].completed = '3' },
+            { param($r) $r.workloads[0].completed = $true },
+            { param($r) $r.workloads[0].completed = 3.5 },
+            { param($r) $r.workloads[0].completed = -1 },
+            { param($r) $r.workloads[0].failures = 0 },
+            { param($r) $r.workloads[0].warmupRequests = 1 },
+            { param($r) $r.workloads[0].concurrency = 1 },
+            { param($r) $r.workloads[0].timeoutSeconds = 4 },
+            { param($r) $r.workloads[0].elapsedMilliseconds = 0 },
+            { param($r) $r.workloads[0].elapsedMilliseconds = [double]::PositiveInfinity },
+            { param($r) $r.workloads[0].throughputPerSecond = 31 },
+            { param($r) $r.workloads[0].p50Milliseconds = [double]::NaN },
+            { param($r) $r.workloads[0].p95Milliseconds = -1 },
+            { param($r) $r.workloads[0].p95Milliseconds = 4 }
+        )) {
+            $invalid = $report | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+            & $mutate $invalid | Out-Null
+            $aggregate = Get-FailedWorkloadAggregate ($invalid | ConvertTo-Json -Depth 8 -Compress) $configuration
+            Assert-Contract ($null -eq $aggregate) 'Malformed, mismatched or private failed stdout produced retained evidence.'
+            $script:cases++
+        }
+        $stdout = $report | ConvertTo-Json -Depth 8 -Compress
+        foreach ($invalid in @(
+            ('private-child-diagnostic ' + $privateKey),
+            ($stdout.Replace('"schemaVersion":2', '"schemaVersion":2,"schemaVersion":2')),
+            ($stdout.Replace('"p50Milliseconds":1.125', '"p50Milliseconds":1e999')),
+            ((' ' * 16385) + $stdout)
+        )) {
+            Assert-Contract ($null -eq (Get-FailedWorkloadAggregate $invalid $configuration)) 'Unparseable, duplicate, nonfinite or oversized failed stdout was retained.'
+            $script:cases++
+        }
+    }
 }
 
 function Invoke-FailureDiagnosticSchemaContracts {
@@ -103,7 +330,7 @@ function Invoke-FailureDiagnosticSchemaContracts {
         $script:cases++
         Assert-Contract (@(Set-NativeBenchmarkAttemptFailureDiagnostic -Context $context -Diagnostic (New-DiagnosticContractInput)).Count -eq 0) 'Diagnostic writer emitted incidental output.'
         $full = Read-AttemptContractJson $diagnosticPath
-        Assert-Contract ($full.Count -eq 11 -and $full.schemaVersion -eq 1 -and
+        Assert-Contract ($full.Count -eq 12 -and $full.schemaVersion -eq 2 -and $null -eq $full.workloadAggregate -and
             $full.kind -ceq 'conduit-native-benchmark-failure-diagnostic' -and $full.attemptId -ceq $context.attemptId -and
             $full.service -ceq 'admin' -and $full.phase -ceq 'unknown' -and $full.reason -ceq 'unknown' -and
             [IO.FileInfo]::new($diagnosticPath).Length -le 4096) 'Unknown fallback diagnostic is not a bounded closed record.'
@@ -114,8 +341,33 @@ function Invoke-FailureDiagnosticSchemaContracts {
             (Get-AttemptContractHash $output) -ceq $aliasHash -and (Get-AttemptContractHash $archive) -ceq $archiveHash) 'Immutable diagnostic writer changed a sidecar, attempt, alias or archive.'
         $script:cases++
 
+        $legacy = $full | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+        $legacy.schemaVersion = 1
+        $legacy.Remove('workloadAggregate')
+        Assert-Contract (@(Get-NativeBenchmarkAttemptFailureDiagnostic $legacy).Count -eq 1) 'Original schema-1 failure evidence is no longer readable.'
+        $legacy.workloadAggregate = $null
+        Assert-DiagnosticContractRejection { Get-NativeBenchmarkAttemptFailureDiagnostic $legacy } $validationError
+        $script:cases++
+
+        $networkDiagnostic = $full | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+        $networkDiagnostic.phase = 'configuration'; $networkDiagnostic.reason = 'network-binding'
+        Assert-Contract (@(Get-NativeBenchmarkAttemptFailureDiagnostic $networkDiagnostic).Count -eq 1 -and
+            $null -eq $networkDiagnostic.workloadAggregate) 'Schema-2 network binding diagnostics did not retain the closed reason and null aggregate.'
+        $script:cases++
+        $legacyNetworkDiagnostic = $networkDiagnostic | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+        $legacyNetworkDiagnostic.schemaVersion = 1; $legacyNetworkDiagnostic.Remove('workloadAggregate')
+        Assert-Contract (@(Get-NativeBenchmarkAttemptFailureDiagnostic $legacyNetworkDiagnostic).Count -eq 1) 'Schema-1 diagnostics did not accept the closed network binding reason.'
+        $script:cases++
+        foreach ($invalidReason in @('Network-binding', 'network-binding-unknown', ('network-binding:' + $privateKey), ("network-binding`n" + $privateKey))) {
+            $modified = $networkDiagnostic | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+            $modified.reason = $invalidReason
+            Assert-DiagnosticContractRejection { Get-NativeBenchmarkAttemptFailureDiagnostic $modified } $validationError
+            $script:cases++
+        }
+
         $mutations = @(
             { param($d) $d.schemaVersion = '1' },
+            { param($d) $d.schemaVersion = 3 },
             { param($d) $d.kind = 'Conduit-native-benchmark-failure-diagnostic' },
             { param($d) $d.attemptId = '0' * 32 },
             { param($d) $d.service = 'Admin' },
@@ -156,6 +408,41 @@ function Invoke-FailureDiagnosticSchemaContracts {
             $valid.ownedContainerCleanup = @{ status = 'confirmed'; reason = 'shutdown-failed' }
             $valid.privateFileCleanup = @{ status = 'confirmed'; reason = 'cleanup-failed' }
             Assert-Contract (@(Get-NativeBenchmarkAttemptFailureDiagnostic $valid).Count -eq 1) 'Valid recorded pair or confirmed cleanup reason was rejected.'
+            $script:cases++
+        }
+        $withAggregate = $full | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+        $withAggregate.phase = 'workload'; $withAggregate.reason = 'probe-exit'
+        $withAggregate.runtime = 'jit'; $withAggregate.sampleKind = 'warmup'
+        $withAggregate.workloadAggregate = @{ phase = 'measured'; id = 'admin-setting-read'; requested = 4;
+            executed = 4; completed = 0; failures = 4; warmupRequests = 2; concurrency = 2; timeoutSeconds = 5 }
+        Assert-Contract (@(Get-NativeBenchmarkAttemptFailureDiagnostic $withAggregate).Count -eq 1) 'A fully failed measured aggregate was rejected.'
+        $script:cases++
+        foreach ($mutate in @(
+            { param($d) $d.phase = 'workload-result' },
+            { param($d) $d.reason = 'unknown' },
+            { param($d) $d.runtime = 'unknown' },
+            { param($d) $d.sampleKind = 'none' },
+            { param($d) $d.workloadAggregate.phase = 'warmup' },
+            { param($d) $d.workloadAggregate.id = 'gateway-chat-sse' },
+            { param($d) $d.workloadAggregate.id = $privateKey },
+            { param($d) $d.workloadAggregate.requested = 0 },
+            { param($d) $d.workloadAggregate.requested = 100001 },
+            { param($d) $d.workloadAggregate.executed = 3 },
+            { param($d) $d.workloadAggregate.completed = 5 },
+            { param($d) $d.workloadAggregate.failures = 3 },
+            { param($d) $d.workloadAggregate.completed = '0' },
+            { param($d) $d.workloadAggregate.completed = $false },
+            { param($d) $d.workloadAggregate.completed = [double]::NaN },
+            { param($d) $d.workloadAggregate.warmupRequests = 10001 },
+            { param($d) $d.workloadAggregate.concurrency = 0 },
+            { param($d) $d.workloadAggregate.concurrency = 257 },
+            { param($d) $d.workloadAggregate.timeoutSeconds = 121 },
+            { param($d) $d.workloadAggregate.extra = $privateKey },
+            { param($d) $d.workloadAggregate.Remove('phase') }
+        )) {
+            $modified = $withAggregate | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+            & $mutate $modified | Out-Null
+            Assert-DiagnosticContractRejection { Get-NativeBenchmarkAttemptFailureDiagnostic $modified } $validationError
             $script:cases++
         }
     }
@@ -610,7 +897,7 @@ exit 0
 function New-CaseRoot([string] $Scenario) {
     $caseRoot = Join-Path $temporaryRoot ([Guid]::NewGuid().ToString('N'))
     [IO.Directory]::CreateDirectory($caseRoot) | Out-Null
-    foreach ($name in @('commands', 'drivers', 'created', 'active', 'processes')) {
+    foreach ($name in @('commands', 'drivers', 'created', 'active', 'processes', 'network-checks')) {
         [IO.Directory]::CreateDirectory((Join-Path $caseRoot $name)) | Out-Null
     }
     [Environment]::SetEnvironmentVariable('CONDUIT_COLLECTOR_TEST_ROOT', $caseRoot)
@@ -653,7 +940,7 @@ function Get-CaseFailureDiagnostic([string] $CaseRoot, [object[]] $Commands, [ob
     foreach ($allowed in @('Private command failed.', 'Private command failed and its cleanup failed.',
         'Private command cleanup failed.', 'Benchmark variant failed.',
         'Benchmark variant failed and owned container cleanup failed.',
-        'Owned benchmark container cleanup failed.', 'Container ownership verification failed.')) {
+        'Owned benchmark container cleanup failed.', 'Container ownership verification failed.', 'Benchmark fixture network binding failed.')) {
         if ($classificationFailure -ceq ($allowed + ' No qualification was recorded.')) { $safeFailure = $allowed }
     }
     foreach ($tag in @('command-deadline', 'poll-command-deadline', 'poll-callback', 'poll-memory-sample', 'poll-memory-value')) {
@@ -690,20 +977,45 @@ function Assert-CollectorFailureDiagnostic($Metadata, [string] $Scenario, [strin
         'diagnostic-private-child' { $phase = 'workload-result'; $reason = 'unknown' }
         'diagnostic-private-config' { $phase = 'workload-result'; $reason = 'unknown'; $privateReason = 'cleanup-failed' }
         'diagnostic-poll-memory' { $phase = 'workload'; $reason = 'poll-memory-sample' }
+        'diagnostic-poll-deadline' { $phase = 'workload'; $reason = 'poll-command-deadline' }
+        { $_.StartsWith('diagnostic-probe-', [StringComparison]::Ordinal) } { $phase = 'workload'; $reason = 'probe-exit' }
     }
     Assert-Contract ($diagnostic.phase -ceq $phase -and $diagnostic.reason -ceq $reason -and $diagnostic.runtime -ceq $runtime -and
         $diagnostic.sampleKind -ceq $sample -and $diagnostic.pair -ceq $pair -and
         $diagnostic.ownedContainerCleanup.status -ceq $ownedStatus -and $diagnostic.ownedContainerCleanup.reason -ceq $ownedReason -and
-        $diagnostic.privateFileCleanup.status -ceq $privateStatus -and $diagnostic.privateFileCleanup.reason -ceq $privateReason) 'Persisted primary phase, variant identity or independent cleanup outcome differs.'
+        $diagnostic.privateFileCleanup.status -ceq $privateStatus -and $diagnostic.privateFileCleanup.reason -ceq $privateReason) (
+        'Persisted diagnostic differs for ' + $Scenario + ': phase=' + $diagnostic.phase + ';reason=' + $diagnostic.reason +
+        ';runtime=' + $diagnostic.runtime + ';sample=' + $diagnostic.sampleKind + ';owned=' + $diagnostic.ownedContainerCleanup.status +
+        '/' + $diagnostic.ownedContainerCleanup.reason + ';private=' + $diagnostic.privateFileCleanup.status + '/' + $diagnostic.privateFileCleanup.reason + '.')
     $pairText = if ($null -eq $pair) { 'none' } else { [string]$pair }
     $expectedSuffix = '[phase=' + $phase + ';reason=' + $reason + ';runtime=' + $runtime + ';sample=' + $sample + ';pair=' + $pairText +
         ';owned-cleanup=' + $ownedStatus + ';owned-cleanup-reason=' + $ownedReason + ';private-cleanup=' + $privateStatus + ';private-cleanup-reason=' + $privateReason + ']'
     Assert-Contract ($Failure.Contains($expectedSuffix)) 'Public summary lost the same closed primary and independent cleanup codes.'
+    $expectedAggregate = $Scenario -cin @('diagnostic-probe-partial', 'diagnostic-probe-all-failed')
+    Assert-Contract ($diagnostic.schemaVersion -eq 2 -and ($null -ne $diagnostic.workloadAggregate) -eq $expectedAggregate) (
+        'Failed stdout aggregate availability differs for ' + $Scenario + '; expected ' + $expectedAggregate + ', observed ' + ($null -ne $diagnostic.workloadAggregate) + '.')
+    if ($expectedAggregate) {
+        $aggregate = $diagnostic.workloadAggregate
+        $completed = if ($Scenario -ceq 'diagnostic-probe-all-failed') { 0 } else { 3 }
+        $id = if ($Metadata.attempt.service -ceq 'admin') { 'admin-setting-read' } else { 'gateway-chat-nonstream' }
+        Assert-Contract ($aggregate.Count -eq 9 -and $aggregate.phase -ceq 'measured' -and $aggregate.id -ceq $id -and
+            $aggregate.requested -eq 4 -and $aggregate.executed -eq 4 -and $aggregate.completed -eq $completed -and
+            $aggregate.failures -eq (4 - $completed) -and $aggregate.warmupRequests -eq 2 -and
+            $aggregate.concurrency -eq 2 -and $aggregate.timeoutSeconds -eq 5) 'Failed client completion counts were not retained exactly.'
+    }
 }
 
 function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $ExpectedFailure,
     [string] $ExistingOutputPath = '', [switch] $CaptureResult, [switch] $StrictCaller) {
     $caseRoot = New-CaseRoot $Scenario
+    $networkCase = $Scenario.StartsWith('network-', [StringComparison]::Ordinal)
+    $fixtureNetworkName = 'owned-private-fixture-' + [Guid]::NewGuid().ToString('N')
+    $fixtureNetworkId = '9' * 64
+    if ($networkCase) {
+        # Network records are independent of the active-container oracle.
+        [IO.File]::WriteAllText((Join-Path $caseRoot 'fixture-network.json'), (ConvertTo-Json -InputObject @{
+            Id = $fixtureNetworkId; Name = $fixtureNetworkName; Driver = 'bridge'; Scope = 'local' } -Compress))
+    }
     $indexedJit = $Scenario -cin @('jit-index', 'jit-index-ambiguous', 'jit-index-missing', 'jit-index-malformed')
     $jitRootImage = 'example.invalid/conduit-jit@sha256:' + $(if ($indexedJit) { '4' * 64 } else { '1' * 64 })
     $jitSelectedImage = 'example.invalid/conduit-jit@sha256:' + ('2' * 64)
@@ -767,6 +1079,8 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         $parameters.ReadinessTimeoutSeconds = 1
     }
     if ($Scenario -eq 'even-pairs') { $parameters.PairedRuns = 6 }
+    if ($networkCase) { $parameters.DockerNetwork = $fixtureNetworkName }
+    if ($Scenario -ceq 'network-invalid-name') { $parameters.DockerNetwork = '-' + $privateKey }
     $priorAliasHash = if ([IO.File]::Exists($parameters.OutputPath)) { Get-AttemptContractHash $parameters.OutputPath } else { $null }
     $priorEvidence = $null
     $priorLatestId = $null
@@ -784,7 +1098,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     $failureDiagnostic = $null
     $collectorToInvoke = $collector
     $privateCleanupMarker = Join-Path $caseRoot 'injected-private-cleanup.path'
-    if ($Scenario -cin @('diagnostic-private-cleanup', 'diagnostic-readiness-private-cleanup', 'diagnostic-private-config')) {
+    if ($Scenario -cin @('driver-timeout', 'diagnostic-private-cleanup', 'diagnostic-readiness-private-cleanup', 'diagnostic-private-config')) {
         $copyRoot = Join-Path $caseRoot 'collector-source'
         [IO.Directory]::CreateDirectory($copyRoot) | Out-Null
         foreach ($sourceFile in Get-ChildItem -LiteralPath $PSScriptRoot -File -Filter '*.ps1') {
@@ -792,13 +1106,31 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         }
         $collectorToInvoke = Join-Path $copyRoot 'measure-native-container.ps1'
         $copy = [IO.File]::ReadAllText($collectorToInvoke)
-        $delete = if ($Scenario -ceq 'diagnostic-private-config') { 'Remove-Item -LiteralPath $configurationPath -Force' }
-            else { 'Remove-Item -LiteralPath $resolved -Recurse -Force' }
-        Assert-Contract ($copy.Split($delete, [StringSplitOptions]::None).Length -eq 2) 'Exact private cleanup fault seam differs.'
-        $markerValue = if ($Scenario -ceq 'diagnostic-private-config') { '$configurationPath' } else { '$resolved' }
-        $fault = '[IO.File]::WriteAllText((Join-Path $env:CONDUIT_COLLECTOR_TEST_ROOT ''injected-private-cleanup.path''), ' + $markerValue +
-            '); throw (''private-cleanup-sentinel:'' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)'
-        [IO.File]::WriteAllText($collectorToInvoke, $copy.Replace($delete, $fault), [Text.UTF8Encoding]::new($false))
+        if ($Scenario -ceq 'driver-timeout') {
+            # Isolate the outer workload deadline from nested command startup.
+            # Real process-based memory sampling has its own latched deadline case.
+            $pollDefinition = '$poll = { param([int] $remainingSeconds) $samples.Add((Get-ContainerMemory $record.Id $remainingSeconds)) }'
+            Assert-Contract ($copy.Split($pollDefinition, [StringSplitOptions]::None).Length -eq 2) 'Exact workload poll seam differs.'
+            $successfulPoll = @'
+$poll = {
+    param([int] $remainingSeconds)
+    [IO.File]::AppendAllText((Join-Path $env:CONDUIT_COLLECTOR_TEST_ROOT 'outer-poll-budgets.txt'),
+        ([string]$remainingSeconds + [Environment]::NewLine))
+    $samples.Add([long]1048576)
+}
+'@
+            $copy = $copy.Replace($pollDefinition, $successfulPoll)
+        }
+        else {
+            $delete = if ($Scenario -ceq 'diagnostic-private-config') { 'Remove-Item -LiteralPath $configurationPath -Force' }
+                else { 'Remove-Item -LiteralPath $resolved -Recurse -Force' }
+            Assert-Contract ($copy.Split($delete, [StringSplitOptions]::None).Length -eq 2) 'Exact private cleanup fault seam differs.'
+            $markerValue = if ($Scenario -ceq 'diagnostic-private-config') { '$configurationPath' } else { '$resolved' }
+            $fault = '[IO.File]::WriteAllText((Join-Path $env:CONDUIT_COLLECTOR_TEST_ROOT ''injected-private-cleanup.path''), ' + $markerValue +
+                '); throw (''private-cleanup-sentinel:'' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)'
+            $copy = $copy.Replace($delete, $fault)
+        }
+        [IO.File]::WriteAllText($collectorToInvoke, $copy, [Text.UTF8Encoding]::new($false))
     }
     try {
     if ($Scenario -cnotin @('even-pairs', 'case-duplicate-environment', 'revision-mismatch', 'package-absent', 'legacy-baseline',
@@ -842,6 +1174,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         } *>&1 | ForEach-Object { $publicRecords.Add($_) }
     }
     catch { $failure = $_.Exception.Message; $publicError = $_ | Out-String }
+    finally { $watch.Stop() }
     $publicOutput = $publicRecords | Out-String
     $caseStage = 'privacy-assertions'
     foreach ($name in $environmentNames) {
@@ -850,6 +1183,10 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     foreach ($secret in @($privateKey, $privateDatabasePassword, $privateRedisPassword, 'private-child-diagnostic', 'private-cleanup-sentinel')) {
         Assert-Contract (-not $publicOutput.Contains($secret) -and -not $publicError.Contains($secret) -and
             ($null -eq $failure -or -not $failure.Contains($secret))) 'Collector exposed private command configuration.'
+    }
+    if ($networkCase) {
+        Assert-Contract (-not $publicOutput.Contains($fixtureNetworkName) -and -not $publicError.Contains($fixtureNetworkName) -and
+            ($null -eq $failure -or -not $failure.Contains($fixtureNetworkName))) 'Public diagnostics exposed a private fixture network name.'
     }
     $commands = Read-Records (Join-Path $caseRoot 'commands')
     $drivers = Read-Records (Join-Path $caseRoot 'drivers')
@@ -883,6 +1220,17 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
             ($null -eq $failure -or -not $failure.Contains($driver.configurationPath))) 'Public diagnostics exposed a private workload configuration path.'
     }
     $caseStage = 'failure-oracle'
+    $networkCommands = @($commands | Where-Object { $_.arguments[0] -ceq 'network' })
+    if ($networkCase) {
+        $expectedInspections = if ($Scenario -ceq 'network-invalid-name') { 0 } else { 1 }
+        Assert-Contract ($networkCommands.Count -eq $expectedInspections -and
+            @($networkCommands | Where-Object { $_.arguments.Count -ne 5 -or $_.arguments[1] -cne 'inspect' -or
+                $_.arguments[2] -cne '--format' -or $_.arguments[3] -cne '{{json .}}' -or $_.arguments[4] -cne $fixtureNetworkName }).Count -eq 0) 'Collector mutated a caller-managed network or did not inspect its exact name once.'
+    }
+    else {
+        Assert-Contract ($networkCommands.Count -eq 0 -and
+            @($commands | Where-Object { $_.arguments[0] -ceq 'run' -and $_.arguments -ccontains '--network' }).Count -eq 0) 'Default transport acquired a network dependency.'
+    }
     if (-not [string]::IsNullOrEmpty($ExpectedFailure)) {
         Assert-Contract ($null -ne $failure -and $failure.Contains($ExpectedFailure)) ('Expected controlled collector failure was absent: ' + $Scenario)
         if ($null -eq $priorAliasHash) {
@@ -894,6 +1242,21 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         }
         $failedAttempt = Get-AttemptContractMetadata $parameters.OutputPath $Service 'failed'
         Assert-AttemptContractReaderRejected $parameters.OutputPath $Service
+        if ($networkCase) {
+            $diagnosticPath = Join-Path ([IO.Path]::GetDirectoryName($failedAttempt.attemptPath)) 'diagnostics.json'
+            $diagnostic = Get-NativeBenchmarkAttemptFailureDiagnostic (Read-AttemptContractJson $diagnosticPath)
+            $beforeStart = $Scenario -cin @('network-invalid-name', 'network-malformed', 'network-foreign-name', 'network-nonbridge')
+            $finalAttachment = $Scenario -ceq 'network-id-change'
+            Assert-Contract ($diagnostic.reason -ceq 'network-binding' -and
+                $diagnostic.phase -ceq $(if ($beforeStart) { 'configuration' } elseif ($finalAttachment) { 'collection-validation' } else { 'container-start' }) -and
+                $diagnostic.runtime -ceq $(if ($beforeStart) { 'unknown' } else { 'jit' }) -and
+                $created.Count -eq $(if ($beforeStart) { 0 } else { 1 }) -and
+                $drivers.Count -eq $(if ($finalAttachment) { if ($Service -ceq 'gateway') { 2 } else { 1 } } else { 0 }) -and
+                (Read-Records (Join-Path $caseRoot 'active')).Count -eq 0) 'Network binding rejection occurred after an unexpected workload or lost its closed diagnostic.'
+            foreach ($file in Get-ChildItem -LiteralPath ($parameters.OutputPath + '.attempts') -File -Recurse -Filter '*.json') {
+                Assert-Contract (-not [IO.File]::ReadAllText($file.FullName).Contains($fixtureNetworkName)) 'Retained diagnostics exposed a private fixture network.'
+            }
+        }
         if ($Scenario.StartsWith('diagnostic-', [StringComparison]::Ordinal)) {
             Assert-CollectorFailureDiagnostic $failedAttempt $Scenario $failure
             Assert-Contract ((Read-Records (Join-Path $caseRoot 'active')).Count -eq 0) 'A diagnostic case left an owned fake container.'
@@ -908,13 +1271,18 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
             elseif ($Scenario -ceq 'diagnostic-private-cleanup') {
                 Assert-Contract ($created.Count -eq 12 -and $drivers.Count -eq 12) 'Private-only cleanup fault occurred before complete successful workload collection.'
             }
-            elseif ($Scenario -ceq 'diagnostic-poll-memory') {
-                foreach ($name in @('diagnostic-workload.identity', 'diagnostic-descendant.identity')) {
+            elseif ($Scenario -cin @('diagnostic-poll-memory', 'diagnostic-poll-deadline')) {
+                $identityNames = @('diagnostic-workload.identity', 'diagnostic-descendant.identity')
+                if ($Scenario -ceq 'diagnostic-poll-deadline') { $identityNames += 'diagnostic-poll.identity' }
+                foreach ($name in $identityNames) {
                     $identity = Join-Path $caseRoot ('processes/' + $name)
                     Assert-Contract ([IO.File]::Exists($identity)) 'Nested poll did not reach a latched sleeping workload and descendant.'
                     Test-OwnedProcessStopped $identity
                 }
                 Assert-Contract ($watch.Elapsed.TotalSeconds -lt 25 -and $created.Count -eq 1 -and $drivers.Count -eq 1) 'Nested poll failure did not remain bounded in its first workload.'
+                if ($Scenario -ceq 'diagnostic-poll-deadline') {
+                    Assert-Contract ($failureDiagnostic.Classification -ceq 'Private command failed. [stage=poll-command-deadline]') 'Nested poll fixture failed for a reason other than its bounded command deadline.'
+                }
             }
             if ($Scenario -cin @('diagnostic-private-cleanup', 'diagnostic-readiness-private-cleanup', 'diagnostic-private-config')) {
                 Assert-Contract ([IO.File]::Exists($privateCleanupMarker)) 'Exact private cleanup fault was not invoked.'
@@ -966,10 +1334,20 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         }
         if ($Scenario -eq 'driver-timeout') {
             Assert-Contract ($watch.Elapsed.TotalSeconds -lt 20) 'Collector workload timeout exceeded its bounded cleanup budget.'
-            $identityPath = Join-Path $caseRoot 'processes/driver-descendant.identity'
-            Assert-Contract ([IO.File]::Exists($identityPath)) ('Timeout driver did not start its latched descendant; ' + $failureDiagnostic.Text)
-            Test-OwnedProcessStopped $identityPath
+            foreach ($name in @('driver-workload.identity', 'driver-descendant.identity')) {
+                $identityPath = Join-Path $caseRoot ('processes/' + $name)
+                Assert-Contract ([IO.File]::Exists($identityPath)) ('Timeout driver did not start its latched workload and descendant; ' + $failureDiagnostic.Text)
+                Test-OwnedProcessStopped $identityPath
+            }
             Assert-Contract ($failureDiagnostic.Classification -ceq 'Private command failed. [stage=command-deadline]') 'Timeout fixture failed for a reason other than the bounded command deadline.'
+            $pollBudgets = @([IO.File]::ReadAllLines((Join-Path $caseRoot 'outer-poll-budgets.txt')))
+            Assert-Contract ($pollBudgets.Count -gt 0 -and @($pollBudgets | Where-Object { $_ -cnotmatch '^[1-4]$' }).Count -eq 0 -and
+                @($commands | Where-Object { $_.arguments[0] -ceq 'stats' }).Count -eq 1) 'Outer deadline control did not isolate successful bounded polls from nested processes.'
+            $diagnosticPath = Join-Path ([IO.Path]::GetDirectoryName($failedAttempt.attemptPath)) 'diagnostics.json'
+            $diagnostic = Get-NativeBenchmarkAttemptFailureDiagnostic (Read-AttemptContractJson $diagnosticPath)
+            Assert-Contract ($diagnostic.phase -ceq 'workload' -and $diagnostic.reason -ceq 'command-deadline' -and
+                $null -eq $diagnostic.workloadAggregate -and $diagnostic.ownedContainerCleanup.status -ceq 'confirmed' -and
+                $diagnostic.privateFileCleanup.status -ceq 'confirmed' -and $created.Count -eq 1 -and $drivers.Count -eq 1) 'Outer workload deadline lost its closed failed-attempt diagnostic or bounded cleanup.'
         }
         if ($Scenario -cin @('package-absent', 'legacy-baseline', 'package-wrong-service', 'package-cross-build',
             'package-dirty', 'package-unavailable', 'package-hold', 'candidate-config', 'candidate-selected-swap')) {
@@ -1003,6 +1381,19 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     }
     $attemptEvidence = Assert-AttemptContractSuccess $parameters.OutputPath $Service
     $report = $attemptEvidence.report
+    Assert-Contract ($report.methodology.Contains('Caller-managed direct-bridge transport was requested;') -eq $networkCase) 'Methodology did not truthfully describe requested transport.'
+    if ($networkCase) {
+        Assert-Contract (-not $reportText.Contains($fixtureNetworkName) -and -not $reportText.Contains($fixtureNetworkId)) 'Collector retained private network identity in the report.'
+        $networkRuns = @($commands | Where-Object { $_.arguments[0] -ceq 'run' })
+        Assert-Contract ($networkRuns.Count -eq 12 -and @($networkRuns | Where-Object {
+            $index = [Array]::IndexOf([object[]]$_.arguments, '--network')
+            $index -lt 0 -or $_.arguments[$index + 1] -cne $fixtureNetworkId
+        }).Count -eq 0 -and @($created | Where-Object networkMode -CNE $fixtureNetworkId).Count -eq 0) 'All twelve warm/measured variants did not use the same pinned network.'
+        $networkChecks = Read-Records (Join-Path $caseRoot 'network-checks')
+        foreach ($container in $created) {
+            Assert-Contract (@($networkChecks | Where-Object { $_.id -ceq $container.id -and $_.running }).Count -ge 2) 'A measured variant omitted initial or final running attachment verification.'
+        }
+    }
     Assert-Contract ($report.schemaVersion -eq 4 -and $report.service -ceq $Service -and $report.pairedRuns -eq 5 -and $report.samples.Count -eq 5) 'Collector report identity or paired sample count is wrong.'
     Assert-NativeBenchmarkFixtureIdentity $report.nativeEvidence $packageFixture
     Assert-NativeBenchmarkFixtureBinding $report.nativePublish.imageBinding $packageFixture
@@ -1367,7 +1758,14 @@ $context = Start-NativeBenchmarkAttempt -OutputPath $OutputPath -Service 'admin'
 
 try {
     [IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
-    if ($DiagnosticSchemaOnly) {
+    if ($CollectorTimingOnly) {
+        Invoke-CollectorTimingContracts
+    }
+    elseif ($NetworkBindingOnly) {
+        Invoke-NetworkBindingContracts
+    }
+    elseif ($DiagnosticSchemaOnly) {
+        Invoke-FailedWorkloadAggregateContracts
         Invoke-FailureDiagnosticSchemaContracts
     }
     else {
@@ -1482,6 +1880,19 @@ if ($Mode -eq 'health') {
 if ($Mode -eq 'docker') {
     Save-Record 'commands' @{ arguments = $CommandArguments; benchmarkCredentialPresent = -not [string]::IsNullOrEmpty($env:CONDUIT_NATIVE_BENCHMARK_API_KEY) }
     $nativeImage = [IO.File]::ReadAllText((Join-Path $root 'native-image.json')) | ConvertFrom-Json -AsHashtable -DateKind String
+    if ($CommandArguments[0] -ceq 'network') {
+        if ($CommandArguments.Count -ne 5 -or $CommandArguments[1] -cne 'inspect' -or
+            $CommandArguments[2] -cne '--format' -or $CommandArguments[3] -cne '{{json .}}') { throw 'Unexpected fake network mutation.' }
+        $network = [IO.File]::ReadAllText((Join-Path $root 'fixture-network.json')) | ConvertFrom-Json -AsHashtable
+        if ($CommandArguments[-1] -cne $network.Name) { throw 'Network inspection did not use its exact caller-managed name.' }
+        switch ($scenario) {
+            'network-malformed' { [Console]::Out.WriteLine('{"Id":1,"Id":"private-child-diagnostic"}'); exit 0 }
+            'network-foreign-name' { $network.Name = 'private-child-diagnostic' }
+            'network-nonbridge' { $network.Driver = 'overlay' }
+        }
+        $network | ConvertTo-Json -Compress
+        exit 0
+    }
     if ($CommandArguments[0] -eq 'image') {
         $native = -not ($CommandArguments[-1].StartsWith('example.invalid/conduit-jit@', [StringComparison]::Ordinal) -or $CommandArguments[-1] -ceq ('sha256:' + ('1' * 64)))
         $revision = if ($scenario -eq 'revision-mismatch' -and $native) { 'b' * 40 } else { 'a' * 40 }
@@ -1536,6 +1947,7 @@ if ($Mode -eq 'docker') {
         $labels = @{}
         $port = 0
         $privateEnvironment = $null
+        $networkMode = $null
         for ($index = 1; $index -lt $CommandArguments.Count - 1; $index++) {
             if ($CommandArguments[$index] -eq '--name') { $name = $CommandArguments[++$index] }
             elseif ($CommandArguments[$index] -eq '--label') {
@@ -1543,10 +1955,20 @@ if ($Mode -eq 'docker') {
             }
             elseif ($CommandArguments[$index] -eq '--publish') { $port = [int]$CommandArguments[++$index].Split(':')[1] }
             elseif ($CommandArguments[$index] -eq '--env-file') { $privateEnvironment = $CommandArguments[++$index] }
+            elseif ($CommandArguments[$index] -eq '--network') { $networkMode = $CommandArguments[++$index] }
         }
         Write-RunTrace 'arguments-parsed'
         $platformIndex = [Array]::IndexOf($CommandArguments, '--platform')
         if ($platformIndex -lt 0 -or $CommandArguments[$platformIndex + 1] -cne 'linux/amd64') { throw 'Measured image platform was not explicit.' }
+        $hostIndex = [Array]::IndexOf($CommandArguments, '--add-host')
+        $publishIndex = [Array]::IndexOf($CommandArguments, '--publish')
+        if ($hostIndex -lt 0 -or $CommandArguments[$hostIndex + 1] -cne 'host.docker.internal:host-gateway' -or
+            $publishIndex -lt 0 -or $CommandArguments[$publishIndex + 1] -cne ('127.0.0.1:' + $port + ':8080')) { throw 'Host mapping or published-port contract changed.' }
+        if ($scenario.StartsWith('network-', [StringComparison]::Ordinal)) {
+            $network = [IO.File]::ReadAllText((Join-Path $root 'fixture-network.json')) | ConvertFrom-Json -AsHashtable
+            if ($networkMode -cne $network.Id) { throw 'Measured host did not use the pinned network ID.' }
+        }
+        elseif ($null -ne $networkMode) { throw 'Default transport received an unexpected network.' }
         $native = $labels['conduit.native-benchmark.runtime'] -ceq 'native-aot'
         $expectedImage = if ($native) { $nativeImage.Id } else { 'sha256:' + ('1' * 64) }
         if ($CommandArguments[-1] -cne $expectedImage) { throw 'Measured image was not the immutable observed local ID.' }
@@ -1615,7 +2037,7 @@ if ($Mode -eq 'docker') {
         $record = @{ id = $identity; name = $name; labels = $labels; port = $port; ordinal = $ordinal;
             runtime = $labels['conduit.native-benchmark.runtime']; processIdentity = $identityPath;
             canonicalEnvironment = $true; backendCredentialCorrect = $true; image = $expectedImage;
-            running = $true; exitCode = 0 }
+            running = $true; exitCode = 0; networkMode = $networkMode; attachmentChecks = 0 }
         if ($native) {
             $record['selectedDescriptor'] = [IO.File]::ReadAllText((Join-Path $root 'native-selected.json')) | ConvertFrom-Json -AsHashtable
             if ($scenario -ceq 'native-selected-mismatch') { $record.selectedDescriptor.digest = 'sha256:' + ('d' * 64) }
@@ -1661,13 +2083,34 @@ if ($Mode -eq 'docker') {
         if ($scenario -ceq 'shutdown-foreign-label' -and -not $record.running) {
             $labels['conduit.native-benchmark.owner'] = 'foreign-owner'
         }
+        $attachments = @{}
+        if ($null -ne $record.networkMode) {
+            $network = [IO.File]::ReadAllText((Join-Path $root 'fixture-network.json')) | ConvertFrom-Json -AsHashtable
+            $record.attachmentChecks++
+            [IO.File]::WriteAllText((Join-Path $root ('active/' + $record.id + '.json')), ($record | ConvertTo-Json -Depth 8))
+            Save-Record 'network-checks' @{ id = $record.id; running = $record.running; check = $record.attachmentChecks }
+            $attachmentId = if ($scenario -ceq 'network-forged-attachment' -or
+                ($scenario -ceq 'network-id-change' -and $record.attachmentChecks -gt 1)) { '8' * 64 } else { $network.Id }
+            $attachments[$network.Name] = @{ NetworkID = $attachmentId; IPAddress = '172.29.0.8' }
+        }
         @{ Id = $record.id; Name = '/' + $record.name; Image = $record.image; ImageManifestDescriptor = $record.selectedDescriptor;
-            Config = @{ Labels = $labels }; State = @{ Running = $record.running; ExitCode = $record.exitCode } } |
+            Config = @{ Labels = $labels }; State = @{ Running = $record.running; ExitCode = $record.exitCode };
+            HostConfig = @{ NetworkMode = $record.networkMode }; NetworkSettings = @{ Networks = $attachments } } |
             ConvertTo-Json -Depth 8 -Compress
         exit 0
     }
     if ($CommandArguments[0] -eq 'stats') {
         $record = @(Read-Active | Where-Object id -CEQ $CommandArguments[1])[0]
+        if ($scenario -ceq 'diagnostic-poll-deadline' -and
+            [IO.File]::Exists((Join-Path $root 'processes/diagnostic-workload.identity')) -and
+            [IO.File]::Exists((Join-Path $root 'processes/diagnostic-descendant.identity'))) {
+            $self = [Diagnostics.Process]::GetCurrentProcess()
+            try { [IO.File]::WriteAllText((Join-Path $root 'processes/diagnostic-poll.identity'),
+                ($self.Id.ToString() + '|' + (Get-OwnedProcessIdentityToken $self))) }
+            finally { $self.Dispose() }
+            [Console]::Error.WriteLine('private-child-diagnostic ' + [IO.File]::ReadAllText((Join-Path $root 'expected-redis.url')))
+            Start-Sleep -Seconds 60
+        }
         if ($scenario -ceq 'diagnostic-poll-memory' -and
             [IO.File]::Exists((Join-Path $root 'processes/diagnostic-workload.identity')) -and
             [IO.File]::Exists((Join-Path $root 'processes/diagnostic-descendant.identity'))) {
@@ -1732,7 +2175,12 @@ if ($Mode -eq 'driver' -or $Mode -eq 'dotnet') {
         [Console]::Error.WriteLine('private-child-diagnostic: ' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)
         exit 0
     }
-    if ($scenario -ceq 'diagnostic-poll-memory') {
+    if ($scenario -ceq 'diagnostic-probe-malformed') {
+        [Console]::Out.WriteLine('private-child-diagnostic ' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)
+        [Console]::Error.WriteLine('private-child-diagnostic ' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)
+        exit 1
+    }
+    if ($scenario -cin @('diagnostic-poll-memory', 'diagnostic-poll-deadline')) {
         $descendant = Start-Child 'sleep' @()
         try {
             [IO.File]::WriteAllText((Join-Path $root 'processes/diagnostic-descendant.identity'),
@@ -1756,6 +2204,10 @@ if ($Mode -eq 'driver' -or $Mode -eq 'dotnet') {
         [Console]::Error.WriteLine('private-child-diagnostic'); exit 17
     }
     if ($scenario -eq 'driver-timeout') {
+        $self = [Diagnostics.Process]::GetCurrentProcess()
+        try { [IO.File]::WriteAllText((Join-Path $root 'processes/driver-workload.identity'),
+            ($self.Id.ToString() + '|' + (Get-OwnedProcessIdentityToken $self))) }
+        finally { $self.Dispose() }
         $trace.Add(@{ stage = 'before-start' })
         [IO.File]::WriteAllText($tracePath, (ConvertTo-Json -InputObject @($trace.ToArray()) -Compress))
         try {
@@ -1794,9 +2246,20 @@ if ($Mode -eq 'driver' -or $Mode -eq 'dotnet') {
         p95Milliseconds = $(if ($record.ordinal -le 2) { 200 } else { 2 })
         p99Milliseconds = $(if ($record.ordinal -le 2) { 300 } else { 3 })
     }
+    if ($scenario.StartsWith('diagnostic-probe-', [StringComparison]::Ordinal)) {
+        $row.completed = if ($scenario -ceq 'diagnostic-probe-all-failed') { 0 } else { $configuration.requests - 1 }
+        $row.failures = $configuration.requests - $row.completed
+        $row.throughputPerSecond = $row.completed * 1000.0 / $elapsed
+        if ($scenario -ceq 'diagnostic-probe-private') { $row.extra = $env:CONDUIT_NATIVE_BENCHMARK_API_KEY }
+    }
     $childSchemaVersion = if ($scenario -eq 'child-string-schema') { '2' } else { 2 }
-    @{ schemaVersion = $childSchemaVersion; service = $(if ($admin) { 'admin' } else { 'gateway' }); workloads = @($row) } |
+    @{ schemaVersion = $childSchemaVersion; service = $(if ($admin) { 'admin' } else { 'gateway' });
+        generatedAt = [DateTimeOffset]::UtcNow.ToString('O'); workloads = @($row) } |
         ConvertTo-Json -Depth 8 -Compress
+    if ($scenario.StartsWith('diagnostic-probe-', [StringComparison]::Ordinal)) {
+        [Console]::Error.WriteLine('private-child-diagnostic ' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)
+        exit 1
+    }
     exit 0
 }
 throw 'Unknown fixture mode.'
@@ -1816,7 +2279,7 @@ throw 'Unknown fixture mode.'
     $script:packages = @{}
     $script:packages['admin'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
     $script:packages['gateway'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'gateway'
-    if (-not $StrictCallerOnly) {
+    if (-not $StrictCallerOnly -and -not $FailedWorkloadOnly -and -not $DockerNetworkOnly -and -not $DeadlineOnly) {
     $script:packages['admin-other'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
     $script:packages['admin-dirty'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -SourceDirty $true
     $script:packages['admin-unavailable'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -UnavailableSource
@@ -1862,10 +2325,41 @@ throw 'Unknown fixture mode.'
         Assert-Contract ($null -ne $definition) ('Collector helper is missing: ' + $functionName)
         Invoke-Expression $definition.Extent.Text
     }
+    if ($DeadlineOnly) {
+        Invoke-CollectorCase 'admin' 'driver-timeout' 'No qualification was recorded.'
+        Invoke-CollectorCase 'admin' 'diagnostic-poll-deadline' 'No qualification was recorded.'
+        Assert-Contract ($cases -eq 2) 'Focused deadline controls did not execute both independent collector cases.'
+    }
+    elseif ($DockerNetworkOnly) {
+        Invoke-NetworkBindingContracts
+        $successfulNetwork = Invoke-CollectorCase 'gateway' 'network-success' $null -CaptureResult -StrictCaller
+        foreach ($scenario in @('network-invalid-name', 'network-malformed', 'network-foreign-name', 'network-nonbridge', 'network-forged-attachment')) {
+            Invoke-CollectorCase 'admin' $scenario 'Benchmark fixture network binding failed.' -StrictCaller
+        }
+        Invoke-CollectorCase 'gateway' 'network-id-change' 'Benchmark fixture network binding failed.' -ExistingOutputPath $successfulNetwork.outputPath -StrictCaller
+    }
+    elseif ($FailedWorkloadOnly) {
+        $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult -StrictCaller
+        Invoke-CollectorCase 'admin' 'diagnostic-probe-partial' 'No qualification was recorded.' -ExistingOutputPath $successfulAdmin.outputPath
+        Invoke-CollectorCase 'gateway' 'diagnostic-probe-all-failed' 'No qualification was recorded.'
+        Invoke-CollectorCase 'gateway' 'diagnostic-probe-private' 'No qualification was recorded.'
+        Invoke-CollectorCase 'admin' 'diagnostic-probe-malformed' 'No qualification was recorded.'
+        Invoke-FailedWorkloadAggregateContracts
+        Invoke-AttemptLifecycleContracts $successfulAdmin
+        Invoke-FailureDiagnosticSchemaContracts
+    }
+    else {
+    Invoke-CollectorTimingContracts
     $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult -StrictCaller
     Invoke-CollectorCase 'gateway' 'success' $null -StrictCaller
     Invoke-CollectorCase 'admin' 'case-duplicate-environment' 'No qualification was recorded.' -StrictCaller
     if (-not $StrictCallerOnly) {
+    Invoke-NetworkBindingContracts
+    $successfulNetwork = Invoke-CollectorCase 'gateway' 'network-success' $null -CaptureResult -StrictCaller
+    foreach ($scenario in @('network-invalid-name', 'network-malformed', 'network-foreign-name', 'network-nonbridge', 'network-forged-attachment')) {
+        Invoke-CollectorCase 'admin' $scenario 'Benchmark fixture network binding failed.' -StrictCaller
+    }
+    Invoke-CollectorCase 'gateway' 'network-id-change' 'Benchmark fixture network binding failed.' -ExistingOutputPath $successfulNetwork.outputPath -StrictCaller
     & (Join-Path $PSScriptRoot 'test-native-process-cleanup-metadata.ps1')
     # These are public fixture credentials, not a connection to any service.
     # Assert exact strings as well as parsed components: an invented slash on a
@@ -2170,6 +2664,7 @@ exit 0
     Invoke-CollectorCase 'admin' 'revision-mismatch' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'driver-nonzero' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'driver-timeout' 'No qualification was recorded.'
+    Invoke-CollectorCase 'admin' 'diagnostic-poll-deadline' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'unknown-create' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'foreign-label' 'cleanup failed'
     Invoke-CollectorCase 'admin' 'cleanup-failure' 'cleanup failed'
@@ -2197,8 +2692,14 @@ exit 0
     Invoke-CollectorCase 'admin' 'diagnostic-private-child' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'diagnostic-private-config' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'diagnostic-poll-memory' 'No qualification was recorded.'
+    Invoke-CollectorCase 'admin' 'diagnostic-probe-partial' 'No qualification was recorded.' -ExistingOutputPath $successfulAdmin.outputPath
+    Invoke-CollectorCase 'gateway' 'diagnostic-probe-all-failed' 'No qualification was recorded.'
+    Invoke-CollectorCase 'gateway' 'diagnostic-probe-private' 'No qualification was recorded.'
+    Invoke-CollectorCase 'admin' 'diagnostic-probe-malformed' 'No qualification was recorded.'
+    Invoke-FailedWorkloadAggregateContracts
     Invoke-AttemptLifecycleContracts $successfulAdmin
     Invoke-FailureDiagnosticSchemaContracts
+    }
     }
     }
 }
@@ -2256,11 +2757,26 @@ if ($cleanupFailures.Count -gt 0) {
     throw ('Collector contract fixture cleanup failed; cleanup failures ' + $cleanupFailures.Count + '.')
 }
 if ($null -ne $proofFailure) { throw $proofFailure }
-if ($DiagnosticSchemaOnly) {
-    Write-Host ('PASS: ' + $cases + ' failure diagnostic schema/writer contracts; strict codes, immutable sidecars, privacy and failed eligibility; no Docker/driver workload cases ran.')
+if ($DeadlineOnly) {
+    Write-Host ('PASS: ' + $cases + ' independent collector deadline contracts; exact outer/nested classifications, latched processes stopped before fixture fallback, private failed-attempt evidence and owned cleanup.')
+}
+elseif ($CollectorTimingOnly) {
+    Write-Host ('PASS: ' + $cases + ' actual collector invocation timing contracts; success/failure records preserved and oracle time excluded; no Docker/driver processes ran.')
+}
+elseif ($NetworkBindingOnly) {
+    Write-Host ('PASS: ' + $cases + ' pure fixture network contracts; strict private names/JSON, immutable bridge pin and actual running attachment validation; no Docker/driver processes ran.')
+}
+elseif ($DockerNetworkOnly) {
+    Write-Host ('PASS: ' + $cases + ' fixture network contracts; all twelve alternating Gateway variants, strict pre-workload/final attachment rejection, prior-alias preservation and owned cleanup.')
+}
+elseif ($DiagnosticSchemaOnly) {
+    Write-Host ('PASS: ' + $cases + ' failure diagnostic schema/writer and failed-workload projection contracts; strict codes, immutable sidecars, privacy and failed eligibility; no Docker/driver workload cases ran.')
 }
 elseif ($StrictCallerOnly) {
     Write-Host ('PASS: ' + $cases + ' strict-caller collector contracts; complete authenticated Admin/Gateway workload pairs, private configuration rejection, owned cleanup and latest-attempt evidence.')
+}
+elseif ($FailedWorkloadOnly) {
+    Write-Host ('PASS: ' + $cases + ' failed-workload collector contracts; one successful setup, four failed process cases, prior-alias preservation, projections, lifecycle, schema and owned cleanup.')
 }
 else {
     Write-Host ('PASS: ' + $cases + ' collector contracts; owned mocked Docker/driver processes, authenticated workload pairs, warm exclusion, private deadlines, strict cleanup and latest-attempt evidence.')

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Helpers;
 using ConduitLLM.IntegrationTests.Infrastructure;
@@ -42,21 +43,26 @@ public sealed class WebhookNativeRuntimeTests(MediaDispatchFixture fixture, ITes
         var connection = new NpgsqlConnectionStringBuilder(fixture.ConnectionString);
         var database = $"postgresql://{Uri.EscapeDataString(connection.Username!)}:{Uri.EscapeDataString(connection.Password!)}@postgres:5432/{connection.Database}";
         const string master = "native-webhook-test-master-key-32-bytes";
-        IContainer Container(string image, string schema) => new ContainerBuilder(image)
-            .WithNetwork(fixture.Network).WithPortBinding(8080, true)
-            .WithEnvironment("DATABASE_URL", database)
-            .WithEnvironment("REDIS_URL", "redis:6379")
-            .WithEnvironment("CONDUIT_API_TO_API_BACKEND_AUTH_KEY", master).WithEnvironment("CONDUIT_MIGRATION_MODE", "Wait")
-            .WithEnvironment("CONDUIT_ENABLE_HTTPS_REDIRECTION", "false")
-            .WithEnvironment("ConduitLLM__Messaging__Wolverine__SchemaName", schema)
-            .WithEnvironment("ConduitLLM__Messaging__Wolverine__AutoProvision", "true")
-            .WithEnvironment("Webhooks__GatewayDurabilitySchema", "wolverine_media_test").Build();
+        IContainer Container(string image, string schema, bool webhookRecovery = false)
+        {
+            var builder = new ContainerBuilder(image)
+                .WithNetwork(fixture.Network).WithPortBinding(8080, true)
+                .WithEnvironment("DATABASE_URL", database)
+                .WithEnvironment("REDIS_URL", "redis:6379")
+                .WithEnvironment("CONDUIT_API_TO_API_BACKEND_AUTH_KEY", master).WithEnvironment("CONDUIT_MIGRATION_MODE", "Wait")
+                .WithEnvironment("CONDUIT_ENABLE_HTTPS_REDIRECTION", "false")
+                .WithEnvironment("ConduitLLM__Messaging__Wolverine__SchemaName", schema)
+                .WithEnvironment("ConduitLLM__Messaging__Wolverine__AutoProvision", "true")
+                .WithEnvironment("Webhooks__GatewayDurabilitySchema", "wolverine_media_test");
+            if (webhookRecovery) builder = builder.WithEnvironment("NativeAdmin__EnableWebhookRecovery", "true");
+            return builder.Build();
+        }
         var gatewayImage = Environment.GetEnvironmentVariable("CONDUIT_WEBHOOK_NATIVE_GATEWAY_IMAGE")
             ?? "conduit-http-native:epic-1419";
         var adminImage = Environment.GetEnvironmentVariable("CONDUIT_WEBHOOK_NATIVE_ADMIN_IMAGE")
             ?? "conduit-admin-native:epic-1419";
         await using var gateway = Container(gatewayImage, "wolverine_media_test");
-        await using var admin = Container(adminImage, "wolverine_native_admin_test");
+        await using var admin = Container(adminImage, "wolverine_native_admin_test", webhookRecovery: true);
         using var publisher = fixture.Host(worker: false);
         await publisher.StartAsync();
         using (var provision = fixture.Host(worker: false, durabilitySchema: "wolverine_native_admin_test"))
@@ -70,8 +76,23 @@ public sealed class WebhookNativeRuntimeTests(MediaDispatchFixture fixture, ITes
             using var gatewayClient = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{gateway.GetMappedPublicPort(8080)}"), Timeout = TimeSpan.FromSeconds(5) };
             foreach (var serviceClient in new[] { client, gatewayClient })
                 await MediaDispatchFixture.EventuallyAsync(async () => { try { return (await serviceClient.GetAsync("/health/ready")).IsSuccessStatusCode; } catch (HttpRequestException) { return false; } });
+            await AssertNativeCapabilitiesAsync(gatewayClient, "gateway", webhookRecovery: false);
+            await AssertNativeCapabilitiesAsync(client, "admin", webhookRecovery: true);
             await AssertAuthenticationMatrixAsync("/v1/admin/global-settings/", "global-settings", includeRejections: false);
             await AssertAuthenticationMatrixAsync("/v1/admin/webhook-deliveries/backlog", "webhook-backlog");
+
+            async Task AssertNativeCapabilitiesAsync(HttpClient service, string name, bool webhookRecovery)
+            {
+                using var response = await service.GetAsync("/health/runtime-capabilities");
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                using var capabilities = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                var mode = capabilities.RootElement.GetProperty("runtime_mode").GetString();
+                Assert.Equal("native-aot", mode);
+                if (webhookRecovery)
+                    Assert.Contains("experimental-webhook-recovery", capabilities.RootElement.GetProperty("included_features")
+                        .EnumerateArray().Select(feature => feature.GetString()));
+                output.WriteLine($"NATIVE_WEBHOOK_RUNTIME_CHECKPOINT service={name}; runtime_mode={mode}; webhook_recovery={webhookRecovery}");
+            }
 
             async Task AssertAuthenticationMatrixAsync(string path, string endpoint, bool includeRejections = true)
             {

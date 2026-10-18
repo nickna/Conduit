@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -19,6 +20,8 @@ namespace ConduitLLM.Core.Utilities
     /// </remarks>
     public static class HttpClientHelper
     {
+        private static readonly EventId JsonFailureDiagnostic = new(1702, "ProviderJsonFailureDiagnostic");
+
         /// <summary>
         /// Sends a request with JSON content and deserializes the response.
         /// </summary>
@@ -48,6 +51,8 @@ namespace ConduitLLM.Core.Utilities
             CancellationToken cancellationToken = default,
             Func<HttpResponseMessage, string, Exception?>? errorTranslator = null)
         {
+            var stage = "request-create";
+            int? observedStatus = null;
             try
             {
                 var request = CreateJsonRequest(
@@ -60,31 +65,43 @@ namespace ConduitLLM.Core.Utilities
                 LogRequestHeaderNames(request, logger);
                 logger?.LogDebug("Sending {Method} request to {Endpoint}", method, endpoint);
 
+                // The default completion option buffers the response body. A failure
+                // here does not establish whether upstream headers were received.
+                stage = "send-buffered";
                 using var response = await client.SendAsync(request, cancellationToken);
+                observedStatus = (int)response.StatusCode;
+                stage = "response-processing";
+                if (!response.IsSuccessStatusCode)
+                    LogJsonFailure(logger, stage, "upstream-http-response", observedStatus);
                 return await ProcessResponseAsync(
                     response,
                     responseTypeInfo,
                     logger,
                     cancellationToken,
-                    errorTranslator);
+                    errorTranslator,
+                    recordNullJsonDiagnostic: true);
             }
             catch (HttpRequestException ex)
             {
+                LogJsonFailure(logger, stage, "http-request", observedStatus, ex.HttpRequestError);
                 logger?.LogError(ex, "HTTP request error communicating with API at {Endpoint}", endpoint);
                 throw new LLMCommunicationException($"HTTP request error: {ex.Message}", ex);
             }
             catch (TaskCanceledException ex) when (cancellationToken.IsCancellationRequested)
             {
+                LogJsonFailure(logger, stage, "caller-cancelled", observedStatus);
                 logger?.LogWarning("Request to {Endpoint} was cancelled", endpoint);
                 throw new LLMCommunicationException("Request was cancelled", ex);
             }
             catch (TaskCanceledException ex)
             {
+                LogJsonFailure(logger, stage, "timeout", observedStatus);
                 logger?.LogError(ex, "Request to {Endpoint} timed out", endpoint);
                 throw new LLMCommunicationException("Request timed out", ex);
             }
             catch (JsonException ex)
             {
+                LogJsonFailure(logger, stage, "invalid-json", observedStatus);
                 logger?.LogError(ex, "JSON error processing response from {Endpoint}", endpoint);
                 throw new LLMCommunicationException("Error processing response", ex);
             }
@@ -94,9 +111,39 @@ namespace ConduitLLM.Core.Utilities
                 ex is not ModelNotFoundException &&
                 ex is not ValidationException)
             {
+                LogJsonFailure(logger, stage, "unexpected", observedStatus);
                 logger?.LogError(ex, "Unexpected error during API communication with {Endpoint}", endpoint);
                 throw new LLMCommunicationException($"Unexpected error: {ex.Message}", ex);
             }
+        }
+
+        // This event is independently extractable from the existing detailed logs.
+        // Retain only closed codes and numeric/hex metadata, never log an exception,
+        // request, response, endpoint, header, or provider-supplied text here.
+        private static void LogJsonFailure(ILogger? logger, string stage, string category,
+            int? observedStatus, HttpRequestError? httpRequestError = null)
+        {
+            var error = httpRequestError switch
+            {
+                null => "none",
+                HttpRequestError.NameResolutionError => "name-resolution-error",
+                HttpRequestError.ConnectionError => "connection-error",
+                HttpRequestError.SecureConnectionError => "secure-connection-error",
+                HttpRequestError.HttpProtocolError => "http-protocol-error",
+                HttpRequestError.ExtendedConnectNotSupported => "extended-connect-not-supported",
+                HttpRequestError.VersionNegotiationError => "version-negotiation-error",
+                HttpRequestError.UserAuthenticationError => "user-authentication-error",
+                HttpRequestError.ProxyTunnelError => "proxy-tunnel-error",
+                HttpRequestError.InvalidResponse => "invalid-response",
+                HttpRequestError.ResponseEnded => "response-ended",
+                HttpRequestError.ConfigurationLimitExceeded => "configuration-limit-exceeded",
+                _ => "unknown"
+            };
+            var traceId = Activity.Current is { IdFormat: ActivityIdFormat.W3C } activity
+                ? activity.TraceId.ToHexString() : "none";
+            logger?.LogWarning(JsonFailureDiagnostic,
+                "Provider JSON failure: Stage={Stage} Category={Category} ObservedStatus={ObservedStatus} HttpRequestError={HttpRequestError} TraceId={TraceId}",
+                stage, category, observedStatus, error, traceId);
         }
 
         /// <summary>
@@ -221,7 +268,8 @@ namespace ConduitLLM.Core.Utilities
             JsonTypeInfo<TResponse> responseTypeInfo,
             ILogger? logger,
             CancellationToken cancellationToken,
-            Func<HttpResponseMessage, string, Exception?>? errorTranslator = null)
+            Func<HttpResponseMessage, string, Exception?>? errorTranslator = null,
+            bool recordNullJsonDiagnostic = false)
         {
             if (!response.IsSuccessStatusCode)
             {
@@ -266,8 +314,14 @@ namespace ConduitLLM.Core.Utilities
 
             try
             {
-                return JsonSerializer.Deserialize(responseContent, responseTypeInfo)
-                    ?? throw new LLMCommunicationException("Failed to deserialize response - result was null");
+                var result = JsonSerializer.Deserialize(responseContent, responseTypeInfo);
+                if (result is null)
+                {
+                    if (recordNullJsonDiagnostic)
+                        LogJsonFailure(logger, "response-processing", "null-json-result", (int)response.StatusCode);
+                    throw new LLMCommunicationException("Failed to deserialize response - result was null");
+                }
+                return result;
             }
             catch (JsonException ex)
             {

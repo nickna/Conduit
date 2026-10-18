@@ -57,6 +57,7 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
     private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(15);
 
     private readonly List<HubConnection> _connections = [];
+    private readonly DisconnectObserver _disconnects = new();
     private WebApplication? _app;
     private string _address = null!;
 
@@ -67,6 +68,7 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
     public ConcurrentDictionary<string, AsyncTaskStatus> Tasks { get; } = new();
     public IServiceProvider Services => _app!.Services;
     public IWebhookConnectionTracker WebhookTracker => Services.GetRequiredService<IWebhookConnectionTracker>();
+    public VirtualKeyManagementAudienceService KeyAudiences => Services.GetRequiredService<VirtualKeyManagementAudienceService>();
 
     public GatewaySignalRDispatchHost()
     {
@@ -103,7 +105,9 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
 
     public async Task StartAsync(
         Action<IServiceCollection>? configureServices = null,
-        Action<WebApplication>? configureEndpoints = null)
+        Action<WebApplication>? configureEndpoints = null,
+        string? redisConnectionString = null,
+        string redisChannelPrefix = "dispatch-fixture:")
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -133,8 +137,17 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
         }));
         builder.Services.AddScoped<VirtualKeyHubFilter>();
         builder.Services.AddScoped<ISignalRAuthenticationService, SignalRAuthenticationService>();
-        builder.Services.AddConduitSignalR(builder.Environment, null, "dispatch-fixture:", 2, "Dispatch fixture",
-            configureHubOptions: options => options.AddFilter<VirtualKeyHubFilter>(),
+        builder.Services.AddSingleton<VirtualKeyManagementAudienceService>();
+        builder.Services.AddSingleton<IVirtualKeyManagementAudienceService>(services =>
+            services.GetRequiredService<VirtualKeyManagementAudienceService>());
+        // Explicit audits keep unrelated dispatch tests' exact lookup counts
+        // deterministic. The production periodic worker has separate clock tests.
+        builder.Services.AddConduitSignalR(builder.Environment, redisConnectionString, redisChannelPrefix, 2, "Dispatch fixture",
+            configureHubOptions: options =>
+            {
+                options.AddFilter<VirtualKeyHubFilter>();
+                options.AddFilter(_disconnects);
+            },
             additionalPayloadResolver: GatewaySignalRJsonContext.Default);
         configureServices?.Invoke(builder.Services);
 
@@ -204,6 +217,49 @@ internal sealed class GatewaySignalRDispatchHost : IAsyncDisposable
                 .SendAsync(BarrierEvent, marker);
             await received.Task.WaitAsync(Deadline);
         }));
+
+    /// <summary>
+    /// A remote node's authorized sentinel acknowledges this exact Redis group
+    /// channel before direct-connection barriers drain recipients' transports.
+    /// </summary>
+    public async Task FlushGroupAsync<THub>(string group, params HubConnection[] sentinels) where THub : Hub
+    {
+        if (sentinels.Length == 0) throw new ArgumentException("An authorized group sentinel is required.", nameof(sentinels));
+        using var deadline = new CancellationTokenSource(Deadline);
+        var marker = Guid.NewGuid().ToString("N");
+        var received = sentinels.Select(_ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).ToArray();
+        var handlers = sentinels.Select((connection, index) => connection.On<string>(BarrierEvent, value =>
+        {
+            if (value == marker) received[index].TrySetResult();
+        })).ToArray();
+        try
+        {
+            await Services.GetRequiredService<IHubContext<THub>>().Clients.Group(group)
+                .SendAsync(BarrierEvent, marker, deadline.Token).WaitAsync(deadline.Token);
+            await Task.WhenAll(received.Select(signal => signal.Task)).WaitAsync(deadline.Token);
+        }
+        finally { foreach (var handler in handlers) handler.Dispose(); }
+    }
+
+    public Task WaitForDisconnectAsync(string connectionId) => _disconnects.WaitAsync(connectionId);
+
+    private sealed class DisconnectObserver : IHubFilter
+    {
+        private readonly ConcurrentDictionary<string, TaskCompletionSource> _completed = new(StringComparer.Ordinal);
+        public Task WaitAsync(string connectionId) => _completed.GetOrAdd(connectionId,
+            _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).Task.WaitAsync(Deadline);
+
+        public async Task OnDisconnectedAsync(HubLifetimeContext context, Exception? exception,
+            Func<HubLifetimeContext, Exception?, Task> next)
+        {
+            try { await next(context, exception); }
+            finally
+            {
+                _completed.GetOrAdd(context.Context.ConnectionId,
+                    _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult();
+            }
+        }
+    }
 
     public async ValueTask DisposeAsync()
     {

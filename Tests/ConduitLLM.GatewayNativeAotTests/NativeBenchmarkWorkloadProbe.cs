@@ -17,6 +17,7 @@ internal static class NativeBenchmarkWorkloadProbe
     internal const int MaximumWarmupRequests = 10_000;
     internal const int MaximumTimeoutSeconds = 120;
     internal const int MaximumDiagnosticBytes = 64 * 1024 * 1024;
+    internal const int MaximumFailedWarmupDiagnosticBytes = 4096;
     private const int MaximumSseLineCharacters = 64 * 1024;
     private const string SecretEnvironmentVariable = "CONDUIT_NATIVE_BENCHMARK_API_KEY";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -58,7 +59,12 @@ internal static class NativeBenchmarkWorkloadProbe
             var warmup = await RunPhaseAsync(configuration, client, apiKey,
                 configuration.WarmupRequests, deadline.Token, phases, "warmup", origin);
             if (warmup.Completed != configuration.WarmupRequests || warmup.Failures != 0)
+            {
+                deadline.Token.ThrowIfCancellationRequested();
+                if (diagnostics is not null)
+                    await WriteFailedWarmupDiagnosticsAsync(diagnostics, configuration, phases![0], deadline.Token);
                 throw new InvalidOperationException("Benchmark warm-up failed.");
+            }
 
             var measured = await RunPhaseAsync(configuration, client, apiKey,
                 configuration.Requests, deadline.Token, phases, "measured", origin);
@@ -263,11 +269,17 @@ internal static class NativeBenchmarkWorkloadProbe
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
             if (diagnostic is not null) diagnostic.HeadersOffsetTicks = Stopwatch.GetTimestamp() - origin;
             if (response.StatusCode != HttpStatusCode.OK)
+            {
+                if (diagnostic is not null) diagnostic.Failure = RequestFailure.HttpStatus;
                 return false;
+            }
             var mediaType = response.Content.Headers.ContentType?.MediaType;
             if (mediaType != (configuration.IsStream ? "text/event-stream" : "application/json") ||
                 response.Content.Headers.ContentLength is > MaximumResponseBytes)
+            {
+                if (diagnostic is not null) diagnostic.Failure = RequestFailure.ResponseValidation;
                 return false;
+            }
             await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
             var bytes = await ReadBoundedAsync(stream, MaximumResponseBytes, deadline.Token,
                 diagnostic?.Streaming, origin);
@@ -297,6 +309,14 @@ internal static class NativeBenchmarkWorkloadProbe
             JsonException or InvalidDataException or InvalidOperationException or ArgumentException or KeyNotFoundException or
             OperationCanceledException)
         {
+            if (diagnostic is not null)
+                diagnostic.Failure = exception switch
+                {
+                    OperationCanceledException when deadline.IsCancellationRequested => RequestFailure.RequestDeadline,
+                    OperationCanceledException => RequestFailure.Transport,
+                    HttpRequestException or IOException => RequestFailure.Transport,
+                    _ => RequestFailure.ResponseValidation
+                };
             return false;
         }
     }
@@ -582,6 +602,57 @@ internal static class NativeBenchmarkWorkloadProbe
         samples[Math.Clamp((int)Math.Ceiling(samples.Length * percentile) - 1, 0, samples.Length - 1)] *
         1000d / Stopwatch.Frequency;
 
+    private static async Task WriteFailedWarmupDiagnosticsAsync(
+        Stream output, Configuration configuration, PhaseDiagnostic phase, CancellationToken token)
+    {
+        // A completed failed batch is distinct from successful schema-2 output and
+        // from an interrupted batch. Serialize only closed aggregates, never rows,
+        // configuration text, HTTP data or exception messages.
+        if (phase.Name != "warmup" || phase.Requested != configuration.WarmupRequests ||
+            phase.Requested is < 1 or > MaximumWarmupRequests || phase.Completed < 0 ||
+            phase.Executed != phase.Requested || phase.Requests.Length != phase.Executed ||
+            phase.Failures <= 0 || phase.Completed + phase.Failures != phase.Executed ||
+            phase.Requests.Count(request => request.Succeeded) != phase.Completed ||
+            phase.Requests.Count(request => request.Failure is RequestFailure.HttpStatus or
+                RequestFailure.ResponseValidation or RequestFailure.Transport or RequestFailure.RequestDeadline) != phase.Failures ||
+            phase.Requests.Any(request => request.EndOffsetTicks <= request.StartOffsetTicks ||
+                request.Succeeded != (request.Failure == RequestFailure.None)))
+            throw new InvalidDataException("Benchmark failed warm-up diagnostics are incomplete.");
+
+        using var bytes = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(bytes))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("schemaVersion", 1);
+            writer.WriteString("kind", "conduit-native-benchmark-failed-warmup-diagnostics");
+            writer.WriteString("scope", "client");
+            writer.WriteString("status", "failed");
+            writer.WriteString("phase", "warmup");
+            writer.WriteString("service", configuration.IsAdmin ? "admin" : "gateway");
+            writer.WriteString("workload", configuration.Workload);
+            writer.WriteString("inputFingerprint", Fingerprint(configuration));
+            writer.WriteNumber("requested", phase.Requested);
+            writer.WriteNumber("executed", phase.Executed);
+            writer.WriteNumber("completed", phase.Completed);
+            writer.WriteNumber("failures", phase.Failures);
+            writer.WriteStartObject("failureCategories");
+            WriteCategory("http-status", RequestFailure.HttpStatus);
+            WriteCategory("response-validation", RequestFailure.ResponseValidation);
+            WriteCategory("transport", RequestFailure.Transport);
+            WriteCategory("request-deadline", RequestFailure.RequestDeadline);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+
+            void WriteCategory(string name, RequestFailure failure) =>
+                writer.WriteNumber(name, phase.Requests.Count(request => request.Failure == failure));
+        }
+        if (bytes.Length > MaximumFailedWarmupDiagnosticBytes)
+            throw new InvalidDataException("Benchmark failed warm-up diagnostics exceed their limit.");
+        token.ThrowIfCancellationRequested();
+        await output.WriteAsync(bytes.GetBuffer().AsMemory(0, checked((int)bytes.Length)), token);
+        await output.FlushAsync(token);
+    }
+
     private static void WriteDiagnostics(Utf8JsonWriter writer, Configuration configuration, List<PhaseDiagnostic> phases)
     {
         writer.WriteStartObject();
@@ -668,6 +739,8 @@ internal static class NativeBenchmarkWorkloadProbe
         }
     }
 
+    private enum RequestFailure { None, HttpStatus, ResponseValidation, Transport, RequestDeadline }
+
     private sealed class RequestDiagnostic(int index, bool streaming)
     {
         internal int Index { get; } = index;
@@ -681,6 +754,7 @@ internal static class NativeBenchmarkWorkloadProbe
         internal long EndOffsetTicks { get; set; }
         internal long? ResponseBytes { get; set; }
         internal bool Succeeded { get; set; }
+        internal RequestFailure Failure { get; set; }
         internal StreamingDiagnostic? Streaming { get; } = streaming ? new() : null;
 
         private static string NewTraceId()

@@ -184,7 +184,8 @@ public partial class Program
     internal static void ConfigureRuntimeProfileBoundary(WebApplication app)
     {
 #if CONDUIT_NATIVE_AOT
-        app.UseMiddleware<NativeAdminRuntimeProfileMiddleware>();
+        app.UseMiddleware<NativeAdminRuntimeProfileMiddleware>(
+            NativeAdminRuntimeProfileMiddleware.ReadWebhookRecoveryEnabled(app.Configuration));
 #endif
     }
 

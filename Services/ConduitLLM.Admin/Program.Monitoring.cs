@@ -1,4 +1,5 @@
 using ConduitLLM.Admin.DTOs;
+using ConduitLLM.Admin.Middleware;
 using ConduitLLM.Admin.Serialization;
 using ConduitLLM.Core.Extensions;
 
@@ -138,6 +139,11 @@ public partial class Program
                 "database-count-operations-metrics",
                 "billing-audit-reads-and-retention"
             ]);
+        if (NativeAdminRuntimeProfileMiddleware.ReadWebhookRecoveryEnabled(app.Configuration))
+            runtimeCapabilities = runtimeCapabilities with
+            {
+                IncludedFeatures = [.. runtimeCapabilities.IncludedFeatures, "experimental-webhook-recovery"]
+            };
 #else
         var runtimeCapabilities = new AdminRuntimeCapabilitiesResponse(
             "jit", [], "ef-core-supported",

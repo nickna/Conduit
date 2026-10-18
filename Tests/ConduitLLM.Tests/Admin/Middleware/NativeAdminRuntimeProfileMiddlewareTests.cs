@@ -11,6 +11,7 @@ using ConduitLLM.Admin.Interfaces;
 using ConduitLLM.Admin.Middleware;
 using ConduitLLM.Admin.Security;
 using ConduitLLM.Admin.Services;
+using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Middleware;
 using ConduitLLM.Security.Models;
 using ConduitLLM.Security.Options;
@@ -25,6 +26,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -39,6 +41,195 @@ namespace ConduitLLM.Tests.Admin.Middleware;
 public sealed class NativeAdminRuntimeProfileMiddlewareTests
 {
     private const string Detail = "This management operation is not supported by the native-aot runtime profile.";
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("false", false)]
+    [InlineData("true", true)]
+    [InlineData("TRUE", true)]
+    public void QualificationRequiresExplicitBooleanConfiguration(string? value, bool expected)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { [NativeAdminRuntimeProfileMiddleware.WebhookRecoveryConfigurationKey] = value }).Build();
+        Assert.Equal(expected, NativeAdminRuntimeProfileMiddleware.ReadWebhookRecoveryEnabled(configuration));
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("enabled")]
+    public void InvalidQualificationConfigurationFailsInsteadOfEnablingTheProfile(string value)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { [NativeAdminRuntimeProfileMiddleware.WebhookRecoveryConfigurationKey] = value }).Build();
+        Assert.Throws<InvalidOperationException>(() => NativeAdminRuntimeProfileMiddleware.ReadWebhookRecoveryEnabled(configuration));
+    }
+
+    [Theory]
+    [InlineData("control")]
+    [InlineData("missing-name")]
+    [InlineData("name-case")]
+    [InlineData("purge-name")]
+    [InlineData("foreign-pattern")]
+    [InlineData("pattern-case")]
+    [InlineData("foreign-method")]
+    [InlineData("multiple-methods")]
+    public async Task QualificationStillRequiresTheExactWebhookMetadataTriple(string mutation)
+    {
+        var builder = Builder();
+        await using var app = builder.Build();
+        var name = mutation switch
+        {
+            "missing-name" => null, "name-case" => "webhooks_Backlog", "purge-name" => "Webhooks_Purge", _ => "Webhooks_Backlog"
+        };
+        var pattern = mutation switch
+        {
+            "foreign-pattern" => "/v1/admin/webhook-deliveries/purge",
+            "pattern-case" => "/v1/admin/webhook-deliveries/BACKLOG",
+            _ => "/v1/admin/webhook-deliveries/backlog"
+        };
+        var methods = mutation switch
+        {
+            "foreign-method" => new[] { "POST" }, "multiple-methods" => new[] { "GET", "POST" }, _ => new[] { "GET" }
+        };
+        var metadata = new List<object> { new HttpMethodMetadata(methods) };
+        if (name is not null) metadata.Add(new EndpointNameMetadata(name));
+        var context = new DefaultHttpContext { RequestServices = app.Services };
+        context.Response.Body = new MemoryStream();
+        context.SetEndpoint(new RouteEndpoint(_ => throw new InvalidOperationException("Handler reached."),
+            RoutePatternFactory.Parse(pattern), 0, new EndpointMetadataCollection(metadata), "owned-webhook-metadata"));
+        var calls = 0;
+        await new NativeAdminRuntimeProfileMiddleware(_ => { calls++; return Task.CompletedTask; }, enableWebhookRecovery: true)
+            .InvokeAsync(context);
+        Assert.Equal(mutation == "control" ? 1 : 0, calls);
+        if (mutation != "control") Assert.Equal(501, context.Response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("inspect", "GET", "/v1/admin/webhook-deliveries/")]
+    [InlineData("backlog", "GET", "/v1/admin/webhook-deliveries/backlog")]
+    [InlineData("dead-letters", "GET", "/v1/admin/webhook-deliveries/dead-letters")]
+    [InlineData("replay", "POST", "/v1/admin/webhook-deliveries/owned-delivery/replay")]
+    public async Task QualificationEnablesTheFourRealWebhookHandlersWithGeneratedJsonContracts(
+        string operation, string method, string path)
+    {
+        var builder = Builder();
+        builder.Services.AddAuthorization(options => options.AddPolicy("MasterKeyPolicy", policy => policy.RequireAuthenticatedUser()));
+        var recovery = new Mock<IWebhookRecovery>(MockBehavior.Strict);
+        var operationId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        switch (operation)
+        {
+            case "inspect":
+                recovery.Setup(service => service.InspectAsync(null, null, null, 50, It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new List<WebhookDeliveryInspection>());
+                break;
+            case "backlog":
+                recovery.Setup(service => service.BacklogAsync(It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new WebhookBacklog(1, 2, 3, 4, 5));
+                break;
+            case "dead-letters":
+                recovery.Setup(service => service.DeadLettersAsync(50, It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new List<WebhookDeadLetterInspection>());
+                break;
+            case "replay":
+                recovery.Setup(service => service.ReplayAsync("owned-delivery", It.Is<WebhookReplayRequest>(request =>
+                        request.OperationId == operationId && request.VirtualKeyId == 1 && request.ExpectedCycle == 0),
+                        "master-key", It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new WebhookReplayResult("Accepted", 1));
+                break;
+        }
+        builder.Services.AddSingleton(recovery.Object);
+        await using var app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.UseMiddleware<NativeAdminRuntimeProfileMiddleware>(true);
+        app.MapWebhookRecoveryEndpoints();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await app.StartAsync(deadline.Token);
+        try
+        {
+            using var client = app.GetTestClient();
+            using var request = Request(method, path, operation == "replay"
+                ? $$"""{"operationId":"{{operationId}}","virtualKeyId":1,"expectedCycle":0}""" : null);
+            using var response = await client.SendAsync(request, deadline.Token);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(deadline.Token));
+            if (operation is "inspect" or "dead-letters") Assert.Empty(body.RootElement.EnumerateArray());
+            else if (operation == "backlog") Assert.Equal(1, body.RootElement.GetProperty("pending").GetInt64());
+            else
+            {
+                Assert.Equal("Accepted", body.RootElement.GetProperty("outcome").GetString());
+                Assert.Equal(1, body.RootElement.GetProperty("cycle").GetInt32());
+            }
+            recovery.VerifyAll();
+            recovery.VerifyNoOtherCalls();
+        }
+        finally { await Stop(app); }
+    }
+
+    [Fact]
+    public async Task QualificationStillRejectsPurgeBeforeBodyBindingFiltersOrServiceResolution()
+    {
+        var state = new Calls();
+        await using var app = await CreateSentinelApp("POST", state, unreadableBody: true, enableWebhookRecovery: true,
+            pattern: "/v1/admin/webhook-deliveries/purge", operationName: "Webhooks_Purge");
+        using var client = app.GetTestClient();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var request = Request("POST", "/v1/admin/webhook-deliveries/purge", "{");
+        using var response = await client.SendAsync(request, deadline.Token);
+        await AssertProblem(response, deadline.Token);
+        Assert.Equal(0, state.BodyReads);
+        Assert.Equal(0, state.Services);
+        Assert.Equal(0, state.Filters);
+        Assert.Equal(0, state.Handlers);
+    }
+
+    [Theory]
+    [InlineData(401)]
+    [InlineData(403)]
+    [InlineData(429)]
+    public async Task ProductionSecurityDenialPrecedesAnEnabledWebhookOperation(int status)
+    {
+        var state = new Calls();
+        var security = new Mock<SharedSecurityService>(MockBehavior.Strict);
+        security.Setup(service => service.IsRequestAllowedAsync(It.IsAny<HttpContext>()))
+            .ReturnsAsync(SecurityCheckResult.Denied("owned qualification security denial", status));
+        await using var app = await CreateSentinelApp("GET", state, security: security.Object, enableWebhookRecovery: true,
+            pattern: "/v1/admin/webhook-deliveries/backlog", operationName: "Webhooks_Backlog");
+        using var client = app.GetTestClient();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var request = Request("GET", "/v1/admin/webhook-deliveries/backlog");
+        using var response = await client.SendAsync(request, deadline.Token);
+        Assert.Equal(status, (int)response.StatusCode);
+        Assert.Equal(0, state.Services);
+        Assert.Equal(0, state.Filters);
+        Assert.Equal(0, state.Handlers);
+        security.Verify(service => service.IsRequestAllowedAsync(It.IsAny<HttpContext>()), Times.Once);
+        security.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task AuthorizationDenialPrecedesAnEnabledWebhookOperation()
+    {
+        var builder = Builder();
+        builder.Services.AddAuthorization(options => options.AddPolicy("deny-webhook", policy => policy.RequireAssertion(_ => false)));
+        await using var app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.UseMiddleware<NativeAdminRuntimeProfileMiddleware>(true);
+        var calls = 0;
+        app.MapGet("/v1/admin/webhook-deliveries/backlog", () => { calls++; return Results.NoContent(); })
+            .WithName("Webhooks_Backlog").RequireAuthorization("deny-webhook");
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await app.StartAsync(deadline.Token);
+        try
+        {
+            using var client = app.GetTestClient();
+            using var response = await client.GetAsync("/v1/admin/webhook-deliveries/backlog", deadline.Token);
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.Equal(0, calls);
+        }
+        finally { await Stop(app); }
+    }
 
     [Theory]
     [InlineData("GET")]
@@ -332,7 +523,8 @@ public sealed class NativeAdminRuntimeProfileMiddlewareTests
     }
 
     private static async Task<SentinelApplication> CreateSentinelApp(string method, Calls state, bool unreadableBody = false,
-        SharedSecurityService? security = null, bool programRegistration = false, bool throwingService = true)
+        SharedSecurityService? security = null, bool programRegistration = false, bool throwingService = true,
+        bool enableWebhookRecovery = false, string pattern = "/v1/admin/excluded", string operationName = "Excluded_Operation")
     {
         var builder = Builder();
         builder.Services.AddScoped<ProbeDependency>(_ =>
@@ -349,12 +541,12 @@ public sealed class NativeAdminRuntimeProfileMiddlewareTests
         app.UseAuthentication();
         app.UseAuthorization();
         if (programRegistration) AdminProgram.ConfigureRuntimeProfileBoundary(app);
-        else app.UseMiddleware<NativeAdminRuntimeProfileMiddleware>();
-        app.MapMethods("/v1/admin/excluded", [method], ([FromServices] ProbeDependency dependency, [FromBody] JsonElement body) =>
+        else app.UseMiddleware<NativeAdminRuntimeProfileMiddleware>(enableWebhookRecovery);
+        app.MapMethods(pattern, [method], ([FromServices] ProbeDependency dependency, [FromBody] JsonElement body) =>
         {
             state.Handlers++;
             return Results.NoContent();
-        }).WithName("Excluded_Operation").AddEndpointFilter((context, next) =>
+        }).WithName(operationName).AddEndpointFilter((context, next) =>
         {
             state.Filters++;
             if (throwingService) throw new InvalidOperationException("Excluded filter invoked.");
