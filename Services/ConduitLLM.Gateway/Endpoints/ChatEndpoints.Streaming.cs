@@ -540,6 +540,7 @@ namespace ConduitLLM.Gateway.Endpoints
             }
         }
 
+        /// <summary>Records content-chunk timing and emits periodic metrics for enhanced SSE streams.</summary>
         internal async Task EmitPeriodicMetrics(
             ChatCompletionChunk chunk,
             EnhancedSSEResponseWriter sseWriter,

@@ -18,6 +18,7 @@ namespace ConduitLLM.Tests.Gateway.Endpoints;
 
 public class ChatStreamingMetricsTests
 {
+    /// <summary>Verifies that long streams collect and emit periodic metrics only in enhanced mode.</summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -52,6 +53,7 @@ public class ChatStreamingMetricsTests
         }
     }
 
+    /// <summary>Verifies completion framing and usage accounting across stream dialects and usage options.</summary>
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
@@ -99,6 +101,7 @@ public class ChatStreamingMetricsTests
         }
     }
 
+    /// <summary>Verifies that client cancellation retains provider usage without emitting a completion marker.</summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -123,6 +126,7 @@ public class ChatStreamingMetricsTests
         Assert.Equal(15, snapshot.ProviderUsage!.Usage.TotalTokens);
     }
 
+    /// <summary>Creates a non-agentic streaming request with the selected usage option.</summary>
     private static ChatCompletionRequest Request(bool includeUsage) => new()
     {
         Model = "test-model", Stream = true, EnableAgenticMode = false,
@@ -130,6 +134,7 @@ public class ChatStreamingMetricsTests
         Messages = [new Message { Role = MessageRole.User, Content = "hello" }]
     };
 
+    /// <summary>Creates an in-memory response at the route selecting the requested SSE dialect.</summary>
     private static DefaultHttpContext CreateContext(bool enhanced)
     {
         var context = new DefaultHttpContext();
@@ -138,6 +143,7 @@ public class ChatStreamingMetricsTests
         return context;
     }
 
+    /// <summary>Connects the real endpoint orchestration to a deterministic provider stream.</summary>
     private static ChatEndpoints CreateEndpoints(
         DefaultHttpContext context, ChatCompletionChunk[] chunks, CancellationTokenSource cancellation = null)
     {
@@ -156,21 +162,25 @@ public class ChatStreamingMetricsTests
             httpContextAccessor: new HttpContextAccessor { HttpContext = context });
     }
 
+    /// <summary>Creates one provider chunk containing a content delta.</summary>
     private static ChatCompletionChunk ContentChunk(string content) => new()
     {
         Id = "stream", Model = "test-model",
         Choices = [new StreamingChoice { Index = 0, Delta = new DeltaContent { Content = content } }]
     };
 
+    /// <summary>Creates the provider's final usage-only chunk with known token totals.</summary>
     private static ChatCompletionChunk UsageChunk() => new()
     {
         Id = "stream", Model = "test-model", Choices = [],
         Usage = new Usage { PromptTokens = 10, CompletionTokens = 5, TotalTokens = 15 }
     };
 
+    /// <summary>Reads the accumulated UTF-8 SSE response.</summary>
     private static string ReadBody(DefaultHttpContext context) =>
         Encoding.UTF8.GetString(((MemoryStream)context.Response.Body).ToArray());
 
+    /// <summary>Yields provider chunks and optionally cancels the client after the first observed chunk.</summary>
     private static async IAsyncEnumerable<ChatCompletionChunk> StreamAsync(
         ChatCompletionChunk[] chunks, CancellationTokenSource cancellation,
         [EnumeratorCancellation] CancellationToken token)
