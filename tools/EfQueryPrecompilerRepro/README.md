@@ -160,7 +160,8 @@ A newer release by itself is not evidence that it fixes this cast. Keep #1695
 open until an applicable fix is available and both generated-code stages pass;
 retain the failing 10.0.12 baseline alongside that result.
 
-The opt-in runner now captures this control without hand-copying commands:
+The opt-in runner (PowerShell 7.2 or newer, for native stderr handling) now
+captures this control without hand-copying commands:
 
 ```powershell
 pwsh -NoProfile -File tools/EfQueryPrecompilerRepro/Repeat-GeneratedCompilation.ps1 -Issue 1695
