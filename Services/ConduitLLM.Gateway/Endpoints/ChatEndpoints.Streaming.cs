@@ -540,12 +540,19 @@ namespace ConduitLLM.Gateway.Endpoints
             }
         }
 
-        private async Task EmitPeriodicMetrics(
+        internal async Task EmitPeriodicMetrics(
             ChatCompletionChunk chunk,
             EnhancedSSEResponseWriter sseWriter,
             StreamingMetricsCollector metricsCollector,
             CancellationToken cancellationToken)
         {
+            // Standard OpenAI streams never emit these events. Avoid retaining token
+            // timestamps and calculating a growing latency snapshot for discarded metrics.
+            if (!sseWriter.EnhancedEventsEnabled)
+            {
+                return;
+            }
+
             if (chunk?.Choices?.Count > 0)
             {
                 var hasContent = chunk.Choices.Any(c => !string.IsNullOrEmpty(c.Delta?.Content));

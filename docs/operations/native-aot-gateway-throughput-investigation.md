@@ -275,3 +275,41 @@ No application or persistence optimization was selected. This investigation
 establishes no accepted qualification window, canary,
 ordered Admin/Gateway soak, rollback, successor ADR approval or production
 promotion. Production remains on JIT under the existing blocked policy.
+
+## Standard SSE metrics work, 2026-10-18
+
+Current-source inspection found avoidable work in the standard
+`/v1/chat/completions` stream. `EmitPeriodicMetrics` checked the collector's current
+metrics and recorded a timestamp for every content-bearing chunk even though the
+standard response writer suppresses enhanced metrics events. `GetMetrics` builds
+a metrics object and, once multiple timestamps exist, a temporary list of all
+inter-chunk intervals. Repeating that snapshot on each content chunk makes the
+total interval work grow quadratically with a long stream's chunk count. These
+timestamps describe chunks, rather than independently counted model tokens.
+
+The endpoint now returns from periodic metrics collection immediately when
+enhanced events are disabled. Enhanced `/v1/conduit/chat/completions` streams keep
+their periodic and final metrics. Content, caller-selected usage, terminal
+`[DONE]`, provider usage capture, transport evidence and accounting finalization
+continue through their existing paths. The focused endpoint tests exercise both
+dialects, usage opt-in and opt-out, client cancellation with observed usage, and
+1,024 content chunks with and without enhanced events.
+
+This code finding does not identify the cause of the historical runtime
+comparison. The original provider emits exactly two content-bearing chunks,
+separated by its intentional 25 ms delay, followed by one empty-choices usage
+chunk and `[DONE]`. That short fixture does not exercise growing per-chunk
+interval snapshots: its two content chunks encounter zero and one previously
+recorded timestamps. Both JIT and native profiles used this workload. Removing
+discarded metrics work does not establish a NativeAOT-specific bottleneck or
+demonstrate recovery of the original 4.18% throughput loss and 7.70% p99 increase.
+
+A new performance comparison still requires a fresh, source-matched fixture,
+the discarded pair and five alternating recorded pairs, complete JSON/SSE
+validation, unchanged load and deadlines, and independent exact
+provider/financial/Redis settlement and owned cleanup. Run it without concurrent
+builds or contract tests and retain separate instrumented observations of
+provider stream completion, application work, transport and backing services.
+The historical report and failed follow-ups remain unchanged, and
+[issue #1647](https://github.com/nickna/Conduit/issues/1647) remains open until that
+evidence resolves the streaming observation.
