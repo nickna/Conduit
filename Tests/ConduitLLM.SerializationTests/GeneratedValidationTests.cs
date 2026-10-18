@@ -139,6 +139,55 @@ public sealed class GeneratedValidationTests
         }
     }
 
+    [Theory]
+    [InlineData(100, 0, false)]
+    [InlineData(0, 10000, false)]
+    [InlineData(100, 10000, true)]
+    public void Gateway_SignalR_registration_validates_connection_limits_at_startup(
+        int maxConnectionsPerVirtualKey, int maxTotalConnections, bool valid)
+    {
+        const string name = "REDIS_URL";
+        var previous = Environment.GetEnvironmentVariable(name);
+        try
+        {
+            // Configure the actual runtime registration without starting its Redis workers.
+            Environment.SetEnvironmentVariable(name, "redis://127.0.0.1:6379");
+            var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
+            {
+                EnvironmentName = Environments.Production
+            });
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{SignalRConnectionOptions.SectionName}:MaxConnectionsPerVirtualKey"] = maxConnectionsPerVirtualKey.ToString(),
+                [$"{SignalRConnectionOptions.SectionName}:MaxTotalConnections"] = maxTotalConnections.ToString()
+            });
+            global::Program.ConfigureSignalRServices(builder);
+            using var provider = builder.Services.BuildServiceProvider();
+            var startupValidator = provider.GetRequiredService<IStartupValidator>();
+
+            if (valid)
+            {
+                startupValidator.Validate();
+                var options = provider.GetRequiredService<IOptions<SignalRConnectionOptions>>().Value;
+                Assert.Equal(maxConnectionsPerVirtualKey, options.MaxConnectionsPerVirtualKey);
+                Assert.Equal(maxTotalConnections, options.MaxTotalConnections);
+            }
+            else
+            {
+                var error = Assert.Throws<OptionsValidationException>(startupValidator.Validate);
+                Assert.Equal(typeof(SignalRConnectionOptions), error.OptionsType);
+                var property = maxTotalConnections == 0
+                    ? nameof(SignalRConnectionOptions.MaxTotalConnections)
+                    : nameof(SignalRConnectionOptions.MaxConnectionsPerVirtualKey);
+                Assert.Contains(error.Failures, failure => failure.Contains(property, StringComparison.Ordinal));
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(name, previous);
+        }
+    }
+
     private static void Check<T>(IValidateOptions<T> validator, T valid, T invalid, string property) where T : class
     {
         Assert.True(validator.Validate(null, valid).Succeeded);

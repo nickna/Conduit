@@ -82,8 +82,9 @@ public partial class Program
             RedisCircuitBreakerOptionsValidator>();
 
         // Register SignalR connection limit configuration
-        builder.Services.Configure<SignalRConnectionOptions>(
-            builder.Configuration.GetSection(SignalRConnectionOptions.SectionName));
+        builder.Services.AddOptions<SignalRConnectionOptions>()
+            .Bind(builder.Configuration.GetSection(SignalRConnectionOptions.SectionName))
+            .ValidateOnStart();
         builder.Services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<SignalRConnectionOptions>,
             SignalRConnectionOptionsValidator>();
 
