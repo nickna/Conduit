@@ -188,7 +188,7 @@ public sealed class WireBoundaryContractTests
             {
                 var lines = frame.Split('\n');
                 var name = lines.FirstOrDefault(line => line.StartsWith("event: ", StringComparison.Ordinal))?[7..];
-                var json = Assert.Single(lines.Where(line => line.StartsWith("data: ", StringComparison.Ordinal)))[6..];
+                var json = Assert.Single(lines, line => line.StartsWith("data: ", StringComparison.Ordinal))[6..];
                 return (name, json);
             }).ToList();
 
