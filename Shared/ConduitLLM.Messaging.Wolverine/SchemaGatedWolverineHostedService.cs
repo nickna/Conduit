@@ -9,12 +9,36 @@ public sealed class WolverineRuntimeStartupState
 {
     // 0: immediate lifecycle; 1: waiting/starting; 2: started; 3: stopped/failed.
     private int _phase;
+    private readonly TaskCompletionSource<bool> _startup = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public bool IsReady => Volatile.Read(ref _phase) is 0 or 2;
+
+    /// <summary>
+    /// Waits for actual runtime startup, returning false if startup failed or stopped.
+    /// Canceling a caller's wait does not cancel startup or other waiters.
+    /// Immediate-lifecycle hosts retain their existing startup behavior.
+    /// </summary>
+    public async Task<bool> WaitUntilReadyAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (Volatile.Read(ref _phase) == 1)
+            await _startup.Task.WaitAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return IsReady;
+    }
+
     internal void MarkDeferred() => Interlocked.CompareExchange(ref _phase, 1, 0);
-    internal void MarkCompleted() => Interlocked.CompareExchange(ref _phase, 2, 1);
+    internal void MarkCompleted()
+    {
+        if (Interlocked.CompareExchange(ref _phase, 2, 1) == 1)
+            _startup.TrySetResult(true);
+    }
     // A concurrent startup completion cannot overwrite a terminal transition.
-    internal void MarkUnavailable() => Interlocked.Exchange(ref _phase, 3);
+    internal void MarkUnavailable()
+    {
+        Interlocked.Exchange(ref _phase, 3);
+        _startup.TrySetResult(false);
+    }
 }
 
 /// <summary>Keeps web-host startup available while release-owned database resources are unavailable.</summary>

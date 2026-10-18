@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace ConduitLLM.Core.Services;
 
 /// <summary>
-/// Builds and emits a readiness heartbeat immediately and at a configured interval.
+/// Builds and emits a readiness heartbeat after startup and at a configured interval.
 /// </summary>
 public abstract class HeartbeatPublisherBase : BackgroundService
 {
@@ -26,6 +26,7 @@ public abstract class HeartbeatPublisherBase : BackgroundService
     private readonly ILogger _logger;
     private readonly string _serviceName;
     private readonly TimeSpan _interval;
+    private readonly TimeProvider _timeProvider;
 
     protected HeartbeatPublisherBase(
         HealthCheckService healthCheckService,
@@ -33,7 +34,8 @@ public abstract class HeartbeatPublisherBase : BackgroundService
         ILogger logger,
         Type serviceAssemblyMarker,
         string serviceName,
-        string intervalConfigurationKey)
+        string intervalConfigurationKey,
+        TimeProvider? timeProvider = null)
     {
         _healthCheckService =
             healthCheckService ?? throw new ArgumentNullException(nameof(healthCheckService));
@@ -41,6 +43,7 @@ public abstract class HeartbeatPublisherBase : BackgroundService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         ArgumentNullException.ThrowIfNull(serviceAssemblyMarker);
         _serviceName = serviceName;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _serviceBuild = BuildMetadata.FromAssembly(serviceAssemblyMarker.Assembly);
         _interval = TimeSpan.FromSeconds(Math.Max(
             MinimumIntervalSeconds,
@@ -57,8 +60,10 @@ public abstract class HeartbeatPublisherBase : BackgroundService
 
         try
         {
+            if (!await WaitForStartupAsync(stoppingToken)) return;
+            stoppingToken.ThrowIfCancellationRequested();
             await PublishHeartbeatAsync(stoppingToken);
-            using var timer = new PeriodicTimer(_interval);
+            using var timer = new PeriodicTimer(_interval, _timeProvider);
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
                 await PublishHeartbeatAsync(stoppingToken);
@@ -69,6 +74,9 @@ public abstract class HeartbeatPublisherBase : BackgroundService
             // Normal shutdown.
         }
     }
+
+    /// <summary>Returns false when the publisher's startup dependency becomes unavailable.</summary>
+    protected virtual Task<bool> WaitForStartupAsync(CancellationToken cancellationToken) => Task.FromResult(true);
 
     protected async Task PublishHeartbeatAsync(CancellationToken cancellationToken)
     {
@@ -95,6 +103,7 @@ public abstract class HeartbeatPublisherBase : BackgroundService
                 Timestamp = now
             };
 
+            cancellationToken.ThrowIfCancellationRequested();
             await EmitAsync(heartbeat, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
