@@ -1,4 +1,5 @@
 using ConduitLLM.Configuration.Messaging;
+using ConduitLLM.Configuration.Messaging.Wolverine;
 using ConduitLLM.Core.Events;
 using ConduitLLM.Core.Services;
 
@@ -16,10 +17,12 @@ namespace ConduitLLM.Gateway.Services
     /// fresh heartbeat, and a full outage stops every heartbeat and surfaces as unhealthy.
     /// Publishing via <see cref="IEventBus"/> keeps Admin↔Gateway strictly event-driven
     /// (epic #909) — there is no synchronous Admin→Gateway HTTP probe.
+    /// Schema-gated hosts wait for Wolverine runtime startup before the first heartbeat.
     /// </remarks>
     public class GatewayHeartbeatPublisher : HeartbeatPublisherBase
     {
         private readonly IServiceProvider _serviceProvider;
+        private readonly WolverineRuntimeStartupState? _startup;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GatewayHeartbeatPublisher"/> class.
@@ -28,17 +31,24 @@ namespace ConduitLLM.Gateway.Services
             IServiceProvider serviceProvider,
             HealthCheckService healthCheckService,
             IConfiguration configuration,
-            ILogger<GatewayHeartbeatPublisher> logger)
+            ILogger<GatewayHeartbeatPublisher> logger,
+            WolverineRuntimeStartupState? startup = null,
+            TimeProvider? timeProvider = null)
             : base(
                 healthCheckService,
                 configuration,
                 logger,
                 typeof(GatewayHeartbeatPublisher),
                 "Gateway",
-                "GatewayHeartbeat:IntervalSeconds")
+                "GatewayHeartbeat:IntervalSeconds",
+                timeProvider)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+            _startup = startup;
         }
+
+        protected override Task<bool> WaitForStartupAsync(CancellationToken cancellationToken) =>
+            _startup?.WaitUntilReadyAsync(cancellationToken) ?? Task.FromResult(true);
 
         protected override async Task EmitAsync(
             GatewayHeartbeat heartbeat,

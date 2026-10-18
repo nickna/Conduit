@@ -74,6 +74,61 @@ public sealed class SchemaGatedWolverineHostedServiceTests
     }
 
     [Fact]
+    public async Task CancelingReadinessWait_DoesNotCancelRuntimeStartupOrOtherWaiters()
+    {
+        var runtime = new Runtime { PauseStart = true };
+        var state = new WolverineRuntimeStartupState();
+        using var service = Create(runtime, _ => Task.FromResult(true), state);
+        await service.StartAsync(CancellationToken.None);
+        await runtime.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        using var caller = new CancellationTokenSource();
+        var canceledWait = state.WaitUntilReadyAsync(caller.Token);
+        var survivingWait = state.WaitUntilReadyAsync(CancellationToken.None);
+        Assert.False(canceledWait.IsCompleted);
+        Assert.False(survivingWait.IsCompleted);
+
+        caller.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledWait);
+        Assert.False(survivingWait.IsCompleted);
+        Assert.False(state.IsReady);
+
+        runtime.FinishStart.SetResult();
+        await service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(await survivingWait.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.True(await state.WaitUntilReadyAsync(CancellationToken.None));
+        await service.StopAsync(CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShutdownBeforeRuntimeStartup_CompletesReadinessWaitAsUnavailable(bool waitBeforeStop)
+    {
+        var polling = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runtime = new Runtime();
+        var state = new WolverineRuntimeStartupState();
+        using var service = Create(runtime, async token =>
+        {
+            polling.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return false;
+        }, state);
+        await service.StartAsync(CancellationToken.None);
+        await polling.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var readiness = waitBeforeStop ? state.WaitUntilReadyAsync(CancellationToken.None) : null;
+        if (readiness is not null) Assert.False(readiness.IsCompleted);
+
+        await service.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.False(await (readiness ?? state.WaitUntilReadyAsync(CancellationToken.None))
+            .WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.False(service.ExecuteTask!.IsFaulted);
+        Assert.False(state.IsReady);
+        Assert.Equal(0, runtime.Starts);
+        Assert.Equal(0, runtime.Stops);
+    }
+
+    [Fact]
     public async Task ShutdownDuringUncancellableStartup_WaitsBeforeStoppingAndCannotBecomeReady()
     {
         var runtime = new Runtime { PauseStart = true };
@@ -81,15 +136,19 @@ public sealed class SchemaGatedWolverineHostedServiceTests
         using var service = Create(runtime, _ => Task.FromResult(true), state);
         await service.StartAsync(CancellationToken.None);
         await runtime.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var readiness = state.WaitUntilReadyAsync(CancellationToken.None);
+        Assert.False(readiness.IsCompleted);
         using var shutdownDeadline = new CancellationTokenSource();
         shutdownDeadline.Cancel();
         var stopping = service.StopAsync(shutdownDeadline.Token);
         Assert.Equal(0, runtime.Stops);
         Assert.False(stopping.IsCompleted);
+        Assert.False(await readiness.WaitAsync(TimeSpan.FromSeconds(5)));
         runtime.FinishStart.SetResult();
         await stopping.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(1, runtime.Stops);
         Assert.False(state.IsReady);
+        Assert.False(await state.WaitUntilReadyAsync(CancellationToken.None));
         Assert.False(runtime.StoppedBeforeStartFinished);
     }
 
@@ -141,11 +200,15 @@ public sealed class SchemaGatedWolverineHostedServiceTests
         var runtime = new Runtime { StartupFailure = new InvalidOperationException("generated code missing") };
         var state = new WolverineRuntimeStartupState();
         using var service = Create(runtime, _ => Task.FromResult(true), state, lifetime);
+        var readiness = state.WaitUntilReadyAsync(CancellationToken.None);
+        Assert.False(readiness.IsCompleted);
         await service.StartAsync(CancellationToken.None);
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => service.ExecuteTask!);
         Assert.Equal("generated code missing", failure.Message);
         Assert.Equal(1, runtime.Starts);
         Assert.False(state.IsReady);
+        Assert.False(await readiness.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.False(await state.WaitUntilReadyAsync(CancellationToken.None));
         lifetime.Verify(value => value.StopApplication(), Times.Once);
         await service.StopAsync(CancellationToken.None);
         Assert.Equal(1, runtime.Stops);
@@ -158,10 +221,14 @@ public sealed class SchemaGatedWolverineHostedServiceTests
         var runtime = new Runtime();
         var state = new WolverineRuntimeStartupState();
         using var service = Create(runtime, _ => throw Postgres("42501"), state, lifetime);
+        var readiness = state.WaitUntilReadyAsync(CancellationToken.None);
+        Assert.False(readiness.IsCompleted);
         await service.StartAsync(CancellationToken.None);
         await Assert.ThrowsAsync<PostgresException>(() => service.ExecuteTask!);
         Assert.Equal(0, runtime.Starts);
         Assert.False(state.IsReady);
+        Assert.False(await readiness.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.False(await state.WaitUntilReadyAsync(CancellationToken.None));
         lifetime.Verify(value => value.StopApplication(), Times.Once);
         await service.StopAsync(CancellationToken.None);
     }
