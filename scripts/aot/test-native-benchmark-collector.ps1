@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 [CmdletBinding()]
 param([switch] $DiagnosticSchemaOnly, [switch] $StrictCallerOnly, [switch] $FailedWorkloadOnly,
-    [switch] $NetworkBindingOnly, [switch] $DockerNetworkOnly)
+    [switch] $NetworkBindingOnly, [switch] $DockerNetworkOnly, [switch] $CollectorTimingOnly)
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -62,6 +62,48 @@ function New-DiagnosticContractInput {
     return ,([ordered]@{ phase = 'unknown'; reason = 'unknown'; runtime = 'unknown'; sampleKind = 'none'; pair = $null;
         ownedContainerCleanup = @{ status = 'not-attempted'; reason = 'none' };
         privateFileCleanup = @{ status = 'not-attempted'; reason = 'none' }; workloadAggregate = $null })
+}
+
+function Invoke-CollectorTimingContracts {
+    # Execute the real invocation boundary, including its catch/finally, with
+    # an in-memory collector. Later oracle work must not change its measurement.
+    $tokens = $null; $parseErrors = $null
+    $contractPath = Join-Path ([IO.Path]::GetDirectoryName($collector)) 'test-native-benchmark-collector.ps1'
+    $ast = [Management.Automation.Language.Parser]::ParseFile($contractPath, [ref]$tokens, [ref]$parseErrors)
+    Assert-Contract ($parseErrors.Count -eq 0) 'Collector contract syntax is invalid.'
+    $definition = $ast.Find({ param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Invoke-CollectorCase'
+    }, $true)
+    Assert-Contract ($null -ne $definition) 'Collector case definition is missing.'
+    $boundaries = @($definition.FindAll({ param($node)
+        $node -is [Management.Automation.Language.TryStatementAst] -and $node.CatchClauses.Count -eq 1 -and
+        $node.CatchClauses[0].Body.Extent.Text.Contains('$failure = $_.Exception.Message; $publicError = $_ | Out-String')
+    }, $true))
+    Assert-Contract ($boundaries.Count -eq 1) 'Actual collector invocation boundary is ambiguous.'
+    $boundary = [scriptblock]::Create($boundaries[0].Extent.Text)
+    foreach ($shouldFail in @($false, $true)) {
+        $parameters = @{}; $StrictCaller = $true
+        $publicRecords = [Collections.Generic.List[object]]::new()
+        $failure = $null; $publicError = ''
+        $collectorToInvoke = if ($shouldFail) { { throw [InvalidOperationException]::new($privateKey) } }
+            else { { 'first-result'; 'second-result' } }
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        $boundaryOutput = @(. $boundary)
+        $measuredTicks = $watch.ElapsedTicks
+        $stoppedAtBoundary = -not $watch.IsRunning
+        # This deliberately happens after the actual invocation and its catch.
+        # Exact tick equality avoids a scheduler-dependent elapsed-time bound.
+        [Threading.Thread]::SpinWait(100000)
+        $oracleResult = @($publicRecords | ForEach-Object { [string]$_ })
+        Assert-Contract ($boundaryOutput.Count -eq 0 -and $stoppedAtBoundary -and $watch.ElapsedTicks -eq $measuredTicks) 'Oracle work changed the collector invocation measurement.'
+        if ($shouldFail) {
+            Assert-Contract ($failure -ceq $privateKey -and $publicError.Contains($privateKey)) 'Timing boundary lost the controlled collector failure.'
+        }
+        else {
+            Assert-Contract ($null -eq $failure -and ($oracleResult -join '|') -ceq 'first-result|second-result') 'Timing boundary lost successful collector records.'
+        }
+        $script:cases++
+    }
 }
 
 function Invoke-NetworkBindingContracts {
@@ -1112,6 +1154,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         } *>&1 | ForEach-Object { $publicRecords.Add($_) }
     }
     catch { $failure = $_.Exception.Message; $publicError = $_ | Out-String }
+    finally { $watch.Stop() }
     $publicOutput = $publicRecords | Out-String
     $caseStage = 'privacy-assertions'
     foreach ($name in $environmentNames) {
@@ -1680,7 +1723,10 @@ $context = Start-NativeBenchmarkAttempt -OutputPath $OutputPath -Service 'admin'
 
 try {
     [IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
-    if ($NetworkBindingOnly) {
+    if ($CollectorTimingOnly) {
+        Invoke-CollectorTimingContracts
+    }
+    elseif ($NetworkBindingOnly) {
         Invoke-NetworkBindingContracts
     }
     elseif ($DiagnosticSchemaOnly) {
@@ -2249,6 +2295,7 @@ throw 'Unknown fixture mode.'
         Invoke-FailureDiagnosticSchemaContracts
     }
     else {
+    Invoke-CollectorTimingContracts
     $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult -StrictCaller
     Invoke-CollectorCase 'gateway' 'success' $null -StrictCaller
     Invoke-CollectorCase 'admin' 'case-duplicate-environment' 'No qualification was recorded.' -StrictCaller
@@ -2655,7 +2702,10 @@ if ($cleanupFailures.Count -gt 0) {
     throw ('Collector contract fixture cleanup failed; cleanup failures ' + $cleanupFailures.Count + '.')
 }
 if ($null -ne $proofFailure) { throw $proofFailure }
-if ($NetworkBindingOnly) {
+if ($CollectorTimingOnly) {
+    Write-Host ('PASS: ' + $cases + ' actual collector invocation timing contracts; success/failure records preserved and oracle time excluded; no Docker/driver processes ran.')
+}
+elseif ($NetworkBindingOnly) {
     Write-Host ('PASS: ' + $cases + ' pure fixture network contracts; strict private names/JSON, immutable bridge pin and actual running attachment validation; no Docker/driver processes ran.')
 }
 elseif ($DockerNetworkOnly) {
