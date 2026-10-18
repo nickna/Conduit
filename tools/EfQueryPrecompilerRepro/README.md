@@ -194,6 +194,28 @@ generated sources stayed unchanged. The report is retained in
 Run the fast classifier and fresh-directory contracts without EF using
 `pwsh -NoProfile -File tools/EfQueryPrecompilerRepro/test-GeneratedCompilation.ps1`.
 
+The 2026-10-18 (America/Los_Angeles) verification tightened `KnownFailure`:
+every `CS0030` diagnostic must name `ReadPredicate.EFInterceptors.ReproContext.cs`
+and the qualified `VirtualKey` to `IInjectableService` conversion on that same
+line. An unrelated file or conversion, including an additional error with the
+same code, is `UnexpectedFailure`. The 34 fast contracts cover these cases,
+repeated build-summary diagnostics, Windows/POSIX paths and the #1696 control.
+
+A fresh Windows x64 repeat with the same SDK/EF/provider pins passed this
+stricter check: initial/generation/generated-build exits `0/0/1`, zero initial
+build warnings, and four retained generated-code warnings. Inputs and generated
+sources stayed unchanged. Its local report is
+`artifacts/ef-query-repro/issue-1695-verified-20261018/result.json` (SHA-256
+`1b561b7c181b20535030e0d8b15c2ca1c370b95e6e19adbcaf50d326c249d934`).
+A second fresh run explicitly requesting `-Expect CompilationSuccess` exited
+1 with `Expected CompilationSuccess; observed KnownFailure`; its report is
+`artifacts/ef-query-repro/issue-1695-success-gate-20261018/result.json` (SHA-256
+`a94cfc3e66c1531be726f24f80733dab3b153fc14598283ed89a0600579ae5ab`).
+Neither run connected to a database, executed a query or published NativeAOT.
+The same-day upstream check still found #37957 open/Backlog, no identified
+merged fix, and latest stable EF 10.0.13 (not tested). #1695 remains open pending
+an applicable fix and successful generation plus generated-code compilation.
+
 ## Additional expression reductions (#1662)
 
 Use the same fresh-directory commands, setting `$variant` and `$context` before
