@@ -124,11 +124,24 @@ Request offsets and phase elapsed ticks use `stopwatchFrequency`; CPU and GC
 pause ticks use `runtimeTickFrequency`. Runtime snapshots describe the probe
 process, including its GC mode, rather than the application container. Missing
 response milestones are null. Outputs contain no credentials, URLs, setting
-keys, request bodies or response content. Configuration, warm-up and caller
-cancellation failures produce no completed report; a newly created sidecar can
-remain empty. Output I/O failure or process termination can leave a partial file,
+keys, request bodies or response content. A fully joined failed warm-up instead
+writes a distinct schema-1 `conduit-native-benchmark-failed-warmup-diagnostics`
+sidecar, bounded to 4 KiB, with `scope: client`, `status: failed` and
+`phase: warmup`. It contains the workload/input fingerprint, requested/executed
+counts, validated-success `completed` count, failure count, and exactly four
+closed failure-category counts: `http-status`, `response-validation`, `transport`
+and `request-deadline`. Every requested operation must have finished, and the
+categories must sum to failures. It contains no per-request rows or private
+input text. Measured requests never start, stdout remains empty, and the command
+still fails. This is client failure evidence, not a successful benchmark report
+or proof of provider acceptance or settled accounting; collector eligibility
+and publication rules are unchanged.
+
+Configuration failures and interrupted/incomplete phases emit no diagnostic
+document; the CLI's newly created sidecar can remain empty. Output I/O failure
+or process termination can leave a partial file,
 so retain and validate exit status and both artifacts before analysis.
-Sidecars are limited to 64 MiB, including SSE schema 2. A sufficiently large
+Per-request sidecars are limited to 64 MiB, including SSE schema 2. A sufficiently large
 diagnostic workload can exceed that bound even when its request configuration is
 valid; the invocation fails rather than truncating the evidence.
 

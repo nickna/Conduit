@@ -207,17 +207,15 @@ public sealed class NativeBenchmarkWorkloadProbeTests
         Assert.Single(server.Requests);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task DiagnosticConfigurationOrWarmupFailureEmitsNeitherPartialOutput(bool failedWarmup)
+    [Fact]
+    public async Task DiagnosticConfigurationFailureEmitsNeitherPartialOutput()
     {
         using var secret = new EnvironmentSecret(Secret);
         await using var server = new LoopbackServer(new Response("application/json", "private invalid " + Secret));
         using var output = new MemoryStream();
         using var diagnostics = new MemoryStream();
         var configuration = Configuration(server, "admin-setting-read", warmup: 1);
-        if (!failedWarmup) configuration["private-" + Secret] = true;
+        configuration["private-" + Secret] = true;
         await server.WriteConfigurationAsync(configuration);
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => NativeBenchmarkWorkloadProbe.RunAsync(
@@ -226,8 +224,133 @@ public sealed class NativeBenchmarkWorkloadProbeTests
         Assert.DoesNotContain(Secret, exception.ToString());
         Assert.Equal(0, output.Length);
         Assert.Equal(0, diagnostics.Length);
-        Assert.Equal(failedWarmup ? 1 : 0, server.Requests.Count);
-        if (!failedWarmup) Assert.Equal(0, server.AcceptedConnections);
+        Assert.Empty(server.Requests);
+        Assert.Equal(0, server.AcceptedConnections);
+    }
+
+    [Theory]
+    [InlineData("admin-setting-read", "status", "http-status")]
+    [InlineData("admin-setting-read", "json", "response-validation")]
+    [InlineData("gateway-chat-nonstream", "content", "response-validation")]
+    [InlineData("gateway-chat-nonstream", "media-type", "response-validation")]
+    [InlineData("gateway-chat-sse", "content", "response-validation")]
+    [InlineData("gateway-chat-sse", "size", "response-validation")]
+    [InlineData("admin-setting-read", "transport", "transport")]
+    [InlineData("admin-setting-read", "deadline", "request-deadline")]
+    public async Task CompletedFailedWarmupEmitsOnlyBoundedClosedFailureDiagnostics(
+        string workload, string scenario, string category)
+    {
+        using var secret = new EnvironmentSecret(Secret);
+        var valid = ValidResponse(workload);
+        var response = scenario switch
+        {
+            "status" => valid with { StatusCode = 401, Body = "private invalid " + Secret },
+            "json" => valid with { Body = "private invalid " + Secret },
+            "content" => valid with { Body = workload == "gateway-chat-sse"
+                ? SseResponse(includeDone: false) : ChatResponse("private wrong value " + Secret) },
+            "media-type" => valid with { ContentType = "text/private-" + Secret },
+            "size" => valid with { Body = new string('x', NativeBenchmarkWorkloadProbe.MaximumResponseBytes + 1) },
+            "transport" => valid with { Truncated = true },
+            "deadline" => valid with { Hold = true },
+            _ => throw new InvalidOperationException()
+        };
+        await using var server = new LoopbackServer(response);
+        using var output = new MemoryStream();
+        using var diagnostics = new MemoryStream();
+        var configuration = Configuration(server, workload, requests: 3, warmup: 1);
+        configuration["timeoutSeconds"] = 1;
+        await server.WriteConfigurationAsync(configuration);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => NativeBenchmarkWorkloadProbe.RunAsync(
+            server.ConfigurationPath, output, server.Token, diagnostics));
+
+        Assert.Equal("Benchmark warm-up failed.", exception.Message);
+        Assert.Equal(0, output.Length);
+        Assert.Single(server.Requests);
+        using var document = JsonDocument.Parse(diagnostics.ToArray());
+        AssertFailedWarmupDiagnostics(document.RootElement, server, workload, requested: 1, completed: 0,
+            new Dictionary<string, int> { [category] = 1 });
+        Assert.InRange(diagnostics.Length, 1, NativeBenchmarkWorkloadProbe.MaximumFailedWarmupDiagnosticBytes);
+    }
+
+    [Fact]
+    public async Task FailedWarmupCountsEveryValidatedSuccessAndClosedFailureWithoutStartingMeasuredRequests()
+    {
+        using var secret = new EnvironmentSecret(Secret);
+        await using var server = new LoopbackServer(ValidResponse("admin-setting-read"));
+        server.BeforeResponse = (ordinal, _) =>
+        {
+            server.Response = ordinal switch
+            {
+                2 => new Response("application/json", "private invalid " + Secret, StatusCode: 502),
+                3 => new Response("application/json", AdminResponse("private wrong value " + Secret)),
+                _ => ValidResponse("admin-setting-read")
+            };
+            return Task.CompletedTask;
+        };
+        using var output = new MemoryStream();
+        using var diagnostics = new MemoryStream();
+        await server.WriteConfigurationAsync(Configuration(server, "admin-setting-read", requests: 3, concurrency: 1, warmup: 4));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => NativeBenchmarkWorkloadProbe.RunAsync(
+            server.ConfigurationPath, output, server.Token, diagnostics));
+
+        Assert.Equal(0, output.Length);
+        Assert.Equal(4, server.Requests.Count);
+        using var document = JsonDocument.Parse(diagnostics.ToArray());
+        AssertFailedWarmupDiagnostics(document.RootElement, server, "admin-setting-read", requested: 4, completed: 2,
+            new Dictionary<string, int> { ["http-status"] = 1, ["response-validation"] = 1 });
+    }
+
+    [Fact]
+    public async Task InterruptedWarmupWithAlreadyCompletedFailuresEmitsNoDiagnosticDocument()
+    {
+        using var secret = new EnvironmentSecret(Secret);
+        await using var server = new LoopbackServer(new Response("application/json", "private invalid " + Secret));
+        var secondArrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        server.BeforeResponse = async (ordinal, token) =>
+        {
+            if (ordinal != 2) return;
+            secondArrived.TrySetResult();
+            await Task.Delay(Timeout.Infinite, token);
+        };
+        using var caller = CancellationTokenSource.CreateLinkedTokenSource(server.Token);
+        using var output = new MemoryStream();
+        using var diagnostics = new MemoryStream();
+        await server.WriteConfigurationAsync(Configuration(server, "admin-setting-read", requests: 3, concurrency: 1, warmup: 3));
+        var pending = NativeBenchmarkWorkloadProbe.RunAsync(server.ConfigurationPath, output, caller.Token, diagnostics);
+        await AwaitPhaseRequestsAsync(secondArrived.Task, pending, server.Token);
+
+        caller.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(server.Token));
+        Assert.Equal(0, output.Length);
+        Assert.Equal(0, diagnostics.Length);
+        Assert.Equal(2, server.Requests.Count);
+    }
+
+    [Fact]
+    public async Task FailedWarmupDiagnosticSizeIsIndependentOfPrivateInputAndRequestRows()
+    {
+        using var secret = new EnvironmentSecret(Secret);
+        var privateText = Secret + new string('x', 16_384 - Secret.Length);
+        await using var server = new LoopbackServer(new Response("application/json", "private invalid " + privateText));
+        using var output = new MemoryStream();
+        using var diagnostics = new MemoryStream();
+        var configuration = Configuration(server, "gateway-chat-nonstream", requests: 4, concurrency: 4, warmup: 64);
+        foreach (var field in new[] { "model", "prompt", "expectedContent" }) configuration[field] = privateText;
+        await server.WriteConfigurationAsync(configuration);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => NativeBenchmarkWorkloadProbe.RunAsync(
+            server.ConfigurationPath, output, server.Token, diagnostics));
+
+        Assert.Equal(0, output.Length);
+        Assert.Equal(64, server.Requests.Count);
+        Assert.InRange(diagnostics.Length, 1, NativeBenchmarkWorkloadProbe.MaximumFailedWarmupDiagnosticBytes);
+        using var document = JsonDocument.Parse(diagnostics.ToArray());
+        AssertFailedWarmupDiagnostics(document.RootElement, server, "gateway-chat-nonstream", requested: 64, completed: 0,
+            new Dictionary<string, int> { ["response-validation"] = 64 });
+        Assert.DoesNotContain(privateText, document.RootElement.GetRawText());
     }
 
     [Theory]
@@ -838,6 +961,31 @@ public sealed class NativeBenchmarkWorkloadProbeTests
         Assert.Equal(before.GetProperty("serverGc").GetBoolean(), after.GetProperty("serverGc").GetBoolean());
     }
 
+    private static void AssertFailedWarmupDiagnostics(JsonElement diagnostic, LoopbackServer server,
+        string workload, int requested, int completed, Dictionary<string, int> categories)
+    {
+        AssertKeys(diagnostic, "schemaVersion", "kind", "scope", "status", "phase", "service", "workload",
+            "inputFingerprint", "requested", "executed", "completed", "failures", "failureCategories");
+        Assert.Equal(1, diagnostic.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("conduit-native-benchmark-failed-warmup-diagnostics", diagnostic.GetProperty("kind").GetString());
+        Assert.Equal("client", diagnostic.GetProperty("scope").GetString());
+        Assert.Equal("failed", diagnostic.GetProperty("status").GetString());
+        Assert.Equal("warmup", diagnostic.GetProperty("phase").GetString());
+        Assert.Equal(workload == "admin-setting-read" ? "admin" : "gateway", diagnostic.GetProperty("service").GetString());
+        Assert.Equal(workload, diagnostic.GetProperty("workload").GetString());
+        Assert.Matches("^[0-9a-f]{64}$", diagnostic.GetProperty("inputFingerprint").GetString()!);
+        Assert.Equal(requested, diagnostic.GetProperty("requested").GetInt32());
+        Assert.Equal(requested, diagnostic.GetProperty("executed").GetInt32());
+        Assert.Equal(completed, diagnostic.GetProperty("completed").GetInt32());
+        Assert.Equal(requested - completed, diagnostic.GetProperty("failures").GetInt32());
+        var failures = diagnostic.GetProperty("failureCategories");
+        AssertKeys(failures, "http-status", "response-validation", "transport", "request-deadline");
+        foreach (var category in failures.EnumerateObject())
+            Assert.Equal(categories.GetValueOrDefault(category.Name), category.Value.GetInt32());
+        Assert.Equal(requested - completed, failures.EnumerateObject().Sum(category => category.Value.GetInt32()));
+        AssertPrivateInputsAbsent(diagnostic, server);
+    }
+
     private static void AssertPrivateInputsAbsent(JsonElement document, LoopbackServer server)
     {
         var json = document.GetRawText();
@@ -952,7 +1100,8 @@ public sealed class NativeBenchmarkWorkloadProbeTests
         public void Dispose() => Environment.SetEnvironmentVariable(SecretVariable, _previous);
     }
 
-    private sealed record Response(string ContentType, string Body, int StatusCode = 200, bool Hold = false, bool Chunked = false, bool HoldAfterBody = false);
+    private sealed record Response(string ContentType, string Body, int StatusCode = 200, bool Hold = false,
+        bool Chunked = false, bool HoldAfterBody = false, bool Truncated = false);
 
     private sealed class LoopbackServer : IAsyncDisposable
     {
@@ -1049,7 +1198,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
                 if (response.Hold) await Task.Delay(Timeout.Infinite, _stop.Token);
                 var body = Encoding.UTF8.GetBytes(response.Body);
                 var framing = response.HoldAfterBody ? string.Empty : response.Chunked ? "Transfer-Encoding: chunked\r\n"
-                    : "Content-Length: " + body.Length.ToString(CultureInfo.InvariantCulture) + "\r\n";
+                    : "Content-Length: " + (body.Length + (response.Truncated ? 1 : 0)).ToString(CultureInfo.InvariantCulture) + "\r\n";
                 var header = Encoding.ASCII.GetBytes("HTTP/1.1 " + response.StatusCode.ToString(CultureInfo.InvariantCulture)
                     + " fixture\r\nContent-Type: " + response.ContentType + "; charset=utf-8\r\n" + framing + "Connection: close\r\n\r\n");
                 writingResponse = true;
