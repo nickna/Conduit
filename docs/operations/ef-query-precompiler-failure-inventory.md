@@ -136,6 +136,15 @@ The retained `result.json` binds commands, individual exits, logs, unchanged
 inputs/generated sources and resolved package assets by SHA-256. Infrastructure
 or generation failures do not satisfy either compilation expectation.
 
+The 2026-10-18 (America/Los_Angeles) #1695 repeat again recorded `0/0/1` under
+the stricter classifier: every `CS0030` must identify the expected generated
+interceptor and qualified entity/interface conversion on the same diagnostic
+line. Unrelated errors with that same code are rejected. A separate fresh run
+confirmed `-Expect CompilationSuccess` fails against this baseline; the linked
+runner documentation retains both report hashes. EF #37957 remains open in
+Backlog with no identified merged fix; production and #1373 qualification are
+unchanged.
+
 The [fresh Include-only control](../../tools/EfQueryPrecompilerRepro/README.md#dotted-local-name-generated-compilation-tracker-1696)
 retains its own three stage exits and generated source. The fix is on upstream's
 12.0.0-alpha main line; inspected 10.0.13/release-10.0 source still has the old

@@ -15,7 +15,7 @@ if ($definitions.Count -ne 1) { throw 'Expected one compilation-result classifie
 # Load only the real classifier. Loading the runner itself would restore tools and invoke EF.
 . ([scriptblock]::Create($definitions[0].Extent.Text))
 
-$sealedDiagnostic = "Generated/ReadPredicate.EFInterceptors.cs(116,18): error CS0030: Cannot convert type 'EfQueryPrecompilerRepro.VirtualKey' to 'Microsoft.EntityFrameworkCore.Internal.IInjectableService'"
+$sealedDiagnostic = "Generated/ReadPredicate.EFInterceptors.ReproContext.cs(116,18): error CS0030: Cannot convert type 'EfQueryPrecompilerRepro.VirtualKey' to 'Microsoft.EntityFrameworkCore.Internal.IInjectableService'"
 $sealedGenerated = @'
 if (instance is IInjectableService)
 {
@@ -32,9 +32,19 @@ $discoveryGenerated = @'
 $cases = @(
     @{ name = 'successful generated compilation'; exit = 0; diagnostics = 'Build succeeded.'; generated = $sealedGenerated; expected = 'CompilationSuccess' },
     @{ name = 'sealed entity cast'; exit = 1; diagnostics = $sealedDiagnostic; generated = $sealedGenerated; expected = 'KnownFailure' },
+    @{ name = 'sealed entity Windows path and project suffix'; exit = 1; diagnostics = ('C:\scratch\' + $sealedDiagnostic.Replace('/', '\') + ' [C:\scratch\EfQueryPrecompilerRepro.csproj]'); generated = $sealedGenerated; expected = 'KnownFailure' },
     @{ name = 'repeated compiler diagnostic and retained warning'; exit = 1; diagnostics = ($sealedDiagnostic + "`nwarning CS0184: The given expression is never of the provided type.`n" + $sealedDiagnostic); generated = $sealedGenerated; expected = 'KnownFailure' },
     @{ name = 'unrelated entity cast'; exit = 1; diagnostics = $sealedDiagnostic.Replace('VirtualKey', 'OtherEntity'); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
     @{ name = 'unrelated interface cast'; exit = 1; diagnostics = $sealedDiagnostic.Replace('IInjectableService', 'IDisposable'); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'sealed cast in unrelated generated file'; exit = 1; diagnostics = $sealedDiagnostic.Replace('ReadPredicate.EFInterceptors.ReproContext.cs', 'OtherQuery.EFInterceptors.ReproContext.cs'); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'sealed cast in unrelated context'; exit = 1; diagnostics = $sealedDiagnostic.Replace('EFInterceptors.ReproContext.cs', 'EFInterceptors.OtherContext.cs'); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'sealed cast filename must be complete'; exit = 1; diagnostics = $sealedDiagnostic.Replace('ReadPredicate.EFInterceptors', 'OtherReadPredicate.EFInterceptors'); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'sealed cast entity must be qualified'; exit = 1; diagnostics = $sealedDiagnostic.Replace('EfQueryPrecompilerRepro.VirtualKey', 'OtherNamespace.VirtualKey'); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'sealed cast interface must be qualified'; exit = 1; diagnostics = $sealedDiagnostic.Replace('Microsoft.EntityFrameworkCore.Internal.IInjectableService', 'OtherNamespace.IInjectableService'); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'warning cannot supply the expected conversion'; exit = 1; diagnostics = ($sealedDiagnostic.Replace('VirtualKey', 'OtherEntity') + "`nwarning CS0184: Cannot convert type 'EfQueryPrecompilerRepro.VirtualKey' to 'Microsoft.EntityFrameworkCore.Internal.IInjectableService'"); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'conversion must stay on the diagnostic line'; exit = 1; diagnostics = $sealedDiagnostic.Replace(" to 'Microsoft", "`n to 'Microsoft"); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'expected cast plus unrelated CS0030 file'; exit = 1; diagnostics = ($sealedDiagnostic + "`n" + $sealedDiagnostic.Replace('ReadPredicate.EFInterceptors.ReproContext.cs', 'OtherQuery.EFInterceptors.ReproContext.cs')); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'expected cast plus unrelated CS0030 conversion'; exit = 1; diagnostics = ($sealedDiagnostic + "`n" + $sealedDiagnostic.Replace('VirtualKey', 'OtherEntity')); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
     @{ name = 'missing generated cast'; exit = 1; diagnostics = $sealedDiagnostic; generated = 'if (instance is IInjectableService) { }'; expected = 'UnexpectedFailure' },
     @{ name = 'mixed MSBuild and compiler errors'; exit = 1; diagnostics = ($sealedDiagnostic + "`nerror MSB4018: The task failed unexpectedly."); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
     @{ name = 'failed build without expected diagnostic'; exit = 1; diagnostics = 'Build FAILED.'; generated = $sealedGenerated; expected = 'UnexpectedFailure' },

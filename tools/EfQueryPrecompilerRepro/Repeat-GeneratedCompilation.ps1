@@ -70,8 +70,13 @@ function Get-GeneratedHashes {
 function Get-CompilationResult([int]$ExitCode, [string]$Diagnostics, [string]$GeneratedText, [int]$Issue = 1695) {
     if ($ExitCode -eq 0) { return 'CompilationSuccess' }
     $errorCodes = @([regex]::Matches($Diagnostics, 'error ([A-Z]+\d+)') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    # Build output repeats diagnostics in its summary. Every occurrence must belong to
+    # this generated control; another CS0030 must not hide behind the same error code.
+    $sealedDiagnostics = @($Diagnostics -split '\r?\n' | Where-Object { $_ -cmatch '\berror CS0030\b' })
+    $sealedDiagnosticPattern = "^(?:[^\r\n]*[/\\])?ReadPredicate\.EFInterceptors\.ReproContext\.cs\(\d+,\d+\): error CS0030: Cannot convert type 'EfQueryPrecompilerRepro\.VirtualKey' to 'Microsoft\.EntityFrameworkCore\.Internal\.IInjectableService'(?: \[[^\r\n]+\])?\s*$"
     if ($Issue -eq 1695 -and $errorCodes.Count -eq 1 -and $errorCodes[0] -eq 'CS0030' -and
-        $Diagnostics -match 'VirtualKey.*IInjectableService' -and $GeneratedText -match '\(\(IInjectableService\)instance\)') {
+        $sealedDiagnostics.Count -gt 0 -and @($sealedDiagnostics | Where-Object { $_ -cnotmatch $sealedDiagnosticPattern }).Count -eq 0 -and
+        $GeneratedText -match '\(\(IInjectableService\)instance\)') {
         return 'KnownFailure'
     }
     if ($Issue -eq 1696 -and $errorCodes.Count -eq 2 -and $errorCodes -contains 'CS1002' -and $errorCodes -contains 'CS1003' -and
