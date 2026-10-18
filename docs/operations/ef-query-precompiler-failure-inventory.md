@@ -129,7 +129,7 @@ generation and generated-code compilation before this tracker changes status.
 Production seals, package pins and diagnostics remain intact.
 
 The [opt-in repeat runner](../../tools/EfQueryPrecompilerRepro/README.md#sealed-entity-generated-compilation-tracker-1695)
-now automates #1695's three gates in a fresh copy with aligned local EF tooling.
+now automates both controls' three gates in fresh copies with aligned local EF tooling.
 Its default exit 0 asserts the known compilation failure, while explicit
 `-Expect CompilationSuccess` requires a generated-source Release build exit 0.
 The retained `result.json` binds commands, individual exits, logs, unchanged
@@ -142,3 +142,8 @@ retains its own three stage exits and generated source. The fix is on upstream's
 name construction, and neither a newer package nor fixed source was executed.
 This control remains separate from `ThenInclude` analysis and sealed-entity
 compilation, with no database/native result or change to the historical index.
+The runner's `-Issue 1696` check additionally requires both syntax diagnostics
+and the dotted local declaration in emitted C#. Its Windows SDK 10.0.401 repeat
+on 2026-10-17 (America/Los_Angeles) reproduced `0/0/1`; the same-day upstream
+review found no supported 10.x backport. Both trackers remain open for a future
+applicable supported release and successful generated-code compilation.

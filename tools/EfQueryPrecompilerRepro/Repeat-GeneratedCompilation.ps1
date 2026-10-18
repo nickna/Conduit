@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 [CmdletBinding()]
 param(
-    [ValidateSet(1695)]
+    [ValidateSet(1695, 1696)]
     [int]$Issue = 1695,
     [ValidateSet('KnownFailure', 'CompilationSuccess')]
     [string]$Expect = 'KnownFailure',
@@ -24,8 +24,8 @@ $runRoot = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $runRoot) { throw "Use a fresh output directory: $runRoot" }
 New-Item -ItemType Directory -Path $runRoot | Out-Null
 
-$variant = 'ReadPredicate'
-$context = 'EfQueryPrecompilerRepro.ReproContext'
+$variant = if ($Issue -eq 1695) { 'ReadPredicate' } else { 'DiscoveryIncludeOnly' }
+$context = if ($Issue -eq 1695) { 'EfQueryPrecompilerRepro.ReproContext' } else { 'EfQueryPrecompilerRepro.DiscoveryContext' }
 $project = 'EfQueryPrecompilerRepro.csproj'
 $inputs = @($project, 'Directory.Packages.props', 'Program.cs', 'ReproContext.cs', "Variants/$variant.cs")
 foreach ($relative in $inputs) {
@@ -67,11 +67,16 @@ function Get-GeneratedHashes {
     })
 }
 
-function Get-CompilationResult([int]$ExitCode, [string]$Diagnostics, [string]$GeneratedText) {
+function Get-CompilationResult([int]$ExitCode, [string]$Diagnostics, [string]$GeneratedText, [int]$Issue = 1695) {
     if ($ExitCode -eq 0) { return 'CompilationSuccess' }
     $errorCodes = @([regex]::Matches($Diagnostics, 'error ([A-Z]+\d+)') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
-    if ($errorCodes.Count -eq 1 -and $errorCodes[0] -eq 'CS0030' -and
+    if ($Issue -eq 1695 -and $errorCodes.Count -eq 1 -and $errorCodes[0] -eq 'CS0030' -and
         $Diagnostics -match 'VirtualKey.*IInjectableService' -and $GeneratedText -match '\(\(IInjectableService\)instance\)') {
+        return 'KnownFailure'
+    }
+    if ($Issue -eq 1696 -and $errorCodes.Count -eq 2 -and $errorCodes -contains 'CS1002' -and $errorCodes -contains 'CS1003' -and
+        $Diagnostics -match 'DiscoveryIncludeOnly\.EFInterceptors\.DiscoveryContext\.cs\(\d+,\d+\): error CS100[23]' -and
+        $GeneratedText -match '(?m)^\s*var efQueryPrecompilerRepro\.DiscoveryMappingPrimaryKeyProperties\s*=') {
         return 'KnownFailure'
     }
     return 'UnexpectedFailure'
@@ -80,7 +85,7 @@ function Get-CompilationResult([int]$ExitCode, [string]$Diagnostics, [string]$Ge
 $report = [ordered]@{
     schemaVersion = 1
     issue = $Issue
-    upstream = 'https://github.com/dotnet/efcore/issues/37957'
+    upstream = if ($Issue -eq 1695) { 'https://github.com/dotnet/efcore/issues/37957' } else { 'https://github.com/dotnet/efcore/issues/37972' }
     variant = $variant
     context = $context
     startedAtUtc = [DateTime]::UtcNow.ToString('o')
@@ -133,7 +138,7 @@ try {
     $compilation = Invoke-ReproStage 'generated-build' @('build', $project, '-c', 'Release', '--no-restore', '-m:1', '--tl:off')
     $diagnostics = Get-Content -LiteralPath (Join-Path $runRoot 'generated-build.log') -Raw
     $generatedText = ($generated | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
-    $report.result = Get-CompilationResult $compilation $diagnostics $generatedText
+    $report.result = Get-CompilationResult $compilation $diagnostics $generatedText $Issue
     if ($report.result -ne $Expect) { throw "Expected $Expect; observed $($report.result). Inspect the retained stage logs." }
 } catch {
     $report.error = $_.Exception.Message

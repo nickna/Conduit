@@ -320,6 +320,32 @@ the [independent ledger](../../docs/operations/ef-query-precompiler-failure-inve
 Do not suppress compiler errors or change repository package pins to declare
 this diagnostic control, or the wider #1373 workload, qualified.
 
+The same opt-in runner selects this independent control explicitly:
+
+```powershell
+pwsh -NoProfile -File tools/EfQueryPrecompilerRepro/Repeat-GeneratedCompilation.ps1 -Issue 1696
+```
+
+The default `KnownFailure` expectation requires initial build and generation
+exits 0, followed by generated compilation errors `CS1003` and `CS1002` and the
+actual dotted local declaration in the generated source. A different syntax
+error, the sealed-entity cast failure, or failure during generation cannot pass
+this check. Candidate versions use the same scratch-only version options and
+`-Expect CompilationSuccess` described for #1695; the two baselines remain
+separate in their reports.
+
+The 2026-10-17 (America/Los_Angeles) Windows x64 repeat with SDK 10.0.401 / EF
+10.0.12 / Npgsql 10.0.3 retained exits `0/0/1`, with the dotted declaration and
+both errors at generated line 90. Inputs and generated sources stayed unchanged.
+Its report is `artifacts/ef-query-repro/verified-1696-baseline/result.json`.
+The report SHA-256 is
+`8557c6d1a2e958a6794cc8eb17fa189af0c001f599020ba0a49a4513de495024`.
+The same-day upstream review reconfirmed the fix on `main`, the `12.0-preview1`
+milestone, and the old namespace-qualified construction in v10.0.13 and
+[the inspected `release/10.0` commit](https://github.com/dotnet/efcore/blob/a5e42cdf727e40ae3ec6368febabae6451e23431/src/EFCore/Query/ShapedQueryCompilingExpressionVisitor.cs#L591).
+No applicable supported fixed package or backport was identified;
+no candidate package was tested. #1696 remains open.
+
 ## Required-member and decimal-literal reductions (#1667)
 
 These four isolated cases reduce [Conduit #1667](https://github.com/nickna/Conduit/issues/1667).

@@ -22,6 +22,13 @@ if (instance is IInjectableService)
     ((IInjectableService)instance).Injected(context, instance, trackingBehavior, entityType);
 }
 '@
+$discoveryDiagnostic = @'
+Generated/DiscoveryIncludeOnly.EFInterceptors.DiscoveryContext.cs(276,42): error CS1002: ; expected
+Generated/DiscoveryIncludeOnly.EFInterceptors.DiscoveryContext.cs(276,42): error CS1003: Syntax error, ',' expected
+'@
+$discoveryGenerated = @'
+    var efQueryPrecompilerRepro.DiscoveryMappingPrimaryKeyProperties = new[] { "Id" };
+'@
 $cases = @(
     @{ name = 'successful generated compilation'; exit = 0; diagnostics = 'Build succeeded.'; generated = $sealedGenerated; expected = 'CompilationSuccess' },
     @{ name = 'sealed entity cast'; exit = 1; diagnostics = $sealedDiagnostic; generated = $sealedGenerated; expected = 'KnownFailure' },
@@ -30,10 +37,24 @@ $cases = @(
     @{ name = 'unrelated interface cast'; exit = 1; diagnostics = $sealedDiagnostic.Replace('IInjectableService', 'IDisposable'); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
     @{ name = 'missing generated cast'; exit = 1; diagnostics = $sealedDiagnostic; generated = 'if (instance is IInjectableService) { }'; expected = 'UnexpectedFailure' },
     @{ name = 'mixed MSBuild and compiler errors'; exit = 1; diagnostics = ($sealedDiagnostic + "`nerror MSB4018: The task failed unexpectedly."); generated = $sealedGenerated; expected = 'UnexpectedFailure' },
-    @{ name = 'failed build without expected diagnostic'; exit = 1; diagnostics = 'Build FAILED.'; generated = $sealedGenerated; expected = 'UnexpectedFailure' }
+    @{ name = 'failed build without expected diagnostic'; exit = 1; diagnostics = 'Build FAILED.'; generated = $sealedGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'successful discovery generated compilation'; issue = 1696; exit = 0; diagnostics = 'Build succeeded.'; generated = $discoveryGenerated; expected = 'CompilationSuccess' },
+    @{ name = 'discovery dotted local identifier'; issue = 1696; exit = 1; diagnostics = $discoveryDiagnostic; generated = $discoveryGenerated; expected = 'KnownFailure' },
+    @{ name = 'repeated discovery diagnostics and retained warning'; issue = 1696; exit = 1; diagnostics = ($discoveryDiagnostic + "`nwarning CS0168: The variable is declared but never used.`n" + $discoveryDiagnostic); generated = $discoveryGenerated; expected = 'KnownFailure' },
+    @{ name = 'discovery missing syntax diagnostics'; issue = 1696; exit = 1; diagnostics = 'Build FAILED.'; generated = $discoveryGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'discovery only semicolon diagnostic'; issue = 1696; exit = 1; diagnostics = ($discoveryDiagnostic -split "`n")[0]; generated = $discoveryGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'discovery only comma diagnostic'; issue = 1696; exit = 1; diagnostics = ($discoveryDiagnostic -split "`n")[1]; generated = $discoveryGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'discovery other syntax error'; issue = 1696; exit = 1; diagnostics = ($discoveryDiagnostic + "`nerror CS1513: } expected"); generated = $discoveryGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'discovery unrelated generated file'; issue = 1696; exit = 1; diagnostics = $discoveryDiagnostic.Replace('DiscoveryIncludeOnly.EFInterceptors.DiscoveryContext.cs', 'OtherQuery.EFInterceptors.DiscoveryContext.cs'); generated = $discoveryGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'discovery missing dotted local'; issue = 1696; exit = 1; diagnostics = $discoveryDiagnostic; generated = 'var properties = new[] { "Id" };'; expected = 'UnexpectedFailure' },
+    @{ name = 'discovery identifier dot must be literal'; issue = 1696; exit = 1; diagnostics = $discoveryDiagnostic; generated = $discoveryGenerated.Replace('efQueryPrecompilerRepro.DiscoveryMappingPrimaryKeyProperties', 'efQueryPrecompilerReproXDiscoveryMappingPrimaryKeyProperties'); expected = 'UnexpectedFailure' },
+    @{ name = 'discovery mixed MSBuild and compiler errors'; issue = 1696; exit = 1; diagnostics = ($discoveryDiagnostic + "`nerror MSB4018: The task failed unexpectedly."); generated = $discoveryGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'sealed entity failure under discovery issue'; issue = 1696; exit = 1; diagnostics = $sealedDiagnostic; generated = $sealedGenerated; expected = 'UnexpectedFailure' },
+    @{ name = 'discovery failure under sealed entity issue'; exit = 1; diagnostics = $discoveryDiagnostic; generated = $discoveryGenerated; expected = 'UnexpectedFailure' }
 )
 foreach ($case in $cases) {
-    $actual = Get-CompilationResult -ExitCode $case.exit -Diagnostics $case.diagnostics -GeneratedText $case.generated
+    $issue = if ($case.ContainsKey('issue')) { $case.issue } else { 1695 }
+    $actual = Get-CompilationResult -ExitCode $case.exit -Diagnostics $case.diagnostics -GeneratedText $case.generated -Issue $issue
     if ($actual -cne $case.expected) { throw "Classification failed for $($case.name): expected $($case.expected), observed $actual." }
 }
 
@@ -52,18 +73,20 @@ try {
         $script:unexpectedDotnetCalls++
         throw 'Existing-directory rejection must occur before invoking dotnet.'
     }
-    $failure = $null
-    try { & $runner -Issue 1695 -OutputDirectory $temporaryRoot } catch { $failure = $_ }
-    if ($null -eq $failure -or $failure.Exception.Message -cne "Use a fresh output directory: $temporaryRoot") {
-        throw 'The runner did not reject the existing output directory.'
-    }
-    if ($script:unexpectedDotnetCalls -ne 0) { throw 'Directory rejection invoked dotnet.' }
-    if ((Get-FileHash -LiteralPath $sentinel).Hash -cne $sentinelHash -or
-        @(Get-ChildItem -LiteralPath $temporaryRoot -Force).Count -ne 1) {
-        throw 'Directory rejection changed existing files.'
-    }
-    if ($env:ReproVariant -cne $callerVariant -or (Get-Location).Path -cne $originalLocation) {
-        throw 'Directory rejection changed the caller environment or location.'
+    foreach ($issue in @(1695, 1696)) {
+        $failure = $null
+        try { & $runner -Issue $issue -OutputDirectory $temporaryRoot } catch { $failure = $_ }
+        if ($null -eq $failure -or $failure.Exception.Message -cne "Use a fresh output directory: $temporaryRoot") {
+            throw "The issue-$issue runner did not reject the existing output directory."
+        }
+        if ($script:unexpectedDotnetCalls -ne 0) { throw "Issue-$issue directory rejection invoked dotnet." }
+        if ((Get-FileHash -LiteralPath $sentinel).Hash -cne $sentinelHash -or
+            @(Get-ChildItem -LiteralPath $temporaryRoot -Force).Count -ne 1) {
+            throw "Issue-$issue directory rejection changed existing files."
+        }
+        if ($env:ReproVariant -cne $callerVariant -or (Get-Location).Path -cne $originalLocation) {
+            throw "Issue-$issue directory rejection changed the caller environment or location."
+        }
     }
 } finally {
     $env:ReproVariant = $previousVariant
@@ -74,4 +97,4 @@ try {
     }
 }
 
-Write-Host "PASS: $($cases.Count + 1) generated-compilation contracts; no EF invocation."
+Write-Host "PASS: $($cases.Count + 2) generated-compilation contracts; no EF invocation."
