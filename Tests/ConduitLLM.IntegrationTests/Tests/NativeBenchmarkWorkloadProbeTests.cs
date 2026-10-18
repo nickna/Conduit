@@ -208,7 +208,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
     }
 
     [Fact]
-    public async Task DiagnosticConfigurationFailureEmitsNeitherPartialOutput()
+    public async Task RunAsync_InvalidConfiguration_EmitsNeitherOutputAsync()
     {
         using var secret = new EnvironmentSecret(Secret);
         await using var server = new LoopbackServer(new Response("application/json", "private invalid " + Secret));
@@ -237,7 +237,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
     [InlineData("gateway-chat-sse", "size", "response-validation")]
     [InlineData("admin-setting-read", "transport", "transport")]
     [InlineData("admin-setting-read", "deadline", "request-deadline")]
-    public async Task CompletedFailedWarmupEmitsOnlyBoundedClosedFailureDiagnostics(
+    public async Task RunAsync_CompletedWarmupFails_EmitsOnlyBoundedClosedFailureDiagnosticsAsync(
         string workload, string scenario, string category)
     {
         using var secret = new EnvironmentSecret(Secret);
@@ -274,7 +274,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
     }
 
     [Fact]
-    public async Task FailedWarmupCountsEveryValidatedSuccessAndClosedFailureWithoutStartingMeasuredRequests()
+    public async Task RunAsync_MixedWarmupResults_CountsAllOutcomesAndSkipsMeasurementAsync()
     {
         using var secret = new EnvironmentSecret(Secret);
         await using var server = new LoopbackServer(ValidResponse("admin-setting-read"));
@@ -303,7 +303,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
     }
 
     [Fact]
-    public async Task InterruptedWarmupWithAlreadyCompletedFailuresEmitsNoDiagnosticDocument()
+    public async Task RunAsync_WarmupInterruptedAfterFailure_EmitsNoDiagnosticDocumentAsync()
     {
         using var secret = new EnvironmentSecret(Secret);
         await using var server = new LoopbackServer(new Response("application/json", "private invalid " + Secret));
@@ -330,7 +330,7 @@ public sealed class NativeBenchmarkWorkloadProbeTests
     }
 
     [Fact]
-    public async Task FailedWarmupDiagnosticSizeIsIndependentOfPrivateInputAndRequestRows()
+    public async Task RunAsync_LargePrivateInputs_FailedWarmupDiagnosticsStayBoundedAsync()
     {
         using var secret = new EnvironmentSecret(Secret);
         var privateText = Secret + new string('x', 16_384 - Secret.Length);

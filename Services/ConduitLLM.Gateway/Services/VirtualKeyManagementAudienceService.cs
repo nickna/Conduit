@@ -145,9 +145,9 @@ public sealed class VirtualKeyManagementAudienceService : BackgroundService, IVi
         var roles = new ConcurrentDictionary<int, bool>();
         void AbortUnresolved()
         {
-            foreach (var connection in connections)
-                if (!roles.GetValueOrDefault(connection.OwnerId) && Volatile.Read(ref connection.Privileged) != 0)
-                    Abort(connection);
+            foreach (var connection in connections.Where(connection =>
+                !roles.GetValueOrDefault(connection.OwnerId) && Volatile.Read(ref connection.Privileged) != 0))
+                Abort(connection);
         }
         using var timeout = linked.Token.Register(AbortUnresolved);
         async Task RevokeAsync(Connection connection, CancellationToken token)

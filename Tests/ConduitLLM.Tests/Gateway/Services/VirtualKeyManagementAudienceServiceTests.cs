@@ -65,7 +65,7 @@ public sealed class VirtualKeyManagementAudienceServiceTests
     }
 
     [Fact]
-    public async Task FailedTargetLookupPreservesExistingAudiencesAndAllowsRetryAndLaterRevocation()
+    public async Task SubscribeAsync_TargetLookupFails_PreservesAudiencesAndAllowsRetryAndRevocationAsync()
     {
         await using var fixture = new Fixture();
         await fixture.RegisterAsync("admin", 1);
@@ -105,7 +105,7 @@ public sealed class VirtualKeyManagementAudienceServiceTests
     }
 
     [Fact]
-    public async Task FailedTargetLookupDoesNotGrantANewlyPromotedAdministratorAudience()
+    public async Task SubscribeAsync_PromotedAdministratorTargetLookupFails_DoesNotGrantAudienceAsync()
     {
         await using var fixture = new Fixture();
         await fixture.RegisterAsync("promoted", 1, administrator: false);
@@ -130,7 +130,7 @@ public sealed class VirtualKeyManagementAudienceServiceTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task CancelledTargetLookupStillAbortsAndSuppressesLateSubscription(bool callerCancellation)
+    public async Task SubscribeAsync_TargetLookupCancelled_AbortsAndSuppressesLateSubscriptionAsync(bool callerCancellation)
     {
         await using var fixture = new Fixture();
         await fixture.RegisterAsync("admin", 1);
@@ -173,7 +173,7 @@ public sealed class VirtualKeyManagementAudienceServiceTests
     }
 
     [Fact]
-    public async Task TargetLookupOperationCancellationWithoutACancelledCallerStillAborts()
+    public async Task SubscribeAsync_TargetLookupThrowsCancellationWithoutCallerCancellation_AbortsAsync()
     {
         await using var fixture = new Fixture();
         await fixture.RegisterAsync("admin", 1);

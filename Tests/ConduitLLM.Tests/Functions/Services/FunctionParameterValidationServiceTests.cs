@@ -135,9 +135,8 @@ public sealed class FunctionParameterValidationServiceTests
     public void ArraySchemaRejectsCallerContainersWithoutInspectingOrEnumeratingThem()
     {
         object[] values = [new ThrowingKeysDictionary(), new ThrowingEnumerable()];
-        foreach (var value in values)
+        foreach (var result in values.Select(value => ValidateWithoutMutation(value, Schema("array"))))
         {
-            var result = ValidateWithoutMutation(value, Schema("array"));
             AssertValidation(result, valid: false);
             Assert.Equal("Parameter 'value' must be an array", Assert.Single(result.Errors));
         }

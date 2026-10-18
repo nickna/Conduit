@@ -55,12 +55,15 @@ public class HttpClientHelperTests
     }
 
     [Fact]
-    public async Task JsonFailureDiagnosticDoesNotTreatAResponseBodyBufferingFailureAsObservedHeaders()
+    public async Task SendJsonRequestAsync_ResponseBufferingFails_DoesNotReportObservedHeadersAsync()
     {
         var logger = new DiagnosticLogger();
         var failure = new HttpRequestException(HttpRequestError.ResponseEnded, PrivateDiagnosticText);
-        using var client = new HttpClient(new DelegateResponseHandler((_, _) => Task.FromResult(
-            new HttpResponseMessage(HttpStatusCode.OK) { Content = new FailingBufferedContent(failure) })));
+        using var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new FailingBufferedContent(failure)
+        };
+        using var client = new HttpClient(new DelegateResponseHandler((_, _) => Task.FromResult(response)));
 
         var wrapped = await Assert.ThrowsAsync<LLMCommunicationException>(() => SendForDiagnosticsAsync(client, logger));
 
