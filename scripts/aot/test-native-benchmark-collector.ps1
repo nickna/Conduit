@@ -1,7 +1,8 @@
 #!/usr/bin/env pwsh
 [CmdletBinding()]
 param([switch] $DiagnosticSchemaOnly, [switch] $StrictCallerOnly, [switch] $FailedWorkloadOnly,
-    [switch] $NetworkBindingOnly, [switch] $DockerNetworkOnly, [switch] $CollectorTimingOnly)
+    [switch] $NetworkBindingOnly, [switch] $DockerNetworkOnly, [switch] $CollectorTimingOnly,
+    [switch] $DeadlineOnly)
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -976,6 +977,7 @@ function Assert-CollectorFailureDiagnostic($Metadata, [string] $Scenario, [strin
         'diagnostic-private-child' { $phase = 'workload-result'; $reason = 'unknown' }
         'diagnostic-private-config' { $phase = 'workload-result'; $reason = 'unknown'; $privateReason = 'cleanup-failed' }
         'diagnostic-poll-memory' { $phase = 'workload'; $reason = 'poll-memory-sample' }
+        'diagnostic-poll-deadline' { $phase = 'workload'; $reason = 'poll-command-deadline' }
         { $_.StartsWith('diagnostic-probe-', [StringComparison]::Ordinal) } { $phase = 'workload'; $reason = 'probe-exit' }
     }
     Assert-Contract ($diagnostic.phase -ceq $phase -and $diagnostic.reason -ceq $reason -and $diagnostic.runtime -ceq $runtime -and
@@ -1096,7 +1098,7 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     $failureDiagnostic = $null
     $collectorToInvoke = $collector
     $privateCleanupMarker = Join-Path $caseRoot 'injected-private-cleanup.path'
-    if ($Scenario -cin @('diagnostic-private-cleanup', 'diagnostic-readiness-private-cleanup', 'diagnostic-private-config')) {
+    if ($Scenario -cin @('driver-timeout', 'diagnostic-private-cleanup', 'diagnostic-readiness-private-cleanup', 'diagnostic-private-config')) {
         $copyRoot = Join-Path $caseRoot 'collector-source'
         [IO.Directory]::CreateDirectory($copyRoot) | Out-Null
         foreach ($sourceFile in Get-ChildItem -LiteralPath $PSScriptRoot -File -Filter '*.ps1') {
@@ -1104,13 +1106,31 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         }
         $collectorToInvoke = Join-Path $copyRoot 'measure-native-container.ps1'
         $copy = [IO.File]::ReadAllText($collectorToInvoke)
-        $delete = if ($Scenario -ceq 'diagnostic-private-config') { 'Remove-Item -LiteralPath $configurationPath -Force' }
-            else { 'Remove-Item -LiteralPath $resolved -Recurse -Force' }
-        Assert-Contract ($copy.Split($delete, [StringSplitOptions]::None).Length -eq 2) 'Exact private cleanup fault seam differs.'
-        $markerValue = if ($Scenario -ceq 'diagnostic-private-config') { '$configurationPath' } else { '$resolved' }
-        $fault = '[IO.File]::WriteAllText((Join-Path $env:CONDUIT_COLLECTOR_TEST_ROOT ''injected-private-cleanup.path''), ' + $markerValue +
-            '); throw (''private-cleanup-sentinel:'' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)'
-        [IO.File]::WriteAllText($collectorToInvoke, $copy.Replace($delete, $fault), [Text.UTF8Encoding]::new($false))
+        if ($Scenario -ceq 'driver-timeout') {
+            # Isolate the outer workload deadline from nested command startup.
+            # Real process-based memory sampling has its own latched deadline case.
+            $pollDefinition = '$poll = { param([int] $remainingSeconds) $samples.Add((Get-ContainerMemory $record.Id $remainingSeconds)) }'
+            Assert-Contract ($copy.Split($pollDefinition, [StringSplitOptions]::None).Length -eq 2) 'Exact workload poll seam differs.'
+            $successfulPoll = @'
+$poll = {
+    param([int] $remainingSeconds)
+    [IO.File]::AppendAllText((Join-Path $env:CONDUIT_COLLECTOR_TEST_ROOT 'outer-poll-budgets.txt'),
+        ([string]$remainingSeconds + [Environment]::NewLine))
+    $samples.Add([long]1048576)
+}
+'@
+            $copy = $copy.Replace($pollDefinition, $successfulPoll)
+        }
+        else {
+            $delete = if ($Scenario -ceq 'diagnostic-private-config') { 'Remove-Item -LiteralPath $configurationPath -Force' }
+                else { 'Remove-Item -LiteralPath $resolved -Recurse -Force' }
+            Assert-Contract ($copy.Split($delete, [StringSplitOptions]::None).Length -eq 2) 'Exact private cleanup fault seam differs.'
+            $markerValue = if ($Scenario -ceq 'diagnostic-private-config') { '$configurationPath' } else { '$resolved' }
+            $fault = '[IO.File]::WriteAllText((Join-Path $env:CONDUIT_COLLECTOR_TEST_ROOT ''injected-private-cleanup.path''), ' + $markerValue +
+                '); throw (''private-cleanup-sentinel:'' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)'
+            $copy = $copy.Replace($delete, $fault)
+        }
+        [IO.File]::WriteAllText($collectorToInvoke, $copy, [Text.UTF8Encoding]::new($false))
     }
     try {
     if ($Scenario -cnotin @('even-pairs', 'case-duplicate-environment', 'revision-mismatch', 'package-absent', 'legacy-baseline',
@@ -1251,13 +1271,18 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
             elseif ($Scenario -ceq 'diagnostic-private-cleanup') {
                 Assert-Contract ($created.Count -eq 12 -and $drivers.Count -eq 12) 'Private-only cleanup fault occurred before complete successful workload collection.'
             }
-            elseif ($Scenario -ceq 'diagnostic-poll-memory') {
-                foreach ($name in @('diagnostic-workload.identity', 'diagnostic-descendant.identity')) {
+            elseif ($Scenario -cin @('diagnostic-poll-memory', 'diagnostic-poll-deadline')) {
+                $identityNames = @('diagnostic-workload.identity', 'diagnostic-descendant.identity')
+                if ($Scenario -ceq 'diagnostic-poll-deadline') { $identityNames += 'diagnostic-poll.identity' }
+                foreach ($name in $identityNames) {
                     $identity = Join-Path $caseRoot ('processes/' + $name)
                     Assert-Contract ([IO.File]::Exists($identity)) 'Nested poll did not reach a latched sleeping workload and descendant.'
                     Test-OwnedProcessStopped $identity
                 }
                 Assert-Contract ($watch.Elapsed.TotalSeconds -lt 25 -and $created.Count -eq 1 -and $drivers.Count -eq 1) 'Nested poll failure did not remain bounded in its first workload.'
+                if ($Scenario -ceq 'diagnostic-poll-deadline') {
+                    Assert-Contract ($failureDiagnostic.Classification -ceq 'Private command failed. [stage=poll-command-deadline]') 'Nested poll fixture failed for a reason other than its bounded command deadline.'
+                }
             }
             if ($Scenario -cin @('diagnostic-private-cleanup', 'diagnostic-readiness-private-cleanup', 'diagnostic-private-config')) {
                 Assert-Contract ([IO.File]::Exists($privateCleanupMarker)) 'Exact private cleanup fault was not invoked.'
@@ -1309,10 +1334,20 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         }
         if ($Scenario -eq 'driver-timeout') {
             Assert-Contract ($watch.Elapsed.TotalSeconds -lt 20) 'Collector workload timeout exceeded its bounded cleanup budget.'
-            $identityPath = Join-Path $caseRoot 'processes/driver-descendant.identity'
-            Assert-Contract ([IO.File]::Exists($identityPath)) ('Timeout driver did not start its latched descendant; ' + $failureDiagnostic.Text)
-            Test-OwnedProcessStopped $identityPath
+            foreach ($name in @('driver-workload.identity', 'driver-descendant.identity')) {
+                $identityPath = Join-Path $caseRoot ('processes/' + $name)
+                Assert-Contract ([IO.File]::Exists($identityPath)) ('Timeout driver did not start its latched workload and descendant; ' + $failureDiagnostic.Text)
+                Test-OwnedProcessStopped $identityPath
+            }
             Assert-Contract ($failureDiagnostic.Classification -ceq 'Private command failed. [stage=command-deadline]') 'Timeout fixture failed for a reason other than the bounded command deadline.'
+            $pollBudgets = @([IO.File]::ReadAllLines((Join-Path $caseRoot 'outer-poll-budgets.txt')))
+            Assert-Contract ($pollBudgets.Count -gt 0 -and @($pollBudgets | Where-Object { $_ -cnotmatch '^[1-4]$' }).Count -eq 0 -and
+                @($commands | Where-Object { $_.arguments[0] -ceq 'stats' }).Count -eq 1) 'Outer deadline control did not isolate successful bounded polls from nested processes.'
+            $diagnosticPath = Join-Path ([IO.Path]::GetDirectoryName($failedAttempt.attemptPath)) 'diagnostics.json'
+            $diagnostic = Get-NativeBenchmarkAttemptFailureDiagnostic (Read-AttemptContractJson $diagnosticPath)
+            Assert-Contract ($diagnostic.phase -ceq 'workload' -and $diagnostic.reason -ceq 'command-deadline' -and
+                $null -eq $diagnostic.workloadAggregate -and $diagnostic.ownedContainerCleanup.status -ceq 'confirmed' -and
+                $diagnostic.privateFileCleanup.status -ceq 'confirmed' -and $created.Count -eq 1 -and $drivers.Count -eq 1) 'Outer workload deadline lost its closed failed-attempt diagnostic or bounded cleanup.'
         }
         if ($Scenario -cin @('package-absent', 'legacy-baseline', 'package-wrong-service', 'package-cross-build',
             'package-dirty', 'package-unavailable', 'package-hold', 'candidate-config', 'candidate-selected-swap')) {
@@ -2066,6 +2101,16 @@ if ($Mode -eq 'docker') {
     }
     if ($CommandArguments[0] -eq 'stats') {
         $record = @(Read-Active | Where-Object id -CEQ $CommandArguments[1])[0]
+        if ($scenario -ceq 'diagnostic-poll-deadline' -and
+            [IO.File]::Exists((Join-Path $root 'processes/diagnostic-workload.identity')) -and
+            [IO.File]::Exists((Join-Path $root 'processes/diagnostic-descendant.identity'))) {
+            $self = [Diagnostics.Process]::GetCurrentProcess()
+            try { [IO.File]::WriteAllText((Join-Path $root 'processes/diagnostic-poll.identity'),
+                ($self.Id.ToString() + '|' + (Get-OwnedProcessIdentityToken $self))) }
+            finally { $self.Dispose() }
+            [Console]::Error.WriteLine('private-child-diagnostic ' + [IO.File]::ReadAllText((Join-Path $root 'expected-redis.url')))
+            Start-Sleep -Seconds 60
+        }
         if ($scenario -ceq 'diagnostic-poll-memory' -and
             [IO.File]::Exists((Join-Path $root 'processes/diagnostic-workload.identity')) -and
             [IO.File]::Exists((Join-Path $root 'processes/diagnostic-descendant.identity'))) {
@@ -2135,7 +2180,7 @@ if ($Mode -eq 'driver' -or $Mode -eq 'dotnet') {
         [Console]::Error.WriteLine('private-child-diagnostic ' + $env:CONDUIT_NATIVE_BENCHMARK_API_KEY)
         exit 1
     }
-    if ($scenario -ceq 'diagnostic-poll-memory') {
+    if ($scenario -cin @('diagnostic-poll-memory', 'diagnostic-poll-deadline')) {
         $descendant = Start-Child 'sleep' @()
         try {
             [IO.File]::WriteAllText((Join-Path $root 'processes/diagnostic-descendant.identity'),
@@ -2159,6 +2204,10 @@ if ($Mode -eq 'driver' -or $Mode -eq 'dotnet') {
         [Console]::Error.WriteLine('private-child-diagnostic'); exit 17
     }
     if ($scenario -eq 'driver-timeout') {
+        $self = [Diagnostics.Process]::GetCurrentProcess()
+        try { [IO.File]::WriteAllText((Join-Path $root 'processes/driver-workload.identity'),
+            ($self.Id.ToString() + '|' + (Get-OwnedProcessIdentityToken $self))) }
+        finally { $self.Dispose() }
         $trace.Add(@{ stage = 'before-start' })
         [IO.File]::WriteAllText($tracePath, (ConvertTo-Json -InputObject @($trace.ToArray()) -Compress))
         try {
@@ -2230,7 +2279,7 @@ throw 'Unknown fixture mode.'
     $script:packages = @{}
     $script:packages['admin'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
     $script:packages['gateway'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'gateway'
-    if (-not $StrictCallerOnly -and -not $FailedWorkloadOnly -and -not $DockerNetworkOnly) {
+    if (-not $StrictCallerOnly -and -not $FailedWorkloadOnly -and -not $DockerNetworkOnly -and -not $DeadlineOnly) {
     $script:packages['admin-other'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
     $script:packages['admin-dirty'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -SourceDirty $true
     $script:packages['admin-unavailable'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -UnavailableSource
@@ -2276,7 +2325,12 @@ throw 'Unknown fixture mode.'
         Assert-Contract ($null -ne $definition) ('Collector helper is missing: ' + $functionName)
         Invoke-Expression $definition.Extent.Text
     }
-    if ($DockerNetworkOnly) {
+    if ($DeadlineOnly) {
+        Invoke-CollectorCase 'admin' 'driver-timeout' 'No qualification was recorded.'
+        Invoke-CollectorCase 'admin' 'diagnostic-poll-deadline' 'No qualification was recorded.'
+        Assert-Contract ($cases -eq 2) 'Focused deadline controls did not execute both independent collector cases.'
+    }
+    elseif ($DockerNetworkOnly) {
         Invoke-NetworkBindingContracts
         $successfulNetwork = Invoke-CollectorCase 'gateway' 'network-success' $null -CaptureResult -StrictCaller
         foreach ($scenario in @('network-invalid-name', 'network-malformed', 'network-foreign-name', 'network-nonbridge', 'network-forged-attachment')) {
@@ -2610,6 +2664,7 @@ exit 0
     Invoke-CollectorCase 'admin' 'revision-mismatch' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'driver-nonzero' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'driver-timeout' 'No qualification was recorded.'
+    Invoke-CollectorCase 'admin' 'diagnostic-poll-deadline' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'unknown-create' 'No qualification was recorded.'
     Invoke-CollectorCase 'admin' 'foreign-label' 'cleanup failed'
     Invoke-CollectorCase 'admin' 'cleanup-failure' 'cleanup failed'
@@ -2702,7 +2757,10 @@ if ($cleanupFailures.Count -gt 0) {
     throw ('Collector contract fixture cleanup failed; cleanup failures ' + $cleanupFailures.Count + '.')
 }
 if ($null -ne $proofFailure) { throw $proofFailure }
-if ($CollectorTimingOnly) {
+if ($DeadlineOnly) {
+    Write-Host ('PASS: ' + $cases + ' independent collector deadline contracts; exact outer/nested classifications, latched processes stopped before fixture fallback, private failed-attempt evidence and owned cleanup.')
+}
+elseif ($CollectorTimingOnly) {
     Write-Host ('PASS: ' + $cases + ' actual collector invocation timing contracts; success/failure records preserved and oracle time excluded; no Docker/driver processes ran.')
 }
 elseif ($NetworkBindingOnly) {
