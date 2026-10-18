@@ -21,11 +21,6 @@ namespace ConduitLLM.Core.Serialization;
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(Dictionary<string, JsonElement>))]
 [JsonSerializable(typeof(Dictionary<string, object>))]
-[JsonSerializable(typeof(WebhookPayloadTooLarge))]
-[JsonSerializable(typeof(ImageCompletionWebhookPayload))]
-[JsonSerializable(typeof(ImageProgressWebhookPayload))]
-[JsonSerializable(typeof(VideoCompletionWebhookPayload))]
-[JsonSerializable(typeof(VideoProgressWebhookPayload))]
 [JsonSerializable(typeof(ProviderWarningEntry))]
 [JsonSerializable(typeof(ProviderFeedEntry))]
 [JsonSerializable(typeof(ModelCost))]
@@ -45,12 +40,6 @@ internal sealed record ConnectionPoolWarmingSignal(
     string ServiceType,
     DateTime Timestamp,
     int ConnectionsWarmed);
-
-internal sealed record WebhookPayloadTooLarge(
-    string Error,
-    int OriginalSizeBytes,
-    int MaxSizeBytes,
-    bool Truncated);
 
 internal sealed record ProviderWarningEntry(
     string Type,

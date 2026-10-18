@@ -14,15 +14,12 @@ public sealed class RefundIdempotencyRecord
 
     public int VirtualKeyGroupId { get; set; }
 
-    [Required, StringLength(100)]
     public string OperationId { get; set; } = string.Empty;
 
-    [Required, StringLength(64)]
     public string RequestHash { get; set; } = string.Empty;
 
     public long RefundTransactionId { get; set; }
 
-    [Required]
     public string ResponseJson { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

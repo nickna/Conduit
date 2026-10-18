@@ -20,7 +20,6 @@ public class Provider
     public ProviderType ProviderType { get; set; } = ProviderType.OpenAI;
 
     [Required]
-    [StringLength(100)]
     public string ProviderName { get; set; } = string.Empty;
 
     public string? BaseUrl { get; set; }

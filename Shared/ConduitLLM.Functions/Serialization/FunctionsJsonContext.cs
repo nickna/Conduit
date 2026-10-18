@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 using ConduitLLM.Functions.Entities;
@@ -17,6 +18,11 @@ namespace ConduitLLM.Functions.Serialization;
 [JsonSerializable(typeof(Dictionary<string, JsonElement>))]
 [JsonSerializable(typeof(Dictionary<string, object>))]
 [JsonSerializable(typeof(List<string>))]
+[JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(List<object>))]
+[JsonSerializable(typeof(object[]))]
+[JsonSerializable(typeof(JsonObject))]
+[JsonSerializable(typeof(JsonArray))]
 [JsonSerializable(typeof(FunctionCost))]
 [JsonSerializable(typeof(FunctionExecution))]
 [JsonSerializable(typeof(List<FunctionCost>))]

@@ -96,7 +96,7 @@ namespace ConduitLLM.Configuration.Options
         /// decision cannot race the fill it is based on and there is no shedding state to flap.
         /// 1.0 disables shedding (the reduced ceiling equals the full one).
         /// </remarks>
-        [Range(0.01, 1.0)]
+        [Range(0.0, 1.0, MinimumIsExclusive = true)]
         public double PrioritySaturationThreshold { get; set; } = 0.8;
 
         /// <summary>

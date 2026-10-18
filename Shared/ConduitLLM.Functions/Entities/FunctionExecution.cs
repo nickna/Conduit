@@ -85,7 +85,6 @@ public class FunctionExecution : IIdentifiableEntity<Guid>
     /// <summary>
     /// Error message if execution failed
     /// </summary>
-    [StringLength(2000)]
     public string? ErrorMessage { get; set; }
 
     /// <summary>
@@ -121,7 +120,6 @@ public class FunctionExecution : IIdentifiableEntity<Guid>
     /// Worker instance ID that has leased this execution for processing
     /// Used for distributed async execution
     /// </summary>
-    [StringLength(100)]
     public string? LeasedBy { get; set; }
 
     /// <summary>
@@ -141,7 +139,6 @@ public class FunctionExecution : IIdentifiableEntity<Guid>
     /// <summary>
     /// Optional webhook URL to notify when execution completes
     /// </summary>
-    [StringLength(1000)]
     public string? WebhookUrl { get; set; }
 
     /// <summary>
@@ -158,7 +155,6 @@ public class FunctionExecution : IIdentifiableEntity<Guid>
     /// <summary>
     /// Optional status message for progress updates
     /// </summary>
-    [StringLength(500)]
     public string? StatusMessage { get; set; }
 
     /// <summary>True when this response replays an existing scoped idempotency claim.</summary>

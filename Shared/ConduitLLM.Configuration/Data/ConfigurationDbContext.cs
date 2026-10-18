@@ -503,6 +503,7 @@ namespace ConduitLLM.Configuration
             });
 
             modelBuilder.ApplyConfigurationEntityConfigurations(IsTestEnvironment);
+            modelBuilder.ApplyStorageEntityShapes();
 
             // Apply Model entity configurations with all indexes and relationships
             modelBuilder.ApplyModelConfigurations();

@@ -93,14 +93,12 @@ public class FunctionCallAudit : IAuditEvent
     /// <summary>
     /// Reason for failure (if EventType = Failed or ParseError)
     /// </summary>
-    [StringLength(2000)]
     public string? FailureReason { get; set; }
 
     /// <summary>
     /// HTTP request correlation ID (trace identifier)
     /// Used to link all audit events for a single request
     /// </summary>
-    [StringLength(100)]
     public string? RequestId { get; set; }
 
     /// <summary>
@@ -112,6 +110,5 @@ public class FunctionCallAudit : IAuditEvent
     /// <summary>
     /// Error message if execution failed
     /// </summary>
-    [StringLength(500)]
     public string? ErrorMessage { get; set; }
 }

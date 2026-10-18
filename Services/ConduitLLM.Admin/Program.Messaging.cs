@@ -52,10 +52,7 @@ public partial class Program
             // ConduitLLM.Configuration. The committed adapters are compiled into this host.
             opts.ApplicationAssembly = typeof(Program).Assembly;
 
-            opts.UseSystemTextJsonForSerialization(options =>
-            {
-                options.TypeInfoResolverChain.Insert(0, CoreMessagingJsonContext.Default);
-            });
+            opts.UseSystemTextJsonForSerialization(CoreMessagingJsonContext.Configure);
 
             ConduitLLM.Core.Extensions.SharedCacheInvalidationMessagingExtensions.AddSharedCacheInvalidationBridges(opts);
 

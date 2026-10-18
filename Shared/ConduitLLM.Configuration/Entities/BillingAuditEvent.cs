@@ -38,13 +38,11 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Model name used in the request
         /// </summary>
-        [StringLength(100)]
         public string? Model { get; set; }
 
         /// <summary>
         /// Unique request identifier for correlation
         /// </summary>
-        [StringLength(100)]
         public string? RequestId { get; set; }
 
         /// <summary>
@@ -62,13 +60,11 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Reason for failure or special handling
         /// </summary>
-        [StringLength(500)]
         public string? FailureReason { get; set; }
 
         /// <summary>
         /// Provider type used for the request
         /// </summary>
-        [StringLength(50)]
         public string? ProviderType { get; set; }
 
         /// <summary>
@@ -85,7 +81,6 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Request path that triggered this event
         /// </summary>
-        [StringLength(256)]
         public string? RequestPath { get; set; }
 
         /// <summary>

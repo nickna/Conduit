@@ -47,11 +47,9 @@ namespace ConduitLLM.Configuration.Entities
         public decimal? OriginalAmount { get; set; }
 
         /// <summary>Operator who verified a historical original amount.</summary>
-        [StringLength(100)]
         public string? OriginalAmountVerifiedBy { get; set; }
 
         /// <summary>Independent evidence reference for historical replay approval.</summary>
-        [StringLength(500)]
         public string? OriginalAmountEvidence { get; set; }
 
         /// <summary>Time the historical original amount was approved.</summary>
@@ -71,25 +69,21 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Reference ID (e.g., virtual key ID, batch operation ID)
         /// </summary>
-        [StringLength(100)]
         public string? ReferenceId { get; set; }
 
         /// <summary>
         /// Description of the transaction
         /// </summary>
-        [StringLength(500)]
         public string? Description { get; set; }
 
         /// <summary>
         /// What initiated this transaction (e.g., "System", "Admin", "API")
         /// </summary>
-        [StringLength(50)]
         public string InitiatedBy { get; set; } = "System";
 
         /// <summary>
         /// Clerk user ID if initiated by an admin user
         /// </summary>
-        [StringLength(100)]
         public string? InitiatedByUserId { get; set; }
 
         /// <summary>
@@ -98,7 +92,6 @@ namespace ConduitLLM.Configuration.Entities
         /// present: a redelivered message is detected by this key and the balance
         /// adjustment is not applied twice.
         /// </summary>
-        [StringLength(100)]
         public string? IdempotencyKey { get; set; }
 
         /// <summary>

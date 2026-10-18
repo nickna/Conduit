@@ -97,9 +97,9 @@ public static class ServiceCollectionExtensions
 
         services.AddOptions<BillingCostCanaryOptions>()
             .BindConfiguration(BillingCostCanaryOptions.SectionName)
-            .Validate(options => options.IntervalMinutes is >= 1 and <= 1440,
-                "IntervalMinutes must be between 1 and 1440.")
             .ValidateOnStart();
+        services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<BillingCostCanaryOptions>,
+            BillingCostCanaryOptionsValidator>();
 #if !CONDUIT_NATIVE_AOT
         services.AddLeaderElectedHostedService<ModelCostCanaryHostedService>("ModelCostCanaryHostedService");
 #endif

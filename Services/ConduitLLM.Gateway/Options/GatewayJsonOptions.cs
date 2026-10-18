@@ -14,6 +14,7 @@ public static class GatewayJsonOptions
 {
     public static void Configure(JsonSerializerOptions options)
     {
+        options.TypeInfoResolverChain.Clear();
         options.TypeInfoResolverChain.Insert(0, GatewayHttpJsonContext.Default);
         options.TypeInfoResolverChain.Insert(1, CoreHttpJsonContext.Default);
         options.TypeInfoResolverChain.Insert(2, GatewayInternalJsonContext.Default);

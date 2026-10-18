@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using ConduitLLM.Core.Serialization;
 
 namespace ConduitLLM.Core.Helpers
@@ -16,10 +17,11 @@ namespace ConduitLLM.Core.Helpers
         /// Serializes a webhook payload to JSON with size validation
         /// </summary>
         /// <param name="payload">The payload object to serialize</param>
+        /// <param name="context">Generated metadata for the webhook body</param>
         /// <param name="maxSizeBytes">Maximum allowed size in bytes (default 1MB)</param>
         /// <returns>Serialized JSON string</returns>
-        /// <exception cref="InvalidOperationException">Thrown when payload exceeds size limit</exception>
-        public static string SerializePayload(object payload, int maxSizeBytes = MAX_PAYLOAD_SIZE_BYTES)
+        /// <exception cref="NotSupportedException">Thrown when the payload has no generated contract</exception>
+        public static string SerializePayload(object? payload, JsonSerializerContext context, int maxSizeBytes = MAX_PAYLOAD_SIZE_BYTES)
         {
             if (payload == null)
             {
@@ -28,7 +30,8 @@ namespace ConduitLLM.Core.Helpers
             
             var json = JsonSerializer.Serialize(
                 payload,
-                CoreJsonTypeInfo.Require(payload.GetType(), JsonOptions));
+                context.GetTypeInfo(payload.GetType())
+                    ?? throw new NotSupportedException($"Unregistered webhook contract: {payload.GetType()}"));
             var sizeInBytes = Encoding.UTF8.GetByteCount(json);
             
             if (sizeInBytes > maxSizeBytes)
@@ -42,7 +45,7 @@ namespace ConduitLLM.Core.Helpers
                 
                 json = JsonSerializer.Serialize(
                     truncatedPayload,
-                    new CoreInternalJsonContext(
+                    new CoreWebhookJsonContext(
                         new JsonSerializerOptions(JsonOptions)).WebhookPayloadTooLarge);
             }
             

@@ -31,7 +31,6 @@ public class ModelCost : IEntity<int>, IAuditableEntity
     /// Examples: "GPT-4 Standard Pricing", "Llama 3 Unified Cost", "Embedding Models - Ada"
     /// This helps administrators identify and manage different cost configurations.
     /// </remarks>
-    [StringLength(255)]
     public string CostName { get; set; } = string.Empty;
 
     /// <summary>
@@ -121,7 +120,6 @@ public class ModelCost : IEntity<int>, IAuditableEntity
     /// Used for filtering and organizing costs in the UI.
     /// </remarks>
     [Required]
-    [StringLength(50)]
     public string ModelType { get; set; } = "chat";
 
     /// <summary>
@@ -154,7 +152,6 @@ public class ModelCost : IEntity<int>, IAuditableEntity
     /// <summary>
     /// Optional description for this model cost entry
     /// </summary>
-    [StringLength(500)]
     public string? Description { get; set; }
 
     /// <summary>

@@ -4,7 +4,7 @@ Status: Accepted
 
 Issues: #1357, #1370 (parent epic #1368)
 
-Current-state review: 2026-10-09, after integration PR #1489.
+Current-state review: 2026-10-18, issue #1370 contract closeout.
 
 ## Decision
 
@@ -22,10 +22,13 @@ JIT builds as well as native builds. Admin and Gateway configure generated HTTP
 resolver chains and closed generic `JsonStringEnumConverter<TEnum>` instances.
 Wolverine and JSON SignalR also use generated metadata.
 
-The focused compatibility test executable separately disables reflection
-globally. Its fixture coverage proves the listed representative wire contracts;
-it does not prove every endpoint or provider workload executes in a native
-process. The supported native workload and remaining exclusions are recorded in
+The compatibility test executable separately disables reflection globally. It
+materializes both production endpoint maps and checks the advertised JSON request
+and response metadata, enumerates every routed Wolverine message, and exercises
+the configured SignalR JSON protocol and persisted/cache fixtures. Runtime values
+behind `object` still need concrete workload coverage; metadata closure alone does
+not prove every provider workload executes in a native process. The supported
+native workload and remaining exclusions are recorded in
 [the feature matrix](../operations/gateway-native-aot-feature-matrix.md) and
 [the audit checkpoint](../operations/native-aot-audit.md).
 
@@ -36,7 +39,7 @@ process. The supported native workload and remaining exclusions are recorded in
 | OpenAI-compatible chat and errors | `CoreHttpJsonContext` / Core | `snake_case`, omit nulls; existing host converters remain authoritative | Gateway endpoints and SDK clients | `gateway-chat-response.json`; production Gateway options also exercised |
 | Gateway discovery, models, files, uploads, and cancellation | `GatewayHttpJsonContext` / Gateway | `snake_case`, omit nulls | Gateway endpoints / API clients | `gateway-model-list.json`; generated metadata and discovery dialect checks |
 | Admin requests, errors, lists, and batch-spend status | `AdminHttpJsonContext` and `AdminHttpResponseJsonContext` / Admin | `camelCase`, case-insensitive reads | Admin minimal APIs / WebAdmin and API clients | `admin-problem-details.json`; generated metadata, collection-wrapper, and `ProviderType` regression checks |
-| Wolverine topology messages | `CoreMessagingJsonContext` / Core | Existing Pascal-case CLR names, numeric enums, and explicit JSON attributes | Gateway and Admin publishers / Wolverine handlers | `wolverine-spend-update.json`; runtime resolver-chain serialization |
+| Wolverine topology messages | `CoreMessagingJsonContext` / Core | Live transport: `camelCase`, case-insensitive reads, numeric enums, and explicit JSON attributes; direct persisted-context callers retain Pascal-case defaults | Gateway and Admin publishers / Wolverine handlers | Every routed type through the configured Wolverine serializer against its previous reflection policy; `wolverine-spend-update.json` retains the direct-context Pascal-case baseline |
 | Gateway Redis cache and invalidation payloads | `GatewayRedisJsonContext` / Gateway | Existing Pascal-case names, case-insensitive reads | Gateway instances across a rolling deployment | `redis-model-cost-legacy.json` old-to-new and new-to-old; `redis-virtual-key-invalidation.json` |
 | Redis webhook reliability state | `CoreRedisJsonContext` / Core | Existing Pascal-case names, case-insensitive reads | Webhook circuit-breaker instances | `redis-webhook-circuit-state.json` |
 | Live SignalR notifications | `ConfigurationSignalRJsonContext` / Configuration; runtime adapter owned by SignalR | `camelCase`, case-insensitive reads | Gateway hubs / WebAdmin | `signalr-virtual-key-created.json`; generated metadata and native JSON SignalR process coverage |
@@ -49,15 +52,31 @@ Additional generated boundaries introduced during the epic are:
 | --- | --- | --- |
 | Admin internal payloads and cleanup cache | `AdminInternalJsonContext`, `MediaCleanupRedisJsonContext` / Admin | Generated internal/persisted metadata; cleanup cache regression tests |
 | Gateway task/accounting/tool metadata | `GatewayInternalJsonContext` / Gateway | Named accounting shape and generated metadata checks |
+| Enhanced chat SSE events | `GatewayHttpJsonContext`, `GatewayInternalJsonContext` / Gateway | Actual SSE writer exercises live metrics, final metrics, reasoning, tools, enhanced errors and standard OpenAI errors with reflection disabled |
 | Core internal, pricing, and async-task persistence | `CoreInternalJsonContext`, `CorePricingJsonContext`, `AsyncTaskJsonContext` / Core | Persisted/cache and pricing regression tests |
 | Shared application cache | `ApplicationCacheJsonContext` / Core | Cache contracts and independent-process probes |
+| Durable webhook bodies and receiver requests | `CoreWebhookJsonContext` / Core | Four named media payloads, previous-release reads/writes, and size-limit envelope |
 | Configuration settings and model capabilities | `ConfigurationJsonContext`, `ConfigurationModelJsonContext` / Configuration | Generated persistence metadata and legacy reads |
 | Function execution and provider payloads | `FunctionsJsonContext`, `FunctionProviderJsonContext` / Functions | Provider/pricing/cache tests; full native function workload remains outstanding |
 | Security middleware and caches | `SecurityCacheJsonContext` / Security | Generated cache and error metadata tests |
+| Provider payloads and private credential/stream contexts | `ProvidersJsonContext`, MiniMax stream context, Vertex service-account context / Providers | Recursive inventory of every declared root and nested contract; Cloudflare, Bedrock stream/request, Azure deployment, OpenRouter video and Vertex credential/token fixtures |
 
 The `[JsonSerializable]` declarations in each context are the concrete type
 inventory. The table groups their ownership and verification boundaries; adding
 a type to a context alone does not establish end-to-end native coverage.
+
+HTTP and Wolverine configuration replace their resolver chains with generated
+contexts, including when the framework or transport supplied a reflection resolver
+before configuration. The webhook helper requires its caller to provide a generated
+context. The required source-policy suite rejects production reflection resolver
+references and non-generic enum converters, and guards the ordinary build switches.
+
+Admin uses .NET 10 generated Minimal API validation. Generated options validators
+cover the annotated billing, batch-spending, rate-limit, Redis circuit-breaker and
+SignalR connection options. Storage-only string lengths on 31 persisted entity
+types live in fluent entity configuration; they are not HTTP validation rules.
+Regression tests compare affected property lengths and nullability with the migration
+snapshot and exercise the existing Admin validation problem envelope.
 
 Batch-spend Redis accumulation uses scalar Redis values and hashes rather than
 JSON documents. Its durable flush event is included in
@@ -87,15 +106,17 @@ JSON documents. Its durable flush event is included in
 ## Reflection-disabled verification
 
 `ConduitLLM.SerializationTests` sets
-`JsonSerializerIsReflectionEnabledByDefault=false`. Its 16 tests check
-representative fixtures in both directions, verify that an unregistered type
-fails, and cover service metadata, enum names, Admin collection wrappers, and
+`JsonSerializerIsReflectionEnabledByDefault=false`. Tests check
+fixtures in both directions, verify that an unregistered type fails, and cover
+the production endpoint graph, provider context graphs, live enhanced/standard SSE
+writers, enum names, Admin collection wrappers, and
 the navigation-free Redis virtual-key shape. Service `.csproj` feature switches
 do not apply automatically to a separate test executable; the broader unit and
 integration projects do not globally disable reflection defaults.
 
 The historical Admin native endpoint-materialization failure for `ProviderType`
-is covered by generated nullable-enum metadata and enum-name regression checks.
+is covered by production endpoint materialization, generated nullable-enum metadata
+and enum-name regression checks, including rejection of numeric enum inputs.
 Both services also have native OpenAPI boot gates. Public OpenAPI drift,
 provider tests, cache contracts, and published native process gates remain
 necessary alongside these serialization fixtures.
@@ -104,6 +125,8 @@ Run:
 
 ```powershell
 dotnet test Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj -c Release
+node --test scripts/ci/json-contract-policy.test.mjs
+./scripts/aot/aot-audit.ps1
 ```
 
 ## Benchmark

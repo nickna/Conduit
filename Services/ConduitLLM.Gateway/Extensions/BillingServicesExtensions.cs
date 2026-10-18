@@ -71,14 +71,14 @@ public static class BillingServicesExtensions
 
         services.AddOptions<ConduitLLM.Configuration.Options.BillingReconciliationOptions>()
             .BindConfiguration(ConduitLLM.Configuration.Options.BillingReconciliationOptions.SectionName)
-            .Validate(options =>
-                    options.WindowHours is >= 1 and <= 24 &&
-                    options.GracePeriodMinutes is >= 0 and <= 360 &&
-                    options.RelativeThreshold is >= 0m and <= 1m &&
-                    options.AbsoluteThresholdUsd is >= 0m and <= 1_000_000m &&
-                    options.MaxCatchUpWindowsPerRun is >= 1 and <= 168,
+            // RangeAttribute's double bounds can round decimal values across the
+            // limit. Preserve the existing exact billing thresholds as well.
+            .Validate(options => options.RelativeThreshold is >= 0m and <= 1m &&
+                    options.AbsoluteThresholdUsd is >= 0m and <= 1_000_000m,
                 "BillingReconciliation settings are outside their supported ranges.")
             .ValidateOnStart();
+        services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<ConduitLLM.Configuration.Options.BillingReconciliationOptions>,
+            ConduitLLM.Configuration.Options.BillingReconciliationOptionsValidator>();
 #if !CONDUIT_NATIVE_AOT
         services.AddSingleton<BillingReconciliationService>();
         services.AddLeaderElectedHostedService<BillingReconciliationService>(
