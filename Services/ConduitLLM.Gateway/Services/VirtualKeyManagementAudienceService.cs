@@ -193,7 +193,13 @@ public sealed class VirtualKeyManagementAudienceService : BackgroundService, IVi
                 throw;
             }
         }
-        catch (OperationCanceledException) when (linked.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (linked.IsCancellationRequested)
+        {
+            // WaitAsync's cancellation callback can resume this method before
+            // the earlier registration runs. Revoke before disposing that
+            // registration, which could otherwise remove its pending callback.
+            AbortUnresolved();
+        }
         catch (Exception failure)
         {
             AbortUnresolved();
