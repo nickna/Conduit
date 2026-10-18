@@ -55,7 +55,11 @@ public sealed class ProviderContractInventoryTests
                                 pending.Push(derived.DerivedType);
                     }
                 }
-                catch (Exception exception)
+                catch (NotSupportedException exception)
+                {
+                    failures.Add($"{context.GetType().FullName}, root {root}: {exception.Message}");
+                }
+                catch (InvalidOperationException exception)
                 {
                     failures.Add($"{context.GetType().FullName}, root {root}: {exception.Message}");
                 }

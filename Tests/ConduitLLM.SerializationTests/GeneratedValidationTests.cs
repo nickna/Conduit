@@ -51,8 +51,8 @@ public sealed class GeneratedValidationTests
             VirtualKeyGroupId = groupId,
             RateLimitPriority = priority
         }, ConduitLLM.Admin.Serialization.AdminHttpJsonContext.Default.CreateVirtualKeyRequestDto);
-        using var response = await client.PostAsync("/validation",
-            new StringContent(input, Encoding.UTF8, "application/json"));
+        using var content = new StringContent(input, Encoding.UTF8, "application/json");
+        using var response = await client.PostAsync("/validation", content);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.False(handlerCalled);
@@ -68,8 +68,9 @@ public sealed class GeneratedValidationTests
         Assert.Contains(expectedMessage, body.GetProperty("detail").GetString());
 
         // A valid body must continue to the handler through the same generated resolver.
-        using var validResponse = await client.PostAsync("/validation", new StringContent(
-            "{\"keyName\":\"valid\",\"virtualKeyGroupId\":1,\"rateLimitPriority\":1}", Encoding.UTF8, "application/json"));
+        using var validContent = new StringContent(
+            "{\"keyName\":\"valid\",\"virtualKeyGroupId\":1,\"rateLimitPriority\":1}", Encoding.UTF8, "application/json");
+        using var validResponse = await client.PostAsync("/validation", validContent);
         Assert.Equal(HttpStatusCode.NoContent, validResponse.StatusCode);
         Assert.True(handlerCalled);
     }

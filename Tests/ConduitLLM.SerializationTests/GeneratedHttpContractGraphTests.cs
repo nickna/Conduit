@@ -158,7 +158,11 @@ public sealed class GeneratedHttpContractGraphTests
                             pending.Push(derived.DerivedType);
                 }
             }
-            catch (Exception exception)
+            catch (NotSupportedException exception)
+            {
+                errors.Add($"{contract.Endpoint.DisplayName}: {contract.Type}: {exception.Message}");
+            }
+            catch (InvalidOperationException exception)
             {
                 errors.Add($"{contract.Endpoint.DisplayName}: {contract.Type}: {exception.Message}");
             }
