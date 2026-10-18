@@ -73,19 +73,30 @@ try {
         $script:unexpectedDotnetCalls++
         throw 'Existing-directory rejection must occur before invoking dotnet.'
     }
-    foreach ($issue in @(1695, 1696)) {
-        $failure = $null
-        try { & $runner -Issue $issue -OutputDirectory $temporaryRoot } catch { $failure = $_ }
-        if ($null -eq $failure -or $failure.Exception.Message -cne "Use a fresh output directory: $temporaryRoot") {
-            throw "The issue-$issue runner did not reject the existing output directory."
-        }
-        if ($script:unexpectedDotnetCalls -ne 0) { throw "Issue-$issue directory rejection invoked dotnet." }
-        if ((Get-FileHash -LiteralPath $sentinel).Hash -cne $sentinelHash -or
-            @(Get-ChildItem -LiteralPath $temporaryRoot -Force).Count -ne 1) {
-            throw "Issue-$issue directory rejection changed existing files."
-        }
-        if ($env:ReproVariant -cne $callerVariant -or (Get-Location).Path -cne $originalLocation) {
-            throw "Issue-$issue directory rejection changed the caller environment or location."
+    $directoryCases = @(
+        @{ name = 'issue-1695 absolute directory'; issue = 1695; output = $temporaryRoot; location = $originalLocation },
+        @{ name = 'issue-1696 absolute directory'; issue = 1696; output = $temporaryRoot; location = $originalLocation },
+        @{ name = 'relative directory after Push-Location'; issue = 1696; output = (Split-Path $temporaryRoot -Leaf); location = (Split-Path $temporaryRoot -Parent) }
+    )
+    foreach ($directoryCase in $directoryCases) {
+        Push-Location $directoryCase.location
+        try {
+            $callerLocation = (Get-Location).Path
+            $failure = $null
+            try { & $runner -Issue $directoryCase.issue -OutputDirectory $directoryCase.output } catch { $failure = $_ }
+            if ($null -eq $failure -or $failure.Exception.Message -cne "Use a fresh output directory: $temporaryRoot") {
+                throw "The runner did not reject the existing $($directoryCase.name) with its full path."
+            }
+            if ($script:unexpectedDotnetCalls -ne 0) { throw "$($directoryCase.name) rejection invoked dotnet." }
+            if ((Get-FileHash -LiteralPath $sentinel).Hash -cne $sentinelHash -or
+                @(Get-ChildItem -LiteralPath $temporaryRoot -Force).Count -ne 1) {
+                throw "$($directoryCase.name) rejection changed existing files."
+            }
+            if ($env:ReproVariant -cne $callerVariant -or (Get-Location).Path -cne $callerLocation) {
+                throw "$($directoryCase.name) rejection changed the caller environment or location."
+            }
+        } finally {
+            Pop-Location
         }
     }
 } finally {
@@ -97,4 +108,4 @@ try {
     }
 }
 
-Write-Host "PASS: $($cases.Count + 2) generated-compilation contracts; no EF invocation."
+Write-Host "PASS: $($cases.Count + $directoryCases.Count) generated-compilation contracts; no EF invocation."

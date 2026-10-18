@@ -20,7 +20,7 @@ $repoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 if (-not $OutputDirectory) {
     $OutputDirectory = Join-Path $repoRoot "artifacts/ef-query-repro/issue-$Issue/$([Guid]::NewGuid().ToString('N'))"
 }
-$runRoot = [IO.Path]::GetFullPath($OutputDirectory)
+$runRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
 if (Test-Path -LiteralPath $runRoot) { throw "Use a fresh output directory: $runRoot" }
 New-Item -ItemType Directory -Path $runRoot | Out-Null
 
