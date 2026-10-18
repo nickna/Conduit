@@ -78,10 +78,15 @@ public partial class Program
         // Register Redis circuit breaker configuration
         builder.Services.Configure<ConduitLLM.Configuration.Options.RedisCircuitBreakerOptions>(
             builder.Configuration.GetSection("RedisCircuitBreaker"));
+        builder.Services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<RedisCircuitBreakerOptions>,
+            RedisCircuitBreakerOptionsValidator>();
 
         // Register SignalR connection limit configuration
-        builder.Services.Configure<SignalRConnectionOptions>(
-            builder.Configuration.GetSection(SignalRConnectionOptions.SectionName));
+        builder.Services.AddOptions<SignalRConnectionOptions>()
+            .Bind(builder.Configuration.GetSection(SignalRConnectionOptions.SectionName))
+            .ValidateOnStart();
+        builder.Services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<SignalRConnectionOptions>,
+            SignalRConnectionOptionsValidator>();
 
         // Register Redis circuit breaker service
         builder.Services.AddSingleton<ConduitLLM.Configuration.Interfaces.IRedisCircuitBreaker, ConduitLLM.Configuration.Services.RedisCircuitBreaker>();

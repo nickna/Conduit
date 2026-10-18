@@ -22,7 +22,6 @@ namespace ConduitLLM.Configuration.Entities
         /// Gets or sets the storage key used to identify the file in the storage system.
         /// </summary>
         [Required]
-        [StringLength(500)]
         public string StorageKey { get; set; } = string.Empty;
 
         /// <summary>
@@ -41,13 +40,11 @@ namespace ConduitLLM.Configuration.Entities
         /// Gets or sets the type of media (image or video).
         /// </summary>
         [Required]
-        [StringLength(50)]
         public string MediaType { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the MIME content type of the media.
         /// </summary>
-        [StringLength(100)]
         public string? ContentType { get; set; }
 
         /// <summary>
@@ -58,19 +55,16 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Gets or sets the hash of the media content for integrity verification.
         /// </summary>
-        [StringLength(64)]
         public string? ContentHash { get; set; }
 
         /// <summary>
         /// Gets or sets the provider used to generate the media (e.g., OpenAI, MiniMax, Replicate).
         /// </summary>
-        [StringLength(50)]
         public string? Provider { get; set; }
 
         /// <summary>
         /// Gets or sets the model used to generate the media (e.g., dall-e-3, minimax-image).
         /// </summary>
-        [StringLength(100)]
         public string? Model { get; set; }
 
         /// <summary>

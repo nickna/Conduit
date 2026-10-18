@@ -13,6 +13,8 @@ public partial class Program
         // Configure batch spending options
         builder.Services.Configure<BatchSpendingOptions>(
             builder.Configuration.GetSection(BatchSpendingOptions.SectionName));
+        builder.Services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<BatchSpendingOptions>,
+            BatchSpendingOptionsValidator>();
 
         // Virtual Key service registration will be done after Redis configuration
 

@@ -17,6 +17,7 @@ public static class RateLimitingServicesExtensions
     {
         services.Configure<RateLimitOptions>(configuration.GetSection(RateLimitOptions.SectionName));
         services.PostConfigure<RateLimitOptions>(ApplyEnvironmentOverrides);
+        services.AddSingleton<IValidateOptions<RateLimitOptions>, RateLimitOptionsValidator>();
         services.AddSingleton(sp => sp.GetRequiredService<IOptions<RateLimitOptions>>().Value);
         services.AddSingleton<IRateLimitFailurePolicy, RateLimitFailurePolicy>();
 

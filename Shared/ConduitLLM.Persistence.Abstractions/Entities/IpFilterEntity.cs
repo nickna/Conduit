@@ -23,26 +23,22 @@ public class IpFilterEntity
     /// Type of the IP filter (whitelist or blacklist).
     /// </summary>
     [Required]
-    [StringLength(10)]
     public string FilterType { get; set; } = "blacklist";
 
     /// <summary>
     /// The IP address or subnet in CIDR notation.
     /// </summary>
     [Required]
-    [StringLength(50)]
     public string IpAddressOrCidr { get; set; } = string.Empty;
 
     /// <summary>
     /// Optional display name for the filter rule.
     /// </summary>
-    [StringLength(100)]
     public string? Name { get; set; }
 
     /// <summary>
     /// Optional description of the filter.
     /// </summary>
-    [StringLength(500)]
     public string? Description { get; set; }
 
     /// <summary>
@@ -63,13 +59,11 @@ public class IpFilterEntity
     /// <summary>
     /// Username or identifier of who created the filter.
     /// </summary>
-    [StringLength(100)]
     public string? CreatedBy { get; set; }
 
     /// <summary>
     /// Username or identifier of who last updated the filter.
     /// </summary>
-    [StringLength(100)]
     public string? UpdatedBy { get; set; }
 
     /// <summary>

@@ -176,7 +176,7 @@ public sealed class MediaTaskTerminalWriter(IWolverineRuntime runtime, IDistribu
             payload = new VideoCompletionWebhookPayload { TaskId = id, Status = "cancelled", Model = video.Model, Prompt = video.Prompt, Error = error };
         }
         return new() { TaskId = id, TaskType = type == "image_generation" ? "image" : "video", VirtualKeyId = owner,
-            EventType = WebhookEventType.TaskCancelled, WebhookUrl = url, PayloadJson = WebhookPayloadHelper.SerializePayload(payload),
+            EventType = WebhookEventType.TaskCancelled, WebhookUrl = url, PayloadJson = WebhookPayloadHelper.SerializePayload(payload, CoreWebhookJsonContext.Default),
             Headers = command.Image?.WebhookHeaders ?? command.Video?.WebhookHeaders, CorrelationId = metadata.CorrelationId ?? id };
     }
 }

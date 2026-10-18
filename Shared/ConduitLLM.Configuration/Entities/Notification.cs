@@ -115,7 +115,6 @@ namespace ConduitLLM.Configuration.Entities
         /// Message text of the notification
         /// </summary>
         [Required]
-        [StringLength(500)]
         public string Message { get; set; } = string.Empty;
 
         /// <summary>

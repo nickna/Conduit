@@ -109,7 +109,6 @@ namespace ConduitLLM.Configuration.Entities
         /// Examples: "gpt-4-0125-preview", "claude-3-opus-20240229", "llama-3-70b-instruct"
         /// </summary>
         [Required]
-        [StringLength(200)]
         public string Identifier { get; set; } = string.Empty;
 
         /// <summary>

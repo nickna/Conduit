@@ -32,7 +32,6 @@ public class FunctionConfiguration : IIdentifiableEntity<int>
     /// User-friendly name for this configuration (e.g., "Production Exa Search")
     /// </summary>
     [Required]
-    [StringLength(200)]
     public required string ConfigurationName { get; set; }
 
     /// <summary>
@@ -51,7 +50,6 @@ public class FunctionConfiguration : IIdentifiableEntity<int>
     /// <summary>
     /// Optional custom base URL for this provider (overrides default)
     /// </summary>
-    [StringLength(500)]
     public string? BaseUrl { get; set; }
 
     /// <summary>
@@ -96,7 +94,6 @@ public class FunctionConfiguration : IIdentifiableEntity<int>
     /// <summary>
     /// Optional description of this function configuration
     /// </summary>
-    [StringLength(1000)]
     public string? Description { get; set; }
 
     /// <summary>

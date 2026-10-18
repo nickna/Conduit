@@ -8,8 +8,9 @@ namespace ConduitLLM.Core.Serialization;
 
 /// <summary>
 /// Source-generated metadata for every message in the Gateway/Admin Wolverine topology.
-/// Wolverine's existing default JSON shape is retained (Pascal-case CLR property names,
-/// numeric enums, and explicit <see cref="JsonPropertyNameAttribute"/> overrides).
+/// The live transport supplies its existing camelCase, case-insensitive JSON policy.
+/// Direct context callers retain Pascal-case CLR names for persisted payloads; both
+/// preserve numeric enums and explicit <see cref="JsonPropertyNameAttribute"/> overrides.
 /// </summary>
 [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(WebhookDeliveryRequested))]
@@ -62,4 +63,12 @@ namespace ConduitLLM.Core.Serialization;
 [JsonSerializable(typeof(Dictionary<string, JsonElement>))]
 [JsonSerializable(typeof(List<object>))]
 [JsonSerializable(typeof(object[]))]
-public partial class CoreMessagingJsonContext : JsonSerializerContext;
+public partial class CoreMessagingJsonContext : JsonSerializerContext
+{
+    /// <summary>Replaces transport defaults with the generated cross-service contracts.</summary>
+    public static void Configure(JsonSerializerOptions options)
+    {
+        options.TypeInfoResolverChain.Clear();
+        options.TypeInfoResolverChain.Add(Default);
+    }
+}

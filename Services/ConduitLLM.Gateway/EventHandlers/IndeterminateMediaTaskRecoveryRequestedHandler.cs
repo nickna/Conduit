@@ -69,7 +69,7 @@ public sealed class IndeterminateMediaTaskRecoveryRequestedHandler(IMediaTaskRec
                         Prompt = image.Request.Prompt, ImageUrls = items.Select(x => x.Url!).ToList(), ImagesGenerated = items.Count,
                         ImagesRequested = image.Request.N, Size = image.Request.Size, ResponseFormat = "url" } :
                     new VideoCompletionWebhookPayload { TaskId = task.TaskId, Status = "completed", Model = decision.Model,
-                        Prompt = command.Video!.ResolveRequest().Prompt, VideoUrl = items[0].Url })
+                        Prompt = command.Video!.ResolveRequest().Prompt, VideoUrl = items[0].Url }, CoreWebhookJsonContext.Default)
             };
         }
         catch (Exception) when (!context.CancellationToken.IsCancellationRequested)

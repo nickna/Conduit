@@ -14,14 +14,11 @@ namespace ConduitLLM.Configuration.Entities
         /// Gets or sets the unique identifier for the task.
         /// </summary>
         [Key]
-        [StringLength(50)]
         public string Id { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the task type (e.g., "image_generation", "video_generation").
         /// </summary>
-        [Required]
-        [StringLength(100)]
         public string Type { get; set; } = string.Empty;
 
         /// <summary>
@@ -32,7 +29,6 @@ namespace ConduitLLM.Configuration.Entities
         /// 0 = Pending, 1 = Processing, 2 = Completed,
         /// 3 = Failed, 4 = Cancelled, 5 = TimedOut
         /// </remarks>
-        [Required]
         public int State { get; set; } = 0; // Default to Pending
 
         /// <summary>
@@ -48,7 +44,6 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Gets or sets the progress message.
         /// </summary>
-        [StringLength(500)]
         public string? ProgressMessage { get; set; }
 
         /// <summary>
@@ -64,13 +59,11 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Gets or sets when the task was created.
         /// </summary>
-        [Required]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         /// <summary>
         /// Gets or sets when the task was last updated.
         /// </summary>
-        [Required]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         /// <summary>
@@ -81,7 +74,6 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Gets or sets the virtual key ID associated with this task.
         /// </summary>
-        [Required]
         public int VirtualKeyId { get; set; }
 
         /// <summary>
@@ -102,7 +94,6 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Gets or sets the ID of the worker/instance that has leased this task.
         /// </summary>
-        [StringLength(100)]
         public string? LeasedBy { get; set; }
 
         /// <summary>
@@ -117,7 +108,6 @@ namespace ConduitLLM.Configuration.Entities
         public DateTime? ProviderInvocationCompletedAt { get; set; }
 
         /// <summary>Provider operation identifier captured for reconciliation.</summary>
-        [StringLength(200)]
         public string? ProviderOperationId { get; set; }
 
         /// <summary>
@@ -125,7 +115,6 @@ namespace ConduitLLM.Configuration.Entities
         /// indeterminate task back to pending. Used to make command redelivery
         /// idempotent across the database update and follow-on event publish.
         /// </summary>
-        [StringLength(64)]
         public string? RetryDispatchId { get; set; }
 
         /// <summary>

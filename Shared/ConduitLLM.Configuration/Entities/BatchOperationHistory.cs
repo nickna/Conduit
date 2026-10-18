@@ -15,7 +15,6 @@ namespace ConduitLLM.Configuration.Entities
         /// Unique identifier for the batch operation
         /// </summary>
         [Key]
-        [StringLength(50)]
         public string OperationId { get; set; } = string.Empty;
 
         /// <summary>
@@ -32,8 +31,6 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Type of batch operation (e.g., "spend_update", "virtual_key_update", "webhook_send")
         /// </summary>
-        [Required]
-        [StringLength(50)]
         public string OperationType { get; set; } = string.Empty;
 
         /// <summary>
@@ -59,8 +56,6 @@ namespace ConduitLLM.Configuration.Entities
         /// <summary>
         /// Final status of the operation
         /// </summary>
-        [Required]
-        [StringLength(20)]
         public string Status { get; set; } = string.Empty;
 
         /// <summary>

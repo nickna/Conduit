@@ -21,20 +21,17 @@ public class GlobalSetting
     /// Setting key.
     /// </summary>
     [Required]
-    [StringLength(100)]
     public string Key { get; set; } = string.Empty;
 
     /// <summary>
     /// Setting value.
     /// </summary>
     [Required]
-    [StringLength(2000)]
     public string Value { get; set; } = string.Empty;
 
     /// <summary>
     /// Optional description of the setting.
     /// </summary>
-    [StringLength(500)]
     public string? Description { get; set; }
 
     /// <summary>

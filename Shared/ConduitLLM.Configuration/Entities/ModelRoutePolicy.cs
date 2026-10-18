@@ -9,9 +9,9 @@ public sealed class ModelRoutePolicy : IEntity<int>, IAuditableEntity
 {
     [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
-    [Required, StringLength(100)]
+    [Required]
     public string ModelAlias { get; set; } = string.Empty;
-    [Required, StringLength(30)]
+    [Required]
     public string Strategy { get; set; } = "Balanced";
     [Column(TypeName = "decimal(4, 3)")] public decimal CostWeight { get; set; } = 0.40m;
     [Column(TypeName = "decimal(4, 3)")] public decimal SpeedWeight { get; set; } = 0.30m;

@@ -6,6 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Reference directly so the compile-time options validation generator runs. -->
+    <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Condition="'$(ConduitEfTooling)' == 'true'">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -63,6 +65,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="ConduitLLM.Tests" />
+    <InternalsVisibleTo Include="ConduitLLM.SerializationTests" />
   </ItemGroup>
 
   <!-- The checked-in provider catalogs are the release artifact's deterministic

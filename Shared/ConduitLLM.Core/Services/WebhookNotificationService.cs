@@ -11,6 +11,7 @@ namespace ConduitLLM.Core.Services;
 /// <summary>One bounded POST. Durable delivery owns retries and receiver admission.</summary>
 public class WebhookNotificationService : IWebhookNotificationService
 {
+    private static readonly CoreWebhookJsonContext JsonContext = new(new JsonSerializerOptions(ConduitJsonOptions.Wire));
     private readonly HttpClient _httpClient;
     private readonly ILogger<WebhookNotificationService> _logger;
     private readonly WebhookDeliveryOptions _options;
@@ -60,7 +61,8 @@ public class WebhookNotificationService : IWebhookNotificationService
             request.Headers.TryAddWithoutValidation("X-Webhook-Type", type);
             request.Headers.TryAddWithoutValidation("X-Webhook-Timestamp", _clock.GetUtcNow().ToUnixTimeSeconds().ToString());
             request.Content = JsonContent.Create(payload,
-                CoreJsonTypeInfo.Require(payload.GetType(), ConduitJsonOptions.Wire));
+                JsonContext.GetTypeInfo(payload.GetType())
+                    ?? throw new NotSupportedException($"Unregistered webhook contract: {payload.GetType()}"));
             using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
             var status = (int)response.StatusCode;
             if (response.IsSuccessStatusCode) return WebhookSendResult.Ok(status);
