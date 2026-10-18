@@ -128,6 +128,14 @@ the inspected 10.0.13 release was not tested. An available upstream fix must pas
 generation and generated-code compilation before this tracker changes status.
 Production seals, package pins and diagnostics remain intact.
 
+The [opt-in repeat runner](../../tools/EfQueryPrecompilerRepro/README.md#sealed-entity-generated-compilation-tracker-1695)
+now automates #1695's three gates in a fresh copy with aligned local EF tooling.
+Its default exit 0 asserts the known compilation failure, while explicit
+`-Expect CompilationSuccess` requires a generated-source Release build exit 0.
+The retained `result.json` binds commands, individual exits, logs, unchanged
+inputs/generated sources and resolved package assets by SHA-256. Infrastructure
+or generation failures do not satisfy either compilation expectation.
+
 The [fresh Include-only control](../../tools/EfQueryPrecompilerRepro/README.md#dotted-local-name-generated-compilation-tracker-1696)
 retains its own three stage exits and generated source. The fix is on upstream's
 12.0.0-alpha main line; inspected 10.0.13/release-10.0 source still has the old

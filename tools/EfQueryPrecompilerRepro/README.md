@@ -160,6 +160,39 @@ A newer release by itself is not evidence that it fixes this cast. Keep #1695
 open until an applicable fix is available and both generated-code stages pass;
 retain the failing 10.0.12 baseline alongside that result.
 
+The opt-in runner now captures this control without hand-copying commands:
+
+```powershell
+pwsh -NoProfile -File tools/EfQueryPrecompilerRepro/Repeat-GeneratedCompilation.ps1 -Issue 1695
+```
+
+It creates a fresh directory under `artifacts/ef-query-repro/issue-1695`, pins
+SDK 10.0.401 and the aligned EF 10.0.12 CLI/runtime/Design/Tasks, and requires
+successful initial build and generation followed by the specific `CS0030`
+sealed-entity compilation failure. Exit 0 means the expected failure was
+reproduced. `result.json` retains each command, exit, log hash, input hashes,
+generated-source hashes and package-assets hash. Logs, sources and resolved
+assets remain beside it; failed setup or generation also leaves a report.
+Use an unused `-OutputDirectory` to choose another evidence destination.
+
+Once a supported fix is identified, run a separate copy with
+`-EfVersion <fixed-version> -Expect CompilationSuccess` (and, if required,
+`-ProviderVersion <compatible-version>` or `-SdkVersion <installed-sdk>`).
+These options change only the scratch copy, including its local tool manifest.
+`CompilationSuccess` requires generated C# to exist and its Release build to
+exit 0; it rejects the current baseline. The runner never executes queries or
+publishes NativeAOT. Preserve both reports and check upstream release support
+before changing the qualification account.
+
+Runner verification on 2026-10-17 (America/Los_Angeles), Windows x64, SDK
+10.0.401 / EF 10.0.12 / Npgsql 10.0.3, again produced initial/generation/generated
+build exits `0/0/1`, with the expected `CS0030` at generated line 116. Inputs and
+generated sources stayed unchanged. The report is retained in
+`artifacts/ef-query-repro/verified-1695-baseline/result.json` (SHA-256
+`2030d0e5f57d4b010fdc0149fd37e65a5679edced630a4cefe0dd3f03724ca3e`).
+Run the fast classifier and fresh-directory contracts without EF using
+`pwsh -NoProfile -File tools/EfQueryPrecompilerRepro/test-GeneratedCompilation.ps1`.
+
 ## Additional expression reductions (#1662)
 
 Use the same fresh-directory commands, setting `$variant` and `$context` before
