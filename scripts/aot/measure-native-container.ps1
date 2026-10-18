@@ -9,6 +9,7 @@ param(
     [Parameter(Mandatory)][string] $WorkloadProbePath,
     [Parameter(Mandatory)][string] $EnvironmentEvidencePath,
     [string] $ContainerEnvironmentPath,
+    [string] $DockerNetwork,
     [ValidateRange(5, 21)][int] $PairedRuns = 5,
     [int] $Requests,
     [int] $Concurrency,
@@ -41,6 +42,7 @@ $primaryDiagnostic = $null
 $failedWorkloadAggregate = $null
 $ownedContainerCleanup = [ordered]@{ status = 'not-attempted'; reason = 'none' }
 $privateFileCleanup = [ordered]@{ status = 'not-attempted'; reason = 'none' }
+$fixtureNetwork = $null
 
 function Set-PrimaryFailureDiagnostic([Exception] $Exception, [string] $Phase = $script:diagnosticPhase) {
     if ($null -ne $script:primaryDiagnostic) { return }
@@ -58,6 +60,7 @@ function Set-PrimaryFailureDiagnostic([Exception] $Exception, [string] $Phase = 
         'Native benchmark image binding failed.' { 'image-binding'; break }
         'Native benchmark container image binding failed.' { 'image-binding'; break }
         'Native benchmark image changed during collection.' { 'image-binding'; break }
+        'Benchmark fixture network binding failed.' { 'network-binding'; break }
         'Owned container shutdown failed.' { 'shutdown-failed'; break }
         'Owned container cleanup failed.' { 'cleanup-verification-failed'; break }
         'Owned container inspection failed.' { 'cleanup-verification-failed'; break }
@@ -106,7 +109,7 @@ function Get-SafeFailureMessage([Exception] $Exception, [string] $Fallback) {
         'Owned benchmark container cleanup failed.', 'Container ownership verification failed.',
         'Container readiness deadline exceeded.',
         'Native benchmark image binding failed.', 'Native benchmark container image binding failed.',
-        'Native benchmark image changed during collection.'
+        'Native benchmark image changed during collection.', 'Benchmark fixture network binding failed.'
     )
     # Tags are closed local classifications; arbitrary callback/private text is
     # never added to the public failure message.
@@ -753,6 +756,48 @@ function Get-ImageMetadata([string] $Image, $NativeEvidence = $null) {
     return [pscustomobject]@{ ImageBytes = [long]$imageData.Size; PullBytes = $pullBytes; Revision = $revision; LocalId = $localId }
 }
 
+function Read-BenchmarkFixtureNetwork([string] $Name) {
+    try {
+        # Names are private input: validate here rather than in parameter binding,
+        # whose error formatting could echo caller-controlled text.
+        if ($Name -cnotmatch '\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z') { throw 'Invalid fixture network name.' }
+        $result = Invoke-Docker @('network', 'inspect', '--format', '{{json .}}', $Name)
+        if ($result.ExitCode -ne 0) { throw 'Fixture network inspection failed.' }
+        $data = Read-NativeImageVerificationJson $result.Stdout
+        if ($data['Id'] -isnot [string] -or $data['Id'] -cnotmatch '\A[0-9a-f]{64}\z' -or
+            $data['Name'] -isnot [string] -or $data['Name'] -cne $Name -or
+            $data['Driver'] -isnot [string] -or $data['Driver'] -cne 'bridge' -or
+            $data['Scope'] -isnot [string] -or $data['Scope'] -cne 'local') { throw 'Invalid fixture network identity.' }
+        return ,([ordered]@{ Id = $data['Id']; Name = $Name })
+    }
+    catch { throw 'Benchmark fixture network binding failed.' }
+}
+
+function Assert-BenchmarkFixtureNetworkAttachment($Container, $Network) {
+    if ($null -eq $Network) { return }
+    try {
+        $hostConfiguration = Get-NativeEvidenceObject $Container['HostConfig']
+        $settings = Get-NativeEvidenceObject $Container['NetworkSettings']
+        $attachments = Get-NativeEvidenceObject $settings['Networks']
+        $state = Get-NativeEvidenceObject $Container['State']
+        if ($state['Running'] -isnot [bool] -or -not $state['Running'] -or
+            $hostConfiguration['NetworkMode'] -isnot [string] -or $hostConfiguration['NetworkMode'] -cne $Network.Id -or
+            $attachments.Count -ne 1 -or -not $attachments.ContainsKey($Network.Name)) { throw 'Fixture network attachment differs.' }
+        $attachment = Get-NativeEvidenceObject $attachments[$Network.Name]
+        $address = $attachment['IPAddress']
+        if ($attachment['NetworkID'] -isnot [string] -or $attachment['NetworkID'] -cne $Network.Id -or
+            $address -isnot [string] -or $address -cnotmatch '\A(?:0|[1-9][0-9]{0,2})(?:\.(?:0|[1-9][0-9]{0,2})){3}\z') {
+            throw 'Invalid fixture network attachment.'
+        }
+        $parsedAddress = $null
+        if (-not [Net.IPAddress]::TryParse($address, [ref]$parsedAddress) -or
+            $parsedAddress.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork -or
+            $parsedAddress.GetAddressBytes()[0] -eq 0 -or $parsedAddress.GetAddressBytes()[0] -ge 224 -or
+            [Net.IPAddress]::IsLoopback($parsedAddress)) { throw 'Invalid fixture network address.' }
+    }
+    catch { throw 'Benchmark fixture network binding failed.' }
+}
+
 function Get-OwnedContainer($Record, [switch] $AllowMissing, [switch] $ValidateNativeImage) {
     $identity = if ($null -ne $Record.Id) { $Record.Id } else { $Record.Name }
     $result = Invoke-Docker @('inspect', '--format', '{{json .}}', $identity) $CleanupTimeoutSeconds
@@ -966,13 +1011,16 @@ function Measure-Variant([string] $Runtime, [string] $Image, $ImageMetadata, [in
             '--label', ('conduit.native-benchmark.service=' + $Service),
             '--label', ('conduit.native-benchmark.runtime=' + $Runtime),
             '--add-host', 'host.docker.internal:host-gateway',
-            '--publish', ('127.0.0.1:' + $HostPort + ':8080'), '--env-file', $environmentFile, $ImageMetadata.LocalId)
+            '--publish', ('127.0.0.1:' + $HostPort + ':8080'), '--env-file', $environmentFile)
+        if ($null -ne $fixtureNetwork) { $arguments += @('--network', $fixtureNetwork.Id) }
+        $arguments += $ImageMetadata.LocalId
         $attempted = $true
         $run = Invoke-Docker $arguments
         if ($run.ExitCode -ne 0 -or $run.Stdout.Trim() -cnotmatch '^[0-9a-f]{64}$') { throw 'Container start failed.' }
         $record.Id = $run.Stdout.Trim()
         $container = Get-OwnedContainer $record -ValidateNativeImage
         if ($container.State.Running -isnot [bool] -or -not $container.State.Running) { throw 'Container start failed.' }
+        Assert-BenchmarkFixtureNetworkAttachment $container $fixtureNetwork
         $script:diagnosticPhase = 'readiness'
         $ready = $false
         $readyBudget = [System.Diagnostics.Stopwatch]::StartNew()
@@ -1042,7 +1090,8 @@ function Measure-Variant([string] $Runtime, [string] $Image, $ImageMetadata, [in
         $steady = Get-ContainerMemory $record.Id
         $samples.Add($steady)
         $script:diagnosticPhase = 'collection-validation'
-        $null = Get-OwnedContainer $record -ValidateNativeImage
+        $container = Get-OwnedContainer $record -ValidateNativeImage
+        Assert-BenchmarkFixtureNetworkAttachment $container $fixtureNetwork
         $measurement = [pscustomobject]@{
             runtime = $Runtime; image = $Image; imageRevision = $ImageMetadata.Revision
             imageBytes = $ImageMetadata.ImageBytes; pullBytes = $ImageMetadata.PullBytes
@@ -1152,6 +1201,7 @@ try {
     if ((@($configurations.Id) -join '|') -cne (@($requiredIds | Sort-Object) -join '|')) { throw 'Workload configurations must match the service.' }
     $database = ConvertTo-ContainerUrl $DatabaseUrl @('postgres', 'postgresql')
     $redis = ConvertTo-ContainerUrl $RedisUrl @('redis', 'rediss')
+    if ($PSBoundParameters.ContainsKey('DockerNetwork')) { $fixtureNetwork = Read-BenchmarkFixtureNetwork $DockerNetwork }
     $diagnosticPhase = 'image-metadata'
     $diagnosticRuntime = 'jit'
     $jitMetadata = Get-ImageMetadata $JitImage
@@ -1236,10 +1286,12 @@ try {
     }
     catch { throw 'Native benchmark image changed during collection.' }
     $diagnosticRuntime = 'unknown'
+    $methodology = 'One unrecorded warm pair, then alternating cold JIT/native container pairs; authenticated workload latency includes complete JSON/SSE response validation. Memory is Docker container usage in bytes, sampled during workload execution.'
+    if ($null -ne $fixtureNetwork) { $methodology += ' Caller-managed direct-bridge transport was requested; every measured host was verified on the pinned existing local bridge.' }
     $report = [pscustomobject]@{
         schemaVersion = 4; generatedAt = $null; collection = $null; service = $Service; platform = 'linux-x64'
         pairedRuns = $PairedRuns
-        methodology = 'One unrecorded warm pair, then alternating cold JIT/native container pairs; authenticated workload latency includes complete JSON/SSE response validation. Memory is Docker container usage in bytes, sampled during workload execution.'
+        methodology = $methodology
         environment = $environment; jit = $jit; native = $native; samples = @($samples.ToArray()); nativePublish = $nativePublish
         nativeEvidence = $nativeEvidence.identity
         comparison = [pscustomobject]@{ common = $comparisonCommon; workloads = @($workloadComparisons.ToArray()) }

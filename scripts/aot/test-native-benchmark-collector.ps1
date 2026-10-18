@@ -1,6 +1,7 @@
 #!/usr/bin/env pwsh
 [CmdletBinding()]
-param([switch] $DiagnosticSchemaOnly, [switch] $StrictCallerOnly, [switch] $FailedWorkloadOnly)
+param([switch] $DiagnosticSchemaOnly, [switch] $StrictCallerOnly, [switch] $FailedWorkloadOnly,
+    [switch] $NetworkBindingOnly, [switch] $DockerNetworkOnly)
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -61,6 +62,94 @@ function New-DiagnosticContractInput {
     return ,([ordered]@{ phase = 'unknown'; reason = 'unknown'; runtime = 'unknown'; sampleKind = 'none'; pair = $null;
         ownedContainerCleanup = @{ status = 'not-attempted'; reason = 'none' };
         privateFileCleanup = @{ status = 'not-attempted'; reason = 'none' }; workloadAggregate = $null })
+}
+
+function Invoke-NetworkBindingContracts {
+    # These contracts execute the real collector helpers with an in-memory
+    # Docker boundary. They never start Docker, readiness listeners or probes.
+    $tokens = $null; $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile($collector, [ref]$tokens, [ref]$parseErrors)
+    Assert-Contract ($parseErrors.Count -eq 0) 'Collector syntax is invalid.'
+    foreach ($functionName in @('Read-BenchmarkFixtureNetwork', 'Assert-BenchmarkFixtureNetworkAttachment')) {
+        $definition = $ast.Find({
+            param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $functionName
+        }.GetNewClosure(), $true)
+        Assert-Contract ($null -ne $definition) 'Collector network helper is missing.'
+        Invoke-Expression $definition.Extent.Text
+    }
+    $networkName = 'owned-fixture-bridge'
+    $networkId = 'a' * 64
+    $networkExit = 0; $networkThrows = $false
+    $networkText = ConvertTo-Json -InputObject @{ Id = $networkId; Name = $networkName; Driver = 'bridge'; Scope = 'local' } -Compress
+    $networkCalls = [Collections.Generic.List[object]]::new()
+    function Invoke-Docker([string[]] $Arguments) {
+        $networkCalls.Add(@($Arguments))
+        if ($networkThrows) { throw ('private-child-diagnostic:' + $privateKey) }
+        return @{ ExitCode = $networkExit; Stdout = $networkText; Stderr = 'private-child-diagnostic:' + $privateKey }
+    }
+    $pin = Read-BenchmarkFixtureNetwork $networkName
+    Assert-Contract ($pin.Id -ceq $networkId -and $pin.Name -ceq $networkName -and $pin.Count -eq 2 -and
+        $networkCalls.Count -eq 1 -and ($networkCalls[0] -join '|') -ceq ('network|inspect|--format|{{json .}}|' + $networkName)) 'Network inspection did not pin the exact existing bridge.'
+    $script:cases++
+    foreach ($invalidName in @('', ' ', '-leading', 'with/slash', 'with:colon', 'nonascii-雪', ('x' * 129), ($privateKey + "`n"))) {
+        $networkCalls.Clear()
+        Assert-DiagnosticContractRejection { Read-BenchmarkFixtureNetwork $invalidName } 'Benchmark fixture network binding failed.'
+        Assert-Contract ($networkCalls.Count -eq 0) 'Invalid network name reached Docker.'
+        $script:cases++
+    }
+    $networkName = 'x' * 128
+    $networkText = ConvertTo-Json -InputObject @{ Id = $networkId; Name = $networkName; Driver = 'bridge'; Scope = 'local' } -Compress
+    Assert-Contract ((Read-BenchmarkFixtureNetwork $networkName).Name -ceq $networkName) 'Maximum bounded ASCII network name was rejected.'
+    $script:cases++
+    $networkName = $pin.Name
+    foreach ($mutation in @(
+        { param($d) $d.Id = 'A' * 64 }, { param($d) $d.Id = 'a' * 63 }, { param($d) $d.Id = 42 },
+        { param($d) $d.Name = 'foreign-fixture' }, { param($d) $d.Name = @($networkName) },
+        { param($d) $d.Driver = 'host' }, { param($d) $d.Driver = 'null' }, { param($d) $d.Driver = 'overlay' },
+        { param($d) $d.Scope = 'swarm' }, { param($d) $d.Remove('Scope') | Out-Null })) {
+        $data = @{ Id = $networkId; Name = $networkName; Driver = 'bridge'; Scope = 'local' }
+        & $mutation $data
+        $networkText = ConvertTo-Json -InputObject $data -Compress
+        Assert-DiagnosticContractRejection { Read-BenchmarkFixtureNetwork $networkName } 'Benchmark fixture network binding failed.'
+        $script:cases++
+    }
+    foreach ($invalidJson in @('[]', 'null', '{', ('{"Id":"' + $networkId + '","Id":"' + $networkId + '","Name":"' + $networkName + '","Driver":"bridge","Scope":"local"}'),
+        ('{"Id":"' + $networkId + '","Name":"' + $networkName + '","Driver":"bridge","Scope":"local","private":{"key":1,"key":2}}'))) {
+        $networkText = $invalidJson
+        Assert-DiagnosticContractRejection { Read-BenchmarkFixtureNetwork $networkName } 'Benchmark fixture network binding failed.'
+        $script:cases++
+    }
+    $networkExit = 17
+    Assert-DiagnosticContractRejection { Read-BenchmarkFixtureNetwork $networkName } 'Benchmark fixture network binding failed.'
+    $networkThrows = $true
+    Assert-DiagnosticContractRejection { Read-BenchmarkFixtureNetwork $networkName } 'Benchmark fixture network binding failed.'
+    $script:cases += 2
+    $valid = @{ HostConfig = @{ NetworkMode = $networkId }; State = @{ Running = $true };
+        NetworkSettings = @{ Networks = @{ $networkName = @{ NetworkID = $networkId; IPAddress = '172.29.0.8' } } } }
+    $validText = ConvertTo-Json -InputObject $valid -Depth 8 -Compress
+    Assert-Contract (@(Assert-BenchmarkFixtureNetworkAttachment $valid $pin).Count -eq 0) 'Valid actual bridge attachment emitted output.'
+    Assert-Contract ((ConvertTo-Json -InputObject $valid -Depth 8 -Compress) -ceq $validText) 'Network validation mutated Docker inspection data.'
+    Assert-Contract (@(Assert-BenchmarkFixtureNetworkAttachment $null $null).Count -eq 0) 'Default transport unexpectedly required network metadata.'
+    $script:cases += 2
+    foreach ($mutation in @(
+        { param($d) $d.HostConfig.NetworkMode = $networkName }, { param($d) $d.HostConfig.NetworkMode = 'b' * 64 },
+        { param($d) $d.Remove('HostConfig') | Out-Null }, { param($d) $d.State.Running = $false }, { param($d) $d.State.Running = 'true' },
+        { param($d) $d.NetworkSettings.Networks[$networkName].NetworkID = 'b' * 64 },
+        { param($d) $d.NetworkSettings.Networks['foreign-network'] = $d.NetworkSettings.Networks[$networkName]; $d.NetworkSettings.Networks.Remove($networkName) | Out-Null },
+        { param($d) $d.NetworkSettings.Networks['second-network'] = @{ NetworkID = 'b' * 64; IPAddress = '172.30.0.8' } },
+        { param($d) $d.NetworkSettings.Networks = @{} })) {
+        $data = Read-NativeImageVerificationJson $validText
+        & $mutation $data
+        Assert-DiagnosticContractRejection { Assert-BenchmarkFixtureNetworkAttachment $data $pin } 'Benchmark fixture network binding failed.'
+        $script:cases++
+    }
+    foreach ($address in @('', '::1', '172.29.0.256', '172.29.0', '172.029.0.8', '0.0.0.0', '127.0.0.1', '224.0.0.1', '255.255.255.255', 42, $null, ($privateKey + "`n"))) {
+        $data = Read-NativeImageVerificationJson $validText
+        $data.NetworkSettings.Networks[$networkName].IPAddress = $address
+        Assert-DiagnosticContractRejection { Assert-BenchmarkFixtureNetworkAttachment $data $pin } 'Benchmark fixture network binding failed.'
+        $script:cases++
+    }
 }
 
 function Invoke-FailedWorkloadAggregateContracts {
@@ -216,6 +305,22 @@ function Invoke-FailureDiagnosticSchemaContracts {
         $legacy.workloadAggregate = $null
         Assert-DiagnosticContractRejection { Get-NativeBenchmarkAttemptFailureDiagnostic $legacy } $validationError
         $script:cases++
+
+        $networkDiagnostic = $full | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+        $networkDiagnostic.phase = 'configuration'; $networkDiagnostic.reason = 'network-binding'
+        Assert-Contract (@(Get-NativeBenchmarkAttemptFailureDiagnostic $networkDiagnostic).Count -eq 1 -and
+            $null -eq $networkDiagnostic.workloadAggregate) 'Schema-2 network binding diagnostics did not retain the closed reason and null aggregate.'
+        $script:cases++
+        $legacyNetworkDiagnostic = $networkDiagnostic | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+        $legacyNetworkDiagnostic.schemaVersion = 1; $legacyNetworkDiagnostic.Remove('workloadAggregate')
+        Assert-Contract (@(Get-NativeBenchmarkAttemptFailureDiagnostic $legacyNetworkDiagnostic).Count -eq 1) 'Schema-1 diagnostics did not accept the closed network binding reason.'
+        $script:cases++
+        foreach ($invalidReason in @('Network-binding', 'network-binding-unknown', ('network-binding:' + $privateKey), ("network-binding`n" + $privateKey))) {
+            $modified = $networkDiagnostic | ConvertTo-Json -Depth 8 | ConvertFrom-Json -AsHashtable
+            $modified.reason = $invalidReason
+            Assert-DiagnosticContractRejection { Get-NativeBenchmarkAttemptFailureDiagnostic $modified } $validationError
+            $script:cases++
+        }
 
         $mutations = @(
             { param($d) $d.schemaVersion = '1' },
@@ -749,7 +854,7 @@ exit 0
 function New-CaseRoot([string] $Scenario) {
     $caseRoot = Join-Path $temporaryRoot ([Guid]::NewGuid().ToString('N'))
     [IO.Directory]::CreateDirectory($caseRoot) | Out-Null
-    foreach ($name in @('commands', 'drivers', 'created', 'active', 'processes')) {
+    foreach ($name in @('commands', 'drivers', 'created', 'active', 'processes', 'network-checks')) {
         [IO.Directory]::CreateDirectory((Join-Path $caseRoot $name)) | Out-Null
     }
     [Environment]::SetEnvironmentVariable('CONDUIT_COLLECTOR_TEST_ROOT', $caseRoot)
@@ -792,7 +897,7 @@ function Get-CaseFailureDiagnostic([string] $CaseRoot, [object[]] $Commands, [ob
     foreach ($allowed in @('Private command failed.', 'Private command failed and its cleanup failed.',
         'Private command cleanup failed.', 'Benchmark variant failed.',
         'Benchmark variant failed and owned container cleanup failed.',
-        'Owned benchmark container cleanup failed.', 'Container ownership verification failed.')) {
+        'Owned benchmark container cleanup failed.', 'Container ownership verification failed.', 'Benchmark fixture network binding failed.')) {
         if ($classificationFailure -ceq ($allowed + ' No qualification was recorded.')) { $safeFailure = $allowed }
     }
     foreach ($tag in @('command-deadline', 'poll-command-deadline', 'poll-callback', 'poll-memory-sample', 'poll-memory-value')) {
@@ -859,6 +964,14 @@ function Assert-CollectorFailureDiagnostic($Metadata, [string] $Scenario, [strin
 function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $ExpectedFailure,
     [string] $ExistingOutputPath = '', [switch] $CaptureResult, [switch] $StrictCaller) {
     $caseRoot = New-CaseRoot $Scenario
+    $networkCase = $Scenario.StartsWith('network-', [StringComparison]::Ordinal)
+    $fixtureNetworkName = 'owned-private-fixture-' + [Guid]::NewGuid().ToString('N')
+    $fixtureNetworkId = '9' * 64
+    if ($networkCase) {
+        # Network records are independent of the active-container oracle.
+        [IO.File]::WriteAllText((Join-Path $caseRoot 'fixture-network.json'), (ConvertTo-Json -InputObject @{
+            Id = $fixtureNetworkId; Name = $fixtureNetworkName; Driver = 'bridge'; Scope = 'local' } -Compress))
+    }
     $indexedJit = $Scenario -cin @('jit-index', 'jit-index-ambiguous', 'jit-index-missing', 'jit-index-malformed')
     $jitRootImage = 'example.invalid/conduit-jit@sha256:' + $(if ($indexedJit) { '4' * 64 } else { '1' * 64 })
     $jitSelectedImage = 'example.invalid/conduit-jit@sha256:' + ('2' * 64)
@@ -922,6 +1035,8 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         $parameters.ReadinessTimeoutSeconds = 1
     }
     if ($Scenario -eq 'even-pairs') { $parameters.PairedRuns = 6 }
+    if ($networkCase) { $parameters.DockerNetwork = $fixtureNetworkName }
+    if ($Scenario -ceq 'network-invalid-name') { $parameters.DockerNetwork = '-' + $privateKey }
     $priorAliasHash = if ([IO.File]::Exists($parameters.OutputPath)) { Get-AttemptContractHash $parameters.OutputPath } else { $null }
     $priorEvidence = $null
     $priorLatestId = $null
@@ -1006,6 +1121,10 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         Assert-Contract (-not $publicOutput.Contains($secret) -and -not $publicError.Contains($secret) -and
             ($null -eq $failure -or -not $failure.Contains($secret))) 'Collector exposed private command configuration.'
     }
+    if ($networkCase) {
+        Assert-Contract (-not $publicOutput.Contains($fixtureNetworkName) -and -not $publicError.Contains($fixtureNetworkName) -and
+            ($null -eq $failure -or -not $failure.Contains($fixtureNetworkName))) 'Public diagnostics exposed a private fixture network name.'
+    }
     $commands = Read-Records (Join-Path $caseRoot 'commands')
     $drivers = Read-Records (Join-Path $caseRoot 'drivers')
     $created = Read-Records (Join-Path $caseRoot 'created')
@@ -1038,6 +1157,17 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
             ($null -eq $failure -or -not $failure.Contains($driver.configurationPath))) 'Public diagnostics exposed a private workload configuration path.'
     }
     $caseStage = 'failure-oracle'
+    $networkCommands = @($commands | Where-Object { $_.arguments[0] -ceq 'network' })
+    if ($networkCase) {
+        $expectedInspections = if ($Scenario -ceq 'network-invalid-name') { 0 } else { 1 }
+        Assert-Contract ($networkCommands.Count -eq $expectedInspections -and
+            @($networkCommands | Where-Object { $_.arguments.Count -ne 5 -or $_.arguments[1] -cne 'inspect' -or
+                $_.arguments[2] -cne '--format' -or $_.arguments[3] -cne '{{json .}}' -or $_.arguments[4] -cne $fixtureNetworkName }).Count -eq 0) 'Collector mutated a caller-managed network or did not inspect its exact name once.'
+    }
+    else {
+        Assert-Contract ($networkCommands.Count -eq 0 -and
+            @($commands | Where-Object { $_.arguments[0] -ceq 'run' -and $_.arguments -ccontains '--network' }).Count -eq 0) 'Default transport acquired a network dependency.'
+    }
     if (-not [string]::IsNullOrEmpty($ExpectedFailure)) {
         Assert-Contract ($null -ne $failure -and $failure.Contains($ExpectedFailure)) ('Expected controlled collector failure was absent: ' + $Scenario)
         if ($null -eq $priorAliasHash) {
@@ -1049,6 +1179,21 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
         }
         $failedAttempt = Get-AttemptContractMetadata $parameters.OutputPath $Service 'failed'
         Assert-AttemptContractReaderRejected $parameters.OutputPath $Service
+        if ($networkCase) {
+            $diagnosticPath = Join-Path ([IO.Path]::GetDirectoryName($failedAttempt.attemptPath)) 'diagnostics.json'
+            $diagnostic = Get-NativeBenchmarkAttemptFailureDiagnostic (Read-AttemptContractJson $diagnosticPath)
+            $beforeStart = $Scenario -cin @('network-invalid-name', 'network-malformed', 'network-foreign-name', 'network-nonbridge')
+            $finalAttachment = $Scenario -ceq 'network-id-change'
+            Assert-Contract ($diagnostic.reason -ceq 'network-binding' -and
+                $diagnostic.phase -ceq $(if ($beforeStart) { 'configuration' } elseif ($finalAttachment) { 'collection-validation' } else { 'container-start' }) -and
+                $diagnostic.runtime -ceq $(if ($beforeStart) { 'unknown' } else { 'jit' }) -and
+                $created.Count -eq $(if ($beforeStart) { 0 } else { 1 }) -and
+                $drivers.Count -eq $(if ($finalAttachment) { if ($Service -ceq 'gateway') { 2 } else { 1 } } else { 0 }) -and
+                (Read-Records (Join-Path $caseRoot 'active')).Count -eq 0) 'Network binding rejection occurred after an unexpected workload or lost its closed diagnostic.'
+            foreach ($file in Get-ChildItem -LiteralPath ($parameters.OutputPath + '.attempts') -File -Recurse -Filter '*.json') {
+                Assert-Contract (-not [IO.File]::ReadAllText($file.FullName).Contains($fixtureNetworkName)) 'Retained diagnostics exposed a private fixture network.'
+            }
+        }
         if ($Scenario.StartsWith('diagnostic-', [StringComparison]::Ordinal)) {
             Assert-CollectorFailureDiagnostic $failedAttempt $Scenario $failure
             Assert-Contract ((Read-Records (Join-Path $caseRoot 'active')).Count -eq 0) 'A diagnostic case left an owned fake container.'
@@ -1158,6 +1303,19 @@ function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $E
     }
     $attemptEvidence = Assert-AttemptContractSuccess $parameters.OutputPath $Service
     $report = $attemptEvidence.report
+    Assert-Contract ($report.methodology.Contains('Caller-managed direct-bridge transport was requested;') -eq $networkCase) 'Methodology did not truthfully describe requested transport.'
+    if ($networkCase) {
+        Assert-Contract (-not $reportText.Contains($fixtureNetworkName) -and -not $reportText.Contains($fixtureNetworkId)) 'Collector retained private network identity in the report.'
+        $networkRuns = @($commands | Where-Object { $_.arguments[0] -ceq 'run' })
+        Assert-Contract ($networkRuns.Count -eq 12 -and @($networkRuns | Where-Object {
+            $index = [Array]::IndexOf([object[]]$_.arguments, '--network')
+            $index -lt 0 -or $_.arguments[$index + 1] -cne $fixtureNetworkId
+        }).Count -eq 0 -and @($created | Where-Object networkMode -CNE $fixtureNetworkId).Count -eq 0) 'All twelve warm/measured variants did not use the same pinned network.'
+        $networkChecks = Read-Records (Join-Path $caseRoot 'network-checks')
+        foreach ($container in $created) {
+            Assert-Contract (@($networkChecks | Where-Object { $_.id -ceq $container.id -and $_.running }).Count -ge 2) 'A measured variant omitted initial or final running attachment verification.'
+        }
+    }
     Assert-Contract ($report.schemaVersion -eq 4 -and $report.service -ceq $Service -and $report.pairedRuns -eq 5 -and $report.samples.Count -eq 5) 'Collector report identity or paired sample count is wrong.'
     Assert-NativeBenchmarkFixtureIdentity $report.nativeEvidence $packageFixture
     Assert-NativeBenchmarkFixtureBinding $report.nativePublish.imageBinding $packageFixture
@@ -1522,7 +1680,10 @@ $context = Start-NativeBenchmarkAttempt -OutputPath $OutputPath -Service 'admin'
 
 try {
     [IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
-    if ($DiagnosticSchemaOnly) {
+    if ($NetworkBindingOnly) {
+        Invoke-NetworkBindingContracts
+    }
+    elseif ($DiagnosticSchemaOnly) {
         Invoke-FailedWorkloadAggregateContracts
         Invoke-FailureDiagnosticSchemaContracts
     }
@@ -1638,6 +1799,19 @@ if ($Mode -eq 'health') {
 if ($Mode -eq 'docker') {
     Save-Record 'commands' @{ arguments = $CommandArguments; benchmarkCredentialPresent = -not [string]::IsNullOrEmpty($env:CONDUIT_NATIVE_BENCHMARK_API_KEY) }
     $nativeImage = [IO.File]::ReadAllText((Join-Path $root 'native-image.json')) | ConvertFrom-Json -AsHashtable -DateKind String
+    if ($CommandArguments[0] -ceq 'network') {
+        if ($CommandArguments.Count -ne 5 -or $CommandArguments[1] -cne 'inspect' -or
+            $CommandArguments[2] -cne '--format' -or $CommandArguments[3] -cne '{{json .}}') { throw 'Unexpected fake network mutation.' }
+        $network = [IO.File]::ReadAllText((Join-Path $root 'fixture-network.json')) | ConvertFrom-Json -AsHashtable
+        if ($CommandArguments[-1] -cne $network.Name) { throw 'Network inspection did not use its exact caller-managed name.' }
+        switch ($scenario) {
+            'network-malformed' { [Console]::Out.WriteLine('{"Id":1,"Id":"private-child-diagnostic"}'); exit 0 }
+            'network-foreign-name' { $network.Name = 'private-child-diagnostic' }
+            'network-nonbridge' { $network.Driver = 'overlay' }
+        }
+        $network | ConvertTo-Json -Compress
+        exit 0
+    }
     if ($CommandArguments[0] -eq 'image') {
         $native = -not ($CommandArguments[-1].StartsWith('example.invalid/conduit-jit@', [StringComparison]::Ordinal) -or $CommandArguments[-1] -ceq ('sha256:' + ('1' * 64)))
         $revision = if ($scenario -eq 'revision-mismatch' -and $native) { 'b' * 40 } else { 'a' * 40 }
@@ -1692,6 +1866,7 @@ if ($Mode -eq 'docker') {
         $labels = @{}
         $port = 0
         $privateEnvironment = $null
+        $networkMode = $null
         for ($index = 1; $index -lt $CommandArguments.Count - 1; $index++) {
             if ($CommandArguments[$index] -eq '--name') { $name = $CommandArguments[++$index] }
             elseif ($CommandArguments[$index] -eq '--label') {
@@ -1699,10 +1874,20 @@ if ($Mode -eq 'docker') {
             }
             elseif ($CommandArguments[$index] -eq '--publish') { $port = [int]$CommandArguments[++$index].Split(':')[1] }
             elseif ($CommandArguments[$index] -eq '--env-file') { $privateEnvironment = $CommandArguments[++$index] }
+            elseif ($CommandArguments[$index] -eq '--network') { $networkMode = $CommandArguments[++$index] }
         }
         Write-RunTrace 'arguments-parsed'
         $platformIndex = [Array]::IndexOf($CommandArguments, '--platform')
         if ($platformIndex -lt 0 -or $CommandArguments[$platformIndex + 1] -cne 'linux/amd64') { throw 'Measured image platform was not explicit.' }
+        $hostIndex = [Array]::IndexOf($CommandArguments, '--add-host')
+        $publishIndex = [Array]::IndexOf($CommandArguments, '--publish')
+        if ($hostIndex -lt 0 -or $CommandArguments[$hostIndex + 1] -cne 'host.docker.internal:host-gateway' -or
+            $publishIndex -lt 0 -or $CommandArguments[$publishIndex + 1] -cne ('127.0.0.1:' + $port + ':8080')) { throw 'Host mapping or published-port contract changed.' }
+        if ($scenario.StartsWith('network-', [StringComparison]::Ordinal)) {
+            $network = [IO.File]::ReadAllText((Join-Path $root 'fixture-network.json')) | ConvertFrom-Json -AsHashtable
+            if ($networkMode -cne $network.Id) { throw 'Measured host did not use the pinned network ID.' }
+        }
+        elseif ($null -ne $networkMode) { throw 'Default transport received an unexpected network.' }
         $native = $labels['conduit.native-benchmark.runtime'] -ceq 'native-aot'
         $expectedImage = if ($native) { $nativeImage.Id } else { 'sha256:' + ('1' * 64) }
         if ($CommandArguments[-1] -cne $expectedImage) { throw 'Measured image was not the immutable observed local ID.' }
@@ -1771,7 +1956,7 @@ if ($Mode -eq 'docker') {
         $record = @{ id = $identity; name = $name; labels = $labels; port = $port; ordinal = $ordinal;
             runtime = $labels['conduit.native-benchmark.runtime']; processIdentity = $identityPath;
             canonicalEnvironment = $true; backendCredentialCorrect = $true; image = $expectedImage;
-            running = $true; exitCode = 0 }
+            running = $true; exitCode = 0; networkMode = $networkMode; attachmentChecks = 0 }
         if ($native) {
             $record['selectedDescriptor'] = [IO.File]::ReadAllText((Join-Path $root 'native-selected.json')) | ConvertFrom-Json -AsHashtable
             if ($scenario -ceq 'native-selected-mismatch') { $record.selectedDescriptor.digest = 'sha256:' + ('d' * 64) }
@@ -1817,8 +2002,19 @@ if ($Mode -eq 'docker') {
         if ($scenario -ceq 'shutdown-foreign-label' -and -not $record.running) {
             $labels['conduit.native-benchmark.owner'] = 'foreign-owner'
         }
+        $attachments = @{}
+        if ($null -ne $record.networkMode) {
+            $network = [IO.File]::ReadAllText((Join-Path $root 'fixture-network.json')) | ConvertFrom-Json -AsHashtable
+            $record.attachmentChecks++
+            [IO.File]::WriteAllText((Join-Path $root ('active/' + $record.id + '.json')), ($record | ConvertTo-Json -Depth 8))
+            Save-Record 'network-checks' @{ id = $record.id; running = $record.running; check = $record.attachmentChecks }
+            $attachmentId = if ($scenario -ceq 'network-forged-attachment' -or
+                ($scenario -ceq 'network-id-change' -and $record.attachmentChecks -gt 1)) { '8' * 64 } else { $network.Id }
+            $attachments[$network.Name] = @{ NetworkID = $attachmentId; IPAddress = '172.29.0.8' }
+        }
         @{ Id = $record.id; Name = '/' + $record.name; Image = $record.image; ImageManifestDescriptor = $record.selectedDescriptor;
-            Config = @{ Labels = $labels }; State = @{ Running = $record.running; ExitCode = $record.exitCode } } |
+            Config = @{ Labels = $labels }; State = @{ Running = $record.running; ExitCode = $record.exitCode };
+            HostConfig = @{ NetworkMode = $record.networkMode }; NetworkSettings = @{ Networks = $attachments } } |
             ConvertTo-Json -Depth 8 -Compress
         exit 0
     }
@@ -1988,7 +2184,7 @@ throw 'Unknown fixture mode.'
     $script:packages = @{}
     $script:packages['admin'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
     $script:packages['gateway'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'gateway'
-    if (-not $StrictCallerOnly -and -not $FailedWorkloadOnly) {
+    if (-not $StrictCallerOnly -and -not $FailedWorkloadOnly -and -not $DockerNetworkOnly) {
     $script:packages['admin-other'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
     $script:packages['admin-dirty'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -SourceDirty $true
     $script:packages['admin-unavailable'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -UnavailableSource
@@ -2034,7 +2230,15 @@ throw 'Unknown fixture mode.'
         Assert-Contract ($null -ne $definition) ('Collector helper is missing: ' + $functionName)
         Invoke-Expression $definition.Extent.Text
     }
-    if ($FailedWorkloadOnly) {
+    if ($DockerNetworkOnly) {
+        Invoke-NetworkBindingContracts
+        $successfulNetwork = Invoke-CollectorCase 'gateway' 'network-success' $null -CaptureResult -StrictCaller
+        foreach ($scenario in @('network-invalid-name', 'network-malformed', 'network-foreign-name', 'network-nonbridge', 'network-forged-attachment')) {
+            Invoke-CollectorCase 'admin' $scenario 'Benchmark fixture network binding failed.' -StrictCaller
+        }
+        Invoke-CollectorCase 'gateway' 'network-id-change' 'Benchmark fixture network binding failed.' -ExistingOutputPath $successfulNetwork.outputPath -StrictCaller
+    }
+    elseif ($FailedWorkloadOnly) {
         $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult -StrictCaller
         Invoke-CollectorCase 'admin' 'diagnostic-probe-partial' 'No qualification was recorded.' -ExistingOutputPath $successfulAdmin.outputPath
         Invoke-CollectorCase 'gateway' 'diagnostic-probe-all-failed' 'No qualification was recorded.'
@@ -2049,6 +2253,12 @@ throw 'Unknown fixture mode.'
     Invoke-CollectorCase 'gateway' 'success' $null -StrictCaller
     Invoke-CollectorCase 'admin' 'case-duplicate-environment' 'No qualification was recorded.' -StrictCaller
     if (-not $StrictCallerOnly) {
+    Invoke-NetworkBindingContracts
+    $successfulNetwork = Invoke-CollectorCase 'gateway' 'network-success' $null -CaptureResult -StrictCaller
+    foreach ($scenario in @('network-invalid-name', 'network-malformed', 'network-foreign-name', 'network-nonbridge', 'network-forged-attachment')) {
+        Invoke-CollectorCase 'admin' $scenario 'Benchmark fixture network binding failed.' -StrictCaller
+    }
+    Invoke-CollectorCase 'gateway' 'network-id-change' 'Benchmark fixture network binding failed.' -ExistingOutputPath $successfulNetwork.outputPath -StrictCaller
     & (Join-Path $PSScriptRoot 'test-native-process-cleanup-metadata.ps1')
     # These are public fixture credentials, not a connection to any service.
     # Assert exact strings as well as parsed components: an invented slash on a
@@ -2445,7 +2655,13 @@ if ($cleanupFailures.Count -gt 0) {
     throw ('Collector contract fixture cleanup failed; cleanup failures ' + $cleanupFailures.Count + '.')
 }
 if ($null -ne $proofFailure) { throw $proofFailure }
-if ($DiagnosticSchemaOnly) {
+if ($NetworkBindingOnly) {
+    Write-Host ('PASS: ' + $cases + ' pure fixture network contracts; strict private names/JSON, immutable bridge pin and actual running attachment validation; no Docker/driver processes ran.')
+}
+elseif ($DockerNetworkOnly) {
+    Write-Host ('PASS: ' + $cases + ' fixture network contracts; all twelve alternating Gateway variants, strict pre-workload/final attachment rejection, prior-alias preservation and owned cleanup.')
+}
+elseif ($DiagnosticSchemaOnly) {
     Write-Host ('PASS: ' + $cases + ' failure diagnostic schema/writer and failed-workload projection contracts; strict codes, immutable sidecars, privacy and failed eligibility; no Docker/driver workload cases ran.')
 }
 elseif ($StrictCallerOnly) {

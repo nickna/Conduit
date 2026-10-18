@@ -431,7 +431,7 @@ function Get-NativeBenchmarkAttemptFailureDiagnostic($Value) {
             'publication', 'unknown')
         $reasons = @('unknown', 'readiness-deadline', 'command-deadline', 'poll-command-deadline',
             'poll-callback', 'poll-memory-sample', 'poll-memory-value', 'memory-sample', 'memory-value',
-            'probe-exit', 'invalid-result', 'request-failed', 'image-binding', 'container-start',
+            'probe-exit', 'invalid-result', 'request-failed', 'image-binding', 'network-binding', 'container-start',
             'ownership-verification', 'shutdown-failed', 'cleanup-verification-failed',
             'private-cleanup-failed', 'publication-failed')
         foreach ($field in @('phase', 'reason', 'runtime', 'sampleKind')) {

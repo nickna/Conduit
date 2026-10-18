@@ -261,10 +261,17 @@ post-failure readback still showed exactly the two settled preflights and zero
 database backends. This metadata failure is separate from the historical
 provider-communication failure and supplies no evidence about its cause.
 
-The failed collection is retained as a separate blocker, tracked in
-[issue #1702](https://github.com/nickna/Conduit/issues/1702). Current-head
-reproduction and the cause of those 502 responses remain unestablished. No application or
-persistence optimization was selected, and the historical causal question remains
-open. This investigation establishes no accepted qualification window, canary,
+The failed collection is retained separately in
+[issue #1702](https://github.com/nickna/Conduit/issues/1702). A
+[2026-10-17 networking follow-up](native-benchmark-container-networking.md)
+reproduces the current communication failure and isolates unanswered TCP SYNs
+when recently closed frontend four-tuples are reused through Docker Desktop's
+host-gateway/published-port path. Direct fixture-bridge controls pass, including
+138 recent tuple reuses. The collector now supports a verified existing bridge
+so containerized backing services can communicate directly. The unavailable
+original packet evidence still prevents retrospective attribution of the
+historical failure, and the historical SSE performance question remains open.
+No application or persistence optimization was selected. This investigation
+establishes no accepted qualification window, canary,
 ordered Admin/Gateway soak, rollback, successor ADR approval or production
 promotion. Production remains on JIT under the existing blocked policy.
