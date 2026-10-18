@@ -306,6 +306,59 @@ public sealed class VirtualKeyManagementAudienceServiceTests
     }
 
     [Fact]
+    public async Task AuditCancellationAbortsUnresolvedOwnersBeforeRemainingCancellationCallbacksFinish()
+    {
+        await using var fixture = new Fixture();
+        await fixture.RegisterAsync("stalled", 1);
+        using var caller = new CancellationTokenSource();
+        var pending = new TaskCompletionSource<VirtualKey?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var lookupStarted = Signal();
+        var cancellationBlocked = Signal();
+        var releaseCancellation = Signal();
+        var aborted = Signal();
+        var scopeDisposed = Signal();
+        fixture.AbortedConnection = _ => aborted.TrySetResult();
+        fixture.ScopeDisposed = _ => scopeDisposed.TrySetResult();
+        fixture.Lookup = async (_, token) =>
+        {
+            using var cancellationBarrier = token.Register(() =>
+            {
+                cancellationBlocked.TrySetResult();
+                releaseCancellation.Task.GetAwaiter().GetResult();
+            });
+            lookupStarted.TrySetResult();
+            return await pending.Task;
+        };
+
+        var audit = fixture.Service.AuditAsync(caller.Token);
+        Task cancellation = Task.CompletedTask;
+        try
+        {
+            await lookupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            // WaitAsync registered after the audit revocation callback. The
+            // lookup-token barrier holds cancellation dispatch between them.
+            cancellation = Task.Run(() => caller.Cancel());
+            await cancellationBlocked.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await aborted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(cancellation.IsCompleted);
+            Assert.Equal(1, fixture.Aborted.GetValueOrDefault("stalled"));
+            Assert.Equal(0, fixture.Service.ConnectionCount);
+            Assert.Empty(fixture.Memberships);
+            Assert.False(scopeDisposed.Task.IsCompleted);
+
+            releaseCancellation.TrySetResult();
+            await Task.WhenAll(audit, cancellation).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(1, fixture.Aborted.GetValueOrDefault("stalled"));
+        }
+        finally
+        {
+            releaseCancellation.TrySetResult();
+            pending.TrySetResult(Key(1));
+            await Task.WhenAll(audit, cancellation, scopeDisposed.Task).WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    [Fact]
     public async Task GroupRemovalFailureAbortsInsteadOfRetainingPrivilegedMembership()
     {
         await using var fixture = new Fixture();
@@ -396,6 +449,7 @@ public sealed class VirtualKeyManagementAudienceServiceTests
         internal ConcurrentDictionary<string, int> Aborted { get; } = new();
         internal Func<int, CancellationToken, Task<VirtualKey?>>? Lookup;
         internal Action<int>? ScopeDisposed;
+        internal Action<string>? AbortedConnection;
         internal Action<string, string>? Added;
         internal Func<string, string, CancellationToken, Task>? Adding;
         internal Func<string, string, CancellationToken, Task>? Removing;
@@ -450,6 +504,7 @@ public sealed class VirtualKeyManagementAudienceServiceTests
                 Aborted.AddOrUpdate(connection, 1, static (_, count) => count + 1);
                 foreach (var membership in Memberships.Keys.Where(value => value.Connection == connection))
                     Memberships.TryRemove(membership, out _);
+                AbortedConnection?.Invoke(connection);
             }, CancellationToken.None);
         }
 

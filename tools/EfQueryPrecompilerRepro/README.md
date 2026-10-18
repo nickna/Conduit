@@ -160,6 +160,40 @@ A newer release by itself is not evidence that it fixes this cast. Keep #1695
 open until an applicable fix is available and both generated-code stages pass;
 retain the failing 10.0.12 baseline alongside that result.
 
+The opt-in runner (PowerShell 7.2 or newer, for native stderr handling) now
+captures this control without hand-copying commands:
+
+```powershell
+pwsh -NoProfile -File tools/EfQueryPrecompilerRepro/Repeat-GeneratedCompilation.ps1 -Issue 1695
+```
+
+It creates a fresh directory under `artifacts/ef-query-repro/issue-1695`, pins
+SDK 10.0.401 and the aligned EF 10.0.12 CLI/runtime/Design/Tasks, and requires
+successful initial build and generation followed by the specific `CS0030`
+sealed-entity compilation failure. Exit 0 means the expected failure was
+reproduced. `result.json` retains each command, exit, log hash, input hashes,
+generated-source hashes and package-assets hash. Logs, sources and resolved
+assets remain beside it; failed setup or generation also leaves a report.
+Use an unused `-OutputDirectory` to choose another evidence destination.
+
+Once a supported fix is identified, run a separate copy with
+`-EfVersion <fixed-version> -Expect CompilationSuccess` (and, if required,
+`-ProviderVersion <compatible-version>` or `-SdkVersion <installed-sdk>`).
+These options change only the scratch copy, including its local tool manifest.
+`CompilationSuccess` requires generated C# to exist and its Release build to
+exit 0; it rejects the current baseline. The runner never executes queries or
+publishes NativeAOT. Preserve both reports and check upstream release support
+before changing the qualification account.
+
+Runner verification on 2026-10-17 (America/Los_Angeles), Windows x64, SDK
+10.0.401 / EF 10.0.12 / Npgsql 10.0.3, again produced initial/generation/generated
+build exits `0/0/1`, with the expected `CS0030` at generated line 116. Inputs and
+generated sources stayed unchanged. The report is retained in
+`artifacts/ef-query-repro/verified-1695-baseline/result.json` (SHA-256
+`2030d0e5f57d4b010fdc0149fd37e65a5679edced630a4cefe0dd3f03724ca3e`).
+Run the fast classifier and fresh-directory contracts without EF using
+`pwsh -NoProfile -File tools/EfQueryPrecompilerRepro/test-GeneratedCompilation.ps1`.
+
 ## Additional expression reductions (#1662)
 
 Use the same fresh-directory commands, setting `$variant` and `$context` before
@@ -286,6 +320,32 @@ baseline. Inspect the emitted identifier and keep the original failure stage in
 the [independent ledger](../../docs/operations/ef-query-precompiler-failure-inventory.md#independent-generated-code-compilation-controls).
 Do not suppress compiler errors or change repository package pins to declare
 this diagnostic control, or the wider #1373 workload, qualified.
+
+The same opt-in runner selects this independent control explicitly:
+
+```powershell
+pwsh -NoProfile -File tools/EfQueryPrecompilerRepro/Repeat-GeneratedCompilation.ps1 -Issue 1696
+```
+
+The default `KnownFailure` expectation requires initial build and generation
+exits 0, followed by generated compilation errors `CS1003` and `CS1002` and the
+actual dotted local declaration in the generated source. A different syntax
+error, the sealed-entity cast failure, or failure during generation cannot pass
+this check. Candidate versions use the same scratch-only version options and
+`-Expect CompilationSuccess` described for #1695; the two baselines remain
+separate in their reports.
+
+The 2026-10-17 (America/Los_Angeles) Windows x64 repeat with SDK 10.0.401 / EF
+10.0.12 / Npgsql 10.0.3 retained exits `0/0/1`, with the dotted declaration and
+both errors at generated line 90. Inputs and generated sources stayed unchanged.
+Its report is `artifacts/ef-query-repro/verified-1696-baseline/result.json`.
+The report SHA-256 is
+`8557c6d1a2e958a6794cc8eb17fa189af0c001f599020ba0a49a4513de495024`.
+The same-day upstream review reconfirmed the fix on `main`, the `12.0-preview1`
+milestone, and the old namespace-qualified construction in v10.0.13 and
+[the inspected `release/10.0` commit](https://github.com/dotnet/efcore/blob/a5e42cdf727e40ae3ec6368febabae6451e23431/src/EFCore/Query/ShapedQueryCompilingExpressionVisitor.cs#L591).
+No applicable supported fixed package or backport was identified;
+no candidate package was tested. #1696 remains open.
 
 ## Required-member and decimal-literal reductions (#1667)
 
