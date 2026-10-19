@@ -778,3 +778,30 @@ A separate read-only archive audit checked all 38 debit entries and every
 running balance. These correctness checks do not resolve the performance
 regression. The issue remains open, the PR remains a draft and production
 remains JIT.
+
+## ThreadPool spinning diagnostic, 2026-10-19
+
+A separate [four-arm diagnostic](benchmarks/2026-10-19-gateway-threadpool-spin-diagnostic.json)
+reused the verified `0e995c03` observer images, whose runtime parent is
+`92d220c0`. It does not represent the later shared audit shutdown fix.
+The fixed order was Native default, JIT default, Native with semaphore
+spinning disabled, then JIT with spinning disabled. Each arm retained
+JSON then SSE, 100 warmups and 1,000 measured requests per workload,
+concurrency eight and the 30-second deadline. Actual environment absence
+or zero was inspected before readiness. Equal phase/client/runtime
+observers remained enabled; CPU sampling, perf, packets and socket
+overrides were excluded. This single fixed order is diagnostic evidence.
+
+Native SSE throughput fell from 168.042 to 163.236 requests/s with
+spinning disabled, while p99 improved from 62.481 to 60.128 ms. JIT
+throughput changed from 181.358 to 182.390 requests/s and p99 from
+56.426 to 55.208 ms. JSON tradeoffs and all four arms remain retained.
+These results do not support disabling Native spinning. No ThreadPool
+setting is shipped, and the earlier spin samples establish no cause.
+
+All 8,800 responses and trace joins passed. Exact spending and debits
+were USD 0.66000000, leaving balance 99.34000000. All 41 unrelated
+tables and three marker bindings per response passed, as did three
+spaced final reads, post-stop zero backends, verified archives and owned
+cleanup. A separate read-only archive calculation checked all seven
+debits and every running balance. The performance regression remains open.
