@@ -5,9 +5,9 @@ healthy and how you find out when it is not. For the settings behind these surfa
 [Configuration](./configuration.md).*
 
 Conduit exposes four kinds of operational signal: **health endpoints** for load balancers and
-uptime checks, **metrics and traces** for dashboards, **real-time event streams** for live
-consoles, and **structured logs** for after-the-fact investigation. Plus a couple of targeted
-alerting paths for the two things most worth waking someone for: billing correctness and security.
+uptime checks, **metrics and traces** for dashboards, **real-time event streams** for operation
+progress and management notifications, and **structured logs** for after-the-fact investigation.
+Billing correctness and client budgets also have targeted alerting paths.
 
 ## Health endpoints
 
@@ -57,18 +57,25 @@ services.
 
 ## Real-time event streams
 
-Conduit pushes live updates over **SignalR** (WebSockets, with automatic fallback to other
-transports). The streams fall into two groups by audience:
+The Gateway pushes operation progress and management notifications over **SignalR** (WebSockets,
+with fallback to other transports). The streams fall into two groups by audience:
 
 - **Client-facing streams** carry the progress of a caller's own work — long-running image/video/
   task generation, spend and budget notifications, webhook-delivery outcomes — and are scoped to the
-  caller's virtual key, so a client only ever sees its own events.
-- **Operator-facing streams** carry system-wide dashboards — live metrics, health and alert state,
-  and security events — and require admin authentication.
+  caller's virtual key. The public video-generation hub validates an ephemeral key and checks the
+  requested task's virtual-key ownership before subscribing.
+- **Operator management notifications** cover virtual-key lifecycle and status changes through the
+  Gateway's `/hubs/virtual-key-management` hub. Connections authenticate with Gateway virtual keys;
+  administrator audiences and subscriptions to other keys require an administrator role in trusted
+  key metadata.
+
+Metrics, health-monitoring, security-monitoring, and usage-analytics hubs have been removed. Use
+**Prometheus/Grafana** for metrics and dashboard alerts, the **health endpoints** for health checks,
+and **structured security logs** for security-event investigation.
 
 For horizontal scale, SignalR uses a **Redis backplane** so a client connected to any instance
-receives events raised on any other. The Gateway requires Redis even in a single-node deployment;
-Admin streams stay local to their instance when Admin runs without Redis.
+receives events raised on any other. The Gateway requires Redis even in a single-node deployment.
+The Admin API maps no SignalR hubs, including when it runs without Redis.
 
 Virtual-key management connections receive administrator and foreign-key notifications only while
 their trusted key metadata grants that role. Each Gateway checks its local privileged connections
@@ -78,8 +85,9 @@ returning its error. Demotion retains the authenticated key's own lifecycle and 
 promotion requires a fresh authorized subscription. Unavailable role lookups revoke access, and a
 connection is closed if revocation cannot finish within its deadline.
 
-The exact set of hubs and their events is declared in the Gateway and Admin service code — treat that
-as the source of truth rather than a list here, which would drift.
+The [Gateway endpoint map](../Services/ConduitLLM.Gateway/Program.Endpoints.cs) declares the supported
+hub routes, and the [Gateway hubs](../Services/ConduitLLM.Gateway/Hubs/) define their subscriptions
+and events. Treat those as the source of truth.
 
 ## Provider health
 
@@ -100,7 +108,7 @@ If Admin runs without Redis, its provider-error routes return **503 Service Unav
 problem response explaining that Redis is not configured. Configure Admin with the Gateway's Redis
 store to inspect and manage the Gateway's recorded provider errors.
 
-## Alerting: billing correctness and security
+## Alerting: billing correctness and budgets
 
 Two areas have dedicated alerting beyond the general dashboards:
 
@@ -116,10 +124,10 @@ Two areas have dedicated alerting beyond the general dashboards:
 
 The security controls from [Configuration](./configuration.md#deploy-time-configuration-the-environment)
 — IP filtering, per-virtual-key rate limiting, and failed-auth banning — are enforced in the request
-pipeline and surface violation metrics and an operator security stream. One scale caveat to know:
-security-event tracking is held **in memory per instance**, so it resets on restart and each replica
-sees only its own traffic. Treat it as a live signal, not a durable audit log; the durable record of
-requests lives in the request logs and ledger.
+pipeline. The security middleware records violation counters and structured warning logs in both
+the Gateway and Admin APIs. Use the metrics for aggregate trends and the logs for investigation;
+collect logs from every replica centrally with the retention your operations require. There is no
+SignalR security-event stream or in-memory security-event history to subscribe to or query.
 
 ## Streaming in production
 
