@@ -30,8 +30,10 @@ public sealed partial class RequestLogRuntimePersistenceParityTests
         _fixture = fixture;
     }
 
-    [Fact]
-    public async Task EfAndTypedNpgsqlWriteTheSameRequestLogRow()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EfAndTypedNpgsqlWriteTheSameRequestLogRow(bool omitNullableFields)
     {
         var efSchema = $"request_log_ef_{Guid.NewGuid():N}";
         var npgsqlSchema = $"request_log_np_{Guid.NewGuid():N}";
@@ -68,6 +70,28 @@ public sealed partial class RequestLogRuntimePersistenceParityTests
             StatusCode = 200,
             MetadataJson = """{"tenant":"acme","stream":true}"""
         };
+
+        if (omitNullableFields)
+        {
+            record = record with
+            {
+                ProviderId = null,
+                ProviderType = null,
+                ModelProviderMappingId = null,
+                RoutingDecisionReason = null,
+                CachedInputTokens = null,
+                CachedWriteTokens = null,
+                BillingMethod = null,
+                ProviderReportedCostUsd = null,
+                ProviderCostMarkupMultiplier = null,
+                BilledAtUtc = null,
+                UserId = null,
+                ClientIp = null,
+                RequestPath = null,
+                StatusCode = null,
+                MetadataJson = null
+            };
+        }
 
         try
         {

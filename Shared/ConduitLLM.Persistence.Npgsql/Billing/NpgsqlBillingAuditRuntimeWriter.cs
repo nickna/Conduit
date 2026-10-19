@@ -18,11 +18,11 @@ public sealed class NpgsqlBillingAuditRuntimeWriter : IBillingAuditRuntimeWriter
             "ProviderType", "HttpStatusCode", "MetadataJson", "RequestPath", "IsEstimated",
             "ToolUsageJson", "ToolUsageCost")
         VALUES (
-            COALESCE(@id, gen_random_uuid()), COALESCE(@timestamp, CURRENT_TIMESTAMP),
-            @eventType, @virtualKeyId, @virtualKeyGroupId,
-            @model, @requestId, @usageJson, @calculatedCost, @failureReason,
-            @providerType, @httpStatusCode, @metadataJson, @requestPath, @isEstimated,
-            @toolUsageJson, @toolUsageCost)
+            COALESCE($1, gen_random_uuid()), COALESCE($2, CURRENT_TIMESTAMP),
+            $3, $4, $5,
+            $6, $7, $8, $9, $10,
+            $11, $12, $13, $14, $15,
+            $16, $17)
         RETURNING "Id", "Timestamp"
         """;
 
@@ -92,25 +92,27 @@ public sealed class NpgsqlBillingAuditRuntimeWriter : IBillingAuditRuntimeWriter
 
     private static void AddParameters(NpgsqlParameterCollection parameters, BillingAuditRuntimeRecord row)
     {
-        AddNullable(parameters, "id", NpgsqlDbType.Uuid, row.Id == Guid.Empty ? null : row.Id);
-        AddNullable(parameters, "timestamp", NpgsqlDbType.TimestampTz, row.Timestamp == default ? null : row.Timestamp);
-        parameters.AddWithValue("eventType", NpgsqlDbType.Integer, row.EventType);
-        AddNullable(parameters, "virtualKeyId", NpgsqlDbType.Integer, row.VirtualKeyId);
-        AddNullable(parameters, "virtualKeyGroupId", NpgsqlDbType.Integer, row.VirtualKeyGroupId);
-        AddNullable(parameters, "model", NpgsqlDbType.Varchar, row.Model);
-        AddNullable(parameters, "requestId", NpgsqlDbType.Varchar, row.RequestId);
-        AddNullable(parameters, "usageJson", NpgsqlDbType.Jsonb, row.UsageJson);
-        AddNullable(parameters, "calculatedCost", NpgsqlDbType.Numeric, row.CalculatedCost);
-        AddNullable(parameters, "failureReason", NpgsqlDbType.Varchar, row.FailureReason);
-        AddNullable(parameters, "providerType", NpgsqlDbType.Varchar, row.ProviderType);
-        AddNullable(parameters, "httpStatusCode", NpgsqlDbType.Integer, row.HttpStatusCode);
-        AddNullable(parameters, "metadataJson", NpgsqlDbType.Jsonb, row.MetadataJson);
-        AddNullable(parameters, "requestPath", NpgsqlDbType.Varchar, row.RequestPath);
-        parameters.AddWithValue("isEstimated", NpgsqlDbType.Boolean, row.IsEstimated);
-        AddNullable(parameters, "toolUsageJson", NpgsqlDbType.Jsonb, row.ToolUsageJson);
-        AddNullable(parameters, "toolUsageCost", NpgsqlDbType.Numeric, row.ToolUsageCost);
+        // Every batch command has its own ordinal bindings, in INSERT column
+        // order. Explicit types preserve null/default handling without rewriting.
+        AddNullable(parameters, NpgsqlDbType.Uuid, row.Id == Guid.Empty ? null : row.Id);
+        AddNullable(parameters, NpgsqlDbType.TimestampTz, row.Timestamp == default ? null : row.Timestamp);
+        parameters.Add(new NpgsqlParameter<int> { NpgsqlDbType = NpgsqlDbType.Integer, TypedValue = row.EventType });
+        AddNullable(parameters, NpgsqlDbType.Integer, row.VirtualKeyId);
+        AddNullable(parameters, NpgsqlDbType.Integer, row.VirtualKeyGroupId);
+        AddNullable(parameters, NpgsqlDbType.Varchar, row.Model);
+        AddNullable(parameters, NpgsqlDbType.Varchar, row.RequestId);
+        AddNullable(parameters, NpgsqlDbType.Jsonb, row.UsageJson);
+        AddNullable(parameters, NpgsqlDbType.Numeric, row.CalculatedCost);
+        AddNullable(parameters, NpgsqlDbType.Varchar, row.FailureReason);
+        AddNullable(parameters, NpgsqlDbType.Varchar, row.ProviderType);
+        AddNullable(parameters, NpgsqlDbType.Integer, row.HttpStatusCode);
+        AddNullable(parameters, NpgsqlDbType.Jsonb, row.MetadataJson);
+        AddNullable(parameters, NpgsqlDbType.Varchar, row.RequestPath);
+        parameters.Add(new NpgsqlParameter<bool> { NpgsqlDbType = NpgsqlDbType.Boolean, TypedValue = row.IsEstimated });
+        AddNullable(parameters, NpgsqlDbType.Jsonb, row.ToolUsageJson);
+        AddNullable(parameters, NpgsqlDbType.Numeric, row.ToolUsageCost);
     }
 
-    private static void AddNullable(NpgsqlParameterCollection parameters, string name, NpgsqlDbType type, object? value) =>
-        parameters.Add(new NpgsqlParameter(name, type) { Value = value ?? DBNull.Value });
+    private static void AddNullable(NpgsqlParameterCollection parameters, NpgsqlDbType type, object? value) =>
+        parameters.Add(new NpgsqlParameter { NpgsqlDbType = type, Value = value ?? DBNull.Value });
 }
