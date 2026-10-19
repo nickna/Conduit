@@ -407,3 +407,57 @@ key/group reads and serial round trips within existing Native billing-audit
 flushes. Those flushes are background work; the earlier diagnostic trace does
 not place their hundred-row loop on each request's awaited HTTP path. No
 production promotion follows from this comparison.
+
+## Authentication and audit-pipeline candidate, 2026-10-18
+
+A third fresh comparison tested source
+`7cc1b4e20a8aed1f20d1695e96722ee44252acb2`. It retained the preceding
+candidate's durable Native request-log writer, positive cost-ID cache and joined
+provider reads, removed a redundant key lookup after group validation, and
+pipelined Native billing-audit inserts in chunks of at most 100 commands within
+the existing single transaction. Native control remained source `234670`.
+The workload, six execution orders, discarded group, five recorded groups and
+resolution objective were unchanged. The
+[full report](benchmarks/2026-10-18-gateway-auth-audit-candidate.json) retains all
+eighteen samples, all 36 raw report hashes, per-group directions and ranges,
+image/source identities and independent accounting and cleanup proofs.
+
+| Median of five recorded runs | Native control | Native candidate | JIT reference |
+| --- | ---: | ---: | ---: |
+| Complete-SSE requests/second | 150.183666 | 152.491850 | 167.506589 |
+| Complete-SSE p50 ms | 52.446501 | 51.731575 | 47.005056 |
+| Complete-SSE p95 ms | 61.832110 | 61.882167 | 54.175918 |
+| Complete-SSE per-run p99 ms | 66.236360 | 69.834046 | 65.097521 |
+| Non-streaming requests/second | 225.803914 | 230.386479 | 304.394831 |
+| Non-streaming p50 ms | 34.273522 | 33.961788 | 24.646619 |
+| Non-streaming p95 ms | 44.126129 | 44.936609 | 33.089244 |
+| Non-streaming per-run p99 ms | 50.239449 | 52.864863 | 45.076359 |
+
+This candidate **fails both unchanged resolution criteria**. The ratio of
+median SSE throughput improves 1.54% over Native control, while median per-run
+p99 worsens 5.43%; both remain worse than JIT. The median paired-group changes
+are approximately +0.009% throughput and +0.97% p99. All five groups remain in
+the result, including the JIT group's 169.701674 ms p99 outlier. Neither a
+favorable subset nor a pooled percentile replaces the declared comparison.
+The complete JSON tradeoff is retained above and in the report. Five groups do
+not establish statistical significance.
+
+All 39,602 operations passed full response validation and exact settlement:
+39,602 request logs and usage audits, matching provider counts and three Redis
+marker sets, USD 2.97015000 spent/debited, and USD 97.02985000 remaining from the
+initial USD 100. Every one of the 38 archived ledger entries has a matching
+running balance. All 41 unrelated public tables remained unchanged, financial
+liabilities and audit errors were zero, and post-stop database backends were
+zero. Three spaced final live checks, shutdown checks, verified PostgreSQL and
+Redis archives, and removal of all owned resources passed. Execution success
+does not resolve issue #1647 or authorize production promotion.
+
+The next declared experiment isolates the Gateway Native publish optimization
+preference. Its Native control will be this third candidate's retained `7cc1b4e`
+image, rather than the earlier `234670` image; the candidate will default an
+otherwise unset `OptimizationPreference` to `Speed` only during Gateway Native
+publication. It will retain the same workload, execution orders and resolution
+criteria, with a JIT reference from the final source. The compiler's evaluated
+properties, response arguments and profile inputs must be captured before any
+efficacy claim. This remains an unverified candidate; the preceding failed
+experiments remain preserved.
