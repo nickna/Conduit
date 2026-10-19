@@ -1,0 +1,1324 @@
+{
+  "schemaVersion": 1,
+  "kind": "sanitized-current92-single-pair-phase-diagnostic",
+  "diagnosticPassed": true,
+  "qualifiesPerformanceResolution": false,
+  "source": {
+    "uninstrumentedParent": "92d220c00d9f1c218d2590e54131f7dc0f855955",
+    "instrumentedRevision": "0e995c03048cbd1bfd3e17913aee99aacdf8b72a",
+    "tree": "f0bf4a2f3da4667c667563ccd0f9c496da9fb685",
+    "observerFiles": 9,
+    "patchSha256": "90b0d7a37707e9b77029b7b344f945424a91034c3f8614269324e0134cb49934",
+    "nativeImage": "sha256:a964ef81ef4217377125a76b3c89c3c2c57bd528a2921b37fa2f6cfb59770177",
+    "jitImage": "sha256:592f227674e6ebce6a9e307a2ecae97d78b684ddb8f386ac80e42d30fd64a522",
+    "frozenManifestSha256": "65df61af090ffc45bfb1d15893d74ce66e6f4e05a085a0dd14b63a36350a5492",
+    "packagedImageProofSha256": "77bed11dd3e43b40b6310c72caffa895a5a79b853c2af183e828253ec5750390",
+    "sdk": "10.0.401",
+    "managedAndCompilerRuntime": "10.0.12",
+    "nativeFirstPartyLinkWarnings": 0,
+    "thirdPartyWarningSummariesRetained": true
+  },
+  "order": [
+    "native JSON then SSE",
+    "JIT JSON then SSE"
+  ],
+  "roles": {
+    "native": {
+      "workloads": {
+        "json": {
+          "measuredRequests": 1000,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "completeResponseFailures": 0,
+          "reportMetrics": {
+            "throughputPerSecond": 281.3753571180861,
+            "p50Milliseconds": 28.064,
+            "p95Milliseconds": 34.420383,
+            "p99Milliseconds": 40.942319
+          },
+          "inclusiveAndDisjointWallMetricsMs": {
+            "phase_request_envelope": {
+              "n": 1000,
+              "sum": 25762.755982,
+              "mean": 25.762755982,
+              "median": 25.460472000000003,
+              "min": 17.184512,
+              "max": 50.938803,
+              "p95NearestRank": 31.531662
+            },
+            "phase_capture_route": {
+              "n": 1000,
+              "sum": 684.263078,
+              "mean": 0.684263078,
+              "median": 0.4067285,
+              "min": 0.032555,
+              "max": 4.466887,
+              "p95NearestRank": 2.485335
+            },
+            "phase_calculate_cost": {
+              "n": 1000,
+              "sum": 396.830794,
+              "mean": 0.396830794,
+              "median": 0.0561785,
+              "min": 0.023324,
+              "max": 6.082374,
+              "p95NearestRank": 1.869883
+            },
+            "phase_token_reconcile": {
+              "n": 1000,
+              "sum": 1.294118,
+              "mean": 0.001294118,
+              "median": 0.0010745,
+              "min": 0.000519,
+              "max": 0.020216,
+              "p95NearestRank": 0.001817
+            },
+            "phase_price_usage": {
+              "n": 1000,
+              "sum": 385.128974,
+              "mean": 0.385128974,
+              "median": 0.0497835,
+              "min": 0.020511,
+              "max": 3.828949,
+              "p95NearestRank": 1.840438
+            },
+            "phase_cache_savings": {
+              "n": 1000,
+              "sum": 0.826178,
+              "mean": 0.000826178,
+              "median": 0.0006594999999999999,
+              "min": 0.00036,
+              "max": 0.016047,
+              "p95NearestRank": 0.00152
+            },
+            "phase_settle_spend": {
+              "n": 1000,
+              "sum": 1840.731373,
+              "mean": 1.840731373,
+              "median": 1.734861,
+              "min": 0.503476,
+              "max": 9.99062,
+              "p95NearestRank": 2.978499
+            },
+            "phase_request_log_await": {
+              "n": 1000,
+              "sum": 1881.543608,
+              "mean": 1.881543608,
+              "median": 1.7542840000000002,
+              "min": 0.835497,
+              "max": 4.352559,
+              "p95NearestRank": 3.006137
+            },
+            "phase_request_log_writer_await": {
+              "n": 1000,
+              "sum": 1692.627756,
+              "mean": 1.692627756,
+              "median": 1.562544,
+              "min": 0.810214,
+              "max": 3.737358,
+              "p95NearestRank": 2.772174
+            },
+            "phase_reservation_finalize": {
+              "n": 1000,
+              "sum": 5.628729,
+              "mean": 0.005628729,
+              "median": 0.0050585000000000005,
+              "min": 0.001181,
+              "max": 0.031163,
+              "p95NearestRank": 0.008985
+            },
+            "server_request_inclusive": {
+              "n": 1000,
+              "sum": 26815.795326,
+              "mean": 26.815795326,
+              "median": 26.482812000000003,
+              "min": 18.113628,
+              "max": 52.505835,
+              "p95NearestRank": 32.745176
+            },
+            "authentication_inclusive": {
+              "n": 1000,
+              "sum": 562.946536,
+              "mean": 0.562946536,
+              "median": 0.51268,
+              "min": 0.31234,
+              "max": 18.896824,
+              "p95NearestRank": 0.787191
+            },
+            "server_start_to_envelope_start": {
+              "n": 1000,
+              "sum": 845.473039,
+              "mean": 0.845473039,
+              "median": 0.7607835000000001,
+              "min": 0.400554,
+              "max": 19.037849,
+              "p95NearestRank": 1.410961
+            },
+            "envelope_start_to_http_client_start": {
+              "n": 1000,
+              "sum": 17292.13704,
+              "mean": 17.29213704,
+              "median": 16.958625,
+              "min": 10.626025,
+              "max": 40.670103,
+              "p95NearestRank": 22.157775
+            },
+            "server_start_to_http_client_start": {
+              "n": 1000,
+              "sum": 18137.610079000002,
+              "mean": 18.137610079,
+              "median": 17.733391,
+              "min": 11.194966,
+              "max": 43.053603,
+              "p95NearestRank": 23.118153
+            },
+            "http_client_headers_span": {
+              "n": 1000,
+              "sum": 1288.641826,
+              "mean": 1.288641826,
+              "median": 1.201076,
+              "min": 0.644481,
+              "max": 3.002832,
+              "p95NearestRank": 2.04021
+            },
+            "pre_http_sql_union": {
+              "n": 1000,
+              "sum": 2692.064049,
+              "mean": 2.692064049,
+              "median": 2.630931,
+              "min": 1.926725,
+              "max": 21.27322,
+              "p95NearestRank": 3.315183
+            },
+            "pre_http_wall_outside_sql_union": {
+              "n": 1000,
+              "sum": 15445.54603,
+              "mean": 15.445546030000001,
+              "median": 15.0819945,
+              "min": 8.628522,
+              "max": 38.54168,
+              "p95NearestRank": 20.125032
+            },
+            "envelope_sql_union": {
+              "n": 1000,
+              "sum": 2642.823846,
+              "mean": 2.642823846,
+              "median": 2.5938285,
+              "min": 1.831665,
+              "max": 8.867748,
+              "p95NearestRank": 3.285717
+            },
+            "all_request_sql_union": {
+              "n": 1000,
+              "sum": 3155.489061,
+              "mean": 3.155489061,
+              "median": 3.077323,
+              "min": 2.256428,
+              "max": 21.941973,
+              "p95NearestRank": 3.832284
+            },
+            "authentication_sql_union": {
+              "n": 1000,
+              "sum": 512.314314,
+              "mean": 0.512314314,
+              "median": 0.4608185,
+              "min": 0.274305,
+              "max": 18.82951,
+              "p95NearestRank": 0.733986
+            },
+            "client_start_to_eof": {
+              "n": 1000,
+              "sum": 28328.714139,
+              "mean": 28.328714139,
+              "median": 28.047314999999998,
+              "min": 19.853526,
+              "max": 53.565088,
+              "p95NearestRank": 34.396475
+            },
+            "client_start_to_headers": {
+              "n": 1000,
+              "sum": 23985.192919,
+              "mean": 23.985192919,
+              "median": 23.560226,
+              "min": 16.350602,
+              "max": 48.787147,
+              "p95NearestRank": 29.431225
+            }
+          },
+          "sqlClientExecutionCountHistogram": {
+            "7": 991,
+            "8": 9
+          },
+          "sqlPhaseCounts": {
+            "background_or_unclassified": 1000,
+            "request_envelope": 5009,
+            "settle_spend": 1000
+          }
+        },
+        "sse": {
+          "measuredRequests": 1000,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "completeResponseFailures": 0,
+          "reportMetrics": {
+            "throughputPerSecond": 173.88172964677403,
+            "p50Milliseconds": 45.290613,
+            "p95Milliseconds": 52.861117,
+            "p99Milliseconds": 55.684854
+          },
+          "inclusiveAndDisjointWallMetricsMs": {
+            "phase_request_envelope": {
+              "n": 1000,
+              "sum": 43582.87017,
+              "mean": 43.58287017,
+              "median": 43.1464685,
+              "min": 33.846008,
+              "max": 54.921418,
+              "p95NearestRank": 50.308286
+            },
+            "phase_endpoint_finalize": {
+              "n": 1000,
+              "sum": 445.550253,
+              "mean": 0.445550253,
+              "median": 0.259706,
+              "min": 0.047053,
+              "max": 3.311693,
+              "p95NearestRank": 1.556925
+            },
+            "phase_capture_route": {
+              "n": 1000,
+              "sum": 419.550712,
+              "mean": 0.419550712,
+              "median": 0.226446,
+              "min": 0.033755,
+              "max": 3.222567,
+              "p95NearestRank": 1.538016
+            },
+            "phase_store_evidence": {
+              "n": 1000,
+              "sum": 12.494601,
+              "mean": 0.012494601,
+              "median": 0.0120755,
+              "min": 0.002497,
+              "max": 0.055246,
+              "p95NearestRank": 0.018095
+            },
+            "phase_usage_finalize": {
+              "n": 1000,
+              "sum": 3082.056445,
+              "mean": 3.082056445,
+              "median": 2.9136775,
+              "min": 1.637164,
+              "max": 13.202278,
+              "p95NearestRank": 4.888278
+            },
+            "phase_calculate_cost": {
+              "n": 1000,
+              "sum": 349.850496,
+              "mean": 0.349850496,
+              "median": 0.13428050000000002,
+              "min": 0.021392,
+              "max": 4.337238,
+              "p95NearestRank": 1.272486
+            },
+            "phase_token_reconcile": {
+              "n": 1000,
+              "sum": 1.229288,
+              "mean": 0.001229288,
+              "median": 0.001126,
+              "min": 0.000496,
+              "max": 0.016963,
+              "p95NearestRank": 0.001683
+            },
+            "phase_price_usage": {
+              "n": 1000,
+              "sum": 345.382717,
+              "mean": 0.345382717,
+              "median": 0.1301605,
+              "min": 0.019119,
+              "max": 4.332039,
+              "p95NearestRank": 1.268565
+            },
+            "phase_cache_savings": {
+              "n": 1000,
+              "sum": 0.935414,
+              "mean": 0.000935414,
+              "median": 0.000761,
+              "min": 0.000369,
+              "max": 0.038494,
+              "p95NearestRank": 0.001371
+            },
+            "phase_settle_spend": {
+              "n": 1000,
+              "sum": 1090.959493,
+              "mean": 1.090959493,
+              "median": 0.967543,
+              "min": 0.500961,
+              "max": 6.266319,
+              "p95NearestRank": 1.924401
+            },
+            "phase_request_log_await": {
+              "n": 1000,
+              "sum": 1588.076847,
+              "mean": 1.588076847,
+              "median": 1.390782,
+              "min": 0.830402,
+              "max": 12.151468,
+              "p95NearestRank": 2.616176
+            },
+            "phase_request_log_writer_await": {
+              "n": 1000,
+              "sum": 1488.324682,
+              "mean": 1.488324682,
+              "median": 1.2683010000000001,
+              "min": 0.817216,
+              "max": 12.123631,
+              "p95NearestRank": 2.50554
+            },
+            "phase_reservation_finalize": {
+              "n": 1000,
+              "sum": 5.324723,
+              "mean": 0.005324723,
+              "median": 0.0049685,
+              "min": 0.001237,
+              "max": 0.03167,
+              "p95NearestRank": 0.007906
+            },
+            "server_request_inclusive": {
+              "n": 1000,
+              "sum": 44434.694544,
+              "mean": 44.434694544,
+              "median": 43.984517999999994,
+              "min": 34.506731,
+              "max": 55.799627,
+              "p95NearestRank": 51.242215
+            },
+            "authentication_inclusive": {
+              "n": 1000,
+              "sum": 484.352195,
+              "mean": 0.484352195,
+              "median": 0.455832,
+              "min": 0.342692,
+              "max": 3.050689,
+              "p95NearestRank": 0.667528
+            },
+            "server_start_to_envelope_start": {
+              "n": 1000,
+              "sum": 691.543596,
+              "mean": 0.691543596,
+              "median": 0.6329585,
+              "min": 0.421639,
+              "max": 3.202063,
+              "p95NearestRank": 1.081467
+            },
+            "envelope_start_to_http_client_start": {
+              "n": 1000,
+              "sum": 11036.715899,
+              "mean": 11.036715899,
+              "median": 10.724489,
+              "min": 4.645573,
+              "max": 20.969401,
+              "p95NearestRank": 16.428351
+            },
+            "server_start_to_http_client_start": {
+              "n": 1000,
+              "sum": 11728.259495,
+              "mean": 11.728259495,
+              "median": 11.3897935,
+              "min": 5.219558,
+              "max": 21.812148,
+              "p95NearestRank": 17.141819
+            },
+            "http_client_headers_span": {
+              "n": 1000,
+              "sum": 1006.3578219999999,
+              "mean": 1.006357822,
+              "median": 0.9414880000000001,
+              "min": 0.614558,
+              "max": 7.942767,
+              "p95NearestRank": 1.442839
+            },
+            "pre_http_sql_union": {
+              "n": 1000,
+              "sum": 2336.369546,
+              "mean": 2.336369546,
+              "median": 2.2689114999999997,
+              "min": 1.808977,
+              "max": 9.81027,
+              "p95NearestRank": 2.890543
+            },
+            "pre_http_wall_outside_sql_union": {
+              "n": 1000,
+              "sum": 9391.889949,
+              "mean": 9.391889949,
+              "median": 9.133328,
+              "min": 3.23626,
+              "max": 18.930018,
+              "p95NearestRank": 14.604961
+            },
+            "envelope_sql_union": {
+              "n": 1000,
+              "sum": 2315.68835,
+              "mean": 2.31568835,
+              "median": 2.243125,
+              "min": 1.684531,
+              "max": 9.769192,
+              "p95NearestRank": 2.868304
+            },
+            "all_request_sql_union": {
+              "n": 1000,
+              "sum": 2748.169857,
+              "mean": 2.748169857,
+              "median": 2.672202,
+              "min": 2.093468,
+              "max": 10.126345,
+              "p95NearestRank": 3.359139
+            },
+            "authentication_sql_union": {
+              "n": 1000,
+              "sum": 431.291192,
+              "mean": 0.431291192,
+              "median": 0.402649,
+              "min": 0.306544,
+              "max": 1.085337,
+              "p95NearestRank": 0.620304
+            },
+            "client_start_to_eof": {
+              "n": 1000,
+              "sum": 45816.229822,
+              "mean": 45.816229822,
+              "median": 45.278234499999996,
+              "min": 35.824817,
+              "max": 57.080757,
+              "p95NearestRank": 52.796267
+            },
+            "client_start_to_headers": {
+              "n": 1000,
+              "sum": 14463.894255,
+              "mean": 14.463894255,
+              "median": 14.1132795,
+              "min": 7.241036,
+              "max": 24.729401,
+              "p95NearestRank": 20.288326
+            },
+            "http_client_start_to_done_flush": {
+              "n": 1000,
+              "sum": 28701.699725,
+              "mean": 28.701699725,
+              "median": 28.7094095,
+              "min": 23.010981,
+              "max": 33.012274,
+              "p95NearestRank": 30.957144
+            },
+            "done_flush_to_response_completed": {
+              "n": 1000,
+              "sum": 3931.63423,
+              "mean": 3.93163423,
+              "median": 3.733375,
+              "min": 1.793267,
+              "max": 14.688652,
+              "p95NearestRank": 6.512164
+            },
+            "response_completed_to_server_span_end": {
+              "n": 1000,
+              "sum": 73.101094,
+              "mean": 0.073101094,
+              "median": 0.022523,
+              "min": 0.001034,
+              "max": 1.17667,
+              "p95NearestRank": 0.280516
+            },
+            "post_done_sql_union": {
+              "n": 1000,
+              "sum": 411.192101,
+              "mean": 0.411192101,
+              "median": 0.374294,
+              "min": 0.227529,
+              "max": 5.841218,
+              "p95NearestRank": 0.5894
+            },
+            "post_done_wall_outside_sql_union": {
+              "n": 1000,
+              "sum": 3520.442129,
+              "mean": 3.520442129,
+              "median": 3.3061015,
+              "min": 1.367568,
+              "max": 14.369211,
+              "p95NearestRank": 6.087606
+            },
+            "provider_iterator_inclusive_consumer_time": {
+              "n": 1000,
+              "sum": 28078.612091,
+              "mean": 28.078612091,
+              "median": 28.151448,
+              "min": 22.554907,
+              "max": 32.6169,
+              "p95NearestRank": 29.932813
+            },
+            "client_done_observation_to_eof": {
+              "n": 1000,
+              "sum": 3866.60191,
+              "mean": 3.86660191,
+              "median": 3.6334455,
+              "min": 0.004106,
+              "max": 14.271568,
+              "p95NearestRank": 6.672626
+            }
+          },
+          "sqlClientExecutionCountHistogram": {
+            "7": 991,
+            "8": 9
+          },
+          "sqlPhaseCounts": {
+            "background_or_unclassified": 1000,
+            "request_envelope": 5000,
+            "settle_spend": 1000,
+            "usage_finalize": 9
+          }
+        }
+      },
+      "joinedTraces": 2200,
+      "completeSuccessEvidence": true,
+      "qualityCounters": {
+        "dropped": 0,
+        "captureErrors": 0,
+        "exportErrors": 0,
+        "activeSpansAtStop": 0,
+        "unclassifiedSql": 0,
+        "runtimeSamplesDropped": 0,
+        "runtimeSamplerFaults": 0
+      },
+      "writerPhaseLogClientExecutions": 0,
+      "unassociatedRecordsPreserved": 6487,
+      "runtimeSamplerJoined": true
+    },
+    "jit": {
+      "workloads": {
+        "json": {
+          "measuredRequests": 1000,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "completeResponseFailures": 0,
+          "reportMetrics": {
+            "throughputPerSecond": 332.7237722917026,
+            "p50Milliseconds": 22.73094,
+            "p95Milliseconds": 31.256107,
+            "p99Milliseconds": 41.379411
+          },
+          "inclusiveAndDisjointWallMetricsMs": {
+            "phase_request_envelope": {
+              "n": 1000,
+              "sum": 21039.80086,
+              "mean": 21.03980086,
+              "median": 19.873725999999998,
+              "min": 16.01422,
+              "max": 51.748065,
+              "p95NearestRank": 27.127233
+            },
+            "phase_capture_route": {
+              "n": 1000,
+              "sum": 350.844647,
+              "mean": 0.350844647,
+              "median": 0.2058305,
+              "min": 0.081746,
+              "max": 12.835738,
+              "p95NearestRank": 0.850283
+            },
+            "phase_calculate_cost": {
+              "n": 1000,
+              "sum": 297.184207,
+              "mean": 0.297184207,
+              "median": 0.1636375,
+              "min": 0.067603,
+              "max": 7.765302,
+              "p95NearestRank": 0.856878
+            },
+            "phase_token_reconcile": {
+              "n": 1000,
+              "sum": 2.555709,
+              "mean": 0.002555709,
+              "median": 0.002128,
+              "min": 0.00131,
+              "max": 0.036154,
+              "p95NearestRank": 0.004165
+            },
+            "phase_price_usage": {
+              "n": 1000,
+              "sum": 270.97946,
+              "mean": 0.27097946,
+              "median": 0.149473,
+              "min": 0.059907,
+              "max": 6.445315,
+              "p95NearestRank": 0.823352
+            },
+            "phase_cache_savings": {
+              "n": 1000,
+              "sum": 2.400351,
+              "mean": 0.002400351,
+              "median": 0.001592,
+              "min": 0.000812,
+              "max": 0.195287,
+              "p95NearestRank": 0.003723
+            },
+            "phase_settle_spend": {
+              "n": 1000,
+              "sum": 2093.43825,
+              "mean": 2.09343825,
+              "median": 1.9549845000000001,
+              "min": 1.384372,
+              "max": 10.181785,
+              "p95NearestRank": 2.741145
+            },
+            "phase_request_log_await": {
+              "n": 1000,
+              "sum": 302.890881,
+              "mean": 0.302890881,
+              "median": 0.0528305,
+              "min": 0.021473,
+              "max": 31.684545,
+              "p95NearestRank": 0.145721
+            },
+            "phase_request_log_writer_await": {
+              "n": 1000,
+              "sum": 250.821982,
+              "mean": 0.250821982,
+              "median": 0.009473,
+              "min": 0.003576,
+              "max": 31.650212,
+              "p95NearestRank": 0.020581
+            },
+            "phase_reservation_finalize": {
+              "n": 1000,
+              "sum": 7.831812,
+              "mean": 0.007831812,
+              "median": 0.0067595,
+              "min": 0.003497,
+              "max": 0.117081,
+              "p95NearestRank": 0.012236
+            },
+            "server_request_inclusive": {
+              "n": 1000,
+              "sum": 22265.979644,
+              "mean": 22.265979644,
+              "median": 21.092751,
+              "min": 16.897268,
+              "max": 53.262764,
+              "p95NearestRank": 28.579206
+            },
+            "authentication_inclusive": {
+              "n": 1000,
+              "sum": 884.172086,
+              "mean": 0.884172086,
+              "median": 0.8367285,
+              "min": 0.507408,
+              "max": 6.829161,
+              "p95NearestRank": 1.138588
+            },
+            "server_start_to_envelope_start": {
+              "n": 1000,
+              "sum": 1130.444857,
+              "mean": 1.130444857,
+              "median": 1.0754700000000001,
+              "min": 0.655182,
+              "max": 7.065059,
+              "p95NearestRank": 1.445034
+            },
+            "envelope_start_to_http_client_start": {
+              "n": 1000,
+              "sum": 15239.847389,
+              "mean": 15.239847389,
+              "median": 14.386949,
+              "min": 11.259799,
+              "max": 34.632144,
+              "p95NearestRank": 20.575745
+            },
+            "server_start_to_http_client_start": {
+              "n": 1000,
+              "sum": 16370.292246,
+              "mean": 16.370292245999998,
+              "median": 15.510895,
+              "min": 12.080338,
+              "max": 35.614463,
+              "p95NearestRank": 21.603298
+            },
+            "http_client_headers_span": {
+              "n": 1000,
+              "sum": 1559.979058,
+              "mean": 1.559979058,
+              "median": 1.420217,
+              "min": 0.70305,
+              "max": 6.325387,
+              "p95NearestRank": 2.483263
+            },
+            "pre_http_sql_union": {
+              "n": 1000,
+              "sum": 4778.06293,
+              "mean": 4.77806293,
+              "median": 4.4230805,
+              "min": 3.499335,
+              "max": 16.527294,
+              "p95NearestRank": 8.277942
+            },
+            "pre_http_wall_outside_sql_union": {
+              "n": 1000,
+              "sum": 11592.229316,
+              "mean": 11.592229316,
+              "median": 10.935551,
+              "min": 8.376564,
+              "max": 30.593767,
+              "p95NearestRank": 16.333619
+            },
+            "envelope_sql_union": {
+              "n": 1000,
+              "sum": 5646.514569,
+              "mean": 5.646514569,
+              "median": 5.168525,
+              "min": 4.103231,
+              "max": 19.458732,
+              "p95NearestRank": 9.969199
+            },
+            "all_request_sql_union": {
+              "n": 1000,
+              "sum": 5651.449128,
+              "mean": 5.651449128,
+              "median": 5.169197499999999,
+              "min": 4.103231,
+              "max": 19.458732,
+              "p95NearestRank": 9.969199
+            },
+            "authentication_sql_union": {
+              "n": 1000,
+              "sum": 4.934559,
+              "mean": 0.004934559,
+              "median": 0.0,
+              "min": 0.0,
+              "max": 0.708759,
+              "p95NearestRank": 0.0
+            },
+            "client_start_to_eof": {
+              "n": 1000,
+              "sum": 23966.182021,
+              "mean": 23.966182021,
+              "median": 22.703496,
+              "min": 18.353592,
+              "max": 54.965798,
+              "p95NearestRank": 31.24004
+            },
+            "client_start_to_headers": {
+              "n": 1000,
+              "sum": 21186.692187,
+              "mean": 21.186692187,
+              "median": 20.206445000000002,
+              "min": 16.702816,
+              "max": 39.725149,
+              "p95NearestRank": 27.206746
+            }
+          },
+          "sqlClientExecutionCountHistogram": {
+            "8": 973,
+            "10": 2,
+            "9": 25
+          },
+          "sqlPhaseCounts": {
+            "request_envelope": 7011,
+            "settle_spend": 1000,
+            "request_log_writer_await": 10,
+            "background_or_unclassified": 8
+          }
+        },
+        "sse": {
+          "measuredRequests": 1000,
+          "warmupRequests": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "completeResponseFailures": 0,
+          "reportMetrics": {
+            "throughputPerSecond": 173.12568592396764,
+            "p50Milliseconds": 44.715736,
+            "p95Milliseconds": 55.666671,
+            "p99Milliseconds": 66.107876
+          },
+          "inclusiveAndDisjointWallMetricsMs": {
+            "phase_request_envelope": {
+              "n": 1000,
+              "sum": 42249.250415,
+              "mean": 42.249250415,
+              "median": 41.5501425,
+              "min": 34.354522,
+              "max": 65.489834,
+              "p95NearestRank": 48.344462
+            },
+            "phase_endpoint_finalize": {
+              "n": 1000,
+              "sum": 341.573872,
+              "mean": 0.341573872,
+              "median": 0.15717350000000002,
+              "min": 0.039342,
+              "max": 2.640178,
+              "p95NearestRank": 1.071763
+            },
+            "phase_capture_route": {
+              "n": 1000,
+              "sum": 309.125082,
+              "mean": 0.309125082,
+              "median": 0.12135199999999999,
+              "min": 0.027417,
+              "max": 2.626826,
+              "p95NearestRank": 1.038164
+            },
+            "phase_store_evidence": {
+              "n": 1000,
+              "sum": 19.057474,
+              "mean": 0.019057474,
+              "median": 0.016691499999999998,
+              "min": 0.003328,
+              "max": 0.246197,
+              "p95NearestRank": 0.026054
+            },
+            "phase_usage_finalize": {
+              "n": 1000,
+              "sum": 2019.124836,
+              "mean": 2.019124836,
+              "median": 1.7183405,
+              "min": 1.08494,
+              "max": 23.163397,
+              "p95NearestRank": 2.831773
+            },
+            "phase_calculate_cost": {
+              "n": 1000,
+              "sum": 218.314064,
+              "mean": 0.218314064,
+              "median": 0.09157699999999999,
+              "min": 0.025131,
+              "max": 1.609514,
+              "p95NearestRank": 0.949544
+            },
+            "phase_token_reconcile": {
+              "n": 1000,
+              "sum": 1.369905,
+              "mean": 0.001369905,
+              "median": 0.001223,
+              "min": 0.000484,
+              "max": 0.025846,
+              "p95NearestRank": 0.002103
+            },
+            "phase_price_usage": {
+              "n": 1000,
+              "sum": 211.687132,
+              "mean": 0.211687132,
+              "median": 0.0857155,
+              "min": 0.022196,
+              "max": 1.605286,
+              "p95NearestRank": 0.942863
+            },
+            "phase_cache_savings": {
+              "n": 1000,
+              "sum": 1.114477,
+              "mean": 0.001114477,
+              "median": 0.000939,
+              "min": 0.000547,
+              "max": 0.017074,
+              "p95NearestRank": 0.001854
+            },
+            "phase_settle_spend": {
+              "n": 1000,
+              "sum": 1518.617597,
+              "mean": 1.518617597,
+              "median": 1.4387265,
+              "min": 0.91942,
+              "max": 7.367113,
+              "p95NearestRank": 1.944757
+            },
+            "phase_request_log_await": {
+              "n": 1000,
+              "sum": 210.383406,
+              "mean": 0.210383406,
+              "median": 0.035718,
+              "min": 0.007036,
+              "max": 21.46699,
+              "p95NearestRank": 0.101692
+            },
+            "phase_request_log_writer_await": {
+              "n": 1000,
+              "sum": 175.364969,
+              "mean": 0.175364969,
+              "median": 0.0059535000000000005,
+              "min": 0.001571,
+              "max": 21.4444,
+              "p95NearestRank": 0.010567
+            },
+            "phase_reservation_finalize": {
+              "n": 1000,
+              "sum": 3.852583,
+              "mean": 0.003852583,
+              "median": 0.003641,
+              "min": 0.000703,
+              "max": 0.044357,
+              "p95NearestRank": 0.006233
+            },
+            "server_request_inclusive": {
+              "n": 1000,
+              "sum": 43196.389815,
+              "mean": 43.196389815,
+              "median": 42.4211445,
+              "min": 35.166426,
+              "max": 66.309647,
+              "p95NearestRank": 49.640596
+            },
+            "authentication_inclusive": {
+              "n": 1000,
+              "sum": 715.012137,
+              "mean": 0.715012137,
+              "median": 0.650293,
+              "min": 0.38729,
+              "max": 6.43468,
+              "p95NearestRank": 0.959798
+            },
+            "server_start_to_envelope_start": {
+              "n": 1000,
+              "sum": 886.111003,
+              "mean": 0.886111003,
+              "median": 0.8074574999999999,
+              "min": 0.53025,
+              "max": 6.829222,
+              "p95NearestRank": 1.163654
+            },
+            "envelope_start_to_http_client_start": {
+              "n": 1000,
+              "sum": 10941.744254,
+              "mean": 10.941744254,
+              "median": 10.3654125,
+              "min": 7.496965,
+              "max": 19.770949,
+              "p95NearestRank": 15.682884
+            },
+            "server_start_to_http_client_start": {
+              "n": 1000,
+              "sum": 11827.855257,
+              "mean": 11.827855257,
+              "median": 11.1757965,
+              "min": 8.195713,
+              "max": 20.603189,
+              "p95NearestRank": 17.102013
+            },
+            "http_client_headers_span": {
+              "n": 1000,
+              "sum": 1271.416147,
+              "mean": 1.271416147,
+              "median": 1.1800465,
+              "min": 0.657655,
+              "max": 3.804532,
+              "p95NearestRank": 2.035387
+            },
+            "pre_http_sql_union": {
+              "n": 1000,
+              "sum": 3991.831512,
+              "mean": 3.991831512,
+              "median": 3.7320365,
+              "min": 2.809598,
+              "max": 12.891237,
+              "p95NearestRank": 6.741075
+            },
+            "pre_http_wall_outside_sql_union": {
+              "n": 1000,
+              "sum": 7836.023745,
+              "mean": 7.836023745,
+              "median": 7.3630975,
+              "min": 5.04245,
+              "max": 16.184407,
+              "p95NearestRank": 12.223669
+            },
+            "envelope_sql_union": {
+              "n": 1000,
+              "sum": 4722.942847,
+              "mean": 4.722942847,
+              "median": 4.382537,
+              "min": 3.338992,
+              "max": 19.665264,
+              "p95NearestRank": 8.114154
+            },
+            "all_request_sql_union": {
+              "n": 1000,
+              "sum": 4722.942847,
+              "mean": 4.722942847,
+              "median": 4.382537,
+              "min": 3.338992,
+              "max": 19.665264,
+              "p95NearestRank": 8.114154
+            },
+            "authentication_sql_union": {
+              "n": 1000,
+              "sum": 0.0,
+              "mean": 0.0,
+              "median": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "p95NearestRank": 0.0
+            },
+            "client_start_to_eof": {
+              "n": 1000,
+              "sum": 45958.551007,
+              "mean": 45.958551007,
+              "median": 44.664609999999996,
+              "min": 36.454392,
+              "max": 69.409028,
+              "p95NearestRank": 55.640567
+            },
+            "client_start_to_headers": {
+              "n": 1000,
+              "sum": 15404.347325,
+              "mean": 15.404347325,
+              "median": 14.6141545,
+              "min": 10.476083,
+              "max": 30.659409,
+              "p95NearestRank": 21.242436
+            },
+            "http_client_start_to_done_flush": {
+              "n": 1000,
+              "sum": 28782.283074,
+              "mean": 28.782283074,
+              "median": 28.784096499999997,
+              "min": 24.331426,
+              "max": 34.366675,
+              "p95NearestRank": 30.915329
+            },
+            "done_flush_to_response_completed": {
+              "n": 1000,
+              "sum": 2561.740067,
+              "mean": 2.561740067,
+              "median": 2.207691,
+              "min": 1.257955,
+              "max": 23.393743,
+              "p95NearestRank": 3.869993
+            },
+            "response_completed_to_server_span_end": {
+              "n": 1000,
+              "sum": 24.511417,
+              "mean": 0.024511417,
+              "median": 0.014287,
+              "min": 0.002206,
+              "max": 0.475391,
+              "p95NearestRank": 0.083139
+            },
+            "post_done_sql_union": {
+              "n": 1000,
+              "sum": 731.111335,
+              "mean": 0.731111335,
+              "median": 0.621062,
+              "min": 0.353987,
+              "max": 15.864015,
+              "p95NearestRank": 0.884202
+            },
+            "post_done_wall_outside_sql_union": {
+              "n": 1000,
+              "sum": 1830.628732,
+              "mean": 1.830628732,
+              "median": 1.5452315,
+              "min": 0.775596,
+              "max": 22.614561,
+              "p95NearestRank": 3.13172
+            },
+            "provider_iterator_inclusive_consumer_time": {
+              "n": 1000,
+              "sum": 28436.219131,
+              "mean": 28.436219131,
+              "median": 28.4579225,
+              "min": 23.999393,
+              "max": 34.011442,
+              "p95NearestRank": 30.470648
+            },
+            "client_done_observation_to_eof": {
+              "n": 1000,
+              "sum": 2210.244952,
+              "mean": 2.210244952,
+              "median": 1.8894769999999999,
+              "min": 0.000452,
+              "max": 22.957755,
+              "p95NearestRank": 4.589764
+            }
+          },
+          "sqlClientExecutionCountHistogram": {
+            "8": 982,
+            "9": 16,
+            "10": 2
+          },
+          "sqlPhaseCounts": {
+            "request_envelope": 7000,
+            "settle_spend": 1000,
+            "request_log_writer_await": 10,
+            "usage_finalize": 10
+          }
+        }
+      },
+      "joinedTraces": 2200,
+      "completeSuccessEvidence": true,
+      "qualityCounters": {
+        "dropped": 0,
+        "captureErrors": 0,
+        "exportErrors": 0,
+        "activeSpansAtStop": 0,
+        "unclassifiedSql": 0,
+        "runtimeSamplesDropped": 0,
+        "runtimeSamplerFaults": 0
+      },
+      "writerPhaseLogClientExecutions": 22,
+      "unassociatedRecordsPreserved": 4594,
+      "runtimeSamplerJoined": true
+    }
+  },
+  "observationPolicy": {
+    "physicalCpuEvidenceCollected": false,
+    "packetEvidenceCollected": false,
+    "perfCountersCollected": false,
+    "socketOverrides": false,
+    "scope": "Bounded phase/SQL/HTTP Activities, deterministic client read/event timings, and whole-process100ms numeric sampler. Single fixed order and observers prevent an efficacy or causal attribution claim. SQL client spans are not server statement or round-trip counts. Wall outside SQL includes I/O, scheduling and uninstrumented code; it is not CPU. Native worker SQL is context-isolated and retained separately from request traces."
+  },
+  "accounting": {
+    "operations": 4400,
+    "json": 2200,
+    "sse": 2200,
+    "logs": 4400,
+    "usageAudits": 4400,
+    "auditErrors": 0,
+    "inputTokens": 44000,
+    "outputTokens": 22000,
+    "cost": "0.33000000",
+    "spent": "0.33000000",
+    "debits": "0.33000000",
+    "balance": "99.67000000",
+    "retainedMarkerFamilies": 3,
+    "markersEach": 4400,
+    "unchangedUnrelatedTables": 41,
+    "poststopDatabaseBackends": 0,
+    "finalExactReads": [
+      {
+        "file": "diagnostic-final-balanced-live-1.observation.private.json",
+        "sha256": "c37996361c2a4b41639934f49377c39c9c97db041191948f3ba5b052b8b6bbe9",
+        "observedAt": "2026-10-19T01:44:39.452201-07:00",
+        "passed": true
+      },
+      {
+        "file": "diagnostic-final-balanced-live-2.observation.private.json",
+        "sha256": "a690f2ed2bb115ee2f975bca6b628d95c64e4116030e3843a58085d531d96c9e",
+        "observedAt": "2026-10-19T01:45:17.407735-07:00",
+        "passed": true
+      },
+      {
+        "file": "diagnostic-final-balanced-live-3.observation.private.json",
+        "sha256": "4553416f3f1200b35094c170a28a00be4418842430184335a067adced379e2b8",
+        "observedAt": "2026-10-19T01:45:55.489318-07:00",
+        "passed": true
+      },
+      {
+        "file": "diagnostic-final-poststop.observation.private.json",
+        "sha256": "65d2d7449d0f22a02d6f99b1c68cc4e5551b08c17b8ff334db9b846b7efe709c",
+        "observedAt": "2026-10-19T01:46:04.962019-07:00",
+        "passed": true
+      },
+      {
+        "file": "preservation-final.observation.private.json",
+        "sha256": "4165cb0b0b214d14b8a8fd764beac257293d36914cf0937872e84f189ce6c39d",
+        "observedAt": "2026-10-19T01:46:14.135372-07:00",
+        "passed": true
+      }
+    ],
+    "archivedLedgerAudit": {
+      "passed": true,
+      "rows": 3,
+      "allRunningBalancesChecked": true,
+      "uniquePositiveUndeletedDebits": true,
+      "debits": "0.33000000",
+      "finalBalance": "99.67000000",
+      "extractedSqlSha256": "742644c00b4898e5fd19adee859f04fcdfbee9b63ba126f92216a2f68b77c312",
+      "extractionClosureSha256": "377c6d21ab4234ea491e62da62412a0829dcafdd4749f91ce17982cf939ee9cc",
+      "reviewScope": "Root independent read-only archive calculation; no new independent-agent review claimed."
+    }
+  },
+  "closure": {
+    "archivesVerified": true,
+    "postgresArchiveSha256": "22b17141d280b96e8321f10be37b254f38589a593eba1bf251a0beb6d992c31c",
+    "redisArchiveSha256": "2425b66ec90fc9e3074d24dedeb74549ca06fe41c25af06252c44fb16d8e6a2b",
+    "allOwnedResourcesAbsent": true,
+    "receiptSha256": "e6a92bce73e9ad2c943129efa654fe27b4d644cae91a8e68bfcbc6901479c35c"
+  },
+  "retainedFailedPreparationAttempt": {
+    "status": "failed",
+    "operations": 0,
+    "reason": "Greedy function-name parser omitted Assert-Frozen. Failure occurred before any Gateway or client started. Corrected function extraction and structural/synthetic checks preceded the fresh run.",
+    "postgresArchiveSha256": "8089e8b737a870afe07f122df1f8c7c8c6735508f72ec73fb87b3efe4d68dc53",
+    "redisArchiveSha256": "17f3e81cc20088f8ebb2193908aabe641a472e80d15df4f819b18213d2e59225",
+    "allOwnedResourcesAbsent": true
+  },
+  "rawBindings": [
+    {
+      "file": "full-native-json.report.json",
+      "sha256": "1a003a6e500701c2fb497a8c8bcf340ed32d0410146a80c4c5fa4180a7832452"
+    },
+    {
+      "file": "full-native-json.client-trace.private.json",
+      "sha256": "4d691479371f5cc16cb8fef33d551a0aeaf7d7156d060a74c441ff54a7d529d1"
+    },
+    {
+      "file": "full-native-json.execution.json",
+      "sha256": "41110964979fc52ddb03c3b3a96d37881f4f3362bdbf81d0a699ec5f7ffcac70"
+    },
+    {
+      "file": "full-native-sse.report.json",
+      "sha256": "6c87ec286709464991c232a009b4da66e38875a6ca04daac8776f3f2c8672b09"
+    },
+    {
+      "file": "full-native-sse.client-trace.private.json",
+      "sha256": "7dd9940e1178e90854e105cc014388033699e1990370a357a4dbd997fa20a9d0"
+    },
+    {
+      "file": "full-native-sse.execution.json",
+      "sha256": "ec2cc6503fc0648569fa33c9dcd48369e499bd93fd6ad6129ccd4a6a3315fe86"
+    },
+    {
+      "file": "full-native.server-profile.private.json",
+      "sha256": "ae759256a2ad4f048ddafc9f5d934c2c44a206ab73e252d7bd23daa215d5a338"
+    },
+    {
+      "file": "full-native.client-server-validation.json",
+      "sha256": "4cfade252d4ec5544cb1f23ccba4c68ff0f67f4eb12554268b89d7d6d6de0b77"
+    },
+    {
+      "file": "full-jit-json.report.json",
+      "sha256": "a98c3e16b4ff1fd53acb55798749220b79a59d43a90f1ed15b2d33a5c6ca7294"
+    },
+    {
+      "file": "full-jit-json.client-trace.private.json",
+      "sha256": "b729107a942393e797a34e71ea476dc55fc707b6c1297c78a2c642c446acac1e"
+    },
+    {
+      "file": "full-jit-json.execution.json",
+      "sha256": "411e1ab7b261006f6afce2fae4595a7d32cbeecda4d09301c7cce59c934cf129"
+    },
+    {
+      "file": "full-jit-sse.report.json",
+      "sha256": "879fdc50d575fba225ddb948ed16f31817c4e3a78dbb930b5d9cab2281e4c166"
+    },
+    {
+      "file": "full-jit-sse.client-trace.private.json",
+      "sha256": "b5e54ae8bec0edd0350603b979c10ea3700c684f003f80f64fc8bcfd7ef4bafe"
+    },
+    {
+      "file": "full-jit-sse.execution.json",
+      "sha256": "e92951938430bf3615b18f9a55dbe09e104c34c4df08d2de49e67f7665d8ad59"
+    },
+    {
+      "file": "full-jit.server-profile.private.json",
+      "sha256": "53b84b7c2af38a53b773f21630cf7d14173ea6ab3f970e5da0c6fd41828d5c25"
+    },
+    {
+      "file": "full-jit.client-server-validation.json",
+      "sha256": "c014c4482526812b9315d60a3fd4ed47f761c5ef67a476e07ac15a6baa4030f1"
+    }
+  ],
+  "analysisSha256": "cf9d727217002592ef492f4c385541e94bcc930173ed5753e1124ecd59ef3ae9",
+  "publisherSourceSha256": "bb2904a4c628bf0d57995dddee4b9b43ec67ed999a89b5c8f6715150fb86b6da",
+  "conclusion": "The observed SSE writer await differs most: Native mean1.488325ms versus JIT0.175365ms; pre-provider envelope means11.036716/10.941744ms. These observations motivate testing direct durable writes, not a claim that the performance regression is resolved. The fifth controlled candidate still fails both unchanged criteria."
+}

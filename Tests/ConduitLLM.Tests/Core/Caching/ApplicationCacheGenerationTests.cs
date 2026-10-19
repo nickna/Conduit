@@ -1,4 +1,6 @@
 using ConduitLLM.Core.Caching;
+using Moq;
+using StackExchange.Redis;
 using ZiggyCreatures.Caching.Fusion;
 
 namespace ConduitLLM.Tests.Core.Caching;
@@ -11,6 +13,160 @@ public sealed class ApplicationCacheGenerationCollection;
 [Collection("Application cache generation publication")]
 public sealed class ApplicationCacheGenerationTests
 {
+    /// <summary>Uses the existing L1 entry and reloads only after local invalidation.</summary>
+    [Fact]
+    public async Task WarmL1HitSkipsFactoryAndLocalInvalidationReloads()
+    {
+        var options = new ApplicationCacheOptions();
+        var fusionOptions = options.FusionOptions();
+        fusionOptions.EnableSyncEventHandlersExecution = true;
+        using var cache = new FusionCache(fusionOptions);
+        using var generations = new ApplicationCacheGeneration(cache, options, null);
+        var key = "generation:mappings";
+        var entry = options.Entry(TimeSpan.FromSeconds(5));
+        entry.EnableAutoClone = false;
+        await cache.SetAsync(key, "warm", entry);
+        var loads = 0;
+        cache.Events.FactorySuccess += (_, args) => { if (args.Key.EndsWith(key, StringComparison.Ordinal)) loads++; };
+
+        var hit = generations.GetAsync(ApplicationCacheDomain.Mappings);
+        Assert.True(hit.IsCompletedSuccessfully);
+        Assert.Equal("warm", await hit);
+        Assert.Equal(0, loads);
+
+        await generations.InvalidateAsync(ApplicationCacheDomain.Mappings);
+        Assert.NotEqual("warm", await generations.GetAsync(ApplicationCacheDomain.Mappings));
+        Assert.Equal(1, loads);
+    }
+
+    /// <summary>A later publication-time failure remains fenced even with a fresh old L1 token.</summary>
+    [Fact]
+    public async Task LocalRecoveryBypassesWarmL1AndPreservesLaterFailure()
+    {
+        var options = new ApplicationCacheOptions();
+        var fusionOptions = options.FusionOptions();
+        fusionOptions.EnableSyncEventHandlersExecution = true;
+        using var cache = new FusionCache(fusionOptions);
+        using var generations = new ApplicationCacheGeneration(cache, options, null);
+        var key = "generation:mappings";
+        var entry = options.Entry(TimeSpan.FromSeconds(5));
+        entry.EnableAutoClone = false;
+        await cache.SetAsync(key, "stale", entry);
+        var loads = 0;
+        cache.Events.FactorySuccess += (_, args) =>
+        {
+            if (!args.Key.EndsWith(key, StringComparison.Ordinal)) return;
+            if (++loads == 1) generations.RecordStorageFailure(ApplicationCacheDomain.Mappings);
+        };
+
+        generations.RecordStorageFailure(ApplicationCacheDomain.Mappings);
+        var recovered = await generations.GetAsync(ApplicationCacheDomain.Mappings);
+        Assert.NotEqual("stale", recovered);
+        Assert.Equal(1, loads);
+        Assert.Equal(recovered, await generations.GetAsync(ApplicationCacheDomain.Mappings));
+        Assert.Equal(2, loads);
+    }
+
+    /// <summary>Pre-cancellation returns a canceled operation without consulting the cache.</summary>
+    [Fact]
+    public async Task PreCanceledReadReturnsCanceledValueTaskWithoutSynchronousThrow()
+    {
+        var cache = new Mock<IFusionCache>(MockBehavior.Strict);
+        using var generations = new ApplicationCacheGeneration(cache.Object, new ApplicationCacheOptions(), null);
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+
+        var read = generations.GetAsync(ApplicationCacheDomain.Mappings, canceled.Token);
+
+        Assert.True(read.IsCanceled);
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => read.AsTask());
+        Assert.Equal(canceled.Token, error.CancellationToken);
+        cache.VerifyNoOtherCalls();
+    }
+
+    /// <summary>Configured-Redis disposal returns a faulted operation before starting a connection.</summary>
+    [Fact]
+    public async Task DisposedReadReturnsFaultedValueTaskWithoutSynchronousThrow()
+    {
+        var cache = new Mock<IFusionCache>(MockBehavior.Strict);
+        using var generations = new ApplicationCacheGeneration(cache.Object, new ApplicationCacheOptions(), "127.0.0.1:1");
+        generations.Dispose();
+
+        var read = generations.GetAsync(ApplicationCacheDomain.Mappings);
+
+        Assert.True(read.IsFaulted);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => read.AsTask());
+        cache.VerifyNoOtherCalls();
+    }
+
+    /// <summary>Local-only mode retains its existing cache lifetime independently of the unused connection owner.</summary>
+    [Fact]
+    public async Task LocalOnlyModeRetainsItsExistingPostDisposeReadBehavior()
+    {
+        var options = new ApplicationCacheOptions();
+        using var cache = new FusionCache(options.FusionOptions());
+        using var generations = new ApplicationCacheGeneration(cache, options, null);
+        var entry = options.Entry(TimeSpan.FromSeconds(5));
+        entry.EnableAutoClone = false;
+        await cache.SetAsync("generation:mappings", "warm", entry);
+        generations.Dispose();
+
+        var read = generations.GetAsync(ApplicationCacheDomain.Mappings);
+
+        Assert.True(read.IsCompletedSuccessfully);
+        Assert.Equal("warm", await read);
+    }
+
+    /// <summary>Fast cache failures propagate once, without a cold retry, and increment the existing metric once.</summary>
+    [Fact]
+    public async Task FastReadFailureIsNotRetriedAndRecordsOneFailure()
+    {
+        var cache = new Mock<IFusionCache>(MockBehavior.Strict);
+        var error = new RedisException("L1 read failed");
+        cache.Setup(value => value.TryGet<string>(It.IsAny<string>(), It.IsAny<FusionCacheEntryOptions>(), It.IsAny<CancellationToken>()))
+            .Throws(error);
+        using var generations = new ApplicationCacheGeneration(cache.Object, new ApplicationCacheOptions(), null);
+        var before = await GenerationReadFailuresAsync();
+
+        var read = generations.GetAsync(ApplicationCacheDomain.Mappings);
+
+        Assert.True(read.IsFaulted);
+        Assert.Same(error, await Assert.ThrowsAsync<RedisException>(() => read.AsTask()));
+        Assert.Equal(before + 1, await GenerationReadFailuresAsync());
+        cache.Verify(value => value.TryGet<string>(It.IsAny<string>(), It.IsAny<FusionCacheEntryOptions>(), It.IsAny<CancellationToken>()), Times.Once);
+        cache.VerifyNoOtherCalls();
+    }
+
+    /// <summary>A cache-thrown cancellation retains canceled status and does not count as storage failure.</summary>
+    [Fact]
+    public async Task FastReadCancellationIsNotRetriedOrRecordedAsStorageFailure()
+    {
+        var cache = new Mock<IFusionCache>(MockBehavior.Strict);
+        var error = new OperationCanceledException();
+        cache.Setup(value => value.TryGet<string>(It.IsAny<string>(), It.IsAny<FusionCacheEntryOptions>(), It.IsAny<CancellationToken>()))
+            .Throws(error);
+        using var generations = new ApplicationCacheGeneration(cache.Object, new ApplicationCacheOptions(), null);
+        var before = await GenerationReadFailuresAsync();
+
+        var read = generations.GetAsync(ApplicationCacheDomain.Mappings);
+
+        Assert.True(read.IsCanceled);
+        Assert.Same(error, await Assert.ThrowsAnyAsync<OperationCanceledException>(() => read.AsTask()));
+        Assert.Equal(before, await GenerationReadFailuresAsync());
+        cache.Verify(value => value.TryGet<string>(It.IsAny<string>(), It.IsAny<FusionCacheEntryOptions>(), It.IsAny<CancellationToken>()), Times.Once);
+        cache.VerifyNoOtherCalls();
+    }
+
+    /// <summary>Reads the public metric without adding a production test seam.</summary>
+    private static async Task<double> GenerationReadFailuresAsync()
+    {
+        using var output = new MemoryStream();
+        await Prometheus.Metrics.DefaultRegistry.CollectAndExportAsTextAsync(output);
+        var line = System.Text.Encoding.UTF8.GetString(output.ToArray()).Split('\n').SingleOrDefault(value =>
+            value.StartsWith("conduit_application_cache_operations_total{domain=\"shared\",operation=\"generation_read\",result=\"redis_error\"}", StringComparison.Ordinal));
+        return line is null ? 0 : double.Parse(line[(line.LastIndexOf(' ') + 1)..], System.Globalization.CultureInfo.InvariantCulture);
+    }
+
     [SkippableTheory]
     [InlineData(ApplicationCacheDomain.Mappings)]
     [InlineData(ApplicationCacheDomain.Costs)]

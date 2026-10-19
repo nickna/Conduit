@@ -52,6 +52,12 @@
     <RdXmlFile Include="NativeAot.rd.xml" />
   </ItemGroup>
 
+  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+    <!-- Prefer throughput for the Native Gateway while preserving explicit
+         publisher overrides and ordinary managed builds. -->
+    <OptimizationPreference Condition="'$(OptimizationPreference)' == ''">Speed</OptimizationPreference>
+  </PropertyGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="ConduitLLM.IntegrationTests" />
   </ItemGroup>

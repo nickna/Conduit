@@ -284,7 +284,7 @@ public sealed class AotDependencyBoundaryTests
         AssertNativeSingleton<IGatewayMetricsStore, NpgsqlGatewayMetricsStore>(services);
         AssertNativeSingleton<IAsyncTaskRuntimeStore, NpgsqlAsyncTaskRuntimeStore>(services);
         AssertNativeSingleton<IMediaRuntimeStore, NpgsqlMediaRuntimeStore>(services);
-        AssertNativeSingleton<IRequestLogRuntimeStore, NpgsqlRequestLogRuntimeStore>(services);
+        AssertNativeSingleton<IRequestLogRuntimeStore, NpgsqlBatchingRequestLogRuntimeStore>(services);
         AssertNativeSingleton<IRequestLogRuntimeWriter, StoreBackedRequestLogRuntimeWriter>(services);
         AssertNativeSingleton<IModelProviderMappingRuntimeStore, NpgsqlModelProviderMappingRuntimeStore>(services);
         AssertNativeSingleton<IModelProviderMappingRepository, StoreBackedModelProviderMappingRepository>(services);
@@ -325,7 +325,12 @@ public sealed class AotDependencyBoundaryTests
             services,
             candidate => candidate.ServiceType == typeof(IModelCostService));
         Assert.Equal(ServiceLifetime.Scoped, modelCost.Lifetime);
-        Assert.Equal(typeof(StoreBackedModelCostService), modelCost.ImplementationType);
+        Assert.NotNull(modelCost.ImplementationFactory);
+        Assert.Null(modelCost.ImplementationType);
+        var nativeCostLoader = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(StoreBackedModelCostService));
+        Assert.Equal(ServiceLifetime.Scoped, nativeCostLoader.Lifetime);
+        Assert.Equal(typeof(StoreBackedModelCostService), nativeCostLoader.ImplementationType);
     }
 #endif
 

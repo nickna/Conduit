@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "issue": 1647,
+  "kind": "failed-exploratory-socket-diagnostic",
+  "applicationSource": "4c907b41e408bad5ae775c57ac0b1da389ac3bae",
+  "status": "failed",
+  "performanceQualification": false,
+  "productionSocketChanges": false,
+  "scope": "Four predeclared arms using the same observer images, with equal scoped HTTP/PostgreSQL/Redis packet capture and no CPU recording. JSON then complete SSE, concurrency 8, 100 warmups plus 1000 measured requests per workload, 30 second deadline.",
+  "arms": [
+    { "profile": "Native", "inlineCompletions": false, "socketThreads": 1, "status": "completed", "successfulResponses": 2200 },
+    { "profile": "JIT", "inlineCompletions": false, "socketThreads": 1, "status": "completed", "successfulResponses": 2200 },
+    { "profile": "Native", "inlineCompletions": true, "socketThreads": 1, "status": "failed-during-SSE-warmup", "successfulJsonResponses": 1100, "successfulSseWarmups": 85, "sseWarmupTimeouts": 8, "sseWarmupHttp401": 7, "measuredSseRequestsStarted": 0 },
+    { "profile": "Native", "inlineCompletions": true, "socketThreads": 28, "status": "not-run" }
+  ],
+  "qualifiedDefaultArmObservations": {
+    "qualificationLimit": "Single fixed-order default pair inside an overall failed experiment; diagnostic observations only, not a controlled efficacy result.",
+    "nativeSse": { "requestsPerSecond": 166.488, "p99Ms": 58.493, "meanServerMs": 46.487, "meanDurableLogWriterMs": 1.314 },
+    "jitSse": { "requestsPerSecond": 178.968, "p99Ms": 55.640, "meanServerMs": 42.742, "meanLogWriterMs": 0.171 },
+    "envelopeSqlCommandsPerRequest": { "native": 7, "jit": 7 },
+    "interpretation": "The default pair localizes remaining wall-time differences before provider invocation and after the provider response. It does not establish CPU time or a single causal wait. The earlier diagnostic included Native-only CPU observation and had substantially different timings; fresh fixtures and capture configuration also differed."
+  },
+  "failureEvidence": {
+    "httpJoins": "The first eight failed SSE warmups reached the application promptly but produced no headers or provider request before the 30 second deadline. Seven later warmups returned HTTP 401 without invoking the provider.",
+    "database": "The inline arm later produced 111 fully framed PostgreSQL SQLSTATE 53300 errors (too many clients). Their timing overlaps recovery after the initial stall and does not alone explain the earlier silence. Neither default arm had PostgreSQL error responses.",
+    "redis": "Qualified SYN-captured non-pubsub Redis RPC streams had a maximum wire response time of 0.481 ms. Pre-existing streams without captured initial state were excluded from qualified FIFO timing. The inline arm also logged a synchronous Redis DataProtection startup timeout before business traffic.",
+    "conclusion": "The single-engine inline setting failed and is excluded. The 28-engine arm has no outcome."
+  },
+  "accounting": {
+    "originalPlannedCountPreservationStatus": "failed-and-retained",
+    "independentForensicReconciliationStatus": "passed-for-actual-outcomes-only",
+    "successfulJson": 3300,
+    "successfulSse": 2285,
+    "requestLogs": 5585,
+    "usageAudits": 5585,
+    "errorAudits": 8,
+    "inputTokens": 55850,
+    "outputTokens": 27925,
+    "costAndSpent": "0.41887500",
+    "finalBalance": "99.58112500",
+    "archivedLedgerRowsVerified": 6,
+    "unrelatedTablesUnchanged": 41,
+    "ownerBoundMarkerSetsReconciled": 3,
+    "archivesVerified": true,
+    "allOwnedResourcesAbsent": true,
+    "limit": "The independent actual-count reconciliation does not turn the original failed experiment or its original preservation check into a pass."
+  },
+  "evidenceSha256": {
+    "frozenInputs": "f7411bed4734b0036e2a33506a6c8f079480ed2fd946e940b5d1ae50c1412560",
+    "independentFinancialForensics": "8a2c43d1d2d18e1d11f81b02d7237ef5d649f35e20df8490549a76672d6ee681",
+    "independentClientCaptureInventory": "e70337227578b2da6b9febf4c1d02ca63ea12f3f12f209c392443e5a907958ba",
+    "defaultPhaseAnalysis": "fd72b8e54c2c99b5737a88f15445ed84733a1b78d0dce01ac09a7c8491932996",
+    "wireAnalysis": "42dd6b5287580e0d769344d458264be0f78964b7db6b4d7634e621cb98361c1d",
+    "postgresArchive": "39308bb3c3c2b4c1e182717b0586c05a9c9a70baae0ca8bcd669448900d85a67",
+    "redisArchive": "2f205fbc6cf8b3a7b814ecb95ab318f69ea5aaf51ec876c900bec679b800f7ab"
+  }
+}

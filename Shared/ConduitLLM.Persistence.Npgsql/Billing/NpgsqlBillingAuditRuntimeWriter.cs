@@ -9,6 +9,8 @@ namespace ConduitLLM.Persistence.Npgsql;
 /// <summary>NativeAOT-compatible typed writer for atomic scalar billing audit batches.</summary>
 public sealed class NpgsqlBillingAuditRuntimeWriter : IBillingAuditRuntimeWriter
 {
+    private const int CommandsPerBatch = 100;
+
     private const string InsertSql = """
         INSERT INTO "BillingAuditEvents" (
             "Id", "Timestamp", "EventType", "VirtualKeyId", "VirtualKeyGroupId",
@@ -46,55 +48,69 @@ public sealed class NpgsqlBillingAuditRuntimeWriter : IBillingAuditRuntimeWriter
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = InsertSql;
-
         var committed = new BillingAuditRuntimeRecord[snapshots.Length];
-        for (var index = 0; index < snapshots.Length; index++)
+        for (var offset = 0; offset < snapshots.Length;)
         {
-            var row = snapshots[index];
-            command.Parameters.Clear();
-            AddParameters(command, row);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            if (!await reader.ReadAsync(cancellationToken))
-                throw new InvalidOperationException("Billing audit insert did not return its generated values.");
-            var id = reader.GetGuid(0);
-            var timestamp = reader.GetDateTime(1);
-            if (await reader.ReadAsync(cancellationToken))
-                throw new InvalidOperationException("Billing audit insert returned more than one row.");
-            committed[index] = row with
+            // Bound transient parameters during a large shutdown drain, while
+            // retaining the whole call's single transaction and commit.
+            var count = Math.Min(CommandsPerBatch, snapshots.Length - offset);
+            await using var batch = new NpgsqlBatch(connection, transaction);
+            for (var index = 0; index < count; index++)
             {
-                Id = row.Id == Guid.Empty ? id : row.Id,
-                Timestamp = row.Timestamp == default ? timestamp : row.Timestamp
-            };
+                var command = new NpgsqlBatchCommand(InsertSql);
+                AddParameters(command.Parameters, snapshots[offset + index]);
+                batch.BatchCommands.Add(command);
+            }
+            await using (var reader = await batch.ExecuteReaderAsync(cancellationToken))
+            {
+                for (var index = 0; index < count; index++)
+                {
+                    if (index > 0 && !await reader.NextResultAsync(cancellationToken))
+                        throw new InvalidOperationException("Billing audit batch did not return every insert result.");
+                    if (!await reader.ReadAsync(cancellationToken))
+                        throw new InvalidOperationException("Billing audit insert did not return its generated values.");
+                    var id = reader.GetGuid(0);
+                    var timestamp = reader.GetDateTime(1);
+                    if (await reader.ReadAsync(cancellationToken))
+                        throw new InvalidOperationException("Billing audit insert returned more than one row.");
+                    var row = snapshots[offset + index];
+                    committed[offset + index] = row with
+                    {
+                        Id = row.Id == Guid.Empty ? id : row.Id,
+                        Timestamp = row.Timestamp == default ? timestamp : row.Timestamp
+                    };
+                }
+                if (await reader.NextResultAsync(cancellationToken))
+                    throw new InvalidOperationException("Billing audit batch returned an unexpected insert result.");
+            }
+            offset += count;
         }
 
         await transaction.CommitAsync(cancellationToken);
         return Array.AsReadOnly(committed);
     }
 
-    private static void AddParameters(NpgsqlCommand command, BillingAuditRuntimeRecord row)
+    private static void AddParameters(NpgsqlParameterCollection parameters, BillingAuditRuntimeRecord row)
     {
-        AddNullable(command, "id", NpgsqlDbType.Uuid, row.Id == Guid.Empty ? null : row.Id);
-        AddNullable(command, "timestamp", NpgsqlDbType.TimestampTz, row.Timestamp == default ? null : row.Timestamp);
-        command.Parameters.AddWithValue("eventType", NpgsqlDbType.Integer, row.EventType);
-        AddNullable(command, "virtualKeyId", NpgsqlDbType.Integer, row.VirtualKeyId);
-        AddNullable(command, "virtualKeyGroupId", NpgsqlDbType.Integer, row.VirtualKeyGroupId);
-        AddNullable(command, "model", NpgsqlDbType.Varchar, row.Model);
-        AddNullable(command, "requestId", NpgsqlDbType.Varchar, row.RequestId);
-        AddNullable(command, "usageJson", NpgsqlDbType.Jsonb, row.UsageJson);
-        AddNullable(command, "calculatedCost", NpgsqlDbType.Numeric, row.CalculatedCost);
-        AddNullable(command, "failureReason", NpgsqlDbType.Varchar, row.FailureReason);
-        AddNullable(command, "providerType", NpgsqlDbType.Varchar, row.ProviderType);
-        AddNullable(command, "httpStatusCode", NpgsqlDbType.Integer, row.HttpStatusCode);
-        AddNullable(command, "metadataJson", NpgsqlDbType.Jsonb, row.MetadataJson);
-        AddNullable(command, "requestPath", NpgsqlDbType.Varchar, row.RequestPath);
-        command.Parameters.AddWithValue("isEstimated", NpgsqlDbType.Boolean, row.IsEstimated);
-        AddNullable(command, "toolUsageJson", NpgsqlDbType.Jsonb, row.ToolUsageJson);
-        AddNullable(command, "toolUsageCost", NpgsqlDbType.Numeric, row.ToolUsageCost);
+        AddNullable(parameters, "id", NpgsqlDbType.Uuid, row.Id == Guid.Empty ? null : row.Id);
+        AddNullable(parameters, "timestamp", NpgsqlDbType.TimestampTz, row.Timestamp == default ? null : row.Timestamp);
+        parameters.AddWithValue("eventType", NpgsqlDbType.Integer, row.EventType);
+        AddNullable(parameters, "virtualKeyId", NpgsqlDbType.Integer, row.VirtualKeyId);
+        AddNullable(parameters, "virtualKeyGroupId", NpgsqlDbType.Integer, row.VirtualKeyGroupId);
+        AddNullable(parameters, "model", NpgsqlDbType.Varchar, row.Model);
+        AddNullable(parameters, "requestId", NpgsqlDbType.Varchar, row.RequestId);
+        AddNullable(parameters, "usageJson", NpgsqlDbType.Jsonb, row.UsageJson);
+        AddNullable(parameters, "calculatedCost", NpgsqlDbType.Numeric, row.CalculatedCost);
+        AddNullable(parameters, "failureReason", NpgsqlDbType.Varchar, row.FailureReason);
+        AddNullable(parameters, "providerType", NpgsqlDbType.Varchar, row.ProviderType);
+        AddNullable(parameters, "httpStatusCode", NpgsqlDbType.Integer, row.HttpStatusCode);
+        AddNullable(parameters, "metadataJson", NpgsqlDbType.Jsonb, row.MetadataJson);
+        AddNullable(parameters, "requestPath", NpgsqlDbType.Varchar, row.RequestPath);
+        parameters.AddWithValue("isEstimated", NpgsqlDbType.Boolean, row.IsEstimated);
+        AddNullable(parameters, "toolUsageJson", NpgsqlDbType.Jsonb, row.ToolUsageJson);
+        AddNullable(parameters, "toolUsageCost", NpgsqlDbType.Numeric, row.ToolUsageCost);
     }
 
-    private static void AddNullable(NpgsqlCommand command, string name, NpgsqlDbType type, object? value) =>
-        command.Parameters.Add(new NpgsqlParameter(name, type) { Value = value ?? DBNull.Value });
+    private static void AddNullable(NpgsqlParameterCollection parameters, string name, NpgsqlDbType type, object? value) =>
+        parameters.Add(new NpgsqlParameter(name, type) { Value = value ?? DBNull.Value });
 }

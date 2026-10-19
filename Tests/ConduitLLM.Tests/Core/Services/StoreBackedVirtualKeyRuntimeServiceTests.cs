@@ -73,6 +73,7 @@ public sealed class StoreBackedVirtualKeyRuntimeServiceTests
         _batchSpendService.Verify(
             value => value.GetPendingSpendAsync(It.IsAny<int>()),
             Times.Never);
+        _batchSpendService.Verify(value => value.GetPendingSpendForGroupAsync(It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
@@ -84,7 +85,7 @@ public sealed class StoreBackedVirtualKeyRuntimeServiceTests
                 ConduitLLM.Configuration.Utilities.VirtualKeyUtilities.HashKey(plaintextKey),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(record);
-        _batchSpendService.Setup(value => value.GetPendingSpendAsync(record.Id))
+        _batchSpendService.Setup(value => value.GetPendingSpendForGroupAsync(record.Group.Id))
             .ReturnsAsync(5m);
 
         var outcome = await _service.ValidateVirtualKeyAsync(plaintextKey);
@@ -93,7 +94,9 @@ public sealed class StoreBackedVirtualKeyRuntimeServiceTests
         Assert.Equal(VirtualKeyValidationFailureCodes.InsufficientBalance, outcome.FailureCode);
         Assert.Equal(402, outcome.HttpStatusCode);
         Assert.Equal(record.Id, outcome.Key?.Id);
-        _batchSpendService.Verify(value => value.GetPendingSpendAsync(record.Id), Times.Once);
+        _batchSpendService.Verify(value => value.GetPendingSpendForGroupAsync(record.Group.Id), Times.Once);
+        _batchSpendService.Verify(value => value.GetPendingSpendAsync(It.IsAny<int>()), Times.Never);
+        _store.Verify(value => value.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -113,6 +116,88 @@ public sealed class StoreBackedVirtualKeyRuntimeServiceTests
         _batchSpendService.Verify(
             value => value.GetPendingSpendAsync(It.IsAny<int>()),
             Times.Never);
+        _batchSpendService.Verify(value => value.GetPendingSpendForGroupAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(5, 4, true)]
+    [InlineData(5, 5, false)]
+    [InlineData(5, 6, false)]
+    [InlineData(0, 0, false)]
+    [InlineData(-1, 0, false)]
+    public async Task ValidateVirtualKeyAsync_CurrentGroupPendingSpend_PreservesBalanceDecisionAsync(
+        int balance, int pending, bool expectedValid)
+    {
+        var record = CreateRecord(groupBalance: balance);
+        _store.Setup(value => value.GetByHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(record);
+        _batchSpendService.Setup(value => value.GetPendingSpendForGroupAsync(record.Group.Id)).ReturnsAsync(pending);
+
+        var outcome = await _service.ValidateVirtualKeyAsync("condt_group_balance");
+
+        Assert.Equal(expectedValid, outcome.IsValid);
+        if (!expectedValid)
+            Assert.Equal(VirtualKeyValidationFailureCodes.InsufficientBalance, outcome.FailureCode);
+        _batchSpendService.Verify(value => value.GetPendingSpendForGroupAsync(record.Group.Id), Times.Once);
+        _batchSpendService.Verify(value => value.GetPendingSpendAsync(It.IsAny<int>()), Times.Never);
+        _store.Verify(value => value.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ValidateVirtualKeyAsync_GroupChangedBetweenValidations_UsesEachFreshPersistedGroupAsync()
+    {
+        var first = CreateRecord(groupBalance: 5m);
+        var second = CreateRecord(groupBalance: 2m, groupId: 91);
+        _store.SetupSequence(value => value.GetByHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(first).ReturnsAsync(second);
+        _batchSpendService.Setup(value => value.GetPendingSpendForGroupAsync(first.Group.Id)).ReturnsAsync(1m);
+        _batchSpendService.Setup(value => value.GetPendingSpendForGroupAsync(second.Group.Id)).ReturnsAsync(2m);
+
+        Assert.True((await _service.ValidateVirtualKeyAsync("condt_current_group")).IsValid);
+        var outcome = await _service.ValidateVirtualKeyAsync("condt_current_group");
+
+        Assert.False(outcome.IsValid);
+        Assert.Equal(VirtualKeyValidationFailureCodes.InsufficientBalance, outcome.FailureCode);
+        Assert.Equal(second.Group.Id, outcome.Key!.VirtualKeyGroup.Id);
+        _store.Verify(value => value.GetByHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        _store.Verify(value => value.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        _batchSpendService.Verify(value => value.GetPendingSpendForGroupAsync(first.Group.Id), Times.Once);
+        _batchSpendService.Verify(value => value.GetPendingSpendForGroupAsync(second.Group.Id), Times.Once);
+    }
+
+    [Fact]
+    public async Task ValidateVirtualKeyAsync_RevokedDeletedOrExpiredAfterAuthentication_RejectsFreshKeyAsync()
+    {
+        var active = CreateRecord();
+        var revoked = CreateRecord(isEnabled: false);
+        var expired = CreateRecord(expiresAt: DateTime.UtcNow.AddMinutes(-1));
+        _store.SetupSequence(value => value.GetByHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(active).ReturnsAsync(revoked).Returns(Task.FromResult<VirtualKeyRuntimeRecord?>(null)).ReturnsAsync(expired);
+
+        Assert.True((await _service.ValidateVirtualKeyForAuthenticationAsync("condt_fresh_security")).IsValid);
+        Assert.Equal(VirtualKeyValidationFailureCodes.KeyDisabled,
+            (await _service.ValidateVirtualKeyAsync("condt_fresh_security")).FailureCode);
+        Assert.Equal(VirtualKeyValidationFailureCodes.KeyNotFound,
+            (await _service.ValidateVirtualKeyAsync("condt_fresh_security")).FailureCode);
+        Assert.Equal(VirtualKeyValidationFailureCodes.KeyExpired,
+            (await _service.ValidateVirtualKeyAsync("condt_fresh_security")).FailureCode);
+
+        _store.Verify(value => value.GetByHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(4));
+        _batchSpendService.Verify(value => value.GetPendingSpendForGroupAsync(It.IsAny<int>()), Times.Never);
+        _store.Verify(value => value.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ValidateVirtualKeyAsync_RestrictedModel_RemainsDeniedWithGroupPendingReaderAsync()
+    {
+        var record = CreateRecord();
+        _store.Setup(value => value.GetByHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(record);
+        _batchSpendService.Setup(value => value.GetPendingSpendForGroupAsync(record.Group.Id)).ReturnsAsync(0m);
+
+        var outcome = await _service.ValidateVirtualKeyAsync("condt_model_restriction", "unlisted-model");
+
+        Assert.False(outcome.IsValid);
+        Assert.Equal(VirtualKeyValidationFailureCodes.ModelNotAllowed, outcome.FailureCode);
     }
 
     [Fact]
@@ -297,7 +382,9 @@ public sealed class StoreBackedVirtualKeyRuntimeServiceTests
 
     private static VirtualKeyRuntimeRecord CreateRecord(
         bool isEnabled = true,
-        decimal groupBalance = 50m)
+        decimal groupBalance = 50m,
+        int groupId = 7,
+        DateTime? expiresAt = null)
     {
         var now = DateTime.UtcNow;
         return new VirtualKeyRuntimeRecord
@@ -307,8 +394,8 @@ public sealed class StoreBackedVirtualKeyRuntimeServiceTests
             KeyHash = "hash-29",
             Description = "runtime key",
             IsEnabled = isEnabled,
-            VirtualKeyGroupId = 7,
-            ExpiresAt = now.AddDays(1),
+            VirtualKeyGroupId = groupId,
+            ExpiresAt = expiresAt ?? now.AddDays(1),
             CreatedAt = now.AddDays(-2),
             UpdatedAt = now.AddMinutes(-1),
             Metadata = "{\"role\":\"test\"}",
@@ -322,7 +409,7 @@ public sealed class StoreBackedVirtualKeyRuntimeServiceTests
             RowVersion = [1, 2, 3],
             Group = new VirtualKeyGroupRuntimeRecord
             {
-                Id = 7,
+                Id = groupId,
                 ExternalGroupId = "tenant-7",
                 GroupName = "native-group",
                 Balance = groupBalance,

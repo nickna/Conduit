@@ -22,7 +22,7 @@ namespace ConduitLLM.IntegrationTests.Tests;
 /// Runs the Gateway virtual-key runtime contract against EF and typed Npgsql.
 /// </summary>
 [Collection("Postgres advisory locks")]
-public sealed class VirtualKeyRuntimePersistenceParityTests
+public sealed partial class VirtualKeyRuntimePersistenceParityTests
 {
     private readonly PostgresLockTestContainerFixture _fixture;
 

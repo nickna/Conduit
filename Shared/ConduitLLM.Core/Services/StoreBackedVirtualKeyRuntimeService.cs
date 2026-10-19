@@ -150,9 +150,11 @@ public sealed class StoreBackedVirtualKeyRuntimeService : IVirtualKeyRuntimeServ
         {
             getBalanceSnapshotAsync = async virtualKey =>
             {
+                // Balance and pending spend describe the same group from the
+                // just-loaded persisted key, rather than resolving its group twice.
                 var pendingSpend = _batchSpendService == null
                     ? 0m
-                    : await _batchSpendService.GetPendingSpendAsync(virtualKey.Id);
+                    : await _batchSpendService.GetPendingSpendForGroupAsync(virtualKey.VirtualKeyGroup.Id);
                 return (virtualKey.VirtualKeyGroup, pendingSpend);
             };
         }

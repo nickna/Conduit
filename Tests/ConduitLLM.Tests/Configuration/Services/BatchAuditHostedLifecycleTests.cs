@@ -18,6 +18,53 @@ public sealed class BatchAuditHostedLifecycleTests
     private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(10);
 
     [Fact]
+    public async Task QueueAdapterJoinsConcurrentStopsAndDoesNotRestopItsDisposedBorrowedQueue()
+    {
+        using var inner = new GatedHostedService();
+        var adapter = new BatchAuditQueueHostedService(inner);
+        var first = adapter.StopAsync(CancellationToken.None);
+        try
+        {
+            Assert.Same(first, adapter.StopAsync(CancellationToken.None));
+            Assert.Equal(1, inner.StopCalls);
+            Assert.False(first.IsCompleted);
+            inner.ReleaseStop.TrySetResult();
+            await first.WaitAsync(TestTimeout);
+
+            inner.Dispose();
+            Assert.Same(first, adapter.StopAsync(CancellationToken.None));
+            Assert.Equal(1, inner.StopCalls);
+        }
+        finally
+        {
+            inner.ReleaseStop.TrySetResult();
+            await first.WaitAsync(TestTimeout);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task QueueAdapterAllowsRetryAfterAFailedOrCanceledDrain(bool canceled)
+    {
+        var attempts = 0;
+        var failure = new InvalidOperationException("Transient drain failure");
+        var inner = new CallbackStopService(() => ++attempts == 1
+            ? canceled ? Task.FromCanceled(new CancellationToken(true)) : Task.FromException(failure)
+            : Task.CompletedTask);
+        var adapter = new BatchAuditQueueHostedService(inner);
+
+        if (canceled)
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => adapter.StopAsync(CancellationToken.None));
+        else
+            Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(
+                () => adapter.StopAsync(CancellationToken.None)));
+        await adapter.StopAsync(CancellationToken.None);
+        await adapter.StopAsync(CancellationToken.None);
+        Assert.Equal(2, attempts);
+    }
+
+    [Fact]
     public async Task QueueAdapterForwardsLifecycleTokensAndBorrowsItsInnerService()
     {
         using var inner = new GatedHostedService();
@@ -308,6 +355,7 @@ public sealed class BatchAuditHostedLifecycleTests
         public TaskCompletionSource ReleaseStart { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource ReleaseStop { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int DisposeCalls { get; private set; }
+        public int StopCalls { get; private set; }
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
@@ -317,11 +365,19 @@ public sealed class BatchAuditHostedLifecycleTests
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
+            ObjectDisposedException.ThrowIf(DisposeCalls != 0, this);
+            StopCalls++;
             Stopped.TrySetResult(cancellationToken);
             return ReleaseStop.Task;
         }
 
         public void Dispose() => DisposeCalls++;
+    }
+
+    private sealed class CallbackStopService(Func<Task> stop) : IHostedService
+    {
+        public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task StopAsync(CancellationToken cancellationToken) => stop();
     }
 
     private sealed class GatedRetention

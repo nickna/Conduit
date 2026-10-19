@@ -9,7 +9,7 @@ namespace ConduitLLM.Persistence.Npgsql;
 /// <summary>
 /// NativeAOT-compatible typed Npgsql store for Gateway virtual-key requests.
 /// </summary>
-public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
+public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore, IVirtualKeySpendSnapshotStore
 {
     private const string SelectRuntimeKey = """
         SELECT
@@ -58,6 +58,27 @@ public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore
         command.CommandText = $"{SelectRuntimeKey} WHERE key.\"Id\" = @id";
         command.Parameters.AddWithValue("id", NpgsqlDbType.Integer, id);
         return await ReadSingleAsync(command, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<VirtualKeySpendSnapshot?> GetSpendSnapshotAsync(
+        int virtualKeyId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT key."VirtualKeyGroupId", key_group."Balance"
+            FROM "VirtualKeys" AS key
+            INNER JOIN "VirtualKeyGroups" AS key_group
+                ON key_group."Id" = key."VirtualKeyGroupId"
+            WHERE key."Id" = @id
+            """;
+        command.Parameters.AddWithValue("id", NpgsqlDbType.Integer, virtualKeyId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken)
+            ? new VirtualKeySpendSnapshot(reader.GetInt32(0), reader.GetDecimal(1))
+            : null;
     }
 
     /// <inheritdoc />

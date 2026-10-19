@@ -1,0 +1,1358 @@
+{
+  "schemaVersion": 1,
+  "kind": "sanitized-current-runtime-single-pair-middleware8-diagnostic",
+  "diagnosticPassed": true,
+  "qualifiesPerformanceResolution": false,
+  "source": {
+    "uninstrumentedParent": "cef4866647f8a096a2eadbaccb8e04bd24cafad2",
+    "instrumentedRevision": "ef9ec3e7bff14d27d1d406b9c2321e7324c6a014",
+    "tree": "a66951fe7985e3e70175177f5874133b252dc455",
+    "observerFiles": 17,
+    "middlewareOperations": [
+      "stage_auth_validate",
+      "stage_middleware_http_metrics_normalize",
+      "stage_security_fixed_ip_window",
+      "stage_security_ip_banned",
+      "stage_security_legacy_cache_read",
+      "stage_security_redis_get_ban",
+      "stage_security_request_allowed",
+      "stage_security_sliding_key_window"
+    ],
+    "middlewareOperationCount": 8,
+    "patchSha256": "2d0c7981874314ddbd669606c2af1c538ec41693365cc81db2b9ca912d84bd30",
+    "nativeImage": "sha256:142803bb6fd1754cfc53340b1af534891270acf1c5fdcd17b221c32b8a9ec682",
+    "jitImage": "sha256:da3a0d8f4813475cea7707fea3f4c1ba4d925b1119bd225980aa14a739e46abb",
+    "frozenManifestSha256": "cbb01f672513805224aaa1d133cc1ade276ba5f8a00d0469f1cb94247d2407c7",
+    "frozenSourcePairsVerified": 65,
+    "frozenEvidenceHashesVerified": 40,
+    "stageObserverPlanSha256": "a0a6db784244764b3d45f29f42c1017c6af139528c224e8024f64823128a1c9d",
+    "sdk": "10.0.401",
+    "managedAndCompilerRuntime": "10.0.12",
+    "sourceScope": "Ignored clean diagnostic commit with the stated production parent and observer-only overlay; the main production checkout was not changed by this run."
+  },
+  "order": [
+    "Native JSON then SSE",
+    "JIT JSON then SSE"
+  ],
+  "roles": {
+    "native": {
+      "workloads": {
+        "json": {
+          "measuredRequests": 1000,
+          "warmupRequestsExcluded": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "completeResponseFailures": 0,
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "reportMetrics": {
+            "throughputPerSecond": 264.6442482642513,
+            "p50Milliseconds": 29.617946,
+            "p95Milliseconds": 37.5013,
+            "p99Milliseconds": 46.635752
+          },
+          "measuredStageObservationCounts": {
+            "stage_auth_validate": 2000,
+            "stage_middleware_http_metrics_normalize": 1000,
+            "stage_security_fixed_ip_window": 1000,
+            "stage_security_ip_banned": 1000,
+            "stage_security_legacy_cache_read": 1000,
+            "stage_security_redis_get_ban": 1000,
+            "stage_security_request_allowed": 1000,
+            "stage_security_sliding_key_window": 1000
+          }
+        },
+        "sse": {
+          "measuredRequests": 1000,
+          "warmupRequestsExcluded": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "completeResponseFailures": 0,
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "reportMetrics": {
+            "throughputPerSecond": 165.8280465970178,
+            "p50Milliseconds": 47.406088,
+            "p95Milliseconds": 57.084115,
+            "p99Milliseconds": 61.314004
+          },
+          "measuredStageObservationCounts": {
+            "stage_auth_validate": 2000,
+            "stage_middleware_http_metrics_normalize": 1000,
+            "stage_security_fixed_ip_window": 1000,
+            "stage_security_ip_banned": 1000,
+            "stage_security_legacy_cache_read": 1000,
+            "stage_security_redis_get_ban": 1000,
+            "stage_security_request_allowed": 1000,
+            "stage_security_sliding_key_window": 1000
+          },
+          "stages": {
+            "stage_auth_validate": {
+              "countPerRequestHistogram": {
+                "2": 1000
+              },
+              "observedSpans": 2000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 2000
+              },
+              "inclusiveSpanMs": {
+                "n": 2000,
+                "sum": 1890.347779,
+                "mean": 0.9451738895,
+                "median": 0.6777905,
+                "min": 0.285764,
+                "max": 7.680169,
+                "p95NearestRank": 2.252816
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 1890.347779,
+                "mean": 1.890347779,
+                "median": 1.7417340000000001,
+                "min": 0.98083,
+                "max": 10.546631,
+                "p95NearestRank": 3.166314
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 1890.347779,
+                "mean": 1.890347779,
+                "median": 1.7417340000000001,
+                "min": 0.98083,
+                "max": 10.546631,
+                "p95NearestRank": 3.166314
+              }
+            },
+            "stage_security_request_allowed": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 2418.365498,
+                "mean": 2.418365498,
+                "median": 2.2131245,
+                "min": 0.64938,
+                "max": 11.845892,
+                "p95NearestRank": 4.365308
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 2418.365498,
+                "mean": 2.418365498,
+                "median": 2.2131245,
+                "min": 0.64938,
+                "max": 11.845892,
+                "p95NearestRank": 4.365308
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 2418.365498,
+                "mean": 2.418365498,
+                "median": 2.2131245,
+                "min": 0.64938,
+                "max": 11.845892,
+                "p95NearestRank": 4.365308
+              }
+            },
+            "stage_security_ip_banned": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 1595.37355,
+                "mean": 1.59537355,
+                "median": 1.460931,
+                "min": 0.383725,
+                "max": 7.126963,
+                "p95NearestRank": 3.004113
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 1595.37355,
+                "mean": 1.59537355,
+                "median": 1.460931,
+                "min": 0.383725,
+                "max": 7.126963,
+                "p95NearestRank": 3.004113
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 1595.37355,
+                "mean": 1.59537355,
+                "median": 1.460931,
+                "min": 0.383725,
+                "max": 7.126963,
+                "p95NearestRank": 3.004113
+              }
+            },
+            "stage_security_redis_get_ban": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 747.500487,
+                "mean": 0.747500487,
+                "median": 0.6340950000000001,
+                "min": 0.112255,
+                "max": 3.376313,
+                "p95NearestRank": 1.674469
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 747.500487,
+                "mean": 0.747500487,
+                "median": 0.6340950000000001,
+                "min": 0.112255,
+                "max": 3.376313,
+                "p95NearestRank": 1.674469
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 747.500487,
+                "mean": 0.747500487,
+                "median": 0.6340950000000001,
+                "min": 0.112255,
+                "max": 3.376313,
+                "p95NearestRank": 1.674469
+              }
+            },
+            "stage_security_legacy_cache_read": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 840.029001,
+                "mean": 0.840029001,
+                "median": 0.7029075,
+                "min": 0.126933,
+                "max": 6.370566,
+                "p95NearestRank": 1.863805
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 840.029001,
+                "mean": 0.840029001,
+                "median": 0.7029075,
+                "min": 0.126933,
+                "max": 6.370566,
+                "p95NearestRank": 1.863805
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 840.029001,
+                "mean": 0.840029001,
+                "median": 0.7029075,
+                "min": 0.126933,
+                "max": 6.370566,
+                "p95NearestRank": 1.863805
+              }
+            },
+            "stage_security_fixed_ip_window": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 798.941217,
+                "mean": 0.798941217,
+                "median": 0.6706920000000001,
+                "min": 0.166119,
+                "max": 8.28964,
+                "p95NearestRank": 1.745116
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 798.941217,
+                "mean": 0.798941217,
+                "median": 0.6706920000000001,
+                "min": 0.166119,
+                "max": 8.28964,
+                "p95NearestRank": 1.745116
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 798.941217,
+                "mean": 0.798941217,
+                "median": 0.6706920000000001,
+                "min": 0.166119,
+                "max": 8.28964,
+                "p95NearestRank": 1.745116
+              }
+            },
+            "stage_security_sliding_key_window": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 881.465038,
+                "mean": 0.881465038,
+                "median": 0.7332415,
+                "min": 0.216568,
+                "max": 7.791126,
+                "p95NearestRank": 1.992904
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 881.465038,
+                "mean": 0.881465038,
+                "median": 0.7332415,
+                "min": 0.216568,
+                "max": 7.791126,
+                "p95NearestRank": 1.992904
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 881.465038,
+                "mean": 0.881465038,
+                "median": 0.7332415,
+                "min": 0.216568,
+                "max": 7.791126,
+                "p95NearestRank": 1.992904
+              }
+            },
+            "stage_middleware_http_metrics_normalize": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 3.804663,
+                "mean": 0.003804663,
+                "median": 0.0036595,
+                "min": 0.001396,
+                "max": 0.022267,
+                "p95NearestRank": 0.005186
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 3.804663,
+                "mean": 0.003804663,
+                "median": 0.0036595,
+                "min": 0.001396,
+                "max": 0.022267,
+                "p95NearestRank": 0.005186
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 3.804663,
+                "mean": 0.003804663,
+                "median": 0.0036595,
+                "min": 0.001396,
+                "max": 0.022267,
+                "p95NearestRank": 0.005186
+              }
+            }
+          },
+          "inclusiveWallMetricsMs": {
+            "preHttpMs": {
+              "n": 1000,
+              "sum": 12984.672879,
+              "mean": 12.984672879,
+              "median": 12.6020905,
+              "min": 6.132489,
+              "max": 26.262994,
+              "p95NearestRank": 19.031148
+            },
+            "firstAuthEndToUsageBeginMs": {
+              "n": 1000,
+              "sum": 69.49017,
+              "mean": 0.06949017,
+              "median": 0.0627365,
+              "min": 0.016419,
+              "max": 5.105371,
+              "p95NearestRank": 0.087219
+            },
+            "usageBeginToSecondAuthBeginMs": {
+              "n": 1000,
+              "sum": 3580.670676,
+              "mean": 3.580670676,
+              "median": 3.4457115,
+              "min": 1.044184,
+              "max": 13.245468,
+              "p95NearestRank": 6.307007
+            },
+            "capturedStageSqlUnionMs": {
+              "n": 1000,
+              "sum": 3303.635199,
+              "mean": 3.303635199,
+              "median": 3.1272124999999997,
+              "min": 0.916129,
+              "max": 12.570788,
+              "p95NearestRank": 5.913348
+            }
+          },
+          "preBalanceDisjointWallMetricsMs": {
+            "ban_legacy_fixed_sliding_method_wall_union": {
+              "n": 1000,
+              "sum": 3267.935743,
+              "mean": 3.2679357430000002,
+              "median": 3.085979,
+              "min": 0.887679,
+              "max": 12.53841,
+              "p95NearestRank": 5.869597
+            },
+            "security_wall_outside_those_methods": {
+              "n": 1000,
+              "sum": 31.894793,
+              "mean": 0.031894793,
+              "median": 0.0315345,
+              "min": 0.006516,
+              "max": 0.10919,
+              "p95NearestRank": 0.042721
+            },
+            "http_normalization_wall_outside_prior_union": {
+              "n": 1000,
+              "sum": 3.804663,
+              "mean": 0.003804663,
+              "median": 0.0036595,
+              "min": 0.001396,
+              "max": 0.022267,
+              "p95NearestRank": 0.005186
+            },
+            "other_sql_client_wall_outside_prior_union": {
+              "n": 1000,
+              "sum": 0.0,
+              "mean": 0.0,
+              "median": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "p95NearestRank": 0.0
+            },
+            "remaining_complement": {
+              "n": 1000,
+              "sum": 277.035477,
+              "mean": 0.277035477,
+              "median": 0.1946785,
+              "min": 0.064083,
+              "max": 1.623526,
+              "p95NearestRank": 0.741741
+            }
+          },
+          "remainingComplementBoundaryGroups": [
+            {
+              "boundaries": "stage_middleware_http_metrics_normalize -> SECOND_AUTH_BEGIN",
+              "requests": 1000,
+              "perMeasuredRequestMsIncludingZeros": {
+                "n": 1000,
+                "sum": 251.344205,
+                "mean": 0.251344205,
+                "median": 0.1693285,
+                "min": 0.050223,
+                "max": 1.600417,
+                "p95NearestRank": 0.717371
+              }
+            },
+            {
+              "boundaries": "stage_security_sliding_key_window -> stage_middleware_http_metrics_normalize",
+              "requests": 1000,
+              "perMeasuredRequestMsIncludingZeros": {
+                "n": 1000,
+                "sum": 13.192875,
+                "mean": 0.013192875,
+                "median": 0.0127995,
+                "min": 0.005861,
+                "max": 0.140307,
+                "p95NearestRank": 0.017574
+              }
+            },
+            {
+              "boundaries": "USAGE_ENVELOPE_BEGIN -> stage_security_request_allowed",
+              "requests": 1000,
+              "perMeasuredRequestMsIncludingZeros": {
+                "n": 1000,
+                "sum": 6.959271,
+                "mean": 0.006959271,
+                "median": 0.0065495,
+                "min": 0.002094,
+                "max": 0.091391,
+                "p95NearestRank": 0.009155
+              }
+            },
+            {
+              "boundaries": "stage_security_request_allowed -> stage_security_sliding_key_window",
+              "requests": 1000,
+              "perMeasuredRequestMsIncludingZeros": {
+                "n": 1000,
+                "sum": 5.539126,
+                "mean": 0.005539126,
+                "median": 0.005486,
+                "min": 0.000759,
+                "max": 0.035903,
+                "p95NearestRank": 0.007739
+              }
+            }
+          ],
+          "detailedSummaryPopulation": "1000 measured SSE requests only; 100 warmups excluded. JSON retains complete-response metrics and stage counts, without extending these partitions to JSON."
+        }
+      },
+      "backgroundStageObservationCounts": {
+        "stage_auth_validate": 0,
+        "stage_middleware_http_metrics_normalize": 0,
+        "stage_security_fixed_ip_window": 0,
+        "stage_security_ip_banned": 0,
+        "stage_security_legacy_cache_read": 0,
+        "stage_security_redis_get_ban": 0,
+        "stage_security_request_allowed": 4,
+        "stage_security_sliding_key_window": 0
+      },
+      "backgroundScope": "Stage intervals on traces without a captured request envelope, including startup or background work; nested stages overlap and are not caller or batch cardinality.",
+      "joinedTraces": 2200,
+      "completeSuccessEvidence": true,
+      "qualityCounters": {
+        "dropped": 0,
+        "captureErrors": 0,
+        "exportErrors": 0,
+        "activeSpansAtStop": 0,
+        "unclassifiedSql": 0,
+        "runtimeSamplesDropped": 0,
+        "runtimeSamplerFaults": 0
+      },
+      "runtimeSamplerJoined": true,
+      "runtimeSamplesRetained": 651,
+      "unassociatedRecordsPreserved": 6463
+    },
+    "jit": {
+      "workloads": {
+        "json": {
+          "measuredRequests": 1000,
+          "warmupRequestsExcluded": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "completeResponseFailures": 0,
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "reportMetrics": {
+            "throughputPerSecond": 332.710886716102,
+            "p50Milliseconds": 22.937432,
+            "p95Milliseconds": 29.080764,
+            "p99Milliseconds": 37.629936
+          },
+          "measuredStageObservationCounts": {
+            "stage_auth_validate": 2000,
+            "stage_middleware_http_metrics_normalize": 1000,
+            "stage_security_fixed_ip_window": 1000,
+            "stage_security_ip_banned": 1000,
+            "stage_security_legacy_cache_read": 1000,
+            "stage_security_redis_get_ban": 1000,
+            "stage_security_request_allowed": 1000,
+            "stage_security_sliding_key_window": 1000
+          }
+        },
+        "sse": {
+          "measuredRequests": 1000,
+          "warmupRequestsExcluded": 100,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "completeResponseFailures": 0,
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "reportMetrics": {
+            "throughputPerSecond": 186.70798589077623,
+            "p50Milliseconds": 41.282419,
+            "p95Milliseconds": 49.655395,
+            "p99Milliseconds": 55.173691
+          },
+          "measuredStageObservationCounts": {
+            "stage_auth_validate": 2000,
+            "stage_middleware_http_metrics_normalize": 1000,
+            "stage_security_fixed_ip_window": 1000,
+            "stage_security_ip_banned": 1000,
+            "stage_security_legacy_cache_read": 1000,
+            "stage_security_redis_get_ban": 1000,
+            "stage_security_request_allowed": 1000,
+            "stage_security_sliding_key_window": 1000
+          },
+          "stages": {
+            "stage_auth_validate": {
+              "countPerRequestHistogram": {
+                "2": 1000
+              },
+              "observedSpans": 2000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 2000
+              },
+              "inclusiveSpanMs": {
+                "n": 2000,
+                "sum": 2046.326669,
+                "mean": 1.0231633345,
+                "median": 1.0614425,
+                "min": 0.337653,
+                "max": 5.356758,
+                "p95NearestRank": 1.82001
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 2046.326669,
+                "mean": 2.046326669,
+                "median": 1.9269125,
+                "min": 1.375765,
+                "max": 6.401636,
+                "p95NearestRank": 2.758148
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 2046.326669,
+                "mean": 2.046326669,
+                "median": 1.9269125,
+                "min": 1.375765,
+                "max": 6.401636,
+                "p95NearestRank": 2.758148
+              }
+            },
+            "stage_security_request_allowed": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 784.423523,
+                "mean": 0.784423523,
+                "median": 0.7463150000000001,
+                "min": 0.500303,
+                "max": 3.865363,
+                "p95NearestRank": 1.121504
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 784.423523,
+                "mean": 0.784423523,
+                "median": 0.7463150000000001,
+                "min": 0.500303,
+                "max": 3.865363,
+                "p95NearestRank": 1.121504
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 784.423523,
+                "mean": 0.784423523,
+                "median": 0.7463150000000001,
+                "min": 0.500303,
+                "max": 3.865363,
+                "p95NearestRank": 1.121504
+              }
+            },
+            "stage_security_ip_banned": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 510.78562,
+                "mean": 0.51078562,
+                "median": 0.4815065,
+                "min": 0.285267,
+                "max": 3.324591,
+                "p95NearestRank": 0.751445
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 510.78562,
+                "mean": 0.51078562,
+                "median": 0.4815065,
+                "min": 0.285267,
+                "max": 3.324591,
+                "p95NearestRank": 0.751445
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 510.78562,
+                "mean": 0.51078562,
+                "median": 0.4815065,
+                "min": 0.285267,
+                "max": 3.324591,
+                "p95NearestRank": 0.751445
+              }
+            },
+            "stage_security_redis_get_ban": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 253.270908,
+                "mean": 0.253270908,
+                "median": 0.2336975,
+                "min": 0.110784,
+                "max": 2.967666,
+                "p95NearestRank": 0.381935
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 253.270908,
+                "mean": 0.253270908,
+                "median": 0.2336975,
+                "min": 0.110784,
+                "max": 2.967666,
+                "p95NearestRank": 0.381935
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 253.270908,
+                "mean": 0.253270908,
+                "median": 0.2336975,
+                "min": 0.110784,
+                "max": 2.967666,
+                "p95NearestRank": 0.381935
+              }
+            },
+            "stage_security_legacy_cache_read": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 250.787365,
+                "mean": 0.250787365,
+                "median": 0.23328749999999998,
+                "min": 0.121263,
+                "max": 1.171112,
+                "p95NearestRank": 0.386796
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 250.787365,
+                "mean": 0.250787365,
+                "median": 0.23328749999999998,
+                "min": 0.121263,
+                "max": 1.171112,
+                "p95NearestRank": 0.386796
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 250.787365,
+                "mean": 0.250787365,
+                "median": 0.23328749999999998,
+                "min": 0.121263,
+                "max": 1.171112,
+                "p95NearestRank": 0.386796
+              }
+            },
+            "stage_security_fixed_ip_window": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 246.327455,
+                "mean": 0.246327455,
+                "median": 0.22779850000000001,
+                "min": 0.081977,
+                "max": 0.780981,
+                "p95NearestRank": 0.388219
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 246.327455,
+                "mean": 0.246327455,
+                "median": 0.22779850000000001,
+                "min": 0.081977,
+                "max": 0.780981,
+                "p95NearestRank": 0.388219
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 246.327455,
+                "mean": 0.246327455,
+                "median": 0.22779850000000001,
+                "min": 0.081977,
+                "max": 0.780981,
+                "p95NearestRank": 0.388219
+              }
+            },
+            "stage_security_sliding_key_window": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 343.128282,
+                "mean": 0.343128282,
+                "median": 0.3225055,
+                "min": 0.16363,
+                "max": 4.318018,
+                "p95NearestRank": 0.507374
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 343.128282,
+                "mean": 0.343128282,
+                "median": 0.3225055,
+                "min": 0.16363,
+                "max": 4.318018,
+                "p95NearestRank": 0.507374
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 343.128282,
+                "mean": 0.343128282,
+                "median": 0.3225055,
+                "min": 0.16363,
+                "max": 4.318018,
+                "p95NearestRank": 0.507374
+              }
+            },
+            "stage_middleware_http_metrics_normalize": {
+              "countPerRequestHistogram": {
+                "1": 1000
+              },
+              "observedSpans": 1000,
+              "requestsWithStage": 1000,
+              "recordModeLabelsNotUsedForJoining": {
+                "background_or_unknown": 1000
+              },
+              "inclusiveSpanMs": {
+                "n": 1000,
+                "sum": 5.21745,
+                "mean": 0.00521745,
+                "median": 0.0045780000000000005,
+                "min": 0.001737,
+                "max": 0.048591,
+                "p95NearestRank": 0.008308
+              },
+              "perMeasuredRequestInclusiveSumMs": {
+                "n": 1000,
+                "sum": 5.21745,
+                "mean": 0.00521745,
+                "median": 0.0045780000000000005,
+                "min": 0.001737,
+                "max": 0.048591,
+                "p95NearestRank": 0.008308
+              },
+              "perMeasuredRequestUnionMs": {
+                "n": 1000,
+                "sum": 5.21745,
+                "mean": 0.00521745,
+                "median": 0.0045780000000000005,
+                "min": 0.001737,
+                "max": 0.048591,
+                "p95NearestRank": 0.008308
+              }
+            }
+          },
+          "inclusiveWallMetricsMs": {
+            "preHttpMs": {
+              "n": 1000,
+              "sum": 10047.874688,
+              "mean": 10.047874688,
+              "median": 9.509291999999999,
+              "min": 7.446197,
+              "max": 16.7639,
+              "p95NearestRank": 13.923335
+            },
+            "firstAuthEndToUsageBeginMs": {
+              "n": 1000,
+              "sum": 78.170035,
+              "mean": 0.078170035,
+              "median": 0.0751,
+              "min": 0.021232,
+              "max": 0.325907,
+              "p95NearestRank": 0.112198
+            },
+            "usageBeginToSecondAuthBeginMs": {
+              "n": 1000,
+              "sum": 1299.009879,
+              "mean": 1.299009879,
+              "median": 1.243792,
+              "min": 0.878755,
+              "max": 5.369849,
+              "p95NearestRank": 1.792559
+            },
+            "capturedStageSqlUnionMs": {
+              "n": 1000,
+              "sum": 1132.769255,
+              "mean": 1.132769255,
+              "median": 1.0860095,
+              "min": 0.726604,
+              "max": 4.999169,
+              "p95NearestRank": 1.58945
+            }
+          },
+          "preBalanceDisjointWallMetricsMs": {
+            "ban_legacy_fixed_sliding_method_wall_union": {
+              "n": 1000,
+              "sum": 1093.51401,
+              "mean": 1.09351401,
+              "median": 1.0486659999999999,
+              "min": 0.687296,
+              "max": 4.955177,
+              "p95NearestRank": 1.548873
+            },
+            "security_wall_outside_those_methods": {
+              "n": 1000,
+              "sum": 34.037795,
+              "mean": 0.034037795,
+              "median": 0.03256,
+              "min": 0.010323,
+              "max": 0.289169,
+              "p95NearestRank": 0.048897
+            },
+            "http_normalization_wall_outside_prior_union": {
+              "n": 1000,
+              "sum": 5.21745,
+              "mean": 0.00521745,
+              "median": 0.0045780000000000005,
+              "min": 0.001737,
+              "max": 0.048591,
+              "p95NearestRank": 0.008308
+            },
+            "other_sql_client_wall_outside_prior_union": {
+              "n": 1000,
+              "sum": 0.0,
+              "mean": 0.0,
+              "median": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "p95NearestRank": 0.0
+            },
+            "remaining_complement": {
+              "n": 1000,
+              "sum": 166.240624,
+              "mean": 0.166240624,
+              "median": 0.1594695,
+              "min": 0.064112,
+              "max": 0.756913,
+              "p95NearestRank": 0.243795
+            }
+          },
+          "remainingComplementBoundaryGroups": [
+            {
+              "boundaries": "stage_middleware_http_metrics_normalize -> SECOND_AUTH_BEGIN",
+              "requests": 1000,
+              "perMeasuredRequestMsIncludingZeros": {
+                "n": 1000,
+                "sum": 136.136199,
+                "mean": 0.136136199,
+                "median": 0.130163,
+                "min": 0.045505,
+                "max": 0.726328,
+                "p95NearestRank": 0.207384
+              }
+            },
+            {
+              "boundaries": "stage_security_sliding_key_window -> stage_middleware_http_metrics_normalize",
+              "requests": 1000,
+              "perMeasuredRequestMsIncludingZeros": {
+                "n": 1000,
+                "sum": 14.285556,
+                "mean": 0.014285556,
+                "median": 0.013397,
+                "min": 0.005146,
+                "max": 0.225291,
+                "p95NearestRank": 0.02124
+              }
+            },
+            {
+              "boundaries": "USAGE_ENVELOPE_BEGIN -> stage_security_request_allowed",
+              "requests": 1000,
+              "perMeasuredRequestMsIncludingZeros": {
+                "n": 1000,
+                "sum": 9.560714,
+                "mean": 0.009560714,
+                "median": 0.0091755,
+                "min": 0.002722,
+                "max": 0.044175,
+                "p95NearestRank": 0.013317
+              }
+            },
+            {
+              "boundaries": "stage_security_request_allowed -> stage_security_sliding_key_window",
+              "requests": 1000,
+              "perMeasuredRequestMsIncludingZeros": {
+                "n": 1000,
+                "sum": 6.258155,
+                "mean": 0.006258155,
+                "median": 0.005936,
+                "min": 0.001434,
+                "max": 0.043197,
+                "p95NearestRank": 0.00912
+              }
+            }
+          ],
+          "detailedSummaryPopulation": "1000 measured SSE requests only; 100 warmups excluded. JSON retains complete-response metrics and stage counts, without extending these partitions to JSON."
+        }
+      },
+      "backgroundStageObservationCounts": {
+        "stage_auth_validate": 0,
+        "stage_middleware_http_metrics_normalize": 0,
+        "stage_security_fixed_ip_window": 0,
+        "stage_security_ip_banned": 0,
+        "stage_security_legacy_cache_read": 0,
+        "stage_security_redis_get_ban": 0,
+        "stage_security_request_allowed": 3,
+        "stage_security_sliding_key_window": 0
+      },
+      "backgroundScope": "Stage intervals on traces without a captured request envelope, including startup or background work; nested stages overlap and are not caller or batch cardinality.",
+      "joinedTraces": 2200,
+      "completeSuccessEvidence": true,
+      "qualityCounters": {
+        "dropped": 0,
+        "captureErrors": 0,
+        "exportErrors": 0,
+        "activeSpansAtStop": 0,
+        "unclassifiedSql": 0,
+        "runtimeSamplesDropped": 0,
+        "runtimeSamplerFaults": 0
+      },
+      "runtimeSamplerJoined": true,
+      "runtimeSamplesRetained": 613,
+      "unassociatedRecordsPreserved": 4464
+    }
+  },
+  "observationPolicy": {
+    "physicalCpuEvidenceCollected": false,
+    "packetEvidenceCollected": false,
+    "perfCountersCollected": false,
+    "socketOverrides": false,
+    "threadPoolOverrides": false,
+    "stageScope": "Inclusive method wall intervals include client handling, parsing, scheduling, failure policy and uncaptured code. Neither these intervals nor the disjoint remainder is CPU, scheduler-wait or Redis-server time. Nested stages and marginal percentile summaries must not be added or subtracted to infer causes.",
+    "partitionScope": "Only 1000 measured SSE requests per role are partitioned, in each request server stopwatch coordinates. Priority unions of four I/O methods, remaining security wall, normalization, other SQL and the complement are disjoint and sum to usage entry through second authentication start. This interval also includes middleware, body/argument binding, activation, validation and logging; it is not binding-only.",
+    "backgroundScope": "Background intervals are retained separately and can overlap one another. They do not map one-to-one to waiting callers.",
+    "runtimeSamplerScope": "Whole-process numeric observations every 100 ms; ticks may coalesce. Zero observed queue does not establish absence of queue wait.",
+    "comparisonScope": "One fixed-order instrumented pair, 100 excluded warmups plus 1000 measured complete responses per workload. No efficacy, significance, historical recovery or causal attribution claim."
+  },
+  "correctness": {
+    "passed": true,
+    "cases": 379,
+    "tests": [
+      {
+        "label": "managed-combined-unit",
+        "passed": 173,
+        "failed": 0,
+        "skipped": 0,
+        "trxSha256": "205aa76d30588017753b4a41053facbab12e7eaf0015957352c6b15a228b8883"
+      },
+      {
+        "label": "native-profile-combined-unit",
+        "passed": 151,
+        "failed": 0,
+        "skipped": 0,
+        "trxSha256": "41f5587eb62bfd46fed42c9a055735a7f5d73602450eb07b44a25991e64655c1"
+      },
+      {
+        "label": "real-postgres-combined-parity",
+        "passed": 55,
+        "failed": 0,
+        "skipped": 0,
+        "trxSha256": "0d21e0a91b527559603414d50a5e4217d4ba3c6b935430389d0fd86f2b31d7c5"
+      }
+    ],
+    "managedAotCompatibleProbePassed": true,
+    "probeExecutionIsPublishedNativeAot": false,
+    "receiptSha256": "9ad2564a2ede864a8ef0edaaf82a6cfc18c4a758b81852b164a23ce3ed91ecb9",
+    "testedSourceEquivalenceSha256": "1a55aa0262c452cad4942ac3e2549e073580df22a76b3196065c1c807ab00df4",
+    "probeCommandSha256": "f18d116be06a434713361295496e4f807d52942c81ec0aa01bf660bbbdd6cfde",
+    "probeStdoutSha256": "05ac1d6081d5ab644c7cd8491fca9bbc77cdd3f7591eaeec2a5c72682c3c672c",
+    "allCommandsJoined": true,
+    "allOwnedResourcesAbsent": true
+  },
+  "validatorTests": {
+    "passed": true,
+    "serverTests": 24,
+    "clientTests": 18,
+    "total": 42,
+    "failed": 0,
+    "skipped": 0,
+    "receiptSha256": "533b4157ca52589ace2c2d118340842024968ab423cea01485d073434511e4ad",
+    "validatorSourceHashes": {
+      "client-trace/test_validate_client_trace.py": "af93f247693c6f8ef1be145d688785d8730d05724db9ed54074499b3fc3b80e0",
+      "client-trace/validate_client_trace.py": "3b7226dbec28464fd6453c82fcc837569ab21338d20fc07d5681f43adaf1c12b",
+      "test_validate_profile.py": "15f194a25c78c02d14ecec54ada290eea53c3e7b8b04bb2aaebe4e723f0bf515",
+      "validate_profile.py": "b36c895c4b4414682a8388e43c632656ce14449d39c7227ba220d3e7e293795a"
+    },
+    "runtimeSourceManifestSha256": "6e57c7c764546809a7859e94cda1b5358ec4b50f0225753a46d9c6c368929680"
+  },
+  "accounting": {
+    "operations": 4400,
+    "json": 2200,
+    "sse": 2200,
+    "logs": 4400,
+    "usageAudits": 4400,
+    "auditErrors": 0,
+    "inputTokens": 44000,
+    "outputTokens": 22000,
+    "cost": "0.33000000",
+    "spent": "0.33000000",
+    "debits": "0.33000000",
+    "balance": "99.67000000",
+    "retainedMarkerFamilies": 3,
+    "markersEach": 4400,
+    "markerFieldSetsAndValuesVerified": true,
+    "residualSpendObligations": 0,
+    "unchangedUnrelatedTables": 41,
+    "poststopDatabaseBackends": 0,
+    "liveReadSpacingSeconds": [
+      38.12957,
+      38.033013
+    ],
+    "finalExactReads": [
+      {
+        "file": "diagnostic-final-balanced-live-1.observation.private.json",
+        "sha256": "ccb1c4d19575f858c5f15b780920886346bb756b8148921b05fcc5861d47550f",
+        "observedAt": "2026-10-19T06:39:08.138424-07:00",
+        "passed": true
+      },
+      {
+        "file": "diagnostic-final-balanced-live-2.observation.private.json",
+        "sha256": "ca23710fa86cd2072bc2746557cde8d0ddd5f255fba2b7b2809792b784349e27",
+        "observedAt": "2026-10-19T06:39:46.267994-07:00",
+        "passed": true
+      },
+      {
+        "file": "diagnostic-final-balanced-live-3.observation.private.json",
+        "sha256": "8aaf6202c8b156fdfe7b7c77ad4cb9f822fdf09a05da029d00c5e93f2167a3ec",
+        "observedAt": "2026-10-19T06:40:24.301007-07:00",
+        "passed": true
+      },
+      {
+        "file": "diagnostic-final-poststop.observation.private.json",
+        "sha256": "3a1f4f74a58b9ac0bd1b7b8d7e1ce75b7ef0ad6da4eac393a225f8b76be3d72d",
+        "observedAt": "2026-10-19T06:40:33.686163-07:00",
+        "passed": true
+      },
+      {
+        "file": "preservation-final.observation.private.json",
+        "sha256": "6778aa10ee60aa28ee2e8dfd8a0d87577d27a4fe0e7b4c2e8d63538648ac82a5",
+        "observedAt": "2026-10-19T06:40:43.2659-07:00",
+        "passed": true
+      }
+    ],
+    "archivedLedgerAudit": {
+      "passed": true,
+      "rows": 3,
+      "allRunningBalancesChecked": true,
+      "uniquePositiveUndeletedDebits": true,
+      "debits": "0.33000000",
+      "finalBalance": "99.67000000",
+      "extractedSqlSha256": "94e71d9ee3b32fc540db289391937ae9a1347fa02603d08467c13a5ce0962263",
+      "extractionClosureSha256": "e73112f76dbc396bdc84f172fdf031d76a37af82e1cadfdd82b19ebb8327e102",
+      "reviewScope": "Independent retained read-only archive calculation; no database restore, live queries or new requests."
+    }
+  },
+  "closure": {
+    "archivesVerified": true,
+    "postgresArchiveSha256": "042806e20cd055b966ef03710c17239f1df7054512704a370e12978847cf2c6a",
+    "redisArchiveSha256": "063f36040e95717a267e9cccf84ca5a3dfd9539f789f15ce419474069ec2bbab",
+    "allOwnedResourcesAbsent": true,
+    "receiptSha256": "7e681b09197520ee7f86a97aa2bed1d30384a09787ad2c6fcd9d5ae44d3cb792",
+    "retainedOwnedAbsenceReceipts": [
+      {
+        "file": "verify-owned-container-absence-ce72d20a31b8479bb651b4ae381ae220.command.private.json",
+        "sha256": "9923fa2222c369b75cb32d183fecd9d53cad03213719a22be32781a7ba73b0ee"
+      },
+      {
+        "file": "verify-owned-volume-absence-88195530c49d4b28a49d14a8d15ada9a.command.private.json",
+        "sha256": "4b3bf88121e4ac8419e772bb5f91a17ff46b7d967e0d1f34dcc6690854be1d23"
+      },
+      {
+        "file": "verify-owned-network-absence-086cc9c4630742daa9055d0231aca0ca.command.private.json",
+        "sha256": "32563f9bb3537119f4a9fe67e4e57ea5b5edb5c28d799a6aaf01ccf03283989f"
+      }
+    ]
+  },
+  "sourcePreparationNote": "A fresh ignored clean clone carries the nine-file phase overlay plus eight literal stages over the stated parent. Source preparation corrected a path-comparison precondition before application. Earlier failed preparation and review evidence remains retained; no failed gate is reclassified as a completed diagnostic.",
+  "posthocAnalysisCorrections": {
+    "priorAnalyzerSourceHashes": {
+      "analyze_middleware_stages.py": "644b8bf3b9938bb5fc51e835db0e8f189d8df3a02ebc0721e46d367834e08f3e",
+      "analyze_middleware_stages_v3.py": "e53792b111c1e6d45a7437e51ec868bad0e61022f25bf5ca783a06288d2e245b"
+    },
+    "preservedV3AnalysisSha256": "3cc4fab1b9cfc264bc81bf3eceb905164f423c4122cc10c4f5fdd97ce9e58e5d",
+    "correctionProofSha256": "53d5a7d8a5f093c48df5353378ed23e218d22bd52aed548684160bd2075e095d",
+    "finalAnalysisSha256": "64bda039482c552278c890fe09acd4a65acca862ad84e7d0819e69196e03a4e6",
+    "numericResultsAndRawInputBindingsUnchangedFromV3": true,
+    "scope": "After the pipeline closed, the first analyzer attempt failed its client-mode assertion before writing output. V3 corrected the client enum to streaming. V4 corrected only the server label accessor to requestMode; every timing, count, row, partition and raw binding is identical to retained V3. Each request retains both authentication spans, including the first span\u2019s early unknown mode, and joins them by TraceId. Earlier sources, failure evidence and output remain preserved; no raw capture or workload was changed."
+  },
+  "rawBindings": [
+    {
+      "file": "full-native-json.report.json",
+      "sha256": "70b9a5f713f27a2c0d4959eb91803ff6698298e5f329435634ed09b174e150c8"
+    },
+    {
+      "file": "full-native-json.client-trace.private.json",
+      "sha256": "2768d86f943acdd1efcfd891b5e8573738e7ea3a6cbd2ebc4854dbb460d9dc26"
+    },
+    {
+      "file": "full-native-json.execution.json",
+      "sha256": "385bf289f0116679f9d9e746a746d9803a42e0da732ddb275b4c89d8456ba007"
+    },
+    {
+      "file": "client-full-native-json-a2fda390691646b2b73c3666de2a4dfc.command.private.json",
+      "sha256": "12043ab1a5edee9793bd859952d0d3292a7815d67d1e828707b5123a6008ec0f"
+    },
+    {
+      "file": "client-full-native-json-a2fda390691646b2b73c3666de2a4dfc.stdout.private.txt",
+      "sha256": "70b9a5f713f27a2c0d4959eb91803ff6698298e5f329435634ed09b174e150c8"
+    },
+    {
+      "file": "client-full-native-json-a2fda390691646b2b73c3666de2a4dfc.stderr.private.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "full-native-sse.report.json",
+      "sha256": "4d233903bd66dad2f1854c9f76be27f207caa33678cdd225880740b13c28f0e9"
+    },
+    {
+      "file": "full-native-sse.client-trace.private.json",
+      "sha256": "055561a62c6074a59edbee42a37e3102d0093ed71ba7f7490e028cc585f14baf"
+    },
+    {
+      "file": "full-native-sse.execution.json",
+      "sha256": "dba1bd9ad9627e9507dae8ce2177c45138fb49f651a2d3f765e68bfdcbb3f691"
+    },
+    {
+      "file": "client-full-native-sse-909939cf9c214f5c9fca7b491adc5240.command.private.json",
+      "sha256": "bfb703c611cf9b9f443ea483c6c127db90787321a46e6f5a0cc6bf92ecf08e17"
+    },
+    {
+      "file": "client-full-native-sse-909939cf9c214f5c9fca7b491adc5240.stdout.private.txt",
+      "sha256": "4d233903bd66dad2f1854c9f76be27f207caa33678cdd225880740b13c28f0e9"
+    },
+    {
+      "file": "client-full-native-sse-909939cf9c214f5c9fca7b491adc5240.stderr.private.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "full-native.server-profile.private.json",
+      "sha256": "7824a9ee676e1531355aeb1d7567cb8a4e779dbbef3d004b085366a5532b23cc"
+    },
+    {
+      "file": "full-native.client-server-validation.json",
+      "sha256": "11200207188c7834d15a3da318d3db403da665a9a90f5b5e799af84a1a7b9e96"
+    },
+    {
+      "file": "full-native.stopped.inspect.private.json",
+      "sha256": "ebcf3baf35fe226566c94a2428c001df107e98ed05358ecead43ddbfe51fe8a0"
+    },
+    {
+      "file": "full-jit-json.report.json",
+      "sha256": "84e27ca85fc40efbd124dc4c5a0a3c1165fbc2d0dd336b414a4faad7ee8da0d2"
+    },
+    {
+      "file": "full-jit-json.client-trace.private.json",
+      "sha256": "9cd355dbbbb47e245da865c08cb090c46ee6e5dfdce540cbd7e70f8a418d6436"
+    },
+    {
+      "file": "full-jit-json.execution.json",
+      "sha256": "0c9815becff4be83a0406576c25e56722077418b3f2ce8b5abbf5664b7988cf7"
+    },
+    {
+      "file": "client-full-jit-json-21ecb57bcc664f5f92576277857710be.command.private.json",
+      "sha256": "3fc99cbef884ca034ff0073a39f45db877b12c4ccb065c0a60f754d406cb8e5a"
+    },
+    {
+      "file": "client-full-jit-json-21ecb57bcc664f5f92576277857710be.stdout.private.txt",
+      "sha256": "84e27ca85fc40efbd124dc4c5a0a3c1165fbc2d0dd336b414a4faad7ee8da0d2"
+    },
+    {
+      "file": "client-full-jit-json-21ecb57bcc664f5f92576277857710be.stderr.private.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "full-jit-sse.report.json",
+      "sha256": "e095472bf65a61ecf3d7dd30a4c42c2a9d97ee71e85e78101d61fbfe5cd023ed"
+    },
+    {
+      "file": "full-jit-sse.client-trace.private.json",
+      "sha256": "4bbd91a515dfb8baecfb4a116990987a6264a43e7d4876bac75dfe415b390040"
+    },
+    {
+      "file": "full-jit-sse.execution.json",
+      "sha256": "922ce88f8a41d70cc90102ace931158ffea8bc2d951893f3399f6ca77937debf"
+    },
+    {
+      "file": "client-full-jit-sse-59689ef7ce7142f4866d595e4c580f1c.command.private.json",
+      "sha256": "9a0f3838f53c17c1637fed46db7ba82a5a72eabe8eeae2ae126751b026974727"
+    },
+    {
+      "file": "client-full-jit-sse-59689ef7ce7142f4866d595e4c580f1c.stdout.private.txt",
+      "sha256": "e095472bf65a61ecf3d7dd30a4c42c2a9d97ee71e85e78101d61fbfe5cd023ed"
+    },
+    {
+      "file": "client-full-jit-sse-59689ef7ce7142f4866d595e4c580f1c.stderr.private.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "full-jit.server-profile.private.json",
+      "sha256": "4c974e718a9bcce76467311c7bb4c47b55149ba6ddfa02ab5261ba29453e759b"
+    },
+    {
+      "file": "full-jit.client-server-validation.json",
+      "sha256": "608674189e89a33d4ceeb7fcfe79c79eb6b81426284e06beb122c38db52d275d"
+    },
+    {
+      "file": "full-jit.stopped.inspect.private.json",
+      "sha256": "0d0b569e8401f3f51fa7ea876e76031ef9e5965c0d44152d84c2e0fcfe9b113e"
+    }
+  ],
+  "stageAndPartitionAnalysisSha256": "64bda039482c552278c890fe09acd4a65acca862ad84e7d0819e69196e03a4e6",
+  "stageAnalyzerSha256": "218e5973119989072b7cfa68790047348a8d62075a8f66f50a89c15e5a0edc0f",
+  "publisherSourceSha256": "501bf5f9d763ca2383465cd8654851cf4fd12684b229d20e40a330784753dbc3",
+  "conclusion": "All eight measured-SSE stage summaries and the JSON/background observation counts are retained. These wall-time observations guide further investigation; they do not demonstrate that the regression is resolved or identify its cause."
+}

@@ -56,18 +56,39 @@ public sealed class NpgsqlProviderKeyCredentialRepository : IProviderKeyCredenti
             "WHERE \"ProviderId\" = @providerId",
             command => command.Parameters.AddWithValue("providerId", NpgsqlDbType.Integer, providerId),
             cancellationToken);
-        var credentials = await ReadCredentialsAsync(
-            connection,
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            $"SELECT {ProviderPersistenceMappings.JoinedCredentialColumns}, " +
+            $"{ProviderPersistenceMappings.JoinedProviderColumns} FROM (" +
             $"SELECT {ProviderPersistenceMappings.CredentialColumns} FROM \"ProviderKeyCredentials\" " +
             "WHERE \"ProviderId\" = @providerId " +
-            "ORDER BY \"IsPrimary\" DESC, \"ProviderAccountGroup\" OFFSET @offset LIMIT @limit",
-            command =>
+            "ORDER BY \"IsPrimary\" DESC, \"ProviderAccountGroup\", \"Id\" OFFSET @offset LIMIT @limit) c " +
+            "LEFT JOIN \"Providers\" p ON p.\"Id\" = c.\"ProviderId\" " +
+            "ORDER BY c.\"IsPrimary\" DESC, c.\"ProviderAccountGroup\", c.\"Id\"";
+        command.Parameters.AddWithValue("providerId", NpgsqlDbType.Integer, providerId);
+        AddPagination(command, pageNumber, pageSize);
+
+        var credentials = new List<ProviderKeyCredential>();
+        var providers = new Dictionary<int, Provider>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var credential = ProviderPersistenceMappings.ReadCredential(reader);
+            if (reader.IsDBNull(ProviderPersistenceMappings.CredentialColumnCount))
             {
-                command.Parameters.AddWithValue("providerId", NpgsqlDbType.Integer, providerId);
-                AddPagination(command, pageNumber, pageSize);
-            },
-            cancellationToken);
-        await LoadProvidersAsync(connection, credentials, cancellationToken);
+                throw new KeyNotFoundException(
+                    $"Provider {credential.ProviderId} for credential {credential.Id} was not found.");
+            }
+            if (!providers.TryGetValue(credential.ProviderId, out var provider))
+            {
+                provider = ProviderPersistenceMappings.ReadProvider(
+                    reader, ProviderPersistenceMappings.CredentialColumnCount);
+                providers.Add(provider.Id, provider);
+            }
+            credential.Provider = provider;
+            provider.ProviderKeyCredentials.Add(credential);
+            credentials.Add(credential);
+        }
         return (credentials, totalCount);
     }
 

@@ -21,7 +21,7 @@ namespace ConduitLLM.IntegrationTests.Tests;
 /// Npgsql on real PostgreSQL.
 /// </summary>
 [Collection("Postgres advisory locks")]
-public sealed class ProviderPersistenceParityTests
+public sealed partial class ProviderPersistenceParityTests
 {
     private readonly PostgresLockTestContainerFixture _fixture;
 
