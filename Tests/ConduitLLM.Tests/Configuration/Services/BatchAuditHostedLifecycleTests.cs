@@ -20,7 +20,7 @@ public sealed class BatchAuditHostedLifecycleTests
     [Fact]
     public async Task QueueAdapterJoinsConcurrentStopsAndDoesNotRestopItsDisposedBorrowedQueue()
     {
-        var inner = new GatedHostedService();
+        using var inner = new GatedHostedService();
         var adapter = new BatchAuditQueueHostedService(inner);
         var first = adapter.StopAsync(CancellationToken.None);
         try
@@ -39,7 +39,6 @@ public sealed class BatchAuditHostedLifecycleTests
         {
             inner.ReleaseStop.TrySetResult();
             await first.WaitAsync(TestTimeout);
-            if (inner.DisposeCalls == 0) inner.Dispose();
         }
     }
 
