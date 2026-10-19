@@ -56,10 +56,6 @@
     <!-- Prefer throughput for the Native Gateway while preserving explicit
          publisher overrides and ordinary managed builds. -->
     <OptimizationPreference Condition="'$(OptimizationPreference)' == ''">Speed</OptimizationPreference>
-    <!-- .NET 10 defaults Native LINQ to size independently of the compiler
-         preference. Select throughput implementations for Speed, retaining
-         explicit LINQ and compiler-preference overrides. -->
-    <UseSizeOptimizedLinq Condition="'$(UseSizeOptimizedLinq)' == '' and '$(OptimizationPreference)' == 'Speed'">false</UseSizeOptimizedLinq>
   </PropertyGroup>
 
   <ItemGroup>

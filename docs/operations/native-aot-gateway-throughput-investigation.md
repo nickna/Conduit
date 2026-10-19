@@ -751,3 +751,30 @@ the pinned SDK/runtime/compiler, portable instruction-set selection,
 first-party warning baseline, zero MIBC inputs and no applied packaged PGO.
 Its images and a fresh five-group comparison remain separate gates. No
 seventh performance result is available.
+
+## Seventh candidate result, 2026-10-19
+
+The [speed-oriented LINQ comparison](benchmarks/2026-10-19-gateway-linq-speed-candidate.json)
+failed both unchanged SSE criteria. Native measured 165.459 requests/s and
+60.527 ms median per-run p99, versus the matched default-LINQ control's
+166.982 requests/s and 59.925 ms. JIT measured 182.318 requests/s and
+53.400 ms. The candidate worsened Native throughput by 0.91% and p99 by
+1.00%; versus JIT, throughput remained 9.25% lower and p99 13.35% higher.
+All five groups, their ranges and paired contrasts remain retained. JSON
+throughput fell 3.92% versus the Native control and p99 worsened 6.94%.
+
+The actual compiler feature and runtime knob both selected speed LINQ;
+the candidate executable grew to 122,850,144 bytes. Strict publishing,
+zero first-party link warnings and matching packaged bytes passed. This
+controlled result does not support retaining the override, which is removed.
+The compiler's existing `Speed` preference and durable coalescer remain.
+
+All 39,602 complete responses validated. Logs, usage audits and each of
+three owner-bound marker families numbered 39,602, with zero audit errors.
+Exact spending and debits were USD 2.97015000, leaving balance 97.02985000.
+All 41 unrelated tables were unchanged. Three spaced live reads, zero
+post-stop database backends, verified archives and owned cleanup passed.
+A separate read-only archive audit checked all 38 debit entries and every
+running balance. These correctness checks do not resolve the performance
+regression. The issue remains open, the PR remains a draft and production
+remains JIT.
