@@ -654,3 +654,52 @@ archive audit checked all 38 debit entries and every running balance.
 
 Correctness and a modest Native improvement do not satisfy #1647. The PR
 remains a draft, the issue remains unresolved, and production remains JIT.
+
+## Current-source phase observations and direct-write candidate, 2026-10-19
+
+A fresh [phase-only diagnostic](benchmarks/2026-10-19-gateway-current92-phase-diagnostic.json)
+used observer-only source `0e995c03`, based on runtime `92d220c0`. It retained
+one Native-then-JIT pair, JSON then SSE, with the same complete-response
+validators and 100 warmups plus 1,000 measured requests per workload. Both
+roles had bounded phase/SQL/HTTP Activities, deterministic client timings and
+whole-process numeric samples. CPU sampling, perf counters, packet capture
+and socket overrides were excluded before traffic. The fixed order and
+observers make this diagnostic evidence, not an efficacy qualification.
+
+For the measured SSE requests, mean server duration was 44.435 ms Native
+versus 43.196 ms JIT. Envelope start to provider HTTP start was near parity,
+11.037 versus 10.942 ms. The caller's log-writer await averaged 1.488 versus
+0.175 ms, while DONE flush to response completion averaged 3.932 versus
+2.562 ms. Native's context-isolated worker SQL remains separate from caller
+traces. Wall time includes I/O and scheduling; these intervals do not measure
+CPU or establish an isolated cause. SQL client spans do not count server
+statements or network round trips.
+
+All 4,400 responses and client/server joins passed, with zero capture drops
+or errors. Logs, usage audits and each of three owner-bound marker families
+numbered 4,400; exact spending/debits were USD 0.33000000 and balance
+99.67000000. All 41 unrelated tables were unchanged. Three spaced final
+reads, zero post-stop backends, verified archives and owned cleanup passed.
+A separate archive calculation checked every running balance in all three
+debit rows. An earlier script-definition error occurred before any Gateway
+or client started; that zero-traffic failed attempt and its verified archives
+remain retained. Structural and synthetic checks preceded the fresh run.
+
+The next candidate, `c9fe819c`, restores direct durable
+`NpgsqlRequestLogRuntimeStore` writes and removes the experimental serial
+coalescer, batch backend and drain bridge. Each caller still awaits its
+PostgreSQL insert and validates its generated-ID result. Fresh narrow spend
+reads and the provider/credential snapshot remain. The matched Native control
+retains coalescing and otherwise shares those reads, dependencies and a small
+audit shutdown fix. Exactly ten paths differ between these variants.
+
+The shared audit queue bridge now joins a pending or successful stop, avoiding
+a repeated drain after DI disposes the borrowed queue. Failed or canceled
+drains remain retryable. Its regression cases and the real Admin startup and
+shutdown cases pass. The direct-write source passed 151 managed, 129
+Native-compatible managed and 44 PostgreSQL cases; the coalescer control
+passed 163, 141 and 49, respectively. All had zero skips and passed the full
+managed AOT-compatible persistence probe. The count difference consists of
+tests for deleted coalescer code. Published-image verification and the fresh
+controlled performance comparison remain separate gates. There is no sixth
+performance result yet, and the fifth candidate's failed criteria stand.
