@@ -23,7 +23,9 @@ public sealed class ApplicationCacheGenerationTests
         using var cache = new FusionCache(fusionOptions);
         using var generations = new ApplicationCacheGeneration(cache, options, null);
         var key = "generation:mappings";
-        await cache.SetAsync(key, "warm", options.Entry(TimeSpan.FromSeconds(5)));
+        var entry = options.Entry(TimeSpan.FromSeconds(5));
+        entry.EnableAutoClone = false;
+        await cache.SetAsync(key, "warm", entry);
         var loads = 0;
         cache.Events.FactorySuccess += (_, args) => { if (args.Key.EndsWith(key, StringComparison.Ordinal)) loads++; };
 
@@ -47,7 +49,9 @@ public sealed class ApplicationCacheGenerationTests
         using var cache = new FusionCache(fusionOptions);
         using var generations = new ApplicationCacheGeneration(cache, options, null);
         var key = "generation:mappings";
-        await cache.SetAsync(key, "stale", options.Entry(TimeSpan.FromSeconds(5)));
+        var entry = options.Entry(TimeSpan.FromSeconds(5));
+        entry.EnableAutoClone = false;
+        await cache.SetAsync(key, "stale", entry);
         var loads = 0;
         cache.Events.FactorySuccess += (_, args) =>
         {
@@ -102,7 +106,9 @@ public sealed class ApplicationCacheGenerationTests
         var options = new ApplicationCacheOptions();
         using var cache = new FusionCache(options.FusionOptions());
         using var generations = new ApplicationCacheGeneration(cache, options, null);
-        await cache.SetAsync("generation:mappings", "warm", options.Entry(TimeSpan.FromSeconds(5)));
+        var entry = options.Entry(TimeSpan.FromSeconds(5));
+        entry.EnableAutoClone = false;
+        await cache.SetAsync("generation:mappings", "warm", entry);
         generations.Dispose();
 
         var read = generations.GetAsync(ApplicationCacheDomain.Mappings);
