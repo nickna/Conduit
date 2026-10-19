@@ -322,6 +322,17 @@ previous successful alias and archive. It checks public streams, error records
 and retained JSON for private sentinels and configuration paths. Use
 `-DiagnosticSchemaOnly` for the focused sidecar validation and immutable-writer
 contracts; the default invocation includes these and the full collector suite.
+Unexpected positive-control failures include a bounded projection of the current
+failed attempt in the assertion message before owned fixture cleanup removes its
+temporary files. The projection validates the latest pointer, failed attempt and
+sidecar together and emits only the closed phase, reason, runtime, sample, pair,
+cleanup outcomes and optional validated workload counts. Missing or invalid
+evidence is reported as `unavailable`; raw child output and exception messages
+are never a fallback. `test-native-benchmark-collector-diagnostics.ps1` checks
+hostile sidecars and a controlled unexpected Gateway failure, including privacy,
+environment restoration and successful owned process/directory cleanup. Use its
+`-ProjectionOnly` switch for the focused projection contracts. The default
+collector suite includes this regression.
 On 2026-10-16, the unchanged collector inputs passed all 144 cases and 31 metadata
 cleanup boundaries on Windows PowerShell 7.6.5/.NET 10.0.11 and Linux PowerShell
 7.6.6/.NET 10.0.12. The original 204 promotion contracts also passed on both

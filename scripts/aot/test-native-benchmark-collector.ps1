@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param([switch] $DiagnosticSchemaOnly, [switch] $StrictCallerOnly, [switch] $FailedWorkloadOnly,
     [switch] $NetworkBindingOnly, [switch] $DockerNetworkOnly, [switch] $CollectorTimingOnly,
-    [switch] $DeadlineOnly)
+    [switch] $DeadlineOnly, [switch] $UnexpectedPositiveFailureOnly)
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -21,6 +21,7 @@ $privateDatabasePassword = 'private-database-' + [Guid]::NewGuid().ToString('N')
 $privateRedisPassword = 'private-redis-' + [Guid]::NewGuid().ToString('N')
 $cases = 0
 $proofFailure = $null
+$script:lastCaseFailureProjection = 'unavailable'
 $cleanupFailures = [Collections.Generic.List[string]]::new()
 $ownedReadinessServers = [Collections.Generic.List[object]]::new()
 
@@ -923,8 +924,52 @@ function Get-TestPort {
     throw 'Could not reserve adjacent owned fixture ports.'
 }
 
+function Get-CaseAttemptFailureProjection([string] $OutputPath, [string] $Service) {
+    # Only validated, current failed-attempt codes and counts may survive the
+    # suite's owned directory cleanup. Never fall back to exception/child text.
+    try {
+        $root = $OutputPath + '.attempts'
+        $latestDocument = Read-NativeBenchmarkAttemptDocument (Join-Path $root 'latest.json')
+        $latest = Get-NativeBenchmarkAttemptLatest $latestDocument['value']
+        if ($latest['service'] -cne $Service) { return 'unavailable' }
+        $directory = Join-Path $root $latest['attemptId']
+        $attemptDocument = Read-NativeBenchmarkAttemptDocument (Join-Path $directory 'attempt.json')
+        $attempt = Get-NativeBenchmarkAttemptRecord $attemptDocument['value']
+        if ($attempt['status'] -cne 'failed' -or $attempt['attemptId'] -cne $latest['attemptId'] -or
+            $attempt['service'] -cne $Service) { return 'unavailable' }
+        $path = Join-Path $directory 'diagnostics.json'
+        Assert-NativeBenchmarkAttemptFilePath $path -Required
+        if ([IO.FileInfo]::new($path).Length -gt 4096) { return 'unavailable' }
+        $document = Read-NativeBenchmarkAttemptDocument $path
+        if ($document['bytes'] -gt 4096) { return 'unavailable' }
+        $diagnostic = Get-NativeBenchmarkAttemptFailureDiagnostic $document['value']
+        if ($diagnostic['attemptId'] -cne $attempt['attemptId'] -or
+            $diagnostic['service'] -cne $Service) { return 'unavailable' }
+        $projection = [ordered]@{}
+        foreach ($field in @('phase', 'reason', 'runtime', 'sampleKind', 'pair')) {
+            $projection[$field] = $diagnostic[$field]
+        }
+        foreach ($field in @('ownedContainerCleanup', 'privateFileCleanup')) {
+            $projection[$field] = [ordered]@{
+                status = $diagnostic[$field]['status']; reason = $diagnostic[$field]['reason']
+            }
+        }
+        $projection['workloadAggregate'] = $null
+        if ($diagnostic['schemaVersion'] -eq 2 -and $null -ne $diagnostic['workloadAggregate']) {
+            $aggregate = [ordered]@{}
+            foreach ($field in @('phase', 'id', 'requested', 'executed', 'completed', 'failures',
+                'warmupRequests', 'concurrency', 'timeoutSeconds')) {
+                $aggregate[$field] = $diagnostic['workloadAggregate'][$field]
+            }
+            $projection['workloadAggregate'] = $aggregate
+        }
+        return (ConvertTo-Json -InputObject $projection -Depth 4 -Compress)
+    }
+    catch { return 'unavailable' }
+}
+
 function Get-CaseFailureDiagnostic([string] $CaseRoot, [object[]] $Commands, [object[]] $Drivers,
-    [object[]] $Created, [string] $Failure) {
+    [object[]] $Created, [string] $Failure, [string] $Projection) {
     $operations = @($Commands | ForEach-Object {
         if ($null -ne $_ -and $null -ne $_.arguments -and $_.arguments.Count -gt 0) {
             [string]$_.arguments[0] + $(if ($_.arguments[0] -cin @('image', 'manifest')) { ':' + $_.arguments[1] } else { '' })
@@ -932,7 +977,8 @@ function Get-CaseFailureDiagnostic([string] $CaseRoot, [object[]] $Commands, [ob
     })
     $safeFailure = 'unclassified'
     # Preserve the old console-classification oracle while accepting only the
-    # new closed diagnostic suffix. The full sidecar is validated separately.
+    # new closed diagnostic suffix. Project the independently validated sidecar
+    # separately so classification assertions retain their exact old contract.
     $classificationFailure = $Failure -creplace (' \[phase=[a-z-]+;reason=[a-z-]+;runtime=(?:unknown|jit|native-aot);' +
         'sample=(?:none|warmup|recorded);pair=(?:none|[1-9]|1[0-9]|2[01]);' +
         'owned-cleanup=(?:not-attempted|confirmed|verification-failed);owned-cleanup-reason=(?:none|shutdown-failed|verification-failed);' +
@@ -958,7 +1004,8 @@ function Get-CaseFailureDiagnostic([string] $CaseRoot, [object[]] $Commands, [ob
         Classification = $safeFailure
         Text = 'driver records ' + $Drivers.Count + ', created records ' + $Created.Count +
             ', operations ' + ($operations -join '|') + ', controlled failure ' + $safeFailure +
-            ', safe driver trace ' + $traces.driver + ', safe run trace ' + $traces.run + '.'
+            ', safe driver trace ' + $traces.driver + ', safe run trace ' + $traces.run +
+            ', attempt diagnostic ' + $Projection + '.'
     }
 }
 
@@ -1007,6 +1054,7 @@ function Assert-CollectorFailureDiagnostic($Metadata, [string] $Scenario, [strin
 
 function Invoke-CollectorCase([string] $Service, [string] $Scenario, [string] $ExpectedFailure,
     [string] $ExistingOutputPath = '', [switch] $CaptureResult, [switch] $StrictCaller) {
+    $script:lastCaseFailureProjection = 'unavailable'
     $caseRoot = New-CaseRoot $Scenario
     $networkCase = $Scenario.StartsWith('network-', [StringComparison]::Ordinal)
     $fixtureNetworkName = 'owned-private-fixture-' + [Guid]::NewGuid().ToString('N')
@@ -1176,6 +1224,7 @@ $poll = {
     catch { $failure = $_.Exception.Message; $publicError = $_ | Out-String }
     finally { $watch.Stop() }
     $publicOutput = $publicRecords | Out-String
+    $script:lastCaseFailureProjection = Get-CaseAttemptFailureProjection $parameters.OutputPath $Service
     $caseStage = 'privacy-assertions'
     foreach ($name in $environmentNames) {
         Assert-Contract ([Environment]::GetEnvironmentVariable($name) -ceq $before[$name]) ('Collector mutated parent environment: ' + $name)
@@ -1191,7 +1240,7 @@ $poll = {
     $commands = Read-Records (Join-Path $caseRoot 'commands')
     $drivers = Read-Records (Join-Path $caseRoot 'drivers')
     $created = Read-Records (Join-Path $caseRoot 'created')
-    $failureDiagnostic = Get-CaseFailureDiagnostic $caseRoot $commands $drivers $created $failure
+    $failureDiagnostic = Get-CaseFailureDiagnostic $caseRoot $commands $drivers $created $failure $script:lastCaseFailureProjection
     $caseStage = 'fixture-record-assertions'
     foreach ($container in $created) {
         Assert-Contract ($container.canonicalEnvironment -and $container.backendCredentialCorrect) 'Mandatory environment canonicalization or independent backend credential preservation failed.'
@@ -1507,7 +1556,8 @@ $poll = {
             $primaryClassification = if ($null -ne $failureDiagnostic) { $failureDiagnostic.Classification } else { 'unclassified' }
             throw ('Collector case readiness cleanup failed; primary stage ' + $caseStage +
                 ', type ' + $primaryType + ', classification ' + $primaryClassification +
-                '; cleanup stages ' + ($caseCleanupFailures -join '|') + '.')
+                '; cleanup stages ' + ($caseCleanupFailures -join '|') +
+                '; attempt diagnostic ' + $script:lastCaseFailureProjection + '.')
         }
     }
 }
@@ -2279,7 +2329,7 @@ throw 'Unknown fixture mode.'
     $script:packages = @{}
     $script:packages['admin'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
     $script:packages['gateway'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'gateway'
-    if (-not $StrictCallerOnly -and -not $FailedWorkloadOnly -and -not $DockerNetworkOnly -and -not $DeadlineOnly) {
+    if (-not $StrictCallerOnly -and -not $FailedWorkloadOnly -and -not $DockerNetworkOnly -and -not $DeadlineOnly -and -not $UnexpectedPositiveFailureOnly) {
     $script:packages['admin-other'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin'
     $script:packages['admin-dirty'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -SourceDirty $true
     $script:packages['admin-unavailable'] = New-NativeBenchmarkPackagingFixture $temporaryRoot 'admin' -UnavailableSource
@@ -2325,7 +2375,13 @@ throw 'Unknown fixture mode.'
         Assert-Contract ($null -ne $definition) ('Collector helper is missing: ' + $functionName)
         Invoke-Expression $definition.Extent.Text
     }
-    if ($DeadlineOnly) {
+    if ($UnexpectedPositiveFailureOnly) {
+        # A failing workload is deliberately sent through the positive oracle.
+        # The separate regression inspects its exception after suite cleanup.
+        Invoke-CollectorCase 'gateway' 'diagnostic-probe-partial' $null -StrictCaller
+        throw 'Controlled unexpected positive failure was not reached.'
+    }
+    elseif ($DeadlineOnly) {
         Invoke-CollectorCase 'admin' 'driver-timeout' 'No qualification was recorded.'
         Invoke-CollectorCase 'admin' 'diagnostic-poll-deadline' 'No qualification was recorded.'
         Assert-Contract ($cases -eq 2) 'Focused deadline controls did not execute both independent collector cases.'
@@ -2349,6 +2405,7 @@ throw 'Unknown fixture mode.'
         Invoke-FailureDiagnosticSchemaContracts
     }
     else {
+    & (Join-Path $PSScriptRoot 'test-native-benchmark-collector-diagnostics.ps1')
     Invoke-CollectorTimingContracts
     $successfulAdmin = Invoke-CollectorCase 'admin' 'success' $null -CaptureResult -StrictCaller
     Invoke-CollectorCase 'gateway' 'success' $null -StrictCaller
@@ -2703,7 +2760,12 @@ exit 0
     }
     }
 }
-catch { $proofFailure = $_.Exception }
+catch {
+    $proofFailure = $_.Exception
+    # Emit only the validated snapshot even if an earlier fixture assertion or
+    # a later cleanup error replaces the positive oracle's exception message.
+    Write-Host ('Collector case attempt diagnostic ' + $script:lastCaseFailureProjection)
+}
 finally {
     $processCleanupConfirmed = $true
     try {
@@ -2733,7 +2795,12 @@ finally {
     }
     finally {
         foreach ($name in $environmentNames) {
-            try { [Environment]::SetEnvironmentVariable($name, $oldEnvironment[$name]) }
+            try {
+                # PowerShell binds an untyped null dictionary value as an empty
+                # string; use a typed null to restore an originally absent name.
+                $value = if ($null -eq $oldEnvironment[$name]) { [NullString]::Value } else { $oldEnvironment[$name] }
+                [Environment]::SetEnvironmentVariable($name, $value)
+            }
             catch { $cleanupFailures.Add('Parent environment restoration failed.') }
         }
         try {
@@ -2753,7 +2820,8 @@ finally {
     }
 }
 if ($cleanupFailures.Count -gt 0) {
-    if ($null -ne $proofFailure) { throw ('Collector contract proof and fixture cleanup failed; cleanup failures ' + $cleanupFailures.Count + '.') }
+    if ($null -ne $proofFailure) { throw ('Collector contract proof and fixture cleanup failed; cleanup failures ' + $cleanupFailures.Count +
+        '; attempt diagnostic ' + $script:lastCaseFailureProjection + '.') }
     throw ('Collector contract fixture cleanup failed; cleanup failures ' + $cleanupFailures.Count + '.')
 }
 if ($null -ne $proofFailure) { throw $proofFailure }
