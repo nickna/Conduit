@@ -111,7 +111,7 @@ public sealed class NpgsqlBatchingRequestLogRuntimeStore : IRequestLogRuntimeSto
         try { _abort.Cancel(); }
         // Disposal can race a repeated StopAsync only after the worker has
         // already joined. There is then no remaining database operation to abort.
-        catch (ObjectDisposedException) { }
+        catch (ObjectDisposedException) { return; }
     }
 
     private async Task RunAsync()

@@ -358,7 +358,8 @@ not demonstrate recovery, and no favorable subset replaces this result.
 
 The queued Native log experiment is therefore removed from the proposed fix.
 It introduced a process-crash durability tradeoff without demonstrating an SSE
-benefit. Native retains its original typed per-request durable writer. The
+benefit. Through `ea7c0a0`, Native retained its original typed per-request
+durable writer. The
 candidate commit, retry/failure test receipts and measurements remain retained.
 Separate matched diagnostic traces and zero-drop packet captures locate extra
 Native work before provider transmission and during completion; they do not
@@ -556,3 +557,60 @@ matched 4,400 logs, audits and entries in each of three Redis marker sets,
 checks, post-stop zero backends, independently checked archived ledger running
 balances, both verified archives and complete owned cleanup passed. This
 diagnostic leaves the fourth candidate's failed resolution criteria unchanged.
+
+## Fresh reads and durable coalescing candidate, 2026-10-19
+
+The next runtime candidate was committed as `c6ff7f8d` and then incorporated
+the dependency merge `8c099994`. Native now registers
+`NpgsqlBatchingRequestLogRuntimeStore`. It accepts immutable request-log
+records through a bounded channel of 1,024 entries and immediately gathers
+available work into batches of at most 100, without a batching timer. A single
+row retains the autocommit path. Multiple rows use an explicit transaction,
+validate every returned ID before commit, and complete callers only after
+confirmed commit. This preserves caller-awaited durability; it does not
+restore the earlier fire-and-forget experiment.
+
+A rejected SQL batch can be split into individual writes only after its
+explicit rollback succeeds. Network errors, invalid returned-ID cardinality,
+cancellation and uncertain commit acknowledgments never trigger automatic
+retry. Shutdown closes admission, drains or explicitly fails accepted work,
+and joins the worker. The hosted drain bridge borrows the one DI-owned store.
+The existing configuration writer continues to snapshot all 29 scalar/string
+fields, including serialized metadata, before admission.
+
+The same candidate reads a fresh group ID and balance through a two-column
+projection at every existing spend stage. It also reads the current provider
+and all its credentials in one command per invocation, retaining enabled-key
+filtering and primary/ID ordering. Full authentication and its fresh pending
+totals remain in place. Review additionally identified tied credential-page
+sort values; both page ordering levels now include the unique credential ID,
+with a real-PostgreSQL assertion that all 105 identities appear exactly once
+in the expected order across pages.
+
+Both `c6ff7f8d` and the exact clean dependency-merged `8c099994` passed 149
+managed cases, 127 Native-compatible managed cases and 47 real-PostgreSQL
+cases, all with zero skips, plus the complete managed AOT-compatible
+PostgreSQL persistence probe. These are not published NativeAOT probe runs.
+The retained earlier attempts distinguish a pre-test Linux file-mode guard
+failure and a test fixture that reused a disposed HTTP client. The corrected
+fixture creates fresh clients over an owned handler. The small subsequent
+review changes still require their own verification.
+
+The dependency merge updated package versions, so the next Native control is
+a reproducible local source with the same updated dependencies and the
+candidate runtime delta reversed. Shared pagination fixes are applied to both
+variants before timing. The old `ea7c0a0` image and its failed results remain
+retained. The new candidate has no performance result yet. Its objective is
+unchanged: median of five SSE throughput results at least the same-source JIT
+reference and median of five per-run p99 results no worse, retaining all five
+groups, the discarded warm group, the before/after contrast and JSON tradeoff.
+No production promotion is established.
+
+The intervening [socket experiment](benchmarks/2026-10-19-gateway-socket-experiment.json)
+failed during the single-engine inline-completion SSE warmup; the 28-engine
+arm never ran. All failed outcomes and the original failed planned-count
+check remain retained. Independent archive reconciliation accounted for the
+actual 5,585 successful responses and eight error audits, exact settlement,
+verified archives and complete owned cleanup. That reconciliation does not
+turn the failed experiment into a pass. The two completed default arms offer
+diagnostic evidence only. No socket override is included in the candidate.

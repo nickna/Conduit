@@ -20,7 +20,7 @@ public sealed class BatchSpendProjectionReadTests
         state.Snapshots.SetupSequence(value => value.GetSpendSnapshotAsync(29, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new VirtualKeySpendSnapshot(7, 10m))
             .ReturnsAsync(new VirtualKeySpendSnapshot(91, 2m))
-            .ReturnsAsync((VirtualKeySpendSnapshot?)null);
+            .Returns(Task.FromResult<VirtualKeySpendSnapshot?>(null));
         var groups = new List<string>();
         state.Database.Setup(value => value.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
             .Callback<RedisKey[], CommandFlags>((keys, _) => groups.Add(keys[0].ToString()))
@@ -43,7 +43,7 @@ public sealed class BatchSpendProjectionReadTests
             .ReturnsAsync(new VirtualKeySpendSnapshot(7, 10m))
             .ReturnsAsync(new VirtualKeySpendSnapshot(7, 1m))
             .ReturnsAsync(new VirtualKeySpendSnapshot(91, 0m))
-            .ReturnsAsync((VirtualKeySpendSnapshot?)null);
+            .Returns(Task.FromResult<VirtualKeySpendSnapshot?>(null));
         var admissions = new List<(string Group, string Balance)>();
         state.Database.Setup(value => value.ScriptEvaluateAsync(It.IsAny<string>(), It.IsAny<RedisKey[]>(),
                 It.IsAny<RedisValue[]>(), It.IsAny<CommandFlags>()))
@@ -100,7 +100,7 @@ public sealed class BatchSpendProjectionReadTests
     {
         using var state = new State();
         state.Snapshots.Setup(value => value.GetSpendSnapshotAsync(29, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((VirtualKeySpendSnapshot?)null);
+            .Returns(Task.FromResult<VirtualKeySpendSnapshot?>(null));
 
         Assert.False(await state.Batch.TryReserveSpendAsync(29, 1m, "missing"));
         Assert.False(await state.Batch.MarkSpendReservationInvocationStartedAsync(29, "missing"));

@@ -62,9 +62,9 @@ public sealed class NpgsqlProviderKeyCredentialRepository : IProviderKeyCredenti
             $"{ProviderPersistenceMappings.JoinedProviderColumns} FROM (" +
             $"SELECT {ProviderPersistenceMappings.CredentialColumns} FROM \"ProviderKeyCredentials\" " +
             "WHERE \"ProviderId\" = @providerId " +
-            "ORDER BY \"IsPrimary\" DESC, \"ProviderAccountGroup\" OFFSET @offset LIMIT @limit) c " +
+            "ORDER BY \"IsPrimary\" DESC, \"ProviderAccountGroup\", \"Id\" OFFSET @offset LIMIT @limit) c " +
             "LEFT JOIN \"Providers\" p ON p.\"Id\" = c.\"ProviderId\" " +
-            "ORDER BY c.\"IsPrimary\" DESC, c.\"ProviderAccountGroup\"";
+            "ORDER BY c.\"IsPrimary\" DESC, c.\"ProviderAccountGroup\", c.\"Id\"";
         command.Parameters.AddWithValue("providerId", NpgsqlDbType.Integer, providerId);
         AddPagination(command, pageNumber, pageSize);
 

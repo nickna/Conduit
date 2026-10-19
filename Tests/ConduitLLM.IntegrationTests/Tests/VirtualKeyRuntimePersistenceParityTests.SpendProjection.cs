@@ -117,6 +117,7 @@ public sealed partial class VirtualKeyRuntimePersistenceParityTests
             }
             await using (var held = await source.OpenConnectionAsync(deadline.Token))
             {
+                Assert.Equal(System.Data.ConnectionState.Open, held.State);
                 using var cancelled = new CancellationTokenSource();
                 var pending = projection.GetSpendSnapshotAsync(ids.KeyId, cancelled.Token);
                 try

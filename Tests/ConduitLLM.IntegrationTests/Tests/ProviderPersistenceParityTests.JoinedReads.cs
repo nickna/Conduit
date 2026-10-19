@@ -104,6 +104,14 @@ public sealed partial class ProviderPersistenceParityTests
             commands.TakeCount().Should().Be(2);
             second.TotalCount.Should().Be(105);
             second.Items.Should().HaveCount(5);
+            var allCredentials = (await new NpgsqlProviderRepository(source).GetByIdAsync(provider.Id))!
+                .ProviderKeyCredentials;
+            commands.TakeCount().Should().Be(1);
+            var expectedIds = allCredentials.OrderByDescending(key => key.IsPrimary)
+                .ThenBy(key => key.ProviderAccountGroup).ThenBy(key => key.Id).Select(key => key.Id);
+            var pagedIds = first.Items.Concat(second.Items).Select(key => key.Id).ToArray();
+            pagedIds.Should().Equal(expectedIds);
+            pagedIds.Should().OnlyHaveUniqueItems();
             var lastFirstGroup = first.Items[^1].ProviderAccountGroup;
             second.Items.Should().OnlyContain(key =>
                 key.ProviderAccountGroup >= lastFirstGroup);

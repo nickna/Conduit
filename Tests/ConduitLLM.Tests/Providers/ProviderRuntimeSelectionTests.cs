@@ -168,6 +168,7 @@ public sealed class ProviderRuntimeSelectionTests
 
     private sealed class SelectionHandler : HttpMessageHandler
     {
+        private readonly List<HttpResponseMessage> _responses = [];
         public List<string?> Credentials { get; } = [];
         public List<string?> Hosts { get; } = [];
 
@@ -176,14 +177,23 @@ public sealed class ProviderRuntimeSelectionTests
         {
             Credentials.Add(request.Headers.Authorization?.Parameter);
             Hosts.Add(request.RequestUri?.Host);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("""
                     {"id":"reply","object":"chat.completion","created":1,"model":"provider-model",
                     "choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],
                     "usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
                     """, Encoding.UTF8, "application/json")
-            });
+            };
+            _responses.Add(response);
+            return Task.FromResult(response);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                foreach (var response in _responses) response.Dispose();
+            base.Dispose(disposing);
         }
     }
 }
