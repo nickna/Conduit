@@ -61,51 +61,7 @@ public sealed class ApplicationCacheGeneration : IDisposable
         return result;
     }
 
-    /// <summary>Returns a healthy, unfenced L1 hit without entering the cold read's async closure.</summary>
-    public ValueTask<string> GetAsync(ApplicationCacheDomain domain, CancellationToken token = default)
-    {
-        if (token.IsCancellationRequested) return ValueTask.FromCanceled<string>(token);
-        try
-        {
-            if (_redis is not null)
-            {
-                Task<ConnectionMultiplexer>? connection;
-                lock (_gate)
-                {
-                    ObjectDisposedException.ThrowIf(_disposed, this);
-                    connection = _connection;
-                }
-                // Cold, pending and failed connections keep the original bounded
-                // asynchronous path. A completed task alone does not prove health.
-                if (connection is null || !connection.IsCompletedSuccessfully || !connection.Result.IsConnected)
-                    return GetSlowAsync(domain, token);
-            }
-            if (_reconcile.ContainsKey(domain)) return GetSlowAsync(domain, token);
-
-            var entry = _reads[domain];
-            var cached = _cache.TryGet<string>(Key(domain), entry, token);
-            return cached.HasValue ? ValueTask.FromResult(cached.Value) : GetSlowAsync(domain, token);
-        }
-        catch (OperationCanceledException exception)
-        {
-            return CanceledReadAsync(exception);
-        }
-        catch (Exception exception)
-        {
-            // A failed fast read must not be retried as a cold read. Preserve the
-            // same recovery fence and single failure metric as the async path.
-            RecordStorageFailure(domain);
-            ApplicationCacheMetrics.RedisFailure("generation_read");
-            return ValueTask.FromException<string>(exception);
-        }
-    }
-
-    /// <summary>Preserves asynchronous cancellation status even when the cache throws before an await.</summary>
-    private static async ValueTask<string> CanceledReadAsync(OperationCanceledException exception) =>
-        await Task.FromException<string>(exception).ConfigureAwait(false);
-
-    /// <summary>Retains connection initialization, recovery publication and cache loading on misses.</summary>
-    private async ValueTask<string> GetSlowAsync(ApplicationCacheDomain domain, CancellationToken token)
+    public async ValueTask<string> GetAsync(ApplicationCacheDomain domain, CancellationToken token = default)
     {
         token.ThrowIfCancellationRequested();
         IConnectionMultiplexer? connection = null;

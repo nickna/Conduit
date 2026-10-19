@@ -869,3 +869,46 @@ and owned cleanup passed. A read-only archive calculation checked all
 three debits and every running balance. Two input-metadata corrections
 occurred before application traffic and remain bound in the report.
 Eight production candidates still fail the resolution objective.
+
+## Guarded implicit log batch and generation fast-path candidate, 2026-10-19
+
+The [ninth controlled candidate](benchmarks/2026-10-19-gateway-implicit-batch-candidate.json)
+used source `284a9088`. It combined server-side generated-ID cardinality
+checks with a single implicit transaction for multirow request logs, and
+a synchronous healthy, unfenced generation-cache hit path. Single-row
+writes, all 29 bindings, fresh reads, cache expiry and invalidation policy
+were retained. The Native control remained `b20d3700`; JIT used the same
+final candidate source. All six orders, the discarded group and five
+recorded groups remain retained.
+
+| Median of five SSE summaries | Native control | Native candidate | JIT |
+| --- | ---: | ---: | ---: |
+| Requests/s | 178.372 | 175.496 | 183.375 |
+| Per-run p99 ms | 54.982 | 57.626 | 58.562 |
+
+The candidate met the p99 criterion but failed throughput, which remained
+4.30% below JIT. Both criteria are required. Against Native control,
+throughput fell 1.61% and p99 worsened 4.81%. JSON throughput improved
+1.42% and p99 improved 2.34% versus control; its throughput remained
+17.07% below JIT. Every group, range and paired contrast is retained;
+no outlier is removed and this combined source does not isolate either
+optimization. Both production changes are reverted after this result.
+The useful cache contracts and expanded log parity/failure tests remain,
+with commit-time failure expectations matching the restored explicit
+transaction policy.
+
+Exact candidate source passed 173 managed, 151 Native-compatible managed
+and 55 real PostgreSQL cases, with zero skips, plus the managed AOT-compatible
+persistence probe. Strict Native and standard JIT publishing and packaged
+byte verification passed. All 39,602 responses, exact USD 2.97015000
+cost/spending/debits, balance 97.02985000, three marker sets, 41 unrelated
+tables, three spaced final reads, post-stop zero backends, archives and
+owned cleanup passed. A read-only archive calculation checked all 38
+debits and every running balance. An initial verification attempt had
+three test setup failures before their production read paths; those
+entries were corrected and the failed receipt remains retained.
+
+Nine candidates have failed the resolution objective. The next diagnostic
+will separate security and rate-limit Redis waits, metrics normalization,
+and the remaining pre-balance wall interval. The PR remains a draft and
+the regression remains open.

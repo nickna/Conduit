@@ -9,15 +9,6 @@ internal sealed class NpgsqlRequestLogBatchWriter(NpgsqlDataSource dataSource)
 {
     private readonly NpgsqlRequestLogRuntimeStore _single = new(dataSource);
 
-    // Validate RETURNING on the server, before the implicit batch transaction can
-    // commit. A trigger that suppresses a row must reject every insert in the
-    // batch. Client-side cardinality validation alone would be too late.
-    private const string BatchInsertSql = "WITH inserted AS (" +
-        NpgsqlRequestLogRuntimeStore.InsertSql + """
-        )
-        SELECT min("Id"), 1 / ((count(*) = 1)::integer) FROM inserted
-        """;
-
     internal async Task<int[]> WriteAsync(RequestLogRuntimeRecord[] records, CancellationToken cancellationToken)
     {
         if (records.Length is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(records));
@@ -26,16 +17,15 @@ internal sealed class NpgsqlRequestLogBatchWriter(NpgsqlDataSource dataSource)
             return [await _single.WriteAsync(records[0], cancellationToken)];
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var commitStarted = false;
         try
         {
             var ids = new int[records.Length];
-            // One terminating Sync makes these commands one atomic implicit
-            // transaction, including each server-side cardinality check. This
-            // avoids a separate COMMIT round trip on the successful path.
-            await using var batch = new NpgsqlBatch(connection) { EnableErrorBarriers = false };
+            await using var batch = new NpgsqlBatch(connection, transaction);
             foreach (var record in records)
             {
-                var command = new NpgsqlBatchCommand(BatchInsertSql) { AppendErrorBarrier = false };
+                var command = new NpgsqlBatchCommand(NpgsqlRequestLogRuntimeStore.InsertSql);
                 NpgsqlRequestLogRuntimeStore.AddParameters(command.Parameters, record);
                 batch.BatchCommands.Add(command);
             }
@@ -48,43 +38,41 @@ internal sealed class NpgsqlRequestLogBatchWriter(NpgsqlDataSource dataSource)
                     if (!await reader.ReadAsync(cancellationToken))
                         throw new InvalidOperationException("Request log insert did not return its generated ID.");
                     ids[index] = reader.GetInt32(0);
-                    if (reader.GetInt32(1) != 1 || await reader.ReadAsync(cancellationToken))
-                        throw new InvalidOperationException("Request log insert returned unexpected generated IDs.");
+                    if (await reader.ReadAsync(cancellationToken))
+                        throw new InvalidOperationException("Request log insert returned more than one ID.");
                 }
-                // Consume ReadyForQuery, including a deferred constraint failure
-                // or lost commit acknowledgment, before acknowledging any ID.
                 if (await reader.NextResultAsync(cancellationToken))
                     throw new InvalidOperationException("Request log batch returned unexpected generated IDs.");
             }
+
+            // No exception after this point is eligible for automatic isolation:
+            // a failed acknowledgment can follow a successful COMMIT.
+            commitStarted = true;
+            await transaction.CommitAsync(cancellationToken);
             return ids;
         }
-        catch (PostgresException error)
+        catch (Exception error) when (!commitStarted)
         {
             try
             {
-                // The received SQL rejection aborts this fixed, no-barrier
-                // implicit transaction. Confirm recovery on the same physical
-                // connection before allowing isolation; never infer rollback
-                // from a transport error or from this ROLLBACK alone.
-                await using var rollback = new NpgsqlCommand("ROLLBACK", connection);
-                await rollback.ExecuteNonQueryAsync(CancellationToken.None);
+                // Caller cancellation cannot prevent the confirmation required
+                // before retrying rows from a rejected SQL batch.
+                await transaction.RollbackAsync(CancellationToken.None);
             }
             catch (Exception rollbackError)
             {
                 throw new AggregateException("Request log rollback was not confirmed.", error, rollbackError);
             }
 
-            // The guard and user triggers can both report division by zero.
-            // Conservatively fail the entire batch without retrying either.
-            if (error.SqlState == PostgresErrorCodes.DivisionByZero)
-                throw new InvalidOperationException("Request log batch failed its server-side cardinality check or a division operation.", error);
-            throw new RequestLogBatchRolledBackException(error);
+            if (error is PostgresException)
+                throw new RequestLogBatchRolledBackException(error);
+            // Cancellation, network/read errors and invalid RETURNING results
+            // are not SQL-poison signals, even with a confirmed rollback.
+            throw;
         }
-        // Cancellation, transport errors and unexpected client-side result
-        // shapes may follow a commit. They never authorize automatic retries.
     }
 }
 
-/// <summary>Only created after a SQL rejection of an atomic batch and confirmed recovery.</summary>
+/// <summary>Only created after a SQL rejection and a confirmed explicit rollback.</summary>
 internal sealed class RequestLogBatchRolledBackException(Exception cause)
     : Exception("Request log SQL batch was rejected and its rollback was confirmed.", cause);

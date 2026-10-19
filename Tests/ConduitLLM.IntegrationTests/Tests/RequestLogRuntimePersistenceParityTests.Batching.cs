@@ -150,7 +150,7 @@ public sealed partial class RequestLogRuntimePersistenceParityTests
     }
 
     [Fact]
-    public async Task WriteAsync_UserTriggerDivisionByZero_FailsWholeBatchWithoutIsolationAsync()
+    public async Task WriteAsync_UserTriggerDivisionByZero_ConfirmsRollbackBeforeIsolatingAndCommitsGoodRowsOnceAsync()
     {
         var schema = $"request_user_division_{Guid.NewGuid():N}";
         try
@@ -169,12 +169,20 @@ public sealed partial class RequestLogRuntimePersistenceParityTests
                 """);
             await using var source = NpgsqlDataSource.Create(WithSearchPath(schema));
             var backend = new NpgsqlRequestLogBatchWriter(source);
-            var entered = BatchSignal(); var release = BatchSignal(); var calls = 0;
+            var entered = BatchSignal(); var release = BatchSignal();
+            var sizes = new List<int>(); var rollbackConfirmed = false;
             await using var store = new NpgsqlBatchingRequestLogRuntimeStore(async (rows, token) =>
             {
-                calls++;
+                sizes.Add(rows.Length);
                 if (rows[0].VirtualKeyId == 0) { entered.TrySetResult(); await release.Task.WaitAsync(BatchTimeout, token); }
-                return await backend.WriteAsync(rows, token);
+                try { return await backend.WriteAsync(rows, token); }
+                catch (RequestLogBatchRolledBackException error)
+                {
+                    Assert.Equal(PostgresErrorCodes.DivisionByZero, Assert.IsType<PostgresException>(error.InnerException).SqlState);
+                    Assert.Equal(1, await RequestRowCountAsync(schema));
+                    rollbackConfirmed = true;
+                    throw;
+                }
             });
             var seed = store.WriteAsync(BatchRow(0)); await entered.Task.WaitAsync(BatchTimeout);
             var writes = new[]
@@ -182,21 +190,22 @@ public sealed partial class RequestLogRuntimePersistenceParityTests
                 store.WriteAsync(BatchRow(1)), store.WriteAsync(BatchRow(2, "divide")), store.WriteAsync(BatchRow(3))
             };
             release.TrySetResult(); await seed.WaitAsync(BatchTimeout);
-            foreach (var write in writes)
-            {
-                var error = await Assert.ThrowsAsync<InvalidOperationException>(() => write);
-                Assert.Equal(PostgresErrorCodes.DivisionByZero, Assert.IsType<PostgresException>(error.InnerException).SqlState);
-            }
-            // User SQL can raise the same SQLSTATE as the cardinality guard.
-            // Conservative classification rejects every caller after rollback;
-            // it must not silently retry the otherwise valid neighboring rows.
-            Assert.Equal(2, calls); Assert.Equal(1, await RequestRowCountAsync(schema));
+            var firstId = await writes[0].WaitAsync(BatchTimeout);
+            var error = await Assert.ThrowsAsync<PostgresException>(() => writes[1]);
+            Assert.Equal(PostgresErrorCodes.DivisionByZero, error.SqlState);
+            var lastId = await writes[2].WaitAsync(BatchTimeout);
+            Assert.True(firstId > 0); Assert.True(lastId > 0); Assert.NotEqual(firstId, lastId);
+            // A genuine server SQL rejection before COMMIT is eligible for
+            // isolated retries only after the original batch's rollback is confirmed.
+            Assert.True(rollbackConfirmed);
+            Assert.Equal(new[] { 1, 3, 1, 1, 1 }, sizes);
+            Assert.Equal(3, await RequestRowCountAsync(schema));
         }
         finally { await DropSchemaAsync(schema); }
     }
 
     [Fact]
-    public async Task WriteAsync_DeferredConstraintAtSync_ConfirmsRollbackBeforeIsolatingCommittedIdsAsync()
+    public async Task WriteAsync_DeferredConstraintAtCommit_FailsAllCallersWithoutIsolationOrEarlyIdsAsync()
     {
         var schema = $"request_deferred_{Guid.NewGuid():N}";
         try
@@ -217,21 +226,22 @@ public sealed partial class RequestLogRuntimePersistenceParityTests
             await using var source = NpgsqlDataSource.Create(WithSearchPath(schema));
             var backend = new NpgsqlRequestLogBatchWriter(source);
             var entered = BatchSignal(); var release = BatchSignal();
-            var attempts = new List<int[]>(); var rollbackConfirmed = false;
+            var commitFailed = BatchSignal(); var releaseFailure = BatchSignal();
+            var attempts = new List<int[]>();
             await using var store = new NpgsqlBatchingRequestLogRuntimeStore(async (rows, token) =>
             {
                 attempts.Add(rows.Select(row => row.VirtualKeyId).ToArray());
                 if (rows[0].VirtualKeyId == 0) { entered.TrySetResult(); await release.Task.WaitAsync(BatchTimeout, token); }
                 try { return await backend.WriteAsync(rows, token); }
-                catch (RequestLogBatchRolledBackException error)
+                catch (PostgresException error)
                 {
-                    var sqlError = Assert.IsType<PostgresException>(error.InnerException);
-                    Assert.Equal(PostgresErrorCodes.CheckViolation, sqlError.SqlState);
+                    Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
                     // The earlier INSERTs already returned IDs, but the final
-                    // Sync/implicit commit rejected the deferred constraint.
-                    // None may become visible or be acknowledged as successful.
+                    // explicit COMMIT rejected the deferred constraint. Once
+                    // COMMIT starts the conservative policy never isolates.
                     Assert.Equal(1, await RequestRowCountAsync(schema));
-                    rollbackConfirmed = true;
+                    commitFailed.TrySetResult();
+                    await releaseFailure.Task.WaitAsync(BatchTimeout, token);
                     throw;
                 }
             });
@@ -240,14 +250,17 @@ public sealed partial class RequestLogRuntimePersistenceParityTests
             var poison = store.WriteAsync(BatchRow(2, "deferred-poison"));
             var last = store.WriteAsync(BatchRow(3));
             release.TrySetResult(); await seed.WaitAsync(BatchTimeout);
-            Assert.True(await first.WaitAsync(BatchTimeout) > 0);
-            var error = await Assert.ThrowsAsync<PostgresException>(() => poison);
-            Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
-            Assert.True(await last.WaitAsync(BatchTimeout) > 0);
-            Assert.True(rollbackConfirmed);
-            Assert.Equal(new[] { 1, 3, 1, 1, 1 }, attempts.Select(rows => rows.Length));
+            await commitFailed.Task.WaitAsync(BatchTimeout);
+            Assert.False(first.IsCompleted); Assert.False(poison.IsCompleted); Assert.False(last.IsCompleted);
+            releaseFailure.TrySetResult();
+            foreach (var write in new[] { first, poison, last })
+            {
+                var error = await Assert.ThrowsAsync<PostgresException>(() => write);
+                Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
+            }
+            Assert.Equal(new[] { 1, 3 }, attempts.Select(rows => rows.Length));
             Assert.Equal(new[] { 1, 2, 3 }, attempts[1]);
-            Assert.Equal(3, await RequestRowCountAsync(schema));
+            Assert.Equal(1, await RequestRowCountAsync(schema));
         }
         finally { await DropSchemaAsync(schema); }
     }
