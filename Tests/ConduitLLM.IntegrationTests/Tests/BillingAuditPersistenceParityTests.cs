@@ -18,7 +18,7 @@ using Xunit;
 namespace ConduitLLM.IntegrationTests.Tests;
 
 [Collection("Postgres advisory locks")]
-public sealed class BillingAuditPersistenceParityTests(PostgresLockTestContainerFixture fixture)
+public sealed partial class BillingAuditPersistenceParityTests(PostgresLockTestContainerFixture fixture)
 {
     private static readonly DateTime Instant = new DateTime(2026, 10, 11, 12, 0, 0, DateTimeKind.Utc).AddTicks(1234567);
 

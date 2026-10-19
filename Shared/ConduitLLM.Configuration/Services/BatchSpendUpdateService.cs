@@ -228,24 +228,43 @@ namespace ConduitLLM.Configuration.Services
                     return 0;
                 }
 
-                var redis = await _redisConnectionFactory.GetConnectionAsync();
-                var db = redis.GetDatabase();
-                var values = await db.StringGetAsync(new RedisKey[]
-                {
-                    $"{_redisKeyPrefix}{groupId.Value}",
-                    $"{_redisUnitsKeyPrefix}{groupId.Value}",
-                    $"{_reservedSpendPrefix}{groupId.Value}",
-                    $"{_windowedPendingTotalUnitsPrefix}{groupId.Value}"
-                });
-
-                return ParseRedisDecimal(values[0]) + ParseRedisUnits(values[1]) +
-                    ParseRedisDecimal(values[2]) + ParseRedisUnits(values[3]);
+                return await ReadPendingSpendForGroupAsync(groupId.Value);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to get pending spend from Redis for Virtual Key {VirtualKeyId}", virtualKeyId);
                 return 0;
             }
+        }
+
+        /// <inheritdoc />
+        public async Task<decimal> GetPendingSpendForGroupAsync(int virtualKeyGroupId)
+        {
+            try
+            {
+                return await ReadPendingSpendForGroupAsync(virtualKeyGroupId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get pending spend from Redis for Virtual Key group {GroupId}", virtualKeyGroupId);
+                return 0;
+            }
+        }
+
+        private async Task<decimal> ReadPendingSpendForGroupAsync(int groupId)
+        {
+            var redis = await _redisConnectionFactory.GetConnectionAsync();
+            var db = redis.GetDatabase();
+            var values = await db.StringGetAsync(new RedisKey[]
+            {
+                $"{_redisKeyPrefix}{groupId}",
+                $"{_redisUnitsKeyPrefix}{groupId}",
+                $"{_reservedSpendPrefix}{groupId}",
+                $"{_windowedPendingTotalUnitsPrefix}{groupId}"
+            });
+
+            return ParseRedisDecimal(values[0]) + ParseRedisUnits(values[1]) +
+                ParseRedisDecimal(values[2]) + ParseRedisUnits(values[3]);
         }
 
         private static DateTime GetBillingWindow(DateTime? billedAtUtc) =>

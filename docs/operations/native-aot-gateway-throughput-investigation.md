@@ -365,3 +365,45 @@ Native work before provider transmission and during completion; they do not
 assign the remaining wall time outside SQL to CPU. Further work targets
 provider/credential graph round trips and resolved CPU stacks. Issue #1647
 remains open; this candidate establishes no production promotion.
+
+## Provider-lookup candidate, 2026-10-18
+
+A second fresh comparison tested source
+`0906b29de737c5a507647908b4b0a5a30e9fcba9`: positive scalar cost-ID caching,
+joined provider/credential reads and the original durable per-request Native
+log writer. It used the same control, workload, six execution orders, discarded
+group and five recorded groups as the preceding comparison. All 39,602 responses
+passed complete validation and exact financial/provider/Redis settlement;
+archives and owned cleanup passed. The
+[full report](benchmarks/2026-10-18-gateway-provider-lookup-candidate.json)
+retains all samples, ranges, raw hashes and independent closure evidence.
+
+| Median of five recorded runs | Native control | Native candidate | JIT reference |
+| --- | ---: | ---: | ---: |
+| Complete-SSE requests/second | 155.595829 | 160.698457 | 178.714662 |
+| Complete-SSE p50 ms | 51.433095 | 49.591357 | 44.021796 |
+| Complete-SSE p95 ms | 57.712710 | 58.389472 | 51.322707 |
+| Complete-SSE per-run p99 ms | 60.802173 | 64.877831 | 58.474274 |
+| Non-streaming requests/second | 253.509214 | 260.563858 | 338.919300 |
+| Non-streaming per-run p99 ms | 42.146247 | 44.420383 | 35.248519 |
+
+This candidate also **fails the unchanged resolution objective**. Native median
+SSE throughput improves 3.28% over its control, but remains 10.08% below JIT;
+median per-run p99 is 6.70% worse than its control and 10.95% worse than JIT.
+The candidate loses both SSE metrics to JIT in every recorded group. Its modest
+throughput improvement does not establish regression recovery. JSON throughput
+improves 2.78% over Native control while its p99 worsens 5.40%; both remain worse
+than JIT. These are ratios of run-summary medians, without a significance or
+pooled-percentile claim.
+
+The full-run manifest initially omitted the required seed-tools image field.
+That omission was caught before timed traffic; the original manifest was
+retained and a separately reviewed metadata-only correction bound the existing
+seed image. Frozen source, workload, objective and runner bytes were unchanged.
+All timings ran after builds, tests and offline profiling had closed.
+
+Issue #1647 remains unresolved. Further work examines redundant request-time
+key/group reads and serial round trips within existing Native billing-audit
+flushes. Those flushes are background work; the earlier diagnostic trace does
+not place their hundred-row loop on each request's awaited HTTP path. No
+production promotion follows from this comparison.

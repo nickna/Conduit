@@ -95,6 +95,9 @@ internal static class BillingAuditPersistenceProbe
             await AssertRowAsync(source, shutdownCommitted[index], token);
         }
 
+        await AssertHundredOrderedDefaultsAsync(source, writer, token);
+        await AssertEmptyReturningRollbackAsync(source, writer, token);
+
         var failures = new (BillingAuditRuntimeRecord Row, string State)[]
         {
             (Populated() with { UsageJson = "{" }, PostgresErrorCodes.InvalidTextRepresentation),
@@ -194,7 +197,86 @@ internal static class BillingAuditPersistenceProbe
         var beforeRecovery = await CountAsync(source, token);
         foreach (var row in await writer.WriteBatchAsync([cancelledRow, Populated()], token)) await AssertRowAsync(source, row, token);
         Require(await CountAsync(source, token) == beforeRecovery + 2, "SQL cancellation releases the single slot for atomic reuse");
-        Console.WriteLine("Native billing audit writer passed: 17 scalars, ordered immutable batches, database defaults, JSONB/decimal mappings, atomic failures, reconciliation uniqueness, SQL/pool cancellation and reuse.");
+        Console.WriteLine("Native billing audit writer passed: 17 scalars, ordered immutable pipelined batches, database defaults, empty RETURNING rollback, JSONB/decimal mappings, atomic failures, reconciliation uniqueness, SQL/pool cancellation and reuse.");
+    }
+
+    private static async Task AssertHundredOrderedDefaultsAsync(
+        NpgsqlDataSource source, NpgsqlBillingAuditRuntimeWriter writer, CancellationToken token)
+    {
+        var rows = Enumerable.Range(0, 100).Select(index => Populated() with
+        {
+            Id = Guid.Empty, Timestamp = default, EventType = index - 50,
+            RequestId = $"native-pipelined-{index:D3}"
+        }).ToArray();
+        var originals = rows.ToArray();
+        var before = DateTime.UtcNow.AddSeconds(-5);
+        var beforeCount = await CountAsync(source, token);
+        var committed = await writer.WriteBatchAsync(rows, token);
+        Require(committed.Count == 100 && rows.SequenceEqual(originals) &&
+            committed.Select(row => row.Id).Distinct().Count() == 100 &&
+            committed.Select(row => row.Timestamp).Distinct().Count() == 1 &&
+            await CountAsync(source, token) == beforeCount + 100,
+            "100-row pipeline retains ordered distinct defaults in one transaction");
+        for (var index = 0; index < rows.Length; index++)
+        {
+            var output = committed[index];
+            Require(output.Id != Guid.Empty && output.Timestamp.Kind == DateTimeKind.Utc &&
+                output.Timestamp >= before && output.Timestamp <= DateTime.UtcNow.AddSeconds(5) &&
+                output == rows[index] with { Id = output.Id, Timestamp = output.Timestamp },
+                "100-row pipeline preserves every input ordinal and other scalar");
+            await AssertRowAsync(source, output, token);
+        }
+    }
+
+    private static async Task AssertEmptyReturningRollbackAsync(
+        NpgsqlDataSource source, NpgsqlBillingAuditRuntimeWriter writer, CancellationToken token)
+    {
+        await using (var command = source.CreateCommand("""
+            CREATE FUNCTION omit_native_audit_returning_row() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+                IF NEW."RequestId" = 'omit-native-returning' THEN RETURN NULL; END IF;
+                RETURN NEW;
+            END $$;
+            CREATE TRIGGER omit_native_audit_returning_row BEFORE INSERT ON "BillingAuditEvents"
+                FOR EACH ROW EXECUTE FUNCTION omit_native_audit_returning_row();
+            """))
+        {
+            await command.ExecuteNonQueryAsync(token);
+        }
+        var rows = Enumerable.Range(0, 3).Select(index => Populated() with
+        {
+            Id = Guid.Empty, Timestamp = default,
+            RequestId = index == 1 ? "omit-native-returning" : $"native-preserved-{index}"
+        }).ToArray();
+        var originals = rows.ToArray();
+        var fingerprint = await FingerprintAsync(source, token);
+        try
+        {
+            await writer.WriteBatchAsync(rows, token);
+            throw new InvalidOperationException("Billing audit probe accepted an empty RETURNING row.");
+        }
+        catch (InvalidOperationException exception) when
+            (exception.Message == "Billing audit insert did not return its generated values.") { }
+        Require(rows.SequenceEqual(originals) && fingerprint == await FingerprintAsync(source, token),
+            "empty RETURNING rolls back earlier and later pipelined rows without changing inputs");
+        rows[1] = rows[1] with { RequestId = "native-restored-returning" };
+        var beforeCount = await CountAsync(source, token);
+        var committed = await writer.WriteBatchAsync(rows, token);
+        Require(committed.Count == 3 && committed.Select(row => row.Id).Distinct().Count() == 3 &&
+            await CountAsync(source, token) == beforeCount + 3, "empty RETURNING leaves the writer reusable");
+        for (var index = 0; index < rows.Length; index++)
+        {
+            var output = committed[index];
+            Require(rows[index].Id == Guid.Empty && rows[index].Timestamp == default &&
+                output == rows[index] with { Id = output.Id, Timestamp = output.Timestamp },
+                "empty RETURNING recovery preserves ordered immutable snapshots");
+            await AssertRowAsync(source, output, token);
+        }
+        await using var cleanup = source.CreateCommand("""
+            DROP TRIGGER omit_native_audit_returning_row ON "BillingAuditEvents";
+            DROP FUNCTION omit_native_audit_returning_row();
+            """);
+        await cleanup.ExecuteNonQueryAsync(token);
     }
 
     private static BillingAuditRuntimeRecord Populated() => new()

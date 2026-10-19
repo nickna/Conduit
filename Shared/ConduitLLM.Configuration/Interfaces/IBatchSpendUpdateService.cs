@@ -68,6 +68,13 @@ namespace ConduitLLM.Configuration.Interfaces
         Task<decimal> GetPendingSpendAsync(int virtualKeyId);
 
         /// <summary>
+        /// Reads pending spend and active reservations for a group resolved from a fresh
+        /// persisted key snapshot. Callers must not supply cached, claimed or client-provided
+        /// group IDs. This does not replace key validation or fresh reservation admission.
+        /// </summary>
+        Task<decimal> GetPendingSpendForGroupAsync(int virtualKeyGroupId);
+
+        /// <summary>
         /// Atomically reserves part of a virtual key group's available balance. Replays require
         /// the same owner and original maximum amount, including after a hold is reduced or settled.
         /// Legacy records whose original maximum is unknown reject reservation replays.
