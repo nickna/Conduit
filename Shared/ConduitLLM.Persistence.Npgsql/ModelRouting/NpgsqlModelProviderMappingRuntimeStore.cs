@@ -234,9 +234,9 @@ public sealed class NpgsqlModelProviderMappingRuntimeStore : IModelProviderMappi
                 "QualityWeight", "CacheAffinityEnabled", "AffinityTtlSeconds",
                 "MaxAffinityScorePenalty", "IsEnabled", "CreatedAt", "UpdatedAt"
             FROM "ModelRoutePolicies"
-            WHERE "ModelAlias" = $1
+            WHERE "ModelAlias" = @modelAlias
             """;
-        command.Parameters.Add(new NpgsqlParameter<string> { NpgsqlDbType = NpgsqlDbType.Varchar, TypedValue = modelAlias });
+        command.Parameters.AddWithValue("modelAlias", NpgsqlDbType.Varchar, modelAlias);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))

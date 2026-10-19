@@ -779,6 +779,39 @@ running balance. These correctness checks do not resolve the performance
 regression. The issue remains open, the PR remains a draft and production
 remains JIT.
 
+## Eighth candidate result, 2026-10-19
+
+The [positional-binding comparison](benchmarks/2026-10-19-gateway-positional-binding-candidate.json)
+failed both unchanged SSE criteria. Candidate `af93f345` changed five Native
+persistence paths to positional SQL bindings and typed non-null scalar
+parameters, retaining fresh reads, nullable SQL types and all transaction,
+cardinality and rollback boundaries. Native measured 159.561 requests/s
+and 61.586 ms median per-run p99; the matched control measured 168.817
+requests/s and 58.700 ms. JIT measured 180.423 requests/s and 56.272 ms.
+Native throughput fell 5.48% versus control and p99 worsened 4.92%.
+Versus JIT, throughput remained 11.56% lower and p99 9.44% higher.
+All five groups, ranges and paired contrasts remain retained. JSON
+throughput improved 4.06% versus control and p99 improved 7.03%; these
+tradeoffs do not satisfy the SSE objective or isolate a cause.
+
+The exact source passed 163 managed, 141 Native-compatible managed and
+50 PostgreSQL cases with zero skips, plus the full managed AOT-compatible
+persistence probe. The additional PostgreSQL case compares all 29 log
+fields with every optional field null. Strict publishing, zero first-party
+link warnings and packaged-byte verification passed. Compiler/runtime
+profiles matched the control: Speed, default LINQ, portable instruction
+set, zero MIBC inputs and no applied packaged PGO. Both complete-response
+preflights and every response in the full 39,602-operation comparison passed.
+
+Exact spending and debits were USD 2.97015000, leaving balance 97.02985000.
+All 41 unrelated tables and three marker bindings per response passed,
+as did three spaced final reads, post-stop zero backends, verified archives
+and owned cleanup. A separate read-only archive calculation checked all
+36 debit entries and every running balance. The five production changes
+are removed after this unsupported result; the additional null-parity
+coverage remains. Eight completed candidates have failed the objective.
+The issue remains unresolved and the PR remains a draft.
+
 ## ThreadPool spinning diagnostic, 2026-10-19
 
 A separate [four-arm diagnostic](benchmarks/2026-10-19-gateway-threadpool-spin-diagnostic.json)

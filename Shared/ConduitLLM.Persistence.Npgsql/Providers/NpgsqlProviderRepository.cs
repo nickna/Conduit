@@ -78,9 +78,9 @@ public sealed class NpgsqlProviderRepository : IProviderRepository, IProviderRun
             $"SELECT {ProviderPersistenceMappings.JoinedProviderColumns}, " +
             $"{ProviderPersistenceMappings.JoinedCredentialColumns} " +
             "FROM \"Providers\" p LEFT JOIN \"ProviderKeyCredentials\" c ON c.\"ProviderId\" = p.\"Id\" " +
-            "WHERE p.\"Id\" = $1 " +
+            "WHERE p.\"Id\" = @id " +
             "ORDER BY c.\"ProviderId\", c.\"IsPrimary\" DESC, c.\"ProviderAccountGroup\"";
-        command.Parameters.Add(new NpgsqlParameter<int> { NpgsqlDbType = NpgsqlDbType.Integer, TypedValue = id });
+        command.Parameters.AddWithValue("id", NpgsqlDbType.Integer, id);
 
         Provider? provider = null;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);

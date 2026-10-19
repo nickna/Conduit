@@ -58,54 +58,53 @@ public sealed class NpgsqlRequestLogRuntimeStore : IRequestLogRuntimeStore
                 "BilledAtUtc", "ResponseTimeMs", "Timestamp", "UserId", "ClientIp",
                 "RequestPath", "StatusCode", "Metadata")
             VALUES (
-                $1, $2, $3, $4,
-                $5, $6, $7,
-                $8, $9, $10,
-                $11, $12, $13, $14,
-                $15, $16, $17, $18,
-                $19, $20, $21,
-                $22, $23, $24, $25, $26,
-                $27, $28, $29)
+                @virtualKeyId, @modelName, @providerId, @providerType,
+                @modelProviderMappingId, @promptCachingEligible, @promptCachingPolicyApplied,
+                @cachedReadSavings, @cacheWritePremium, @routingAffinityUsed,
+                @routingDecisionReason, @routingFailoverCount, @requestType, @inputTokens,
+                @outputTokens, @cachedInputTokens, @cachedWriteTokens, @cost,
+                @billingMethod, @providerReportedCostUsd, @providerCostMarkupMultiplier,
+                @billedAtUtc, @responseTimeMs, @timestamp, @userId, @clientIp,
+                @requestPath, @statusCode, @metadata)
             RETURNING "Id"
             """;
     internal static void AddParameters(NpgsqlParameterCollection parameters, RequestLogRuntimeRecord record)
     {
-        // Native PostgreSQL placeholders bypass named-SQL rewriting. Keep this
-        // list in INSERT column order, including explicitly typed SQL nulls.
-        parameters.Add(new NpgsqlParameter<int> { NpgsqlDbType = NpgsqlDbType.Integer, TypedValue = record.VirtualKeyId });
-        parameters.Add(new NpgsqlParameter<string> { NpgsqlDbType = NpgsqlDbType.Varchar, TypedValue = record.ModelName });
-        AddNullable(parameters, NpgsqlDbType.Integer, record.ProviderId);
-        AddNullable(parameters, NpgsqlDbType.Varchar, record.ProviderType);
-        AddNullable(parameters, NpgsqlDbType.Integer, record.ModelProviderMappingId);
-        parameters.Add(new NpgsqlParameter<bool> { NpgsqlDbType = NpgsqlDbType.Boolean, TypedValue = record.PromptCachingEligible });
-        parameters.Add(new NpgsqlParameter<bool> { NpgsqlDbType = NpgsqlDbType.Boolean, TypedValue = record.PromptCachingPolicyApplied });
-        parameters.Add(new NpgsqlParameter<decimal> { NpgsqlDbType = NpgsqlDbType.Numeric, TypedValue = record.CachedReadSavings });
-        parameters.Add(new NpgsqlParameter<decimal> { NpgsqlDbType = NpgsqlDbType.Numeric, TypedValue = record.CacheWritePremium });
-        parameters.Add(new NpgsqlParameter<bool> { NpgsqlDbType = NpgsqlDbType.Boolean, TypedValue = record.RoutingAffinityUsed });
-        AddNullable(parameters, NpgsqlDbType.Varchar, record.RoutingDecisionReason);
-        parameters.Add(new NpgsqlParameter<int> { NpgsqlDbType = NpgsqlDbType.Integer, TypedValue = record.RoutingFailoverCount });
-        parameters.Add(new NpgsqlParameter<string> { NpgsqlDbType = NpgsqlDbType.Varchar, TypedValue = record.RequestType });
-        parameters.Add(new NpgsqlParameter<int> { NpgsqlDbType = NpgsqlDbType.Integer, TypedValue = record.InputTokens });
-        parameters.Add(new NpgsqlParameter<int> { NpgsqlDbType = NpgsqlDbType.Integer, TypedValue = record.OutputTokens });
-        AddNullable(parameters, NpgsqlDbType.Integer, record.CachedInputTokens);
-        AddNullable(parameters, NpgsqlDbType.Integer, record.CachedWriteTokens);
-        parameters.Add(new NpgsqlParameter<decimal> { NpgsqlDbType = NpgsqlDbType.Numeric, TypedValue = record.Cost });
-        AddNullable(parameters, NpgsqlDbType.Integer, record.BillingMethod);
-        AddNullable(parameters, NpgsqlDbType.Numeric, record.ProviderReportedCostUsd);
-        AddNullable(parameters, NpgsqlDbType.Numeric, record.ProviderCostMarkupMultiplier);
-        AddNullable(parameters, NpgsqlDbType.TimestampTz, record.BilledAtUtc);
-        parameters.Add(new NpgsqlParameter<double> { NpgsqlDbType = NpgsqlDbType.Double, TypedValue = record.ResponseTimeMs });
-        parameters.Add(new NpgsqlParameter<DateTime> { NpgsqlDbType = NpgsqlDbType.TimestampTz, TypedValue = record.Timestamp });
-        AddNullable(parameters, NpgsqlDbType.Varchar, record.UserId);
-        AddNullable(parameters, NpgsqlDbType.Varchar, record.ClientIp);
-        AddNullable(parameters, NpgsqlDbType.Varchar, record.RequestPath);
-        AddNullable(parameters, NpgsqlDbType.Integer, record.StatusCode);
-        AddNullable(parameters, NpgsqlDbType.Jsonb, record.MetadataJson);
+        parameters.AddWithValue("virtualKeyId", NpgsqlDbType.Integer, record.VirtualKeyId);
+        parameters.AddWithValue("modelName", NpgsqlDbType.Varchar, record.ModelName);
+        AddNullable(parameters, "providerId", NpgsqlDbType.Integer, record.ProviderId);
+        AddNullable(parameters, "providerType", NpgsqlDbType.Varchar, record.ProviderType);
+        AddNullable(parameters, "modelProviderMappingId", NpgsqlDbType.Integer, record.ModelProviderMappingId);
+        parameters.AddWithValue("promptCachingEligible", NpgsqlDbType.Boolean, record.PromptCachingEligible);
+        parameters.AddWithValue("promptCachingPolicyApplied", NpgsqlDbType.Boolean, record.PromptCachingPolicyApplied);
+        parameters.AddWithValue("cachedReadSavings", NpgsqlDbType.Numeric, record.CachedReadSavings);
+        parameters.AddWithValue("cacheWritePremium", NpgsqlDbType.Numeric, record.CacheWritePremium);
+        parameters.AddWithValue("routingAffinityUsed", NpgsqlDbType.Boolean, record.RoutingAffinityUsed);
+        AddNullable(parameters, "routingDecisionReason", NpgsqlDbType.Varchar, record.RoutingDecisionReason);
+        parameters.AddWithValue("routingFailoverCount", NpgsqlDbType.Integer, record.RoutingFailoverCount);
+        parameters.AddWithValue("requestType", NpgsqlDbType.Varchar, record.RequestType);
+        parameters.AddWithValue("inputTokens", NpgsqlDbType.Integer, record.InputTokens);
+        parameters.AddWithValue("outputTokens", NpgsqlDbType.Integer, record.OutputTokens);
+        AddNullable(parameters, "cachedInputTokens", NpgsqlDbType.Integer, record.CachedInputTokens);
+        AddNullable(parameters, "cachedWriteTokens", NpgsqlDbType.Integer, record.CachedWriteTokens);
+        parameters.AddWithValue("cost", NpgsqlDbType.Numeric, record.Cost);
+        AddNullable(parameters, "billingMethod", NpgsqlDbType.Integer, record.BillingMethod);
+        AddNullable(parameters, "providerReportedCostUsd", NpgsqlDbType.Numeric, record.ProviderReportedCostUsd);
+        AddNullable(parameters, "providerCostMarkupMultiplier", NpgsqlDbType.Numeric, record.ProviderCostMarkupMultiplier);
+        AddNullable(parameters, "billedAtUtc", NpgsqlDbType.TimestampTz, record.BilledAtUtc);
+        parameters.AddWithValue("responseTimeMs", NpgsqlDbType.Double, record.ResponseTimeMs);
+        parameters.AddWithValue("timestamp", NpgsqlDbType.TimestampTz, record.Timestamp);
+        AddNullable(parameters, "userId", NpgsqlDbType.Varchar, record.UserId);
+        AddNullable(parameters, "clientIp", NpgsqlDbType.Varchar, record.ClientIp);
+        AddNullable(parameters, "requestPath", NpgsqlDbType.Varchar, record.RequestPath);
+        AddNullable(parameters, "statusCode", NpgsqlDbType.Integer, record.StatusCode);
+        AddNullable(parameters, "metadata", NpgsqlDbType.Jsonb, record.MetadataJson);
     }
 
     private static void AddNullable(
         NpgsqlParameterCollection parameters,
+        string name,
         NpgsqlDbType type,
         object? value) =>
-        parameters.Add(new NpgsqlParameter { NpgsqlDbType = type, Value = value ?? DBNull.Value });
+        parameters.Add(new NpgsqlParameter(name, type) { Value = value ?? DBNull.Value });
 }

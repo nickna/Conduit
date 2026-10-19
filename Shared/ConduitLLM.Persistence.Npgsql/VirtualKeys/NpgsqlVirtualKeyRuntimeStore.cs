@@ -43,8 +43,8 @@ public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore, IVir
         ArgumentException.ThrowIfNullOrWhiteSpace(keyHash);
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = $"{SelectRuntimeKey} WHERE key.\"KeyHash\" = $1";
-        command.Parameters.Add(new NpgsqlParameter<string> { NpgsqlDbType = NpgsqlDbType.Varchar, TypedValue = keyHash });
+        command.CommandText = $"{SelectRuntimeKey} WHERE key.\"KeyHash\" = @keyHash";
+        command.Parameters.AddWithValue("keyHash", NpgsqlDbType.Varchar, keyHash);
         return await ReadSingleAsync(command, cancellationToken);
     }
 
@@ -55,8 +55,8 @@ public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore, IVir
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = $"{SelectRuntimeKey} WHERE key.\"Id\" = $1";
-        command.Parameters.Add(new NpgsqlParameter<int> { NpgsqlDbType = NpgsqlDbType.Integer, TypedValue = id });
+        command.CommandText = $"{SelectRuntimeKey} WHERE key.\"Id\" = @id";
+        command.Parameters.AddWithValue("id", NpgsqlDbType.Integer, id);
         return await ReadSingleAsync(command, cancellationToken);
     }
 
@@ -72,9 +72,9 @@ public sealed class NpgsqlVirtualKeyRuntimeStore : IVirtualKeyRuntimeStore, IVir
             FROM "VirtualKeys" AS key
             INNER JOIN "VirtualKeyGroups" AS key_group
                 ON key_group."Id" = key."VirtualKeyGroupId"
-            WHERE key."Id" = $1
+            WHERE key."Id" = @id
             """;
-        command.Parameters.Add(new NpgsqlParameter<int> { NpgsqlDbType = NpgsqlDbType.Integer, TypedValue = virtualKeyId });
+        command.Parameters.AddWithValue("id", NpgsqlDbType.Integer, virtualKeyId);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken)
             ? new VirtualKeySpendSnapshot(reader.GetInt32(0), reader.GetDecimal(1))
