@@ -725,3 +725,29 @@ do not turn the failed performance result into a pass.
 The phase diagnostic did not establish the serial coalescer as a bottleneck;
 this controlled removal performed worse. The next investigation retains
 coalescing. The issue remains unresolved and the PR remains a draft.
+
+## Speed-oriented LINQ candidate, 2026-10-19
+
+The next candidate, `7fc20fd4`, retains coalescing and selects
+`UseSizeOptimizedLinq=false` for Native Gateway builds whose compiler
+preference is `Speed`, unless the publisher explicitly sets the LINQ switch.
+An explicit `Size` preference retains the SDK default; managed builds and
+Admin are unchanged. Microsoft documents this separate Native LINQ
+[size/speed switch](https://devblogs.microsoft.com/dotnet/performance-improvements-in-net-10/#linq).
+This is a hypothesis, not an established explanation or performance fix.
+
+All 163 managed, 141 Native-compatible managed and 49 PostgreSQL checks
+passed, with zero skips, plus the complete managed AOT-compatible persistence
+probe. Five read-only MSBuild property evaluations checked selection and
+override preservation. An initial probe incorrectly expected a late SDK
+default during early property evaluation; its failed expectation remains
+retained separately. Actual publisher/compiler evidence must still confirm
+both the ILC feature and runtime knob, rather than relying on evaluation.
+
+The matched control remains the verified `b20d3700` coalescer image. Only the
+Gateway project file differs in production inputs; other differences are the
+test-cleanup correction and diagnostic documentation. The candidate keeps
+the pinned SDK/runtime/compiler, portable instruction-set selection,
+first-party warning baseline, zero MIBC inputs and no applied packaged PGO.
+Its images and a fresh five-group comparison remain separate gates. No
+seventh performance result is available.
