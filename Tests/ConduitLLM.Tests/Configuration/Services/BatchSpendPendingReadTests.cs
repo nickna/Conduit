@@ -38,7 +38,7 @@ public sealed class BatchSpendPendingReadTests
     {
         using var state = new State();
         state.Store.SetupSequence(value => value.GetByIdAsync(29, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Key(7)).ReturnsAsync(Key(91)).ReturnsAsync((VirtualKeyRuntimeRecord?)null);
+            .ReturnsAsync(Key(7)).ReturnsAsync(Key(91)).Returns(Task.FromResult<VirtualKeyRuntimeRecord?>(null));
         var groups = new List<string>();
         state.Database.Setup(value => value.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
             .Callback<RedisKey[], CommandFlags>((keys, _) => groups.Add(keys[0].ToString()))

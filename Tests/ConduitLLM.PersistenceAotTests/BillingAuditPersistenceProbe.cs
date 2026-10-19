@@ -250,13 +250,17 @@ internal static class BillingAuditPersistenceProbe
         }).ToArray();
         var originals = rows.ToArray();
         var fingerprint = await FingerprintAsync(source, token);
+        var rejectedEmptyReturning = false;
         try
         {
             await writer.WriteBatchAsync(rows, token);
-            throw new InvalidOperationException("Billing audit probe accepted an empty RETURNING row.");
         }
         catch (InvalidOperationException exception) when
-            (exception.Message == "Billing audit insert did not return its generated values.") { }
+            (exception.Message == "Billing audit insert did not return its generated values.")
+        {
+            rejectedEmptyReturning = true;
+        }
+        Require(rejectedEmptyReturning, "empty RETURNING produces the expected writer rejection");
         Require(rows.SequenceEqual(originals) && fingerprint == await FingerprintAsync(source, token),
             "empty RETURNING rolls back earlier and later pipelined rows without changing inputs");
         rows[1] = rows[1] with { RequestId = "native-restored-returning" };

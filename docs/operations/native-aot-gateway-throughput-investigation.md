@@ -461,3 +461,54 @@ criteria, with a JIT reference from the final source. The compiler's evaluated
 properties, response arguments and profile inputs must be captured before any
 efficacy claim. This remains an unverified candidate; the preceding failed
 experiments remain preserved.
+
+## Native Speed publish preference, 2026-10-18
+
+The fourth fresh comparison tested source
+`ea7c0a079c5eaa963befa136d4d30a76eb1af5fa`, defaulting an otherwise unset
+Gateway Native `OptimizationPreference` to `Speed`. Its control was explicitly
+changed before traffic to the preceding `7cc1b4e` Native image, with the same
+request-path code. The JIT reference came from `ea7c0a0`. The original fixture,
+JSON-then-SSE workload, six execution orders, discarded group, five recorded
+groups and resolution objective were unchanged. All samples and raw hashes are
+retained in the [full report](benchmarks/2026-10-18-gateway-speed-candidate.json).
+
+The actual pinned Linux compiler invocation contained `--Ot` and no `--mibc`
+arguments. Although the evaluated `IlcPgoOptimize` property was true, its pinned
+runtime package contained no MIBC profiles and the evaluated MIBC directory did
+not exist. The completed producer therefore records `packagedPgoApplied=false`.
+Compiler, response-file, selected VxSort input and completed executable hashes
+were checked after compilation. This is a Speed-property experiment with no
+applied packaged-PGO claim. Earlier rejected capture/metadata attempts remain
+preserved; they did not supply a benchmark image.
+
+| Median of five recorded runs | Native control (`7cc1b4e`) | Speed Native | JIT reference |
+| --- | ---: | ---: | ---: |
+| Complete-SSE requests/second | 161.375198 | 163.015067 | 178.562440 |
+| Complete-SSE p50 ms | 48.885887 | 48.678627 | 44.237801 |
+| Complete-SSE p95 ms | 58.304651 | 56.858544 | 51.376238 |
+| Complete-SSE per-run p99 ms | 62.714902 | 62.518512 | 56.752164 |
+| Non-streaming requests/second | 264.483213 | 254.030815 | 329.518063 |
+| Non-streaming p50 ms | 29.451441 | 30.302247 | 23.064820 |
+| Non-streaming p95 ms | 37.686544 | 39.642473 | 30.078455 |
+| Non-streaming per-run p99 ms | 45.072110 | 49.609700 | 43.716313 |
+
+The candidate **fails both unchanged resolution criteria**: median SSE
+throughput remains 8.71% below JIT, and median per-run p99 is 10.16% worse.
+Throughput loses to JIT in all five groups; p99 is no worse in two of five.
+Relative to Native control, ratios of medians show +1.02% throughput and -0.31%
+p99, while the median paired-group changes are -1.17% throughput and +2.37%
+p99. These mixed directions do not establish a compiler performance benefit.
+JSON throughput falls 3.95% and p99 worsens 10.07% relative to Native control.
+Every group and range is retained, with no pooled-percentile, significance,
+historical-reconstruction or regression-resolution claim.
+
+All 39,602 operations passed full response validation and exact accounting:
+39,602 request logs, usage audits and entries in each of the three retained
+Redis marker sets, USD 2.97015000 spent/debited, and USD 97.02985000 remaining.
+Every one of the 38 archived ledger running balances was independently checked.
+All 41 unrelated tables were unchanged, errors and liabilities were zero,
+and final post-stop database backends were zero. Three final live observations
+39.77 and 39.76 seconds apart, post-stop checks, both verified archives and
+removal of all owned resources passed. Execution passed; issue #1647 remains
+unresolved and this experiment does not justify merging a resolution claim.

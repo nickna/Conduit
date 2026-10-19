@@ -172,7 +172,7 @@ public sealed class StoreBackedVirtualKeyRuntimeServiceTests
         var revoked = CreateRecord(isEnabled: false);
         var expired = CreateRecord(expiresAt: DateTime.UtcNow.AddMinutes(-1));
         _store.SetupSequence(value => value.GetByHashAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(active).ReturnsAsync(revoked).ReturnsAsync((VirtualKeyRuntimeRecord?)null).ReturnsAsync(expired);
+            .ReturnsAsync(active).ReturnsAsync(revoked).Returns(Task.FromResult<VirtualKeyRuntimeRecord?>(null)).ReturnsAsync(expired);
 
         Assert.True((await _service.ValidateVirtualKeyForAuthenticationAsync("condt_fresh_security")).IsValid);
         Assert.Equal(VirtualKeyValidationFailureCodes.KeyDisabled,
