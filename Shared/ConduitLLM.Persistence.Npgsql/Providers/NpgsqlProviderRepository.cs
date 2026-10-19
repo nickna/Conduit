@@ -10,7 +10,7 @@ namespace ConduitLLM.Persistence.Npgsql;
 /// NativeAOT-compatible typed Npgsql implementation of configured-provider
 /// persistence.
 /// </summary>
-public sealed class NpgsqlProviderRepository : IProviderRepository
+public sealed class NpgsqlProviderRepository : IProviderRepository, IProviderRuntimeSelectionReader
 {
     private const int DefaultPageSize = 20;
     private const int MaxPageSize = 100;

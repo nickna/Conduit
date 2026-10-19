@@ -584,6 +584,11 @@ namespace ConduitLLM.Configuration.Services
 
         private async Task<int?> GetGroupIdAsync(int virtualKeyId, CancellationToken cancellationToken = default)
         {
+            if (_runtimeStore is IVirtualKeySpendSnapshotStore spendSnapshots)
+            {
+                return (await spendSnapshots.GetSpendSnapshotAsync(virtualKeyId, cancellationToken))?.GroupId;
+            }
+
             if (_runtimeStore is not null)
             {
                 return (await _runtimeStore.GetByIdAsync(virtualKeyId, cancellationToken))?.VirtualKeyGroupId;
@@ -604,6 +609,12 @@ namespace ConduitLLM.Configuration.Services
 
         private async Task<(int GroupId, decimal Balance)?> GetKeyAndBalanceAsync(int virtualKeyId)
         {
+            if (_runtimeStore is IVirtualKeySpendSnapshotStore spendSnapshots)
+            {
+                var snapshot = await spendSnapshots.GetSpendSnapshotAsync(virtualKeyId);
+                return snapshot is null ? null : (snapshot.Value.GroupId, snapshot.Value.Balance);
+            }
+
             if (_runtimeStore is not null)
             {
                 var key = await _runtimeStore.GetByIdAsync(virtualKeyId);

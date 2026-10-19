@@ -42,6 +42,7 @@ namespace ConduitLLM.Providers
         private readonly IDbContextFactory<ConduitDbContext>? _dbContextFactory;
         private readonly IDistributedCache? _distributedCache;
         private readonly IModelProviderMappingRuntimeStore? _runtimeMappingStore;
+        private readonly IProviderRuntimeSelectionReader? _runtimeProviderSelectionReader;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DatabaseAwareLLMClientFactory"/> class.
@@ -56,7 +57,8 @@ namespace ConduitLLM.Providers
             IPerformanceMetricsService? performanceMetricsService = null,
             IDbContextFactory<ConduitDbContext>? dbContextFactory = null,
             IDistributedCache? distributedCache = null,
-            IModelProviderMappingRuntimeStore? runtimeMappingStore = null)
+            IModelProviderMappingRuntimeStore? runtimeMappingStore = null,
+            IProviderRuntimeSelectionReader? runtimeProviderSelectionReader = null)
         {
             _credentialService = credentialService ?? throw new ArgumentNullException(nameof(credentialService));
             _mappingService = mappingService ?? throw new ArgumentNullException(nameof(mappingService));
@@ -68,8 +70,10 @@ namespace ConduitLLM.Providers
             _dbContextFactory = dbContextFactory;
             _distributedCache = distributedCache;
             _runtimeMappingStore = runtimeMappingStore;
+            _runtimeProviderSelectionReader = runtimeProviderSelectionReader;
         }
 
+        /// <inheritdoc />
         public async Task<ILLMClient> GetClientForChatAsync(
             ConduitLLM.Core.Models.ChatCompletionRequest request,
             CancellationToken cancellationToken = default)
@@ -130,9 +134,14 @@ namespace ConduitLLM.Providers
             var routes = new List<(ModelProviderMapping, ILLMClient)>();
             foreach (var route in ordered)
             {
-                var provider = await _credentialService.GetProviderByIdAsync(route.Mapping.ProviderId);
+                var provider = _runtimeProviderSelectionReader is null
+                    ? await _credentialService.GetProviderByIdAsync(route.Mapping.ProviderId)
+                    : await _runtimeProviderSelectionReader.GetByIdAsync(
+                        route.Mapping.ProviderId, cancellationToken);
                 if (provider is null || !provider.IsEnabled) continue;
-                var credentials = await ValidateProviderAndGetCredentialsAsync(provider);
+                var credentials = _runtimeProviderSelectionReader is null
+                    ? await ValidateProviderAndGetCredentialsAsync(provider)
+                    : SelectEnabledKeyCredentials(provider, provider.ProviderKeyCredentials);
                 routes.Add((route.Mapping, CreateClientForProvider(provider, credentials,
                     route.Mapping.ProviderModelId, route.Mapping.ProviderOptions)));
             }
@@ -368,10 +377,22 @@ namespace ConduitLLM.Providers
             return await GetEnabledKeyCredentialsAsync(provider);
         }
 
+        /// <summary>
+        /// Reads current credentials through the service when a complete runtime snapshot is unavailable.
+        /// </summary>
         private async Task<IReadOnlyList<ProviderKeyCredential>> GetEnabledKeyCredentialsAsync(Provider provider)
         {
             var keyCredentials = await _credentialService.GetKeyCredentialsByProviderIdAsync(provider.Id);
+            return SelectEnabledKeyCredentials(provider, keyCredentials);
+        }
 
+        /// <summary>
+        /// Applies the same enabled-key and failover ordering policy to either persistence read path.
+        /// </summary>
+        private IReadOnlyList<ProviderKeyCredential> SelectEnabledKeyCredentials(
+            Provider provider,
+            IEnumerable<ProviderKeyCredential> keyCredentials)
+        {
             var enabledKeys = keyCredentials
                 .Where(key => key.IsEnabled)
                 .OrderByDescending(key => key.IsPrimary)

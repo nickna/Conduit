@@ -227,6 +227,7 @@ public sealed class HostCompositionTests
 
         using var scope = provider.CreateScope();
         AssertModelCostComposition(descriptors, scope.ServiceProvider);
+        AssertProviderSelectionComposition(descriptors, scope.ServiceProvider);
         var endpoints = descriptors.Where(descriptor =>
             descriptor.ServiceType.Namespace is "ConduitLLM.Gateway.Endpoints" or "ConduitLLM.Admin.Endpoints")
             .Select(descriptor => descriptor.ServiceType).Distinct().ToArray();
@@ -243,6 +244,30 @@ public sealed class HostCompositionTests
         {
             var services = descriptor.Lifetime == ServiceLifetime.Singleton ? provider : scope.ServiceProvider;
             Assert.NotNull(services.GetRequiredService(descriptor.ServiceType));
+        }
+    }
+
+    /// <summary>Verifies the actual factory receives the fresh Native provider reader and JIT retains its fallback.</summary>
+    private static void AssertProviderSelectionComposition(IServiceCollection descriptors, IServiceProvider provider)
+    {
+        var factory = Assert.IsType<ConduitLLM.Providers.DatabaseAwareLLMClientFactory>(
+            provider.GetRequiredService<ILLMClientFactory>());
+        var reader = provider.GetService<IProviderRuntimeSelectionReader>();
+        var field = typeof(ConduitLLM.Providers.DatabaseAwareLLMClientFactory).GetField(
+            "_runtimeProviderSelectionReader",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var nativeRepository = descriptors.Any(descriptor =>
+            descriptor.ServiceType == typeof(IProviderRepository) &&
+            descriptor.ImplementationType == typeof(NpgsqlProviderRepository));
+        if (nativeRepository)
+        {
+            Assert.Same(provider.GetRequiredService<IProviderRepository>(), reader);
+            Assert.Same(reader, field.GetValue(factory));
+        }
+        else
+        {
+            Assert.Null(reader);
+            Assert.Null(field.GetValue(factory));
         }
     }
 
@@ -737,12 +762,15 @@ public sealed class HostCompositionTests
             Assert.Equal(ServiceLifetime.Singleton, Assert.Single(descriptors,
                 descriptor => descriptor.ServiceType == typeof(IRequestLogRuntimeWriter)).Lifetime);
             Assert.Same(writer, scope.ServiceProvider.GetRequiredService<IRequestLogRuntimeWriter>());
-            var store = Assert.IsType<NpgsqlRequestLogRuntimeStore>(provider.GetRequiredService<IRequestLogRuntimeStore>());
+            var store = Assert.IsType<NpgsqlBatchingRequestLogRuntimeStore>(provider.GetRequiredService<IRequestLogRuntimeStore>());
             var storeField = typeof(StoreBackedRequestLogRuntimeWriter).GetField("_store",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             Assert.NotNull(storeField);
             Assert.Same(store, storeField.GetValue(writer));
             Assert.Same(store, scope.ServiceProvider.GetRequiredService<IRequestLogRuntimeStore>());
+            var drain = Assert.Single(hosted, worker => worker.GetType().Name == "NativeRequestLogDrainHostedService");
+            Assert.False(drain is IDisposable);
+            Assert.False(drain is IAsyncDisposable);
         }
         else
         {

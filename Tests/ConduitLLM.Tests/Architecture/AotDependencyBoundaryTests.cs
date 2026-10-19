@@ -284,7 +284,7 @@ public sealed class AotDependencyBoundaryTests
         AssertNativeSingleton<IGatewayMetricsStore, NpgsqlGatewayMetricsStore>(services);
         AssertNativeSingleton<IAsyncTaskRuntimeStore, NpgsqlAsyncTaskRuntimeStore>(services);
         AssertNativeSingleton<IMediaRuntimeStore, NpgsqlMediaRuntimeStore>(services);
-        AssertNativeSingleton<IRequestLogRuntimeStore, NpgsqlRequestLogRuntimeStore>(services);
+        AssertNativeSingleton<IRequestLogRuntimeStore, NpgsqlBatchingRequestLogRuntimeStore>(services);
         AssertNativeSingleton<IRequestLogRuntimeWriter, StoreBackedRequestLogRuntimeWriter>(services);
         AssertNativeSingleton<IModelProviderMappingRuntimeStore, NpgsqlModelProviderMappingRuntimeStore>(services);
         AssertNativeSingleton<IModelProviderMappingRepository, StoreBackedModelProviderMappingRepository>(services);
