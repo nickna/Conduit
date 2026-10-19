@@ -614,3 +614,43 @@ actual 5,585 successful responses and eight error audits, exact settlement,
 verified archives and complete owned cleanup. That reconciliation does not
 turn the failed experiment into a pass. The two completed default arms offer
 diagnostic evidence only. No socket override is included in the candidate.
+
+## Fifth candidate result, 2026-10-19
+
+The completed [fresh-read and durable-log comparison](benchmarks/2026-10-19-gateway-fresh-read-durable-candidate.json)
+failed both unchanged SSE resolution criteria. Candidate `92d220c0` measured
+171.504 requests/s and 56.905 ms median per-run p99; its same-source JIT
+reference measured 183.629 requests/s and 55.573 ms. Native remained 6.60%
+slower with 2.40% worse p99. All five recorded groups and the predeclared
+discarded group remain in the report.
+
+The matched Native control measured 166.446 requests/s and 59.699 ms p99.
+The candidate improved these medians by 3.04% and 4.68%, respectively, but
+this improvement did not resolve the regression. JSON throughput improved
+0.28% versus that control while p99 worsened 1.22%; versus JIT, JSON
+throughput remained 19.57% lower and p99 17.31% higher. These are changes
+between medians, distinct from the retained per-group contrasts.
+
+The control uses the current dependency versions and shared pagination fix;
+exactly the 22 candidate paths differ. Both Native images preserve the
+same pinned toolchain, runtime base, user and compiler properties. The
+standard JIT build preserves its no-RID publish path. Native passed the
+original zero-first-party-link-warning baseline; third-party warning
+summaries remain retained. Compiler evidence still shows `--Ot`, zero MIBC
+inputs and no applied packaged PGO. All packaged executable bytes matched
+the strict publish outputs.
+
+Current source additionally isolates the lazy log worker from caller
+execution context. It passed 151 managed cases, 129 Native-compatible
+managed cases and 47 real-PostgreSQL cases, with zero skips, plus the full
+managed AOT-compatible persistence probe. The full published-image
+comparison validated all 39,602 responses. Logs, usage audits and each of
+three owner-bound Redis marker families numbered 39,602, with no audit
+errors. Exact cost, spending and ledger debits were USD 2.97015000 and the
+final balance was 97.02985000. All 41 unrelated tables were unchanged.
+Three spaced live settlement checks, post-stop zero database backends,
+verified archives and complete owned cleanup passed. A separate read-only
+archive audit checked all 38 debit entries and every running balance.
+
+Correctness and a modest Native improvement do not satisfy #1647. The PR
+remains a draft, the issue remains unresolved, and production remains JIT.
