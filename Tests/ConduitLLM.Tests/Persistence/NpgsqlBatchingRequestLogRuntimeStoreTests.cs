@@ -18,6 +18,30 @@ public sealed class NpgsqlBatchingRequestLogRuntimeStoreTests
         VirtualKeyId = id, ModelName = "model", RequestType = "chat", Timestamp = DateTime.UtcNow
     };
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WriteAsync_LazyWorker_DoesNotInheritCallerExecutionContextAsync(bool callerAlreadySuppressedFlow)
+    {
+        var ambient = new AsyncLocal<string?> { Value = "request context" };
+        var observed = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var store = new NpgsqlBatchingRequestLogRuntimeStore((records, _) =>
+        {
+            observed.TrySetResult(ambient.Value);
+            return Task.FromResult(new[] { Assert.Single(records).VirtualKeyId });
+        });
+        Task<int> write;
+        if (callerAlreadySuppressedFlow)
+        {
+            using (ExecutionContext.SuppressFlow()) write = store.WriteAsync(Row(17));
+        }
+        else write = store.WriteAsync(Row(17));
+
+        Assert.Equal(17, await write.WaitAsync(Timeout));
+        Assert.Null(await observed.Task.WaitAsync(Timeout));
+        Assert.Equal("request context", ambient.Value);
+    }
+
     [Fact]
     public async Task WriteAsync_AdmittedWrite_WaitsForCommittedIdDespiteCallerCancellationAsync()
     {

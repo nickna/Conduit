@@ -83,7 +83,14 @@ public sealed class NpgsqlBatchingRequestLogRuntimeStore : IRequestLogRuntimeSto
         lock (_lifecycle)
         {
             if (_stopping) throw new InvalidOperationException("Request log writer is stopping.");
-            _worker ??= Task.Run(RunAsync);
+            if (_worker is not null) return;
+            // A lazy first write must not make every later batch inherit that
+            // request's Activity, logging scopes or ambient transaction.
+            if (ExecutionContext.IsFlowSuppressed()) _worker = Task.Run(RunAsync);
+            else
+            {
+                using (ExecutionContext.SuppressFlow()) _worker = Task.Run(RunAsync);
+            }
         }
     }
 
