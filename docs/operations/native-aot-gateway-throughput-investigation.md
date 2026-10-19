@@ -703,3 +703,25 @@ managed AOT-compatible persistence probe. The count difference consists of
 tests for deleted coalescer code. Published-image verification and the fresh
 controlled performance comparison remain separate gates. There is no sixth
 performance result yet, and the fifth candidate's failed criteria stand.
+
+## Sixth candidate result, 2026-10-19
+
+The [direct durable-write comparison](benchmarks/2026-10-19-gateway-direct-durable-candidate.json)
+failed both unchanged criteria. Direct writes measured 165.575 SSE requests/s
+and 60.471 ms median per-run p99, versus the matched coalescer control's
+171.567 requests/s and 58.230 ms. JIT measured 184.048 requests/s and
+55.686 ms. Direct writes worsened Native throughput by 3.49% and p99 by
+3.85%; versus JIT, throughput remained 10.04% lower and p99 8.59% higher.
+All five groups, their ranges and paired contrasts remain retained. JSON
+throughput fell 0.66% versus the Native control while p99 improved 2.21%.
+
+All 39,602 responses, exact accounting, all 41 unrelated-table fingerprints,
+three marker bindings per request, three spaced final reads, zero post-stop
+database backends, verified archives and owned cleanup passed. A separate
+read-only archive calculation checked all 38 debit entries and every running
+balance, ending at 97.02985000 after USD 2.97015000 spending. These checks
+do not turn the failed performance result into a pass.
+
+The phase diagnostic did not establish the serial coalescer as a bottleneck;
+this controlled removal performed worse. The next investigation retains
+coalescing. The issue remains unresolved and the PR remains a draft.
