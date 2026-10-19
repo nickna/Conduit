@@ -7,6 +7,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using ConduitLLM.Configuration.Serialization;
+using ConduitLLM.Persistence;
+using ConduitLLM.Persistence.Interfaces;
+using System.Runtime.CompilerServices;
 
 namespace ConduitLLM.Configuration.Services;
 
@@ -16,6 +19,9 @@ namespace ConduitLLM.Configuration.Services;
 /// </summary>
 public class RequestLogService : BatchAuditServiceBase<RequestLog>, IRequestLogService
 {
+    private readonly IRequestLogBatchRuntimeStore? _runtimeStore;
+    private readonly ConditionalWeakTable<RequestLog, RequestLogRuntimeRecord> _ownedRuntimeRows = new();
+
     /// <summary>
     /// Creates a new instance of the RequestLogService.
     /// </summary>
@@ -28,6 +34,23 @@ public class RequestLogService : BatchAuditServiceBase<RequestLog>, IRequestLogS
     {
     }
 
+    private RequestLogService(IServiceProvider serviceProvider, ILogger<RequestLogService> logger,
+        IRequestLogBatchRuntimeStore runtimeStore) : this(serviceProvider, logger)
+    {
+        _runtimeStore = runtimeStore;
+    }
+
+    /// <summary>
+    /// Creates the Native scalar queue with the same enqueue/100-row/10-second
+    /// boundary as the JIT queue. Unflushed process-local events are not crash durable.
+    /// </summary>
+    public static RequestLogService CreateWithRuntimePersistence(IServiceProvider serviceProvider,
+        IRequestLogBatchRuntimeStore runtimeStore, ILogger<RequestLogService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(runtimeStore);
+        return new RequestLogService(serviceProvider, logger, runtimeStore);
+    }
+
     #region Template Method Implementations
 
     /// <inheritdoc/>
@@ -37,6 +60,50 @@ public class RequestLogService : BatchAuditServiceBase<RequestLog>, IRequestLogS
     /// <inheritdoc/>
     protected override string EntityName => "RequestLog";
 
+    /// <inheritdoc />
+    protected override async Task PersistEventsAsync(IReadOnlyList<RequestLog> events,
+        CancellationToken cancellationToken = default)
+    {
+        if (_runtimeStore is null)
+        {
+            await base.PersistEventsAsync(events, cancellationToken);
+            return;
+        }
+
+        var records = new RequestLogRuntimeRecord[events.Count];
+        var unassigned = new List<int>();
+        var assignedIds = new HashSet<int>();
+        for (var index = 0; index < events.Count; index++)
+        {
+            var row = events[index];
+            if (row.VirtualKey is not null || !_ownedRuntimeRows.TryGetValue(row, out var record))
+                throw new ArgumentException("Runtime request logs must be owned scalar DTO snapshots.", nameof(events));
+            records[index] = record;
+            if (row.Id == 0) unassigned.Add(index);
+            else if (row.Id < 0 || !assignedIds.Add(row.Id))
+                throw new InvalidOperationException("Invalid retained request-log identity.");
+        }
+        if (unassigned.Count != 0)
+        {
+            var allocated = await _runtimeStore.AllocateIdsAsync(unassigned.Count, cancellationToken);
+            if (allocated is null || allocated.Count != unassigned.Count ||
+                allocated.Any(id => id <= 0 || !assignedIds.Add(id)))
+                throw new InvalidOperationException("The request-log store returned an invalid identity allocation.");
+            // Validate the complete allocation before mutating any queue owner;
+            // assign once before the first INSERT, including ambiguous commits.
+            for (var index = 0; index < unassigned.Count; index++)
+                events[unassigned[index]].Id = allocated[index];
+        }
+        var batch = new RequestLogRuntimeBatchEntry[events.Count];
+        for (var index = 0; index < events.Count; index++)
+            batch[index] = new RequestLogRuntimeBatchEntry(events[index].Id, records[index]);
+        await _runtimeStore.WriteBatchAsync(batch, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    protected override Task ScheduleDataRetentionAsync(CancellationToken cancellationToken) =>
+        _runtimeStore is null ? base.ScheduleDataRetentionAsync(cancellationToken) : Task.CompletedTask;
+
     #endregion
 
     #region IRequestLogService Implementation
@@ -45,6 +112,7 @@ public class RequestLogService : BatchAuditServiceBase<RequestLog>, IRequestLogS
     public async Task LogRequestAsync(LogRequestDto request)
     {
         var log = MapToRequestLog(request);
+        OwnRuntimeSnapshot(log);
         await LogEventAsync(log);
 
         Logger.LogDebug("Request logged for VirtualKeyId={VirtualKeyId}, Cost={Cost:C}, ProviderId={ProviderId}, queued for batch write",
@@ -59,6 +127,7 @@ public class RequestLogService : BatchAuditServiceBase<RequestLog>, IRequestLogS
     public async Task LogRequestWithBatchedSpendAsync(LogRequestDto request, BatchSpendUpdateService batchSpendService)
     {
         var log = MapToRequestLog(request);
+        OwnRuntimeSnapshot(log);
         await LogEventAsync(log);
 
         // Queue spend update for batching instead of immediate database write
@@ -66,6 +135,28 @@ public class RequestLogService : BatchAuditServiceBase<RequestLog>, IRequestLogS
 
         Logger.LogDebug("Request logged and spend update queued for VirtualKeyId={VirtualKeyId}, Cost={Cost:C}, ProviderId={ProviderId}",
             request.VirtualKeyId, request.Cost, request.ProviderId);
+    }
+
+    private void OwnRuntimeSnapshot(RequestLog row)
+    {
+        if (_runtimeStore is null) return;
+        _ownedRuntimeRows.Add(row, new RequestLogRuntimeRecord
+        {
+            VirtualKeyId = row.VirtualKeyId, ModelName = row.ModelName,
+            ProviderId = row.ProviderId, ProviderType = row.ProviderType,
+            ModelProviderMappingId = row.ModelProviderMappingId,
+            PromptCachingEligible = row.PromptCachingEligible, PromptCachingPolicyApplied = row.PromptCachingPolicyApplied,
+            CachedReadSavings = row.CachedReadSavings, CacheWritePremium = row.CacheWritePremium,
+            RoutingAffinityUsed = row.RoutingAffinityUsed, RoutingDecisionReason = row.RoutingDecisionReason,
+            RoutingFailoverCount = row.RoutingFailoverCount, RequestType = row.RequestType,
+            InputTokens = row.InputTokens, OutputTokens = row.OutputTokens,
+            CachedInputTokens = row.CachedInputTokens, CachedWriteTokens = row.CachedWriteTokens,
+            Cost = row.Cost, BillingMethod = row.BillingMethod is null ? null : (int)row.BillingMethod.Value,
+            ProviderReportedCostUsd = row.ProviderReportedCostUsd, ProviderCostMarkupMultiplier = row.ProviderCostMarkupMultiplier,
+            BilledAtUtc = row.BilledAtUtc, ResponseTimeMs = row.ResponseTimeMs, Timestamp = row.Timestamp,
+            UserId = row.UserId, ClientIp = row.ClientIp, RequestPath = row.RequestPath,
+            StatusCode = row.StatusCode, MetadataJson = row.Metadata
+        });
     }
 
     private static RequestLog MapToRequestLog(LogRequestDto request) => new()

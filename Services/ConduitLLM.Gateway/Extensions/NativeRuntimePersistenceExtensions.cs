@@ -37,7 +37,15 @@ public static class NativeRuntimePersistenceExtensions
         services.Replace(ServiceDescriptor.Singleton<IModelProviderMappingRuntimeStore, NpgsqlModelProviderMappingRuntimeStore>());
         services.Replace(ServiceDescriptor.Singleton<IModelProviderMappingRepository, StoreBackedModelProviderMappingRepository>());
         services.Replace(ServiceDescriptor.Singleton<IRequestLogRuntimeStore, NpgsqlRequestLogRuntimeStore>());
-        services.Replace(ServiceDescriptor.Singleton<IRequestLogRuntimeWriter, StoreBackedRequestLogRuntimeWriter>());
+        services.AddSingleton<IRequestLogBatchRuntimeStore, NpgsqlRequestLogBatchRuntimeStore>();
+        services.Replace(ServiceDescriptor.Singleton<IRequestLogRuntimeWriter>(provider =>
+            RequestLogService.CreateWithRuntimePersistence(provider,
+                provider.GetRequiredService<IRequestLogBatchRuntimeStore>(),
+                provider.GetRequiredService<ILogger<RequestLogService>>())));
+        // The writer owns the queue; the hosted wrapper borrows its lifecycle
+        // without adding a second IDisposable owner or shared leader election.
+        services.AddSingleton<IHostedService>(provider => new BatchAuditQueueHostedService(
+            (RequestLogService)provider.GetRequiredService<IRequestLogRuntimeWriter>()));
         return services;
     }
 }

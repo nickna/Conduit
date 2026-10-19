@@ -12,10 +12,20 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace ConduitLLM.Core.Services;
 
+/// <summary>Selects the cached billing shape and supported lookup policy.</summary>
+public enum ModelCostCacheProfile
+{
+    /// <summary>Caches complete management graphs and explicit missing results.</summary>
+    Complete,
+    /// <summary>Caches positive native scalar lookups by ID; other reads stay direct.</summary>
+    NativeRuntime
+}
+
 /// <summary>Coalesced billing reads, explicit missing results, and per-read time validity.</summary>
 public sealed class FusionModelCostService : IModelCostService
 {
     private const ApplicationCacheDomain Domain = ApplicationCacheDomain.Costs;
+    private const string RuntimeIdKeyPrefix = "runtime-scalar-id-v1:";
     private readonly IModelCostService _inner;
     private readonly IFusionCache _cache;
     private readonly ApplicationCacheGeneration _generation;
@@ -23,21 +33,26 @@ public sealed class FusionModelCostService : IModelCostService
     private readonly TimeProvider _clock;
     private readonly ILogger<FusionModelCostService> _logger;
     private readonly bool _enabled;
+    private readonly bool _runtimeReadOnly;
     private readonly TimeSpan _positive, _negative;
     private readonly FusionCacheEntryOptions _positiveEntry, _localEntry;
     private readonly IModelMappingCacheInvalidator? _mappings;
     private readonly ICachedPricingRulesService? _rules;
     private readonly IDiscoveryCacheService? _discovery;
+    /// <summary>Creates the cache decorator with the selected loader and lookup profile.</summary>
     public FusionModelCostService(IModelCostService inner,
         [FromKeyedServices(ApplicationCacheOptions.ServiceKey)] IFusionCache cache,
         ApplicationCacheOptions options, ApplicationCacheGeneration generation, TimeProvider clock,
         ILogger<FusionModelCostService> logger,
         IModelMappingCacheInvalidator? mappings = null, ICachedPricingRulesService? rules = null,
-        IDiscoveryCacheService? discovery = null)
+        IDiscoveryCacheService? discovery = null, ModelCostCacheProfile profile = ModelCostCacheProfile.Complete)
     {
+        if (profile is not ModelCostCacheProfile.Complete and not ModelCostCacheProfile.NativeRuntime)
+            throw new ArgumentOutOfRangeException(nameof(profile));
         _inner = inner; _cache = cache; _options = options; _generation = generation; _clock = clock; _logger = logger;
         _mappings = mappings; _rules = rules; _discovery = discovery;
         _enabled = options.Costs.Enabled;
+        _runtimeReadOnly = profile == ModelCostCacheProfile.NativeRuntime;
         _positive = options.Limit(Domain, options.Costs.Duration ?? TimeSpan.FromHours(12));
         _negative = options.Limit(Domain, TimeSpan.FromMinutes(1));
         _positiveEntry = Entry(_positive); _ = Entry(_negative);
@@ -66,25 +81,31 @@ public sealed class FusionModelCostService : IModelCostService
     private async Task<ModelCost?> ReadAsync(string logicalKey, Func<CancellationToken, Task<ModelCost?>> load, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        if (!_enabled) { var value = await load(token); return value is not null && Active(value) ? value : null; }
+        if (!_enabled) return await ReadCurrentAsync(load, token);
         ModelCost? loaded = null; var didLoad = false; var businessFailed = false;
         try
         {
             var key = $"costs:{await _generation.GetAsync(Domain, token)}:{logicalKey}";
             for (var attempt = 0; attempt < 2; attempt++)
             {
+                var loadedThisAttempt = false;
                 var local = await _cache.TryGetAsync<CostLookupResult>(key, _localEntry, token);
                 var result = local.HasValue ? local.Value : await _cache.GetOrSetAsync<CostLookupResult>(key, async (context, cancellation) =>
                 {
-                    try { loaded = await load(cancellation); didLoad = true; }
+                    try { loaded = await load(cancellation); didLoad = loadedThisAttempt = true; }
                     catch { businessFailed = true; throw; }
                     var snapshot = Snapshot(loaded);
                     var duration = snapshot.ValidUntil - Now;
-                    if (duration <= TimeSpan.Zero) context.Options.SkipMemoryCacheWrite = context.Options.SkipDistributedCacheWrite = true;
+                    // Native's active-only loader hides future effective dates. A missing
+                    // result must be read again rather than cached past its activation.
+                    if (duration <= TimeSpan.Zero || (_runtimeReadOnly && snapshot.Value is null))
+                        context.Options.SkipMemoryCacheWrite = context.Options.SkipDistributedCacheWrite = true;
                     else { var policy = Entry(duration); context.Options.Duration = policy.Duration; context.Options.DistributedCacheDuration = policy.DistributedCacheDuration; }
                     return snapshot;
                 }, options: _positiveEntry, tags: [ApplicationCacheOptions.Tag(Domain)], token: token);
                 if (result is null) throw new JsonException("Missing cost lookup contract.");
+                if (_runtimeReadOnly && result.Value is null && !loadedThisAttempt)
+                    throw new JsonException("Unexpected cached missing runtime cost.");
                 var value = result.Value?.ToDomain();
                 if (result.ValidUntil > Now && (value is null || Active(value))) return value;
                 await _cache.RemoveAsync(key, _positiveEntry, token);
@@ -99,17 +120,29 @@ public sealed class FusionModelCostService : IModelCostService
             return value is not null && Active(value) ? value : null;
         }
     }
+    /// <summary>Reads current source data without caching identifier selection or missing prices.</summary>
+    private async Task<ModelCost?> ReadCurrentAsync(Func<CancellationToken, Task<ModelCost?>> load, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        var value = await load(token);
+        return value is not null && Active(value) ? value : null;
+    }
     public Task<ModelCost?> GetCostForModelAsync(string modelId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
+        // Identifier selection can change when another cost becomes effective.
+        // The fixed-shape store does not expose that next boundary, so keep it direct.
+        if (_runtimeReadOnly)
+            return ReadCurrentAsync(token => _inner.GetCostForModelAsync(modelId, token), cancellationToken);
         return ReadAsync(CacheKeys.ModelCost.ByModelId(modelId), token => _inner.GetCostForModelAsync(modelId, token), cancellationToken);
     }
     public Task<ModelCost?> GetCostByIdAsync(int id, CancellationToken cancellationToken = default) =>
-        ReadAsync(CacheKeys.ModelCost.ById(id), token => _inner.GetCostByIdAsync(id, token), cancellationToken);
+        ReadAsync((_runtimeReadOnly ? RuntimeIdKeyPrefix : "") + CacheKeys.ModelCost.ById(id),
+            token => _inner.GetCostByIdAsync(id, token), cancellationToken);
     public async Task<List<ModelCost>> ListModelCostsAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_enabled) return await _inner.ListModelCostsAsync(cancellationToken);
+        if (!_enabled || _runtimeReadOnly) return await _inner.ListModelCostsAsync(cancellationToken);
         List<ModelCost>? loaded = null; var businessFailed = false;
         try
         {

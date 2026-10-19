@@ -21,7 +21,7 @@ namespace ConduitLLM.IntegrationTests.Tests;
 /// Runs the Gateway request-accounting write contract against EF and typed Npgsql.
 /// </summary>
 [Collection("Postgres advisory locks")]
-public sealed class RequestLogRuntimePersistenceParityTests
+public sealed partial class RequestLogRuntimePersistenceParityTests
 {
     private readonly PostgresLockTestContainerFixture _fixture;
 
@@ -35,6 +35,7 @@ public sealed class RequestLogRuntimePersistenceParityTests
     {
         var efSchema = $"request_log_ef_{Guid.NewGuid():N}";
         var npgsqlSchema = $"request_log_np_{Guid.NewGuid():N}";
+        var batchSchema = $"request_log_batch_parity_{Guid.NewGuid():N}";
         var timestamp = new DateTime(2026, 8, 27, 22, 15, 30, DateTimeKind.Utc);
         var record = new RequestLogRuntimeRecord
         {
@@ -73,6 +74,7 @@ public sealed class RequestLogRuntimePersistenceParityTests
         {
             await CreateSchemaAsync(efSchema);
             await CreateSchemaAsync(npgsqlSchema);
+            await CreateSchemaAsync(batchSchema);
 
             await using var efSource = NpgsqlDataSource.Create(WithSearchPath(efSchema));
 
@@ -83,17 +85,24 @@ public sealed class RequestLogRuntimePersistenceParityTests
             var npgsqlId = await ExerciseContractAsync(
                 new NpgsqlRequestLogRuntimeStore(dataSource),
                 record);
+            await using var batchSource = NpgsqlDataSource.Create(WithSearchPath(batchSchema));
+            var batchStore = new NpgsqlRequestLogBatchRuntimeStore(batchSource);
+            var batchId = (await batchStore.AllocateIdsAsync(1))[0];
+            await batchStore.WriteBatchAsync([new RequestLogRuntimeBatchEntry(batchId, record)]);
 
             efId.Should().BePositive();
             npgsqlId.Should().BePositive();
             using var efRow = JsonDocument.Parse(await ReadRowAsJsonAsync(efSchema));
             using var npgsqlRow = JsonDocument.Parse(await ReadRowAsJsonAsync(npgsqlSchema));
+            using var batchRow = JsonDocument.Parse(await ReadRowAsJsonAsync(batchSchema));
             JsonElement.DeepEquals(efRow.RootElement, npgsqlRow.RootElement).Should().BeTrue();
+            JsonElement.DeepEquals(efRow.RootElement, batchRow.RootElement).Should().BeTrue();
         }
         finally
         {
             await DropSchemaAsync(efSchema);
             await DropSchemaAsync(npgsqlSchema);
+            await DropSchemaAsync(batchSchema);
         }
     }
 

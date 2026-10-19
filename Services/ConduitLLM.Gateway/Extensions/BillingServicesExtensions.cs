@@ -23,10 +23,13 @@ public static class BillingServicesExtensions
     /// </summary>
     public static IServiceCollection AddBillingAndPricingServices(this IServiceCollection services)
     {
-        // Native request billing uses the fixed-shape routing persistence contract.
-        // JIT retains the full EF management service and FusionCache composition.
+        // Native request billing caches positive fixed-shape costs by ID. The
+        // separate payload namespace preserves JIT/Admin's complete EF graphs.
 #if CONDUIT_NATIVE_AOT
-        services.AddScoped<IModelCostService, StoreBackedModelCostService>();
+        services.AddScoped<StoreBackedModelCostService>();
+        services.AddScoped<IModelCostService>(provider =>
+            ActivatorUtilities.CreateInstance<FusionModelCostService>(provider,
+                provider.GetRequiredService<StoreBackedModelCostService>(), ModelCostCacheProfile.NativeRuntime));
 #else
         services.AddModelCostCache();
 #endif

@@ -285,7 +285,11 @@ public sealed class AotDependencyBoundaryTests
         AssertNativeSingleton<IAsyncTaskRuntimeStore, NpgsqlAsyncTaskRuntimeStore>(services);
         AssertNativeSingleton<IMediaRuntimeStore, NpgsqlMediaRuntimeStore>(services);
         AssertNativeSingleton<IRequestLogRuntimeStore, NpgsqlRequestLogRuntimeStore>(services);
-        AssertNativeSingleton<IRequestLogRuntimeWriter, StoreBackedRequestLogRuntimeWriter>(services);
+        AssertNativeSingleton<IRequestLogBatchRuntimeStore, NpgsqlRequestLogBatchRuntimeStore>(services);
+        var requestLogWriter = Assert.Single(services, value => value.ServiceType == typeof(IRequestLogRuntimeWriter));
+        Assert.Equal(ServiceLifetime.Singleton, requestLogWriter.Lifetime);
+        Assert.NotNull(requestLogWriter.ImplementationFactory);
+        Assert.Null(requestLogWriter.ImplementationType);
         AssertNativeSingleton<IModelProviderMappingRuntimeStore, NpgsqlModelProviderMappingRuntimeStore>(services);
         AssertNativeSingleton<IModelProviderMappingRepository, StoreBackedModelProviderMappingRepository>(services);
         AssertNativeSingleton<IFunctionDiscoveryRuntimeStore, NpgsqlFunctionDiscoveryRuntimeStore>(services);
@@ -325,7 +329,12 @@ public sealed class AotDependencyBoundaryTests
             services,
             candidate => candidate.ServiceType == typeof(IModelCostService));
         Assert.Equal(ServiceLifetime.Scoped, modelCost.Lifetime);
-        Assert.Equal(typeof(StoreBackedModelCostService), modelCost.ImplementationType);
+        Assert.NotNull(modelCost.ImplementationFactory);
+        Assert.Null(modelCost.ImplementationType);
+        var nativeCostLoader = Assert.Single(services,
+            candidate => candidate.ServiceType == typeof(StoreBackedModelCostService));
+        Assert.Equal(ServiceLifetime.Scoped, nativeCostLoader.Lifetime);
+        Assert.Equal(typeof(StoreBackedModelCostService), nativeCostLoader.ImplementationType);
     }
 #endif
 
