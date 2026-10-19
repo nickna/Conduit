@@ -21,7 +21,7 @@ namespace ConduitLLM.IntegrationTests.Tests;
 /// Runs the Gateway request-accounting write contract against EF and typed Npgsql.
 /// </summary>
 [Collection("Postgres advisory locks")]
-public sealed partial class RequestLogRuntimePersistenceParityTests
+public sealed class RequestLogRuntimePersistenceParityTests
 {
     private readonly PostgresLockTestContainerFixture _fixture;
 

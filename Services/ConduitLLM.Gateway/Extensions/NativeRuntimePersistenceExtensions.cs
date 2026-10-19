@@ -38,25 +38,10 @@ public static class NativeRuntimePersistenceExtensions
         services.Replace(ServiceDescriptor.Singleton<IMediaRuntimeStore, NpgsqlMediaRuntimeStore>());
         services.Replace(ServiceDescriptor.Singleton<IModelProviderMappingRuntimeStore, NpgsqlModelProviderMappingRuntimeStore>());
         services.Replace(ServiceDescriptor.Singleton<IModelProviderMappingRepository, StoreBackedModelProviderMappingRepository>());
-        services.Replace(ServiceDescriptor.Singleton<IRequestLogRuntimeStore, NpgsqlBatchingRequestLogRuntimeStore>());
+        services.Replace(ServiceDescriptor.Singleton<IRequestLogRuntimeStore, NpgsqlRequestLogRuntimeStore>());
         services.Replace(ServiceDescriptor.Singleton<IRequestLogRuntimeWriter, StoreBackedRequestLogRuntimeWriter>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, NativeRequestLogDrainHostedService>());
         return services;
     }
 }
 
-/// <summary>Borrowed lifecycle bridge; DI owns and disposes the single store.</summary>
-internal sealed class NativeRequestLogDrainHostedService : IHostedService
-{
-    private readonly NpgsqlBatchingRequestLogRuntimeStore _store;
-
-    public NativeRequestLogDrainHostedService(IRequestLogRuntimeStore store)
-    {
-        _store = (NpgsqlBatchingRequestLogRuntimeStore)store;
-    }
-
-    public Task StartAsync(CancellationToken cancellationToken) => _store.StartAsync(cancellationToken);
-
-    public Task StopAsync(CancellationToken cancellationToken) => _store.StopAsync(cancellationToken);
-}
 #endif

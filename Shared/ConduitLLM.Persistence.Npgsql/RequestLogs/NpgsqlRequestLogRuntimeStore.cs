@@ -40,14 +40,14 @@ public sealed class NpgsqlRequestLogRuntimeStore : IRequestLogRuntimeStore
         return id;
     }
 
-    internal static void Validate(RequestLogRuntimeRecord record)
+    private static void Validate(RequestLogRuntimeRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentException.ThrowIfNullOrWhiteSpace(record.ModelName);
         ArgumentException.ThrowIfNullOrWhiteSpace(record.RequestType);
     }
 
-    internal const string InsertSql = """
+    private const string InsertSql = """
             INSERT INTO "RequestLogs" (
                 "VirtualKeyId", "ModelName", "ProviderId", "ProviderType",
                 "ModelProviderMappingId", "PromptCachingEligible", "PromptCachingPolicyApplied",
@@ -68,7 +68,7 @@ public sealed class NpgsqlRequestLogRuntimeStore : IRequestLogRuntimeStore
                 @requestPath, @statusCode, @metadata)
             RETURNING "Id"
             """;
-    internal static void AddParameters(NpgsqlParameterCollection parameters, RequestLogRuntimeRecord record)
+    private static void AddParameters(NpgsqlParameterCollection parameters, RequestLogRuntimeRecord record)
     {
         parameters.AddWithValue("virtualKeyId", NpgsqlDbType.Integer, record.VirtualKeyId);
         parameters.AddWithValue("modelName", NpgsqlDbType.Varchar, record.ModelName);

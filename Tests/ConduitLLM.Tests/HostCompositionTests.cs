@@ -762,15 +762,12 @@ public sealed class HostCompositionTests
             Assert.Equal(ServiceLifetime.Singleton, Assert.Single(descriptors,
                 descriptor => descriptor.ServiceType == typeof(IRequestLogRuntimeWriter)).Lifetime);
             Assert.Same(writer, scope.ServiceProvider.GetRequiredService<IRequestLogRuntimeWriter>());
-            var store = Assert.IsType<NpgsqlBatchingRequestLogRuntimeStore>(provider.GetRequiredService<IRequestLogRuntimeStore>());
+            var store = Assert.IsType<NpgsqlRequestLogRuntimeStore>(provider.GetRequiredService<IRequestLogRuntimeStore>());
             var storeField = typeof(StoreBackedRequestLogRuntimeWriter).GetField("_store",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             Assert.NotNull(storeField);
             Assert.Same(store, storeField.GetValue(writer));
             Assert.Same(store, scope.ServiceProvider.GetRequiredService<IRequestLogRuntimeStore>());
-            var drain = Assert.Single(hosted, worker => worker.GetType().Name == "NativeRequestLogDrainHostedService");
-            Assert.False(drain is IDisposable);
-            Assert.False(drain is IAsyncDisposable);
         }
         else
         {
