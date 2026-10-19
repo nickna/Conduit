@@ -154,6 +154,64 @@ public sealed class NativeModelCostCacheTests
         inner.Verify(value => value.GetCostByIdAsync(42, It.IsAny<CancellationToken>()), Times.Exactly(3));
     }
 
+    /// <summary>Concurrent absent prices remain fresh reads without a false storage failure or activation delay.</summary>
+    [Fact]
+    public async Task GetCostByIdAsync_ConcurrentMissingCost_ReadsEachCallerWithoutStorageFailureAndObservesActivationAsync()
+    {
+        const int callerCount = 16;
+        var clock = new Clock(); var cost = Cost(); cost.EffectiveDate = clock.Now.AddSeconds(10).UtcDateTime;
+        var inner = Inner(null);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        inner.Setup(value => value.GetCostByIdAsync(42, It.IsAny<CancellationToken>())).Returns(async () =>
+        {
+            entered.TrySetResult();
+            await release.Task;
+            // The active-only runtime source does not expose the future effective date.
+            return clock.Now.UtcDateTime < cost.EffectiveDate ? null : cost;
+        });
+        using var host = Host(clock); var service = Service(host, inner.Object);
+        var generations = host.GetRequiredService<ApplicationCacheGeneration>();
+        var generation = await generations.GetAsync(ApplicationCacheDomain.Costs);
+        var bypasses = await CostReadBypassesAsync();
+        var first = service.GetCostByIdAsync(42);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var requests = Enumerable.Range(1, callerCount - 1).Select(_ => service.GetCostByIdAsync(42))
+            .Prepend(first).ToArray();
+        try
+        {
+            Assert.All(requests, request => Assert.False(request.IsCompleted));
+            inner.Verify(value => value.GetCostByIdAsync(42, It.IsAny<CancellationToken>()), Times.Once);
+        }
+        finally { release.SetResult(); }
+
+        Assert.All(await Task.WhenAll(requests).WaitAsync(TimeSpan.FromSeconds(10)), Assert.Null);
+        // FusionCache's waiting callers recheck the cache after taking the lock. Since a
+        // missing runtime price skips both writes, each caller executes its own fresh load.
+        inner.Verify(value => value.GetCostByIdAsync(42, It.IsAny<CancellationToken>()), Times.Exactly(callerCount));
+        Assert.Equal(bypasses, await CostReadBypassesAsync());
+        Assert.Equal(generation, await generations.GetAsync(ApplicationCacheDomain.Costs));
+        Assert.DoesNotContain(((DistributedStore)host.GetRequiredService<IDistributedCache>()).Writes,
+            key => key.Contains("runtime-scalar-id-v1:", StringComparison.Ordinal));
+        Assert.False((await host.GetRequiredKeyedService<IFusionCache>(ApplicationCacheOptions.ServiceKey)
+            .TryGetAsync<CostLookupResult>($"costs:{generation}:runtime-scalar-id-v1:modelcost:id:42")).HasValue);
+
+        clock.Now = clock.Now.AddSeconds(10);
+        Assert.Equal(cost.InputCostPerMillionTokens, (await service.GetCostByIdAsync(42))!.InputCostPerMillionTokens);
+        inner.Verify(value => value.GetCostByIdAsync(42, It.IsAny<CancellationToken>()), Times.Exactly(callerCount + 1));
+        Assert.Equal(bypasses, await CostReadBypassesAsync());
+    }
+
+    /// <summary>Observes the public fallback metric without inspecting private recovery state.</summary>
+    private static async Task<double> CostReadBypassesAsync()
+    {
+        using var output = new MemoryStream();
+        await Prometheus.Metrics.DefaultRegistry.CollectAndExportAsTextAsync(output);
+        var line = System.Text.Encoding.UTF8.GetString(output.ToArray()).Split('\n').SingleOrDefault(value =>
+            value.StartsWith("conduit_application_cache_operations_total{domain=\"costs\",operation=\"read\",result=\"bypass\"}", StringComparison.Ordinal));
+        return line is null ? 0 : double.Parse(line[(line.LastIndexOf(' ') + 1)..], System.Globalization.CultureInfo.InvariantCulture);
+    }
+
     /// <summary>Identifier reads always select from the source, including newly effective alternatives.</summary>
     [Fact]
     public async Task GetCostForModelAsync_IdentifierSelection_RemainsUncachedAsync()

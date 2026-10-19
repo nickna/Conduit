@@ -140,7 +140,7 @@ public sealed class NativeGatewayRedisSchedulingTests
             global::Program.ConfigureCachingServices(builder);
             using var provider = builder.Services.BuildServiceProvider(validateScopes: true);
             var shared = provider.GetRequiredService<IConnectionMultiplexer>();
-            var cache = Assert.IsAssignableFrom<RedisCache>(provider.GetRequiredService<IDistributedCache>());
+            using var cache = Assert.IsAssignableFrom<RedisCache>(provider.GetRequiredService<IDistributedCache>());
             // A missing-key read creates the independently owned cache connection without writing state.
             var key = $"scheduler-ownership-test:{Guid.NewGuid():N}";
             await cache.GetAsync(key).WaitAsync(TimeSpan.FromSeconds(10));

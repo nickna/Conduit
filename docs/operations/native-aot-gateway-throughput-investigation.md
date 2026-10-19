@@ -1,10 +1,29 @@
-# Gateway complete-SSE investigation, 2026-10-16
+# Gateway complete-SSE investigation, 2026-10-16–19
 
-The historical complete-SSE regression remains unexplained. A fresh source-matched
-Gateway baseline stopped during the discarded JIT warm pair with eight HTTP 502
-operations. It produced no paired performance report and never reached its SSE
-workload. This failed experiment cannot establish whether the historical SSE
-result reproduces, identify a runtime bottleneck, or justify an optimization.
+The tenth controlled candidate meets the unchanged complete-SSE resolution
+objective in the fresh matched fixture. Selecting the managed ThreadPool Redis
+scheduler for two Native Gateway connection families produced median SSE
+throughput of 195.858 requests/s versus JIT's 177.075, with median per-run p99
+47.520 versus 58.629 ms. Both criteria pass with all five recorded groups
+included. Group 4 was worse in both metrics and remains in the result. The
+[complete report](benchmarks/2026-10-19-gateway-redis-scheduler-candidate.json)
+retains all six groups, raw-report hashes, ranges, paired contrasts and JSON
+tradeoffs.
+
+This resolves the current matched SSE deficit in that fixture. CI and review
+verification are tracked in [PR #1726](https://github.com/nickna/Conduit/pull/1726).
+It does not establish the cause of the historical result,
+Redis-server or application CPU attribution, statistical significance, or a
+general production performance guarantee. The nine unsuccessful candidates and
+their reversions remain below. Production JIT promotion policy is unchanged.
+
+## Initial failed baseline, 2026-10-16
+
+The initial fresh source-matched Gateway baseline stopped during the discarded
+JIT warm pair with eight HTTP 502 operations. It produced no paired performance
+report and never reached its SSE workload. This failed experiment could not
+establish whether the historical SSE result reproduced, identify a runtime
+bottleneck, or justify an optimization.
 
 The [original comparison](native-aot-gateway-controlled-benchmark.md),
 [original report](benchmarks/2026-10-12-gateway-controlled.json), and
@@ -12,7 +31,8 @@ The [original comparison](native-aot-gateway-controlled-benchmark.md),
 unchanged. Their source roles, five alternating pairs and adverse SSE observation
 remain authoritative: native median SSE throughput was 4.18% lower and the median
 of five per-run p99 values was 7.70% higher. A failed follow-up does not replace
-that result. [Issue #1647](https://github.com/nickna/Conduit/issues/1647) remains open.
+that result. At this stage, [issue #1647](https://github.com/nickna/Conduit/issues/1647)
+remained open.
 
 ## Fresh experiment and retained provenance
 
@@ -908,10 +928,10 @@ debits and every running balance. An initial verification attempt had
 three test setup failures before their production read paths; those
 entries were corrected and the failed receipt remains retained.
 
-Nine candidates have failed the resolution objective. The next diagnostic
-will separate security and rate-limit Redis waits, metrics normalization,
-and the remaining pre-balance wall interval. The PR remains a draft and
-the regression remains open.
+At this point, nine candidates had failed the resolution objective. The next
+diagnostic would separate security and rate-limit Redis waits, metrics
+normalization, and the remaining pre-balance wall interval. The PR remained
+a draft and the regression remained open.
 
 ## Security and rate-limit middleware wall diagnostic, 2026-10-19
 
@@ -958,14 +978,94 @@ binds the versioned post-run analyzer corrections. Raw captures and the workload
 were unchanged. The final correction changed only server mode-label metadata, with
 all timing, count, partition, and input bindings proven identical.
 
-The next candidate changes only the Native Gateway's Redis I/O scheduling for
+The next candidate changed only the Native Gateway's Redis I/O scheduling for
 the shared connection factory and the separately owned host distributed cache.
 The library's [versioned scheduler implementation](https://github.com/StackExchange/StackExchange.Redis/blob/2.13.17/src/StackExchange.Redis/SocketManager.cs)
 offers a managed ThreadPool scheduler alongside its dedicated scheduler. All
 four security/rate-limit operations and their sequence remain. Explicit options
 and socket managers, independent cache connection ownership, and JIT scheduling
-must remain intact. Generation, application-cache backplane, and SignalR
-connections are outside this candidate. Correctness, strict images, and a new
-matched five-group trial are required before adoption. This is a measured
-hypothesis, with no resolution claim; nine production candidates have failed
-and the PR remains a draft.
+must remain intact. Generation, keyed application-cache storage, the Fusion
+backplane, and SignalR backplane connections are outside this candidate. At this
+point, correctness, strict images, and a new matched five-group trial were still
+required; nine production candidates had failed the objective.
+
+## Native Redis scheduler candidate, 2026-10-19
+
+The [tenth controlled candidate](benchmarks/2026-10-19-gateway-redis-scheduler-candidate.json)
+used source `2d5e1771`. Native selects `SocketManager.ThreadPool` when no explicit
+socket manager is present in the shared Gateway `RedisConnectionFactory` or the
+host's legacy `IDistributedCache`. The Native factory delegates connection
+creation, parsing, event handling, connection reuse and disposal to the existing base
+factory. The host Redis cache retains its original configuration string and
+instance prefix; preconfigured `ConfigurationOptions` are cloned before filling
+an unspecified manager. Explicit managers and custom multiplexer factories
+remain intact, without mutating the caller's options. The host cache continues
+to own a separate multiplexer. JIT retains its original registration and default
+scheduler. No security check, command, ordering, failure policy, cache expiry,
+invalidation rule, socket inline-completion setting or global Redis default is
+changed.
+
+The Native control remained `b20d3700`, whose production runtime matches the
+restored `cef486664` baseline; Native candidate and standard JIT reference used
+the same final candidate source. All 18 cold hosts, six role permutations,
+predeclared discarded group 0 and five recorded groups were retained. Each host
+ran the unchanged JSON workload followed by complete SSE: 100 warmups and 1,000
+measured requests per workload, concurrency eight, 30-second deadlines, and full
+content, usage, DONE and EOF validation. Builds, tests and diagnostic observers
+were absent during the uninstrumented timing window.
+
+| SSE metric, median (recorded range) | Native control | Native candidate | JIT |
+| --- | ---: | ---: | ---: |
+| Requests/s | 169.058 (160.379–176.210) | 195.858 (159.796–200.467) | 177.075 (174.184–182.634) |
+| Per-run p99 ms | 59.015 (57.709–62.369) | 47.520 (47.041–93.393) | 58.629 (54.929–65.006) |
+
+The unchanged objective requires Native median SSE throughput at least JIT's
+and median per-run SSE p99 no worse than JIT's. Both pass: the ratio of medians
+is 10.61% higher throughput and 18.95% lower p99 than JIT, or 15.85% higher
+throughput and 19.48% lower p99 than Native control. The median of the five
+paired candidate/JIT percentage changes is separately 12.04% for throughput and
+−18.98% for p99. These summaries are different calculations; p99 values are
+not pooled.
+
+The candidate improved both SSE metrics in four of five recorded groups against
+each reference. Group 4 remains adverse: candidate SSE was 159.796 requests/s
+with p99 93.393 ms, versus JIT's 177.075 and 54.929 ms. Its JSON result was also
+adverse, at 128.034 requests/s and p99 134.395 ms. No group was removed or rerun.
+All five directional comparisons and every per-run p50, p95 and p99 remain in
+the report; five groups do not support a significance claim or explain the
+outlier.
+
+| JSON metric, median (recorded range) | Native control | Native candidate | JIT |
+| --- | ---: | ---: | ---: |
+| Requests/s | 274.467 (270.688–280.421) | 503.027 (128.034–548.307) | 342.071 (309.252–350.934) |
+| Per-run p99 ms | 39.194 (38.146–42.638) | 32.932 (20.632–134.395) | 43.608 (32.428–46.989) |
+
+JSON ratios of medians improved 83.27% in throughput and 15.98% in p99 versus
+Native control, and 47.05% and 24.48% versus JIT. Four of five JSON groups
+improved both metrics against each reference, with the group 4 tradeoff retained.
+These observations qualify this fixed synthetic fixture, not historical
+recovery or a universal workload result. The earlier middleware diagnostic
+motivated the scheduler contrast; neither that diagnostic nor this complete
+request comparison isolates Redis-server time or application CPU.
+
+Exact candidate source passed 180 managed, 158 Native-compatible managed and
+55 real PostgreSQL cases, all 393 with zero skips, plus the complete managed
+AOT-compatible persistence probe. Strict Native and standard no-RID JIT
+publishing, matched source/toolchain/image bindings, packaged-byte verification
+and the two small response/accounting preflights passed. All 39,602 responses
+passed complete validation. Cost, spending and debits were exactly USD
+2.97015000, leaving balance 97.02985000. All three retained Redis marker families,
+41 unrelated tables, three spaced final reads, zero post-stop backends, verified
+archives and owned cleanup passed. Independent read-only archive verification
+checked all 38 debit entries and every running balance. The report binds that
+proof and the complete financial closure.
+
+The shared factory still connects lazily, synchronously waits its first DI
+resolution, and preserves its existing disposal behavior. Other shared
+consumers, including Data Protection's synchronous key repository and background
+spend/cache services, also use that multiplexer. ThreadPool scheduling removes
+the dedicated scheduler's isolation from blocked workers; the qualified fixture
+does not prove behavior under arbitrary blocking load. Generation, keyed
+application-cache storage, Fusion backplane and SignalR backplane connections
+retain their previous scheduling. Merge also requires CI and PR review;
+production JIT promotion policy is unchanged.
