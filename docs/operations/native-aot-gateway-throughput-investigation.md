@@ -512,3 +512,47 @@ and final post-stop database backends were zero. Three final live observations
 39.77 and 39.76 seconds apart, post-stop checks, both verified archives and
 removal of all owned resources passed. Execution passed; issue #1647 remains
 unresolved and this experiment does not justify merging a resolution claim.
+
+## Current-source phase and physical CPU diagnostic, 2026-10-18
+
+A fresh diagnostic used clean observer-only source `4c907b41`, based on the
+fourth candidate's `ea7c0a0` runtime code. Both images used the pinned .NET
+10.0.12 runtime and the same schema, provider, validators and JSON-then-SSE
+workload. It collected one Native-then-JIT pair, with 100 warmups and 1,000
+measured requests per workload and role. The
+[sanitized diagnostic](benchmarks/2026-10-18-gateway-current-source-diagnostic.json)
+retains exact sources, image IDs, observations and raw evidence hashes.
+
+This is **diagnostic evidence, not a performance qualification**. Both arms
+carried server/client timing observers, 100 ms whole-process runtime samples,
+software counters and packet capture; Native additionally carried physical CPU
+sampling. These perturbations and the single fixed order prevent an efficacy
+or historical-reconstruction claim.
+
+Both profiles now execute seven SQL client commands inside the request
+envelope. Native additionally performs a SQL read during authentication and
+durable request-log persistence; both profiles authenticate. Settlement and
+background executions remain separately counted.
+Mean authentication wall time was near parity, 0.743 ms Native versus 0.718 ms
+JIT. Mean wall time before the provider HTTP span and outside the SQL-span
+union was 18.931 versus 7.604 ms. The durable log-writer await averaged 5.098
+versus 0.269 ms, with Native tail delays. These wall intervals include awaited
+I/O and scheduling; they are not CPU measurements or network round-trip counts.
+
+Independent packet analysis places the extra observed time before the provider
+request and after its last response data. Provider turnaround and body timing
+were near parity. The HTTP capture excludes PostgreSQL and Redis, so it cannot
+assign that extra time to either backing service. Physical CPU capture passed
+the recorded GNU build-ID, executable/debug-file identity, physical-frame and
+zero-loss gates. Its 1,149 samples included 221 leaf samples in `RhSpinWait`,
+mostly under worker semaphore waits; this does not establish application lock
+contention or request-critical queue delay. Numeric worker/queue samples are
+whole-process observations and do not measure per-request queue wait.
+
+All 4,400 responses and client/server trace joins validated. Exact accounting
+matched 4,400 logs, audits and entries in each of three Redis marker sets,
+44,000 input and 22,000 output tokens, USD 0.33000000 spent/debited and balance
+99.67000000. All 41 unrelated tables were unchanged. Three spaced final live
+checks, post-stop zero backends, independently checked archived ledger running
+balances, both verified archives and complete owned cleanup passed. This
+diagnostic leaves the fourth candidate's failed resolution criteria unchanged.
