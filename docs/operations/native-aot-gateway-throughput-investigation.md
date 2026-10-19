@@ -838,3 +838,34 @@ tables and three marker bindings per response passed, as did three
 spaced final reads, post-stop zero backends, verified archives and owned
 cleanup. A separate read-only archive calculation checked all seven
 debits and every running balance. The performance regression remains open.
+
+## Detailed current-runtime stage diagnostic, 2026-10-19
+
+The [32-stage diagnostic](benchmarks/2026-10-19-gateway-detailed-stage-diagnostic.json)
+binds observer revision `899157f0` to the restored runtime at `98c32295`.
+Both images include the same 28 observer files. Native then JIT each run
+100 warmups and 1,000 measured JSON requests, then the same SSE population,
+at concurrency eight with the unchanged complete-response validation.
+All 32 stages, including unobserved stages, and background batch ranges
+are retained. This single instrumented order does not qualify efficacy
+or establish CPU, scheduling, queue, or historical regression causality.
+
+Measured SSE server wall means were 43.208 ms for Native and 41.295 ms
+for JIT. The disjoint post-DONE interval was 3.631 versus 2.392 ms;
+request-log writer await was 1.368 versus 0.310 ms. The Native worker
+suppresses request execution context, so backend spans are retained
+separately and cannot divide that caller wait into queue and database
+time. Six mapping-cache reads per request averaged 1.578 versus 0.671 ms
+in total; their nested generation checks must not be added again.
+Graph reconstruction itself was small. These observations motivate
+server-validated atomic log batches and a cache-hit allocation fast path,
+with unchanged durability, invalidation, and recovery semantics.
+
+All 4,400 responses and trace joins passed with zero capture errors or
+drops. Cost, spending, and debits were exactly USD 0.33000000, leaving
+balance 99.67000000. All 41 unrelated tables, three marker bindings per
+response, three spaced final reads, post-stop zero backends, archives,
+and owned cleanup passed. A read-only archive calculation checked all
+three debits and every running balance. Two input-metadata corrections
+occurred before application traffic and remain bound in the report.
+Eight production candidates still fail the resolution objective.

@@ -113,8 +113,11 @@ public sealed partial class RequestLogRuntimePersistenceParityTests
         finally { await DropSchemaAsync(schema); }
     }
 
-    [Fact]
-    public async Task WriteAsync_MissingReturningRow_RollsBackWholeBatchWithoutIsolationAsync()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task WriteAsync_MissingReturningRow_RollsBackWholeBatchWithoutIsolationAsync(int skippedIndex)
     {
         var schema = $"request_cardinality_{Guid.NewGuid():N}";
         try
@@ -135,10 +138,164 @@ public sealed partial class RequestLogRuntimePersistenceParityTests
                 return await backend.WriteAsync(rows, token);
             });
             var seed = store.WriteAsync(BatchRow(0)); await entered.Task.WaitAsync(BatchTimeout);
-            var first = store.WriteAsync(BatchRow(1)); var skipped = store.WriteAsync(BatchRow(2, "skip")); release.TrySetResult();
+            var writes = Enumerable.Range(0, 3)
+                .Select(index => store.WriteAsync(BatchRow(index + 1, index == skippedIndex ? "skip" : "model")))
+                .ToArray();
+            release.TrySetResult();
             await seed.WaitAsync(BatchTimeout);
-            await Assert.ThrowsAsync<InvalidOperationException>(() => first); await Assert.ThrowsAsync<InvalidOperationException>(() => skipped);
+            foreach (var write in writes) await Assert.ThrowsAsync<InvalidOperationException>(() => write);
             Assert.Equal(2, calls); Assert.Equal(1, await RequestRowCountAsync(schema));
+        }
+        finally { await DropSchemaAsync(schema); }
+    }
+
+    [Fact]
+    public async Task WriteAsync_UserTriggerDivisionByZero_FailsWholeBatchWithoutIsolationAsync()
+    {
+        var schema = $"request_user_division_{Guid.NewGuid():N}";
+        try
+        {
+            await CreateSchemaAsync(schema);
+            await ExecuteRequestSqlAsync(schema, """
+                CREATE FUNCTION reject_request_by_division() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF NEW."ModelName" = 'divide' THEN
+                        PERFORM 1 / (NEW."InputTokens" - 101);
+                    END IF;
+                    RETURN NEW;
+                END $$;
+                CREATE TRIGGER reject_request_by_division BEFORE INSERT ON "RequestLogs"
+                    FOR EACH ROW EXECUTE FUNCTION reject_request_by_division();
+                """);
+            await using var source = NpgsqlDataSource.Create(WithSearchPath(schema));
+            var backend = new NpgsqlRequestLogBatchWriter(source);
+            var entered = BatchSignal(); var release = BatchSignal(); var calls = 0;
+            await using var store = new NpgsqlBatchingRequestLogRuntimeStore(async (rows, token) =>
+            {
+                calls++;
+                if (rows[0].VirtualKeyId == 0) { entered.TrySetResult(); await release.Task.WaitAsync(BatchTimeout, token); }
+                return await backend.WriteAsync(rows, token);
+            });
+            var seed = store.WriteAsync(BatchRow(0)); await entered.Task.WaitAsync(BatchTimeout);
+            var writes = new[]
+            {
+                store.WriteAsync(BatchRow(1)), store.WriteAsync(BatchRow(2, "divide")), store.WriteAsync(BatchRow(3))
+            };
+            release.TrySetResult(); await seed.WaitAsync(BatchTimeout);
+            foreach (var write in writes)
+            {
+                var error = await Assert.ThrowsAsync<InvalidOperationException>(() => write);
+                Assert.Equal(PostgresErrorCodes.DivisionByZero, Assert.IsType<PostgresException>(error.InnerException).SqlState);
+            }
+            // User SQL can raise the same SQLSTATE as the cardinality guard.
+            // Conservative classification rejects every caller after rollback;
+            // it must not silently retry the otherwise valid neighboring rows.
+            Assert.Equal(2, calls); Assert.Equal(1, await RequestRowCountAsync(schema));
+        }
+        finally { await DropSchemaAsync(schema); }
+    }
+
+    [Fact]
+    public async Task WriteAsync_DeferredConstraintAtSync_ConfirmsRollbackBeforeIsolatingCommittedIdsAsync()
+    {
+        var schema = $"request_deferred_{Guid.NewGuid():N}";
+        try
+        {
+            await CreateSchemaAsync(schema);
+            await ExecuteRequestSqlAsync(schema, """
+                CREATE FUNCTION reject_deferred_request() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF NEW."ModelName" = 'deferred-poison' THEN
+                        RAISE EXCEPTION 'deferred request rejected' USING ERRCODE = '23514';
+                    END IF;
+                    RETURN NEW;
+                END $$;
+                CREATE CONSTRAINT TRIGGER reject_deferred_request
+                    AFTER INSERT ON "RequestLogs" DEFERRABLE INITIALLY DEFERRED
+                    FOR EACH ROW EXECUTE FUNCTION reject_deferred_request();
+                """);
+            await using var source = NpgsqlDataSource.Create(WithSearchPath(schema));
+            var backend = new NpgsqlRequestLogBatchWriter(source);
+            var entered = BatchSignal(); var release = BatchSignal();
+            var attempts = new List<int[]>(); var rollbackConfirmed = false;
+            await using var store = new NpgsqlBatchingRequestLogRuntimeStore(async (rows, token) =>
+            {
+                attempts.Add(rows.Select(row => row.VirtualKeyId).ToArray());
+                if (rows[0].VirtualKeyId == 0) { entered.TrySetResult(); await release.Task.WaitAsync(BatchTimeout, token); }
+                try { return await backend.WriteAsync(rows, token); }
+                catch (RequestLogBatchRolledBackException error)
+                {
+                    var sqlError = Assert.IsType<PostgresException>(error.InnerException);
+                    Assert.Equal(PostgresErrorCodes.CheckViolation, sqlError.SqlState);
+                    // The earlier INSERTs already returned IDs, but the final
+                    // Sync/implicit commit rejected the deferred constraint.
+                    // None may become visible or be acknowledged as successful.
+                    Assert.Equal(1, await RequestRowCountAsync(schema));
+                    rollbackConfirmed = true;
+                    throw;
+                }
+            });
+            var seed = store.WriteAsync(BatchRow(0)); await entered.Task.WaitAsync(BatchTimeout);
+            var first = store.WriteAsync(BatchRow(1));
+            var poison = store.WriteAsync(BatchRow(2, "deferred-poison"));
+            var last = store.WriteAsync(BatchRow(3));
+            release.TrySetResult(); await seed.WaitAsync(BatchTimeout);
+            Assert.True(await first.WaitAsync(BatchTimeout) > 0);
+            var error = await Assert.ThrowsAsync<PostgresException>(() => poison);
+            Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
+            Assert.True(await last.WaitAsync(BatchTimeout) > 0);
+            Assert.True(rollbackConfirmed);
+            Assert.Equal(new[] { 1, 3, 1, 1, 1 }, attempts.Select(rows => rows.Length));
+            Assert.Equal(new[] { 1, 2, 3 }, attempts[1]);
+            Assert.Equal(3, await RequestRowCountAsync(schema));
+        }
+        finally { await DropSchemaAsync(schema); }
+    }
+
+    [Fact]
+    public async Task WriteAsync_MixedNullableAndPopulatedBatch_PreservesEveryColumnAndIdAssociationAsync()
+    {
+        var schema = $"request_batch_parity_{Guid.NewGuid():N}";
+        try
+        {
+            await CreateSchemaAsync(schema);
+            await using var source = NpgsqlDataSource.Create(WithSearchPath(schema));
+            var nullable = BatchRow(42, "nullable") with
+            {
+                ProviderId = null, ProviderType = null, ModelProviderMappingId = null,
+                PromptCachingEligible = false, PromptCachingPolicyApplied = false,
+                CachedReadSavings = 0, CacheWritePremium = 0, RoutingAffinityUsed = false,
+                RoutingDecisionReason = null, RoutingFailoverCount = 0, InputTokens = 0, OutputTokens = 0,
+                CachedInputTokens = null, CachedWriteTokens = null, Cost = 0, BillingMethod = null,
+                ProviderReportedCostUsd = null, ProviderCostMarkupMultiplier = null, BilledAtUtc = null,
+                ResponseTimeMs = 0, UserId = null, ClientIp = null, RequestPath = null,
+                StatusCode = null, MetadataJson = null
+            };
+            RequestLogRuntimeRecord[] rows =
+            [
+                BatchRow(41), nullable,
+                nullable with { VirtualKeyId = 43, ModelName = "json-null", MetadataJson = "null" }
+            ];
+            var ids = await new NpgsqlRequestLogBatchWriter(source).WriteAsync(rows, CancellationToken.None);
+            Assert.Equal(rows.Length, ids.Length); Assert.Equal(rows.Length, ids.Distinct().Count());
+            var single = new NpgsqlRequestLogRuntimeStore(source);
+            for (var index = 0; index < rows.Length; index++)
+            {
+                Assert.True(ids[index] > 0);
+                var controlId = await single.WriteAsync(rows[index]);
+                Assert.Equal(await RequestRowJsonByIdAsync(schema, controlId),
+                    await RequestRowJsonByIdAsync(schema, ids[index]));
+                await using var command = source.CreateCommand("""
+                    SELECT "VirtualKeyId", "Metadata" IS NULL FROM "RequestLogs" WHERE "Id" = @id
+                    """);
+                command.Parameters.AddWithValue("id", ids[index]);
+                await using var reader = await command.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync());
+                Assert.Equal(rows[index].VirtualKeyId, reader.GetInt32(0));
+                Assert.Equal(index == 1, reader.GetBoolean(1));
+                Assert.False(await reader.ReadAsync());
+            }
+            Assert.Equal(6, await RequestRowCountAsync(schema));
         }
         finally { await DropSchemaAsync(schema); }
     }
