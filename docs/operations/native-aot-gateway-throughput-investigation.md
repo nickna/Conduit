@@ -912,3 +912,60 @@ Nine candidates have failed the resolution objective. The next diagnostic
 will separate security and rate-limit Redis waits, metrics normalization,
 and the remaining pre-balance wall interval. The PR remains a draft and
 the regression remains open.
+
+## Security and rate-limit middleware wall diagnostic, 2026-10-19
+
+The [eight-stage diagnostic](benchmarks/2026-10-19-gateway-middleware-stage-diagnostic.json)
+used an isolated observer commit `ef9ec3e7` over `cef486664`, whose production
+runtime retained the explicit request-log transaction and original generation
+cache paths. The main production checkout did not contain these observers.
+Native ran before JIT; each ran 100 warmups and 1,000 measured JSON responses,
+then the same SSE population, at concurrency eight. Every measured SSE request
+contained two authentication stages and exactly one of each of the other seven
+stages. All observations, including JSON and background stage counts, remain in
+the report.
+
+| Measured SSE method wall mean, ms | Native | JIT |
+| --- | ---: | ---: |
+| Modern ban lookup | 0.747500 | 0.253271 |
+| Legacy ban cache read | 0.840029 | 0.250787 |
+| Fixed IP window | 0.798941 | 0.246327 |
+| Sliding virtual-key window | 0.881465 | 0.343128 |
+| Four-method interval union | 3.267936 | 1.093514 |
+| Usage entry through second authentication start | 3.580671 | 1.299010 |
+| Metrics path normalization | 0.003805 | 0.005217 |
+| Remaining disjoint complement | 0.277035 | 0.166241 |
+
+The four-method union differs by 2.174422 ms, compared with 2.281661 ms
+for the complete pre-balance interval. These methods include client handling,
+parsing, scheduling, and failure policy; they do not measure Redis-server time
+or CPU. Inclusive security stages nest the ban lookups and IP window and must
+not be added to those leaves. The complement also includes other middleware,
+binding, activation, validation, and logging. A single fixed-order instrumented
+pair does not establish a cause, significance, or production efficacy.
+
+Exact observer source passed 173 managed, 151 Native-compatible managed, and
+55 real PostgreSQL cases with zero skips, plus the full managed AOT-compatible
+persistence probe. All 42 diagnostic validator tests, strict Native publishing,
+standard JIT publishing, actual packaged-byte checks, and source bindings passed.
+All 4,400 complete responses and trace joins passed with zero capture errors or
+drops. Cost, spending, and debits were exactly USD 0.33000000, with balance
+99.67000000. All three marker families, 41 unrelated tables, three spaced final
+reads, zero post-stop backends, verified archives, and owned cleanup passed.
+The read-only archive calculation checked all three debits and every running
+balance. Private evidence retains the pre-traffic missing-confirmation check; the report
+binds the versioned post-run analyzer corrections. Raw captures and the workload
+were unchanged. The final correction changed only server mode-label metadata, with
+all timing, count, partition, and input bindings proven identical.
+
+The next candidate changes only the Native Gateway's Redis I/O scheduling for
+the shared connection factory and the separately owned host distributed cache.
+The library's [versioned scheduler implementation](https://github.com/StackExchange/StackExchange.Redis/blob/2.13.17/src/StackExchange.Redis/SocketManager.cs)
+offers a managed ThreadPool scheduler alongside its dedicated scheduler. All
+four security/rate-limit operations and their sequence remain. Explicit options
+and socket managers, independent cache connection ownership, and JIT scheduling
+must remain intact. Generation, application-cache backplane, and SignalR
+connections are outside this candidate. Correctness, strict images, and a new
+matched five-group trial are required before adoption. This is a measured
+hypothesis, with no resolution claim; nine production candidates have failed
+and the PR remains a draft.

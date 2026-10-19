@@ -37,7 +37,12 @@ public partial class Program
         if (!string.IsNullOrEmpty(redisConnectionString))
         {
             // Register Redis connection factory for proper connection pooling
+#if CONDUIT_NATIVE_AOT
+            builder.Services.AddSingleton<ConduitLLM.Configuration.Services.RedisConnectionFactory,
+                NativeGatewayRedisConnectionFactory>();
+#else
             builder.Services.AddSingleton<ConduitLLM.Configuration.Services.RedisConnectionFactory>();
+#endif
 
             // Use Redis-cached Virtual Key service for high-performance validation
             builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
@@ -54,6 +59,12 @@ public partial class Program
             builder.Services.AddStackExchangeRedisCache(options =>
             {
                 options.Configuration = redisConnectionString;
+#if CONDUIT_NATIVE_AOT
+                var configuration = options.ConfigurationOptions?.Clone()
+                    ?? ConduitLLM.Configuration.Utilities.RedisUrlParser.ParseConfiguration(redisConnectionString);
+                NativeGatewayRedisConnectionFactory.ConfigureSocketScheduling(configuration);
+                options.ConfigurationOptions = configuration;
+#endif
                 options.InstanceName = "conduit-tasks:";
             });
         }
