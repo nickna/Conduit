@@ -1,0 +1,2469 @@
+{
+  "schemaVersion": 1,
+  "kind": "sanitized-current-three-variant-counterfactual",
+  "owner": "f0ac7aea74174243a3b43e1b885a0840",
+  "plan": {
+    "schemaVersion": 1,
+    "kind": "issue1647-current-three-variant-counterfactual-plan",
+    "variants": {
+      "native-control": {
+        "runtime": "native",
+        "source": "234670caf30fd87452282d1a817cec452f594844",
+        "tree": "e1926f6d5e19c4ba82d2f7918a42fc7791eb904c",
+        "imageId": "sha256:6a47b6fcf8eb7d7543a93cb5977d8d59ee7e13c76973daf443bc049ece674b06",
+        "user": "1654",
+        "role": "current-unfixed-control"
+      },
+      "native-candidate": {
+        "runtime": "native",
+        "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+        "imageId": "sha256:592ac2341da5fe8362ce0f0e249a89b2fcee9c72c0dae0d564c95b6a69289b10",
+        "user": "1654",
+        "role": "candidate",
+        "tree": "965c4e0a07f8c557f8906b8ddee31ba77f799ada"
+      },
+      "jit-reference": {
+        "runtime": "jit",
+        "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+        "imageId": "sha256:076135663fd628fe1f78587db4201cdffe39bd539acb5c7a18790a22e4704707",
+        "user": "1000",
+        "role": "candidate-jit-reference",
+        "tree": "965c4e0a07f8c557f8906b8ddee31ba77f799ada"
+      }
+    },
+    "groups": [
+      {
+        "index": 0,
+        "discarded": true,
+        "order": [
+          "native-control",
+          "native-candidate",
+          "jit-reference"
+        ]
+      },
+      {
+        "index": 1,
+        "discarded": false,
+        "order": [
+          "jit-reference",
+          "native-candidate",
+          "native-control"
+        ]
+      },
+      {
+        "index": 2,
+        "discarded": false,
+        "order": [
+          "native-candidate",
+          "native-control",
+          "jit-reference"
+        ]
+      },
+      {
+        "index": 3,
+        "discarded": false,
+        "order": [
+          "jit-reference",
+          "native-control",
+          "native-candidate"
+        ]
+      },
+      {
+        "index": 4,
+        "discarded": false,
+        "order": [
+          "native-control",
+          "jit-reference",
+          "native-candidate"
+        ]
+      },
+      {
+        "index": 5,
+        "discarded": false,
+        "order": [
+          "native-candidate",
+          "jit-reference",
+          "native-control"
+        ]
+      }
+    ],
+    "fixtureSource": "45d99bcd1ed1c52b4acaa728e27f9b3704155dcd",
+    "perHost": {
+      "coldHost": true,
+      "workloadOrder": [
+        "json",
+        "sse"
+      ],
+      "warmupPerWorkload": 100,
+      "measuredPerWorkload": 1000,
+      "concurrency": 8,
+      "timeoutSeconds": 30,
+      "completeValidation": true
+    },
+    "totalHosts": 18,
+    "totalCollectionOperations": 39600,
+    "preflightOperations": 2,
+    "finalExpectedJson": 19801,
+    "finalExpectedSse": 19801,
+    "finalExpectedCost": "2.97015000",
+    "finalExpectedBalance": "97.02985000",
+    "statistics": false,
+    "tracing": false,
+    "profilers": false,
+    "allBuildsMustBeClosed": true,
+    "performanceScope": "Five recorded groups after one predeclared discarded group; all six three-variant permutations. Primary contrast Native candidate versus Native control in fixed per-role environments; candidate JIT is reference. Direct immutable local image IDs. Original private historical inputs unavailable; no historical reconstruction or isolated component speedup claim.",
+    "memoryScope": "Docker container memory display sampled at readiness and after both full probes, outside measured request windows. No forced GC or sampled peak claim.",
+    "coldReadinessScope": "Host wrapper stopwatch from immediately before docker run until successful readiness; includes Docker launch and polling. Per-host raw timestamps retained; not an application-only startup measurement.",
+    "reportScope": "Custom outer experiment schema, with each original schema2 probe report retained byte-for-byte; does not mislabel a second Native arm as JIT.",
+    "unusedCandidateJitImage": "c20d6969 RID-publish candidate was never used for any business request; replaced before freeze by standard no-RID Dockerfile reference.",
+    "variantEnvironment": "Native control/candidate same SDK401/runtime12 and exact OS base-layer prefix, UID1654. JIT reference standard no-RID Dockerfile, exact SDK401/runtime12 base layers, UID1000. Per-role differences explicit; Native before/after is primary contrast."
+  },
+  "inputs": {
+    "fullManifestSha256": "dd9ea158f7d96a5ed0d71fcf415205a721c1ccd5f1b3c4926332144b76138b3d",
+    "rawResultSha256": "0a7ddfa2a1fd50b66e5e5fab62ede84684c936444037ac90c9059f3a9a264558",
+    "planSha256": "32314af0ae32fc2ce0b292a9baa369fdbcd7bef65fddcd8847f1fd8f59a75100",
+    "originalReports": [
+      {
+        "file": "g0-native-control-json.report.json",
+        "sha256": "0a050feb7f3f9448b15c43b47389d163de12eb05480d8667c9096541c094039b"
+      },
+      {
+        "file": "g0-native-control-sse.report.json",
+        "sha256": "1e70ec60a08683a7406e463bc2d62ffd441c51b77ecfa40b96dcceb0008338ae"
+      },
+      {
+        "file": "g0-native-candidate-json.report.json",
+        "sha256": "db8f20280fe65619942af23864426f343bc4bfda7ce1412d019294fb9289841e"
+      },
+      {
+        "file": "g0-native-candidate-sse.report.json",
+        "sha256": "2dc0dbab54dc8ce08109dbe1e08e4f6c82115993dffaee1c0274be639811db9a"
+      },
+      {
+        "file": "g0-jit-reference-json.report.json",
+        "sha256": "36e103a2bbfee8e03baba7c3cbc6271ae430df23158f55d6c03ca75c72c1705e"
+      },
+      {
+        "file": "g0-jit-reference-sse.report.json",
+        "sha256": "93ff0b9c5e61f177ef71a963194c4e5d04ab47110e5dc130807b3a05cbfb6b36"
+      },
+      {
+        "file": "g1-jit-reference-json.report.json",
+        "sha256": "d87f381206c13684cef841c90c9636f1d0d656f1e259acfbc84998b47becf3f3"
+      },
+      {
+        "file": "g1-jit-reference-sse.report.json",
+        "sha256": "edf2ecd2ed318263646dc25ccb56e104d1bb0ea869c03315c8b40fb57efaa07a"
+      },
+      {
+        "file": "g1-native-candidate-json.report.json",
+        "sha256": "3dff45a661401c3207ec697fdd6b8069406457c00712c8c2c69108c6cb7c64c6"
+      },
+      {
+        "file": "g1-native-candidate-sse.report.json",
+        "sha256": "50375484e7f520825ab4a5649eece81eef4908a2c28f43cba072b3ec4430c661"
+      },
+      {
+        "file": "g1-native-control-json.report.json",
+        "sha256": "3351380c630bb54c33564c819007fb7078899923e5b1a3e337d03fe0af52b418"
+      },
+      {
+        "file": "g1-native-control-sse.report.json",
+        "sha256": "67dced828b275f3862311e9ee97a104b9c8a2662a99a6073562b3eae62d9b25e"
+      },
+      {
+        "file": "g2-native-candidate-json.report.json",
+        "sha256": "abeeb564e00e6d54f4a2051cc72b550b2e33bbfd72b76ebd3eb261d7a8dea38b"
+      },
+      {
+        "file": "g2-native-candidate-sse.report.json",
+        "sha256": "9c10b73593651dfd786dcf4ab98f1b798687ea3f26f19f9b859e099dc4d0502e"
+      },
+      {
+        "file": "g2-native-control-json.report.json",
+        "sha256": "fcf5f4458a661f24bbc5b65af56cef8a5421d3e79337d4c34315e1bcefde5c71"
+      },
+      {
+        "file": "g2-native-control-sse.report.json",
+        "sha256": "263e5d420cdd60928d91f88e5fa8c80e9a2b877d7d6643dc2459aa9c79270b00"
+      },
+      {
+        "file": "g2-jit-reference-json.report.json",
+        "sha256": "2f063ad3aa67ba941f761cbe80e716945f507b42c7d56e91fc1075d92fc31916"
+      },
+      {
+        "file": "g2-jit-reference-sse.report.json",
+        "sha256": "4bed14d8a2dd40a41f241a402d82b60d3ceba6d6e7804746eb2a2b9e445acacf"
+      },
+      {
+        "file": "g3-jit-reference-json.report.json",
+        "sha256": "4319adb61961c2044ccb5dfacc7b1d8093439a058bc78506be015088efcdd237"
+      },
+      {
+        "file": "g3-jit-reference-sse.report.json",
+        "sha256": "4a88b66d3b584ffcb27805b0dd3c6a3c9fff725358797cac00efce6f78cbf808"
+      },
+      {
+        "file": "g3-native-control-json.report.json",
+        "sha256": "9305cf78a069b99e990e53228e5c1d018cea77b5ffceec7636bd5969d5f06abf"
+      },
+      {
+        "file": "g3-native-control-sse.report.json",
+        "sha256": "6dbe964e62f0f42a81cadc705d87c43042a7b4f1e6b00f1bca79829563832de1"
+      },
+      {
+        "file": "g3-native-candidate-json.report.json",
+        "sha256": "b4cb243bb84f315e3577bf44a15d87b6d16d1c2986f8c3673c861908d7236e6c"
+      },
+      {
+        "file": "g3-native-candidate-sse.report.json",
+        "sha256": "6a855949685df5c07fae56753bcf54b72dca24ad08dc49d3c74cce40ecd3e3e4"
+      },
+      {
+        "file": "g4-native-control-json.report.json",
+        "sha256": "5be7a1029d41005b898861942a625e26b189a06d7836251d84ea9e6cb147eb75"
+      },
+      {
+        "file": "g4-native-control-sse.report.json",
+        "sha256": "07b9a6704175aad4d76886444616029a54137770bd3ed4e6df0922d8890b99ee"
+      },
+      {
+        "file": "g4-jit-reference-json.report.json",
+        "sha256": "4f935984a35d3c56e1aa255e7c3176470dc615527d4ace34b86d1e26e08afc70"
+      },
+      {
+        "file": "g4-jit-reference-sse.report.json",
+        "sha256": "a4957bc1beae9541046144e58cfc5ee92559dddd3265ba5786fb266b35247191"
+      },
+      {
+        "file": "g4-native-candidate-json.report.json",
+        "sha256": "9af75ea3aa4247142fd3defd1877ce2093d3d0e3c5b012de93c59ff4c5bab609"
+      },
+      {
+        "file": "g4-native-candidate-sse.report.json",
+        "sha256": "0cd431481832a41c13a7c33c67e2caf42735e519d8a2ddd7c605685192db7fb4"
+      },
+      {
+        "file": "g5-native-candidate-json.report.json",
+        "sha256": "8fbaa1d5eec004023f7565b73d358d43bb37a287a45fc2a7cde93a3ab02c7101"
+      },
+      {
+        "file": "g5-native-candidate-sse.report.json",
+        "sha256": "346a4992c1b80b9b9ee0703551bdcc0a73b5d9aeb35adeb13e1ba5980b81366a"
+      },
+      {
+        "file": "g5-jit-reference-json.report.json",
+        "sha256": "92c954d6b7c422bb943e18e86cc14d17d3f5474cd3d4af1a10a03bb5a3a8ae69"
+      },
+      {
+        "file": "g5-jit-reference-sse.report.json",
+        "sha256": "240ff099ca66de7daa63fc57e8e04ffb610a490ae5ec639da41a9bd7023f91bd"
+      },
+      {
+        "file": "g5-native-control-json.report.json",
+        "sha256": "844e470c175efb9615dc6d0aa8d3bda05d6117fa53f5450bd2cb86fd1ad4db7f"
+      },
+      {
+        "file": "g5-native-control-sse.report.json",
+        "sha256": "0403599d86be7257206a5b3d39dab254bcdf9640424c0938ee6741c8bb99ae6d"
+      }
+    ],
+    "rootAuthorizationSha256": "3d67af5099a818300c0ac79560ed4d31a090a6db6705216359398de543d1ddfc",
+    "originalSanitizedSummarySha256": "51ce8db2018c52ea4b32ffce00e4ea7c64dd8eaf55bb7de5e7fde9083c188a33"
+  },
+  "toolchains": {
+    "sdk": "10.0.401",
+    "managedRuntime": "10.0.12",
+    "nativeCompilerRuntime": "10.0.12",
+    "jitStandardNoRid": true,
+    "fixtureToolsImageId": "sha256:db635c52de974d28dbf674bd8a74c1b8222ad13cb1cbf87d632d924678ac253d",
+    "providerToolsImageId": "sha256:db635c52de974d28dbf674bd8a74c1b8222ad13cb1cbf87d632d924678ac253d",
+    "fixtureSource": "45d99bcd1ed1c52b4acaa728e27f9b3704155dcd",
+    "nativePerRoleOsAndUserMatched": true
+  },
+  "samples": [
+    {
+      "group": 0,
+      "discarded": true,
+      "variant": "native-control",
+      "runtime": "native",
+      "source": "234670caf30fd87452282d1a817cec452f594844",
+      "imageId": "sha256:6a47b6fcf8eb7d7543a93cb5977d8d59ee7e13c76973daf443bc049ece674b06",
+      "imageSizeBytes": 229562966,
+      "containerUser": "1654",
+      "readinessWrapperMilliseconds": 876.2157,
+      "readinessMemory": {
+        "MemUsage": "85.09MiB / 46.93GiB",
+        "MemPerc": "0.18%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "160.9MiB / 46.93GiB",
+        "MemPerc": "0.33%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g0-native-control-json.report.json",
+          "rawReportSha256": "0a050feb7f3f9448b15c43b47389d163de12eb05480d8667c9096541c094039b",
+          "throughputPerSecond": 171.65093491569863,
+          "p50Milliseconds": 45.546603,
+          "p95Milliseconds": 58.287358,
+          "p99Milliseconds": 68.304868
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g0-native-control-sse.report.json",
+          "rawReportSha256": "1e70ec60a08683a7406e463bc2d62ffd441c51b77ecfa40b96dcceb0008338ae",
+          "throughputPerSecond": 125.92438890216272,
+          "p50Milliseconds": 62.912507,
+          "p95Milliseconds": 73.994174,
+          "p99Milliseconds": 83.394275
+        }
+      ]
+    },
+    {
+      "group": 0,
+      "discarded": true,
+      "variant": "native-candidate",
+      "runtime": "native",
+      "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+      "imageId": "sha256:592ac2341da5fe8362ce0f0e249a89b2fcee9c72c0dae0d564c95b6a69289b10",
+      "imageSizeBytes": 229677315,
+      "containerUser": "1654",
+      "readinessWrapperMilliseconds": 789.5775,
+      "readinessMemory": {
+        "MemUsage": "84.97MiB / 46.93GiB",
+        "MemPerc": "0.18%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "187.4MiB / 46.93GiB",
+        "MemPerc": "0.39%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g0-native-candidate-json.report.json",
+          "rawReportSha256": "db8f20280fe65619942af23864426f343bc4bfda7ce1412d019294fb9289841e",
+          "throughputPerSecond": 180.73917224603971,
+          "p50Milliseconds": 43.264546,
+          "p95Milliseconds": 55.903728,
+          "p99Milliseconds": 64.443489
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g0-native-candidate-sse.report.json",
+          "rawReportSha256": "2dc0dbab54dc8ce08109dbe1e08e4f6c82115993dffaee1c0274be639811db9a",
+          "throughputPerSecond": 127.6272304693166,
+          "p50Milliseconds": 61.945921,
+          "p95Milliseconds": 71.086905,
+          "p99Milliseconds": 75.725075
+        }
+      ]
+    },
+    {
+      "group": 0,
+      "discarded": true,
+      "variant": "jit-reference",
+      "runtime": "jit",
+      "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+      "imageId": "sha256:076135663fd628fe1f78587db4201cdffe39bd539acb5c7a18790a22e4704707",
+      "imageSizeBytes": 489514469,
+      "containerUser": "1000",
+      "readinessWrapperMilliseconds": 2862.5239,
+      "readinessMemory": {
+        "MemUsage": "125.1MiB / 46.93GiB",
+        "MemPerc": "0.26%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "267.5MiB / 46.93GiB",
+        "MemPerc": "0.56%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g0-jit-reference-json.report.json",
+          "rawReportSha256": "36e103a2bbfee8e03baba7c3cbc6271ae430df23158f55d6c03ca75c72c1705e",
+          "throughputPerSecond": 265.121840586108,
+          "p50Milliseconds": 28.17798,
+          "p95Milliseconds": 42.110229,
+          "p99Milliseconds": 58.120665
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g0-jit-reference-sse.report.json",
+          "rawReportSha256": "93ff0b9c5e61f177ef71a963194c4e5d04ab47110e5dc130807b3a05cbfb6b36",
+          "throughputPerSecond": 156.42927528209557,
+          "p50Milliseconds": 49.888455,
+          "p95Milliseconds": 59.217583,
+          "p99Milliseconds": 78.510824
+        }
+      ]
+    },
+    {
+      "group": 1,
+      "discarded": false,
+      "variant": "jit-reference",
+      "runtime": "jit",
+      "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+      "imageId": "sha256:076135663fd628fe1f78587db4201cdffe39bd539acb5c7a18790a22e4704707",
+      "imageSizeBytes": 489514469,
+      "containerUser": "1000",
+      "readinessWrapperMilliseconds": 2768.0909,
+      "readinessMemory": {
+        "MemUsage": "128.4MiB / 46.93GiB",
+        "MemPerc": "0.27%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "272.7MiB / 46.93GiB",
+        "MemPerc": "0.57%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g1-jit-reference-json.report.json",
+          "rawReportSha256": "d87f381206c13684cef841c90c9636f1d0d656f1e259acfbc84998b47becf3f3",
+          "throughputPerSecond": 297.4171049454695,
+          "p50Milliseconds": 25.865877,
+          "p95Milliseconds": 32.895872,
+          "p99Milliseconds": 44.385752
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g1-jit-reference-sse.report.json",
+          "rawReportSha256": "edf2ecd2ed318263646dc25ccb56e104d1bb0ea869c03315c8b40fb57efaa07a",
+          "throughputPerSecond": 160.0689910156797,
+          "p50Milliseconds": 48.774262,
+          "p95Milliseconds": 56.347842,
+          "p99Milliseconds": 74.607514
+        }
+      ]
+    },
+    {
+      "group": 1,
+      "discarded": false,
+      "variant": "native-candidate",
+      "runtime": "native",
+      "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+      "imageId": "sha256:592ac2341da5fe8362ce0f0e249a89b2fcee9c72c0dae0d564c95b6a69289b10",
+      "imageSizeBytes": 229677315,
+      "containerUser": "1654",
+      "readinessWrapperMilliseconds": 738.4277,
+      "readinessMemory": {
+        "MemUsage": "85.64MiB / 46.93GiB",
+        "MemPerc": "0.18%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "181.1MiB / 46.93GiB",
+        "MemPerc": "0.38%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g1-native-candidate-json.report.json",
+          "rawReportSha256": "3dff45a661401c3207ec697fdd6b8069406457c00712c8c2c69108c6cb7c64c6",
+          "throughputPerSecond": 192.1476665577766,
+          "p50Milliseconds": 40.852204,
+          "p95Milliseconds": 54.473507,
+          "p99Milliseconds": 62.989487
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g1-native-candidate-sse.report.json",
+          "rawReportSha256": "50375484e7f520825ab4a5649eece81eef4908a2c28f43cba072b3ec4430c661",
+          "throughputPerSecond": 129.57434529549437,
+          "p50Milliseconds": 60.767325,
+          "p95Milliseconds": 73.193952,
+          "p99Milliseconds": 78.601998
+        }
+      ]
+    },
+    {
+      "group": 1,
+      "discarded": false,
+      "variant": "native-control",
+      "runtime": "native",
+      "source": "234670caf30fd87452282d1a817cec452f594844",
+      "imageId": "sha256:6a47b6fcf8eb7d7543a93cb5977d8d59ee7e13c76973daf443bc049ece674b06",
+      "imageSizeBytes": 229562966,
+      "containerUser": "1654",
+      "readinessWrapperMilliseconds": 713.2211,
+      "readinessMemory": {
+        "MemUsage": "84.57MiB / 46.93GiB",
+        "MemPerc": "0.18%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "184MiB / 46.93GiB",
+        "MemPerc": "0.38%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g1-native-control-json.report.json",
+          "rawReportSha256": "3351380c630bb54c33564c819007fb7078899923e5b1a3e337d03fe0af52b418",
+          "throughputPerSecond": 180.32931089570255,
+          "p50Milliseconds": 43.61159,
+          "p95Milliseconds": 55.521032,
+          "p99Milliseconds": 64.823306
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g1-native-control-sse.report.json",
+          "rawReportSha256": "67dced828b275f3862311e9ee97a104b9c8a2662a99a6073562b3eae62d9b25e",
+          "throughputPerSecond": 123.23262389503006,
+          "p50Milliseconds": 63.007564,
+          "p95Milliseconds": 75.510706,
+          "p99Milliseconds": 136.862185
+        }
+      ]
+    },
+    {
+      "group": 2,
+      "discarded": false,
+      "variant": "native-candidate",
+      "runtime": "native",
+      "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+      "imageId": "sha256:592ac2341da5fe8362ce0f0e249a89b2fcee9c72c0dae0d564c95b6a69289b10",
+      "imageSizeBytes": 229677315,
+      "containerUser": "1654",
+      "readinessWrapperMilliseconds": 744.9557,
+      "readinessMemory": {
+        "MemUsage": "85.86MiB / 46.93GiB",
+        "MemPerc": "0.18%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "169.5MiB / 46.93GiB",
+        "MemPerc": "0.35%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g2-native-candidate-json.report.json",
+          "rawReportSha256": "abeeb564e00e6d54f4a2051cc72b550b2e33bbfd72b76ebd3eb261d7a8dea38b",
+          "throughputPerSecond": 185.38542547614344,
+          "p50Milliseconds": 42.159444,
+          "p95Milliseconds": 55.062802,
+          "p99Milliseconds": 63.954169
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g2-native-candidate-sse.report.json",
+          "rawReportSha256": "9c10b73593651dfd786dcf4ab98f1b798687ea3f26f19f9b859e099dc4d0502e",
+          "throughputPerSecond": 128.38832188041027,
+          "p50Milliseconds": 60.71304,
+          "p95Milliseconds": 72.983236,
+          "p99Milliseconds": 83.2948
+        }
+      ]
+    },
+    {
+      "group": 2,
+      "discarded": false,
+      "variant": "native-control",
+      "runtime": "native",
+      "source": "234670caf30fd87452282d1a817cec452f594844",
+      "imageId": "sha256:6a47b6fcf8eb7d7543a93cb5977d8d59ee7e13c76973daf443bc049ece674b06",
+      "imageSizeBytes": 229562966,
+      "containerUser": "1654",
+      "readinessWrapperMilliseconds": 645.2912,
+      "readinessMemory": {
+        "MemUsage": "84.14MiB / 46.93GiB",
+        "MemPerc": "0.18%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "193.8MiB / 46.93GiB",
+        "MemPerc": "0.40%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g2-native-control-json.report.json",
+          "rawReportSha256": "fcf5f4458a661f24bbc5b65af56cef8a5421d3e79337d4c34315e1bcefde5c71",
+          "throughputPerSecond": 243.05127937210912,
+          "p50Milliseconds": 32.512025,
+          "p95Milliseconds": 39.904279,
+          "p99Milliseconds": 44.733785
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g2-native-control-sse.report.json",
+          "rawReportSha256": "263e5d420cdd60928d91f88e5fa8c80e9a2b877d7d6643dc2459aa9c79270b00",
+          "throughputPerSecond": 151.67275329425635,
+          "p50Milliseconds": 52.886918,
+          "p95Milliseconds": 60.507248,
+          "p99Milliseconds": 63.182663
+        }
+      ]
+    },
+    {
+      "group": 2,
+      "discarded": false,
+      "variant": "jit-reference",
+      "runtime": "jit",
+      "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+      "imageId": "sha256:076135663fd628fe1f78587db4201cdffe39bd539acb5c7a18790a22e4704707",
+      "imageSizeBytes": 489514469,
+      "containerUser": "1000",
+      "readinessWrapperMilliseconds": 2331.2651,
+      "readinessMemory": {
+        "MemUsage": "124.4MiB / 46.93GiB",
+        "MemPerc": "0.26%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "263.7MiB / 46.93GiB",
+        "MemPerc": "0.55%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g2-jit-reference-json.report.json",
+          "rawReportSha256": "2f063ad3aa67ba941f761cbe80e716945f507b42c7d56e91fc1075d92fc31916",
+          "throughputPerSecond": 329.6297019039939,
+          "p50Milliseconds": 22.653811,
+          "p95Milliseconds": 32.871689,
+          "p99Milliseconds": 52.898801
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g2-jit-reference-sse.report.json",
+          "rawReportSha256": "4bed14d8a2dd40a41f241a402d82b60d3ceba6d6e7804746eb2a2b9e445acacf",
+          "throughputPerSecond": 152.25238524676823,
+          "p50Milliseconds": 50.700933,
+          "p95Milliseconds": 61.831535,
+          "p99Milliseconds": 91.505914
+        }
+      ]
+    },
+    {
+      "group": 3,
+      "discarded": false,
+      "variant": "jit-reference",
+      "runtime": "jit",
+      "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+      "imageId": "sha256:076135663fd628fe1f78587db4201cdffe39bd539acb5c7a18790a22e4704707",
+      "imageSizeBytes": 489514469,
+      "containerUser": "1000",
+      "readinessWrapperMilliseconds": 2851.2154,
+      "readinessMemory": {
+        "MemUsage": "125.7MiB / 46.93GiB",
+        "MemPerc": "0.26%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "268.5MiB / 46.93GiB",
+        "MemPerc": "0.56%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g3-jit-reference-json.report.json",
+          "rawReportSha256": "4319adb61961c2044ccb5dfacc7b1d8093439a058bc78506be015088efcdd237",
+          "throughputPerSecond": 329.49571866442994,
+          "p50Milliseconds": 23.047885,
+          "p95Milliseconds": 29.750055,
+          "p99Milliseconds": 44.276535
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g3-jit-reference-sse.report.json",
+          "rawReportSha256": "4a88b66d3b584ffcb27805b0dd3c6a3c9fff725358797cac00efce6f78cbf808",
+          "throughputPerSecond": 164.24201112897296,
+          "p50Milliseconds": 47.634276,
+          "p95Milliseconds": 58.618139,
+          "p99Milliseconds": 74.108335
+        }
+      ]
+    },
+    {
+      "group": 3,
+      "discarded": false,
+      "variant": "native-control",
+      "runtime": "native",
+      "source": "234670caf30fd87452282d1a817cec452f594844",
+      "imageId": "sha256:6a47b6fcf8eb7d7543a93cb5977d8d59ee7e13c76973daf443bc049ece674b06",
+      "imageSizeBytes": 229562966,
+      "containerUser": "1654",
+      "readinessWrapperMilliseconds": 608.7527,
+      "readinessMemory": {
+        "MemUsage": "84.33MiB / 46.93GiB",
+        "MemPerc": "0.18%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "161.3MiB / 46.93GiB",
+        "MemPerc": "0.34%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g3-native-control-json.report.json",
+          "rawReportSha256": "9305cf78a069b99e990e53228e5c1d018cea77b5ffceec7636bd5969d5f06abf",
+          "throughputPerSecond": 250.42635086234316,
+          "p50Milliseconds": 31.549174,
+          "p95Milliseconds": 38.692803,
+          "p99Milliseconds": 43.553757
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g3-native-control-sse.report.json",
+          "rawReportSha256": "6dbe964e62f0f42a81cadc705d87c43042a7b4f1e6b00f1bca79829563832de1",
+          "throughputPerSecond": 154.79156116654326,
+          "p50Milliseconds": 51.536198,
+          "p95Milliseconds": 59.592625,
+          "p99Milliseconds": 64.851191
+        }
+      ]
+    },
+    {
+      "group": 3,
+      "discarded": false,
+      "variant": "native-candidate",
+      "runtime": "native",
+      "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+      "imageId": "sha256:592ac2341da5fe8362ce0f0e249a89b2fcee9c72c0dae0d564c95b6a69289b10",
+      "imageSizeBytes": 229677315,
+      "containerUser": "1654",
+      "readinessWrapperMilliseconds": 648.6233,
+      "readinessMemory": {
+        "MemUsage": "85.48MiB / 46.93GiB",
+        "MemPerc": "0.18%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "183.6MiB / 46.93GiB",
+        "MemPerc": "0.38%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g3-native-candidate-json.report.json",
+          "rawReportSha256": "b4cb243bb84f315e3577bf44a15d87b6d16d1c2986f8c3673c861908d7236e6c",
+          "throughputPerSecond": 249.19799984714194,
+          "p50Milliseconds": 31.726379,
+          "p95Milliseconds": 38.720042,
+          "p99Milliseconds": 44.953706
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g3-native-candidate-sse.report.json",
+          "rawReportSha256": "6a855949685df5c07fae56753bcf54b72dca24ad08dc49d3c74cce40ecd3e3e4",
+          "throughputPerSecond": 156.2561403780164,
+          "p50Milliseconds": 50.866708,
+          "p95Milliseconds": 59.900139,
+          "p99Milliseconds": 67.886788
+        }
+      ]
+    },
+    {
+      "group": 4,
+      "discarded": false,
+      "variant": "native-control",
+      "runtime": "native",
+      "source": "234670caf30fd87452282d1a817cec452f594844",
+      "imageId": "sha256:6a47b6fcf8eb7d7543a93cb5977d8d59ee7e13c76973daf443bc049ece674b06",
+      "imageSizeBytes": 229562966,
+      "containerUser": "1654",
+      "readinessWrapperMilliseconds": 620.4324,
+      "readinessMemory": {
+        "MemUsage": "84.93MiB / 46.93GiB",
+        "MemPerc": "0.18%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "160.7MiB / 46.93GiB",
+        "MemPerc": "0.33%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g4-native-control-json.report.json",
+          "rawReportSha256": "5be7a1029d41005b898861942a625e26b189a06d7836251d84ea9e6cb147eb75",
+          "throughputPerSecond": 230.33692026270202,
+          "p50Milliseconds": 34.215926,
+          "p95Milliseconds": 43.67087,
+          "p99Milliseconds": 49.652524
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g4-native-control-sse.report.json",
+          "rawReportSha256": "07b9a6704175aad4d76886444616029a54137770bd3ed4e6df0922d8890b99ee",
+          "throughputPerSecond": 151.61126386788231,
+          "p50Milliseconds": 52.579374,
+          "p95Milliseconds": 60.017268,
+          "p99Milliseconds": 65.404874
+        }
+      ]
+    },
+    {
+      "group": 4,
+      "discarded": false,
+      "variant": "jit-reference",
+      "runtime": "jit",
+      "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+      "imageId": "sha256:076135663fd628fe1f78587db4201cdffe39bd539acb5c7a18790a22e4704707",
+      "imageSizeBytes": 489514469,
+      "containerUser": "1000",
+      "readinessWrapperMilliseconds": 2325.2514,
+      "readinessMemory": {
+        "MemUsage": "127.1MiB / 46.93GiB",
+        "MemPerc": "0.26%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "261.2MiB / 46.93GiB",
+        "MemPerc": "0.54%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g4-jit-reference-json.report.json",
+          "rawReportSha256": "4f935984a35d3c56e1aa255e7c3176470dc615527d4ace34b86d1e26e08afc70",
+          "throughputPerSecond": 305.9983198244255,
+          "p50Milliseconds": 25.1751,
+          "p95Milliseconds": 34.023188,
+          "p99Milliseconds": 46.989427
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g4-jit-reference-sse.report.json",
+          "rawReportSha256": "a4957bc1beae9541046144e58cfc5ee92559dddd3265ba5786fb266b35247191",
+          "throughputPerSecond": 172.22698621202417,
+          "p50Milliseconds": 44.979347,
+          "p95Milliseconds": 54.226261,
+          "p99Milliseconds": 62.601314
+        }
+      ]
+    },
+    {
+      "group": 4,
+      "discarded": false,
+      "variant": "native-candidate",
+      "runtime": "native",
+      "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+      "imageId": "sha256:592ac2341da5fe8362ce0f0e249a89b2fcee9c72c0dae0d564c95b6a69289b10",
+      "imageSizeBytes": 229677315,
+      "containerUser": "1654",
+      "readinessWrapperMilliseconds": 631.0526,
+      "readinessMemory": {
+        "MemUsage": "85.2MiB / 46.93GiB",
+        "MemPerc": "0.18%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "185.9MiB / 46.93GiB",
+        "MemPerc": "0.39%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g4-native-candidate-json.report.json",
+          "rawReportSha256": "9af75ea3aa4247142fd3defd1877ce2093d3d0e3c5b012de93c59ff4c5bab609",
+          "throughputPerSecond": 267.25106278398266,
+          "p50Milliseconds": 29.310412,
+          "p95Milliseconds": 37.048605,
+          "p99Milliseconds": 43.145572
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g4-native-candidate-sse.report.json",
+          "rawReportSha256": "0cd431481832a41c13a7c33c67e2caf42735e519d8a2ddd7c605685192db7fb4",
+          "throughputPerSecond": 149.43413849493194,
+          "p50Milliseconds": 53.318783,
+          "p95Milliseconds": 61.943688,
+          "p99Milliseconds": 67.872641
+        }
+      ]
+    },
+    {
+      "group": 5,
+      "discarded": false,
+      "variant": "native-candidate",
+      "runtime": "native",
+      "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+      "imageId": "sha256:592ac2341da5fe8362ce0f0e249a89b2fcee9c72c0dae0d564c95b6a69289b10",
+      "imageSizeBytes": 229677315,
+      "containerUser": "1654",
+      "readinessWrapperMilliseconds": 617.1395,
+      "readinessMemory": {
+        "MemUsage": "85.59MiB / 46.93GiB",
+        "MemPerc": "0.18%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "191MiB / 46.93GiB",
+        "MemPerc": "0.40%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g5-native-candidate-json.report.json",
+          "rawReportSha256": "8fbaa1d5eec004023f7565b73d358d43bb37a287a45fc2a7cde93a3ab02c7101",
+          "throughputPerSecond": 263.584325620689,
+          "p50Milliseconds": 29.744334,
+          "p95Milliseconds": 38.343192,
+          "p99Milliseconds": 44.55193
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g5-native-candidate-sse.report.json",
+          "rawReportSha256": "346a4992c1b80b9b9ee0703551bdcc0a73b5d9aeb35adeb13e1ba5980b81366a",
+          "throughputPerSecond": 162.8371839035118,
+          "p50Milliseconds": 48.728552,
+          "p95Milliseconds": 56.762186,
+          "p99Milliseconds": 59.823512
+        }
+      ]
+    },
+    {
+      "group": 5,
+      "discarded": false,
+      "variant": "jit-reference",
+      "runtime": "jit",
+      "source": "ddbd0180f387c609db0291c613c8ed74dca362b0",
+      "imageId": "sha256:076135663fd628fe1f78587db4201cdffe39bd539acb5c7a18790a22e4704707",
+      "imageSizeBytes": 489514469,
+      "containerUser": "1000",
+      "readinessWrapperMilliseconds": 1984.5678,
+      "readinessMemory": {
+        "MemUsage": "124.5MiB / 46.93GiB",
+        "MemPerc": "0.26%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "269.2MiB / 46.93GiB",
+        "MemPerc": "0.56%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g5-jit-reference-json.report.json",
+          "rawReportSha256": "92c954d6b7c422bb943e18e86cc14d17d3f5474cd3d4af1a10a03bb5a3a8ae69",
+          "throughputPerSecond": 336.00996632440916,
+          "p50Milliseconds": 22.660101,
+          "p95Milliseconds": 29.49252,
+          "p99Milliseconds": 47.217675
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g5-jit-reference-sse.report.json",
+          "rawReportSha256": "240ff099ca66de7daa63fc57e8e04ffb610a490ae5ec639da41a9bd7023f91bd",
+          "throughputPerSecond": 176.1213975204714,
+          "p50Milliseconds": 44.547764,
+          "p95Milliseconds": 51.861416,
+          "p99Milliseconds": 56.402544
+        }
+      ]
+    },
+    {
+      "group": 5,
+      "discarded": false,
+      "variant": "native-control",
+      "runtime": "native",
+      "source": "234670caf30fd87452282d1a817cec452f594844",
+      "imageId": "sha256:6a47b6fcf8eb7d7543a93cb5977d8d59ee7e13c76973daf443bc049ece674b06",
+      "imageSizeBytes": 229562966,
+      "containerUser": "1654",
+      "readinessWrapperMilliseconds": 622.2875,
+      "readinessMemory": {
+        "MemUsage": "84.66MiB / 46.93GiB",
+        "MemPerc": "0.18%"
+      },
+      "afterWorkloadsMemory": {
+        "MemUsage": "183.8MiB / 46.93GiB",
+        "MemPerc": "0.38%"
+      },
+      "workloads": [
+        {
+          "configuration": "json",
+          "id": "gateway-chat-nonstream",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "7e02ff15915c80acbd402c6fe39963ec2b4bb5593d1b37b255829a0207295a25",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g5-native-control-json.report.json",
+          "rawReportSha256": "844e470c175efb9615dc6d0aa8d3bda05d6117fa53f5450bd2cb86fd1ad4db7f",
+          "throughputPerSecond": 244.82021627417907,
+          "p50Milliseconds": 32.133051,
+          "p95Milliseconds": 39.882063,
+          "p99Milliseconds": 44.694469
+        },
+        {
+          "configuration": "sse",
+          "id": "gateway-chat-sse",
+          "path": "/v1/chat/completions",
+          "inputFingerprint": "8a31c66deec22811e4483d3b0be163939671820ed51f1614e05498b07fa71c2e",
+          "warmupRequests": 100,
+          "measuredRequests": 1000,
+          "completed": 1000,
+          "failures": 0,
+          "concurrency": 8,
+          "timeoutSeconds": 30,
+          "rawReportFile": "g5-native-control-sse.report.json",
+          "rawReportSha256": "0403599d86be7257206a5b3d39dab254bcdf9640424c0938ee6741c8bb99ae6d",
+          "throughputPerSecond": 158.20065861465392,
+          "p50Milliseconds": 50.572333,
+          "p95Milliseconds": 58.450428,
+          "p99Milliseconds": 63.406127
+        }
+      ]
+    }
+  ],
+  "recordedSummaries": {
+    "json": {
+      "native-control": {
+        "throughputPerSecond": {
+          "values": [
+            180.32931089570255,
+            243.05127937210912,
+            250.42635086234316,
+            230.33692026270202,
+            244.82021627417907
+          ],
+          "median": 243.05127937210912,
+          "minimum": 180.32931089570255,
+          "maximum": 250.42635086234316
+        },
+        "p50Milliseconds": {
+          "values": [
+            43.61159,
+            32.512025,
+            31.549174,
+            34.215926,
+            32.133051
+          ],
+          "median": 32.512025,
+          "minimum": 31.549174,
+          "maximum": 43.61159
+        },
+        "p95Milliseconds": {
+          "values": [
+            55.521032,
+            39.904279,
+            38.692803,
+            43.67087,
+            39.882063
+          ],
+          "median": 39.904279,
+          "minimum": 38.692803,
+          "maximum": 55.521032
+        },
+        "p99Milliseconds": {
+          "values": [
+            64.823306,
+            44.733785,
+            43.553757,
+            49.652524,
+            44.694469
+          ],
+          "median": 44.733785,
+          "minimum": 43.553757,
+          "maximum": 64.823306
+        }
+      },
+      "native-candidate": {
+        "throughputPerSecond": {
+          "values": [
+            192.1476665577766,
+            185.38542547614344,
+            249.19799984714194,
+            267.25106278398266,
+            263.584325620689
+          ],
+          "median": 249.19799984714194,
+          "minimum": 185.38542547614344,
+          "maximum": 267.25106278398266
+        },
+        "p50Milliseconds": {
+          "values": [
+            40.852204,
+            42.159444,
+            31.726379,
+            29.310412,
+            29.744334
+          ],
+          "median": 31.726379,
+          "minimum": 29.310412,
+          "maximum": 42.159444
+        },
+        "p95Milliseconds": {
+          "values": [
+            54.473507,
+            55.062802,
+            38.720042,
+            37.048605,
+            38.343192
+          ],
+          "median": 38.720042,
+          "minimum": 37.048605,
+          "maximum": 55.062802
+        },
+        "p99Milliseconds": {
+          "values": [
+            62.989487,
+            63.954169,
+            44.953706,
+            43.145572,
+            44.55193
+          ],
+          "median": 44.953706,
+          "minimum": 43.145572,
+          "maximum": 63.954169
+        }
+      },
+      "jit-reference": {
+        "throughputPerSecond": {
+          "values": [
+            297.4171049454695,
+            329.6297019039939,
+            329.49571866442994,
+            305.9983198244255,
+            336.00996632440916
+          ],
+          "median": 329.49571866442994,
+          "minimum": 297.4171049454695,
+          "maximum": 336.00996632440916
+        },
+        "p50Milliseconds": {
+          "values": [
+            25.865877,
+            22.653811,
+            23.047885,
+            25.1751,
+            22.660101
+          ],
+          "median": 23.047885,
+          "minimum": 22.653811,
+          "maximum": 25.865877
+        },
+        "p95Milliseconds": {
+          "values": [
+            32.895872,
+            32.871689,
+            29.750055,
+            34.023188,
+            29.49252
+          ],
+          "median": 32.871689,
+          "minimum": 29.49252,
+          "maximum": 34.023188
+        },
+        "p99Milliseconds": {
+          "values": [
+            44.385752,
+            52.898801,
+            44.276535,
+            46.989427,
+            47.217675
+          ],
+          "median": 46.989427,
+          "minimum": 44.276535,
+          "maximum": 52.898801
+        }
+      }
+    },
+    "sse": {
+      "native-control": {
+        "throughputPerSecond": {
+          "values": [
+            123.23262389503006,
+            151.67275329425635,
+            154.79156116654326,
+            151.61126386788231,
+            158.20065861465392
+          ],
+          "median": 151.67275329425635,
+          "minimum": 123.23262389503006,
+          "maximum": 158.20065861465392
+        },
+        "p50Milliseconds": {
+          "values": [
+            63.007564,
+            52.886918,
+            51.536198,
+            52.579374,
+            50.572333
+          ],
+          "median": 52.579374,
+          "minimum": 50.572333,
+          "maximum": 63.007564
+        },
+        "p95Milliseconds": {
+          "values": [
+            75.510706,
+            60.507248,
+            59.592625,
+            60.017268,
+            58.450428
+          ],
+          "median": 60.017268,
+          "minimum": 58.450428,
+          "maximum": 75.510706
+        },
+        "p99Milliseconds": {
+          "values": [
+            136.862185,
+            63.182663,
+            64.851191,
+            65.404874,
+            63.406127
+          ],
+          "median": 64.851191,
+          "minimum": 63.182663,
+          "maximum": 136.862185
+        }
+      },
+      "native-candidate": {
+        "throughputPerSecond": {
+          "values": [
+            129.57434529549437,
+            128.38832188041027,
+            156.2561403780164,
+            149.43413849493194,
+            162.8371839035118
+          ],
+          "median": 149.43413849493194,
+          "minimum": 128.38832188041027,
+          "maximum": 162.8371839035118
+        },
+        "p50Milliseconds": {
+          "values": [
+            60.767325,
+            60.71304,
+            50.866708,
+            53.318783,
+            48.728552
+          ],
+          "median": 53.318783,
+          "minimum": 48.728552,
+          "maximum": 60.767325
+        },
+        "p95Milliseconds": {
+          "values": [
+            73.193952,
+            72.983236,
+            59.900139,
+            61.943688,
+            56.762186
+          ],
+          "median": 61.943688,
+          "minimum": 56.762186,
+          "maximum": 73.193952
+        },
+        "p99Milliseconds": {
+          "values": [
+            78.601998,
+            83.2948,
+            67.886788,
+            67.872641,
+            59.823512
+          ],
+          "median": 67.886788,
+          "minimum": 59.823512,
+          "maximum": 83.2948
+        }
+      },
+      "jit-reference": {
+        "throughputPerSecond": {
+          "values": [
+            160.0689910156797,
+            152.25238524676823,
+            164.24201112897296,
+            172.22698621202417,
+            176.1213975204714
+          ],
+          "median": 164.24201112897296,
+          "minimum": 152.25238524676823,
+          "maximum": 176.1213975204714
+        },
+        "p50Milliseconds": {
+          "values": [
+            48.774262,
+            50.700933,
+            47.634276,
+            44.979347,
+            44.547764
+          ],
+          "median": 47.634276,
+          "minimum": 44.547764,
+          "maximum": 50.700933
+        },
+        "p95Milliseconds": {
+          "values": [
+            56.347842,
+            61.831535,
+            58.618139,
+            54.226261,
+            51.861416
+          ],
+          "median": 56.347842,
+          "minimum": 51.861416,
+          "maximum": 61.831535
+        },
+        "p99Milliseconds": {
+          "values": [
+            74.607514,
+            91.505914,
+            74.108335,
+            62.601314,
+            56.402544
+          ],
+          "median": 74.108335,
+          "minimum": 56.402544,
+          "maximum": 91.505914
+        }
+      }
+    }
+  },
+  "contrasts": {
+    "json": {
+      "nativeBeforeToAfter": {
+        "perGroup": [
+          {
+            "group": 1,
+            "denominatorVariant": "native-control",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 180.32931089570255,
+                "numerator": 192.1476665577766,
+                "changePercent": 6.553763003569313
+              },
+              "p50Milliseconds": {
+                "denominator": 43.61159,
+                "numerator": 40.852204,
+                "changePercent": -6.327185044159133
+              },
+              "p95Milliseconds": {
+                "denominator": 55.521032,
+                "numerator": 54.473507,
+                "changePercent": -1.8867174515055818
+              },
+              "p99Milliseconds": {
+                "denominator": 64.823306,
+                "numerator": 62.989487,
+                "changePercent": -2.828950130991481
+              }
+            }
+          },
+          {
+            "group": 2,
+            "denominatorVariant": "native-control",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 243.05127937210912,
+                "numerator": 185.38542547614344,
+                "changePercent": -23.725797307028294
+              },
+              "p50Milliseconds": {
+                "denominator": 32.512025,
+                "numerator": 42.159444,
+                "changePercent": 29.673387000655914
+              },
+              "p95Milliseconds": {
+                "denominator": 39.904279,
+                "numerator": 55.062802,
+                "changePercent": 37.98721184763168
+              },
+              "p99Milliseconds": {
+                "denominator": 44.733785,
+                "numerator": 63.954169,
+                "changePercent": 42.96614739843723
+              }
+            }
+          },
+          {
+            "group": 3,
+            "denominatorVariant": "native-control",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 250.42635086234316,
+                "numerator": 249.19799984714194,
+                "changePercent": -0.4905038990391297
+              },
+              "p50Milliseconds": {
+                "denominator": 31.549174,
+                "numerator": 31.726379,
+                "changePercent": 0.5616787304796089
+              },
+              "p95Milliseconds": {
+                "denominator": 38.692803,
+                "numerator": 38.720042,
+                "changePercent": 0.07039810478450814
+              },
+              "p99Milliseconds": {
+                "denominator": 43.553757,
+                "numerator": 44.953706,
+                "changePercent": 3.2143013517754504
+              }
+            }
+          },
+          {
+            "group": 4,
+            "denominatorVariant": "native-control",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 230.33692026270202,
+                "numerator": 267.25106278398266,
+                "changePercent": 16.026150944095118
+              },
+              "p50Milliseconds": {
+                "denominator": 34.215926,
+                "numerator": 29.310412,
+                "changePercent": -14.336931872017733
+              },
+              "p95Milliseconds": {
+                "denominator": 43.67087,
+                "numerator": 37.048605,
+                "changePercent": -15.164032683571449
+              },
+              "p99Milliseconds": {
+                "denominator": 49.652524,
+                "numerator": 43.145572,
+                "changePercent": -13.104977301858812
+              }
+            }
+          },
+          {
+            "group": 5,
+            "denominatorVariant": "native-control",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 244.82021627417907,
+                "numerator": 263.584325620689,
+                "changePercent": 7.664444396003489
+              },
+              "p50Milliseconds": {
+                "denominator": 32.133051,
+                "numerator": 29.744334,
+                "changePercent": -7.433831913440159
+              },
+              "p95Milliseconds": {
+                "denominator": 39.882063,
+                "numerator": 38.343192,
+                "changePercent": -3.858554157541949
+              },
+              "p99Milliseconds": {
+                "denominator": 44.694469,
+                "numerator": 44.55193,
+                "changePercent": -0.31891865635543803
+              }
+            }
+          }
+        ],
+        "changePercentDefinition": "100*(numerator/denominator-1); positiveRPS and negative latency favor numerator.",
+        "pairedChangePercent": {
+          "throughputPerSecond": {
+            "values": [
+              6.553763003569313,
+              -23.725797307028294,
+              -0.4905038990391297,
+              16.026150944095118,
+              7.664444396003489
+            ],
+            "median": 6.553763003569313,
+            "minimum": -23.725797307028294,
+            "maximum": 16.026150944095118
+          },
+          "p50Milliseconds": {
+            "values": [
+              -6.327185044159133,
+              29.673387000655914,
+              0.5616787304796089,
+              -14.336931872017733,
+              -7.433831913440159
+            ],
+            "median": -6.327185044159133,
+            "minimum": -14.336931872017733,
+            "maximum": 29.673387000655914
+          },
+          "p95Milliseconds": {
+            "values": [
+              -1.8867174515055818,
+              37.98721184763168,
+              0.07039810478450814,
+              -15.164032683571449,
+              -3.858554157541949
+            ],
+            "median": -1.8867174515055818,
+            "minimum": -15.164032683571449,
+            "maximum": 37.98721184763168
+          },
+          "p99Milliseconds": {
+            "values": [
+              -2.828950130991481,
+              42.96614739843723,
+              3.2143013517754504,
+              -13.104977301858812,
+              -0.31891865635543803
+            ],
+            "median": -0.31891865635543803,
+            "minimum": -13.104977301858812,
+            "maximum": 42.96614739843723
+          }
+        }
+      },
+      "candidateNativeVersusJitReference": {
+        "perGroup": [
+          {
+            "group": 1,
+            "denominatorVariant": "jit-reference",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 297.4171049454695,
+                "numerator": 192.1476665577766,
+                "changePercent": -35.39454746793857
+              },
+              "p50Milliseconds": {
+                "denominator": 25.865877,
+                "numerator": 40.852204,
+                "changePercent": 57.938599955454826
+              },
+              "p95Milliseconds": {
+                "denominator": 32.895872,
+                "numerator": 54.473507,
+                "changePercent": 65.59374683850912
+              },
+              "p99Milliseconds": {
+                "denominator": 44.385752,
+                "numerator": 62.989487,
+                "changePercent": 41.91375421554196
+              }
+            }
+          },
+          {
+            "group": 2,
+            "denominatorVariant": "jit-reference",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 329.6297019039939,
+                "numerator": 185.38542547614344,
+                "changePercent": -43.75948999579603
+              },
+              "p50Milliseconds": {
+                "denominator": 22.653811,
+                "numerator": 42.159444,
+                "changePercent": 86.10309762008697
+              },
+              "p95Milliseconds": {
+                "denominator": 32.871689,
+                "numerator": 55.062802,
+                "changePercent": 67.5082834958678
+              },
+              "p99Milliseconds": {
+                "denominator": 52.898801,
+                "numerator": 63.954169,
+                "changePercent": 20.899089943456374
+              }
+            }
+          },
+          {
+            "group": 3,
+            "denominatorVariant": "jit-reference",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 329.49571866442994,
+                "numerator": 249.19799984714194,
+                "changePercent": -24.369882298551516
+              },
+              "p50Milliseconds": {
+                "denominator": 23.047885,
+                "numerator": 31.726379,
+                "changePercent": 37.654188225947834
+              },
+              "p95Milliseconds": {
+                "denominator": 29.750055,
+                "numerator": 38.720042,
+                "changePercent": 30.15116106508038
+              },
+              "p99Milliseconds": {
+                "denominator": 44.276535,
+                "numerator": 44.953706,
+                "changePercent": 1.5294128142592678
+              }
+            }
+          },
+          {
+            "group": 4,
+            "denominatorVariant": "jit-reference",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 305.9983198244255,
+                "numerator": 267.25106278398266,
+                "changePercent": -12.66257182806595
+              },
+              "p50Milliseconds": {
+                "denominator": 25.1751,
+                "numerator": 29.310412,
+                "changePercent": 16.42619890288419
+              },
+              "p95Milliseconds": {
+                "denominator": 34.023188,
+                "numerator": 37.048605,
+                "changePercent": 8.89222079953238
+              },
+              "p99Milliseconds": {
+                "denominator": 46.989427,
+                "numerator": 43.145572,
+                "changePercent": -8.18025510291921
+              }
+            }
+          },
+          {
+            "group": 5,
+            "denominatorVariant": "jit-reference",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 336.00996632440916,
+                "numerator": 263.584325620689,
+                "changePercent": -21.55461086347511
+              },
+              "p50Milliseconds": {
+                "denominator": 22.660101,
+                "numerator": 29.744334,
+                "changePercent": 31.263024820586626
+              },
+              "p95Milliseconds": {
+                "denominator": 29.49252,
+                "numerator": 38.343192,
+                "changePercent": 30.009887252767832
+              },
+              "p99Milliseconds": {
+                "denominator": 47.217675,
+                "numerator": 44.55193,
+                "changePercent": -5.645650701776406
+              }
+            }
+          }
+        ],
+        "changePercentDefinition": "100*(numerator/denominator-1); positiveRPS and negative latency favor numerator.",
+        "pairedChangePercent": {
+          "throughputPerSecond": {
+            "values": [
+              -35.39454746793857,
+              -43.75948999579603,
+              -24.369882298551516,
+              -12.66257182806595,
+              -21.55461086347511
+            ],
+            "median": -24.369882298551516,
+            "minimum": -43.75948999579603,
+            "maximum": -12.66257182806595
+          },
+          "p50Milliseconds": {
+            "values": [
+              57.938599955454826,
+              86.10309762008697,
+              37.654188225947834,
+              16.42619890288419,
+              31.263024820586626
+            ],
+            "median": 37.654188225947834,
+            "minimum": 16.42619890288419,
+            "maximum": 86.10309762008697
+          },
+          "p95Milliseconds": {
+            "values": [
+              65.59374683850912,
+              67.5082834958678,
+              30.15116106508038,
+              8.89222079953238,
+              30.009887252767832
+            ],
+            "median": 30.15116106508038,
+            "minimum": 8.89222079953238,
+            "maximum": 67.5082834958678
+          },
+          "p99Milliseconds": {
+            "values": [
+              41.91375421554196,
+              20.899089943456374,
+              1.5294128142592678,
+              -8.18025510291921,
+              -5.645650701776406
+            ],
+            "median": 1.5294128142592678,
+            "minimum": -8.18025510291921,
+            "maximum": 41.91375421554196
+          }
+        }
+      }
+    },
+    "sse": {
+      "nativeBeforeToAfter": {
+        "perGroup": [
+          {
+            "group": 1,
+            "denominatorVariant": "native-control",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 123.23262389503006,
+                "numerator": 129.57434529549437,
+                "changePercent": 5.146138416939183
+              },
+              "p50Milliseconds": {
+                "denominator": 63.007564,
+                "numerator": 60.767325,
+                "changePercent": -3.555508033924315
+              },
+              "p95Milliseconds": {
+                "denominator": 75.510706,
+                "numerator": 73.193952,
+                "changePercent": -3.068113281843776
+              },
+              "p99Milliseconds": {
+                "denominator": 136.862185,
+                "numerator": 78.601998,
+                "changePercent": -42.568505683290105
+              }
+            }
+          },
+          {
+            "group": 2,
+            "denominatorVariant": "native-control",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 151.67275329425635,
+                "numerator": 128.38832188041027,
+                "changePercent": -15.351756270074802
+              },
+              "p50Milliseconds": {
+                "denominator": 52.886918,
+                "numerator": 60.71304,
+                "changePercent": 14.797840932988372
+              },
+              "p95Milliseconds": {
+                "denominator": 60.507248,
+                "numerator": 72.983236,
+                "changePercent": 20.618997578604148
+              },
+              "p99Milliseconds": {
+                "denominator": 63.182663,
+                "numerator": 83.2948,
+                "changePercent": 31.831733651365713
+              }
+            }
+          },
+          {
+            "group": 3,
+            "denominatorVariant": "native-control",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 154.79156116654326,
+                "numerator": 156.2561403780164,
+                "changePercent": 0.9461621812169474
+              },
+              "p50Milliseconds": {
+                "denominator": 51.536198,
+                "numerator": 50.866708,
+                "changePercent": -1.2990675020303155
+              },
+              "p95Milliseconds": {
+                "denominator": 59.592625,
+                "numerator": 59.900139,
+                "changePercent": 0.5160269412532337
+              },
+              "p99Milliseconds": {
+                "denominator": 64.851191,
+                "numerator": 67.886788,
+                "changePercent": 4.680865460127004
+              }
+            }
+          },
+          {
+            "group": 4,
+            "denominatorVariant": "native-control",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 151.61126386788231,
+                "numerator": 149.43413849493194,
+                "changePercent": -1.435991836891204
+              },
+              "p50Milliseconds": {
+                "denominator": 52.579374,
+                "numerator": 53.318783,
+                "changePercent": 1.4062719727321316
+              },
+              "p95Milliseconds": {
+                "denominator": 60.017268,
+                "numerator": 61.943688,
+                "changePercent": 3.209776226402039
+              },
+              "p99Milliseconds": {
+                "denominator": 65.404874,
+                "numerator": 67.872641,
+                "changePercent": 3.7730628454387016
+              }
+            }
+          },
+          {
+            "group": 5,
+            "denominatorVariant": "native-control",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 158.20065861465392,
+                "numerator": 162.8371839035118,
+                "changePercent": 2.9307876019350587
+              },
+              "p50Milliseconds": {
+                "denominator": 50.572333,
+                "numerator": 48.728552,
+                "changePercent": -3.645829430095704
+              },
+              "p95Milliseconds": {
+                "denominator": 58.450428,
+                "numerator": 56.762186,
+                "changePercent": -2.8883312881815004
+              },
+              "p99Milliseconds": {
+                "denominator": 63.406127,
+                "numerator": 59.823512,
+                "changePercent": -5.650266258968939
+              }
+            }
+          }
+        ],
+        "changePercentDefinition": "100*(numerator/denominator-1); positiveRPS and negative latency favor numerator.",
+        "pairedChangePercent": {
+          "throughputPerSecond": {
+            "values": [
+              5.146138416939183,
+              -15.351756270074802,
+              0.9461621812169474,
+              -1.435991836891204,
+              2.9307876019350587
+            ],
+            "median": 0.9461621812169474,
+            "minimum": -15.351756270074802,
+            "maximum": 5.146138416939183
+          },
+          "p50Milliseconds": {
+            "values": [
+              -3.555508033924315,
+              14.797840932988372,
+              -1.2990675020303155,
+              1.4062719727321316,
+              -3.645829430095704
+            ],
+            "median": -1.2990675020303155,
+            "minimum": -3.645829430095704,
+            "maximum": 14.797840932988372
+          },
+          "p95Milliseconds": {
+            "values": [
+              -3.068113281843776,
+              20.618997578604148,
+              0.5160269412532337,
+              3.209776226402039,
+              -2.8883312881815004
+            ],
+            "median": 0.5160269412532337,
+            "minimum": -3.068113281843776,
+            "maximum": 20.618997578604148
+          },
+          "p99Milliseconds": {
+            "values": [
+              -42.568505683290105,
+              31.831733651365713,
+              4.680865460127004,
+              3.7730628454387016,
+              -5.650266258968939
+            ],
+            "median": 3.7730628454387016,
+            "minimum": -42.568505683290105,
+            "maximum": 31.831733651365713
+          }
+        }
+      },
+      "candidateNativeVersusJitReference": {
+        "perGroup": [
+          {
+            "group": 1,
+            "denominatorVariant": "jit-reference",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 160.0689910156797,
+                "numerator": 129.57434529549437,
+                "changePercent": -19.050938927451732
+              },
+              "p50Milliseconds": {
+                "denominator": 48.774262,
+                "numerator": 60.767325,
+                "changePercent": 24.58891740893998
+              },
+              "p95Milliseconds": {
+                "denominator": 56.347842,
+                "numerator": 73.193952,
+                "changePercent": 29.89663739030146
+              },
+              "p99Milliseconds": {
+                "denominator": 74.607514,
+                "numerator": 78.601998,
+                "changePercent": 5.353996917790349
+              }
+            }
+          },
+          {
+            "group": 2,
+            "denominatorVariant": "jit-reference",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 152.25238524676823,
+                "numerator": 128.38832188041027,
+                "changePercent": -15.67401609352751
+              },
+              "p50Milliseconds": {
+                "denominator": 50.700933,
+                "numerator": 60.71304,
+                "changePercent": 19.747382163559003
+              },
+              "p95Milliseconds": {
+                "denominator": 61.831535,
+                "numerator": 72.983236,
+                "changePercent": 18.035620496887226
+              },
+              "p99Milliseconds": {
+                "denominator": 91.505914,
+                "numerator": 83.2948,
+                "changePercent": -8.973315101797697
+              }
+            }
+          },
+          {
+            "group": 3,
+            "denominatorVariant": "jit-reference",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 164.24201112897296,
+                "numerator": 156.2561403780164,
+                "changePercent": -4.8622582590550305
+              },
+              "p50Milliseconds": {
+                "denominator": 47.634276,
+                "numerator": 50.866708,
+                "changePercent": 6.785937084464133
+              },
+              "p95Milliseconds": {
+                "denominator": 58.618139,
+                "numerator": 59.900139,
+                "changePercent": 2.1870363369945967
+              },
+              "p99Milliseconds": {
+                "denominator": 74.108335,
+                "numerator": 67.886788,
+                "changePercent": -8.395205478574042
+              }
+            }
+          },
+          {
+            "group": 4,
+            "denominatorVariant": "jit-reference",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 172.22698621202417,
+                "numerator": 149.43413849493194,
+                "changePercent": -13.234190656412315
+              },
+              "p50Milliseconds": {
+                "denominator": 44.979347,
+                "numerator": 53.318783,
+                "changePercent": 18.540589306465492
+              },
+              "p95Milliseconds": {
+                "denominator": 54.226261,
+                "numerator": 61.943688,
+                "changePercent": 14.231899558776506
+              },
+              "p99Milliseconds": {
+                "denominator": 62.601314,
+                "numerator": 67.872641,
+                "changePercent": 8.420473410510198
+              }
+            }
+          },
+          {
+            "group": 5,
+            "denominatorVariant": "jit-reference",
+            "numeratorVariant": "native-candidate",
+            "metrics": {
+              "throughputPerSecond": {
+                "denominator": 176.1213975204714,
+                "numerator": 162.8371839035118,
+                "changePercent": -7.542646040731937
+              },
+              "p50Milliseconds": {
+                "denominator": 44.547764,
+                "numerator": 48.728552,
+                "changePercent": 9.384955886899293
+              },
+              "p95Milliseconds": {
+                "denominator": 51.861416,
+                "numerator": 56.762186,
+                "changePercent": 9.449741981591874
+              },
+              "p99Milliseconds": {
+                "denominator": 56.402544,
+                "numerator": 59.823512,
+                "changePercent": 6.065272516785769
+              }
+            }
+          }
+        ],
+        "changePercentDefinition": "100*(numerator/denominator-1); positiveRPS and negative latency favor numerator.",
+        "pairedChangePercent": {
+          "throughputPerSecond": {
+            "values": [
+              -19.050938927451732,
+              -15.67401609352751,
+              -4.8622582590550305,
+              -13.234190656412315,
+              -7.542646040731937
+            ],
+            "median": -13.234190656412315,
+            "minimum": -19.050938927451732,
+            "maximum": -4.8622582590550305
+          },
+          "p50Milliseconds": {
+            "values": [
+              24.58891740893998,
+              19.747382163559003,
+              6.785937084464133,
+              18.540589306465492,
+              9.384955886899293
+            ],
+            "median": 18.540589306465492,
+            "minimum": 6.785937084464133,
+            "maximum": 24.58891740893998
+          },
+          "p95Milliseconds": {
+            "values": [
+              29.89663739030146,
+              18.035620496887226,
+              2.1870363369945967,
+              14.231899558776506,
+              9.449741981591874
+            ],
+            "median": 14.231899558776506,
+            "minimum": 2.1870363369945967,
+            "maximum": 29.89663739030146
+          },
+          "p99Milliseconds": {
+            "values": [
+              5.353996917790349,
+              -8.973315101797697,
+              -8.395205478574042,
+              8.420473410510198,
+              6.065272516785769
+            ],
+            "median": 5.353996917790349,
+            "minimum": -8.973315101797697,
+            "maximum": 8.420473410510198
+          }
+        }
+      }
+    }
+  },
+  "objective": {
+    "declaredBeforeRecordedResultsViewed": true,
+    "definition": "Candidate Native median SSE RPS at least JIT reference and median of per-run p99 no worse; before/after changes and all five directions retained. Five groups do not establish statistical significance or reconstruct unavailable historical inputs.",
+    "candidateNativeMedianRpsAtLeastJitReference": false,
+    "candidateNativeMedianPerRunP99NoWorseThanJitReference": true,
+    "bothMedianCriteriaMet": false
+  },
+  "accounting": {
+    "expectedJson": 19801,
+    "expectedSse": 19801,
+    "operations": 39602,
+    "logs": 39602,
+    "usageAudits": 39602,
+    "auditErrors": 0,
+    "inputTokens": 396020,
+    "outputTokens": 198010,
+    "cost": "2.97015000",
+    "spent": "2.97015000",
+    "debits": "2.97015000",
+    "balance": "97.02985000",
+    "retainedMarkerFamilies": [
+      "owners",
+      "bounds",
+      "settled"
+    ],
+    "retainedMarkerCountEach": 39602,
+    "boundEach": "0.0410025",
+    "settledUnitsEach": "7500",
+    "fullThreeWayBindingValidated": true,
+    "outstandingFinancialObligations": 0,
+    "unchangedUnrelatedTables": 41,
+    "poststopDatabaseBackends": 0,
+    "finalExactReads": [
+      {
+        "file": "three-arm-final-balanced-live-1.observation.private.json",
+        "sha256": "18fb8cc820498f4399b59fd921adfc004bdba59160107e4a39223f42e29fa960",
+        "observedAt": "2026-10-18T19:35:35.655853-07:00",
+        "operations": 39602,
+        "passed": true
+      },
+      {
+        "file": "three-arm-final-balanced-live-2.observation.private.json",
+        "sha256": "027d520827f3414ce0a350ebb98ec9e63daa5d62741bcdf2a1cfba9e7e971d34",
+        "observedAt": "2026-10-18T19:36:13.056636-07:00",
+        "operations": 39602,
+        "passed": true
+      },
+      {
+        "file": "three-arm-final-balanced-live-3.observation.private.json",
+        "sha256": "b64c2073280277fb20596f764a228772e28dcf91a85860f352b64337768d8f06",
+        "observedAt": "2026-10-18T19:36:50.16715-07:00",
+        "operations": 39602,
+        "passed": true
+      },
+      {
+        "file": "three-arm-final-poststop.observation.private.json",
+        "sha256": "430f34722b79dbc0ae31d098797aaaa32955de3a2feb6570c033e3baf382babf",
+        "observedAt": "2026-10-18T19:36:58.404544-07:00",
+        "operations": 39602,
+        "passed": true
+      },
+      {
+        "file": "preservation-final.observation.private.json",
+        "sha256": "6b08b1fa7d40cfc7844a0923b3370418d9faca95b5dd030ca78b2f49a01251fc",
+        "observedAt": "2026-10-18T19:37:06.700295-07:00",
+        "operations": 39602,
+        "passed": true
+      }
+    ]
+  },
+  "closure": {
+    "status": "passed",
+    "archivesVerified": true,
+    "postgresArchiveSha256": "b9bc981c39437c46440318af6f666ada50be88df335de7350eea306dd066db2d",
+    "redisArchiveSha256": "df6efb8c78b1a1c548b7d2e7f15cca2ffc1278604fa34c08b758fb3f669c5613",
+    "allOwnedResourcesAbsent": true,
+    "receiptSha256": "2e3fcfaa12bc937c4acda89f2f8287d21162cfee8ac51b00847423fc24ec1bef",
+    "independentReviewSha256": "f5b0559bc50b3760237af066115412d3b0039487d62a9da560faf9ec79bb708f"
+  },
+  "scope": "All18 original samples retained including predeclared discarded group0. Recorded metrics are five full per-run workload observations per variant; per-run percentiles are not pooled. Wrapper cold readiness and Docker memory displays retain the plan scopes. Native before/after and candidate-vs-JIT contrasts are separate. No confidence/significance or isolated component causal claim. Current matched environment with exact45 synthetic inputs; unavailable historical private inputs are not reconstructed.",
+  "summarySourceSha256": "7888fc9caf860bcccfc04dab37a7f4f00c6a85c4b0d75a8723c4a8d61f6eac77",
+  "executionPassed": true,
+  "performanceResolutionObjectiveMet": false,
+  "statusExplanation": "All response-validation/accounting/archive/cleanup gates passed. The candidate did not meet the predeclared SSE throughput objective; correctness success is not regression resolution.",
+  "finalizerSourceSha256": "7f55442dfc880d3eb87f85c9fe220c1bd9c8664f0d8d25ac92388dbcc28eee42"
+}

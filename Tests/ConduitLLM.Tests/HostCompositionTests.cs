@@ -719,39 +719,30 @@ public sealed class HostCompositionTests
 #if CONDUIT_NATIVE_AOT
         foreach (var type in unsupportedWorkers)
         {
-            if (gateway && type == typeof(RequestLogService)) continue; // Native scalar queue is supported.
             Assert.DoesNotContain(workers, worker => worker.GetType() == type);
             // Media endpoints retain safe construction of their manual helpers.
             if (type != typeof(MediaStorageConfigurationGuard) && type != typeof(MediaCleanupService))
                 Assert.DoesNotContain(descriptors, descriptor => descriptor.ServiceType == type);
         }
         Assert.DoesNotContain(descriptors, descriptor => descriptor.ServiceType == typeof(IPricingAuditService));
-        Assert.Equal(gateway ? 2 : 0, hosted.OfType<BatchAuditQueueHostedService>().Count());
+        Assert.Empty(hosted.OfType<BatchAuditQueueHostedService>());
         Assert.Empty(workers.OfType<BatchAuditRetentionHostedService>());
         Assert.Null(auditField.GetValue(evaluator));
         if (gateway)
         {
             Assert.DoesNotContain(descriptors, descriptor => descriptor.ServiceType == typeof(IRequestLogService));
             Assert.DoesNotContain(descriptors, descriptor => descriptor.ServiceType == typeof(IFunctionCallAuditService));
-            var writer = Assert.IsType<RequestLogService>(
+            var writer = Assert.IsType<StoreBackedRequestLogRuntimeWriter>(
                 provider.GetRequiredService<IRequestLogRuntimeWriter>());
             Assert.Equal(ServiceLifetime.Singleton, Assert.Single(descriptors,
                 descriptor => descriptor.ServiceType == typeof(IRequestLogRuntimeWriter)).Lifetime);
             Assert.Same(writer, scope.ServiceProvider.GetRequiredService<IRequestLogRuntimeWriter>());
-            var store = Assert.IsType<NpgsqlRequestLogBatchRuntimeStore>(provider.GetRequiredService<IRequestLogBatchRuntimeStore>());
-            var storeField = typeof(RequestLogService).GetField("_runtimeStore",
+            var store = Assert.IsType<NpgsqlRequestLogRuntimeStore>(provider.GetRequiredService<IRequestLogRuntimeStore>());
+            var storeField = typeof(StoreBackedRequestLogRuntimeWriter).GetField("_store",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
             Assert.NotNull(storeField);
             Assert.Same(store, storeField.GetValue(writer));
-            Assert.Same(store, scope.ServiceProvider.GetRequiredService<IRequestLogBatchRuntimeStore>());
-            Assert.IsType<NpgsqlRequestLogRuntimeStore>(provider.GetRequiredService<IRequestLogRuntimeStore>());
-            Assert.Same(writer, Assert.Single(workers.OfType<RequestLogService>()));
-            var queue = Assert.Single(hosted.OfType<BatchAuditQueueHostedService>(),
-                service => ReferenceEquals(queueInnerField.GetValue(service), writer));
-            Assert.False(typeof(IDisposable).IsAssignableFrom(queue.GetType()));
-            Assert.DoesNotContain(hosted, service => ReferenceEquals(service, writer));
-            Assert.DoesNotContain(hosted.OfType<LeaderElectedServiceWrapper>(),
-                service => service.ServiceName == nameof(RequestLogService));
+            Assert.Same(store, scope.ServiceProvider.GetRequiredService<IRequestLogRuntimeStore>());
         }
         else
         {

@@ -73,13 +73,31 @@ public sealed class NpgsqlProviderRepository : IProviderRepository
         CancellationToken cancellationToken = default)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
-        var providers = await ReadProvidersAsync(
-            connection,
-            $"SELECT {ProviderPersistenceMappings.ProviderColumns} FROM \"Providers\" WHERE \"Id\" = @id",
-            command => command.Parameters.AddWithValue("id", NpgsqlDbType.Integer, id),
-            cancellationToken);
-        await LoadCredentialsAsync(connection, providers, cancellationToken);
-        return providers.Count == 0 ? null : providers[0];
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            $"SELECT {ProviderPersistenceMappings.JoinedProviderColumns}, " +
+            $"{ProviderPersistenceMappings.JoinedCredentialColumns} " +
+            "FROM \"Providers\" p LEFT JOIN \"ProviderKeyCredentials\" c ON c.\"ProviderId\" = p.\"Id\" " +
+            "WHERE p.\"Id\" = @id " +
+            "ORDER BY c.\"ProviderId\", c.\"IsPrimary\" DESC, c.\"ProviderAccountGroup\"";
+        command.Parameters.AddWithValue("id", NpgsqlDbType.Integer, id);
+
+        Provider? provider = null;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            provider ??= ProviderPersistenceMappings.ReadProvider(reader);
+            if (reader.IsDBNull(ProviderPersistenceMappings.ProviderColumnCount))
+            {
+                continue;
+            }
+
+            var credential = ProviderPersistenceMappings.ReadCredential(
+                reader, ProviderPersistenceMappings.ProviderColumnCount);
+            credential.Provider = provider;
+            provider.ProviderKeyCredentials.Add(credential);
+        }
+        return provider;
     }
 
     /// <inheritdoc />

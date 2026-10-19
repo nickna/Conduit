@@ -11,6 +11,9 @@ namespace ConduitLLM.Persistence.Npgsql;
 
 internal static class ProviderPersistenceMappings
 {
+    internal const int ProviderColumnCount = 10;
+    internal const int CredentialColumnCount = 11;
+
     internal const string ProviderColumns =
         "\"Id\", \"ProviderType\", \"ProviderName\", \"BaseUrl\", \"Settings\", " +
         "\"IsEnabled\", \"TrustProviderReportedCosts\", \"ProviderCostMarkupMultiplier\", " +
@@ -19,6 +22,15 @@ internal static class ProviderPersistenceMappings
     internal const string CredentialColumns =
         "\"Id\", \"ProviderId\", \"ProviderAccountGroup\", \"ApiKey\", \"BaseUrl\", " +
         "\"SecretSettings\", \"KeyName\", \"IsPrimary\", \"IsEnabled\", \"CreatedAt\", \"UpdatedAt\"";
+
+    internal const string JoinedProviderColumns =
+        "p.\"Id\", p.\"ProviderType\", p.\"ProviderName\", p.\"BaseUrl\", p.\"Settings\", " +
+        "p.\"IsEnabled\", p.\"TrustProviderReportedCosts\", p.\"ProviderCostMarkupMultiplier\", " +
+        "p.\"CreatedAt\", p.\"UpdatedAt\"";
+
+    internal const string JoinedCredentialColumns =
+        "c.\"Id\", c.\"ProviderId\", c.\"ProviderAccountGroup\", c.\"ApiKey\", c.\"BaseUrl\", " +
+        "c.\"SecretSettings\", c.\"KeyName\", c.\"IsPrimary\", c.\"IsEnabled\", c.\"CreatedAt\", c.\"UpdatedAt\"";
 
     internal static Provider ReadProvider(NpgsqlDataReader reader, int offset = 0) => new()
     {

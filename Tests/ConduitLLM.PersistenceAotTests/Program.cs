@@ -508,7 +508,6 @@ async Task RunProbeAsync()
         await ExerciseRequestLogRuntimeStoreAsync(
             dataSource,
             new NpgsqlRequestLogRuntimeStore(dataSource));
-        await RequestLogBatchPersistenceProbe.RunAsync(dataSource);
     }
 
 }

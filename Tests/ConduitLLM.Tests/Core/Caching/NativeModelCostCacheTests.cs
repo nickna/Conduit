@@ -100,7 +100,7 @@ public sealed class NativeModelCostCacheTests
 
     /// <summary>Concurrent ID misses coalesce and generated L2 envelopes retain detached owned prices.</summary>
     [Fact]
-    public async Task PositiveIdMissesCoalesceAndSerializedResultsRemainOwned()
+    public async Task GetCostByIdAsync_ConcurrentMisses_CoalescesAndReturnsOwnedResultsAsync()
     {
         var cost = Cost(); var inner = Inner(cost);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -134,7 +134,7 @@ public sealed class NativeModelCostCacheTests
 
     /// <summary>Missing/future IDs create no negative payload and activate on the next read.</summary>
     [Fact]
-    public async Task MissingIdIsNotWrittenToEitherCacheAndFutureActivationIsImmediate()
+    public async Task GetCostByIdAsync_MissingCost_RemainsUncachedAndObservesActivationAsync()
     {
         var clock = new Clock(); var cost = Cost(); cost.EffectiveDate = clock.Now.AddSeconds(10).UtcDateTime;
         var inner = Inner(null);
@@ -156,7 +156,7 @@ public sealed class NativeModelCostCacheTests
 
     /// <summary>Identifier reads always select from the source, including newly effective alternatives.</summary>
     [Fact]
-    public async Task IdentifierSelectionIsNeverCached()
+    public async Task GetCostForModelAsync_IdentifierSelection_RemainsUncachedAsync()
     {
         var inner = Inner(Cost()); using var host = Host(); var service = Service(host, inner.Object);
         Assert.Equal(0.25m, (await service.GetCostForModelAsync("model"))!.InputCostPerMillionTokens);
@@ -168,7 +168,7 @@ public sealed class NativeModelCostCacheTests
 
     /// <summary>Native scalar payloads and full management graphs are isolated but share invalidation.</summary>
     [Fact]
-    public async Task ScalarNamespaceCannotOverwriteManagementGraphsAndInvalidationCoversBoth()
+    public async Task ClearCacheAsync_RuntimeAndManagementProfiles_IsolatesAndInvalidatesBothAsync()
     {
         var graph = Cost(0.75m);
         graph.ModelProviderTypeAssociations.Add(new() { Id = 3, Identifier = "model", ModelId = 4,
@@ -189,7 +189,7 @@ public sealed class NativeModelCostCacheTests
 
     /// <summary>A warm TTL never extends a price through its exclusive expiry boundary.</summary>
     [Fact]
-    public async Task ExpiryAndInactiveRowsOverrideWarmPayloads()
+    public async Task GetCostByIdAsync_ExpiredOrInactiveCost_ReturnsNullAsync()
     {
         var clock = new Clock(); var cost = Cost(); cost.ExpiryDate = clock.Now.AddSeconds(10).UtcDateTime;
         var inner = Inner(cost); using var host = Host(clock); var service = Service(host, inner.Object);
@@ -202,7 +202,7 @@ public sealed class NativeModelCostCacheTests
 
     /// <summary>Storage failures fall back once without disguising source failures or cancellation.</summary>
     [Fact]
-    public async Task StorageFallbackDoesNotRetryBusinessFailuresAndCancellationPropagates()
+    public async Task ReadCostAsync_StorageFailureOrCancellation_PreservesSourceSemanticsAsync()
     {
         var inner = Inner(Cost()); using var host = Host(); var service = Service(host, inner.Object);
         ((DistributedStore)host.GetRequiredService<IDistributedCache>()).FailReads = true;
@@ -219,7 +219,7 @@ public sealed class NativeModelCostCacheTests
 
     /// <summary>An unexpected cached missing payload cannot hide an active native price.</summary>
     [Fact]
-    public async Task UnexpectedNegativePayloadFallsBackToCurrentPrice()
+    public async Task GetCostByIdAsync_UnexpectedNegativePayload_LoadsCurrentPriceAsync()
     {
         var inner = Inner(Cost()); using var host = Host();
         var generation = await host.GetRequiredService<ApplicationCacheGeneration>().GetAsync(ApplicationCacheDomain.Costs);
@@ -232,7 +232,7 @@ public sealed class NativeModelCostCacheTests
 
     /// <summary>Disabled caching remains direct, while a real active zero price remains valid.</summary>
     [Fact]
-    public async Task DisabledCacheIsDirectAndZeroPriceIsNotMissing()
+    public async Task GetCostByIdAsync_DisabledCache_ReadsDirectlyAndPreservesZeroPriceAsync()
     {
         var free = Cost(0); free.OutputCostPerMillionTokens = 0;
         var inner = Inner(free); using var host = Host(enabled: false); var service = Service(host, inner.Object);
@@ -243,7 +243,7 @@ public sealed class NativeModelCostCacheTests
 
     /// <summary>The decorator cannot expose native management operations through a cached list.</summary>
     [Fact]
-    public async Task StoreBackedManagementBoundaryRemainsReadOnly()
+    public async Task ManagementOperations_NativeRuntimeProfile_RemainUnsupportedAsync()
     {
         using var host = Host(); var service = Service(host,
             new StoreBackedModelCostService(Mock.Of<IModelProviderMappingRuntimeStore>()));

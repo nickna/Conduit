@@ -313,3 +313,55 @@ provider stream completion, application work, transport and backing services.
 The historical report and failed follow-ups remain unchanged, and
 [issue #1647](https://github.com/nickna/Conduit/issues/1647) remains open until that
 evidence resolves the streaming observation.
+
+## Completion-path candidate, 2026-10-18
+
+A fresh uninstrumented three-variant comparison completed all 39,602 Gateway
+operations with complete JSON/SSE validation, exact financial/provider/Redis
+settlement, verified PostgreSQL/Redis archives and owned cleanup. The
+[retained report](benchmarks/2026-10-18-gateway-persistence-candidate.json)
+preserves all eighteen host samples, including the predeclared discarded group,
+all five recorded groups and their execution orders, raw probe hashes, source and
+image identities, metric ranges, and final accounting receipts.
+
+The candidate combined positive scalar cost-ID caching with Native request-log
+batching. It did **not** resolve the streaming regression:
+
+| Median of five recorded runs | Native control | Native candidate | JIT reference |
+| --- | ---: | ---: | ---: |
+| Complete-SSE requests/second | 151.672753 | 149.434138 | 164.242011 |
+| Complete-SSE p50 ms | 52.579374 | 53.318783 | 47.634276 |
+| Complete-SSE p95 ms | 60.017268 | 61.943688 | 56.347842 |
+| Complete-SSE per-run p99 ms | 64.851191 | 67.886788 | 74.108335 |
+| Non-streaming requests/second | 243.051279 | 249.198000 | 329.495719 |
+| Non-streaming per-run p99 ms | 44.733785 | 44.953706 | 46.989427 |
+
+Native control source was `234670caf30fd87452282d1a817cec452f594844`;
+both candidate profiles used `ddbd0180f387c609db0291c613c8ed74dca362b0`.
+The source-45 provider/probe, JSON-then-SSE ordering, 100 warmups, 1,000 measured
+requests, concurrency eight, 30-second deadlines and complete validators were
+unchanged. All six three-variant permutations were fixed before traffic, with
+group zero discarded and groups one through five retained. Builds, tests,
+tracing, profilers and PostgreSQL statistics were disabled during timing.
+Native before/after images shared the exact OS base; JIT used the standard
+no-RID publish and matched runtime configuration. The report records these
+roles and limits explicitly. Readiness includes Docker launch and polling;
+memory displays were sampled outside request timing and are not a steady-state
+or peak-memory measurement. The p99 column is a median of per-run percentiles,
+not a pooled percentile or confidence interval. Group variability is retained.
+
+The objective, declared before recorded results were read, required candidate
+Native median SSE throughput at least the JIT reference and median per-run p99
+no worse, alongside before/after evidence and the complete JSON tradeoff.
+Throughput failed that objective. The lower candidate p99 relative to JIT does
+not demonstrate recovery, and no favorable subset replaces this result.
+
+The queued Native log experiment is therefore removed from the proposed fix.
+It introduced a process-crash durability tradeoff without demonstrating an SSE
+benefit. Native retains its original typed per-request durable writer. The
+candidate commit, retry/failure test receipts and measurements remain retained.
+Separate matched diagnostic traces and zero-drop packet captures locate extra
+Native work before provider transmission and during completion; they do not
+assign the remaining wall time outside SQL to CPU. Further work targets
+provider/credential graph round trips and resolved CPU stacks. Issue #1647
+remains open; this candidate establishes no production promotion.

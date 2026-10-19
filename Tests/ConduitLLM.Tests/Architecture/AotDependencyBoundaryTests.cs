@@ -285,11 +285,7 @@ public sealed class AotDependencyBoundaryTests
         AssertNativeSingleton<IAsyncTaskRuntimeStore, NpgsqlAsyncTaskRuntimeStore>(services);
         AssertNativeSingleton<IMediaRuntimeStore, NpgsqlMediaRuntimeStore>(services);
         AssertNativeSingleton<IRequestLogRuntimeStore, NpgsqlRequestLogRuntimeStore>(services);
-        AssertNativeSingleton<IRequestLogBatchRuntimeStore, NpgsqlRequestLogBatchRuntimeStore>(services);
-        var requestLogWriter = Assert.Single(services, value => value.ServiceType == typeof(IRequestLogRuntimeWriter));
-        Assert.Equal(ServiceLifetime.Singleton, requestLogWriter.Lifetime);
-        Assert.NotNull(requestLogWriter.ImplementationFactory);
-        Assert.Null(requestLogWriter.ImplementationType);
+        AssertNativeSingleton<IRequestLogRuntimeWriter, StoreBackedRequestLogRuntimeWriter>(services);
         AssertNativeSingleton<IModelProviderMappingRuntimeStore, NpgsqlModelProviderMappingRuntimeStore>(services);
         AssertNativeSingleton<IModelProviderMappingRepository, StoreBackedModelProviderMappingRepository>(services);
         AssertNativeSingleton<IFunctionDiscoveryRuntimeStore, NpgsqlFunctionDiscoveryRuntimeStore>(services);
