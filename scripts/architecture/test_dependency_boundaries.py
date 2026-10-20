@@ -134,6 +134,12 @@ class MSBuildGuardTests(unittest.TestCase):
         result = self.run_guard("ConduitLLM.Gateway", "ConduitVerifyRuntimeDependencyInputs", '<ReferenceCopyLocalPaths Include="pkg/Microsoft.Build.Framework.dll" />', '<PublishAot>true</PublishAot>')
         self.assert_rejected(result, "runtime/publish dependency boundary rejected inputs")
 
+    def test_generation_opt_in_cannot_disable_publish_tooling_guard(self):
+        result = self.run_guard("ConduitLLM.Gateway", "ConduitVerifyRuntimeDependencyInputs",
+                                '<ResolvedFileToPublish Include="pkg/Wolverine.RuntimeCompilation.dll" />',
+                                '<ConduitWolverineCodegen>true</ConduitWolverineCodegen>')
+        self.assert_rejected(result, "runtime/publish dependency boundary rejected inputs")
+
     def test_publish_items_reject_unused_admin_adapter(self):
         result = self.run_guard("ConduitLLM.Admin", "ConduitVerifyRuntimeDependencyInputs", '<ResolvedFileToPublish Include="pkg/Microsoft.ML.Tokenizers.dll" />')
         self.assert_rejected(result, "runtime/publish dependency boundary rejected inputs")

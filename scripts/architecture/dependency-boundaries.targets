@@ -28,7 +28,7 @@
 
   <!-- Reject the inputs before trimming/native linking as well as publish items.
        A native executable alone cannot demonstrate removal of a dependency root. -->
-  <Target Name="ConduitVerifyRuntimeDependencyInputs" BeforeTargets="ILLink;IlcCompile" AfterTargets="ComputeFilesToPublish" Condition="'$(_ConduitRuntimeHost)' == 'true' and '$(_ConduitNormalRuntime)' == 'true'">
+  <Target Name="ConduitVerifyRuntimeDependencyInputs" BeforeTargets="ILLink;IlcCompile" AfterTargets="ComputeFilesToPublish" Condition="'$(_ConduitRuntimeHost)' == 'true'">
     <ItemGroup>
       <_ConduitRuntimeInput Include="@(ReferenceCopyLocalPaths);@(RuntimeCopyLocalItems);@(ResolvedFileToPublish)" />
       <_ConduitForbiddenRuntimeInput Include="@(_ConduitRuntimeInput)" Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(_ConduitRuntimeInput.Filename)', '$(_ConduitToolingPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
@@ -42,7 +42,7 @@
       Overwrite="true" Encoding="UTF-8" Condition="'$(ConduitDependencyEvidenceDirectory)' != ''" />
   </Target>
 
-  <Target Name="ConduitVerifyPublishedDependencyBoundary" AfterTargets="Publish" Condition="'$(_ConduitRuntimeHost)' == 'true' and '$(_ConduitNormalRuntime)' == 'true'">
+  <Target Name="ConduitVerifyPublishedDependencyBoundary" AfterTargets="Publish" Condition="'$(_ConduitRuntimeHost)' == 'true'">
     <ItemGroup>
       <_ConduitPublishedFile Include="$(PublishDir)**/*" />
       <_ConduitForbiddenPublishedFile Include="@(_ConduitPublishedFile)" Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(_ConduitPublishedFile.Filename)', '$(_ConduitToolingPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
