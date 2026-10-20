@@ -9,7 +9,7 @@ namespace ConduitLLM.IntegrationTests.Tests;
 public sealed partial class ModelProviderMappingRuntimePersistenceParityTests
 {
     [Fact]
-    public async Task NamedEfRoutePolicyReaderPreservesPersistedFieldsDisabledMissingAndCancellation()
+    public async Task GetByAliasAsync_PersistedDisabledMissingAndCanceled_PreservesDetachedPolicyAndCancellation()
     {
         var schema = $"named_route_policy_{Guid.NewGuid():N}";
         try

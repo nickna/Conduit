@@ -205,7 +205,7 @@ namespace ConduitLLM.Tests.Providers
         [InlineData(null, true)]
         [InlineData(false, true)]
         [InlineData(true, false)]
-        public async Task GetClientForChatAsync_UsesNamedPolicyReaderAndOnlyFallsBackForMissingOrDisabledPolicy(
+        public async Task GetClientForChatAsync_NamedPolicyEnabledDisabledOrMissing_UsesDefaultsOnlyWhenUnavailable(
             bool? enabled, bool usesDefaults)
         {
             var request = NewChatRequest();
@@ -238,7 +238,7 @@ namespace ConduitLLM.Tests.Providers
         }
 
         [Fact]
-        public async Task GetClientForChatAsync_PropagatesNamedPolicyReaderCancellation()
+        public async Task GetClientForChatAsync_NamedPolicyReaderCanceled_PropagatesBeforeCredentialLookup()
         {
             var request = NewChatRequest();
             _mockMappingService.Setup(service => service.GetMappingsByModelAliasAsync(request.Model))

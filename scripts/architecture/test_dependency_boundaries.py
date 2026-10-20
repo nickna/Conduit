@@ -1,9 +1,11 @@
 from contextlib import contextmanager
+import json
 from pathlib import Path
 import shutil
 import subprocess
 import unittest
 import uuid
+import zipfile
 from xml.sax.saxutils import escape
 
 from dependency_graph import BACKPLANE, CLIENT_PROTOCOL, validate_graph, validate_packages, validate_restore_inputs
@@ -178,6 +180,46 @@ class MSBuildGuardTests(unittest.TestCase):
         self.assertIn("pkg/MessagePack.dll", inputs)
         self.assertIn("MessagePack.dll", outputs)
         self.assertIn("ConduitLLM.Gateway", outputs)
+
+
+class RealSdkGuardTests(unittest.TestCase):
+    def test_sdk_resolved_transitive_packages_fail_an_ordinary_build_without_legacy_items(self):
+        # A local feed keeps this actual SDK restore/build test independent of
+        # NuGet/network availability. Neither package contains an assembly: only
+        # the resolver's transitive closure can expose the prohibited Npgsql ID.
+        with fixture_directory() as root:
+            feed = root / "feed"
+            feed.mkdir()
+            for package, dependency in [("Npgsql", ""), ("BoundaryFixture.Wrapper", '<dependencies><dependency id="Npgsql" version="[1.0.0]" /></dependencies>')]:
+                with zipfile.ZipFile(feed / f"{package}.1.0.0.nupkg", "w") as archive:
+                    archive.writestr(f"{package}.nuspec", f'<?xml version="1.0"?><package><metadata><id>{package}</id><version>1.0.0</version><authors>Conduit boundary fixture</authors><description>Isolated resolved-graph regression fixture</description>{dependency}</metadata></package>')
+                    archive.writestr("lib/net10.0/_._", "")
+            (root / "NuGet.Config").write_text(f'<configuration><packageSources><clear /><add key="fixture" value="{escape(str(feed))}" /></packageSources></configuration>')
+
+            projects = {}
+            for name in ["BoundaryAllowed", "ConduitLLM.Core"]:
+                directory = root / name
+                directory.mkdir()
+                project = directory / f"{name}.csproj"
+                project.write_text(f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>'
+                                   '<ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>'
+                                   '<EmitLegacyAssetsFileItems>false</EmitLegacyAssetsFileItems><NuGetAudit>false</NuGetAudit>'
+                                   f'<RestorePackagesPath>{escape(str(root / "packages"))}</RestorePackagesPath>'
+                                   '</PropertyGroup><ItemGroup><PackageReference Include="BoundaryFixture.Wrapper" Version="1.0.0" PrivateAssets="all" /></ItemGroup></Project>')
+                restore = subprocess.run(["dotnet", "restore", str(project), "--nologo"], capture_output=True, text=True)
+                self.assertEqual(0, restore.returncode, restore.stdout + restore.stderr)
+                projects[name] = project
+
+            resolved = subprocess.run(["dotnet", "msbuild", str(projects["BoundaryAllowed"]), "-nologo", "-t:ResolvePackageAssets",
+                                       "-getItem:PackageDependencies", "-getProperty:EmitLegacyAssetsFileItems"], capture_output=True, text=True)
+            self.assertEqual(0, resolved.returncode, resolved.stdout + resolved.stderr)
+            sdk_items = json.loads(resolved.stdout)
+            self.assertEqual("false", sdk_items["Properties"]["EmitLegacyAssetsFileItems"])
+            self.assertIn("Npgsql", [item["Identity"] for item in sdk_items["Items"]["PackageDependencies"]])
+
+            build = subprocess.run(["dotnet", "build", str(projects["ConduitLLM.Core"]), "--no-restore", "--nologo"], capture_output=True, text=True)
+            self.assertNotEqual(0, build.returncode, build.stdout + build.stderr)
+            self.assertIn("dependency boundary rejected resolved packages: Npgsql", build.stdout + build.stderr)
 
 
 if __name__ == "__main__":

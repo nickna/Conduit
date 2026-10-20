@@ -1,6 +1,9 @@
 <Project>
   <!-- These checks examine NuGet's resolved closure, including unused packages
-       and PrivateAssets dependencies which assembly-reference tests cannot see. -->
+       and PrivateAssets dependencies which assembly-reference tests cannot see.
+       SDK 10 ResolvePackageAssets emits PackageDependencies directly, even with
+       EmitLegacyAssetsFileItems=false. The real-SDK fixture verifies that contract;
+       this does not depend on the obsolete RunResolvePackageDependencies output. -->
   <PropertyGroup>
     <_ConduitExecutionProject Condition="'$(MSBuildProjectName)' == 'ConduitLLM.Core' or '$(MSBuildProjectName)' == 'ConduitLLM.Providers' or '$(MSBuildProjectName)' == 'ConduitLLM.Functions' or '$(MSBuildProjectName)' == 'ConduitLLM.Tokenization'">true</_ConduitExecutionProject>
     <_ConduitNeutralProject Condition="'$(MSBuildProjectName)' == 'ConduitLLM.Contracts' or '$(MSBuildProjectName)' == 'ConduitLLM.Persistence.Abstractions'">true</_ConduitNeutralProject>
