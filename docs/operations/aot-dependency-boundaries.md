@@ -92,6 +92,13 @@ Admin omits Gateway protocols and tokenization through its project graph. Native
 Gateway omits the optional MessagePack client protocol using the properties above.
 Normal JIT protocol compatibility is preserved.
 
+Self-contained ASP.NET builds enumerate the shared framework's SignalR Core,
+Common and JSON assemblies among publish inputs before trimming. The Admin
+filename guards permit these framework assemblies while rejecting the optional
+SignalR client, Redis backplane, MessagePack client protocol and Conduit adapter
+assemblies. The broader Admin resolved-package ban and emitted-assembly checks
+remain in force; framework-pack inputs do not establish an optional adapter root.
+
 The [Gateway feature matrix](gateway-native-aot-feature-matrix.md) and
 [Admin feature matrix](native-aot-admin-feature-matrix.md) remain authoritative for
 supported operations and excluded workers/routes. `ConduitAotAudit=true` enables

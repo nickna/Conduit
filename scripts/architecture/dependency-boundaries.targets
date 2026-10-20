@@ -15,6 +15,10 @@
     <_ConduitNeutralPackages>^(ConduitLLM\.(Configuration|Core|Functions|Providers|Security|Media|Messaging|SignalR|Tokenization|OpenApi)|Microsoft\.EntityFrameworkCore|Npgsql|Microsoft\.Build|ModelContextProtocol|Wolverine|WolverineFx|RabbitMQ\.Client|Microsoft\.AspNetCore\.(SignalR|OpenApi)|MessagePack|AWSSDK|Amazon|Microsoft\.OpenApi|Microsoft\.ML\.Tokenizers|Scalar)(\.|$)</_ConduitNeutralPackages>
     <_ConduitToolingPackages>^(Microsoft\.EntityFrameworkCore\.Design|Microsoft\.Build|Microsoft\.CodeAnalysis|JasperFx\.RuntimeCompiler|Wolverine(Fx)?\.RuntimeCompilation)(\.|$)</_ConduitToolingPackages>
     <_ConduitAdminPackages>^(Microsoft\.AspNetCore\.SignalR|Microsoft\.ML\.Tokenizers|ConduitLLM\.(SignalR|Tokenization))(\.|$)</_ConduitAdminPackages>
+    <!-- Self-contained ASP.NET publishes enumerate the framework's SignalR
+         Core/Common/JSON assemblies before trimming. Those framework inputs
+         are distinct from the optional Gateway adapters and NuGet protocols. -->
+    <_ConduitAdminRuntimeAdapters>^(Microsoft\.AspNetCore\.SignalR\.(Client|Protocols\.MessagePack|StackExchangeRedis)|Microsoft\.ML\.Tokenizers|ConduitLLM\.(SignalR|Tokenization))(\.|$)</_ConduitAdminRuntimeAdapters>
   </PropertyGroup>
 
   <Target Name="ConduitVerifyResolvedDependencyBoundary" AfterTargets="ResolvePackageAssets">
@@ -35,7 +39,7 @@
     <ItemGroup>
       <_ConduitRuntimeInput Include="@(ReferenceCopyLocalPaths);@(RuntimeCopyLocalItems);@(ResolvedFileToPublish)" />
       <_ConduitForbiddenRuntimeInput Include="@(_ConduitRuntimeInput)" Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(_ConduitRuntimeInput.Filename)', '$(_ConduitToolingPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
-      <_ConduitForbiddenRuntimeInput Include="@(_ConduitRuntimeInput)" Condition="'$(MSBuildProjectName)' == 'ConduitLLM.Admin' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(_ConduitRuntimeInput.Filename)', '$(_ConduitAdminPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
+      <_ConduitForbiddenRuntimeInput Include="@(_ConduitRuntimeInput)" Condition="'$(MSBuildProjectName)' == 'ConduitLLM.Admin' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(_ConduitRuntimeInput.Filename)', '$(_ConduitAdminRuntimeAdapters)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
       <_ConduitForbiddenRuntimeInput Include="@(_ConduitRuntimeInput)" Condition="'$(_ConduitNativeProfile)' == 'true' and '%(_ConduitRuntimeInput.Filename)' == 'Microsoft.AspNetCore.SignalR.Protocols.MessagePack'" />
     </ItemGroup>
     <Error Condition="'@(_ConduitForbiddenRuntimeInput)' != ''" Text="$(MSBuildProjectName) runtime/publish dependency boundary rejected inputs: @(_ConduitForbiddenRuntimeInput)." />
@@ -49,7 +53,7 @@
     <ItemGroup>
       <_ConduitPublishedFile Include="$(PublishDir)**/*" />
       <_ConduitForbiddenPublishedFile Include="@(_ConduitPublishedFile)" Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(_ConduitPublishedFile.Filename)', '$(_ConduitToolingPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
-      <_ConduitForbiddenPublishedFile Include="@(_ConduitPublishedFile)" Condition="'$(MSBuildProjectName)' == 'ConduitLLM.Admin' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(_ConduitPublishedFile.Filename)', '$(_ConduitAdminPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
+      <_ConduitForbiddenPublishedFile Include="@(_ConduitPublishedFile)" Condition="'$(MSBuildProjectName)' == 'ConduitLLM.Admin' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(_ConduitPublishedFile.Filename)', '$(_ConduitAdminRuntimeAdapters)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
       <_ConduitForbiddenPublishedFile Include="@(_ConduitPublishedFile)" Condition="'$(_ConduitNativeProfile)' == 'true' and '%(_ConduitPublishedFile.Filename)' == 'Microsoft.AspNetCore.SignalR.Protocols.MessagePack'" />
     </ItemGroup>
     <Error Condition="'@(_ConduitForbiddenPublishedFile)' != ''" Text="$(MSBuildProjectName) publish output dependency boundary rejected files: @(_ConduitForbiddenPublishedFile)." />

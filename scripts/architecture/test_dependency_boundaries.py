@@ -146,6 +146,16 @@ class MSBuildGuardTests(unittest.TestCase):
         result = self.run_guard("ConduitLLM.Admin", "ConduitVerifyRuntimeDependencyInputs", '<ResolvedFileToPublish Include="pkg/Microsoft.ML.Tokenizers.dll" />')
         self.assert_rejected(result, "runtime/publish dependency boundary rejected inputs")
 
+    def test_admin_publish_outputs_allow_framework_signalr_but_reject_optional_adapters(self):
+        result = self.run_guard("ConduitLLM.Admin", "ConduitVerifyPublishedDependencyBoundary", output_files=[
+            "Microsoft.AspNetCore.SignalR.dll", "Microsoft.AspNetCore.SignalR.Common.dll",
+            "Microsoft.AspNetCore.SignalR.Core.dll", "Microsoft.AspNetCore.SignalR.Protocols.Json.dll"])
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        for assembly in ["ConduitLLM.SignalR", BACKPLANE, CLIENT_PROTOCOL, "Microsoft.AspNetCore.SignalR.Client.Core", "ConduitLLM.Tokenization", "Microsoft.ML.Tokenizers"]:
+            with self.subTest(assembly=assembly):
+                result = self.run_guard("ConduitLLM.Admin", "ConduitVerifyPublishedDependencyBoundary", output_files=[f"{assembly}.dll"])
+                self.assert_rejected(result, "publish output dependency boundary rejected files")
+
     def test_published_files_reject_nested_tooling_leak(self):
         result = self.run_guard("ConduitLLM.Admin", "ConduitVerifyPublishedDependencyBoundary", output_files=["tools/Microsoft.EntityFrameworkCore.Design.dll"])
         self.assert_rejected(result, "publish output dependency boundary rejected files")
@@ -183,6 +193,34 @@ class MSBuildGuardTests(unittest.TestCase):
 
 
 class RealSdkGuardTests(unittest.TestCase):
+    def test_self_contained_admin_publish_inputs_distinguish_framework_signalr_from_adapters(self):
+        with fixture_directory() as root:
+            project = root / "ConduitLLM.Admin.csproj"
+            project.write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>'
+                               '<OutputType>Exe</OutputType><SelfContained>true</SelfContained>'
+                               '<RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>'
+                               '<PublishAot>false</PublishAot><PublishTrimmed>false</PublishTrimmed><NuGetAudit>false</NuGetAudit>'
+                               '</PropertyGroup><ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>'
+                               '<Target Name="InjectFixturePublishInput" BeforeTargets="ConduitVerifyRuntimeDependencyInputs">'
+                               '<ItemGroup><ResolvedFileToPublish Include="$(ConduitFixtureInput)" Condition="\'$(ConduitFixtureInput)\' != \'\'" /></ItemGroup>'
+                               '</Target></Project>')
+            (root / "Program.cs").write_text('System.Console.WriteLine("Self-contained publish boundary fixture");')
+            restore = subprocess.run(["dotnet", "restore", str(project), "--nologo"], capture_output=True, text=True)
+            self.assertEqual(0, restore.returncode, restore.stdout + restore.stderr)
+            build = subprocess.run(["dotnet", "build", str(project), "--no-restore", "--nologo"], capture_output=True, text=True)
+            self.assertEqual(0, build.returncode, build.stdout + build.stderr)
+            command = ["dotnet", "msbuild", str(project), "-nologo", "-t:ComputeFilesToPublish"]
+            compute = subprocess.run([*command, "-getItem:ResolvedFileToPublish"], capture_output=True, text=True)
+            self.assertEqual(0, compute.returncode, compute.stdout + compute.stderr)
+            actual_inputs = {Path(item["Identity"]).name for item in json.loads(compute.stdout)["Items"]["ResolvedFileToPublish"]}
+            self.assertTrue({"Microsoft.AspNetCore.SignalR.Core.dll", "Microsoft.AspNetCore.SignalR.Common.dll",
+                             "Microsoft.AspNetCore.SignalR.Protocols.Json.dll"} <= actual_inputs)
+            for assembly in ["ConduitLLM.SignalR", BACKPLANE, CLIENT_PROTOCOL, "Microsoft.AspNetCore.SignalR.Client.Core", "ConduitLLM.Tokenization", "Microsoft.ML.Tokenizers"]:
+                with self.subTest(assembly=assembly):
+                    forbidden = subprocess.run([*command, f"-p:ConduitFixtureInput=forbidden/{assembly}.dll"], capture_output=True, text=True)
+                    self.assertNotEqual(0, forbidden.returncode, forbidden.stdout + forbidden.stderr)
+                    self.assertIn("runtime/publish dependency boundary rejected inputs", forbidden.stdout + forbidden.stderr)
+
     def test_sdk_resolved_transitive_packages_fail_an_ordinary_build_without_legacy_items(self):
         # A local feed keeps this actual SDK restore/build test independent of
         # NuGet/network availability. Neither package contains an assembly: only
