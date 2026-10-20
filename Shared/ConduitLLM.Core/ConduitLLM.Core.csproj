@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <PackageReference Include="DistributedLock.Postgres" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
@@ -20,7 +20,6 @@
   </ItemGroup>
   
   <ItemGroup>
-    <ProjectReference Include="..\ConduitLLM.Configuration\ConduitLLM.Configuration.csproj" />
     <ProjectReference Include="..\ConduitLLM.Contracts\ConduitLLM.Contracts.csproj" />
     <ProjectReference Include="..\ConduitLLM.Functions\ConduitLLM.Functions.csproj" />
     <ProjectReference Include="..\ConduitLLM.Persistence.Abstractions\ConduitLLM.Persistence.Abstractions.csproj" />
@@ -28,6 +27,7 @@
 
   <ItemGroup>
     <Compile Remove="Extensions\SignalRConfigurationExtensions.cs" />
+    <Compile Remove="Extensions\ApplicationCacheExtensions.cs" />
     <Compile Remove="Services\SignalRNotificationServiceBase.cs" />
     <Compile Remove="OpenApi\*.cs" />
     <Compile Remove="Services\TiktokenCounter.cs" />
@@ -35,10 +35,18 @@
     <Compile Remove="Services\S3MediaStorageService.*.cs" />
     <Compile Remove="Messaging\ConduitMessagingTopology.cs" />
     <Compile Remove="Extensions\SharedCacheInvalidationMessagingExtensions.cs" />
+    <!-- PostgreSQL implementations and EF composition belong to the persistence adapter. -->
+    <Compile Remove="Data\ConnectionStringManager.cs" />
+    <Compile Remove="Data\DatabaseConnectionFactory.cs" />
+    <Compile Remove="Data\Extensions\DatabaseServiceExtensions.cs" />
+    <Compile Remove="Extensions\DistributedLockServiceExtensions.cs" />
+    <Compile Remove="Services\PostgresDistributedLockProvider.cs" />
+    <Compile Remove="Services\DiscoveryModelProjector.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="ConduitLLM.Tests" />
+    <InternalsVisibleTo Include="ConduitLLM.Persistence.Composition" />
     <InternalsVisibleTo Include="ConduitLLM.SerializationTests" />
   </ItemGroup>
 

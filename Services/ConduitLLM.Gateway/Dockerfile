@@ -5,12 +5,14 @@ WORKDIR /src
 # ===== CACHED LAYERS (Keep these fast) =====
 # Copy solution-wide restore inputs before project files so package changes
 # invalidate the restore layer consistently.
-COPY Conduit.slnx Directory.Build.props Directory.Packages.props NuGet.Config ./
+COPY Conduit.slnx Directory.Build.props Directory.Build.targets Directory.Packages.props NuGet.Config ./
+COPY scripts/architecture/dependency-boundaries.targets ./scripts/architecture/
 
 # Copy project files to correct locations
 COPY Services/ConduitLLM.Gateway/*.csproj ./Services/ConduitLLM.Gateway/
 COPY Shared/ConduitLLM.Configuration/*.csproj ./Shared/ConduitLLM.Configuration/
 COPY Shared/ConduitLLM.Persistence.Abstractions/*.csproj ./Shared/ConduitLLM.Persistence.Abstractions/
+COPY Shared/ConduitLLM.Persistence.Composition/*.csproj ./Shared/ConduitLLM.Persistence.Composition/
 COPY Shared/ConduitLLM.Persistence.Npgsql/*.csproj ./Shared/ConduitLLM.Persistence.Npgsql/
 COPY Shared/ConduitLLM.Core/*.csproj ./Shared/ConduitLLM.Core/
 COPY Shared/ConduitLLM.Security/*.csproj ./Shared/ConduitLLM.Security/

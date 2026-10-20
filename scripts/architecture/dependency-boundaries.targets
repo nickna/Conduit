@@ -1,0 +1,58 @@
+<Project>
+  <!-- These checks examine NuGet's resolved closure, including unused packages
+       and PrivateAssets dependencies which assembly-reference tests cannot see. -->
+  <PropertyGroup>
+    <_ConduitExecutionProject Condition="'$(MSBuildProjectName)' == 'ConduitLLM.Core' or '$(MSBuildProjectName)' == 'ConduitLLM.Providers' or '$(MSBuildProjectName)' == 'ConduitLLM.Functions' or '$(MSBuildProjectName)' == 'ConduitLLM.Tokenization'">true</_ConduitExecutionProject>
+    <_ConduitNeutralProject Condition="'$(MSBuildProjectName)' == 'ConduitLLM.Contracts' or '$(MSBuildProjectName)' == 'ConduitLLM.Persistence.Abstractions'">true</_ConduitNeutralProject>
+    <_ConduitRuntimeHost Condition="'$(MSBuildProjectName)' == 'ConduitLLM.Admin' or '$(MSBuildProjectName)' == 'ConduitLLM.Gateway'">true</_ConduitRuntimeHost>
+    <_ConduitNativeProfile Condition="'$(PublishAot)' == 'true' or '$(ConduitAotAudit)' == 'true'">true</_ConduitNativeProfile>
+    <_ConduitNormalRuntime Condition="'$(ConduitEfTooling)' != 'true' and '$(ConduitWolverineCodegen)' != 'true'">true</_ConduitNormalRuntime>
+    <_ConduitPersistencePackages>^(Microsoft\.EntityFrameworkCore|Npgsql|Microsoft\.Build)(\.|$)</_ConduitPersistencePackages>
+    <_ConduitOptionalAdapterPackages>^(Wolverine|WolverineFx|RabbitMQ\.Client|Microsoft\.AspNetCore\.(SignalR|OpenApi)|MessagePack|AWSSDK|Amazon|Microsoft\.OpenApi|Microsoft\.ML\.Tokenizers|Scalar)(\.|$)</_ConduitOptionalAdapterPackages>
+    <_ConduitNeutralPackages>^(ConduitLLM\.(Configuration|Core|Functions|Providers|Security|Media|Messaging|SignalR|Tokenization|OpenApi)|Microsoft\.EntityFrameworkCore|Npgsql|Microsoft\.Build|ModelContextProtocol|Wolverine|WolverineFx|RabbitMQ\.Client|Microsoft\.AspNetCore\.(SignalR|OpenApi)|MessagePack|AWSSDK|Amazon|Microsoft\.OpenApi|Microsoft\.ML\.Tokenizers|Scalar)(\.|$)</_ConduitNeutralPackages>
+    <_ConduitToolingPackages>^(Microsoft\.EntityFrameworkCore\.Design|Microsoft\.Build|Microsoft\.CodeAnalysis|JasperFx\.RuntimeCompiler|Wolverine(Fx)?\.RuntimeCompilation)(\.|$)</_ConduitToolingPackages>
+    <_ConduitAdminPackages>^(Microsoft\.AspNetCore\.SignalR|Microsoft\.ML\.Tokenizers|ConduitLLM\.(SignalR|Tokenization))(\.|$)</_ConduitAdminPackages>
+  </PropertyGroup>
+
+  <Target Name="ConduitVerifyResolvedDependencyBoundary" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <_ConduitForbiddenPackage Include="@(PackageDependencies)" Condition="'$(_ConduitExecutionProject)' == 'true' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(PackageDependencies.Identity)', '$(_ConduitPersistencePackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
+      <_ConduitForbiddenPackage Include="@(PackageDependencies)" Condition="('$(MSBuildProjectName)' == 'ConduitLLM.Core' or '$(MSBuildProjectName)' == 'ConduitLLM.Providers') and $([System.Text.RegularExpressions.Regex]::IsMatch('%(PackageDependencies.Identity)', '$(_ConduitOptionalAdapterPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
+      <_ConduitForbiddenPackage Include="@(PackageDependencies)" Condition="'$(_ConduitNeutralProject)' == 'true' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(PackageDependencies.Identity)', '$(_ConduitNeutralPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
+      <_ConduitForbiddenPackage Include="@(PackageDependencies)" Condition="'$(_ConduitRuntimeHost)' == 'true' and '$(_ConduitNormalRuntime)' == 'true' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(PackageDependencies.Identity)', '$(_ConduitToolingPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
+      <_ConduitForbiddenPackage Include="@(PackageDependencies)" Condition="'$(MSBuildProjectName)' == 'ConduitLLM.Admin' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(PackageDependencies.Identity)', '$(_ConduitAdminPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
+      <_ConduitForbiddenPackage Include="@(PackageDependencies)" Condition="'$(_ConduitRuntimeHost)' == 'true' and '$(_ConduitNativeProfile)' == 'true' and '%(PackageDependencies.Identity)' == 'Microsoft.AspNetCore.SignalR.Protocols.MessagePack'" />
+    </ItemGroup>
+    <Error Condition="'@(_ConduitForbiddenPackage)' != ''" Text="$(MSBuildProjectName) dependency boundary rejected resolved packages: @(_ConduitForbiddenPackage). See docs/operations/aot-dependency-boundaries.md." />
+  </Target>
+
+  <!-- Reject the inputs before trimming/native linking as well as publish items.
+       A native executable alone cannot demonstrate removal of a dependency root. -->
+  <Target Name="ConduitVerifyRuntimeDependencyInputs" BeforeTargets="ILLink;IlcCompile" AfterTargets="ComputeFilesToPublish" Condition="'$(_ConduitRuntimeHost)' == 'true' and '$(_ConduitNormalRuntime)' == 'true'">
+    <ItemGroup>
+      <_ConduitRuntimeInput Include="@(ReferenceCopyLocalPaths);@(RuntimeCopyLocalItems);@(ResolvedFileToPublish)" />
+      <_ConduitForbiddenRuntimeInput Include="@(_ConduitRuntimeInput)" Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(_ConduitRuntimeInput.Filename)', '$(_ConduitToolingPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
+      <_ConduitForbiddenRuntimeInput Include="@(_ConduitRuntimeInput)" Condition="'$(MSBuildProjectName)' == 'ConduitLLM.Admin' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(_ConduitRuntimeInput.Filename)', '$(_ConduitAdminPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
+      <_ConduitForbiddenRuntimeInput Include="@(_ConduitRuntimeInput)" Condition="'$(_ConduitNativeProfile)' == 'true' and '%(_ConduitRuntimeInput.Filename)' == 'Microsoft.AspNetCore.SignalR.Protocols.MessagePack'" />
+    </ItemGroup>
+    <Error Condition="'@(_ConduitForbiddenRuntimeInput)' != ''" Text="$(MSBuildProjectName) runtime/publish dependency boundary rejected inputs: @(_ConduitForbiddenRuntimeInput)." />
+    <MakeDir Directories="$(ConduitDependencyEvidenceDirectory)" Condition="'$(ConduitDependencyEvidenceDirectory)' != ''" />
+    <WriteLinesToFile File="$(ConduitDependencyEvidenceDirectory)/$(MSBuildProjectName)-inputs.txt"
+      Lines="project=$(MSBuildProjectName);publishAot=$(PublishAot);conduitAotAudit=$(ConduitAotAudit);rid=$(RuntimeIdentifier);@(_ConduitRuntimeInput->'%(NuGetPackageId)|%(Identity)')"
+      Overwrite="true" Encoding="UTF-8" Condition="'$(ConduitDependencyEvidenceDirectory)' != ''" />
+  </Target>
+
+  <Target Name="ConduitVerifyPublishedDependencyBoundary" AfterTargets="Publish" Condition="'$(_ConduitRuntimeHost)' == 'true' and '$(_ConduitNormalRuntime)' == 'true'">
+    <ItemGroup>
+      <_ConduitPublishedFile Include="$(PublishDir)**/*" />
+      <_ConduitForbiddenPublishedFile Include="@(_ConduitPublishedFile)" Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(_ConduitPublishedFile.Filename)', '$(_ConduitToolingPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
+      <_ConduitForbiddenPublishedFile Include="@(_ConduitPublishedFile)" Condition="'$(MSBuildProjectName)' == 'ConduitLLM.Admin' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(_ConduitPublishedFile.Filename)', '$(_ConduitAdminPackages)', System.Text.RegularExpressions.RegexOptions.IgnoreCase))" />
+      <_ConduitForbiddenPublishedFile Include="@(_ConduitPublishedFile)" Condition="'$(_ConduitNativeProfile)' == 'true' and '%(_ConduitPublishedFile.Filename)' == 'Microsoft.AspNetCore.SignalR.Protocols.MessagePack'" />
+    </ItemGroup>
+    <Error Condition="'@(_ConduitForbiddenPublishedFile)' != ''" Text="$(MSBuildProjectName) publish output dependency boundary rejected files: @(_ConduitForbiddenPublishedFile)." />
+    <MakeDir Directories="$(ConduitDependencyEvidenceDirectory)" Condition="'$(ConduitDependencyEvidenceDirectory)' != ''" />
+    <WriteLinesToFile File="$(ConduitDependencyEvidenceDirectory)/$(MSBuildProjectName)-outputs.txt"
+      Lines="project=$(MSBuildProjectName);publishAot=$(PublishAot);conduitAotAudit=$(ConduitAotAudit);rid=$(RuntimeIdentifier);@(_ConduitPublishedFile)"
+      Overwrite="true" Encoding="UTF-8" Condition="'$(ConduitDependencyEvidenceDirectory)' != ''" />
+  </Target>
+</Project>

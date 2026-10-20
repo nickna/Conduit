@@ -1,7 +1,3 @@
-using ConduitLLM.Configuration;
-using ConduitLLM.Configuration.Interfaces;
-using ConduitLLM.Configuration.Repositories;
-using ConduitLLM.Configuration.Services;
 using ConduitLLM.Core.Configuration;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Options;
@@ -132,33 +128,6 @@ namespace ConduitLLM.Core.Extensions
 
             // Ensure memory cache is registered
             services.AddMemoryCache();
-
-            return services;
-        }
-
-        /// <summary>
-        /// Registers application services shared by both Admin API and Gateway API.
-        /// Centralizes registrations that were previously duplicated across both services.
-        /// </summary>
-        public static IServiceCollection AddSharedApplicationServices(this IServiceCollection services)
-        {
-            // Global settings cache — loads settings at startup and provides fast access
-            services.AddSingleton<IGlobalSettingsCacheService, GlobalSettingsCacheService>();
-            services.AddHostedService(provider =>
-                provider.GetRequiredService<IGlobalSettingsCacheService>() as GlobalSettingsCacheService
-                ?? throw new InvalidOperationException("GlobalSettingsCacheService must be registered as singleton"));
-
-            // Provider service
-            services.AddScoped<IProviderService, ProviderService>();
-
-            // Model provider mapping with caching decorator
-            services.AddSingleton<IModelMappingCacheInvalidator, ConduitLLM.Core.Caching.ModelMappingCacheInvalidator>();
-            services.AddScoped<ModelProviderMappingService>();
-            services.AddScoped<IModelProviderMappingService>(provider =>
-            {
-                var innerService = provider.GetRequiredService<ModelProviderMappingService>();
-                return ActivatorUtilities.CreateInstance<FusionModelProviderMappingService>(provider, innerService);
-            });
 
             return services;
         }

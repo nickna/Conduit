@@ -6,5 +6,7 @@
   <ItemGroup>
     <Compile Include="..\ConduitLLM.Configuration\Messaging\*.cs"
              Link="Messaging\%(Filename)%(Extension)" />
+    <Compile Include="..\ConduitLLM.Configuration\Events\*.cs"
+             Link="Events\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

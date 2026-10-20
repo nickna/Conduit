@@ -161,6 +161,7 @@ namespace ConduitLLM.Tests.Providers
             _mockCredentialService.Setup(x => x.GetProviderByIdAsync(1))
                 .ReturnsAsync((Provider?)null);
             var runtimeStore = new Mock<IModelProviderMappingRuntimeStore>();
+            var efPolicyReader = new Mock<IModelRoutePolicyReader>(MockBehavior.Strict);
             runtimeStore.Setup(store => store.GetRoutePolicyAsync(
                     request.Model, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new ModelRoutePolicyRuntimeRecord
@@ -183,6 +184,7 @@ namespace ConduitLLM.Tests.Providers
                 _mockHttpClientFactory.Object,
                 _mockLogger.Object,
                 Mock.Of<IServiceProvider>(),
+                routePolicyReader: efPolicyReader.Object,
                 runtimeMappingStore: runtimeStore.Object);
 
             await Assert.ThrowsAsync<ServiceUnavailableException>(
@@ -190,6 +192,7 @@ namespace ConduitLLM.Tests.Providers
 
             runtimeStore.Verify(store => store.GetRoutePolicyAsync(
                 request.Model, It.IsAny<CancellationToken>()), Times.Once);
+            efPolicyReader.VerifyNoOtherCalls();
         }
 
         private static ConduitLLM.Core.Models.ChatCompletionRequest NewChatRequest() => new()
@@ -197,6 +200,65 @@ namespace ConduitLLM.Tests.Providers
             Model = "test-model",
             Messages = []
         };
+
+        [Theory]
+        [InlineData(null, true)]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        public async Task GetClientForChatAsync_UsesNamedPolicyReaderAndOnlyFallsBackForMissingOrDisabledPolicy(
+            bool? enabled, bool usesDefaults)
+        {
+            var request = NewChatRequest();
+            _mockMappingService.Setup(service => service.GetMappingsByModelAliasAsync(request.Model))
+                .ReturnsAsync([NewRoutableMapping(1)]);
+            _mockCredentialService.Setup(service => service.GetProviderByIdAsync(1)).ReturnsAsync((Provider?)null);
+            var reader = new Mock<IModelRoutePolicyReader>();
+            using var cancellation = new CancellationTokenSource();
+            reader.Setup(service => service.GetByAliasAsync(request.Model, cancellation.Token))
+                .ReturnsAsync(enabled.HasValue
+                    ? new ModelRoutePolicy { ModelAlias = request.Model, IsEnabled = enabled.Value }
+                    : null);
+            var settings = new Mock<IGlobalSettingsCacheService>();
+            settings.Setup(service => service.GetSettingValueAsync("Routing.Defaults"))
+                .ReturnsAsync("{\"costWeight\":0.8,\"speedWeight\":0.1,\"qualityWeight\":0.1}");
+            var services = new Mock<IServiceProvider>();
+            services.Setup(provider => provider.GetService(typeof(IGlobalSettingsCacheService)))
+                .Returns(settings.Object);
+            var factory = new DatabaseAwareLLMClientFactory(
+                _mockCredentialService.Object, _mockMappingService.Object, _mockLoggerFactory.Object,
+                _mockHttpClientFactory.Object, _mockLogger.Object, services.Object,
+                routePolicyReader: reader.Object);
+
+            await Assert.ThrowsAsync<ServiceUnavailableException>(
+                () => factory.GetClientForChatAsync(request, cancellation.Token));
+
+            reader.Verify(service => service.GetByAliasAsync(request.Model, cancellation.Token), Times.Once);
+            settings.Verify(service => service.GetSettingValueAsync("Routing.Defaults"),
+                usesDefaults ? Times.Once() : Times.Never());
+        }
+
+        [Fact]
+        public async Task GetClientForChatAsync_PropagatesNamedPolicyReaderCancellation()
+        {
+            var request = NewChatRequest();
+            _mockMappingService.Setup(service => service.GetMappingsByModelAliasAsync(request.Model))
+                .ReturnsAsync([NewRoutableMapping(1)]);
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+            var reader = new Mock<IModelRoutePolicyReader>();
+            reader.Setup(service => service.GetByAliasAsync(request.Model, cancellation.Token))
+                .ThrowsAsync(new OperationCanceledException(cancellation.Token));
+            var factory = new DatabaseAwareLLMClientFactory(
+                _mockCredentialService.Object, _mockMappingService.Object, _mockLoggerFactory.Object,
+                _mockHttpClientFactory.Object, _mockLogger.Object, Mock.Of<IServiceProvider>(),
+                routePolicyReader: reader.Object);
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => factory.GetClientForChatAsync(request, cancellation.Token));
+
+            reader.Verify(service => service.GetByAliasAsync(request.Model, cancellation.Token), Times.Once);
+            _mockCredentialService.Verify(service => service.GetProviderByIdAsync(It.IsAny<int>()), Times.Never);
+        }
 
         private static ModelProviderMapping NewRoutableMapping(
             int id,

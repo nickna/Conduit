@@ -252,6 +252,12 @@ public sealed class HostCompositionTests
     {
         var factory = Assert.IsType<ConduitLLM.Providers.DatabaseAwareLLMClientFactory>(
             provider.GetRequiredService<ILLMClientFactory>());
+        var policyReader = Assert.IsType<EfModelRoutePolicyReader>(
+            provider.GetRequiredService<IModelRoutePolicyReader>());
+        Assert.Single(descriptors, descriptor => descriptor.ServiceType == typeof(IModelRoutePolicyReader));
+        Assert.Same(policyReader, typeof(ConduitLLM.Providers.DatabaseAwareLLMClientFactory).GetField(
+            "_routePolicyReader",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(factory));
         var reader = provider.GetService<IProviderRuntimeSelectionReader>();
         var field = typeof(ConduitLLM.Providers.DatabaseAwareLLMClientFactory).GetField(
             "_runtimeProviderSelectionReader",

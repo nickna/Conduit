@@ -7,6 +7,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Core\ConduitLLM.Core.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Composition\ConduitLLM.Persistence.Composition.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Messaging.Wolverine\ConduitLLM.Messaging.Wolverine.csproj" />
   </ItemGroup>
 

@@ -2,6 +2,24 @@
 
 Gateway runtime feature support, exclusions, process gates, and the third-party risk ledger are defined in [gateway-native-aot-feature-matrix.md](gateway-native-aot-feature-matrix.md). A successful publish alone is not a claim that the full JIT data plane is supported.
 
+## Dependency extraction: issue #1372
+
+The current assembly direction and package/profile ownership are recorded in
+[Admin and Gateway dependency boundaries](aot-dependency-boundaries.md). Core and
+Providers consume neutral persistence contracts; Configuration retains the EF
+implementation. Persistence.Composition owns the EF-dependent host registrations,
+discovery query and PostgreSQL connection/lock implementations formerly compiled
+into Core. The provider factory's JIT route-policy query now uses a named reader;
+its native runtime-store selection remains unchanged.
+
+Neutral type ownership, compatibility forwarding, evaluated project edges,
+resolved package graphs and runtime publish inputs/outputs are separate checks.
+Admin retains Functions/provider credential testing and Media/S3. Native SignalR
+omits the MessagePack client protocol while retaining the Redis backplane's
+internal MessagePack dependency. The host matrices and independent persistence,
+protocol and promotion requirements remain in force. Dated assessments below
+describe their original revisions and are not the current dependency inventory.
+
 ## Current selected-profile disposition: 2026-10-12
 
 The dated assessments and tables below retain their original source and evidence
@@ -170,7 +188,7 @@ workload readiness.
 | [#1369](https://github.com/nickna/Conduit/issues/1369), analyzer/publish gates | Implemented and verified. Empty analyzer/linker ratchets, SDK checks, Linux process/image gates, symbols separation, and retained baselines exist. | Reconcile the issue checklist with the linked run; retain the gates for subsequent slices. |
 | [#1370](https://github.com/nickna/Conduit/issues/1370), serialization/validation | Original reflection fallbacks, enum boot failure, and validation warnings are resolved. [ADR 0004](../decisions/0004-json-source-generation-contract-inventory.md) now distinguishes its historical scope from current generated contracts. | Exercise the remaining endpoint/provider graphs with reflection disabled; representative fixtures and OpenAPI materialization are insufficient for every runtime payload. |
 | [#1371](https://github.com/nickna/Conduit/issues/1371), reflection/discovery | Static handler bridges/registries, provider capabilities, decorator traversal, and production `RunAsync` replace the original application discovery paths. | Review and retain bounded third-party Wolverine/EF metadata exceptions; remove them only with upstream support and passing native tests. |
-| [#1372](https://github.com/nickna/Conduit/issues/1372), dependency boundaries | Neutral Contracts and Persistence.Abstractions plus optional adapter projects are extracted; generation tooling is opt-in. Functions excludes unused EF/Npgsql/build-tool packages with a resolved dependency guard. Native SignalR excludes the optional MessagePack client protocol package with a resolved dependency guard. | Configuration still owns EF and references Functions, and Core/Providers still depend on it. Continue checking transitive publish dependencies as well as direct assembly references. The Redis backplane still requires MessagePack for its internal transport. |
+| [#1372](https://github.com/nickna/Conduit/issues/1372), dependency boundaries | Neutral Contracts and Persistence.Abstractions plus adapter ownership are extracted; generation tooling is opt-in. Core/Providers no longer reference Configuration. Configuration retains EF and consumes neutral function contracts. | See the [current owner/profile inventory](aot-dependency-boundaries.md) and exact PR evidence for graph/publish verification. Redis backplane MessagePack, Admin credential testing and S3 remain required exceptions. |
 | [#1373](https://github.com/nickna/Conduit/issues/1373), persistence | Standalone migrator, schema-version seam, two accepted ADRs, typed stores, and real database/native probes exist. | Complete the [remaining operation inventory](persistence-aot-query-inventory.md), including Admin workloads and Gateway workers/new discovery consumers. The 25 method-scoped query exceptions remain unsupported work, not completed queries. |
 | [#1374](https://github.com/nickna/Conduit/issues/1374), runtime parity | OpenAI-compatible chat/SSE/accounting/image storage, authenticated JSON hubs, Redis backplane, and bounded Wolverine delivery pass natively. | Prove normal readiness, invalidation, tools/functions, additional providers/media, durable recovery and failures, and native aggregate values. See the [feature matrix](gateway-native-aot-feature-matrix.md) for exact evidence limits. |
 | [#1375](https://github.com/nickna/Conduit/issues/1375), rollout | Minimal candidate-image, scan/attestation, benchmark and promotion-policy machinery exists. No release-workflow runs or production canary evidence were found during this audit. | Representative digest-pinned benchmarks, successor persistence approval, release evidence, dashboards/alerts, rollback rehearsals, then ordered 168-hour Admin and Gateway soaks. Keep `promotion-policy.json` blocked and JIT deployable. |
