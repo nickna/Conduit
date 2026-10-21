@@ -165,6 +165,50 @@ Case 'snapshot callback retains its specific assertion when the helper swallows 
     Assert ($null -ne $diagnostic -and $diagnostic.reason -ceq 'snapshot-latch-failed' -and $diagnostic.assertion -ceq 'Unexpected or duplicate snapshot seam.') 'The callback must preserve its cause before helper classification replaces the exception.'
     Assert ($diagnostic.assertionLine -eq $snapshotAssertionLine) 'Callback evidence must retain the exact assertion caller line in the extracted latch.'
 }
+Case 'snapshot callback waits for delayed grandchild reparenting before establishing the timeline' {
+    $rootProcess = [Diagnostics.Process]::GetCurrentProcess()
+    $cleanupBudget = [Threading.CancellationTokenSource]::new()
+    try {
+        $fixture['cleanupToken'] = $cleanupBudget.Token
+        $fixture['controlCalls'] = [Collections.Generic.List[string]]::new()
+        $externalParentId = if ($rootProcess.Id -eq 1) { 2 } else { 1 }
+        $rootIdentity = [ordered]@{ id = $rootProcess.Id; startToken = '100'; stdout = 'pipe:[101]'; stderr = 'pipe:[102]' }
+        $childIdentity = [ordered]@{ id = 20; parentId = $rootProcess.Id; startToken = '200' }
+        $script:scenario = [ordered]@{
+            name = 'late-fork-after-snapshot'; armed = $true; snapshotSeen = $false; lateTimelineEstablished = $false; timelineFailure = $null
+            identities = [ordered]@{ root = $rootIdentity; child = $childIdentity }
+            events = [Collections.Generic.List[object]]::new(); reparenting = $fixture.evidence
+        }
+        $records = [Collections.Generic.List[object]]::new()
+        $records.Add([pscustomobject]@{ Identity = [pscustomobject]@{ Id = 20; ParentId = $rootProcess.Id; StartToken = '200' } })
+        # These control seams are local to this case. The snapshot callback,
+        # Observe ownership validation and Wait-Reparenting remain source-derived.
+        function Read-Ready([string]$Role) {
+            Assert ($Role -ceq 'grandchild') 'The snapshot callback must latch only the new grandchild.'
+            $fixture.controlCalls.Add('ready-grandchild')
+            return [ordered]@{ identity = (New-Identity 20) }
+        }
+        function Command-Actor([string]$Role, [string]$Command, [Threading.CancellationToken]$Token) {
+            Assert ($Token.Equals($fixture.cleanupToken)) 'Actor control must retain the shared cleanup token.'
+            $Token.ThrowIfCancellationRequested()
+            $fixture.controlCalls.Add($Role + ':' + $Command)
+        }
+        function Wait-Completion($Expected, [Threading.CancellationToken]$Token) {
+            Assert ($Expected.id -eq 20 -and $Expected.startToken -ceq '200' -and $Token.Equals($fixture.cleanupToken)) 'The snapshot callback must wait for its latched child under the shared cleanup token.'
+            Assert (-not $scenario.lateTimelineEstablished) 'Child completion must not establish the late-fork timeline.'
+            $fixture.controlCalls.Add('wait-child')
+            return [ordered]@{ id = 20; startToken = '200'; completion = 'matching-zombie'; identity = $Expected }
+        }
+        $fixture.observations.Enqueue((New-Identity 20)); $fixture.observations.Enqueue((New-Identity 20)); $fixture.observations.Enqueue((New-Identity $externalParentId))
+        Invoke-Issue1674SnapshotLatch $rootProcess $records $cleanupBudget.Token
+        Assert ($scenario.snapshotSeen -and $scenario.lateTimelineEstablished -and $null -eq $scenario.timelineFailure) 'The actual snapshot callback must establish the completed controlled timeline.'
+        Assert ($fixture.evidence.established -and $fixture.evidence.attempts -eq 3 -and $fixture.reads -eq 3 -and $fixture.pauses -eq 2) 'The callback must poll both retained-child observations before accepting external reparenting.'
+        Assert ($fixture.evidence.lastObservation.identity.parentId -eq $externalParentId -and $fixture.evidence.lastObservation.startToken -ceq '300') 'The callback must retain its accepted matching grandchild identity.'
+        Assert (($fixture.controlCalls -join ',') -ceq 'child:fork,ready-grandchild,grandchild:ping,child:exit,wait-child') 'The callback must retain the synchronized actor command and child completion sequence.'
+        Assert ((@($scenario.events | ForEach-Object stage) -join ',') -ceq 'actual-helper-descendant-snapshot-complete,post-snapshot-grandchild-latched,late-grandchild-reparented-before-helper-termination') 'The callback must record the snapshot, grandchild latch and established reparenting in order.'
+        Assert ($scenario.events[2].grandchild.identity.parentId -eq $externalParentId) 'The timeline event must contain the successful external reparenting observation.'
+    } finally { $cleanupBudget.Dispose(); $rootProcess.Dispose() }
+}
 Case 'ordinary exception messages cannot reach public failure evidence' {
     $sentinel = 'synthetic-private-sentinel-' + [Guid]::NewGuid().ToString('N')
     $failure = Expect-Rejection { throw [InvalidOperationException]::new($sentinel) }
@@ -173,7 +217,7 @@ Case 'ordinary exception messages cannot reach public failure evidence' {
     Assert (-not ($diagnostic | ConvertTo-Json -Depth 8).Contains($sentinel)) 'Private exception text must remain absent from public failure evidence.'
 }
 $passed = @($rows | Where-Object passed -eq $true).Count
-if ($rows.Count -ne 15 -or $passed -ne $rows.Count) {
+if ($rows.Count -ne 16 -or $passed -ne $rows.Count) {
     foreach ($row in $rows) { if (-not $row.passed) { Write-Error ($row.name + ': ' + $row.message) -ErrorAction Continue } }
     throw ('Lifecycle transition contracts failed: ' + $passed + '/' + $rows.Count + '.')
 }
