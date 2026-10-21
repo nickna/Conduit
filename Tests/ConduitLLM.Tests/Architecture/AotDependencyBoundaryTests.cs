@@ -120,6 +120,8 @@ public sealed class AotDependencyBoundaryTests
             typeof(IEventBus).Assembly,
             "ConduitLLM.Functions",
             "Microsoft.EntityFrameworkCore",
+            "Npgsql",
+            "Microsoft.Build",
             "Wolverine",
             "Microsoft.AspNetCore.SignalR",
             "AWSSDK",
@@ -153,6 +155,22 @@ public sealed class AotDependencyBoundaryTests
             "Microsoft.ML.Tokenizers");
     }
 
+    [Theory]
+    [InlineData("ConduitLLM.Core")]
+    [InlineData("ConduitLLM.Providers")]
+    [InlineData("ConduitLLM.Tokenization")]
+    public void ExecutionAssembliesDoNotReferencePersistenceImplementations(string assemblyName)
+    {
+        AssertDoesNotReference(
+            Assembly.Load(assemblyName),
+            "ConduitLLM.Configuration",
+            "ConduitLLM.Persistence.Composition",
+            "ConduitLLM.Persistence.Npgsql",
+            "Microsoft.EntityFrameworkCore",
+            "Npgsql",
+            "Microsoft.Build");
+    }
+
     [Fact]
     public void PersistenceDoesNotOwnMessagingOrBuildTooling()
     {
@@ -173,7 +191,13 @@ public sealed class AotDependencyBoundaryTests
             "Microsoft.EntityFrameworkCore",
             "Npgsql",
             "Wolverine",
-            "Microsoft.AspNetCore.SignalR");
+            "Microsoft.AspNetCore.SignalR",
+            "Microsoft.Build",
+            "MessagePack",
+            "AWSSDK",
+            "Amazon.",
+            "Microsoft.OpenApi",
+            "Microsoft.ML.Tokenizers");
     }
 
     [Fact]

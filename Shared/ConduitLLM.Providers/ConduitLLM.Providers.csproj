@@ -2,7 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ConduitLLM.Core\ConduitLLM.Core.csproj" />
-    <ProjectReference Include="..\ConduitLLM.Configuration\ConduitLLM.Configuration.csproj" />
+    <ProjectReference Include="..\ConduitLLM.Persistence.Abstractions\ConduitLLM.Persistence.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -15,6 +15,11 @@
     <PackageReference Include="Polly" />
     <PackageReference Include="Polly.Contrib.WaitAndRetry" />
     <!-- AWS SDK for Bedrock removed - using direct HTTP calls with AWS Signature V4 -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Registration combines the provider factory with the host's persistence credential protector. -->
+    <Compile Remove="Extensions\ServiceCollectionExtensions.cs" />
   </ItemGroup>
 
 </Project>

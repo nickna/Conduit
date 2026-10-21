@@ -43,7 +43,8 @@ public sealed class FunctionPersistenceBoundaryTests
     {
         var references = typeof(FunctionConfiguration).Assembly.GetReferencedAssemblies();
         Assert.All(references, reference => Assert.False(
-            reference.Name!.StartsWith("ConduitLLM.", StringComparison.Ordinal) ||
+            (reference.Name!.StartsWith("ConduitLLM.", StringComparison.Ordinal) &&
+             reference.Name != "ConduitLLM.Contracts") ||
             reference.Name.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal) ||
             reference.Name.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal) ||
             reference.Name.StartsWith("Npgsql", StringComparison.Ordinal) ||

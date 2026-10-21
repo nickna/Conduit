@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../Shared/ConduitLLM.Core/ConduitLLM.Core.csproj" />
+    <ProjectReference Include="../../Shared/ConduitLLM.Persistence.Composition/ConduitLLM.Persistence.Composition.csproj" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
     <PackageReference Include="ZiggyCreatures.FusionCache" />
     <PackageReference Include="ZiggyCreatures.FusionCache.Backplane.StackExchangeRedis" />

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Host-facing composition owns EF queries and PostgreSQL infrastructure.
+       Core and Providers reference only the neutral persistence ports. -->
+  <ItemGroup>
+    <ProjectReference Include="..\ConduitLLM.Configuration\ConduitLLM.Configuration.csproj" />
+    <ProjectReference Include="..\ConduitLLM.Core\ConduitLLM.Core.csproj" />
+    <ProjectReference Include="..\ConduitLLM.Providers\ConduitLLM.Providers.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="DistributedLock.Postgres" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\ConduitLLM.Core\Data\ConnectionStringManager.cs" Link="Data\ConnectionStringManager.cs" />
+    <Compile Include="..\ConduitLLM.Core\Data\DatabaseConnectionFactory.cs" Link="Data\DatabaseConnectionFactory.cs" />
+    <Compile Include="..\ConduitLLM.Core\Data\Extensions\DatabaseServiceExtensions.cs" Link="Extensions\DatabaseServiceExtensions.cs" />
+    <Compile Include="..\ConduitLLM.Core\Extensions\DistributedLockServiceExtensions.cs" Link="Extensions\DistributedLockServiceExtensions.cs" />
+    <Compile Include="..\ConduitLLM.Core\Extensions\ApplicationCacheExtensions.cs" Link="Extensions\ApplicationCacheExtensions.cs" />
+    <Compile Include="..\ConduitLLM.Core\Services\PostgresDistributedLockProvider.cs" Link="PostgresDistributedLockProvider.cs" />
+    <Compile Include="..\ConduitLLM.Core\Services\DiscoveryModelProjector.cs" Link="DiscoveryModelProjector.cs" />
+    <Compile Include="..\ConduitLLM.Providers\Extensions\ServiceCollectionExtensions.cs" Link="Extensions\ProviderServiceCollectionExtensions.cs" />
+  </ItemGroup>
+</Project>

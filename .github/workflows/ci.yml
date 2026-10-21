@@ -288,6 +288,8 @@ jobs:
       - name: Run analyzer-only AOT audit
         shell: pwsh
         run: ./scripts/aot/aot-audit.ps1 -NoRestore
+      - name: Inventory native-profile project and resolved package boundaries
+        run: python scripts/architecture/dependency_graph.py --profile audit --output artifacts/aot-audit/dependency-graph.json
       - name: Verify native evidence file type contract
         shell: pwsh
         run: ./scripts/aot/test-native-evidence-file-types.ps1
@@ -357,6 +359,12 @@ jobs:
         run: |
           dotnet restore
           dotnet build --no-restore
+
+      - name: Dependency boundary regression fixtures
+        run: python -m unittest discover -s scripts/architecture -p 'test_*.py' -v
+
+      - name: Inventory JIT project and resolved package boundaries
+        run: python scripts/architecture/dependency_graph.py --profile jit --output artifacts/dependencies/jit.json
 
       - name: Main correctness suite and coverage
         uses: ./.github/actions/run-tests
@@ -431,7 +439,8 @@ jobs:
             project="Services/ConduitLLM.$service/ConduitLLM.$service.csproj"
             output="$publish_root/$service"
 
-            dotnet publish "$project" --configuration Release --output "$output"
+            dotnet publish "$project" --configuration Release --output "$output" \
+              -p:ConduitDependencyEvidenceDirectory="$GITHUB_WORKSPACE/artifacts/dependencies/publish"
 
             forbidden="$(
               find "$output" -maxdepth 1 -type f \
@@ -447,6 +456,15 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Retain JIT dependency ownership and publish inventory
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jit-dependency-inventory
+          path: artifacts/dependencies
+          retention-days: 30
+          if-no-files-found: error
 
   contracts:
     name: Contracts and official SDK clients

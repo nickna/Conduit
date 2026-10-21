@@ -1,0 +1,18 @@
+{
+  "ConduitLLM.Contracts": [],
+  "ConduitLLM.Persistence.Abstractions": ["ConduitLLM.Contracts"],
+  "ConduitLLM.Configuration": ["ConduitLLM.Contracts", "ConduitLLM.Persistence.Abstractions"],
+  "ConduitLLM.Core": ["ConduitLLM.Contracts", "ConduitLLM.Functions", "ConduitLLM.Persistence.Abstractions"],
+  "ConduitLLM.Functions": ["ConduitLLM.Contracts", "ConduitLLM.Persistence.Abstractions"],
+  "ConduitLLM.Providers": ["ConduitLLM.Core", "ConduitLLM.Contracts", "ConduitLLM.Persistence.Abstractions"],
+  "ConduitLLM.Persistence.Npgsql": ["ConduitLLM.Persistence.Abstractions"],
+  "ConduitLLM.Persistence.Composition": ["ConduitLLM.Core", "ConduitLLM.Configuration", "ConduitLLM.Providers"],
+  "ConduitLLM.Media": ["ConduitLLM.Core"],
+  "ConduitLLM.Messaging.Wolverine": ["ConduitLLM.Contracts", "ConduitLLM.Configuration", "ConduitLLM.Core"],
+  "ConduitLLM.OpenApi": [],
+  "ConduitLLM.Security": ["ConduitLLM.Core", "ConduitLLM.Configuration"],
+  "ConduitLLM.SignalR": ["ConduitLLM.Contracts", "ConduitLLM.Persistence.Abstractions", "ConduitLLM.Configuration"],
+  "ConduitLLM.Tokenization": ["ConduitLLM.Core"],
+  "ConduitLLM.Admin": ["ConduitLLM.Configuration", "ConduitLLM.Core", "ConduitLLM.Providers", "ConduitLLM.Security", "ConduitLLM.Media", "ConduitLLM.OpenApi", "ConduitLLM.Persistence.Abstractions", "ConduitLLM.Persistence.Npgsql", "ConduitLLM.Persistence.Composition", "ConduitLLM.Messaging.Wolverine"],
+  "ConduitLLM.Gateway": ["ConduitLLM.Configuration", "ConduitLLM.Core", "ConduitLLM.Providers", "ConduitLLM.Security", "ConduitLLM.Media", "ConduitLLM.OpenApi", "ConduitLLM.SignalR", "ConduitLLM.Tokenization", "ConduitLLM.Messaging.Wolverine", "ConduitLLM.Persistence.Npgsql", "ConduitLLM.Persistence.Composition"]
+}

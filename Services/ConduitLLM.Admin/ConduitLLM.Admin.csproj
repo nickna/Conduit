@@ -44,6 +44,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Shared\ConduitLLM.Configuration\ConduitLLM.Configuration.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Core\ConduitLLM.Core.csproj" />
+    <ProjectReference Include="..\..\Shared\ConduitLLM.Persistence.Composition\ConduitLLM.Persistence.Composition.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Providers\ConduitLLM.Providers.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Security\ConduitLLM.Security.csproj" />
     <ProjectReference Include="..\..\Shared\ConduitLLM.Media\ConduitLLM.Media.csproj" />

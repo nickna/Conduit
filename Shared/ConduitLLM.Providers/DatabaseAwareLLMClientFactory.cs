@@ -11,7 +11,6 @@ using ConduitLLM.Core.Services;
 using ConduitLLM.Providers.Configuration;
 using ConduitLLM.Persistence.Interfaces;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -39,7 +38,7 @@ namespace ConduitLLM.Providers
         private readonly ILogger<DatabaseAwareLLMClientFactory> _logger;
         private readonly IPerformanceMetricsService? _performanceMetricsService;
         private readonly IServiceProvider _serviceProvider;
-        private readonly IDbContextFactory<ConduitDbContext>? _dbContextFactory;
+        private readonly IModelRoutePolicyReader? _routePolicyReader;
         private readonly IDistributedCache? _distributedCache;
         private readonly IModelProviderMappingRuntimeStore? _runtimeMappingStore;
         private readonly IProviderRuntimeSelectionReader? _runtimeProviderSelectionReader;
@@ -55,7 +54,7 @@ namespace ConduitLLM.Providers
             ILogger<DatabaseAwareLLMClientFactory> logger,
             IServiceProvider serviceProvider,
             IPerformanceMetricsService? performanceMetricsService = null,
-            IDbContextFactory<ConduitDbContext>? dbContextFactory = null,
+            IModelRoutePolicyReader? routePolicyReader = null,
             IDistributedCache? distributedCache = null,
             IModelProviderMappingRuntimeStore? runtimeMappingStore = null,
             IProviderRuntimeSelectionReader? runtimeProviderSelectionReader = null)
@@ -67,7 +66,7 @@ namespace ConduitLLM.Providers
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _performanceMetricsService = performanceMetricsService;
-            _dbContextFactory = dbContextFactory;
+            _routePolicyReader = routePolicyReader;
             _distributedCache = distributedCache;
             _runtimeMappingStore = runtimeMappingStore;
             _runtimeProviderSelectionReader = runtimeProviderSelectionReader;
@@ -183,11 +182,9 @@ namespace ConduitLLM.Providers
                     };
                 }
             }
-            else if (_dbContextFactory is not null)
+            else if (_routePolicyReader is not null)
             {
-                await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-                var persisted = await context.ModelRoutePolicies.AsNoTracking()
-                    .SingleOrDefaultAsync(policy => policy.ModelAlias == alias, cancellationToken);
+                var persisted = await _routePolicyReader.GetByAliasAsync(alias, cancellationToken);
                 if (persisted is not null && persisted.IsEnabled) return persisted;
             }
             var result = new ModelRoutePolicy { ModelAlias = alias };

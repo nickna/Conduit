@@ -25,6 +25,7 @@ on:
       - 'Tests/ConduitLLM.Tests/Configuration/Services/GlobalSettingsCacheServiceTests.cs'
       - 'Tests/ConduitLLM.Tests/Core/Caching/FusionFunctionDiscoveryCacheTests.cs'
       - 'Tests/ConduitLLM.Tests/HostCompositionTests.cs'
+      - 'Tests/ConduitLLM.Tests/Architecture/**'
       - 'Tests/ConduitLLM.IntegrationTests/**'
       - 'Tests/ConduitLLM.PersistenceAotTests/**'
       - 'Tests/ConduitLLM.PersistenceConverterAotTests/**'
@@ -34,6 +35,7 @@ on:
       - 'tools/ConduitLLM.HealthProbe/**'
       - 'tools/WolverineSmokePublisher/**'
       - 'scripts/aot/**'
+      - 'scripts/architecture/**'
       - 'deploy/native-canary/**'
       - 'scripts/db/providers/*.json'
       - 'scripts/ci/run-tests.ps1'
@@ -194,9 +196,14 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      - name: Inventory native project and resolved package boundaries
+        run: python scripts/architecture/dependency_graph.py --profile native --restore --output artifacts/native-aot/reports/dependency-graph.json
+
       - name: Publish both native services
         shell: pwsh
         run: ./scripts/aot/publish-native.ps1
+        env:
+          ConduitDependencyEvidenceDirectory: ${{ github.workspace }}/artifacts/native-aot/reports/dependencies
 
       - name: Launch native OpenAPI smokes
         id: native-smoke

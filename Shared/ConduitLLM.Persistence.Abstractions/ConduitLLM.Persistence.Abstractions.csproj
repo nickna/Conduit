@@ -3,6 +3,56 @@
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\ConduitLLM.Contracts\ConduitLLM.Contracts.csproj" />
+    <InternalsVisibleTo Include="ConduitLLM.Configuration" />
+    <InternalsVisibleTo Include="ConduitLLM.Tests" />
+    <InternalsVisibleTo Include="ConduitLLM.SerializationTests" />
+  </ItemGroup>
+
+  <!-- POCOs and ports retain their established namespaces and source paths.
+       EF's context, mappings, repositories and implementation helpers stay in
+       Configuration; none of its implementation packages enter this leaf. -->
+  <ItemGroup>
+    <Compile Include="..\ConduitLLM.Configuration\Entities\**\*.cs"
+             Exclude="..\ConduitLLM.Configuration\Entities\WebhookDeliveryRecord.cs;..\ConduitLLM.Configuration\Entities\WebhookReplayAudit.cs"
+             Link="Configuration\Entities\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\ConduitLLM.Configuration\DTOs\**\*.cs"
+             Link="Configuration\DTOs\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\ConduitLLM.Configuration\Interfaces\*.cs"
+             Exclude="..\ConduitLLM.Configuration\Interfaces\IConfigurationDbContext.cs"
+             Link="Configuration\Interfaces\%(Filename)%(Extension)" />
+    <Compile Include="..\ConduitLLM.Configuration\Repositories\IModelRepository.cs;..\ConduitLLM.Configuration\Repositories\IModelSeriesRepository.cs"
+             Link="Configuration\Interfaces\%(Filename)%(Extension)" />
+    <Compile Include="..\ConduitLLM.Configuration\Models\*.cs;
+                      ..\ConduitLLM.Configuration\Enums\*.cs;
+                      ..\ConduitLLM.Configuration\Constants\*.cs;
+                      ..\ConduitLLM.Configuration\Exceptions\*.cs;
+                      ..\ConduitLLM.Configuration\Validation\*.cs;
+                      ..\ConduitLLM.Configuration\Options\*.cs"
+             Exclude="..\ConduitLLM.Configuration\Options\GeneratedOptionsValidators.cs"
+             Link="Configuration\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\ConduitLLM.Configuration\ConduitSettings.cs;
+                      ..\ConduitLLM.Configuration\PerformanceTrackingSettings.cs;
+                      ..\ConduitLLM.Configuration\Providers\ProviderAdapterDefaultsRegistry.cs;
+                      ..\ConduitLLM.Configuration\Security\IProviderSecretProtector.cs;
+                      ..\ConduitLLM.Configuration\Services\ConduitValidationResult.cs;
+                      ..\ConduitLLM.Configuration\Serialization\ConfigurationJsonContext.cs;
+                      ..\ConduitLLM.Configuration\Serialization\ConfigurationModelJsonContext.cs;
+                      ..\ConduitLLM.Configuration\Serialization\ConfigurationSignalRJsonContext.cs;
+                      ..\ConduitLLM.Configuration\Extensions\ProviderMappingExtensions.cs;
+                      ..\ConduitLLM.Configuration\Extensions\RepositoryPaginationExtensions.cs;
+                      ..\ConduitLLM.Configuration\Extensions\DeprecationWarnings.cs"
+             Link="Configuration\%(Filename)%(Extension)" />
+    <Compile Include="..\ConduitLLM.Configuration\Utilities\*.cs"
+             Exclude="..\ConduitLLM.Configuration\Utilities\DbUpdateExceptions.cs;
+                      ..\ConduitLLM.Configuration\Utilities\ResourceMutationGuard.cs;
+                      ..\ConduitLLM.Configuration\Utilities\PostgresConnectionStringParser.cs;
+                      ..\ConduitLLM.Configuration\Utilities\RedisUrlParser.cs"
+             Link="Configuration\Utilities\%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <!-- These unchanged public contracts retain their Functions namespaces.
        Ownership belongs to this neutral leaf; provider clients and services
        remain in Functions and are not dependencies of persistence. -->

@@ -55,6 +55,9 @@
     <Compile Remove="Messaging\*.cs" />
     <Compile Remove="Messaging\Wolverine\*.cs" />
     <Compile Remove="Data\SimpleMigrationService.cs" />
+    <Compile Remove="Events\*.cs;DTOs\**\*.cs;Entities\**\*.cs;Interfaces\*.cs;Repositories\IModelRepository.cs;Repositories\IModelSeriesRepository.cs;Models\*.cs;Enums\*.cs;Constants\*.cs;Exceptions\*.cs;Validation\*.cs;Options\*.cs;Utilities\*.cs" />
+    <Compile Include="Entities\WebhookDeliveryRecord.cs;Entities\WebhookReplayAudit.cs;Interfaces\IConfigurationDbContext.cs;Options\GeneratedOptionsValidators.cs;Utilities\DbUpdateExceptions.cs;Utilities\ResourceMutationGuard.cs;Utilities\PostgresConnectionStringParser.cs;Utilities\RedisUrlParser.cs" />
+    <Compile Remove="ConduitSettings.cs;PerformanceTrackingSettings.cs;Providers\ProviderAdapterDefaultsRegistry.cs;Security\IProviderSecretProtector.cs;Services\ConduitValidationResult.cs;Serialization\ConfigurationJsonContext.cs;Serialization\ConfigurationModelJsonContext.cs;Serialization\ConfigurationSignalRJsonContext.cs;Extensions\ProviderMappingExtensions.cs;Extensions\RepositoryPaginationExtensions.cs;Extensions\DeprecationWarnings.cs" />
   </ItemGroup>
 
   <!-- The generated EF model is a native runtime artifact. Excluding it from JIT
