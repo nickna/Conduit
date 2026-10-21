@@ -83,7 +83,15 @@ npm run validate:openapi
 npm run verify:offline
 ```
 
-Generation does not require running PostgreSQL, Redis, or provider services. `verify:offline` generates both contracts and WebAdmin types twice in isolated directories, checks byte stability, and compares them with committed files. CI runs this verification and rejects drift. Run the focused .NET contract tests from the repository root:
+Generation requires the .NET SDK selected by `global.json` and Node.js/npm, but does not require Docker, PostgreSQL, Redis, or provider services. The offline commands above replace the retired `tools/openapi/docker-compose.codegen.yml` stack and its `generate:docker`, `generate:admin:docker`, and `generate:gateway:docker` npm commands. To migrate an existing Docker codegen invocation, run these commands from the repository root:
+
+```bash
+dotnet restore Conduit.slnx
+npm --prefix tools/openapi ci
+npm --prefix tools/openapi run generate:offline
+```
+
+`verify:offline` generates both contracts and WebAdmin types twice in isolated directories, checks byte stability, and compares them with committed files. CI runs this verification and rejects drift. Run the focused .NET contract tests from the repository root:
 
 ```bash
 dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj --filter Component=OpenApi
