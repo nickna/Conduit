@@ -5,8 +5,8 @@
   "description": "Authoritative contract and WebAdmin type generation tools",
   "scripts": {
     "generate": "npm run generate:admin && npm run generate:gateway",
-    "generate:admin": "openapi-typescript http://localhost:5001/swagger/v1/swagger.json -o ../../WebAdmin/src/generated/admin-api.ts",
-    "generate:gateway": "openapi-typescript http://localhost:5000/swagger/v1/swagger.json -o ../../WebAdmin/src/generated/gateway-api.ts",
+    "generate:admin": "openapi-typescript http://localhost:5002/openapi/v1.json -o ../../WebAdmin/src/generated/admin-api.ts",
+    "generate:gateway": "openapi-typescript http://localhost:5000/openapi/v1.json -o ../../WebAdmin/src/generated/gateway-api.ts",
     "generate:from-files": "npm run generate:gateway:file && npm run generate:admin:file",
     "generate:admin:file": "openapi-typescript ../../Services/ConduitLLM.Admin/openapi-admin.json -o ../../WebAdmin/src/generated/admin-api.ts",
     "generate:offline": "node generate-openapi-offline.mjs all",
@@ -19,7 +19,7 @@
     "test:sdk-smoke": "dotnet test ../../Tests/ConduitLLM.IntegrationTests/ConduitLLM.IntegrationTests.csproj --no-build --no-restore --filter Component=OpenAiSdkSmoke",
     "validate:invariants": "node validate-openapi.mjs",
     "lint:openapi": "node lint-openapi.mjs",
-    "validate:openapi": "node --test ../../scripts/ci/redocly-warning.test.mjs lint-openapi.test.mjs chat-unions.test.mjs && npm run validate:ratchet:self-test && npm run lint:openapi && npm run validate:invariants",
+    "validate:openapi": "node --test ../../scripts/ci/redocly-warning.test.mjs lint-openapi.test.mjs chat-unions.test.mjs live-generation.test.mjs legacy-generator.test.mjs && npm run validate:ratchet:self-test && npm run lint:openapi && npm run validate:invariants",
     "verify:offline": "node verify-openapi-determinism.test.mjs && node verify-openapi-determinism.mjs",
     "clean": "rm -rf ../../WebAdmin/src/generated"
   },
