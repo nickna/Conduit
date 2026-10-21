@@ -173,6 +173,22 @@ docker pull ghcr.io/nickna/conduit-http:latest
 The checked-in [`docker-compose.yml`](docker-compose.yml) is the reference for wiring them
 together (environment variables, health checks, and the observability stack).
 
+To build the production images locally, run these commands from the repository root.
+Each service has its own Dockerfile; the repository root is the build context for all three:
+
+```bash
+docker build -f Services/ConduitLLM.Admin/Dockerfile -t conduit-admin:local .
+docker build -f Services/ConduitLLM.Gateway/Dockerfile -t conduit-http:local .
+docker build -f WebAdmin/Dockerfile -t conduit-webadmin:local .
+```
+
+The obsolete combined .NET WebAdmin/SQLite root `Dockerfile` has been removed.
+Use the service Dockerfiles above instead of `docker build .` or `docker build -f Dockerfile .`.
+WebAdmin is a Node application, and the APIs require PostgreSQL. To build and start the
+complete stack, follow the environment setup under [Run with Docker Compose](#run-with-docker-compose)
+and run `docker compose up --build -d` from the repository root. Compose also runs the
+required schema migration before starting the APIs.
+
 ## Configuration
 
 Configuration lives in two places: **deploy-time environment variables** (connection strings,

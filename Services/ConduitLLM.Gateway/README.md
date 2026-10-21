@@ -109,10 +109,12 @@ For more help, see the Database Status page in the WebAdmin.
    dotnet run --project ConduitLLM.Gateway
    ```
 2. **With Docker:**
+   From the repository root, build the Gateway image:
    ```bash
-   docker build -t conduitllm-http .
-   docker run -e HttpApiHttpPort=5000 -e HttpApiHttpsPort=5003 -p 5000:5000 -p 5003:5003 conduitllm-http
+   docker build -f Services/ConduitLLM.Gateway/Dockerfile -t conduit-http:local .
    ```
+   Follow the root [Docker Compose instructions](../../README.md#run-with-docker-compose)
+   to configure PostgreSQL, Redis, and the required schema migration before starting the APIs.
 3. **With Docker Compose:**
    ```bash
    docker compose up -d
