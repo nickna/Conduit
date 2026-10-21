@@ -4,7 +4,26 @@ param([string]$ActorDll,[string]$OutputDirectory,
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 if(-not $IsLinux){throw 'Process cleanup lifecycle requires Linux.'}
 if(-not $OutputDirectory){$OutputDirectory=Join-Path $PSScriptRoot ('../../artifacts/native-aot/reports/process-cleanup-lifecycle-'+[Guid]::NewGuid().ToString('N'))}
-function Require([bool]$Value,[string]$Message){if(-not $Value){throw $Message}}
+function Require([bool]$Value,[string]$Message){
+    if(-not $Value){
+        $failure=[InvalidOperationException]::new($Message)
+        # Only source-authored assertions are public; never copy arbitrary exception text.
+        $failure.Data['fixtureAssertion']=$Message
+        $failure.Data['fixtureAssertionLine']=(Get-PSCallStack)[1].ScriptLineNumber
+        throw $failure
+    }
+}
+function New-FixtureFailure([string]$Reason,[Management.Automation.ErrorRecord]$Failure){
+    $result=[ordered]@{reason=$Reason;exceptionType=$Failure.Exception.GetType().FullName;line=$Failure.InvocationInfo.ScriptLineNumber;assertion=$null;assertionLine=$null}
+    $errorValue=$Failure.Exception
+    while($null -ne $errorValue){
+        if($errorValue.Data.Contains('fixtureAssertion')){
+            $result.assertion=$errorValue.Data['fixtureAssertion'];$result.assertionLine=$errorValue.Data['fixtureAssertionLine'];break
+        }
+        $errorValue=$errorValue.InnerException
+    }
+    return $result
+}
 function Hash([string]$Path){(Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()}
 function Write-NewJson([string]$Path,$Value){
     $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($Value|ConvertTo-Json -Depth 22));$stream=[IO.File]::Open($Path,'CreateNew','Write','Read')
@@ -65,6 +84,18 @@ function Observe($Expected){
 function Wait-Completion($Expected,[Threading.CancellationToken]$Token){
     while($true){$Token.ThrowIfCancellationRequested();$observed=Observe $Expected;if($observed.completion -cne 'live'){return $observed};Start-Sleep -Milliseconds 10}
 }
+function Wait-Reparenting($Expected,[int]$ChildId,[int]$RootId,[Threading.CancellationToken]$Token,[Collections.IDictionary]$Evidence){
+    while($true){
+        $Token.ThrowIfCancellationRequested()
+        $Evidence.attempts++;$observed=Observe $Expected;$Evidence.lastObservation=$observed
+        $Token.ThrowIfCancellationRequested()
+        Require ($observed.completion -ceq 'live') 'Late grandchild exited before reparenting.'
+        if($observed.identity.parentId -ne $ChildId -and $observed.identity.parentId -ne $RootId){$Evidence.established=$true;return $observed}
+        # A completed child leader does not establish completion of reparenting.
+        # Poll the matching live grandchild under the helper's existing reap token.
+        Start-Sleep -Milliseconds 10
+    }
+}
 function Read-Ready([string]$Role){
     $path=Join-Path $script:scenario.directory ($Role+'.json')
     if(-not [IO.File]::Exists($path)){return $null}
@@ -101,6 +132,7 @@ function Latch-Initial([Threading.CancellationToken]$Token){
     return $true
 }
 function Invoke-Issue1674SnapshotLatch([Diagnostics.Process]$RootProcess,[Collections.Generic.List[object]]$Records,[Threading.CancellationToken]$Token){
+    try{
     Require ($script:scenario.name -ceq 'late-fork-after-snapshot' -and $script:scenario.armed -and -not $script:scenario.snapshotSeen) 'Unexpected or duplicate snapshot seam.'
     Require ($RootProcess.Id -eq $script:scenario.identities.root.id -and $Records.Count -eq 1 -and $null -ne $Records[0].Identity -and $Records[0].Identity.Id -eq $script:scenario.identities.child.id -and [string]$Records[0].Identity.StartToken -ceq $script:scenario.identities.child.startToken) 'Actual helper snapshot did not retain exactly the latched child.'
     $script:scenario.snapshotSeen=$true
@@ -112,10 +144,15 @@ function Invoke-Issue1674SnapshotLatch([Diagnostics.Process]$RootProcess,[Collec
     Command-Actor 'grandchild' 'ping' $Token;$script:scenario.identities['grandchild']=$grandchild.identity
     $script:scenario.events.Add([ordered]@{stage='post-snapshot-grandchild-latched';ticks=[Diagnostics.Stopwatch]::GetTimestamp();grandchild=$grandchild.identity})
     Command-Actor 'child' 'exit' $Token;$childCompletion=Wait-Completion $script:scenario.identities.child $Token
-    $reparented=Observe $grandchild.identity
-    Require ($reparented.completion -ceq 'live' -and $reparented.identity.parentId -ne $script:scenario.identities.child.id -and $reparented.identity.parentId -ne $script:scenario.identities.root.id) 'Late grandchild was not reparented outside the root snapshot.'
+    $reparented=Wait-Reparenting $grandchild.identity $script:scenario.identities.child.id $script:scenario.identities.root.id $Token $script:scenario.reparenting
     $script:scenario.events.Add([ordered]@{stage='late-grandchild-reparented-before-helper-termination';ticks=[Diagnostics.Stopwatch]::GetTimestamp();child=$childCompletion;grandchild=$reparented})
     $script:scenario.lateTimelineEstablished=$true
+    }catch{
+        # The actual helper catches cleanup callback errors. Retain this cause before
+        # it is replaced by the public command classification or timeline assertion.
+        $script:scenario.timelineFailure=New-FixtureFailure 'snapshot-latch-failed' $_
+        throw
+    }
 }
 $source=[IO.File]::ReadAllText($Collector,[Text.UTF8Encoding]::new($false,$true));$tokens=$null;$errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseInput($source,[ref]$tokens,[ref]$errors)
@@ -144,8 +181,8 @@ try{
     $report.actorDllSha256=Hash $ActorDll
     foreach($name in @('root-exits-after-child-latch','late-fork-after-snapshot')){
         $caseDirectory=Join-Path $privateTop $name;$null=[IO.Directory]::CreateDirectory($caseDirectory);[IO.File]::SetUnixFileMode($caseDirectory,[IO.UnixFileMode]'UserRead,UserWrite,UserExecute')
-        $script:scenario=[ordered]@{name=$name;directory=$caseDirectory;armed=$false;snapshotSeen=$false;lateTimelineEstablished=$false;identities=[ordered]@{};events=[Collections.Generic.List[object]]::new()}
-        $row=[ordered]@{name=$name;helperFailure=$null;helperFailureType=$null;helperElapsedMilliseconds=$null;events=$null;beforeOuterCleanup=@();foreignBefore=$null;foreignAfter=$null;completionOrClosedFailure=$false;timelineEstablished=$false;cleanup=@();fixtureFailure=$null}
+        $script:scenario=[ordered]@{name=$name;directory=$caseDirectory;armed=$false;snapshotSeen=$false;lateTimelineEstablished=$false;timelineFailure=$null;reparenting=[ordered]@{attempts=0;lastObservation=$null;established=$false};identities=[ordered]@{};events=[Collections.Generic.List[object]]::new()}
+        $row=[ordered]@{name=$name;helperFailure=$null;helperFailureType=$null;helperElapsedMilliseconds=$null;events=$null;reparenting=$script:scenario.reparenting;beforeOuterCleanup=@();foreignBefore=$null;foreignAfter=$null;completionOrClosedFailure=$false;timelineEstablished=$false;cleanup=@();fixtureFailure=$null}
         $report.cases+=,$row;$foreign=[Diagnostics.Process]::new();$foreignStarted=$false;$foreignOut=$null;$foreignErr=$null;$foreignIdentity=$null
         $cleanup=[Collections.Generic.List[object]]::new();$watch=[Diagnostics.Stopwatch]::new()
         try{
@@ -160,6 +197,7 @@ try{
             Require ($foreignIdentity.id -eq $foreign.Id -and $foreignIdentity.parentId -eq $PID) 'Foreign control actor was not the direct owned fixture child.'
             if($name -ceq 'root-exits-after-child-latch'){. ([scriptblock]::Create($original))}else{. ([scriptblock]::Create($late))}
             $poll={param([int]$Remaining)
+                try{
                 if($script:scenario.armed){return}
                 if(-not (Latch-Initial $deadline.Token)){return}
                 $script:scenario.armed=$true
@@ -168,15 +206,16 @@ try{
                     $childNow=Observe $script:scenario.identities.child;Require ($childNow.completion -ceq 'live') 'Child did not remain live after root exit.'
                     $script:scenario.events.Add([ordered]@{stage='root-exited-with-child-holding-both-output-pipes';ticks=[Diagnostics.Stopwatch]::GetTimestamp();root=$rootDone;child=$childNow})
                 }
+                }catch{$script:scenario.timelineFailure=New-FixtureFailure 'initial-latch-failed' $_;throw}
             }
             $watch.Start()
             try{$unexpected=Invoke-BoundedProcess 'dotnet' @($ActorDll,'root',$caseDirectory) 5 @{ISSUE1674_PRIVATE_SENTINEL=$privateValue} $poll;$row.fixtureFailure='Helper unexpectedly returned a result despite held output pipes.'}
             catch{
                 $row.helperFailureType=$_.Exception.GetType().FullName
                 if($_.Exception.Message -cin @('Private command failed. [stage=command-deadline]','Private command failed and its cleanup failed. [stage=command-deadline]')){$row.helperFailure=$_.Exception.Message}
-                else{$row.fixtureFailure=[ordered]@{reason='unexpected-helper-classification';exceptionType=$_.Exception.GetType().FullName;line=$_.InvocationInfo.ScriptLineNumber}}
+                else{$row.fixtureFailure=New-FixtureFailure 'unexpected-helper-classification' $_}
             }
-            finally{$watch.Stop();$row.helperElapsedMilliseconds=$watch.Elapsed.TotalMilliseconds}
+            finally{$watch.Stop();$row.helperElapsedMilliseconds=$watch.Elapsed.TotalMilliseconds;if($null -ne $script:scenario.timelineFailure){$row.fixtureFailure=$script:scenario.timelineFailure}}
             Require ($script:scenario.armed -and ($name -cne 'late-fork-after-snapshot' -or ($script:scenario.snapshotSeen -and $script:scenario.lateTimelineEstablished))) 'Required controlled timeline was not reached.'
             Require ($watch.Elapsed.TotalSeconds -le 12) 'Helper exceeded five-second work plus five-second cleanup and two-second observation allowance.'
             $row.timelineEstablished=$true
@@ -187,7 +226,7 @@ try{
             $row.completionOrClosedFailure=$allDone -or $closed
             $row.foreignAfter=Observe $foreignIdentity;Require ($row.foreignAfter.completion -ceq 'live') 'Foreign control actor was terminated.'
             $foreignPing=[Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds(1));try{Command-Actor 'foreign' 'ping' $foreignPing.Token}finally{$foreignPing.Dispose()}
-        }catch{if($null -eq $row.fixtureFailure){$row.fixtureFailure=[ordered]@{reason='controlled-fixture-validation-failed';exceptionType=$_.Exception.GetType().FullName;line=$_.InvocationInfo.ScriptLineNumber}}}
+        }catch{if($null -eq $row.fixtureFailure){$row.fixtureFailure=New-FixtureFailure 'controlled-fixture-validation-failed' $_}}
         finally{
             # Each private control socket is cooperatively exited independently. No PID is signaled.
             foreach($role in @('grandchild','child','root','foreign')){
@@ -209,7 +248,7 @@ try{
             if(@($cleanup|Where-Object completed -eq $false).Count -gt 0){$report.cleanupFailures+=,$name}
         }
     }
-}catch{$report.setupFailure=[ordered]@{reason='lifecycle-fixture-setup-failed';exceptionType=$_.Exception.GetType().FullName;line=$_.InvocationInfo.ScriptLineNumber}}
+}catch{$report.setupFailure=New-FixtureFailure 'lifecycle-fixture-setup-failed' $_}
 finally{
     [Environment]::SetEnvironmentVariable('CONDUIT_NATIVE_BENCHMARK_API_KEY',$previousKey)
     $report.sourceStable=(Hash $Collector) -ceq $report.collectorSha256
