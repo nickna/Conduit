@@ -22,7 +22,7 @@ curl 'http://localhost:5000/v1/chat/completions' \
   -H 'Content-Type: application/json' \
   -d '{"model":"YOUR_MODEL_ALIAS","messages":[{"role":"user","content":"Hello"}]}'
 
-curl 'http://localhost:5001/v1/admin/virtual-keys' \
+curl 'http://localhost:5002/v1/admin/virtual-keys' \
   -H 'X-Master-Key: YOUR_MASTER_KEY'
 ```
 
@@ -90,6 +90,22 @@ dotnet restore Conduit.slnx
 npm --prefix tools/openapi ci
 npm --prefix tools/openapi run generate:offline
 ```
+
+The legacy `bash tools/openapi/generate-openapi-from-build.sh` entry point now delegates to `generate:offline` and returns its exit status. It uses the same restore/install prerequisites above; it no longer starts a development stack, fetches running hosts, or installs Swashbuckle tooling.
+
+### Generating types from running hosts or saved contracts
+
+The live aliases generate only WebAdmin TypeScript types from existing development hosts. They do not regenerate the authoritative JSON contracts or replace offline verification:
+
+```bash
+npm --prefix tools/openapi run generate          # Admin :5002 and Gateway :5000
+npm --prefix tools/openapi run generate:admin    # http://localhost:5002/openapi/v1.json
+npm --prefix tools/openapi run generate:gateway  # http://localhost:5000/openapi/v1.json
+```
+
+Start both hosts in `Development` with their runtime infrastructure, schema, and credentials configured before using `generate`. See the [local development setup](../../README.md) and [Gateway runtime guide](../../Services/ConduitLLM.Gateway/README.md). For an existing contract file, use `generate:from-files`, `generate:admin:file`, or `generate:gateway:file`. These file aliases also leave the authoritative contracts unchanged. Use the offline workflow above when preparing endpoint or schema changes for a PR.
+
+### Verifying authoritative artifacts
 
 `verify:offline` generates both contracts and WebAdmin types twice in isolated directories, checks byte stability, and compares them with committed files. CI runs this verification and rejects drift. Run the focused .NET contract tests from the repository root:
 

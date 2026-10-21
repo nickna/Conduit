@@ -1,208 +1,137 @@
 # ConduitLLM.Gateway
 
-## Overview
+`ConduitLLM.Gateway` is Conduit's OpenAI-compatible inference API. It authenticates
+virtual keys, routes model aliases to upstream providers, streams responses, and
+tracks usage and spending. It serves chat, embeddings, images, video, audio, and
+server-side function execution. Configuration and key management belong to the
+separate [Admin API](../ConduitLLM.Admin/) and WebAdmin UI.
 
-`ConduitLLM.Gateway` is the HTTP API backend for the Conduit solution (`Conduit.slnx`). It exposes a unified, OpenAI-compatible REST API for interacting with multiple Large Language Model (LLM) providers such as OpenAI, Anthropic, Azure OpenAI, Gemini, Cohere, and others. It acts as the main programmatic interface for client applications and the ConduitLLM WebAdmin frontend.
-
-## Role in the Conduit Solution
-
-- **Conduit.slnx**: The overall solution file tying together all Conduit sub-projects.
-- **ConduitLLM.Gateway**: This project. Provides the HTTP API for LLM access, model routing, API key/virtual key management, and provider abstraction.
-- **WebAdmin**: The web-based frontend for interactive LLM usage, configuration, and administration. Communicates with this API.
-- **ConduitLLM.Core**: Shared logic, models, and interfaces for LLM operations, used by both Http and WebAdmin.
-- **ConduitLLM.Configuration**: Handles configuration persistence (database, environment, files) and settings management.
-- **ConduitLLM.Providers**: Implements provider-specific logic for different LLM backends.
-- **ConduitLLM.Tests**: Unit and integration tests for all components.
-
-## Key Features
-
-- **OpenAI-compatible REST API** (`/v1/chat/completions`)
-- **Multiple LLM Provider Support** (OpenAI, Anthropic, Azure, Gemini, Cohere, etc.)
-- **Model Routing**: Map model names to provider/model pairs
-- **API Key & Virtual Key Management**: Supports both provider keys and Conduit-managed virtual keys
-- **Streaming and non-streaming responses**
-- **Swagger/OpenAPI documentation** (enabled in development)
-- **Database-backed and file-based configuration**
+See the root [architecture and repository layout](../../README.md) and
+[core concepts](../../docs/concepts.md) for the service boundaries and request
+lifecycle.
 
 ## Configuration
 
-### Environment Variables
+The Gateway reads process settings from **environment variables only**. Its host
+clears the default configuration sources; `appsettings.json` does not configure
+the running service. Hierarchical settings use double underscores, for example
+`Logging__LogLevel__Default=Information`.
 
-- `HttpApiHttpPort` (default: 5000): HTTP port for the API
-- `HttpApiHttpsPort` (default: 5003): HTTPS port for the API
-- `ASPNETCORE_URLS`: Sets the actual listen URLs (usually http://+:80 for Docker)
-- Provider API keys can be set via environment variables or `appsettings.json` (see below)
+The annotated [`.env.example`](../../.env.example) and maintained
+[configuration guide](../../docs/configuration.md) describe the supported settings.
+The essential infrastructure settings are:
 
-### appsettings.json
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Required PostgreSQL URI or Npgsql connection string. PostgreSQL is the only supported database. |
+| `REDIS_URL` | Required for the normal Gateway runtime, including a single instance. `CONDUIT_REDIS_CONNECTION_STRING` is the fallback when `REDIS_URL` is absent or blank. |
+| `ASPNETCORE_URLS` | Listen URLs, for example `http://localhost:5000` when running directly. |
+| `ASPNETCORE_ENVIRONMENT` | Defaults to `Production`; use `Development` to expose interactive API documentation. |
+| `CONDUIT_API_TO_API_BACKEND_AUTH_KEY` | Shared secret for backend service-to-service authentication; see the configuration guide for authentication setup. |
 
-- `ConnectionStrings:DefaultConnection`: Path to the configuration database (default: `../configuration.db`)
-- `Conduit:ModelProviderMapping`: Maps logical model names to provider/model pairs
-- `Conduit:ProviderCredentials`: Stores API keys and endpoints for each provider
+Redis supports caching, rate limiting, spending coordination, ephemeral keys, and
+the SignalR backplane. Internal messaging uses Wolverine over PostgreSQL; no
+separate message broker is needed. Persist and back up PostgreSQL through your
+database deployment. The reference [Compose file](../../docker-compose.yml) uses
+the `pgdata` and `redis-data` named volumes for PostgreSQL and Redis respectively.
 
-Example snippet:
-```json
-"Conduit": {
-  "ModelProviderMapping": {
-    "gpt-4-proxy-example": "openai/gpt-4",
-    "claude-3-opus-proxy-example": "anthropic/claude-3-opus-20240229"
-  },
-  "ProviderCredentials": {
-    "OpenAI": {
-      "ApiKey": "YOUR_OPENAI_API_KEY_OR_USE_ENV_VAR"
-    },
-    "Anthropic": {
-      "ApiKey": "YOUR_ANTHROPIC_API_KEY_OR_USE_ENV_VAR"
-    }
-    // ... other providers ...
-  }
-}
+Provider credentials, model mappings, costs, and virtual keys are stored in the
+database and managed through WebAdmin or the Admin API. See
+[runtime configuration](../../docs/configuration.md#runtime-configuration-in-the-admin-ui).
+
+## Running the Gateway
+
+Run commands below from the **repository root**.
+
+### Full development stack
+
+Follow the root [development environment instructions](../../README.md#development-environment)
+and use the development script:
+
+```powershell
+./scripts/dev.ps1
 ```
 
-### Database Configuration
+### Run directly with the .NET CLI
 
-This service supports both Postgres and SQLite, configured via environment variables ONLY (no appsettings.json required):
+Install the .NET 10 SDK and start PostgreSQL and Redis before running the service.
+Set environment variables in the invoking shell; `dotnet run` does not load the
+repository's `.env` file automatically. For local infrastructure using the
+reference database credentials and published ports:
 
-- **Postgres:**
-  - Set `DATABASE_URL` (e.g., `postgresql://user:password@host:5432/database`)
-- **SQLite:**
-  - Set `CONDUIT_SQLITE_PATH` (e.g., `/data/ConduitConfig.db`)
+```powershell
+$env:DATABASE_URL = 'postgresql://conduit:conduitpass@localhost:5432/conduitdb'
+$env:REDIS_URL = 'redis://localhost:6379'
+$env:ASPNETCORE_URLS = 'http://localhost:5000'
+$env:ASPNETCORE_ENVIRONMENT = 'Development'
+$env:CONDUIT_MEDIA_STORAGE_TYPE = 'InMemory' # Local development only
 
-No other DB-related variables are needed. The service will auto-detect the provider.
-
-### Docker & Port Management
-
-- Designed for containerization. Ports are set via environment variables for flexible deployment.
-- When using Docker Compose, ports are configured in the docker-compose.yml file.
-
-## Persistent Database Storage (Docker)
-
-To ensure your SQLite database persists across container restarts, set the `CONDUIT_SQLITE_PATH` environment variable and mount a persistent volume:
-
-```yaml
-environment:
-  - CONDUIT_SQLITE_PATH=/data/conduit.db
-volumes:
-  - ./my-data:/data
+dotnet run --project tools/ConduitLLM.Migrator
+dotnet run --project Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj
 ```
 
-This will store the database at `/data/conduit.db` inside the container, mapped to your host directory `./my-data`.
+Run the Gateway only after the migrator succeeds. The standalone migrator applies
+EF migrations, seeds initial data, and provisions Wolverine storage. Gateway and
+Admin never change the schema during normal startup. The default
+`CONDUIT_MIGRATION_MODE=Wait` keeps `/health/ready` unhealthy until the schema is
+current. See the [migration deployment strategy](../../docs/operations/deployment/migration-deployment-strategy.md)
+for release sequencing and failure recovery.
 
-### Best Practices
-- Always use a persistent volume for `/data` in production or testing containers.
-- Make sure the volume is writable by the app user (check Docker UID/GID).
-- Use `CONDUIT_SQLITE_PATH` for clarity and to avoid accidental data loss.
+### Docker
 
-### Troubleshooting
-- **File not created or missing**: Check that the volume is mounted and the path is correct.
-- **Permission denied**: Ensure the directory and file are writable by the container user.
-- **Database is read-only**: The file or directory may be mounted as read-only or lack write permissions.
-- **App uses wrong database file**: Double-check environment variable spelling and container/service environment.
+Build the Gateway image with the repository root as the build context:
 
-For more help, see the Database Status page in the WebAdmin.
-
-## Running the API
-
-1. **With .NET CLI:**
-   ```bash
-   export HttpApiHttpPort=5000
-   export HttpApiHttpsPort=5003
-   dotnet run --project ConduitLLM.Gateway
-   ```
-2. **With Docker:**
-   From the repository root, build the Gateway image:
-   ```bash
-   docker build -f Services/ConduitLLM.Gateway/Dockerfile -t conduit-http:local .
-   ```
-   Follow the root [Docker Compose instructions](../../README.md#run-with-docker-compose)
-   to configure PostgreSQL, Redis, and the required schema migration before starting the APIs.
-3. **With Docker Compose:**
-   ```bash
-   docker compose up -d
-   ```
-
-## API Usage
-
-- Main endpoint: `POST /v1/chat/completions` (OpenAI-compatible)
-- Supports both standard and streaming responses
-- Requires API key (provider or virtual key) in the `Authorization: Bearer ...` header
-- See Swagger UI at `/swagger` (in development mode)
-
-## Virtual Keys
-
-- Virtual keys (`condt_...`) are managed by Conduit and can be used instead of provider keys.
-- Spend tracking and access control are supported for virtual keys.
-
-## Refreshing Configuration
-
-- POST `/admin/refresh-configuration` endpoint reloads provider credentials and model mappings from the database.
-
-## Health Checks
-
-The API provides health check endpoints for monitoring and container orchestration:
-
-### Database Health Endpoint
-
-- `GET /health/db`: Checks database connectivity and migration status
-- Returns:
-  - **200 OK**: Database is reachable and all migrations are applied
-  - **503 Service Unavailable**: Database is unreachable or migrations are pending
-  - **500 Internal Server Error**: Unexpected error occurred during health check
-
-The response is a JSON payload with the following structure:
-```json
-{
-  "status": "healthy",  // or "unhealthy"
-  "timestamp": "2025-04-30T07:30:04.5478Z",
-  "details": null  // Contains error information when unhealthy
-}
+```bash
+docker build -f Services/ConduitLLM.Gateway/Dockerfile -t conduit-http:local .
 ```
 
-### Using with Docker & Kubernetes
+Follow the root [Docker Compose instructions](../../README.md#run-with-docker-compose)
+to configure and start the complete deployment. Compose runs the one-shot
+`migrate` service before starting the APIs. The Gateway container listens on
+**8080**; Compose publishes it at **http://localhost:5000**. Container health
+probes must use port 8080. Configure HTTPS termination at your ingress or reverse
+proxy for production.
 
-For Docker Compose health checks:
-```yaml
-healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:5000/health/db"]
-  interval: 30s
-  timeout: 10s
-  retries: 3
-  start_period: 40s
+## API usage and documentation
+
+Clients authenticate with a Conduit virtual key (`condt_...`) in the
+`Authorization: Bearer ...` header and send a configured model alias. Create
+providers, model mappings, costs, and funded virtual-key groups through the Admin
+API or WebAdmin before serving inference requests.
+
+```bash
+curl http://localhost:5000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer condt_yourvirtualkey" \
+  -d '{"model":"my-model-alias","messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
-For Kubernetes readiness and liveness probes:
-```yaml
-readinessProbe:
-  httpGet:
-    path: /health/db
-    port: 5000
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  timeoutSeconds: 3
-  failureThreshold: 3
+Standard and streaming responses are supported. See the root
+[OpenAI SDK example](../../README.md#using-with-openai-sdks) for client setup.
 
-livenessProbe:
-  httpGet:
-    path: /health/db
-    port: 5000
-  initialDelaySeconds: 60
-  periodSeconds: 30
-  timeoutSeconds: 5
-  failureThreshold: 3
-```
+In **Development**, the running host exposes the OpenAPI document at
+`/openapi/v1.json` and Scalar interactive documentation at `/scalar/v1`. These
+routes are not exposed by the normal Production host. The checked-in
+[`openapi-gateway.json`](./openapi-gateway.json) is also available for contract
+inspection and client generation.
 
-## Development Notes
+## Health checks and operations
 
-- Uses ASP.NET Core Minimal APIs
-- Configuration is loaded from both `appsettings.json` and the configuration database
-- Provider credentials and model mappings can be managed via the WebAdmin or directly in the database
+- `GET /health/live`: process liveness; use for restart decisions.
+- `GET /health/ready`: readiness, including schema, messaging, and Redis checks;
+  use for traffic admission and container health checks.
+- `GET /health`: aggregate health for operators.
 
-## Troubleshooting
+Private-network and loopback health probes are allowed; external probes require
+the configured health key in `X-Conduit-Health-Key`. See
+[monitoring](../../docs/monitoring.md#health-endpoints) for the health policy,
+Prometheus metrics, logs, and operational guidance. Readiness returns `503` while
+required dependencies or the database schema are unavailable.
 
-- When using Docker Compose, use `docker compose down` to stop all services
-- Logs are output to the console by default (configurable in `appsettings.json`)
-- Use `docker compose logs` to view container logs
+Logging is configured through environment variables such as
+`Logging__LogLevel__Default`. For Compose deployments, inspect Gateway logs with
+`docker compose logs api`.
 
 ## License
 
-See the root of the repository for license information.
-
+See the root [LICENSE](../../LICENSE).
