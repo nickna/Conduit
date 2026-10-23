@@ -34,7 +34,7 @@ namespace ConduitLLM.Gateway.Middleware
 
         public async Task InvokeAsync(HttpContext context, IRedisCircuitBreaker circuitBreaker)
         {
-            var path = context.Request.Path.Value?.ToLowerInvariant() ?? "";
+            var path = context.Request.Path.Value ?? "";
 
             // Check if this path should bypass the circuit breaker
             if (ShouldBypass(path))
@@ -57,8 +57,8 @@ namespace ConduitLLM.Gateway.Middleware
         private bool ShouldBypass(string path)
         {
             // Always bypass certain critical paths
-            var criticalPaths = new[] { "/health", "/metrics", "/swagger" };
-            if (criticalPaths.Any(cp => path.StartsWith(cp, StringComparison.OrdinalIgnoreCase)))
+            var criticalPaths = new[] { "/health", "/metrics", "/openapi", "/scalar" };
+            if (criticalPaths.Any(cp => MatchesBypassPath(path, cp)))
             {
                 return true;
             }
@@ -66,11 +66,23 @@ namespace ConduitLLM.Gateway.Middleware
             // Check configured bypass paths
             if (_options.BypassPaths != null)
             {
-                return _options.BypassPaths.Any(bp => 
-                    path.StartsWith(bp.ToLowerInvariant(), StringComparison.OrdinalIgnoreCase));
+                return _options.BypassPaths.Any(bp => MatchesBypassPath(path, bp));
             }
 
             return false;
+        }
+
+        private static bool MatchesBypassPath(string path, string bypassPath)
+        {
+            if (string.IsNullOrEmpty(bypassPath) ||
+                !path.StartsWith(bypassPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // A configured trailing slash already supplies the segment boundary.
+            return path.Length == bypassPath.Length || bypassPath.EndsWith('/') ||
+                path[bypassPath.Length] == '/';
         }
 
         private async Task HandleCircuitOpen(HttpContext context, IRedisCircuitBreaker circuitBreaker)

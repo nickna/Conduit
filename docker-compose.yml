@@ -65,6 +65,8 @@ services:
       ConduitLLM__Messaging__Wolverine__AutoProvision: "false"
       # Customer error visibility: External (default, sanitized) or Internal (raw provider detail)
       CONDUIT_CUSTOMER_MODE: "${CONDUIT_CUSTOMER_MODE:-External}"
+      # Shared backend credential used by Gateway, Admin, and server-side WebAdmin calls.
+      CONDUIT_API_TO_API_BACKEND_AUTH_KEY: "${CONDUIT_API_TO_API_BACKEND_AUTH_KEY:?Set CONDUIT_API_TO_API_BACKEND_AUTH_KEY to a strong shared backend secret in .env}"
       # Forward the published Gateway security settings explicitly.
       CONDUIT_CORE_RATE_LIMITING_ENABLED: "${CONDUIT_CORE_RATE_LIMITING_ENABLED:-true}"
       CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS: "${CONDUIT_CORE_RATE_LIMIT_MAX_REQUESTS:-1000}"
@@ -156,7 +158,7 @@ services:
       CONDUIT_ADMIN_AUTH_BAN_DURATION_MINUTES: "${CONDUIT_ADMIN_AUTH_BAN_DURATION_MINUTES:-${CONDUIT_ADMIN_FAILED_AUTH_BAN_DURATION_MINUTES:-30}}"
       # Messaging runs on Wolverine (PostgreSQL transport) — the only backend as of #932.
       # API-to-API authentication key for backend services
-      CONDUIT_API_TO_API_BACKEND_AUTH_KEY: alpha
+      CONDUIT_API_TO_API_BACKEND_AUTH_KEY: "${CONDUIT_API_TO_API_BACKEND_AUTH_KEY:?Set CONDUIT_API_TO_API_BACKEND_AUTH_KEY to a strong shared backend secret in .env}"
       # Redis cache configuration - using new REDIS_URL format
       REDIS_URL: "redis://redis:6379"
       AdminApi__AllowedOrigins__0: http://localhost:3000
@@ -235,7 +237,7 @@ services:
       NODE_ENV: development
       PORT: 3000
       # Server-side environment variables
-      CONDUIT_API_TO_API_BACKEND_AUTH_KEY: alpha
+      CONDUIT_API_TO_API_BACKEND_AUTH_KEY: "${CONDUIT_API_TO_API_BACKEND_AUTH_KEY:?Set CONDUIT_API_TO_API_BACKEND_AUTH_KEY to a strong shared backend secret in .env}"
       CONDUIT_API_BASE_URL: http://api:8080
       CONDUIT_ADMIN_API_BASE_URL: http://admin:8080
       # External URLs for SignalR connections from browser

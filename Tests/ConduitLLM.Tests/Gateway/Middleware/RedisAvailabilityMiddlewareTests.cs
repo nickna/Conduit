@@ -115,6 +115,96 @@ namespace ConduitLLM.Tests.Http.Middleware
             Assert.Equal(200, context.Response.StatusCode);
         }
 
+        [Theory]
+        [InlineData("/openapi/v1.json", false)]
+        [InlineData("/scalar/v1", false)]
+        [InlineData("/openapi/v1.json", true)]
+        [InlineData("/scalar/v1", true)]
+        [InlineData("/openapi", true)]
+        [InlineData("/scalar", true)]
+        [InlineData("/OPENAPI/v1.json", true)]
+        public async Task Middleware_BypassesDocumentationEndpoints_EvenWhenCircuitIsOpen(
+            string path, bool overrideBypassPaths)
+        {
+            var context = CreateHttpContext(path);
+            _mockCircuitBreaker.Setup(x => x.IsOpen).Returns(true);
+            if (overrideBypassPaths)
+            {
+                _options.BypassPaths.Clear();
+            }
+
+            await _middleware.InvokeAsync(context, _mockCircuitBreaker.Object);
+
+            _mockNext.Verify(x => x(context), Times.Once);
+            Assert.Equal(200, context.Response.StatusCode);
+            Assert.False(context.Response.Headers.ContainsKey("X-Circuit-Breaker-State"));
+        }
+
+        [Fact]
+        public void RedisCircuitBreakerOptions_DefaultConfiguration_IncludesCurrentDocumentationPrefixes()
+        {
+            Assert.Contains("/openapi", _options.BypassPaths);
+            Assert.Contains("/scalar", _options.BypassPaths);
+            Assert.DoesNotContain("/swagger", _options.BypassPaths);
+        }
+
+        [Theory]
+        [InlineData("/v1/chat/completions")]
+        [InlineData("/v1/embeddings")]
+        [InlineData("/swagger/index.html")]
+        [InlineData("/healthier")]
+        [InlineData("/metrics-inference")]
+        [InlineData("/openapi-private")]
+        [InlineData("/scalarish")]
+        public async Task Middleware_RejectsNonBypassEndpoints_WhenCircuitIsOpen(string path)
+        {
+            var context = CreateHttpContext(path);
+            _mockCircuitBreaker.Setup(x => x.IsOpen).Returns(true);
+            _mockCircuitBreaker.Setup(x => x.Statistics).Returns(new CircuitBreakerStatistics
+            {
+                State = CircuitState.Open
+            });
+
+            await _middleware.InvokeAsync(context, _mockCircuitBreaker.Object);
+
+            _mockNext.Verify(x => x(It.IsAny<HttpContext>()), Times.Never);
+            Assert.Equal((int)HttpStatusCode.ServiceUnavailable, context.Response.StatusCode);
+        }
+
+        [Theory]
+        [InlineData("/diagnostics", "/diagnostics", true)]
+        [InlineData("/diagnostics", "/diagnostics/status", true)]
+        [InlineData("/DIAGNOSTICS", "/diagnostics/status", true)]
+        [InlineData("/diagnostics", "/diagnostics-private", false)]
+        [InlineData("/diagnostics/", "/diagnostics/", true)]
+        [InlineData("/diagnostics/", "/diagnostics/status", true)]
+        [InlineData("/diagnostics/", "/diagnostics", false)]
+        [InlineData("/diagnostics/", "/diagnostics-private", false)]
+        [InlineData("/v1/chat/completion", "/v1/chat/completions", false)]
+        [InlineData("/v1/chat/completions", "/v1/chat/completions", true)]
+        [InlineData("/v1/chat", "/v1/chat/completions", true)]
+        [InlineData("/", "/v1/chat/completions", true)]
+        [InlineData(null, "/v1/chat/completions", false)]
+        [InlineData("", "/v1/chat/completions", false)]
+        public async Task Middleware_ConfiguredBypassPath_RequiresExactPathOrDescendant(
+            string bypassPath, string requestPath, bool shouldBypass)
+        {
+            var context = CreateHttpContext(requestPath);
+            _options.BypassPaths.Clear();
+            _options.BypassPaths.Add(bypassPath);
+            _mockCircuitBreaker.Setup(x => x.IsOpen).Returns(true);
+            _mockCircuitBreaker.Setup(x => x.Statistics).Returns(new CircuitBreakerStatistics
+            {
+                State = CircuitState.Open
+            });
+
+            await _middleware.InvokeAsync(context, _mockCircuitBreaker.Object);
+
+            _mockNext.Verify(x => x(It.IsAny<HttpContext>()), shouldBypass ? Times.Once() : Times.Never());
+            Assert.Equal(shouldBypass ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable,
+                context.Response.StatusCode);
+        }
+
         [Fact]
         public async Task Middleware_ReturnsCorrectErrorResponse_WhenCircuitIsOpen()
         {

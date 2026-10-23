@@ -1,16 +1,18 @@
 using ConduitLLM.Security.Services;
 using ConduitLLM.Tests.Core.Services;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
+using Moq;
 using StackExchange.Redis;
+using Xunit.Abstractions;
 
 namespace ConduitLLM.Tests.Security;
 
-public sealed class FailedAuthTrackerTests : IAsyncLifetime
+public sealed class FailedAuthTrackerTests(ITestOutputHelper output) : IAsyncLifetime
 {
     private readonly string _prefix = RedisTestServer.NewKeyPrefix("failed-auth");
     public Task InitializeAsync() => Task.CompletedTask;
-    public Task DisposeAsync() => RedisTestServer.CleanupAsync(_prefix);
+    public Task DisposeAsync() => RedisTestServer.CleanupAsync(_prefix, output.WriteLine);
     private static string AttemptsKey(string scope, string ip) => $"security:failed_auth:v2:{{{scope}:{ip}}}:attempts";
     private static string BanKey(string scope, string ip) => $"security:failed_auth:v2:{{{scope}:{ip}}}:ban";
 
@@ -18,12 +20,16 @@ public sealed class FailedAuthTrackerTests : IAsyncLifetime
     public async Task Redis_TwoTrackers_CountEveryConcurrentFailureAndCreateOneBan()
     {
         var redis = RedisTestServer.Require();
-        var first = new RedisFailedAuthTracker(redis, NullLogger.Instance);
-        var second = new RedisFailedAuthTracker(redis, NullLogger.Instance);
+        var first = new RedisFailedAuthTracker(redis, new TrackerLogger(output, "first"));
+        var second = new RedisFailedAuthTracker(redis, new TrackerLogger(output, "second"));
         var ip = _prefix + "burst";
         var results = await Task.WhenAll(Enumerable.Range(0, 200).Select(index =>
             (index % 2 == 0 ? first : second).RecordAsync("api", ip, 3, TimeSpan.FromMinutes(5), "masked")));
 
+        var failedRecordings = results.Count(result => result.Attempts == 0);
+        if (failedRecordings > 0)
+            output.WriteLine($"{failedRecordings}/{results.Length} failed-auth recordings returned zero attempts. " +
+                $"Redis connection state: {redis.GetStatus()}");
         Assert.Equal(Enumerable.Range(1, 200).Select(value => (long)value), results.Select(result => result.Attempts).Order());
         Assert.Single(results, result => result.NewBan);
         var firstBan = await first.GetBanAsync("api", ip);
@@ -41,7 +47,7 @@ public sealed class FailedAuthTrackerTests : IAsyncLifetime
     {
         var redis = RedisTestServer.Require();
         var database = redis.GetDatabase();
-        var tracker = new RedisFailedAuthTracker(redis, NullLogger.Instance);
+        var tracker = new RedisFailedAuthTracker(redis, new TrackerLogger(output, "expiry"));
         var ip = _prefix + "expiry";
         var duration = TimeSpan.FromMinutes(5);
         await tracker.RecordAsync("api", ip, 3, duration, "first-mask");
@@ -72,7 +78,7 @@ public sealed class FailedAuthTrackerTests : IAsyncLifetime
     public async Task Redis_ClearBelowThresholdResetsAttempts_ExpiredAttemptStartsNewWindow()
     {
         var redis = RedisTestServer.Require();
-        var tracker = new RedisFailedAuthTracker(redis, NullLogger.Instance);
+        var tracker = new RedisFailedAuthTracker(redis, new TrackerLogger(output, "clear"));
         var ip = _prefix + "clear";
         await tracker.RecordAsync("api", ip, 3, TimeSpan.FromMinutes(5), "mask");
         await tracker.RecordAsync("api", ip, 3, TimeSpan.FromMinutes(5), "mask");
@@ -80,6 +86,27 @@ public sealed class FailedAuthTrackerTests : IAsyncLifetime
         Assert.Equal(1, (await tracker.RecordAsync("api", ip, 3, TimeSpan.FromMinutes(5), "mask")).Attempts);
         await redis.GetDatabase().KeyExpireAsync(AttemptsKey("api", ip), TimeSpan.Zero);
         Assert.Equal(1, (await tracker.RecordAsync("api", ip, 3, TimeSpan.FromMinutes(5), "mask")).Attempts);
+    }
+
+    [Fact]
+    public async Task Redis_RecordingFailure_PreservesWarningAndFullExceptionInTestOutput()
+    {
+        var database = new Mock<IDatabase>();
+        var exception = new RedisServerException("simulated script failure");
+        database.Setup(value => value.ScriptEvaluateAsync(It.IsAny<string>(), It.IsAny<RedisKey[]>(),
+            It.IsAny<RedisValue[]>(), It.IsAny<CommandFlags>())).ThrowsAsync(exception);
+        var redis = new Mock<IConnectionMultiplexer>();
+        redis.Setup(value => value.GetDatabase(It.IsAny<int>(), It.IsAny<object>())).Returns(database.Object);
+        var capturedOutput = new Mock<ITestOutputHelper>();
+        var tracker = new RedisFailedAuthTracker(redis.Object, new TrackerLogger(capturedOutput.Object, "failing-tracker"));
+
+        var result = await tracker.RecordAsync("api", "test-ip", 3, TimeSpan.FromMinutes(5), "masked");
+
+        Assert.Equal(new FailedAuthTrackingResult(0, false, null), result);
+        capturedOutput.Verify(value => value.WriteLine(It.Is<string>(message =>
+            message.Contains("failing-tracker Warning") &&
+            message.Contains("Failed-auth tracking unavailable for api/test-ip") &&
+            message.Contains(exception.ToString()))), Times.Once);
     }
 
     [Fact]
@@ -145,7 +172,7 @@ public sealed class FailedAuthTrackerTests : IAsyncLifetime
     {
         using var memory = new MemoryCache(new MemoryCacheOptions());
         IFailedAuthTracker tracker = distributed
-            ? new RedisFailedAuthTracker(RedisTestServer.Require(), NullLogger.Instance)
+            ? new RedisFailedAuthTracker(RedisTestServer.Require(), new TrackerLogger(output, "clear-race"))
             : new MemoryFailedAuthTracker(memory);
         var ip = _prefix + "clear-race";
         await Task.WhenAll(Enumerable.Range(0, 100).SelectMany(_ => new[]
@@ -154,6 +181,22 @@ public sealed class FailedAuthTrackerTests : IAsyncLifetime
             Task.Run(async () => await tracker.ClearAttemptsAsync("api", ip))
         }));
         Assert.Equal(100, (await tracker.GetBanAsync("api", ip))!.FailedAttempts);
+    }
+
+    // xUnit retains this output in the failed test's TRX entry. ILogger's formatter
+    // does not include the exception, so append ToString() to keep its type and stack.
+    private sealed class TrackerLogger(ITestOutputHelper output, string name) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (!IsEnabled(logLevel)) return;
+            // The concurrency test shares the output helper across both trackers.
+            lock (output)
+                output.WriteLine($"{name} {logLevel}: {formatter(state, exception)}{Environment.NewLine}{exception}");
+        }
     }
 
     private sealed class Clock : TimeProvider

@@ -1,148 +1,98 @@
 # ConduitLLM Admin API
 
-The ConduitLLM Admin API provides a dedicated administrative interface for managing ConduitLLM configurations and resources. It centralizes all admin functionality in a single API surface, improving separation of concerns and maintainability.
+The Admin API manages Conduit's providers, virtual keys, model mappings, costs,
+routing, and media lifecycle. Operators and the WebAdmin UI use this service;
+inference clients use the separate [Gateway API](../ConduitLLM.Gateway/).
 
-## Current Status ✅
+Start with the root [architecture and quick start](../../README.md),
+[configuration guide](../../docs/configuration.md), and
+[API contract guide](../../docs/api-guides/openapi-maintenance.md).
 
-The Admin API is production-ready with all major architectural issues resolved:
+## Configuration and prerequisites
 
-1. ✅ **Standardized DTOs**: All 136+ DTOs properly centralized in ConduitLLM.Configuration.DTOs
-2. ✅ **Clean Architecture**: Proper separation of concerns with no circular dependencies
-3. ✅ **Complete Services**: All core services fully implemented:
-   - AdminVirtualKeyService
-   - AdminIpFilterService  
-   - AnalyticsService (unified logs, costs, and usage analytics)
-   - AdminModelCostService
-   - AdminSystemInfoService
-   - Plus additional specialized services
+- For a source checkout, install the .NET 10 SDK selected by
+  [`global.json`](../../global.json) (currently `10.0.400`, with the configured
+  roll-forward policy). The services target `net10.0`.
+- Set `DATABASE_URL` to a reachable PostgreSQL database. PostgreSQL is the only
+  supported database; Wolverine messaging also uses it.
+- Set `CONDUIT_API_TO_API_BACKEND_AUTH_KEY` to the shared backend/master secret.
+  This is the key used for operator access to the Admin API.
+- Redis is optional for a standalone Admin instance. Configure `REDIS_URL` for
+  shared ephemeral-key storage and Redis-backed provider-error monitoring. The
+  Gateway and the full local stack require Redis.
 
-### ✅ Resolved Dependency Issues
+Set deploy-time configuration through environment variables. The repository
+ships no `appsettings.json`; use double underscores for hierarchical settings,
+such as `AdminApi__AllowedOrigins__0=http://localhost:3000`.
+The annotated [`.env.example`](../../.env.example) and
+[configuration guide](../../docs/configuration.md) describe supported settings.
+Provider credentials and other runtime configuration are stored in PostgreSQL
+and managed through WebAdmin or this API.
 
-Previous dependency challenges have been successfully resolved:
+## Running the Admin API
 
-1. ✅ **No Circular Dependencies**: Clean dependency graph with proper project separation
-2. ✅ **Eliminated Duplicate DTOs**: All DTOs centralized with domain-specific organization
-3. ✅ **Proper Extension Methods**: All shared functionality properly abstracted
+Run the commands below from the **repository root**. For the complete stack,
+follow the root [Docker Compose quick start](../../README.md#run-with-docker-compose)
+or [development instructions](../../README.md#development-environment), including
+environment setup. The maintained local stack publishes Admin at
+**http://localhost:5002**; the container listens on port **8080**.
 
-**Current Architecture**: The Admin project now maintains clean dependencies on Configuration and Core projects only, with no WebAdmin dependencies required.
+For a direct source run, start PostgreSQL first and set variables in the invoking
+shell. `dotnet run` does not load the repository's `.env` file automatically.
+For example, with the reference local database credentials and published port:
 
-## Features
+```powershell
+$env:DATABASE_URL = 'postgresql://conduit:conduitpass@localhost:5432/conduitdb'
+$env:CONDUIT_API_TO_API_BACKEND_AUTH_KEY = 'replace-with-your-secure-backend-key'
+$env:ASPNETCORE_URLS = 'http://localhost:5002'
+$env:ASPNETCORE_ENVIRONMENT = 'Development'
+$env:CONDUIT_ENABLE_HTTPS_REDIRECTION = 'false' # Local HTTP development only
 
-- **Virtual Keys Management**: Create, read, update, and delete virtual API keys
-- **Model Provider Mapping**: Configure model-to-provider mappings
-- **Router Configuration**: Manage routing rules, model deployments, and fallback configurations
-- **IP Filtering**: Control access with IP whitelist/blacklist rules
-- **Logs Management**: Query request logs and usage data
-- **Cost Dashboard**: Track spending and view cost analytics
-- **System Information**: Monitor system health and configuration
-
-## Getting Started
-
-### Prerequisites
-
-- .NET 9.0 SDK or later
-- Access to a ConduitLLM database instance
-
-### Configuration
-
-The Admin API uses the following configuration settings:
-
-```json
-{
-  "AdminApi": {
-    "MasterKey": "your-master-key-here",
-    "AllowedOrigins": [ "http://localhost:5000", "https://localhost:5001" ]
-  },
-  "ConnectionStrings": {
-    "ConfigurationDb": "..."
-  }
-}
+dotnet run --project tools/ConduitLLM.Migrator
 ```
 
-### Running the Admin API
+Only after the migrator exits successfully, start the API in the same shell:
 
-To run the Admin API:
+```powershell
+dotnet run --project Services/ConduitLLM.Admin/ConduitLLM.Admin.csproj
+```
+
+The standalone migrator applies EF migrations, seeds initial data, and provisions
+Wolverine storage. Neither API changes the schema during normal startup. The
+default `CONDUIT_MIGRATION_MODE=Wait` keeps `/health/ready` unhealthy until the
+schema is current. Compose runs its one-shot `migrate` service before starting
+the APIs. See the
+[migration deployment strategy](../../docs/operations/deployment/migration-deployment-strategy.md)
+for release sequencing and recovery.
+
+## Authentication and API documentation
+
+Use the master key in the **`X-Master-Key`** header, as defined by the
+authoritative [`openapi-admin.json`](./openapi-admin.json) contract. For example:
 
 ```bash
-dotnet run --project ConduitLLM.Admin
+curl http://localhost:5002/v1/admin/virtual-keys \
+  -H 'X-Master-Key: YOUR_MASTER_KEY'
 ```
 
-By default, the API will be available at `https://localhost:7000`.
+WebAdmin signs administrators in through Clerk and obtains short-lived ephemeral
+master keys for browser requests. See the root
+[authentication overview](../../README.md#configuration) for the credential roles.
 
-## API Authentication
-
-The Admin API uses API key authentication. Include your master key in the `X-API-Key` header for all requests:
-
-```
-X-API-Key: your-master-key-here
-```
-
-## API Endpoints
-
-### Virtual Keys
-
-- `GET /api/virtualkeys` - List all virtual keys
-- `GET /api/virtualkeys/{id}` - Get a specific virtual key
-- `POST /api/virtualkeys` - Create a new virtual key
-- `PUT /api/virtualkeys/{id}` - Update a virtual key
-- `DELETE /api/virtualkeys/{id}` - Delete a virtual key
-- `POST /api/virtualkeys/{id}/reset-spend` - Reset spend for a virtual key
-
-### IP Filters
-
-- `GET /api/ipfilter` - List all IP filters
-- `GET /api/ipfilter/enabled` - List enabled IP filters
-- `GET /api/ipfilter/{id}` - Get a specific IP filter
-- `POST /api/ipfilter` - Create a new IP filter
-- `PUT /api/ipfilter` - Update an IP filter
-- `DELETE /api/ipfilter/{id}` - Delete an IP filter
-- `GET /api/ipfilter/settings` - Get IP filter settings
-- `PUT /api/ipfilter/settings` - Update IP filter settings
-
-### Cost Dashboard
-
-- `GET /api/costs/summary` - Get cost summary
-- `GET /api/costs/trends` - Get cost trends
-- `GET /api/costs/models` - Get costs by model
-- `GET /api/costs/virtualkeys` - Get costs by virtual key
-
-### Logs
-
-- `GET /api/logs` - Get paginated logs
-- `GET /api/logs/{id}` - Get a specific log
-- `GET /api/logs/summary` - Get logs summary
-
-### System Info
-
-- `GET /api/systeminfo` - Get system information
+The contract is the source of truth for current routes, request/response shapes,
+and security requirements. In **Development**, the host exposes
+`/openapi/v1.json` and Scalar interactive documentation at `/scalar/v1`.
+Production consumers can use the committed contract. Follow the
+[API contract guide](../../docs/api-guides/openapi-maintenance.md) for usage,
+client generation, and contract maintenance.
 
 ## Development
 
-### Project Structure
-
-- **Controllers/**: API endpoints
-- **Services/**: Business logic
-- **Interfaces/**: Service contracts
-- **Security/**: Authentication and authorization
-- **Middleware/**: Request processing
-- **Extensions/**: Service configuration
-
-### Building
+Minimal API route definitions live in `Endpoints/`, business logic in `Services/`,
+and authentication in `Security/`. Build and run the Admin tests from the
+repository root:
 
 ```bash
-dotnet build ConduitLLM.Admin
+dotnet build Services/ConduitLLM.Admin/ConduitLLM.Admin.csproj
+dotnet test Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj --filter 'FullyQualifiedName~ConduitLLM.Tests.Admin'
 ```
-
-### Testing
-
-```bash
-dotnet test ConduitLLM.Admin.Tests
-```
-
-## Integration with WebAdmin
-
-The WebAdmin project can be configured to use the Admin API for administrative functions instead of direct database access. This improves separation of concerns and maintainability.
-
-## API Documentation
-
-API documentation is available via Swagger at `/swagger` when running in development mode. The API also provides comprehensive XML documentation for use with tools like Swagger.

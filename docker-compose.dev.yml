@@ -79,7 +79,7 @@ services:
       FAST_REFRESH: "true"
       PORT: 3000
       # Backend service URLs
-      CONDUIT_API_TO_API_BACKEND_AUTH_KEY: alpha
+      CONDUIT_API_TO_API_BACKEND_AUTH_KEY: "${CONDUIT_API_TO_API_BACKEND_AUTH_KEY:?Set CONDUIT_API_TO_API_BACKEND_AUTH_KEY to a strong shared backend secret in .env}"
       CONDUIT_API_BASE_URL: http://api:8080
       CONDUIT_ADMIN_API_BASE_URL: http://admin:8080
       CONDUIT_API_EXTERNAL_URL: http://localhost:5000
@@ -104,7 +104,8 @@ services:
         - action: sync
           path: ./WebAdmin
           target: /app/WebAdmin
-          initial_sync: true
+          # Compose 2.x uses this extension; current Compose also honors it.
+          x-initialSync: true
           ignore:
             - node_modules/
             - .next/
