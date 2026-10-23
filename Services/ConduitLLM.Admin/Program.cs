@@ -31,6 +31,7 @@ public partial class Program
     public static async Task<int> Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        ConfigureBasicSettings(builder);
 
         // Create a startup logger for structured logging during service registration
         using var startupLoggerFactory = LoggerFactory.Create(b => b.AddConsole());
