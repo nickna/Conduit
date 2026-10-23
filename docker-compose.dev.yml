@@ -104,7 +104,8 @@ services:
         - action: sync
           path: ./WebAdmin
           target: /app/WebAdmin
-          initial_sync: true
+          # Compose 2.x uses this extension; current Compose also honors it.
+          x-initialSync: true
           ignore:
             - node_modules/
             - .next/
