@@ -77,12 +77,13 @@ function checkResolvedCompose(label, values, expected) {
     const envFile = join(owned, 'fixture.env');
     writeFileSync(envFile, Object.entries({
       CONDUIT_GRAFANA_ADMIN_PASSWORD: randomBytes(24).toString('hex'),
+      CONDUIT_API_TO_API_BACKEND_AUTH_KEY: randomBytes(24).toString('hex'),
       [unrelatedKey]: fixtureSecret,
       ...values,
     }).map(([key, value]) => `${key}=${value}`).join('\n') + '\n', { mode: 0o600 });
     const childEnvironment = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
       !/^CONDUIT_(?:ADMIN|CORE)_/iu.test(key) && !/^COMPOSE_/iu.test(key) &&
-      key.toUpperCase() !== 'CONDUIT_GRAFANA_ADMIN_PASSWORD' && key.toUpperCase() !== unrelatedKey));
+      !['CONDUIT_GRAFANA_ADMIN_PASSWORD', 'CONDUIT_API_TO_API_BACKEND_AUTH_KEY', unrelatedKey].includes(key.toUpperCase())));
     const result = spawnSync('docker', [
       'compose', '--env-file', envFile, '-f', composeFile, 'config', '--format', 'json',
     ], {

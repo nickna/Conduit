@@ -45,7 +45,7 @@ namespace ConduitLLM.Configuration.Options
         public int HalfOpenMaxAttempts { get; set; } = 5;
 
         /// <summary>
-        /// Paths that bypass the circuit breaker (e.g., health checks, metrics)
+        /// Paths that bypass the circuit breaker (e.g., health checks, metrics, API documentation)
         /// </summary>
         public List<string> BypassPaths { get; set; } = new()
         {
@@ -53,7 +53,8 @@ namespace ConduitLLM.Configuration.Options
             "/health/live",
             "/health/ready",
             "/metrics",
-            "/swagger"
+            "/openapi",
+            "/scalar"
         };
 
         /// <summary>

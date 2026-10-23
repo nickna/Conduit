@@ -57,7 +57,7 @@ namespace ConduitLLM.Gateway.Middleware
         private bool ShouldBypass(string path)
         {
             // Always bypass certain critical paths
-            var criticalPaths = new[] { "/health", "/metrics", "/swagger" };
+            var criticalPaths = new[] { "/health", "/metrics", "/openapi", "/scalar" };
             if (criticalPaths.Any(cp => path.StartsWith(cp, StringComparison.OrdinalIgnoreCase)))
             {
                 return true;
