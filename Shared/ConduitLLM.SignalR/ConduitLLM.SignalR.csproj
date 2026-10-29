@@ -8,6 +8,7 @@
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack"
       Condition="'$(PublishAot)' != 'true' and '$(ConduitAotAudit)' != 'true'" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Polly" />
   </ItemGroup>
 
