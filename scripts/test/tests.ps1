@@ -1,29 +1,43 @@
 #!/usr/bin/env pwsh
 #Requires -Version 7.0
+
 <#
 .SYNOPSIS
-    Run all tests in the solution.
+    Run unit tests by default, or explicitly select integration tests.
 
 .DESCRIPTION
-    Simple test runner wrapper that runs dotnet test with appropriate options.
+    Runs Tests/ConduitLLM.Tests by default. Use -Integration to run
+    Tests/ConduitLLM.IntegrationTests instead.
     Active infrastructure tests live in Tests/ConduitLLM.IntegrationTests.
     Use scripts/ci/run-tests.ps1 with the documented Component traits and isolated
     Docker/PostgreSQL/Redis infrastructure for the same execution evidence as CI.
 
 .PARAMETER Filter
-    Optional test filter to run specific tests.
+    Optional test filter to run specific tests in the selected project.
+
+.PARAMETER Integration
+    Run the integration test project instead of the unit test project.
+    Integration tests require their documented infrastructure and configuration.
 
 .EXAMPLE
     ./scripts/test/tests.ps1
 
 .EXAMPLE
     ./scripts/test/tests.ps1 -Filter "FullyQualifiedName~MyTest"
+
+.EXAMPLE
+    ./scripts/test/tests.ps1 -Integration
+
+.EXAMPLE
+    ./scripts/test/tests.ps1 -Integration -Filter "Component=SignalR"
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [string]$Filter
+    [string]$Filter,
+
+    [switch]$Integration
 )
 
 $ErrorActionPreference = 'Stop'
@@ -61,12 +75,18 @@ function Write-TestStatus {
     }
 }
 
-Write-TestStatus 'info' "Running all tests..."
+$projectRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+$testProjectName = if ($Integration) { 'ConduitLLM.IntegrationTests' } else { 'ConduitLLM.Tests' }
+$testProject = Join-Path $projectRoot "Tests/$testProjectName/$testProjectName.csproj"
+$testSuite = if ($Integration) { 'integration' } else { 'unit' }
+
+Write-TestStatus 'info' "Running $testSuite tests..."
 Write-Host ""
 
 # Build test command
 $testArgs = @(
     'test'
+    $testProject
     '--configuration', 'Debug'
     '--logger', 'console;verbosity=normal'
 )
@@ -84,7 +104,7 @@ Write-TestStatus 'info' "Running: $cmdDisplay"
 Write-Host ""
 
 # Run tests
-$result = & dotnet @testArgs
+& dotnet @testArgs
 $exitCode = $LASTEXITCODE
 
 Write-Host ""
