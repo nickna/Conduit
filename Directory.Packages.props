@@ -6,12 +6,12 @@
   <ItemGroup>
     <!-- Keep the test-only SCP client graph patched. -->
     <PackageVersion Include="SSH.NET" Version="2026.0.0" />
-    <PackageVersion Include="AngleSharp" Version="1.8.6" />
+    <PackageVersion Include="AngleSharp" Version="1.9.0" />
     <PackageVersion Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
     <PackageVersion Include="AutoFixture" Version="4.18.1" />
     <PackageVersion Include="AutoFixture.AutoMoq" Version="4.18.1" />
     <PackageVersion Include="AutoFixture.Xunit2" Version="4.18.1" />
-    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.6" />
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.8" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="bunit" Version="2.13.3" />
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
@@ -88,13 +88,13 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.1" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.SqlClient" Version="1.20.1" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.StackExchangeRedis" Version="1.15.1-beta.2" />
-    <PackageVersion Include="Polly" Version="8.8.0" />
+    <PackageVersion Include="Polly" Version="8.9.0" />
     <PackageVersion Include="Polly.Contrib.WaitAndRetry" Version="1.1.1" />
     <PackageVersion Include="Polly.Extensions.Http" Version="3.0.0" />
     <PackageVersion Include="prometheus-net" Version="8.2.1" />
     <PackageVersion Include="prometheus-net.AspNetCore" Version="8.2.1" />
     <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.18.3" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.18.7" />
     <!-- Security override for EF Core Sqlite transitives (GHSA-2m69-gcr7-jv3q, high; fixed in 2.1.12). -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
     <!-- Compatibility pin: SignalR's transitive floor predates the Expiration StringSet API used by Conduit. -->
@@ -105,10 +105,10 @@
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.14" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
     <PackageVersion Include="Testcontainers.Redis" Version="4.16.0" />
-    <PackageVersion Include="WolverineFx" Version="6.54.0" />
-    <PackageVersion Include="WolverineFx.Postgresql" Version="6.54.0" />
+    <PackageVersion Include="WolverineFx" Version="6.60.0" />
+    <PackageVersion Include="WolverineFx.Postgresql" Version="6.60.0" />
     <!-- Generation/test-only; production service restores exclude this package. -->
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.54.0" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.60.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
     <!-- Runtime skips for tests that need external infrastructure (Redis). xUnit v2 has no
