@@ -98,7 +98,7 @@
     <!-- Security override for EF Core Sqlite transitives (GHSA-2m69-gcr7-jv3q, high; fixed in 2.1.12). -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
     <!-- Compatibility pin: SignalR's transitive floor predates the Expiration StringSet API used by Conduit. -->
-    <PackageVersion Include="StackExchange.Redis" Version="2.13.17" />
+    <PackageVersion Include="StackExchange.Redis" Version="3.4.29" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.3" />
     <PackageVersion Include="System.Diagnostics.PerformanceCounter" Version="10.0.14" />
     <!-- Security override: 10.0.13 patches the XML advisories and pulls in patched Pkcs (GHSA-846f-f764-76mx). -->
