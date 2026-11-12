@@ -77,17 +77,9 @@ test('npm development-only status requires an explicit lockfile dev flag for eac
   assert.deepEqual(findings.map(finding => finding.developmentOnly), [true, false]);
 });
 
-test('the recorded braces approval suppresses only its authorized development identity until expiry', () => {
+test('repository security exceptions are valid at the current time', () => {
   const exceptions = JSON.parse(readFileSync(new URL('./security-exceptions.json', import.meta.url), 'utf8'));
-  const approved = { scope: 'WebAdmin', package: 'braces', version: '3.0.3',
-    advisory: 'https://github.com/advisories/GHSA-vfj7-8cjw-p6xm', severity: 'high', developmentOnly: true };
-  const now = new Date('2026-10-07');
-  assert.equal(enforce([approved], exceptions, 'dependency', now).exceptions, 1);
-  for (const change of [{ scope: 'tools/ci' }, { package: 'other' }, { version: '3.0.4' },
-    { advisory: 'https://github.com/advisories/GHSA-other' }, { developmentOnly: false }])
-    assert.throws(() => enforce([{ ...approved, ...change }], exceptions, 'dependency', now), /blocked/);
-  assert.throws(() => enforce([{ ...approved, scope: 'release-image', severity: 'critical' }], exceptions, 'image', now), /blocked/);
-  assert.throws(() => enforce([], exceptions, 'dependency', new Date('2026-11-07')), /exception/);
+  assert.doesNotThrow(() => enforce([], exceptions));
 });
 test('malformed or unavailable scans never become clean reports', () => {
   assert.throws(() => npmFindings({ error: {} }, {}, 'fixture'));

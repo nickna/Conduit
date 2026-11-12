@@ -32,7 +32,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Common" Version="10.0.13" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.15" />
     <!-- Security override for Microsoft.ML.Tokenizers transitives (GHSA-73j8-2gch-69rq / CVE-2026-26127, high; fixed in 9.0.14). -->
     <PackageVersion Include="Microsoft.Bcl.Memory" Version="10.0.14" />
     <!-- Security override for EF Core Design transitives (CVE-2025-55247). -->

@@ -98,14 +98,22 @@ if ($Filter) {
     Write-TestStatus 'info' "Using test filter: $Filter"
 }
 
+# Treat a filter that selects no tests as a failure.
+$testArgs += @('--', 'RunConfiguration.TreatNoTestsAsError=true')
+
 # Show command
 $cmdDisplay = "dotnet $($testArgs -join ' ')"
 Write-TestStatus 'info' "Running: $cmdDisplay"
 Write-Host ""
 
 # Run tests
-& dotnet @testArgs
-$exitCode = $LASTEXITCODE
+Push-Location $projectRoot
+try {
+    & dotnet @testArgs
+    $exitCode = $LASTEXITCODE
+} finally {
+    Pop-Location
+}
 
 Write-Host ""
 
