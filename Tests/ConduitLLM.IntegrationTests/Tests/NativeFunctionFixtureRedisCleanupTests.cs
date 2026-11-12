@@ -24,6 +24,8 @@ public sealed class NativeFunctionFixtureRedisCleanupTests(FunctionCredentialRed
     {
         var profile = (NativeFunctionFixtureProfile)profileValue;
         var options = ConfigurationOptions.Parse(await fixture.GetConnectionStringAsync());
+        // CLIENT LIST verifies cleanup connections close; Redis 3 gates it behind admin mode.
+        options.AllowAdmin = true;
         options.DefaultDatabase = databaseNumber;
         options.ConnectTimeout = options.SyncTimeout = options.AsyncTimeout = 5000;
         options.ConnectRetry = 0;

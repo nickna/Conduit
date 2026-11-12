@@ -14,7 +14,8 @@ repository root unless a command says otherwise.
 | Work in the WebAdmin container | `./scripts/dev/dev-workflow.ps1 <command>` |
 | Check TypeScript projects | `./scripts/test/check-typescript.ps1` |
 | Check ESLint (also used by pre-push) | `./scripts/test/validate-eslint-strict.ps1` |
-| Run .NET tests | `./scripts/test/tests.ps1` |
+| Run .NET unit tests | `./scripts/test/tests.ps1` |
+| Run .NET integration tests | `./scripts/test/tests.ps1 -Integration` |
 | Run the full local build/test/coverage flow | `./scripts/test/ci-build-test.ps1` |
 | Produce or inspect detailed coverage | `./scripts/test/coverage-dashboard.ps1 run|report|summary` |
 | Validate EF Core migrations | `./scripts/migrations/validate-migrations.ps1 -CheckPending` |
