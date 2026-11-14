@@ -369,7 +369,7 @@ namespace ConduitLLM.Providers.OpenAICompatible
                         Message = c.Message != null ? new CoreModels.Message
                         {
                             Role = c.Message.Role ?? "assistant",
-                            Content = c.Message.Content,
+                            Content = NormalizeResponseMessageContent(c.Message.Content),
                             Name = c.Message.Name,
                             ToolCalls = c.Message.ToolCalls,
                             ToolCallId = c.Message.ToolCallId,
@@ -404,6 +404,15 @@ namespace ConduitLLM.Providers.OpenAICompatible
                 return CreateEmptyResponse(originalModelAlias);
             }
         }
+
+        // Object-valued JSON content deserializes as JsonElement. Expose ordinary text
+        // to consumers as a string while preserving structured/multimodal payloads.
+        private static object? NormalizeResponseMessageContent(object? content) => content switch
+        {
+            JsonElement { ValueKind: JsonValueKind.String } text => text.GetString(),
+            JsonElement { ValueKind: JsonValueKind.Null } => null,
+            _ => content
+        };
 
         internal static CoreModels.ProviderToolUsage? MapGroqHostedToolUsage(
             System.Text.Json.JsonElement? groqExtension)

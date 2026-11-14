@@ -17,6 +17,10 @@ internal static class NativeProviderStub
     internal const string AgenticPromptPrefix = "native-agentic-proof:";
     internal const string AgenticQueryPrefix = "native-agentic-query:";
     internal const string AgenticFinalContent = "Native agentic result café 雪 🔎";
+    internal const string ResponsesTextPrompt = "native-responses-text-proof";
+    internal const string ResponsesUnsupportedPrompt = "native-responses-rich-proof";
+    internal const string ResponsesToolPrompt = "native-responses-tool-proof";
+    internal const string ResponsesText = "Responses text café 雪 🔎";
     internal const string FunctionSuccessResponse = """
         {"requestId":"native-function-search","resolvedSearchType":"neural","results":[{"title":"Native search 雪 🔎","url":"https://example.test/native-function","publishedDate":"2026-10-11T00:00:00Z","author":"Native fixture","score":0.875,"text":"Unicode text café 雪","highlights":["snow 雪","café"],"highlightScores":[0.875,0.75],"summary":"Native summary","subpages":[{"title":"Nested 雪","url":"https://example.test/native-function/child","text":"Nested content"}],"extras":{"links":["https://example.test/link"],"imageLinks":["https://example.test/image.png"]}}]}
         """;
@@ -38,6 +42,7 @@ internal static class NativeProviderStub
     private static int _agenticToolCallRequests;
     private static int _agenticFinalRequests;
     private static int _agenticContractFailures;
+    private static int _responsesProofRequests;
 
     public static async Task RunAsync(Uri baseAddress, CancellationToken cancellationToken = default)
     {
@@ -88,7 +93,7 @@ internal static class NativeProviderStub
             if (request.Method == "GET" && request.Path == "/probe/state")
             {
                 var state = $$"""
-                    {"non_stream_requests":{{Volatile.Read(ref _nonStreamingRequests)}},"stream_requests":{{Volatile.Read(ref _streamingRequests)}},"image_requests":{{Volatile.Read(ref _imageRequests)}},"error_requests":{{Volatile.Read(ref _errorRequests)}},"authorization_failures":{{Volatile.Read(ref _authorizationFailures)}},"active_cancellation_requests":{{Volatile.Read(ref _activeCancellationRequests)}},"cancellations_observed":{{Volatile.Read(ref _cancellationsObserved)}},"function_requests":{{Volatile.Read(ref _functionRequests)}},"function_error_requests":{{Volatile.Read(ref _functionErrorRequests)}},"function_authorization_failures":{{Volatile.Read(ref _functionAuthorizationFailures)}},"function_chunked_requests":{{Volatile.Read(ref _functionChunkedRequests)}},"agentic_tool_call_requests":{{Volatile.Read(ref _agenticToolCallRequests)}},"agentic_final_requests":{{Volatile.Read(ref _agenticFinalRequests)}},"agentic_contract_failures":{{Volatile.Read(ref _agenticContractFailures)}}}
+                    {"non_stream_requests":{{Volatile.Read(ref _nonStreamingRequests)}},"stream_requests":{{Volatile.Read(ref _streamingRequests)}},"image_requests":{{Volatile.Read(ref _imageRequests)}},"error_requests":{{Volatile.Read(ref _errorRequests)}},"authorization_failures":{{Volatile.Read(ref _authorizationFailures)}},"active_cancellation_requests":{{Volatile.Read(ref _activeCancellationRequests)}},"cancellations_observed":{{Volatile.Read(ref _cancellationsObserved)}},"function_requests":{{Volatile.Read(ref _functionRequests)}},"function_error_requests":{{Volatile.Read(ref _functionErrorRequests)}},"function_authorization_failures":{{Volatile.Read(ref _functionAuthorizationFailures)}},"function_chunked_requests":{{Volatile.Read(ref _functionChunkedRequests)}},"agentic_tool_call_requests":{{Volatile.Read(ref _agenticToolCallRequests)}},"agentic_final_requests":{{Volatile.Read(ref _agenticFinalRequests)}},"agentic_contract_failures":{{Volatile.Read(ref _agenticContractFailures)}},"responses_proof_requests":{{Volatile.Read(ref _responsesProofRequests)}}}
                     """;
                 await WriteJsonAsync(stream, HttpStatusCode.OK, state);
                 return;
@@ -127,6 +132,23 @@ internal static class NativeProviderStub
                 Interlocked.Increment(ref _imageRequests);
                 await WriteJsonAsync(stream, HttpStatusCode.OK, $$"""
                     {"created":1787800003,"data":[{"b64_json":"{{ImageBase64}}","revised_prompt":"native media persistence"}]}
+                    """);
+                return;
+            }
+
+            if (request.Body.Contains(ResponsesTextPrompt, StringComparison.Ordinal) ||
+                request.Body.Contains(ResponsesUnsupportedPrompt, StringComparison.Ordinal) ||
+                request.Body.Contains(ResponsesToolPrompt, StringComparison.Ordinal))
+            {
+                Interlocked.Increment(ref _responsesProofRequests);
+                var message = request.Body.Contains(ResponsesUnsupportedPrompt, StringComparison.Ordinal)
+                    ? """{"role":"assistant","content":[{"type":"image_url","image_url":{"url":"https://example.test/unsupported.png"}}]}"""
+                    : request.Body.Contains(ResponsesToolPrompt, StringComparison.Ordinal)
+                        ? """{"role":"assistant","content":null,"tool_calls":[{"id":"call-responses-proof","type":"function","function":{"name":"unsupported_tool","arguments":"{}"}}]}"""
+                        : """{"role":"assistant","content":"Responses text café 雪 🔎"}""";
+                var finishReason = request.Body.Contains(ResponsesToolPrompt, StringComparison.Ordinal) ? "tool_calls" : "stop";
+                await WriteJsonAsync(stream, HttpStatusCode.OK, $$$"""
+                    {"id":"chatcmpl-responses-proof","object":"chat.completion","created":1787800000,"model":"native-aot-provider-model","choices":[{"index":0,"message":{{{message}}},"finish_reason":"{{{finishReason}}}"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}
                     """);
                 return;
             }

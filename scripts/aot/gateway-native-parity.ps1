@@ -477,6 +477,15 @@ try {
     }
     if ($LASTEXITCODE -ne 0) { throw "Gateway native parity probe exited with $LASTEXITCODE." }
 
+    # A separate owned key/group preserves the original parity totals while proving
+    # actual HTTP JSON normalization and durable charges after a provider-work 502.
+    if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
+        & $nativeProbe --responses-accounting
+    } else {
+        dotnet $probeDll --responses-accounting
+    }
+    if ($LASTEXITCODE -ne 0) { throw 'Gateway Responses HTTP/accounting proof failed.' }
+
     # The owner is known before POST and cleanup is repeated after producers are
     # reaped, covering an unknown committed HTTP outcome or a late request.
     $adminIpAttempted = $true

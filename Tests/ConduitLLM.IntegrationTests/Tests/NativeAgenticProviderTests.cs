@@ -77,8 +77,8 @@ public sealed class NativeAgenticProviderTests
         var finalChoice = Assert.Single(final.Choices);
         Assert.Equal("stop", finalChoice.FinishReason);
         Assert.Equal("assistant", finalChoice.Message.Role);
-        var finalContent = Assert.IsType<JsonElement>(finalChoice.Message.Content);
-        Assert.Equal(NativeProviderStub.AgenticFinalContent, finalContent.GetString());
+        var finalContent = Assert.IsType<string>(finalChoice.Message.Content);
+        Assert.Equal(NativeProviderStub.AgenticFinalContent, finalContent);
         Assert.Null(finalChoice.Message.ToolCalls);
         AssertUsage(first);
         AssertUsage(final);

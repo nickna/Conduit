@@ -27,11 +27,14 @@ public partial class UsageTrackingMiddleware
     {
         var snapshot = context.GetRequestAccountingSnapshot();
         if (context.Response.StatusCode >= StatusCodes.Status400BadRequest &&
-            snapshot?.ProviderInvocations?.Count is not > 0)
+            !HasTypedAccountingEvidence(snapshot))
         {
             await LogBillingDecisionAsync(context, billingAuditService);
             return;
         }
+
+        // A provider can complete and publish aggregate usage before response conversion
+        // fails. The client status does not invalidate that evidence or require per-call IDs.
 
         if (snapshot is null || snapshot.Operation == RequestOperation.Unknown)
         {

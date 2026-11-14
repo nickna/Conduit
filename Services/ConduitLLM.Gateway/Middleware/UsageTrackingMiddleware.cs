@@ -66,10 +66,7 @@ public partial class UsageTrackingMiddleware
                         billingAuditService,
                         toolCostCalculationService);
                 }
-                else if (downstreamCompleted || context.GetRequestAccountingSnapshot() is { } snapshot &&
-                    (snapshot.ProviderUsage is not null || snapshot.ProviderInvocations?.Count > 0 ||
-                     snapshot.DirectCost is not null || snapshot.FunctionExecutions.Count > 0 ||
-                     snapshot.ProviderToolUsage?.Tools.Count > 0))
+                else if (downstreamCompleted || HasTypedAccountingEvidence(context.GetRequestAccountingSnapshot()))
                 {
                     // Published evidence survives a later provider or response-writing exception.
                     // Accounting failures must not replace the downstream exception.
@@ -138,6 +135,12 @@ public partial class UsageTrackingMiddleware
         ConduitLLM.Core.Models.Usage usage,
         bool includeAggregateReportedCost = true)
         => ProviderUsagePricing.ApplyProviderBillingPolicy(context, usage, includeAggregateReportedCost);
+
+    private static bool HasTypedAccountingEvidence(RequestAccountingSnapshot? snapshot) =>
+        snapshot is not null &&
+        (snapshot.ProviderUsage is not null || snapshot.ProviderInvocations?.Count > 0 ||
+         snapshot.DirectCost is not null || snapshot.FunctionExecutions.Count > 0 ||
+         snapshot.ProviderToolUsage?.Tools.Count > 0);
 }
 
 public static class UsageTrackingMiddlewareExtensions
