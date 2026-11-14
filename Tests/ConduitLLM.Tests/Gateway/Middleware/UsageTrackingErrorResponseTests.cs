@@ -1,8 +1,15 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
+
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.DTOs;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Interfaces;
+using ConduitLLM.Core.Configuration;
+using ConduitLLM.Core.Exceptions;
 using ConduitLLM.Core.Interfaces;
+using ConduitLLM.Core.Middleware;
 using ConduitLLM.Core.Models;
 using ConduitLLM.Core.Services;
 using ConduitLLM.Gateway.Billing;
@@ -10,8 +17,12 @@ using ConduitLLM.Gateway.Constants;
 using ConduitLLM.Gateway.Middleware;
 using ConduitLLM.Gateway.Services;
 using ConduitLLM.Gateway.UsageTracking;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -192,6 +203,184 @@ public class UsageTrackingErrorResponseTests
         request.AssertChargedExactlyOnce(0.000075m);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Outer_error_handler_and_accounting_agree_after_unstarted_response_writing_failure(bool withReservation)
+    {
+        using var request = new TrackedRequest(withReservation);
+        var failure = new IOException("Private response-writing details");
+
+        await request.InvokeWithErrorHandlingAsync(context =>
+        {
+            Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+            request.Accounting.RecordProviderUsage(TokenUsage(), "test-model", UsageEvidenceSource.Provider);
+            throw failure;
+        });
+
+        Assert.Same(failure, request.ExceptionObservedByOuter);
+        Assert.Equal(StatusCodes.Status500InternalServerError, request.Context.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status500InternalServerError, Assert.Single(request.Logs).StatusCode);
+        Assert.Equal(StatusCodes.Status500InternalServerError, Assert.Single(request.Audits).HttpStatusCode);
+        using var body = JsonDocument.Parse(request.ResponseText());
+        Assert.Equal("internal_error", body.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.DoesNotContain(failure.Message, request.ResponseText());
+        Assert.Equal(request.Context.TraceIdentifier, request.Context.Response.Headers["x-request-id"]);
+        request.AssertChargedExactlyOnce(0.000075m);
+    }
+
+    [Theory]
+    [InlineData(CustomerErrorMode.External, HttpStatusCode.Unauthorized, StatusCodes.Status502BadGateway)]
+    [InlineData(CustomerErrorMode.Internal, HttpStatusCode.Unauthorized, StatusCodes.Status502BadGateway)]
+    [InlineData(CustomerErrorMode.External, HttpStatusCode.TooManyRequests, StatusCodes.Status429TooManyRequests)]
+    [InlineData(CustomerErrorMode.Internal, HttpStatusCode.TooManyRequests, StatusCodes.Status429TooManyRequests)]
+    public async Task Wrapped_provider_error_is_translated_once_for_accounting_and_outer_envelope(
+        CustomerErrorMode mode, HttpStatusCode upstreamStatus, int expectedStatus)
+    {
+        var translator = new Mock<IProviderErrorTranslator>();
+        var actualTranslator = new ProviderErrorTranslator(new CustomerErrorOptions { Mode = mode });
+        translator.Setup(service => service.MapProviderError(It.IsAny<LLMCommunicationException>()))
+            .Returns<LLMCommunicationException>(actualTranslator.MapProviderError);
+        using var request = new TrackedRequest(withReservation: true, translator: translator.Object);
+        var providerFailure = new LLMCommunicationException("Provider rejected request", upstreamStatus, "Private upstream text")
+        { ProviderName = "private-provider" };
+        var failure = new IOException("Response wrapper", new LLMCommunicationException("Statusless wrapper", providerFailure));
+
+        await request.InvokeWithErrorHandlingAsync(context =>
+        {
+            request.Accounting.RecordProviderUsage(TokenUsage(), "test-model", UsageEvidenceSource.Provider);
+            throw failure;
+        });
+
+        Assert.Same(failure, request.ExceptionObservedByOuter);
+        Assert.Equal(expectedStatus, request.Context.Response.StatusCode);
+        Assert.Equal(expectedStatus, Assert.Single(request.Logs).StatusCode);
+        Assert.Equal(expectedStatus, Assert.Single(request.Audits).HttpStatusCode);
+        translator.Verify(service => service.MapProviderError(providerFailure), Times.Once);
+        using var body = JsonDocument.Parse(request.ResponseText());
+        var error = body.RootElement.GetProperty("error");
+        if (mode == CustomerErrorMode.External)
+        {
+            Assert.DoesNotContain("Private upstream text", request.ResponseText());
+            Assert.DoesNotContain("private-provider", request.ResponseText());
+            Assert.False(error.TryGetProperty("metadata", out _));
+        }
+        else
+        {
+            Assert.Contains("private-provider", error.GetProperty("message").GetString());
+            Assert.Equal("Private upstream text", error.GetProperty("metadata").GetProperty("provider_error")
+                .GetProperty("raw_message").GetString());
+        }
+        request.AssertChargedExactlyOnce(0.000075m);
+    }
+
+    [Fact]
+    public async Task Provisional_translation_failure_preserves_original_exception_and_known_charge()
+    {
+        var translator = new Mock<IProviderErrorTranslator>();
+        translator.Setup(service => service.MapProviderError(It.IsAny<LLMCommunicationException>()))
+            .Throws(new InvalidOperationException("Translator unavailable"));
+        using var request = new TrackedRequest(withReservation: true, translator: translator.Object);
+        var failure = new IOException("Original downstream failure",
+            new LLMCommunicationException("Provider failure", HttpStatusCode.Unauthorized, "private"));
+
+        var actual = await Assert.ThrowsAsync<IOException>(() => request.InvokeAsync(context =>
+        {
+            request.Accounting.RecordProviderUsage(TokenUsage(), "test-model", UsageEvidenceSource.Provider);
+            throw failure;
+        }));
+
+        Assert.Same(failure, actual);
+        translator.Verify(service => service.MapProviderError(It.IsAny<LLMCommunicationException>()), Times.Once);
+        Assert.Single(request.Logs);
+        request.AssertChargedExactlyOnce(0.000075m);
+    }
+
+    [Fact]
+    public async Task Outer_translation_retry_and_accounting_agree_when_provisional_translation_fails()
+    {
+        var translator = new Mock<IProviderErrorTranslator>();
+        var providerFailure = new LLMCommunicationException("Provider failure", HttpStatusCode.Unauthorized, "private");
+        var mapping = new ProviderErrorTranslator(new CustomerErrorOptions()).MapProviderError(providerFailure);
+        translator.SetupSequence(service => service.MapProviderError(providerFailure))
+            .Throws(new IOException("Temporary translation failure"))
+            .Returns(mapping);
+        using var request = new TrackedRequest(withReservation: true, translator: translator.Object);
+        var failure = new IOException("Original downstream failure", providerFailure);
+
+        await request.InvokeWithErrorHandlingAsync(context =>
+        {
+            request.Accounting.RecordProviderUsage(TokenUsage(), "test-model", UsageEvidenceSource.Provider);
+            throw failure;
+        });
+
+        Assert.Same(failure, request.ExceptionObservedByOuter);
+        Assert.Equal(StatusCodes.Status502BadGateway, request.Context.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status502BadGateway, Assert.Single(request.Logs).StatusCode);
+        Assert.Equal(StatusCodes.Status502BadGateway, Assert.Single(request.Audits).HttpStatusCode);
+        using var body = JsonDocument.Parse(request.ResponseText());
+        Assert.Equal(mapping.ResponseMessage, body.RootElement.GetProperty("error").GetProperty("message").GetString());
+        Assert.DoesNotContain("private", request.ResponseText());
+        translator.Verify(service => service.MapProviderError(providerFailure), Times.Exactly(2));
+        request.AssertChargedExactlyOnce(0.000075m);
+    }
+
+    [Fact]
+    public async Task Provisional_translation_and_diagnostic_logger_failures_do_not_replace_downstream_exception()
+    {
+        var translator = new Mock<IProviderErrorTranslator>();
+        translator.Setup(service => service.MapProviderError(It.IsAny<LLMCommunicationException>()))
+            .Throws(new InvalidOperationException("Translator unavailable"));
+        using var request = new TrackedRequest(withReservation: true, translator: translator.Object);
+        var failure = new IOException("Original downstream failure",
+            new LLMCommunicationException("Provider failure", HttpStatusCode.Unauthorized, "private"));
+
+        var actual = await Assert.ThrowsAsync<IOException>(() => request.InvokeAsync(context =>
+        {
+            request.Accounting.RecordProviderUsage(TokenUsage(), "test-model", UsageEvidenceSource.Provider);
+            throw failure;
+        }, new ThrowingErrorLogger()));
+
+        Assert.Same(failure, actual);
+        Assert.Equal(StatusCodes.Status502BadGateway, Assert.Single(request.Logs).StatusCode);
+        request.AssertChargedExactlyOnce(0.000075m);
+    }
+
+    [Theory]
+    [InlineData("application/json")]
+    [InlineData("text/event-stream")]
+    public async Task Already_started_response_keeps_sent_status_headers_and_body_after_exception(string contentType)
+    {
+        using var request = new TrackedRequest(withReservation: true);
+        var response = new StartedResponseFeature
+        {
+            StatusCode = StatusCodes.Status200OK
+        };
+        request.Context.Features.Set<IHttpResponseFeature>(response);
+        request.Context.Response.ContentType = contentType;
+        request.Context.Response.Headers["x-sent"] = "original";
+        var prefix = Encoding.UTF8.GetBytes("already-sent-body");
+        await request.Context.Response.Body.WriteAsync(prefix);
+        response.Started = true;
+        var failure = new IOException("Writing failed after response started");
+
+        await request.InvokeWithErrorHandlingAsync(context =>
+        {
+            request.Accounting.RecordProviderUsage(TokenUsage(), "test-model", UsageEvidenceSource.Provider);
+            throw failure;
+        });
+
+        Assert.Same(failure, request.ExceptionObservedByOuter);
+        Assert.Equal(StatusCodes.Status200OK, request.Context.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status200OK, Assert.Single(request.Logs).StatusCode);
+        Assert.Equal(StatusCodes.Status200OK, Assert.Single(request.Audits).HttpStatusCode);
+        Assert.Equal(contentType, request.Context.Response.ContentType);
+        Assert.Equal("original", request.Context.Response.Headers["x-sent"]);
+        Assert.False(request.Context.Response.Headers.ContainsKey("x-request-id"));
+        Assert.Equal("already-sent-body", request.ResponseText());
+        request.AssertChargedExactlyOnce(0.000075m);
+    }
+
     [Fact]
     public async Task Error_before_provider_work_remains_unbilled_and_releases_unstarted_reservation()
     {
@@ -218,11 +407,30 @@ public class UsageTrackingErrorResponseTests
 
     private static Usage TokenUsage() => new() { PromptTokens = 10, CompletionTokens = 5, TotalTokens = 15 };
 
+    private sealed class StartedResponseFeature : HttpResponseFeature
+    {
+        public bool Started { get; set; }
+        public override bool HasStarted => Started;
+    }
+
+    private sealed class ThrowingErrorLogger : ILogger<UsageTrackingMiddleware>
+    {
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception,
+            Func<TState, Exception, string> formatter)
+        {
+            if (logLevel == LogLevel.Error) throw new InvalidOperationException("Diagnostic logger failed");
+        }
+    }
+
     private sealed class TrackedRequest : IDisposable
     {
         private readonly ServiceProvider _services;
         private readonly bool _withReservation;
+        private readonly IProviderErrorTranslator _translator;
         public HttpContext Context { get; }
+        public Exception ExceptionObservedByOuter { get; private set; }
         public IRequestAccountingContext Accounting { get; }
         public Mock<ISpendReservationService> Reservations { get; } = new();
         public Mock<IBatchSpendUpdateService> Batch { get; } = new();
@@ -231,11 +439,15 @@ public class UsageTrackingErrorResponseTests
         public List<LogRequestDto> Logs { get; } = [];
         public List<BillingAuditEvent> Audits { get; } = [];
 
-        public TrackedRequest(bool withReservation, bool invocationStarted = true)
+        public TrackedRequest(bool withReservation, bool invocationStarted = true, IProviderErrorTranslator translator = null)
         {
             _withReservation = withReservation;
-            _services = new ServiceCollection().AddSingleton(Reservations.Object).BuildServiceProvider();
+            _translator = translator;
+            var services = new ServiceCollection().AddSingleton(Reservations.Object);
+            if (translator is not null) services.AddSingleton(translator);
+            _services = services.BuildServiceProvider();
             Context = new DefaultHttpContext { RequestServices = _services };
+            Context.Response.Body = new MemoryStream();
             Context.Request.Path = "/v1/responses";
             Context.Items[HttpContextKeys.VirtualKeyId] = 42;
             Context.Items["ProviderType"] = ProviderType.OpenAI;
@@ -267,7 +479,7 @@ public class UsageTrackingErrorResponseTests
             Tools.Setup(service => service.SerializeToolUsage(It.IsAny<ToolUsageData>())).Returns("{}");
         }
 
-        public Task InvokeAsync(RequestDelegate next)
+        public Task InvokeAsync(RequestDelegate next, ILogger<UsageTrackingMiddleware> logger = null)
         {
             var writer = new Mock<IRequestLogRuntimeWriter>();
             writer.Setup(service => service.LogRequestAsync(It.IsAny<LogRequestDto>()))
@@ -276,10 +488,27 @@ public class UsageTrackingErrorResponseTests
             audit.Setup(service => service.LogBillingEvent(It.IsAny<BillingAuditEvent>()))
                 .Callback<BillingAuditEvent>(Audits.Add);
             var pricing = new CostCalculationService(ModelCosts.Object, NullLogger<CostCalculationService>.Instance);
-            var middleware = new UsageTrackingMiddleware(next, NullLogger<UsageTrackingMiddleware>.Instance);
+            var middleware = new UsageTrackingMiddleware(next, logger ?? NullLogger<UsageTrackingMiddleware>.Instance);
             return middleware.InvokeAsync(Context, pricing, Batch.Object, writer.Object,
                 Mock.Of<IVirtualKeyRuntimeService>(), audit.Object, Tools.Object);
         }
+
+        public Task InvokeWithErrorHandlingAsync(RequestDelegate next)
+        {
+            var environment = Mock.Of<IWebHostEnvironment>(value => value.EnvironmentName == Environments.Production);
+            var outer = new OpenAIErrorMiddleware(async _ =>
+            {
+                try { await InvokeAsync(next); }
+                catch (Exception exception)
+                {
+                    ExceptionObservedByOuter = exception;
+                    throw;
+                }
+            }, NullLogger<OpenAIErrorMiddleware>.Instance, environment, _translator);
+            return outer.InvokeAsync(Context);
+        }
+
+        public string ResponseText() => Encoding.UTF8.GetString(((MemoryStream)Context.Response.Body).ToArray());
 
         public void AssertChargedExactlyOnce(decimal cost)
         {

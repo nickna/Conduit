@@ -1,6 +1,7 @@
 using ConduitLLM.Configuration.Interfaces;
 using ConduitLLM.Core.Interfaces;
 using ConduitLLM.Core.Extensions;
+using ConduitLLM.Core.Middleware;
 using ConduitLLM.Gateway.Constants;
 using ConduitLLM.Gateway.Metrics;
 using ConduitLLM.Gateway.Services;
@@ -53,6 +54,11 @@ public partial class UsageTrackingMiddleware
                 await _next(context);
                 downstreamCompleted = true;
             }
+            catch (Exception downstreamException)
+            {
+                PrepareFailureStatusForAccounting(context, downstreamException);
+                throw;
+            }
             finally
             {
                 if (context.Response.ContentType?.Contains("text/event-stream") == true)
@@ -102,6 +108,45 @@ public partial class UsageTrackingMiddleware
                     reservationFinalizationEx,
                     "Failed to finalize the request spend reservation for {Path}",
                     LoggingSanitizer.S(context.Request.Path.ToString()));
+            }
+        }
+    }
+
+    private void PrepareFailureStatusForAccounting(HttpContext context, Exception downstreamException)
+    {
+        IProviderErrorTranslator? translator = null;
+        try
+        {
+            if (context.Response.HasStarted) return;
+
+            // Accounting finalizes before the outer error middleware writes its envelope.
+            // Share its mapping so durable logs describe that response.
+            translator = context.RequestServices.GetService<IProviderErrorTranslator>();
+            context.Response.StatusCode = RequestExceptionMapping.Resolve(
+                context, downstreamException, translator).StatusCode;
+        }
+        catch (Exception mappingException)
+        {
+            try
+            {
+                // Customer-mode translation changes text, never status. Preserve the status
+                // if translation fails here and the outer handler later retries successfully.
+                if (!context.Response.HasStarted)
+                    context.Response.StatusCode = RequestExceptionMapping.GetStatusCodeWithoutTranslation(
+                        downstreamException, translator);
+            }
+            catch
+            {
+                // A transport/status failure must not replace the original exception.
+            }
+
+            try
+            {
+                _logger.LogError(mappingException, "Failed to resolve response status before accounting finalization");
+            }
+            catch
+            {
+                // Diagnostic logging must not replace the original exception either.
             }
         }
     }

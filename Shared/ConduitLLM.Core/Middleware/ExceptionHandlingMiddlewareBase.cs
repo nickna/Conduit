@@ -79,12 +79,7 @@ public abstract class ExceptionHandlingMiddlewareBase
         // Provider communication errors go through the customer-mode translator when one is
         // registered (Gateway): CONDUIT_CUSTOMER_MODE decides whether the customer sees raw
         // provider text or a classified generic message. Status mapping is identical either way.
-        var providerException = _providerErrorTranslator is not null
-            ? LLMCommunicationException.FindWithStatus(exception)
-            : null;
-        var mapping = providerException is not null
-            ? _providerErrorTranslator!.MapProviderError(providerException)
-            : ExceptionToResponseMapper.Map(exception);
+        var mapping = RequestExceptionMapping.Resolve(context, exception, _providerErrorTranslator);
 
         // Log with or without body
         if (requestBody != null)
