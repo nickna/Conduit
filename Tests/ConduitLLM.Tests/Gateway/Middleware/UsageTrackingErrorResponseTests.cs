@@ -26,14 +26,16 @@ public class UsageTrackingErrorResponseTests
     [InlineData(400, true)]
     [InlineData(502, true)]
     [InlineData(503, true)]
+    [InlineData(502, false, UsageEvidenceSource.Estimated)]
+    [InlineData(502, true, UsageEvidenceSource.Estimated)]
     public async Task Published_provider_usage_is_billed_and_logged_after_error_response(
-        int statusCode, bool withReservation)
+        int statusCode, bool withReservation, UsageEvidenceSource source = UsageEvidenceSource.Provider)
     {
         using var request = new TrackedRequest(withReservation);
 
         await request.InvokeAsync(context =>
         {
-            request.Accounting.RecordProviderUsage(TokenUsage(), "test-model", UsageEvidenceSource.Provider);
+            request.Accounting.RecordProviderUsage(TokenUsage(), "test-model", source);
             context.Response.StatusCode = statusCode;
             return Task.CompletedTask;
         });
@@ -51,6 +53,50 @@ public class UsageTrackingErrorResponseTests
         Assert.Equal(0.000075m, audit.CalculatedCost);
         Assert.False(request.Accounting.Snapshot().IsIndeterminate);
         request.AssertChargedExactlyOnce(0.000075m);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Completed_provider_calls_without_aggregate_usage_are_billed_at_their_original_boundaries(bool withReservation)
+    {
+        using var request = new TrackedRequest(withReservation);
+        await request.InvokeAsync(context =>
+        {
+            request.Accounting.RecordProviderCalls([
+                new ProviderCallUsage { Iteration = 1, Usage = TokenUsage() },
+                new ProviderCallUsage { Iteration = 2, Usage = TokenUsage() }
+            ]);
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+            return Task.CompletedTask;
+        });
+
+        var log = Assert.Single(request.Logs);
+        Assert.Equal(0.00015m, log.Cost);
+        Assert.Equal(20, log.InputTokens);
+        Assert.Equal(10, log.OutputTokens);
+        request.ModelCosts.Verify(service => service.GetCostForModelAsync("test-model", It.IsAny<CancellationToken>()), Times.Exactly(2));
+        request.AssertChargedExactlyOnce(0.00015m);
+    }
+
+    [Fact]
+    public async Task Completed_call_without_aggregate_and_unresolved_invocation_preserves_known_cost_and_hold()
+    {
+        using var request = new TrackedRequest(withReservation: true);
+        await request.InvokeAsync(context =>
+        {
+            request.Accounting.RecordProviderInvocation(1);
+            request.Accounting.RecordProviderInvocation(2);
+            request.Accounting.RecordProviderCalls([new ProviderCallUsage { Iteration = 1, Usage = TokenUsage() }]);
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+            return Task.CompletedTask;
+        });
+
+        var log = Assert.Single(request.Logs);
+        Assert.Equal(0.000075m, log.Cost);
+        Assert.Equal(10, log.InputTokens);
+        Assert.Equal(5, log.OutputTokens);
+        request.AssertPartialKnownSpend(0.000075m);
     }
 
     [Theory]

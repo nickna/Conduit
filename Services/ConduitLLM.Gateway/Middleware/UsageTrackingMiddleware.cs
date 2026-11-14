@@ -138,7 +138,8 @@ public partial class UsageTrackingMiddleware
 
     private static bool HasTypedAccountingEvidence(RequestAccountingSnapshot? snapshot) =>
         snapshot is not null &&
-        (snapshot.ProviderUsage is not null || snapshot.ProviderInvocations?.Count > 0 ||
+        (snapshot.ProviderUsage is { Source: not UsageEvidenceSource.SubmissionEstimate } ||
+         snapshot.ProviderCalls.Count > 0 || snapshot.ProviderInvocations?.Count > 0 ||
          snapshot.DirectCost is not null || snapshot.FunctionExecutions.Count > 0 ||
          snapshot.ProviderToolUsage?.Tools.Count > 0);
 }
