@@ -68,7 +68,10 @@ evidence; they require a new collection.
 
 The collector imports only `Invoke-BoundedProcess` and `Protect-PrivatePath` from
 the pinned `measure-native-container.ps1` helper, whose SHA-256 is
-`c55d7c2750f2c5e6299eb35c659983b953c3c0c99c25d7f07b3508b59bf75501`.
+`5df5b5bfe8fdc17c4d907a2ae173cc17b2cf8af44a4eb15857fb67e1821091e2`.
+The helper uses LF checkout endings on all platforms so its byte pin is portable.
+The pin includes the reviewed process-identity and inherited-pipe cleanup fixes;
+changing helper content still requires a new review and pin.
 Its sole derivation sets `ProcessStartInfo.WorkingDirectory` to the explicit
 command source directory. The helper retains its UTF-8 handling, per-stream
 4 Mi-character output limit, shared deadline, process-tree termination, and

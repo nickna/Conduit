@@ -157,8 +157,10 @@ internal static class Program
                             item.GetProperty("symbol").GetString()!.Contains("FunctionConfigurations", StringComparison.Ordinal)),
                         "A full FunctionConfigurations branch lost its bound root.");
                     var operation = terminal.Operation;
+                    var cancellationParameter = terminal.Caller.Parameters.Single(parameter => parameter.Name == "cancellationToken");
+                    var semanticModel = functionDiscovery.Compilation.GetSemanticModel(operation.Syntax.SyntaxTree);
                     Require(operation.Arguments.Any(argument => argument.Parameter?.Name == "cancellationToken" &&
-                        argument.Value is IParameterReferenceOperation { Parameter.Name: "cancellationToken" }),
+                        ForwardsCancellationParameter(argument.Value, cancellationParameter, semanticModel)),
                         "Terminal did not preserve the actual cancellation parameter binding.");
                 }
                 Require(terminals.Select(call => call.Diagnostic.Location.SourceSpan.Start).Distinct().Count() == 4,
@@ -467,6 +469,25 @@ internal static class Program
     }
 
     private static string Sha256(string source) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))).ToLowerInvariant();
+
+    private static bool ForwardsCancellationParameter(IOperation value, IParameterSymbol expected, SemanticModel model)
+    {
+        if (value is IParameterReferenceOperation parameter)
+            return SymbolEqualityComparer.Default.Equals(parameter.Parameter, expected);
+        if (value is not ILocalReferenceOperation local ||
+            local.Local.DeclaringSyntaxReferences.SingleOrDefault()?.GetSyntax() is not VariableDeclaratorSyntax
+                { Initializer.Value: { } initializer })
+            return false;
+
+        // The production EF shape captures the request token in a local. Verify
+        // its bound initializer and reject reassignment rather than accepting a name.
+        if (model.GetOperation(initializer) is not IParameterReferenceOperation source ||
+            !SymbolEqualityComparer.Default.Equals(source.Parameter, expected))
+            return false;
+        var method = initializer.Ancestors().OfType<MethodDeclarationSyntax>().First();
+        return !method.DescendantNodes().OfType<AssignmentExpressionSyntax>().Any(assignment =>
+            SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(assignment.Left).Symbol, local.Local));
+    }
 
     private static void Check(string name, Action assertion)
     {
