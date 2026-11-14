@@ -11,6 +11,14 @@ auto-provisioning during normal startup.
 3. Only after exit code `0`, roll out Gateway and Admin (and promote any floating
    image tags).
 
+For a managed amd64/ARM64 release, qualify both native architectures before this
+sequence reaches production. The immutable service indexes must contain the
+tested architecture-specific children; run migration once using the candidate
+Admin image on the release runner's native platform. Do not run a separate schema
+migration merely because the index contains a second architecture. See
+[CI and release validation](../ci-validation.md) for image identity and candidate
+gates. NativeAOT images remain separate x64 canaries.
+
 The migrator applies EF Core migrations, imports the bundled model catalog on an
 empty installation, and provisions Wolverine's PostgreSQL schemas. A non-zero
 exit code must stop the rollout. Existing services remain available because
@@ -49,6 +57,12 @@ For a source checkout:
 ```bash
 dotnet run --project tools/ConduitLLM.Migrator
 ```
+
+Source builds use the .NET 11 SDK selected by `global.json`. EF Core and Npgsql
+remain on 10.x; invoking the retained `dotnet-ef` 10 CLI additionally requires a
+.NET 10 runtime. The packaged standalone migrator runs with the candidate's
+.NET 11 runtime and does not require installing the EF CLI in production. See
+[EF migration tools](../../../scripts/migrations/README.md) for developer setup.
 
 Both normal services should use `CONDUIT_MIGRATION_MODE=Wait` (the default) and
 `ConduitLLM__Messaging__Wolverine__AutoProvision=false` (also the default).

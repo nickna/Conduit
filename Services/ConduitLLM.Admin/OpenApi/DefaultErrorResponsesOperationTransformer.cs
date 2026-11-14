@@ -58,18 +58,18 @@ public sealed class DefaultErrorResponsesOperationTransformer : IOpenApiOperatio
 
             if (int.TryParse(responseEntry.Key, out var status) && status >= 400)
             {
-                response.Content = new Dictionary<string, OpenApiMediaType>
+                response.Content = new Dictionary<string, IOpenApiMediaType>
                 {
-                    ["application/problem+json"] = new() { Schema = problemReference }
+                    ["application/problem+json"] = new OpenApiMediaType { Schema = problemReference }
                 };
                 if (status is 401 or 403)
                 {
-                    response.Content["application/json"] = new() { Schema = securityReference };
+                    response.Content["application/json"] = new OpenApiMediaType { Schema = securityReference };
                     response.Description += " Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body.";
                 }
                 if (status == 429)
                 {
-                    response.Content["application/json"] = new() { Schema = rateLimitReference };
+                    response.Content["application/json"] = new OpenApiMediaType { Schema = rateLimitReference };
                     response.Headers["Retry-After"] = new OpenApiHeader
                     {
                         Description = "Minimum delay in seconds before retrying.",

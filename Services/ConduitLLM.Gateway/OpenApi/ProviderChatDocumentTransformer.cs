@@ -25,8 +25,10 @@ public sealed class ProviderChatDocumentTransformer : IOpenApiDocumentTransforme
             Items = new OpenApiSchemaReference("ProviderChatMessage", document)
         };
         schemas["ProviderChatCompletionRequest"] = providerRequest;
-        path.Operations![HttpMethod.Post].RequestBody!.Content!["application/json"].Schema =
-            new OpenApiSchemaReference("ProviderChatCompletionRequest", document);
+        var content = path.Operations![HttpMethod.Post].RequestBody!.Content!;
+        var media = ConduitLLM.Core.OpenApi.OpenApiMediaTypeNormalizer.CopyForMutation(content["application/json"]);
+        media.Schema = new OpenApiSchemaReference("ProviderChatCompletionRequest", document);
+        content["application/json"] = media;
         return Task.CompletedTask;
     }
 

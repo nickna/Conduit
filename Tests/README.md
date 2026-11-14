@@ -149,16 +149,16 @@ Tests/
 ## Prerequisites
 
 ### For ConduitLLM.Tests
-- .NET 10.0 SDK or later
+- The .NET 11 SDK selected by `global.json`
 - No external services required (uses in-memory/mock implementations)
 
 ### For ConduitLLM.Benchmarks
-- .NET 10.0 SDK or later
+- The .NET 11 SDK selected by `global.json`
 - No external services required
 - Release configuration required for accurate measurements
 
 ### For ConduitLLM.IntegrationTests
-- .NET 10.0 SDK or later
+- The .NET 11 SDK selected by `global.json`
 - Docker environment running (`./scripts/dev.ps1`)
 - All services healthy:
   - Gateway API (http://localhost:5000)

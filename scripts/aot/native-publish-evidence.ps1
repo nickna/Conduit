@@ -408,6 +408,12 @@ function Get-NativeEvidenceMetadata($Source, $Toolchain, $PublishProperties, [st
     foreach ($name in @('sdkVersion', 'hostOs', 'hostArchitecture', 'targetOs', 'targetArchitecture')) {
         Assert-NativeEvidenceText $toolchainObject[$name]
     }
+    # Historical manifests predate the SDK 11 optimized-publish flag. New
+    # producers include it only after checking the SDK's effective flag.
+    if ($toolchainObject.ContainsKey('optimizedPublish') -and
+        ($toolchainObject['optimizedPublish'] -isnot [bool] -or -not $toolchainObject['optimizedPublish'])) {
+        throw 'Native publish evidence optimized-publish identity is invalid.'
+    }
     $targetOs = if ($Rid -ceq 'linux-x64') { 'linux' } else { 'windows' }
     if ($toolchainObject['targetOs'] -cne $targetOs -or $toolchainObject['targetArchitecture'] -cne 'x64') {
         throw 'Native publish evidence target does not match its RID.'

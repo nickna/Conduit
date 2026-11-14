@@ -8,7 +8,10 @@ const output = resolve(process.env.CI_SMOKE_OUTPUT ?? 'artifacts/container-smoke
 mkdirSync(output, { recursive: true });
 const run = `conduit-ci-${process.pid}-${Date.now()}`;
 const containers = [];
-const report = { images: {}, checks: [], startedAt: new Date().toISOString() };
+const expectedPlatform = process.env.CI_CONTAINER_PLATFORM;
+const hostPlatform = `${process.platform}/${process.arch === 'x64' ? 'amd64' : process.arch}`;
+if (expectedPlatform) assert.equal(hostPlatform, expectedPlatform, 'Packaged qualification must execute on matching native hardware');
+const report = { images: {}, checks: [], startedAt: new Date().toISOString(), hostPlatform, expectedPlatform };
 const images = { admin: process.env.CI_ADMIN_IMAGE ?? 'conduit-admin:ci',
   http: process.env.CI_GATEWAY_IMAGE ?? 'conduit-http:ci' };
 if (process.env.CI_BROWSER_MODULE) images.webadmin = process.env.CI_WEBADMIN_IMAGE ?? 'conduit-webadmin:ci';
@@ -45,7 +48,9 @@ async function api(base, path, method = 'GET', body, headers = {}) {
 try {
   for (const [service, image] of Object.entries(images)) {
     const config = JSON.parse(docker(['image', 'inspect', image]))[0];
-    report.images[service] = { reference: image, id: config.Id, digests: config.RepoDigests };
+    report.images[service] = { reference: image, id: config.Id, digests: config.RepoDigests,
+      os: config.Os, architecture: config.Architecture };
+    if (expectedPlatform) assert.equal(`${config.Os}/${config.Architecture}`, expectedPlatform, `${service} image platform differs`);
     assert.ok(config.Config.User && !['0', 'root'].includes(config.Config.User), `${service} must run as non-root`);
     assert.ok(config.Config.Healthcheck?.Test, `${service} must have a healthcheck`);
   }

@@ -31,8 +31,9 @@ acceptance criterion to pass.
 
 ## Image contract
 
-Both native Dockerfiles target only `linux/amd64` (`linux-x64`) and use the .NET 10
-Ubuntu chiseled-extra runtime-dependencies image. This retains certificates, ICU,
+Both native Dockerfiles target only `linux/amd64` (`linux-x64`). They pin the
+.NET 11 SDK on Resolute and the .NET 11 Ubuntu 26.04
+`resolute-chiseled-extra` runtime-dependencies image. This retains certificates, ICU,
 and time-zone data without carrying the ASP.NET runtime, SDK, shell, or package
 manager. The image runs as the image-defined non-root `APP_UID`, starts the native
 executable directly, and uses a separately compiled native health probe.
@@ -55,8 +56,14 @@ docker build --file Services/ConduitLLM.Gateway/Dockerfile.native --tag conduit-
 ./scripts/aot/verify-native-image.ps1 -Image conduit-http-native:local -Service http
 ```
 
-Do not add `linux-arm64` until that RID is published and receives the same process,
-image-content, protocol, and canary coverage.
+The managed amd64/ARM64 rollout does not extend this NativeAOT scope. Do not add
+`linux-arm64` until that RID is published and receives the same process,
+image-content, protocol, and canary coverage. No NativeAOT ARM64 performance or
+production-promotion qualification follows from the managed ARM64 lane.
+
+Rerun the exact-revision native gates after an SDK/runtime or image-OS change.
+Historical .NET 10 measurements and process proofs retain their original
+toolchains; they do not qualify the .NET 11 images.
 
 The packaged-entrypoint runtime proof stops a running owned container with
 `docker container stop --timeout <calculated-grace> <exact-id>`. It keeps the

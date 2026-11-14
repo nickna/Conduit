@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 env:
-  DOTNET_VERSION: '10.0.x'
+  DOTNET_VERSION: '11.0.x'
   NODE_VERSION: '22'
 
 concurrency:
@@ -625,11 +625,21 @@ jobs:
 
   # Build and execute the same packaged applications used by release candidates.
   docker:
-    name: Packaged application business flows
+    name: Packaged application business flows (${{ matrix.arch }})
     needs: [select]
     if: ${{ needs.select.result == 'success' && fromJSON(needs.select.outputs.plan).jobs['docker'] }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
     permissions:
       contents: read
       actions: read
@@ -650,31 +660,57 @@ jobs:
         with:
           context: .
           file: Services/ConduitLLM.Admin/Dockerfile
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           load: true
           tags: conduit-admin:ci
-          cache-from: type=gha,scope=admin
-          cache-to: type=gha,scope=admin,mode=max
+          cache-from: type=gha,scope=admin-${{ matrix.arch }}
+          cache-to: type=gha,scope=admin-${{ matrix.arch }},mode=max
       - name: Build http production image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: Services/ConduitLLM.Gateway/Dockerfile
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           load: true
           tags: conduit-http:ci
-          cache-from: type=gha,scope=http
-          cache-to: type=gha,scope=http,mode=max
+          cache-from: type=gha,scope=http-${{ matrix.arch }}
+          cache-to: type=gha,scope=http-${{ matrix.arch }},mode=max
       - name: Build webadmin production image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: WebAdmin/Dockerfile
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           load: true
           tags: conduit-webadmin:ci
-          cache-from: type=gha,scope=webadmin
-          cache-to: type=gha,scope=webadmin,mode=max
+          cache-from: type=gha,scope=webadmin-${{ matrix.arch }}
+          cache-to: type=gha,scope=webadmin-${{ matrix.arch }},mode=max
+      # The ordinary protected validation/contracts lanes cover x64. Execute the
+      # source-generated contracts on physical ARM64 as well as final images.
+      - name: Setup .NET for ARM64 contract checks
+        if: matrix.arch == 'arm64'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: ARM64 reflection-disabled serialization contracts
+        if: matrix.arch == 'arm64'
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj
+          suite: managed-arm64-serialization
+      - name: ARM64 OpenAPI contracts
+        if: matrix.arch == 'arm64'
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
+          suite: managed-arm64-openapi
+          filter: Component=OpenApi
+      - name: ARM64 request-delegate generation guards
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        run: |
+          ./scripts/test/verify-admin-media-rdg.ps1 -NoRestore
+          ./scripts/test/verify-gateway-rdg.ps1 -NoRestore
       - name: Install locked browser tooling
         working-directory: tools/ci
         run: |
@@ -684,11 +720,12 @@ jobs:
         run: node scripts/ci/container-smoke.mjs
         env:
           CI_BROWSER_MODULE: tools/ci/browser-smoke.mjs
+          CI_CONTAINER_PLATFORM: ${{ matrix.platform }}
       - name: Retain packaged execution evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: packaged-application-evidence
+          name: packaged-application-evidence-${{ matrix.arch }}
           path: |
             artifacts/container-smoke
             artifacts/registry-copy

@@ -15,6 +15,9 @@ try {
         "build"
         $project
         "--configuration", "Release"
+        "--maxcpucount:1"
+        "--disable-build-servers"
+        "-nr:false"
         "-t:Rebuild"
         "-p:EmitCompilerGeneratedFiles=true"
         "-p:CompilerGeneratedFilesOutputPath=$generatedRoot"
@@ -54,6 +57,13 @@ try {
 }
 finally {
     if (Test-Path -LiteralPath $generatedRoot) {
-        Remove-Item -LiteralPath $generatedRoot -Recurse -Force
+        $ownedPath = [IO.Path]::GetFullPath($generatedRoot)
+        $artifactRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot "artifacts"))
+        if ([IO.Path]::GetDirectoryName($ownedPath) -cne $artifactRoot -or
+            [IO.Path]::GetFileName($ownedPath) -cnotmatch '^conduit-gateway-rdg-[0-9]+-[0-9a-f]{32}$' -or
+            ((Get-Item -LiteralPath $ownedPath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Gateway RDG generated-directory cleanup ownership was rejected."
+        }
+        Remove-Item -LiteralPath $ownedPath -Recurse -Force
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Reflection;
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -26,6 +27,9 @@ internal static class Program
         parameterOptions: SymbolDisplayParameterOptions.IncludeType | SymbolDisplayParameterOptions.IncludeName | SymbolDisplayParameterOptions.IncludeParamsRefOut,
         miscellaneousOptions: SymbolDisplayMiscellaneousOptions.UseSpecialTypes | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
     private static readonly List<object> Results = [];
+    private static readonly FrameworkName Framework = new(typeof(Program).Assembly
+        .GetCustomAttribute<TargetFrameworkAttribute>()!.FrameworkName);
+    private static readonly string TargetFramework = $"net{Framework.Version.Major}.{Framework.Version.Minor}";
     private static int _passed;
     private static int _failed;
 
@@ -33,7 +37,7 @@ internal static class Program
     {
         var root = FindRepositoryRoot();
         var referenceDirectory = args.Length == 1 ? Path.GetFullPath(args[0]) :
-            Path.Combine(root, "Services", "ConduitLLM.Gateway", "bin", "Debug", "net10.0");
+            Path.Combine(root, "Services", "ConduitLLM.Gateway", "bin", "Debug", TargetFramework);
         try
         {
             var references = LoadReferences(referenceDirectory, root, args.Length == 0);
@@ -420,9 +424,12 @@ internal static class Program
         foreach (var packName in new[] { "Microsoft.NETCore.App.Ref", "Microsoft.AspNetCore.App.Ref" })
         {
             var packDirectory = Path.Combine(dotnetRoot, "packs", packName);
-            var versionDirectory = Directory.GetDirectories(packDirectory).Where(path => Path.GetFileName(path).StartsWith("10.", StringComparison.Ordinal))
-                .OrderByDescending(path => Version.Parse(Path.GetFileName(path))).First();
-            foreach (var path in Directory.GetFiles(Path.Combine(versionDirectory, "ref", "net10.0"), "*.dll"))
+            var versionDirectory = Directory.GetDirectories(packDirectory)
+                .Select(path => (Path: path, Version: Version.TryParse(Path.GetFileName(path), out var version) ? version : null))
+                .Where(item => item.Version is { } version && version.Major == Framework.Version.Major && version.Minor == Framework.Version.Minor)
+                .OrderByDescending(item => item.Version).Select(item => item.Path).FirstOrDefault()
+                ?? throw new InvalidOperationException($"Missing {packName} reference pack for {TargetFramework} in {packDirectory}.");
+            foreach (var path in Directory.GetFiles(Path.Combine(versionDirectory, "ref", TargetFramework), "*.dll"))
             {
                 paths.TryAdd(Path.GetFileName(path), path);
             }
@@ -435,7 +442,7 @@ internal static class Program
         {
             foreach (var project in new[] { "ConduitLLM.Configuration", "ConduitLLM.Persistence.Abstractions", "ConduitLLM.Contracts" })
             {
-                var currentPath = Path.Combine(root, "Shared", project, "bin", "Release", "net10.0", $"{project}.dll");
+                var currentPath = Path.Combine(root, "Shared", project, "bin", "Release", TargetFramework, $"{project}.dll");
                 if (File.Exists(currentPath)) paths[$"{project}.dll"] = currentPath;
             }
         }

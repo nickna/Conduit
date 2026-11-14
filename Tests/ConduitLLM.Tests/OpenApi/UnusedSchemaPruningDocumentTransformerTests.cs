@@ -72,9 +72,9 @@ public sealed class UnusedSchemaPruningDocumentTransformerTests
 
     private static OpenApiResponse ResponseReturning(IOpenApiSchema schema) => new()
     {
-        Content = new Dictionary<string, OpenApiMediaType>
+        Content = new Dictionary<string, IOpenApiMediaType>
         {
-            ["application/json"] = new() { Schema = schema }
+            ["application/json"] = new OpenApiMediaType { Schema = schema }
         }
     };
 }

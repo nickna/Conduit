@@ -144,7 +144,7 @@ public sealed class GeneratedValidationTests
     [InlineData(100, 0, false)]
     [InlineData(0, 10000, false)]
     [InlineData(100, 10000, true)]
-    public void Gateway_SignalR_registration_validates_connection_limits_at_startup(
+    public async Task Gateway_SignalR_registration_validates_connection_limits_at_startup(
         int maxConnectionsPerVirtualKey, int maxTotalConnections, bool valid)
     {
         const string name = "REDIS_URL";
@@ -164,18 +164,19 @@ public sealed class GeneratedValidationTests
             });
             global::Program.ConfigureSignalRServices(builder);
             using var provider = builder.Services.BuildServiceProvider();
-            var startupValidator = provider.GetRequiredService<IStartupValidator>();
+            var startupValidator = provider.GetRequiredService<IAsyncStartupValidator>();
 
             if (valid)
             {
-                startupValidator.Validate();
+                await startupValidator.ValidateAsync(CancellationToken.None);
                 var options = provider.GetRequiredService<IOptions<SignalRConnectionOptions>>().Value;
                 Assert.Equal(maxConnectionsPerVirtualKey, options.MaxConnectionsPerVirtualKey);
                 Assert.Equal(maxTotalConnections, options.MaxTotalConnections);
             }
             else
             {
-                var error = Assert.Throws<OptionsValidationException>(startupValidator.Validate);
+                var error = await Assert.ThrowsAsync<OptionsValidationException>(async () =>
+                    await startupValidator.ValidateAsync(CancellationToken.None));
                 Assert.Equal(typeof(SignalRConnectionOptions), error.OptionsType);
                 var property = maxTotalConnections == 0
                     ? nameof(SignalRConnectionOptions.MaxTotalConnections)
