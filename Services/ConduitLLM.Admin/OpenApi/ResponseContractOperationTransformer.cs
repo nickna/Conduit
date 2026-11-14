@@ -86,10 +86,10 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
             {
                 // The registered Prometheus middleware handles the canonical /metrics
                 // request before the legacy JSON handler is reached.
-                response.Content = new Dictionary<string, OpenApiMediaType>
+                response.Content = new Dictionary<string, IOpenApiMediaType>
                 {
-                    ["text/plain"] = new() { Schema = new OpenApiSchema { Type = JsonSchemaType.String } },
-                    ["application/openmetrics-text"] = new() { Schema = new OpenApiSchema { Type = JsonSchemaType.String } }
+                    ["text/plain"] = new OpenApiMediaType { Schema = new OpenApiSchema { Type = JsonSchemaType.String } },
+                    ["application/openmetrics-text"] = new OpenApiMediaType { Schema = new OpenApiSchema { Type = JsonSchemaType.String } }
                 };
                 continue;
             }
@@ -100,7 +100,7 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
 
             if (status is 204 or 205 || string.Equals(httpMethod, "HEAD", StringComparison.OrdinalIgnoreCase))
             {
-                response.Content = new Dictionary<string, OpenApiMediaType>();
+                response.Content = new Dictionary<string, IOpenApiMediaType>();
                 continue;
             }
 
@@ -109,7 +109,7 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
             {
                 response.Content = contentTypes.ToDictionary(
                     contentType => contentType,
-                    _ => new OpenApiMediaType
+                    _ => (IOpenApiMediaType)new OpenApiMediaType
                     {
                         Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" }
                     });

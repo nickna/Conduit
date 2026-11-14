@@ -4,7 +4,7 @@
     <PackageReference Include="MessagePack" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" VersionOverride="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
     <ProjectReference Include="../../Shared/ConduitLLM.Messaging.Wolverine/ConduitLLM.Messaging.Wolverine.csproj" />
     <ProjectReference Include="../../Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj" />
   </ItemGroup>

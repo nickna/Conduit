@@ -13,6 +13,27 @@ using NpgsqlTypes;
 
 using StackExchange.Redis;
 
+if (args is ["--responses-accounting"])
+{
+    try
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        await NativeResponsesAccountingProbe.RunAsync(
+            ProbeSettings.RequiredUri("CONDUIT_NATIVE_GATEWAY_URL"),
+            ProbeSettings.ProviderUriFromEnvironment(),
+            ProbeSettings.DatabaseConnectionStringFromEnvironment(),
+            ProbeSettings.RedisConnectionStringFromEnvironment(),
+            deadline.Token);
+        Console.WriteLine("Gateway Responses HTTP and durable accounting: PASS");
+    }
+    catch (Exception error)
+    {
+        Console.Error.WriteLine("Responses accounting proof failed. " + NativeFixtureDiagnostics.Describe(error));
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
 if (args.Length > 0 && args[0] is "--benchmark-workload" or "--benchmark-workload-diagnostics")
 {
     try

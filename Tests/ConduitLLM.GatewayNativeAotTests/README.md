@@ -4,6 +4,18 @@ This BCL-based probe and its HTTP provider are published with NativeAOT by the
 Linux gate. Production credential protection is prepared separately by the
 managed `ConduitLLM.SchemaStartupFixtures` utility.
 
+`--responses-accounting` exercises `/v1/responses` through the published host and
+the real loopback provider HTTP transport. A fresh GUID-owned key/group keeps its
+three provider calls independent of the main parity accounting totals. Valid
+Unicode text must return a completed response; rich content and tool output must
+retain the text-only subset's 502 errors. All three calls must persist their exact
+reported usage, charges and status codes, with matching group balance and ledger.
+The completed rich-output rejection settles normally; the tool-output rejection
+retains its known charge and unresolved reservation. A `store:true` rejection must
+not call the provider or charge. Provider counters and settled/indeterminate Redis
+state detect replay or duplicate spend. Run this only against the disposable
+fixture database; its rows remain there for audit until fixture disposal.
+
 The native webhook SignalR probe verifies authenticated subscription and
 unsubscription, checks their Redis connection bookkeeping, and requires all four
 server-only `Broadcast*` method names to be unavailable to clients. The

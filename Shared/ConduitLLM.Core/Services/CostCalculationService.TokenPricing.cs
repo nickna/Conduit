@@ -165,7 +165,7 @@ public partial class CostCalculationService
         // Audio transcription (speech-to-text), billed per minute of audio.
         if (usage.AudioDurationSeconds is > 0 && rates.AudioCostPerMinute.HasValue)
         {
-            components.AudioTranscriptionCost = ((decimal)usage.AudioDurationSeconds.Value / 60m) * rates.AudioCostPerMinute.Value;
+            components.AudioTranscriptionCost = (BillingDurationConversion.ToDecimal(usage.AudioDurationSeconds.Value) / 60m) * rates.AudioCostPerMinute.Value;
 
             _logger.LogDebug(
                 "Audio transcription cost for model {ModelId}: {Seconds}s = ${Total}",

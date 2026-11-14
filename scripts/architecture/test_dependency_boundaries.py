@@ -13,6 +13,7 @@ from dependency_graph import BACKPLANE, CLIENT_PROTOCOL, validate_graph, validat
 
 ROOT = Path(__file__).resolve().parents[2]
 TARGETS = ROOT / "scripts/architecture/dependency-boundaries.targets"
+MSBUILD_ARGS = ["-m:1", "-nr:false", "-p:UseSharedCompilation=false"]
 
 
 @contextmanager
@@ -106,7 +107,7 @@ class MSBuildGuardTests(unittest.TestCase):
                 properties += f'<ConduitDependencyEvidenceDirectory>{escape(str(root / "evidence"))}</ConduitDependencyEvidenceDirectory>'
             fixture.write_text(f'<Project><PropertyGroup><PublishDir>{escape(str(publish))}/</PublishDir>{properties}</PropertyGroup>'
                                f'<ItemGroup>{items}</ItemGroup><Import Project="{escape(str(TARGETS))}" /></Project>')
-            result = subprocess.run(["dotnet", "msbuild", str(fixture), "-nologo", f"-t:{target}"], capture_output=True, text=True)
+            result = subprocess.run(["dotnet", "msbuild", str(fixture), "-nologo", *MSBUILD_ARGS, f"-t:{target}"], capture_output=True, text=True)
             result.evidence = {path.name: path.read_text(encoding="utf-8-sig") for path in (root / "evidence").glob("*.txt")}
             return result
 
@@ -205,11 +206,11 @@ class RealSdkGuardTests(unittest.TestCase):
                                '<ItemGroup><ResolvedFileToPublish Include="$(ConduitFixtureInput)" Condition="\'$(ConduitFixtureInput)\' != \'\'" /></ItemGroup>'
                                '</Target></Project>')
             (root / "Program.cs").write_text('System.Console.WriteLine("Self-contained publish boundary fixture");')
-            restore = subprocess.run(["dotnet", "restore", str(project), "--nologo"], capture_output=True, text=True)
+            restore = subprocess.run(["dotnet", "restore", str(project), "--nologo", *MSBUILD_ARGS], capture_output=True, text=True)
             self.assertEqual(0, restore.returncode, restore.stdout + restore.stderr)
-            build = subprocess.run(["dotnet", "build", str(project), "--no-restore", "--nologo"], capture_output=True, text=True)
+            build = subprocess.run(["dotnet", "build", str(project), "--no-restore", "--nologo", *MSBUILD_ARGS], capture_output=True, text=True)
             self.assertEqual(0, build.returncode, build.stdout + build.stderr)
-            command = ["dotnet", "msbuild", str(project), "-nologo", "-t:ComputeFilesToPublish"]
+            command = ["dotnet", "msbuild", str(project), "-nologo", *MSBUILD_ARGS, "-t:ComputeFilesToPublish"]
             compute = subprocess.run([*command, "-getItem:ResolvedFileToPublish"], capture_output=True, text=True)
             self.assertEqual(0, compute.returncode, compute.stdout + compute.stderr)
             actual_inputs = {Path(item["Identity"]).name for item in json.loads(compute.stdout)["Items"]["ResolvedFileToPublish"]}
@@ -231,7 +232,9 @@ class RealSdkGuardTests(unittest.TestCase):
             for package, dependency in [("Npgsql", ""), ("BoundaryFixture.Wrapper", '<dependencies><dependency id="Npgsql" version="[1.0.0]" /></dependencies>')]:
                 with zipfile.ZipFile(feed / f"{package}.1.0.0.nupkg", "w") as archive:
                     archive.writestr(f"{package}.nuspec", f'<?xml version="1.0"?><package><metadata><id>{package}</id><version>1.0.0</version><authors>Conduit boundary fixture</authors><description>Isolated resolved-graph regression fixture</description>{dependency}</metadata></package>')
-                    archive.writestr("lib/net10.0/_._", "")
+                    # Framework-neutral, empty marker only: never restore or
+                    # execute a fabricated implementation of the forbidden ID.
+                    archive.writestr("lib/netstandard2.0/_._", "")
             (root / "NuGet.Config").write_text(f'<configuration><packageSources><clear /><add key="fixture" value="{escape(str(feed))}" /></packageSources></configuration>')
 
             projects = {}
@@ -244,18 +247,23 @@ class RealSdkGuardTests(unittest.TestCase):
                                    '<EmitLegacyAssetsFileItems>false</EmitLegacyAssetsFileItems><NuGetAudit>false</NuGetAudit>'
                                    f'<RestorePackagesPath>{escape(str(root / "packages"))}</RestorePackagesPath>'
                                    '</PropertyGroup><ItemGroup><PackageReference Include="BoundaryFixture.Wrapper" Version="1.0.0" PrivateAssets="all" /></ItemGroup></Project>')
-                restore = subprocess.run(["dotnet", "restore", str(project), "--nologo"], capture_output=True, text=True)
+                restore = subprocess.run(["dotnet", "restore", str(project), "--nologo", *MSBUILD_ARGS], capture_output=True, text=True)
                 self.assertEqual(0, restore.returncode, restore.stdout + restore.stderr)
                 projects[name] = project
 
-            resolved = subprocess.run(["dotnet", "msbuild", str(projects["BoundaryAllowed"]), "-nologo", "-t:ResolvePackageAssets",
-                                       "-getItem:PackageDependencies", "-getProperty:EmitLegacyAssetsFileItems"], capture_output=True, text=True)
+            resolved = subprocess.run(["dotnet", "msbuild", str(projects["BoundaryAllowed"]), "-nologo", *MSBUILD_ARGS, "-t:ResolvePackageAssets",
+                                       "-getItem:PackageDependencies", "-getProperty:EmitLegacyAssetsFileItems,NETCoreSdkVersion,TargetFramework"], capture_output=True, text=True)
             self.assertEqual(0, resolved.returncode, resolved.stdout + resolved.stderr)
             sdk_items = json.loads(resolved.stdout)
             self.assertEqual("false", sdk_items["Properties"]["EmitLegacyAssetsFileItems"])
+            configured_sdk = json.loads((ROOT / "global.json").read_text())["sdk"]["version"]
+            self.assertEqual(configured_sdk.split(".")[0], sdk_items["Properties"]["NETCoreSdkVersion"].split(".")[0])
+            self.assertEqual(f"net{configured_sdk.split('.')[0]}.0", sdk_items["Properties"]["TargetFramework"])
             self.assertIn("Npgsql", [item["Identity"] for item in sdk_items["Items"]["PackageDependencies"]])
 
-            build = subprocess.run(["dotnet", "build", str(projects["ConduitLLM.Core"]), "--no-restore", "--nologo"], capture_output=True, text=True)
+            allowed = subprocess.run(["dotnet", "build", str(projects["BoundaryAllowed"]), "--no-restore", "--nologo", *MSBUILD_ARGS], capture_output=True, text=True)
+            self.assertEqual(0, allowed.returncode, allowed.stdout + allowed.stderr)
+            build = subprocess.run(["dotnet", "build", str(projects["ConduitLLM.Core"]), "--no-restore", "--nologo", *MSBUILD_ARGS], capture_output=True, text=True)
             self.assertNotEqual(0, build.returncode, build.stdout + build.stderr)
             self.assertIn("dependency boundary rejected resolved packages: Npgsql", build.stdout + build.stderr)
 

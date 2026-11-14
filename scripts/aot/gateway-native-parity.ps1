@@ -41,8 +41,6 @@ $migratorProject = Join-Path $repoRoot 'tools/ConduitLLM.Migrator'
 $probeProject = Join-Path $repoRoot 'Tests/ConduitLLM.GatewayNativeAotTests'
 $publisherProject = Join-Path $repoRoot 'tools/WolverineSmokePublisher'
 $startupFixtureProject = Join-Path $repoRoot 'Tests/ConduitLLM.SchemaStartupFixtures'
-$startupFixtureDll = Join-Path $startupFixtureProject 'bin/Release/net10.0/ConduitLLM.SchemaStartupFixtures.dll'
-$publisherDll = Join-Path $publisherProject 'bin/Release/net10.0/WolverineSmokePublisher.dll'
 $logRoot = Join-Path $artifactRoot "reports/gateway-parity-$PID"
 New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
 
@@ -53,6 +51,17 @@ if (-not $S3AccessKeyId) { throw 'S3AccessKeyId not set.' }
 if (-not $S3SecretAccessKey) { throw 'S3SecretAccessKey not set.' }
 if (-not $S3BucketName) { throw 'S3BucketName not set.' }
 if (-not $IsLinux) { throw 'The native BillingAudit process lifecycle proof requires Linux SIGTERM.' }
+
+function Get-ProjectTargetPath([string]$Project) {
+    $projectFile = Join-Path $Project ((Split-Path $Project -Leaf) + '.csproj')
+    $output = & dotnet msbuild $projectFile -nologo -verbosity:quiet -getProperty:TargetPath -property:Configuration=Release 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Could not resolve TargetPath for ${projectFile}: $output" }
+    $targetPath = ($output | Out-String).Trim()
+    if (-not [IO.Path]::IsPathFullyQualified($targetPath) -or -not (Test-Path -LiteralPath $targetPath -PathType Leaf)) {
+        throw "Built output not found at MSBuild TargetPath: $targetPath"
+    }
+    return $targetPath
+}
 
 function Get-NativeExecutable([string]$service) {
     $name = "ConduitLLM.$service"
@@ -304,6 +313,9 @@ if (-not $NoBuild) {
     dotnet build $startupFixtureProject -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Schema startup fixture build failed.' }
 }
+$migratorDll = Get-ProjectTargetPath $migratorProject
+$publisherDll = Get-ProjectTargetPath $publisherProject
+$startupFixtureDll = Get-ProjectTargetPath $startupFixtureProject
 if (-not (Test-Path -LiteralPath $publisherDll -PathType Leaf)) {
     throw "Wolverine media publisher not found: $publisherDll"
 }
@@ -359,7 +371,9 @@ try {
 
     $probeName = if ($IsWindows) { 'ConduitLLM.GatewayNativeAotTests.exe' } else { 'ConduitLLM.GatewayNativeAotTests' }
     $nativeProbe = Join-Path $runtimeRoot 'probe' $probeName
-    $probeDll = Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll'
+    if (-not (Test-Path -LiteralPath $nativeProbe -PathType Leaf)) {
+        $probeDll = Get-ProjectTargetPath $probeProject
+    }
     Set-GateEnvironment 'CONDUIT_NATIVE_PROXY_TOKEN' ([Guid]::NewGuid().ToString('N'))
     Set-GateEnvironment 'CONDUIT_NATIVE_PROXY_CONTROL_URL' "http://127.0.0.1:$DependencyControlPort"
     Set-GateEnvironment 'CONDUIT_NATIVE_PROXY_POSTGRES_PORT' ([string]$PostgresProxyPort)
@@ -373,12 +387,12 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Dependency proxy routing configuration failed.' }
     $routes = $routesJson | ConvertFrom-Json
     & (Join-Path $PSScriptRoot 'schema-startup-native-parity.ps1') -RuntimeRoot $runtimeRoot `
-        -FixtureDll $startupFixtureDll -MigratorDll (Join-Path $migratorProject 'bin/Release/net10.0/ConduitLLM.Migrator.dll') `
+        -FixtureDll $startupFixtureDll -MigratorDll $migratorDll `
         -DatabaseUrl $DatabaseUrl -ManagementConnectionString $routes.directDatabase -LogRoot $logRoot `
         -GatewayPort $GatewayPort -SecondaryGatewayPort $SecondaryGatewayPort -AdminPort $AdminPort -TimeoutSeconds $TimeoutSeconds
 
     Write-Host 'Applying migrations before native process startup...'
-    dotnet (Join-Path $migratorProject 'bin/Release/net10.0/ConduitLLM.Migrator.dll')
+    dotnet $migratorDll
     if ($LASTEXITCODE -ne 0) { throw 'Standalone migrator failed.' }
 
     $protectedFunctionKey = Invoke-FunctionCredentialFixture $startupFixtureDll $routes.directRedis 'native-aot-function-key-32-bytes'
@@ -397,7 +411,7 @@ try {
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
         & $nativeProbe --seed
     } else {
-        dotnet (Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll') --seed
+        dotnet $probeDll --seed
     }
     if ($LASTEXITCODE -ne 0) { throw 'Native Gateway parity fixture seed failed.' }
 
@@ -420,7 +434,6 @@ try {
         $provider = Start-LoggedProcess 'provider' $nativeProbe @('--mock-provider') (Split-Path $nativeProbe) $null
     } else {
         $dotnet = (Get-Command dotnet -CommandType Application | Select-Object -First 1).Source
-        $probeDll = Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll'
         $provider = Start-LoggedProcess 'provider' $dotnet @($probeDll, '--mock-provider') $probeProject $null
     }
     $processes.Add($provider)
@@ -473,9 +486,18 @@ try {
     if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
         & $nativeProbe
     } else {
-        dotnet (Join-Path $probeProject 'bin/Release/net10.0/ConduitLLM.GatewayNativeAotTests.dll')
+        dotnet $probeDll
     }
     if ($LASTEXITCODE -ne 0) { throw "Gateway native parity probe exited with $LASTEXITCODE." }
+
+    # A separate owned key/group preserves the original parity totals while proving
+    # actual HTTP JSON normalization and durable charges after a provider-work 502.
+    if (Test-Path -LiteralPath $nativeProbe -PathType Leaf) {
+        & $nativeProbe --responses-accounting
+    } else {
+        dotnet $probeDll --responses-accounting
+    }
+    if ($LASTEXITCODE -ne 0) { throw 'Gateway Responses HTTP/accounting proof failed.' }
 
     # The owner is known before POST and cleanup is repeated after producers are
     # reaped, covering an unknown committed HTTP outcome or a late request.

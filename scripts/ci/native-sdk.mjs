@@ -7,8 +7,8 @@ export function requireCompatibleSdk(global, dockerfiles) {
   }
   const minimum = global.sdk.version.split('.').map(Number);
   for (const [name, content] of Object.entries(dockerfiles)) {
-    const match = /^FROM mcr\.microsoft\.com\/dotnet\/sdk:(\d+)\.(\d+)\.(\d+)-noble AS build\s*$/m.exec(content);
-    if (!match) throw new Error(`${name}: expected a pinned stable noble SDK build stage`);
+    const match = /^FROM mcr\.microsoft\.com\/dotnet\/sdk:(\d+)\.(\d+)\.(\d+)-resolute@sha256:[a-f0-9]{64} AS build\s*$/m.exec(content);
+    if (!match) throw new Error(`${name}: expected a stable resolute SDK build stage pinned by version and digest`);
     const installed = match.slice(1).map(Number);
     if (installed[0] !== minimum[0] || installed[1] !== minimum[1] || installed[2] < minimum[2]) {
       throw new Error(`${name}: SDK ${installed.join('.')} cannot satisfy global.json ${global.sdk.version}`);

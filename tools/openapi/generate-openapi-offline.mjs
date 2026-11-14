@@ -25,7 +25,6 @@ const prettierCli = path.join(scriptsDir, 'node_modules', 'prettier', 'bin', 'pr
 const targets = {
   admin: {
     project: path.join(repoRoot, 'Services', 'ConduitLLM.Admin', 'ConduitLLM.Admin.csproj'),
-    assembly: path.join(repoRoot, 'Services', 'ConduitLLM.Admin', 'bin', 'Debug', 'net10.0', 'ConduitLLM.Admin.dll'),
     spec: path.join(repoRoot, 'Services', 'ConduitLLM.Admin', 'openapi-admin.json'),
     types: [
       path.join(repoRoot, 'WebAdmin', 'src', 'generated', 'admin-api.ts'),
@@ -33,7 +32,6 @@ const targets = {
   },
   gateway: {
     project: path.join(repoRoot, 'Services', 'ConduitLLM.Gateway', 'ConduitLLM.Gateway.csproj'),
-    assembly: path.join(repoRoot, 'Services', 'ConduitLLM.Gateway', 'bin', 'Debug', 'net10.0', 'ConduitLLM.Gateway.dll'),
     spec: path.join(repoRoot, 'Services', 'ConduitLLM.Gateway', 'openapi-gateway.json'),
     types: [path.join(repoRoot, 'WebAdmin', 'src', 'generated', 'gateway-api.ts')],
   },
@@ -61,6 +59,23 @@ function run(command, args, options = {}) {
   if (result.status !== 0) {
     throw new Error(`${command} exited with code ${result.status ?? 'unknown'}`);
   }
+}
+
+function getTargetPath(project) {
+  const args = ['msbuild', project, '-nologo', '-verbosity:quiet', '-getProperty:TargetPath', '-property:Configuration=Debug'];
+  console.log(`> dotnet ${args.join(' ')}`);
+  const result = spawnSync('dotnet', args, { encoding: 'utf8', shell: false, env, cwd: repoRoot });
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(`Could not resolve TargetPath for ${project}: ${result.stderr || result.stdout}`);
+  }
+  const targetPath = result.stdout.trim();
+  if (!targetPath || !path.isAbsolute(targetPath) || !existsSync(targetPath)) {
+    throw new Error(`Built host assembly not found at MSBuild TargetPath: ${targetPath}`);
+  }
+  return targetPath;
 }
 
 function selectTargets(selection) {
@@ -108,11 +123,15 @@ export function generateToDirectory(selection, outputDirectory) {
       'build',
       target.project,
       '--no-restore',
+      '--disable-build-servers',
+      '-m:1',
+      '-nr:false',
+      '-p:UseSharedCompilation=false',
       '--nologo',
       '-v',
       'q',
     ]);
-    run('dotnet', [target.assembly], {
+    run('dotnet', [getTargetPath(target.project)], {
       env: {
         ...env,
         CONDUIT_OPENAPI_OUTPUT: generatedSpec,

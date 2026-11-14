@@ -151,7 +151,7 @@ public sealed class SecurityOptionsConfigurationTests
     [InlineData(" ")]
     [InlineData("models")]
     [InlineData(" /v1/models")]
-    public void GatewayOptions_InvalidDiscoveryRootsRejectConfigurationAtStartup(string path)
+    public async Task GatewayOptions_InvalidDiscoveryRootsRejectConfigurationAtStartup(string path)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string>
         {
@@ -160,8 +160,8 @@ public sealed class SecurityOptionsConfigurationTests
         var services = new ServiceCollection().ConfigureGatewaySecurityOptions(configuration);
         using var provider = services.BuildServiceProvider();
 
-        var exception = Assert.Throws<OptionsValidationException>(() =>
-            provider.GetRequiredService<IStartupValidator>().Validate());
+        var exception = await Assert.ThrowsAsync<OptionsValidationException>(async () =>
+            await provider.GetRequiredService<IAsyncStartupValidator>().ValidateAsync(CancellationToken.None));
 
         Assert.Contains("nonblank absolute route roots", exception.Message);
     }

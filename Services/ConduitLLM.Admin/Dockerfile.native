@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.18.0
 # Parallel NativeAOT image. The framework-dependent Dockerfile remains the release default.
-FROM mcr.microsoft.com/dotnet/sdk:10.0.401-noble AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0.100-resolute@sha256:65f3c7c6a25a239ab3e6719f2896147e7b68242ff2d8818dd70498bde6ef8bea AS build
 ARG TARGETARCH
 ARG VERSION=3.0.0
 ARG COMMIT_SHA=dev
@@ -24,7 +24,7 @@ RUN pwsh -NoProfile -File scripts/aot/publish-native-image.ps1 \
 FROM scratch AS symbols
 COPY --from=build /app/native-publish/symbols/ /
 
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-extra AS runtime
+FROM mcr.microsoft.com/dotnet/runtime-deps:11.0.0-resolute-chiseled-extra@sha256:661d3e8cfdab9503453095a5b53b17f63402400266c0e0f6f2d1b1192e6da5c9 AS runtime
 ARG VERSION=3.0.0
 ARG COMMIT_SHA=dev
 ARG BUILD_TIMESTAMP=unknown

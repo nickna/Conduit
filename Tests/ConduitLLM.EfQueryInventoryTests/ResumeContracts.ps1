@@ -11,6 +11,12 @@ if (Test-Path -LiteralPath $OutputDirectory) { throw 'Resume contracts require a
 [void][IO.Directory]::CreateDirectory($OutputDirectory)
 $utf8 = [Text.UTF8Encoding]::new($false, $true)
 $results = [Collections.Generic.List[object]]::new()
+$runnerProject = Join-Path $PSScriptRoot 'ConduitLLM.EfQueryInventoryTests.csproj'
+$targetPathOutput = & dotnet msbuild $runnerProject -nologo -verbosity:quiet -getProperty:TargetPath -property:Configuration=Debug 2>&1
+if ($LASTEXITCODE -ne 0) { throw "Could not resolve semantic runner TargetPath: $targetPathOutput" }
+$runnerTargetPath = ($targetPathOutput | Out-String).Trim()
+if (-not [IO.Path]::IsPathFullyQualified($runnerTargetPath)) { throw "Invalid semantic runner TargetPath: $runnerTargetPath" }
+$analyzerOriginal = Join-Path ([IO.Path]::GetDirectoryName($runnerTargetPath)) 'ConduitLLM.EfQueryInventory.dll'
 
 function Assert-ResumeContract([bool] $Condition, [string] $Message) {
     if (-not $Condition) { throw $Message }
@@ -67,7 +73,6 @@ function New-ResumeFixture([string] $Name) {
     $archivePath = Join-Path $caseRoot 'source.zip'
     [IO.Compression.ZipFile]::CreateFromDirectory($sourceDirectory, $archivePath)
 
-    $analyzerOriginal = Join-Path $PSScriptRoot 'bin/Debug/net10.0/ConduitLLM.EfQueryInventory.dll'
     Assert-ResumeContract (Test-Path -LiteralPath $analyzerOriginal) 'Build the semantic runner once before resume contracts.'
     $analyzerPath = Join-Path $caseRoot 'tool/ConduitLLM.EfQueryInventory.dll'
     Copy-Item -LiteralPath $analyzerOriginal -Destination $analyzerPath

@@ -5,7 +5,8 @@ dotnet run --project Tests/ConduitLLM.EfQueryInventoryTests/ConduitLLM.EfQueryIn
 ```
 
 An optional single argument selects another existing managed output directory. The runner reads
-.NET 10 framework reference packs and the existing output assemblies. By default, available
+framework reference packs matching its compiled target framework (`net11.0`) and the existing
+output assemblies. Install the matching .NET 11 SDK reference packs. By default, available
 `Shared` Release output for Configuration, Persistence.Abstractions, and Contracts takes precedence
 over older copies in Gateway output. It then creates real Roslyn
 compilations and executes `EfQueryInventoryAnalyzer` with `CompilationWithAnalyzers`. It does not
@@ -19,7 +20,7 @@ and the current discovery projector source. Its callsite counts describe source 
 they do not establish runtime SQL command counts.
 
 The runner exits with a nonzero code on failure and saves detailed evidence, source SHA-256
-hashes, and assertion results to `bin/<configuration>/net10.0/contract-results.json`.
+hashes, and assertion results to `bin/<configuration>/<target-framework>/contract-results.json`.
 
 After the semantic runner has built the analyzer, run the separate resume integrity contracts:
 

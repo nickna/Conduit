@@ -164,8 +164,10 @@ public sealed class LeaderElectedServiceWrapperTests
         Assert.Equal(1, inner.Finalizations);
     }
 
-    [Fact]
-    public async Task BorrowedAliases_KeepResourceFinalizationIdempotentWithoutWrapperDisposal()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BorrowedAliases_DoNotAddWrapperDisposalToTheContainerOwnedResource(bool asynchronous)
     {
         var services = new ServiceCollection().AddLogging();
         services.AddSingleton(Mock.Of<ILeaderElectionService>());
@@ -174,14 +176,21 @@ public sealed class LeaderElectedServiceWrapperTests
         services.AddLeaderElectedHostedService<ProbeService>(provider => (ProbeService)provider.GetRequiredService<IProbeService>(),
             ownsInnerService: false);
         var provider = services.BuildServiceProvider();
-        _ = provider.GetServices<IHostedService>().ToArray();
+        var wrapper = Assert.IsType<LeaderElectedServiceWrapper>(Assert.Single(provider.GetServices<IHostedService>()));
         var inner = provider.GetRequiredService<ProbeService>();
+        Assert.Same(inner, provider.GetRequiredService<IProbeService>());
 
-        await provider.DisposeAsync();
+        wrapper.Dispose();
+        await wrapper.DisposeAsync();
+        Assert.Equal(0, inner.DisposeCalls);
+        Assert.Equal(0, inner.Finalizations);
 
-        // DI captures both aliases. The wrapper adds no disposal, and the resource itself
-        // tolerates the alias graph's repeated disposal calls.
-        Assert.Equal(2, inner.DisposeCalls);
+        if (asynchronous) await provider.DisposeAsync();
+        else provider.Dispose();
+
+        // .NET 11 DI deduplicates captured aliases by reference. The wrapper
+        // leaves ownership with that container, which finalizes the resource once.
+        Assert.Equal(1, inner.DisposeCalls);
         Assert.Equal(1, inner.Finalizations);
     }
 
