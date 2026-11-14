@@ -14,13 +14,6 @@ internal static class NativeAdminRuntimeProfileProbe
 {
     private const int MissingId = int.MaxValue;
     private const string Detail = "This management operation is not supported by the native-aot runtime profile.";
-    private static readonly string[] ProviderCounters =
-    [
-        "non_stream_requests", "stream_requests", "image_requests", "error_requests", "authorization_failures",
-        "active_cancellation_requests", "cancellations_observed", "function_requests", "function_error_requests",
-        "function_authorization_failures", "function_chunked_requests", "agentic_tool_call_requests",
-        "agentic_final_requests", "agentic_contract_failures"
-    ];
 
     internal static async Task RunAsync(Uri admin, Uri provider, NpgsqlDataSource source, Guid functionOwner,
         string redisConnectionString, string masterKey, CancellationToken ct)
@@ -110,7 +103,7 @@ internal static class NativeAdminRuntimeProfileProbe
             Require(await SnapshotAsync(source, fixture, token) == before,
                 "Admin boundary requests preserve management counts, settings, IP rows and owned accounting");
             Require(JsonElement.DeepEquals(providerBefore, await ProviderStateAsync(upstream, token)),
-                "all fourteen actual provider counters remain unchanged");
+                "all fifteen actual provider counters remain unchanged");
         }
         catch (Exception error)
         {
@@ -262,9 +255,7 @@ internal static class NativeAdminRuntimeProfileProbe
         using var response = await provider.GetAsync("probe/state", HttpCompletionOption.ResponseHeadersRead, ct);
         Require(response.StatusCode == HttpStatusCode.OK, "the owned provider exposes its actual counters");
         var value = await JsonAsync(response, ct);
-        Properties(value, ProviderCounters);
-        foreach (var name in ProviderCounters) Require(value.GetProperty(name).GetInt64() >= 0, "provider counters are nonnegative integers");
-        Require(value.GetProperty("active_cancellation_requests").GetInt64() == 0, "no unrelated provider request is active during the boundary proof");
+        NativeProviderStateAssertions.AssertQuietSnapshot(value);
         return value;
     }
 

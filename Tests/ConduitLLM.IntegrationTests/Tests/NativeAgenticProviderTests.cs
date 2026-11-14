@@ -30,6 +30,133 @@ public sealed class NativeAgenticProviderTests
     private const string Schema = """{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}""";
 
     [Fact]
+    public async Task ActualProviderStateMatchesTheQuietBoundaryCounterSchema()
+    {
+        await using var fixture = new StubFixture();
+        var state = await fixture.ReadStateAsync();
+        Assert.Equal(15, state.EnumerateObject().Count());
+        Assert.True(state.GetProperty("responses_proof_requests").GetInt32() >= 0);
+        NativeProviderStateAssertions.AssertQuietSnapshot(state);
+    }
+
+    [Fact]
+    public async Task ActualProviderStateMatchesTheAgenticDeltaSchema()
+    {
+        await using var fixture = new StubFixture();
+        var before = await fixture.ReadStateAsync();
+        NativeProviderStateAssertions.AssertAgenticDelta(before, AgenticAfter(before));
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("unknown")]
+    [InlineData("duplicate")]
+    [InlineData("string")]
+    [InlineData("fractional")]
+    [InlineData("negative")]
+    [InlineData("overflow")]
+    [InlineData("array")]
+    public async Task BothCounterOraclesRejectMalformedProviderState(string mutation)
+    {
+        await using var fixture = new StubFixture();
+        var before = MutateProviderState(await fixture.ReadStateAsync(), mutation);
+        var after = mutation == "array" ? before : AgenticAfter(before);
+        Assert.ThrowsAny<Exception>(() => NativeProviderStateAssertions.AssertQuietSnapshot(before));
+        Assert.ThrowsAny<Exception>(() => NativeProviderStateAssertions.AssertAgenticDelta(before, after));
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("unknown")]
+    [InlineData("duplicate")]
+    [InlineData("string")]
+    [InlineData("fractional")]
+    [InlineData("negative")]
+    [InlineData("overflow")]
+    [InlineData("array")]
+    public async Task AgenticCounterOracleRejectsMalformedAfterState(string mutation)
+    {
+        await using var fixture = new StubFixture();
+        var before = await fixture.ReadStateAsync();
+        var after = MutateProviderState(AgenticAfter(before), mutation);
+        Assert.ThrowsAny<Exception>(() => NativeProviderStateAssertions.AssertAgenticDelta(before, after));
+    }
+
+    [Theory]
+    [InlineData("responses_proof_requests")]
+    [InlineData("non_stream_requests")]
+    [InlineData("authorization_failures")]
+    public async Task AgenticCounterOracleRejectsUnrelatedProviderWork(string counter)
+    {
+        await using var fixture = new StubFixture();
+        var before = await fixture.ReadStateAsync();
+        var after = ChangeCounter(AgenticAfter(before), counter);
+        Assert.Throws<InvalidOperationException>(() => NativeProviderStateAssertions.AssertAgenticDelta(before, after));
+    }
+
+    [Fact]
+    public async Task QuietCounterOracleRejectsAnActiveProviderRequest()
+    {
+        await using var fixture = new StubFixture();
+        var state = ChangeCounter(await fixture.ReadStateAsync(), "active_cancellation_requests");
+        Assert.Throws<InvalidOperationException>(() => NativeProviderStateAssertions.AssertQuietSnapshot(state));
+    }
+
+    private static JsonElement AgenticAfter(JsonElement before) => CounterJson(writer =>
+    {
+        foreach (var property in before.EnumerateObject())
+        {
+            if (property.Name is "function_requests" or "function_chunked_requests" or
+                "agentic_tool_call_requests" or "agentic_final_requests")
+                writer.WriteNumber(property.Name, property.Value.GetInt32() + 4);
+            else property.WriteTo(writer);
+        }
+    });
+
+    private static JsonElement ChangeCounter(JsonElement state, string counter) => CounterJson(writer =>
+    {
+        foreach (var property in state.EnumerateObject())
+        {
+            if (property.Name == counter) writer.WriteNumber(property.Name, property.Value.GetInt32() + 1);
+            else property.WriteTo(writer);
+        }
+    });
+
+    private static JsonElement MutateProviderState(JsonElement state, string mutation)
+    {
+        if (mutation == "array") { using var array = JsonDocument.Parse("[]"); return array.RootElement.Clone(); }
+        return CounterJson(writer =>
+        {
+            foreach (var property in state.EnumerateObject())
+            {
+                if (property.Name != "responses_proof_requests") { property.WriteTo(writer); continue; }
+                switch (mutation)
+                {
+                    case "missing": break;
+                    case "duplicate": property.WriteTo(writer); property.WriteTo(writer); break;
+                    case "string": writer.WriteString(property.Name, "0"); break;
+                    case "fractional": writer.WriteNumber(property.Name, 0.5m); break;
+                    case "negative": writer.WriteNumber(property.Name, -1); break;
+                    case "overflow": writer.WriteNumber(property.Name, decimal.MaxValue); break;
+                    default: property.WriteTo(writer); break;
+                }
+            }
+            if (mutation == "unknown") writer.WriteNumber("unexpected_provider_counter", 0);
+        });
+    }
+
+    private static JsonElement CounterJson(Action<Utf8JsonWriter> write)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject(); write(writer); writer.WriteEndObject(); writer.Flush();
+        }
+        using var document = JsonDocument.Parse(buffer.ToArray());
+        return document.RootElement.Clone();
+    }
+
+    [Fact]
     public async Task ProductionClientsRoundTripAdvertisedToolArgumentsAndRichResultAcrossTwoChatPhases()
     {
         await using var fixture = new StubFixture();
