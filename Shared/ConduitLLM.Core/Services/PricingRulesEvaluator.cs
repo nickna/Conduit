@@ -237,7 +237,7 @@ public class PricingRulesEvaluator : IPricingRulesEvaluator
     {
         // Primarily for video duration
         if (usage.VideoDurationSeconds.HasValue)
-            return (decimal)usage.VideoDurationSeconds.Value;
+            return BillingDurationConversion.ToDecimal(usage.VideoDurationSeconds.Value);
 
         // Fall back to unit field if specified
         return GetQuantityFromUnitField(config.UnitField, usage);
@@ -266,7 +266,7 @@ public class PricingRulesEvaluator : IPricingRulesEvaluator
         {
             "ImageCount" => usage.ImageCount ?? 1,
             "VideoCount" => 1, // Flat per-video pricing
-            "VideoDurationSeconds" => (decimal)(usage.VideoDurationSeconds ?? 0),
+            "VideoDurationSeconds" => BillingDurationConversion.ToDecimal(usage.VideoDurationSeconds ?? 0),
             "InferenceSteps" => usage.InferenceSteps ?? 1,
             _ => 1m
         };
