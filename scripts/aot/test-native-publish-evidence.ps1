@@ -27,6 +27,47 @@ function Assert-Rejected([scriptblock] $Action, [string] $Message) {
     $script:cases++
 }
 
+function Assert-ProducerOptimizedPublish([string] $Source, [string] $Name) {
+    $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseInput($Source, [ref]$null, [ref]$parseErrors)
+    Assert-Contract ($parseErrors.Count -eq 0) "$Name has invalid producer syntax."
+    $nativeInvocations = @($ast.FindAll({ param($node)
+        $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -ceq 'dotnet'
+    }, $true))
+    Assert-Contract ($nativeInvocations.Count -gt 0) "$Name has no inspectable native publish invocation."
+    foreach ($invocation in $nativeInvocations) {
+        $splats = @($invocation.CommandElements | Where-Object {
+            $_ -is [Management.Automation.Language.VariableExpressionAst] -and $_.Splatted
+        })
+        Assert-Contract ($splats.Count -eq 1) "$Name must expose its native publish argument array."
+        $argumentName = $splats[0].VariablePath.UserPath
+        $assignments = @($ast.FindAll({ param($node)
+            $node -is [Management.Automation.Language.AssignmentStatementAst]
+        }, $true) | Where-Object {
+            $_.Left -is [Management.Automation.Language.VariableExpressionAst] -and
+            $_.Left.VariablePath.UserPath -ceq $argumentName -and
+            $_.Extent.EndOffset -lt $invocation.Extent.StartOffset
+        })
+        $initializer = $assignments | Where-Object Operator -eq Equals |
+            Sort-Object { $_.Extent.StartOffset } -Descending | Select-Object -First 1
+        Assert-Contract ($null -ne $initializer) "$Name has no native publish argument initializer."
+        $literals = @($initializer.Right.FindAll({ param($node)
+            $node -is [Management.Automation.Language.StringConstantExpressionAst]
+        }, $true) | ForEach-Object Value)
+        $optimizedFlags = @($literals | Where-Object { $_ -imatch '^-p:UseOptimizedPublish=' })
+        Assert-Contract ($literals -ccontains 'publish' -and $literals -ccontains '-p:PublishAot=true' -and
+            $optimizedFlags.Count -eq 1 -and $optimizedFlags[0] -ceq '-p:UseOptimizedPublish=true') `
+            "$Name must explicitly request optimized publish in the actual dotnet argument array."
+        foreach ($append in @($assignments | Where-Object { $_.Extent.StartOffset -gt $initializer.Extent.EndOffset })) {
+            $overrides = @($append.Right.FindAll({ param($node)
+                $node -is [Management.Automation.Language.StringConstantExpressionAst] -and
+                $node.Value -imatch '^-p:UseOptimizedPublish='
+            }, $true))
+            Assert-Contract ($overrides.Count -eq 0) "$Name overrides optimized publish after initialization."
+        }
+    }
+}
+
 function Get-IndependentHash([byte[]] $Bytes) {
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($Bytes)).ToLowerInvariant()
 }
@@ -341,6 +382,29 @@ function Invoke-PublisherCase([string] $Scenario, [bool] $ExpectSuccess, [string
 }
 
 try {
+    # Discover every real consumer of the shared capture guard. The auxiliary
+    # converter probe must obey the same opt-in as the service/image producers.
+    $producers = @(Get-ChildItem -LiteralPath (Join-Path $repositoryRoot 'scripts') -Filter '*.ps1' -File -Recurse |
+        Where-Object {
+            $producerAst = [Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$null)
+            @($producerAst.FindAll({ param($node)
+                $node -is [Management.Automation.Language.CommandAst] -and
+                $node.GetCommandName() -ceq 'Get-NativePublishToolchain'
+            }, $true)).Count -gt 0
+        } | Sort-Object FullName)
+    Assert-Contract ($producers.Count -ge 3) 'Shared native toolchain producer inventory is incomplete.'
+    foreach ($producer in $producers) {
+        $producerSource = [IO.File]::ReadAllText($producer.FullName)
+        Assert-ProducerOptimizedPublish $producerSource $producer.Name
+        $cases++
+        $missingOptIn = $producerSource.Replace('-p:UseOptimizedPublish=true', '-p:OptimizationSentinel=true')
+        Assert-Rejected { Assert-ProducerOptimizedPublish $missingOptIn $producer.Name } 'Producer accepted a missing optimized-publish opt-in.'
+        $falseOptIn = $producerSource.Replace('-p:UseOptimizedPublish=true', '-p:UseOptimizedPublish=false')
+        Assert-Rejected { Assert-ProducerOptimizedPublish $falseOptIn $producer.Name } 'Producer accepted an explicit optimized-publish opt-out.'
+        $decoyOptIn = "# -p:UseOptimizedPublish=true`n" + $missingOptIn + "`n`$unrelatedFlag = '-p:UseOptimizedPublish=true'`n"
+        Assert-Rejected { Assert-ProducerOptimizedPublish $decoyOptIn $producer.Name } 'A comment or unrelated string satisfied the producer opt-in contract.'
+    }
+    Write-Host ('PASS: ' + $producers.Count + ' shared native-toolchain producers; missing, false and decoy opt-in mutations rejected.')
     [IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
     $script:pwshPath = (Get-Command pwsh -CommandType Application | Select-Object -First 1).Source
     $script:toolRoot = New-OwnedDirectory
