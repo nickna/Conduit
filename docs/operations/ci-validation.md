@@ -109,7 +109,11 @@ required whenever the full CI plan is selected. Native images remain canaries.
 The required managed Docker job has native `linux/amd64` and `linux/arm64` matrix
 legs. Each builds the three service images and runs the real-infrastructure
 business and browser flows. The ARM64 leg also checks source-generated JSON,
-OpenAPI contracts, and request-delegate generation. The host runners use Ubuntu
+OpenAPI contracts, request-delegate generation, and all 39
+[duration billing compatibility cases](../architecture/billing-duration-precision.md)
+with no skips or optional failures. Those billing cases exercise pricing/refund
+services and spend-unit argument conversion with a mocked Redis backend; the
+packaged flows independently exercise real PostgreSQL and Redis. The host runners use Ubuntu
 24.04; the managed API containers explicitly use .NET 11 Resolute/Ubuntu 26.04.
 Runner OS and application image OS are separate inputs to qualification.
 
