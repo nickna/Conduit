@@ -50,6 +50,13 @@ export function validateWorkflows(workflows, required) {
     s.with?.project === 'Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj') &&
     armContracts.some(s => s.if === "matrix.arch == 'arm64'" && s.with?.suite === 'managed-arm64-openapi' && s.with?.filter === 'Component=OpenApi'),
     'Managed ARM64 must execute reflection-disabled serialization and OpenAPI contracts');
+  require(armContracts.some(s => s.if === "matrix.arch == 'arm64'" &&
+    !s['continue-on-error'] &&
+    s.with?.suite === 'managed-arm64-duration-billing' &&
+    s.with?.project === 'Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj' &&
+    s.with?.filter === 'FullyQualifiedName~BillingDurationCompatibilityTests' &&
+    s.with?.['no-build'] === 'true' && Number(s.with?.minimum) >= 39 &&
+    !s.with?.['maximum-skips']), 'Managed ARM64 must execute exact duration billing contracts without a skip allowance');
   require(array(ci.jobs.docker.steps).some(s => s.if === "matrix.arch == 'arm64'" &&
     s.run?.includes('verify-admin-media-rdg.ps1 -NoRestore') && s.run.includes('verify-gateway-rdg.ps1 -NoRestore')),
     'Managed ARM64 must retain both request-delegate generation guards');

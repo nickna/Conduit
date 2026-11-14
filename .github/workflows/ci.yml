@@ -705,6 +705,15 @@ jobs:
           project: Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
           suite: managed-arm64-openapi
           filter: Component=OpenApi
+      - name: ARM64 exact duration billing contracts
+        if: matrix.arch == 'arm64'
+        uses: ./.github/actions/run-tests
+        with:
+          project: Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj
+          suite: managed-arm64-duration-billing
+          filter: FullyQualifiedName~BillingDurationCompatibilityTests
+          no-build: 'true'
+          minimum: '39'
       - name: ARM64 request-delegate generation guards
         if: matrix.arch == 'arm64'
         shell: pwsh
