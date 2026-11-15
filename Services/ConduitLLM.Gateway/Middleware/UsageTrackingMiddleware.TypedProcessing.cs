@@ -277,9 +277,22 @@ public partial class UsageTrackingMiddleware
     {
         // These totals describe known completed calls in logs and metrics. Pricing
         // continues to use each original ProviderCallUsage, including its own policy.
-        int? Sum(Func<Usage, int?> select) => calls.Any(call => select(call.Usage).HasValue)
-            ? calls.Sum(call => select(call.Usage).GetValueOrDefault())
-            : null;
+        int? Sum(Func<Usage, int?> select)
+        {
+            long total = 0;
+            var hasValue = false;
+            foreach (var call in calls)
+            {
+                if (select(call.Usage) is not int value) continue;
+                hasValue = true;
+                total += value;
+            }
+
+            // The nullable Int32 reporting schema cannot represent every sum of
+            // valid per-call counts. Leave that field unknown instead of allowing
+            // informational aggregation to abort pricing or reservation settlement.
+            return hasValue && total is >= int.MinValue and <= int.MaxValue ? (int)total : null;
+        }
 
         return new Usage
         {

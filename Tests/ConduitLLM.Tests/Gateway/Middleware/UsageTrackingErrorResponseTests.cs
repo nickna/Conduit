@@ -111,6 +111,93 @@ public class UsageTrackingErrorResponseTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Per_call_token_aggregation_overflow_cannot_suppress_completed_charges(bool withReservation)
+    {
+        using var request = new TrackedRequest(withReservation);
+        var first = TokenUsage();
+        first.TotalTokens = int.MaxValue;
+        var second = TokenUsage();
+        second.TotalTokens = 1;
+
+        await request.InvokeAsync(context =>
+        {
+            request.Accounting.RecordProviderCalls([
+                new ProviderCallUsage { Iteration = 1, Usage = first },
+                new ProviderCallUsage { Iteration = 2, Usage = second }
+            ]);
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+            return Task.CompletedTask;
+        });
+
+        var log = Assert.Single(request.Logs);
+        Assert.Equal(0.00015m, log.Cost);
+        Assert.Equal(20, log.InputTokens);
+        Assert.Equal(10, log.OutputTokens);
+        Assert.Equal(int.MaxValue, first.TotalTokens);
+        Assert.Equal(1, second.TotalTokens);
+        Assert.False(request.Accounting.Snapshot().IsIndeterminate);
+        request.ModelCosts.Verify(service => service.GetCostForModelAsync("test-model", It.IsAny<CancellationToken>()), Times.Exactly(2));
+        request.AssertChargedExactlyOnce(0.00015m);
+    }
+
+    [Fact]
+    public async Task Per_call_token_aggregation_overflow_preserves_exact_original_call_pricing()
+    {
+        using var request = new TrackedRequest(withReservation: false);
+        var first = new Usage { PromptTokens = int.MaxValue, CompletionTokens = 0 };
+        var second = new Usage { PromptTokens = 1, CompletionTokens = 0 };
+
+        await request.InvokeAsync(context =>
+        {
+            request.Accounting.RecordProviderCalls([
+                new ProviderCallUsage { Iteration = 1, Usage = first },
+                new ProviderCallUsage { Iteration = 2, Usage = second }
+            ]);
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+            return Task.CompletedTask;
+        });
+
+        // (2^31 original prompt tokens / 1,000,000) * the configured $2.50 rate.
+        Assert.Equal(5368.70912m, Assert.Single(request.Logs).Cost);
+        Assert.Equal(int.MaxValue, first.PromptTokens);
+        Assert.Equal(1, second.PromptTokens);
+        request.ModelCosts.Verify(service => service.GetCostForModelAsync("test-model", It.IsAny<CancellationToken>()), Times.Exactly(2));
+        request.AssertChargedExactlyOnce(5368.70912m);
+    }
+
+    [Fact]
+    public async Task Per_call_token_aggregation_overflow_preserves_known_cost_and_unresolved_hold()
+    {
+        using var request = new TrackedRequest(withReservation: true);
+        var first = TokenUsage();
+        first.TotalTokens = int.MaxValue;
+        var second = TokenUsage();
+        second.TotalTokens = 1;
+
+        await request.InvokeAsync(context =>
+        {
+            request.Accounting.RecordProviderInvocation(1);
+            request.Accounting.RecordProviderInvocation(2);
+            request.Accounting.RecordProviderInvocation(3);
+            request.Accounting.RecordProviderCalls([
+                new ProviderCallUsage { Iteration = 1, Usage = first },
+                new ProviderCallUsage { Iteration = 2, Usage = second }
+            ]);
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+            return Task.CompletedTask;
+        });
+
+        var log = Assert.Single(request.Logs);
+        Assert.Equal(0.00015m, log.Cost);
+        Assert.Equal(20, log.InputTokens);
+        Assert.Equal(10, log.OutputTokens);
+        request.ModelCosts.Verify(service => service.GetCostForModelAsync("test-model", It.IsAny<CancellationToken>()), Times.Exactly(2));
+        request.AssertPartialKnownSpend(0.00015m);
+    }
+
+    [Theory]
     [InlineData(SpendReservationSettlementStatus.Settled)]
     [InlineData(SpendReservationSettlementStatus.AlreadySettled)]
     public async Task Post_provider_error_uses_the_original_reservation_without_queuing_another_charge(

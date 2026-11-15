@@ -152,16 +152,23 @@ public sealed class LeaderElectedServiceWrapperTests
         else
             services.AddLeaderElectedHostedService<ProbeService>(_ => inner = new ProbeService());
         var provider = services.BuildServiceProvider();
-        var wrapper = Assert.IsType<LeaderElectedServiceWrapper>(Assert.Single(provider.GetServices<IHostedService>()));
-        inner ??= provider.GetRequiredService<ProbeService>();
+        try
+        {
+            var wrapper = Assert.IsType<LeaderElectedServiceWrapper>(Assert.Single(provider.GetServices<IHostedService>()));
+            inner ??= provider.GetRequiredService<ProbeService>();
 
-        await wrapper.StopAsync(CancellationToken.None);
-        await provider.DisposeAsync();
-        wrapper.Dispose();
+            await wrapper.StopAsync(CancellationToken.None);
+            await provider.DisposeAsync();
+            wrapper.Dispose();
 
-        Assert.Equal(0, inner.Stops);
-        Assert.Equal(1, inner.DisposeCalls);
-        Assert.Equal(1, inner.Finalizations);
+            Assert.Equal(0, inner.Stops);
+            Assert.Equal(1, inner.DisposeCalls);
+            Assert.Equal(1, inner.Finalizations);
+        }
+        finally
+        {
+            await provider.DisposeAsync();
+        }
     }
 
     [Theory]
@@ -176,22 +183,30 @@ public sealed class LeaderElectedServiceWrapperTests
         services.AddLeaderElectedHostedService<ProbeService>(provider => (ProbeService)provider.GetRequiredService<IProbeService>(),
             ownsInnerService: false);
         var provider = services.BuildServiceProvider();
-        var wrapper = Assert.IsType<LeaderElectedServiceWrapper>(Assert.Single(provider.GetServices<IHostedService>()));
-        var inner = provider.GetRequiredService<ProbeService>();
-        Assert.Same(inner, provider.GetRequiredService<IProbeService>());
+        try
+        {
+            var wrapper = Assert.IsType<LeaderElectedServiceWrapper>(Assert.Single(provider.GetServices<IHostedService>()));
+            var inner = provider.GetRequiredService<ProbeService>();
+            Assert.Same(inner, provider.GetRequiredService<IProbeService>());
 
-        wrapper.Dispose();
-        await wrapper.DisposeAsync();
-        Assert.Equal(0, inner.DisposeCalls);
-        Assert.Equal(0, inner.Finalizations);
+            wrapper.Dispose();
+            await wrapper.DisposeAsync();
+            Assert.Equal(0, inner.DisposeCalls);
+            Assert.Equal(0, inner.Finalizations);
 
-        if (asynchronous) await provider.DisposeAsync();
-        else provider.Dispose();
+            if (asynchronous) await provider.DisposeAsync();
+            else provider.Dispose();
 
-        // .NET 11 DI deduplicates captured aliases by reference. The wrapper
-        // leaves ownership with that container, which finalizes the resource once.
-        Assert.Equal(1, inner.DisposeCalls);
-        Assert.Equal(1, inner.Finalizations);
+            // .NET 11 DI deduplicates captured aliases by reference. The wrapper
+            // leaves ownership with that container, which finalizes the resource once.
+            Assert.Equal(1, inner.DisposeCalls);
+            Assert.Equal(1, inner.Finalizations);
+        }
+        finally
+        {
+            if (asynchronous) await provider.DisposeAsync();
+            else provider.Dispose();
+        }
     }
 
     [Fact]
