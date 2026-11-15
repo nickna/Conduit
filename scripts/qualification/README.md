@@ -17,7 +17,8 @@ The workflow uses native `ubuntu-24.04` and `ubuntu-24.04-arm` runners. Every co
 ## Workloads
 
 - `main`: the23-case phase0 Gateway catalog, repeated five times for all three sources; then seven ordinary JSON/SSE/tool/Responses cases with100 separate warmups and1,000 measured requests per run for fixed/candidate. Profiles remain separate.
-- `pressure`: four separate10MiB standard/enhanced SSE fast/paced controls, with8KiB requested receive buffers and actual OS values recorded. One request per case/run is a pressure diagnostic, not a p99 population estimate. Provider write/awaited-flush spans must be observed; pacing alone does not establish upstream pressure.
+- `pressure`: four separately derived 10 MiB standard/enhanced SSE fast/paced controls, with **64 KiB** requested receive buffers and actual OS values recorded. The frozen C# is unchanged; `pressure-native-catalog.json` identifies the new input cohort. One request per case/run is exploratory, not a p99 population estimate. Provider write/awaited-flush spans must be observed; pacing alone does not establish upstream pressure.
+- `pressure-diagnostic`: the first **original 8 KiB** fast-reader case, once per source on the same native VM, with TCP/sysctl and bounded `ss -tinm` observations. The original catalog remains unchanged. Literal observed deadline failures remain failed protocol observations; diagnostic collection never qualifies performance or finance. Unexpected errors fail collection.
 - `admin-cache`: matched Admin reads and source-backed populated cache/streaming-metrics-collector microbenchmarks. Whole-process observations are labelled separately from operation timings. A list-based collector microbenchmark does not establish durable queue throughput.
 
 Workload and pressure C# sources are copied unchanged from phase0. They retain their historical `Phase0` names and narrative fields; external source/binary bindings identify the executed cohort. The client/provider always run on the fixed .NET10 runtime. Each Gateway cohort/run gets a fresh provider with identical logical payload IDs across runtime pairs. Unique artifact IDs and provider-instance scopes are separate: equal-length different cohort words can change BPE admission estimates.
@@ -43,6 +44,7 @@ On a native Linux host with exactly the declared SDKs, Docker and Python install
 ```powershell
 ./scripts/qualification/run-runtime-matrix.ps1 -CandidateRevision <full-sha> -Architecture X64 -Profile main -OutputDirectory /absolute/fresh/output
 ./scripts/qualification/run-runtime-matrix.ps1 -CandidateRevision <full-sha> -Architecture Arm64 -Profile pressure -OutputDirectory /absolute/fresh/output
+./scripts/qualification/run-runtime-matrix.ps1 -CandidateRevision <full-sha> -Architecture Arm64 -Profile pressure-diagnostic -OutputDirectory /absolute/fresh/transport-diagnostic
 ./scripts/qualification/AdminCache/run-admin-cache-matrix.ps1 -CandidateRevision <full-sha> -Architecture Arm64 -OutputDirectory /absolute/fresh/admin-cache-output
 ```
 

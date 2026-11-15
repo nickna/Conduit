@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: runtime-qualification-${{ github.ref }}
+  group: runtime-qualification-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -47,6 +47,12 @@ jobs:
           - arch: Arm64
             runner: ubuntu-24.04-arm
             profile: admin-cache
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: pressure-diagnostic
+          - arch: Arm64
+            runner: ubuntu-24.04-arm
+            profile: pressure-diagnostic
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
@@ -71,6 +77,9 @@ jobs:
       - name: Verify timeout rejection and owned process-tree cleanup
         shell: pwsh
         run: ./scripts/qualification/test-owned-processes.ps1 -OutputDirectory '${{ runner.temp }}/runtime-process-tests'
+      - name: Verify diagnostic deadline scope and rejection cases
+        shell: pwsh
+        run: ./scripts/qualification/test-pressure-diagnostic-policy.ps1 -OutputPath '${{ runner.temp }}/runtime-deadline-policy-tests.json'
       - name: Run three source cohorts on this same native runner
         if: matrix.profile != 'admin-cache'
         shell: pwsh
@@ -101,12 +110,16 @@ jobs:
             ${{ runner.temp }}/runtime-qualification/*.json
             ${{ runner.temp }}/runtime-input-integrity.json
             ${{ runner.temp }}/runtime-process-tests
+            ${{ runner.temp }}/runtime-deadline-policy-tests.json
             ${{ runner.temp }}/runtime-qualification/*.log
             ${{ runner.temp }}/runtime-qualification/*.txt
             ${{ runner.temp }}/runtime-qualification/*.sql
             ${{ runner.temp }}/runtime-qualification/*.rdb
             ${{ runner.temp }}/runtime-qualification/prepare
             ${{ runner.temp }}/runtime-qualification/measure
+            ${{ runner.temp }}/runtime-qualification/diagnostic-legacy
+            ${{ runner.temp }}/runtime-qualification/diagnostic-fixed
+            ${{ runner.temp }}/runtime-qualification/diagnostic-candidate
             ${{ runner.temp }}/runtime-qualification/core-measure
             ${{ runner.temp }}/runtime-qualification/accounting
             ${{ runner.temp }}/runtime-qualification/harness-source

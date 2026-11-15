@@ -96,14 +96,14 @@ def register_scoped_ids(seen, instances, entry, rows):
 
 def validate_pressure_report(report, rows):
     config = report["configuration"]
-    require(config["receiveBufferBytes"] == 8192, "Pressure controls must request the declared8192byte receive buffer")
+    require(config["receiveBufferBytes"] in (8192, 65536), "Pressure controls must explicitly request original8192or supplemental65536byte receive buffer")
     address = urlsplit(config["baseUrl"])
     sockets = report["sockets"]
     require(sockets and len(sockets) <= len(rows), "Pressure socket observations missing/excessive")
     by_id = {row["id"]: row for row in rows}
     initial_ids = set()
     for socket in sockets:
-        require(socket["requestedReceiveBufferBytes"] == 8192 and integer(socket["actualReceiveBufferBytes"]) > 0 and socket["noDelay"] is True, "Pressure socket setup was not observed")
+        require(socket["requestedReceiveBufferBytes"] == config["receiveBufferBytes"] and integer(socket["actualReceiveBufferBytes"]) > 0 and socket["noDelay"] is True, "Pressure socket setup was not observed")
         require(socket["host"] == address.hostname and socket["port"] == address.port, "Pressure socket is not the measured Gateway connection")
         identity = socket["initialRequestId"]
         require(identity in by_id and identity not in initial_ids, "Pressure socket request correlation missing/duplicated")

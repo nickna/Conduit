@@ -305,6 +305,21 @@ class ProviderIdentityScopeTests(unittest.TestCase):
             with self.assertRaises(EvidenceError): validate_provider_instances("evidence", manifest, {"profile": "phase0"})
 
 
+class PressureBufferProfileTests(unittest.TestCase):
+    def test_supplemental_declared_buffer_preserves_actual_os_value(self):
+        report = PressureTests.report()
+        report["configuration"]["receiveBufferBytes"] = 65536
+        report["sockets"][0].update(requestedReceiveBufferBytes=65536, actualReceiveBufferBytes=196608)
+        self.assertEqual(1, len(report_rows(report)))
+
+    def test_socket_request_cannot_be_mislabeled_as_other_profile(self):
+        for requested, declared in ((8192, 65536), (65536, 8192)):
+            report = PressureTests.report()
+            report["configuration"]["receiveBufferBytes"] = declared
+            report["sockets"][0]["requestedReceiveBufferBytes"] = requested
+            with self.subTest(requested=requested, declared=declared), self.assertRaises(EvidenceError): report_rows(report)
+
+
 class PressureTests(unittest.TestCase):
     @staticmethod
     def report():

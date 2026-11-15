@@ -38,6 +38,11 @@ architecture packaged business-flow jobs also passed. These correctness results
 are distinct from native performance measurements and the separate Native AOT
 pipeline. Changes to the qualification tooling and WebAdmin image receive their
 own PR CI and source/image identities.
+The merged candidate's
+[separate Native AOT pipeline](https://github.com/nickna/Conduit/actions/runs/43768423144)
+also passed all three declared linux-x64 publication/image jobs. This preserves
+its existing feature matrix; it does not qualify native ARM64 AOT or production
+promotion.
 
 ## Recommended reference deployment
 
@@ -96,6 +101,56 @@ WebAdmin's shipped Next.js signal cleanup exits 143 after SIGTERM; this was
 independently checked against its actual shipped code and bounded ready/stop
 controls, then enforced in the three-service rehearsal.
 
+## First native Admin/cache results
+
+The initial [native measurement run](https://github.com/nickna/Conduit/actions/runs/43770860051)
+used harness head `873587a32b22f4447dbbf2984779402a91b17604` to measure candidate
+`66c5c3dad682d40d13ed7391b327ea2397553d58`. Both Admin/cache jobs passed execution,
+artifact-digest verification and exact analyzer replay. The
+[compact native index](dotnet11-phase2-native-cache.json) retains source/hardware,
+per-run observations, paired summaries and raw-artifact identities. New runs
+remain separate cohorts; their quantiles are not pooled with these results.
+
+| Architecture | Fixed .NET 10 → .NET 11 paired Admin RPS ratio | Paired CPU/call ratio | Working throughput result |
+| --- | ---: | ---: | --- |
+| x64, 4 logical Xeon 6975P-C CPUs | 0.9641 | 0.9479 | Within the 0.95 threshold |
+| ARM64, 4 Neoverse-N2 CPUs | 0.9189 | 0.9794 | Breach; no accepted tradeoff |
+
+These are medians of same-run ratios, not ratios of aggregate medians. Both
+architectures' fixed-control full-response p50/p95/p99 and sampled-memory
+comparisons fit the working rules. That does not erase the ARM throughput
+shortfall. Other control comparisons also breached diagnostics: x64 legacy→fixed
+throughput/p99 and legacy→candidate p99, and ARM64 legacy→fixed CPU. Interpret
+those variations before assigning a pure runtime cause. Admin hosts used actual
+Server GC, so affected .NET 10 allocation ratios remain unavailable.
+
+The separately scoped workstation-GC cache microbenchmarks show a pricing-cache
+latency increase against the fixed .NET 10 control on both architectures:
+
+| Architecture | Cold p50 ratio | L1 p50 ratio | Redis L2 p50 ratio |
+| --- | ---: | ---: | ---: |
+| x64 | 1.377 | 1.243 | 1.756 |
+| ARM64 | 1.311 | 1.577 | 1.215 |
+
+The .NET 10 pricing controls were substantially more stable. Inspected cache and
+entity source blobs are identical across the three cohorts, while compiler,
+runtime/framework JSON generation and the Microsoft Redis-cache adapter changed
+together. L1 reconstructs owned graphs without inherently decoding payload JSON;
+serialization alone is not an established explanation. The current pricing L1
+fixture allocates 7,016 process-wide bytes at p50 on both candidate architectures.
+This specific workstation-GC scope is separate from the invalid Server GC
+allocation baseline and does not qualify historical observations without GC
+metadata.
+
+The [phase-4 investigation](https://github.com/nickna/Conduit/issues/1768#issuecomment-6903032657)
+will isolate reconstruction, fixed-byte serialization, generation and Redis
+adapter costs, then measure the actual Gateway lookup mix before an immutable
+pricing-read-model pilot. No cache optimization has been implemented here.
+The collector's 10,000-chunk snapshot pattern still allocates approximately
+1.19 GB per stream in its synchronous thread-local scope; its bounded-work
+replacement remains [phase 3](https://github.com/nickna/Conduit/issues/1767).
+No result in this section grants performance acceptance.
+
 ## Matched measurement method
 
 The [qualification fixture](../../scripts/qualification/README.md) runs default-GC
@@ -111,9 +166,16 @@ run and reported with medians/ranges and same-run pairs; request samples are not
 pooled to manufacture confidence. Long-stream/cancellation/pressure distributions
 remain diagnostics at their declared small sample sizes.
 
-A separate pressure profile retains the frozen 10 MiB fast/paced standard and
-enhanced SSE controls, including requested/actual receive buffers and actual
-provider write/awaited-flush timing. Admin/cache/collector measurements use a
+A separate pressure profile uses the frozen C# 10 MiB fast/paced standard and
+enhanced SSE controls with a separately derived 64 KiB receive-buffer catalog,
+including actual OS buffer observations and provider write/awaited-flush timing.
+The original 8 KiB first case timed out in both native legacy controls before
+reaching the candidate. Those incomplete-wire observations remain failed
+evidence, not a demonstrated .NET 11 regression. A separate original-8-KiB
+diagnostic profile runs each source once on the same VM, retaining TCP/sysctl
+observations and explicit deadline outcomes with no financial or performance
+qualification. Neither read pacing nor a fast provider flush proves upstream
+backpressure. Admin/cache/collector measurements use a
 separate profile. A list-based streaming-metrics microbenchmark is not evidence
 of durable queue throughput.
 

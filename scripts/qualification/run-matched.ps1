@@ -4,7 +4,10 @@ param([Parameter(Mandatory)][string]$ConfigurationPath,
       [ValidateSet('prepare','measure')][string]$Stage='measure')
 $ErrorActionPreference='Stop'
 $configuration=Get-Content -Raw -LiteralPath $ConfigurationPath | ConvertFrom-Json
-if($configuration.schemaVersion -ne 1 -or $configuration.runs -lt 3 -or $configuration.runs -gt 6){throw 'Invalid qualification configuration'}
+. (Join-Path $PSScriptRoot 'diagnostic-policy.ps1')
+$diagnostic=$configuration.diagnostic -eq $true -and $configuration.profile -ceq 'pressure8'
+if($configuration.diagnostic -and !$diagnostic){throw 'Diagnostic exception is restricted to pressure8'}
+if($configuration.schemaVersion -ne 1 -or $(if($diagnostic){$configuration.runs -ne 1}else{$configuration.runs -lt 3 -or $configuration.runs -gt 6})){throw 'Invalid qualification configuration'}
 if(!$IsLinux){throw 'Matched measurements require native Linux'}
 if((Test-Path -LiteralPath $OutputDirectory) -and @(Get-ChildItem -LiteralPath $OutputDirectory -Force).Count){throw 'Use a fresh output directory; previous evidence must remain unchanged'}
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
@@ -13,7 +16,8 @@ Copy-Item -LiteralPath $PSCommandPath -Destination "$out/run-matched.source.ps1"
 Copy-Item -LiteralPath $ConfigurationPath -Destination "$out/configuration.source.json"
 $cohorts=@($configuration.cohorts)
 if($Stage -eq 'measure' -and !(Test-Path -LiteralPath $configuration.drainProbe -PathType Leaf)){throw 'Require the fixed read-only financial drain probe'}
-if($cohorts.Count -lt 2 -or @($cohorts.id|Sort-Object -Unique).Count -ne $cohorts.Count){throw 'Require distinct matched cohorts'}
+if($(if($diagnostic){$cohorts.Count -lt 1}else{$cohorts.Count -lt 2}) -or @($cohorts.id|Sort-Object -Unique).Count -ne $cohorts.Count){throw 'Require distinct matched cohorts; singleton is pressure8diagnostic only'}
+if($diagnostic -and $Stage -eq 'measure' -and $cohorts.Count -ne 1){throw 'Measure exactly one diagnostic source at a time'}
 foreach($cohort in $cohorts){
  if($cohort.id -notmatch '^[a-z0-9-]{1,16}$' -or $cohort.sourceSha -notmatch '^[0-9a-f]{40}$'){throw 'Invalid cohort identity'}
  foreach($path in @($cohort.gateway,$cohort.dotnet,$cohort.migrator,$cohort.seedProbe)){if(!(Test-Path -LiteralPath $path -PathType Leaf)){throw "Missing cohort input: $path"}}
@@ -23,9 +27,15 @@ $cases=@($catalog.cases)
 Copy-Item -LiteralPath $configuration.catalog -Destination "$out/catalog.source.json"
 if(!$cases.Count -or @($cases.id|Sort-Object -Unique).Count -ne $cases.Count){throw 'Invalid case catalog'}
 foreach($case in $cases){if($case.id -notmatch '^[A-Za-z0-9_-]{1,40}$'){throw 'Invalid case identifier'}}
+if($diagnostic){
+ $case=$cases[0]
+ if($cases.Count -ne 1 -or $case.id -cne 'pressure-standard-fast' -or $case.endpoint -cne 'standard-sse' -or $case.requests -ne 1 -or $case.warmupRequests -ne 0 -or $case.chunks -ne 10000 -or $case.chunkCharacters -ne 1024 -or $case.receiveBufferBytes -ne 8192 -or $case.timeoutSeconds -ne 120 -or $case.slowReadDelayMilliseconds -ne 0 -or $case.slowReadBytes -ne 16384 -or $case.cancel -cne 'none'){throw 'Require unchanged first original8KiBcase for diagnostics'}
+ $ssExecutable=(Get-Command ss -CommandType Application -ErrorAction Stop|Select-Object -First 1).Source
+}
 if($configuration.profile -and $configuration.profile -notmatch '^[a-z0-9-]{1,10}$'){throw 'Invalid measurement profile'}
 $bindings=[ordered]@{schemaVersion=1;stage=$Stage;configurationSha256=(Get-FileHash $ConfigurationPath -Algorithm SHA256).Hash.ToLowerInvariant();
  nativeArchitecture=[Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString();processorCount=[Environment]::ProcessorCount;cpuTopology=(& lscpu);osRelease=@(Get-Content /etc/os-release);
+ tcpConfiguration=@(foreach($name in @('net.ipv4.tcp_rmem','net.ipv4.tcp_wmem','net.ipv4.tcp_adv_win_scale','net.ipv4.tcp_moderate_rcvbuf','net.ipv4.tcp_congestion_control','net.ipv4.tcp_autocorking','net.ipv4.tcp_rto_min_us','net.core.rmem_max','net.core.wmem_max')){$path='/proc/sys/'+$name.Replace('.','/');[ordered]@{name=$name;available=(Test-Path $path);value=$(if(Test-Path $path){(Get-Content $path)}else{$null})}});
  kernel=(& uname -a);glibc=(& ldd --version|Select-Object -First 1);cpu=@(Get-Content /proc/cpuinfo|Select-Object -First 35);
  cgroup=@(foreach($file in @('/sys/fs/cgroup/cpu.max','/sys/fs/cgroup/memory.max','/sys/fs/cgroup/cpuset.cpus.effective')){if(Test-Path $file){[ordered]@{path=$file;value=(Get-Content $file)}}});
  files=@(foreach($path in @($configuration.workload,$configuration.observer,$configuration.catalog,$PSCommandPath)+@($cohorts|ForEach-Object{$_.gateway})+@($configuration.drainProbe|Where-Object{$_})){[ordered]@{path=$path;sha256=(Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()}});
@@ -125,33 +135,44 @@ try{
      Invoke-Owned "$id-warm" $configuration.clientDotnet @($configuration.workload,'--run',"$out/$id-warm.configuration.json")
     }
     $config|ConvertTo-Json -Depth 8|Set-Content "$out/$id.configuration.json" -Encoding utf8NoBOM
+    $tcpSampler=$null;$tcpStop="$out/$id-tcp.stop"
+    if($diagnostic){
+     $sampleScript='i=0; while [ ! -f "$1" ] && [ "$i" -lt 180 ]; do date -u +%Y-%m-%dT%H:%M:%S.%NZ; "$2" -tinm "( sport = :18080 or dport = :18080 )" || exit 92; i=$((i+1)); sleep 1; done'
+     $tcpSampler=Start-Owned "$id-tcp" '/bin/sh' @('-c',$sampleScript,'pressure-tcp',$tcpStop,$ssExecutable)
+    }
     Save-Metrics "$out/$id-before.prometheus"
     [void](Read-Json "http://127.0.0.1:18084/begin?id=$id" "$out/$id-server-begin.json" $true)
     $client=Start-Owned $id $configuration.clientDotnet @($configuration.workload,'--run',"$out/$id.configuration.json");$clientFailure=$null
-    try{Finish-Owned $client 600}catch{$clientFailure=$_}finally{[void](Read-Json "http://127.0.0.1:18084/end?id=$id" "$out/$id-server-end.json" $true)}
+    try{Finish-Owned $client 600}catch{$clientFailure=$_}finally{
+     try{[void](Read-Json "http://127.0.0.1:18084/end?id=$id" "$out/$id-server-end.json" $true)}finally{
+      if($tcpSampler){[IO.File]::WriteAllText($tcpStop,'stop');Finish-Owned $tcpSampler 10}
+     }
+    }
     $report=Get-Content -Raw "$out/$id.stdout.log"|ConvertFrom-Json
-    $known=$false
+    $known=$false;$diagnosticDeadline=$false
     if($clientFailure){
      $failed=@($report.measured.requests)
      $known=$legacyDiagnostic -and $failed.Count -eq 1 -and $failed[0].status -eq 502 -and $failed[0].errorResponseBody -match 'cannot be represented by the text-only Responses subset' -and $failed[0].provider.completed
-     if(!$known){throw $clientFailure}
+     $diagnosticDeadline=Test-PressureDiagnosticDeadline $report $diagnostic
+     if(!$known -and !$diagnosticDeadline){throw $clientFailure}
     }
     [void](Read-Json "http://127.0.0.1:18083/observations?prefix=$logicalCaseId" "$out/$id-provider.json")
     Start-Sleep -Milliseconds 250;Save-Metrics "$out/$id-after.prometheus"
     [void](Read-Json 'http://127.0.0.1:18084/snapshot?collect=true' "$out/$id-retained-gc.json")
     $rows.Add([ordered]@{cohort=$cohort.id;case=$case.id;caseId=$id;logicalCaseId=$logicalCaseId;providerInstanceId=$prefix;providerProcessId=$provider.Process.Id;run=$run;sourceSha=$cohort.sourceSha;requests=$config.requests;warmups=$warmups;
-     gatewayProcessId=$hostOwned.Process.Id;readyMilliseconds=$ready;knownProductionFinding=$known;passed=$report.passed;result="$id.stdout.log";
+     diagnostic=$diagnostic;diagnosticDeadlineFailure=$diagnosticDeadline;gatewayProcessId=$hostOwned.Process.Id;readyMilliseconds=$ready;knownProductionFinding=$known;passed=$report.passed;result="$id.stdout.log";
      serverWindowIncludes='Measured client startup, provider-observation/finalization wait, runtime/application background services and observer; excludes warmup; no idle subtraction'})
     $expectedLogs[$cohort.id]+=$warmups
     if(!$known){$expectedLogs[$cohort.id]+=[int]$config.requests}
     $rows.ToArray()|ConvertTo-Json -Depth 8|Set-Content "$out/manifest.json" -Encoding utf8NoBOM
-    Write-Output "$(if($known){'KNOWN LEGACY FAILURE'}else{'PASS'}) $id"
+    Write-Output "$(if($diagnosticDeadline){'DIAGNOSTIC DEADLINE FAILURE'}elseif($known){'KNOWN LEGACY FAILURE'}else{'PASS'}) $id"
    }
    # RequestLog batching and durable fallback SpendUpdateRequested events can
    # outlive response EOF. Drain known persisted spend while the consumer is
    # alive, outside every observer window; retain the entire read-only receipt.
-   Invoke-Owned "$prefix-financial-drain" $configuration.clientDotnet @($configuration.drainProbe,
-    '--expected-logs',([string]$expectedLogs[$cohort.id]),'--timeout-seconds','180','--output',"$out/$prefix-financial-drain.json") 200
+   if(!$diagnostic){Invoke-Owned "$prefix-financial-drain" $configuration.clientDotnet @($configuration.drainProbe,
+    '--expected-logs',([string]$expectedLogs[$cohort.id]),'--timeout-seconds','180','--output',"$out/$prefix-financial-drain.json") 200}
+   else{[ordered]@{executed=$false;financialQualification=$false;scope='Diagnostic only: state captured after shutdown; no live financial-drain success claim'}|ConvertTo-Json|Set-Content "$out/$prefix-financial-drain-not-executed.json" -Encoding utf8NoBOM}
    $shutdown=[Diagnostics.Stopwatch]::StartNew();Finish-Owned $hostOwned 60 $true;$hostOwned=$null
    [ordered]@{cohort=$cohort.id;run=$run;shutdownMilliseconds=$shutdown.Elapsed.TotalMilliseconds;exitCode=0}|ConvertTo-Json|Set-Content "$out/$prefix-shutdown.json" -Encoding utf8NoBOM
    Finish-Owned $provider 60 $true;$provider=$null
@@ -164,6 +185,7 @@ try{
  $http.Dispose();$handler.Dispose()
  [ordered]@{schemaVersion=1;executionCompleted=($null -eq $failure -and $cleanupFailures.Count -eq 0);rows=$rows.Count;
  expectedRows=([int]$configuration.runs*$cohorts.Count*$cases.Count);failure=$failure;cleanupFailures=$cleanupFailures.ToArray();
+ diagnostic=$diagnostic;performanceAcceptanceGranted=$false;
  financialQualification='Requires separate read-only PostgreSQL and Redis reconciliation; HTTP success does not prove settlement'}|ConvertTo-Json -Depth 8|Set-Content "$out/execution.json" -Encoding utf8NoBOM
  if(!$failure -and $cleanupFailures.Count){throw ($cleanupFailures -join '; ')}
 }

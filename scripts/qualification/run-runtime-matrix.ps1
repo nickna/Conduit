@@ -2,7 +2,7 @@
 param([Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{40}$')][string]$CandidateRevision,
       [Parameter(Mandatory)][ValidateSet('X64','Arm64')][string]$Architecture,
       [Parameter(Mandatory)][string]$OutputDirectory,
-      [ValidateSet('main','pressure')][string]$Profile='main',
+      [ValidateSet('main','pressure','pressure-diagnostic')][string]$Profile='main',
       [ValidateRange(3,6)][int]$Runs=5)
 $ErrorActionPreference='Stop'
 if(!$IsLinux -or [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString() -cne $Architecture){throw 'Require matching native Linux hardware'}
@@ -78,7 +78,7 @@ foreach($definition in $cohortDefinitions){
 }
 $sourceBindings.ToArray()|ConvertTo-Json -Depth 8|Set-Content "$out/source-bindings.json" -Encoding utf8NoBOM
 Publish-Project (Join-Path $work 'legacy') 'Tests/ConduitLLM.GatewayNativeAotTests/ConduitLLM.GatewayNativeAotTests.csproj' (Join-Path $work 'seed') "$out/seed-build.log" '10.0.404' 'f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa'
-$clientProject=if($Profile -eq 'pressure'){'Pressure'}else{'Workload'}
+$clientProject=if($Profile -in 'pressure','pressure-diagnostic'){'Pressure'}else{'Workload'}
 Publish-Project (Join-Path $PSScriptRoot $clientProject) "$clientProject.csproj" (Join-Path $work 'client') "$out/client-build.log" '10.0.404'
 Publish-Project (Join-Path $PSScriptRoot 'ObserverV2') 'Conduit.ServerObserver.csproj' (Join-Path $work 'observer') "$out/observer-build.log" '10.0.404'
 Publish-Project (Join-Path $PSScriptRoot 'Drain') 'DrainProbe.csproj' (Join-Path $work 'drain') "$out/drain-build.log" '10.0.404'
@@ -90,8 +90,15 @@ $sourceBindings.Add([ordered]@{id='fixed-tools';sourceSdk='10.0.404';files=@(
  }
 )})
 $sourceBindings.ToArray()|ConvertTo-Json -Depth 8|Set-Content "$out/source-bindings.json" -Encoding utf8NoBOM
-$primaryCatalog=if($Profile -eq 'pressure'){Join-Path $PSScriptRoot 'Pressure/catalog.json'}else{Join-Path $PSScriptRoot 'phase0-catalog.json'}
-$config=[ordered]@{schemaVersion=1;profile=$(if($Profile -eq 'pressure'){'pressure'}else{'phase0'});runs=$Runs;architecture=$Architecture;workingDirectory=$repository;infrastructurePrepared=$false;
+$primaryCatalog=if($Profile -eq 'pressure'){Join-Path $PSScriptRoot 'pressure-native-catalog.json'}else{Join-Path $PSScriptRoot 'phase0-catalog.json'}
+if($Profile -eq 'pressure-diagnostic'){
+ [void](Get-Command ss -CommandType Application -ErrorAction Stop)
+ $originalPath=Join-Path $PSScriptRoot 'Pressure/catalog.json';$original=Get-Content -Raw $originalPath|ConvertFrom-Json
+ $primaryCatalog=Join-Path $out 'pressure8-diagnostic-catalog.json'
+ [ordered]@{schemaVersion=1;profile='pressure8';originFrozenCatalog='Pressure/catalog.json';originFrozenCatalogSha256=(Get-FileHash $originalPath -Algorithm SHA256).Hash.ToLowerInvariant();scope='Original8KiB first standardfastcase unchanged, once per source; TCP diagnostic only, no financial or performance qualification';cases=@($original.cases|Where-Object{$_.id -ceq 'pressure-standard-fast'})}|ConvertTo-Json -Depth 8|Set-Content $primaryCatalog -Encoding utf8NoBOM
+}
+$diagnosticRuns=[Collections.Generic.List[object]]::new()
+$config=[ordered]@{schemaVersion=1;profile=$(if($Profile -eq 'pressure-diagnostic'){'pressure8'}elseif($Profile -eq 'pressure'){'pressure64'}else{'phase0'});diagnostic=($Profile -eq 'pressure-diagnostic');runs=$(if($Profile -eq 'pressure-diagnostic'){1}else{$Runs});architecture=$Architecture;workingDirectory=$repository;infrastructurePrepared=$false;
  scope='Native Ubuntu host-published JIT processes on one runner; not packaged Resolute image performance; source/compiler/runtime migration effects remain attributable';
  clientDotnet=(Get-Command dotnet).Source;workload=(Join-Path $work "client/Conduit.Phase0.$clientProject.dll");
  observer=(Join-Path $work 'observer/Conduit.ServerObserver.dll');drainProbe=(Join-Path $work 'drain/DrainProbe.dll');catalog=$primaryCatalog;cohorts=$cohorts.ToArray()}
@@ -115,7 +122,17 @@ try{
   if($LASTEXITCODE -ne 0){throw 'Fixture controls failed'}
  }
  $config.infrastructurePrepared=$true;$prepared=$true;$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
+ if($Profile -eq 'pressure-diagnostic'){
+  foreach($cohort in $cohorts){
+   $single=[ordered]@{};foreach($key in $config.Keys){$single[$key]=$config[$key]};$single.cohorts=@($cohort)
+   $singlePath=Join-Path $out "$($cohort.id)-diagnostic-configuration.json";$single|ConvertTo-Json -Depth 8|Set-Content $singlePath -Encoding utf8NoBOM
+   $singleDirectory=Join-Path $out "diagnostic-$($cohort.id)";$diagnosticError=$null
+   try{& (Join-Path $PSScriptRoot 'run-matched.ps1') -ConfigurationPath $singlePath -OutputDirectory $singleDirectory -Stage measure}catch{$diagnosticError=$_.ToString()}
+   $diagnosticRuns.Add([ordered]@{cohort=$cohort.id;sourceSha=$cohort.sourceSha;expectedRuntime=$cohort.expectedRuntime;directory=$singleDirectory;executionCompleted=($null -eq $diagnosticError);unexpectedFailure=$diagnosticError;financialQualification=$false;performanceAcceptanceGranted=$false})
+  }
+ }else{
  & (Join-Path $PSScriptRoot 'run-matched.ps1') -ConfigurationPath $configPath -OutputDirectory (Join-Path $out 'measure') -Stage measure
+ }
  if($Profile -eq 'main'){
  # Expand ordinary protocol workloads before evaluating p99 point estimates.
  # Long streams, pressure, cancellation and paced readers remain separately
@@ -171,6 +188,17 @@ try{
  $after=Invoke-Docker @('ps','-aq');$after|Set-Content "$out/outside-containers-after.txt" -Encoding utf8NoBOM
  [ordered]@{failure=$failure;evidenceFailures=$evidenceFailures.ToArray();cleanupFailures=$cleanupFailures.ToArray();outsideContainerInventoryUnchanged=($before -ceq $after);scope='Only explicitly labelled task-owned fixtures removed; source/build/evidence retained'}|ConvertTo-Json -Depth 5|Set-Content "$out/cleanup.json" -Encoding utf8NoBOM
  if(!$failure -and ($cleanupFailures.Count -or $evidenceFailures.Count)){throw (($cleanupFailures.ToArray()+$evidenceFailures.ToArray()) -join '; ')}
+}
+
+if($Profile -eq 'pressure-diagnostic'){
+ $diagnosticRows=@(foreach($run in $diagnosticRuns){$manifestPath=Join-Path $run.directory 'manifest.json';if(Test-Path $manifestPath){Get-Content -Raw $manifestPath|ConvertFrom-Json}})
+ $unexpected=@($diagnosticRuns|Where-Object{!$_.executionCompleted})
+ $mutated=@(foreach($binding in $sourceBindings){foreach($file in $binding.files){if((Get-FileHash (Join-Path $work $file.path) -Algorithm SHA256).Hash.ToLowerInvariant() -cne $file.sha256){$file.path}}})
+ [ordered]@{passed=($mutated.Count -eq 0);mutatedFiles=$mutated}|ConvertTo-Json -Depth 4|Set-Content "$out/published-input-integrity.json" -Encoding utf8NoBOM
+ $complete=$diagnosticRuns.Count -eq 3 -and $diagnosticRows.Count -eq 3 -and !$unexpected.Count -and !$mutated.Count
+ [ordered]@{schemaVersion=1;profile='pressure8';diagnosticCollectionCompleted=$complete;protocolPassed=@($diagnosticRows|Where-Object{$_.passed}).Count;deadlineFailures=@($diagnosticRows|Where-Object{$_.diagnosticDeadlineFailure}).Count;runs=$diagnosticRuns.ToArray();rows=$diagnosticRows;candidateRevision=$CandidateRevision;qualificationCheckout=(& git rev-parse HEAD).Trim();architecture=$Architecture;performanceAcceptanceGranted=$false;allocationGateSatisfied=$false;financialQualification=$false;knownPersistedSpendDrainExecuted=$false;scope='Original8KiB diagnostic; deadline observations remain failed protocols, arbitrary failures remain errors; SQL/Redis snapshots are captured state without live drain qualification.'}|ConvertTo-Json -Depth 9|Set-Content "$out/qualification-state.json" -Encoding utf8NoBOM
+ if(!$complete){throw 'Diagnostic collection incomplete, unexpected failure, or published input changed'}
+ return
 }
 
 # Interpret complete retained cohorts only after fixtures have been snapshotted
