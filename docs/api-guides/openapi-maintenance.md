@@ -9,6 +9,11 @@ Conduit publishes two OpenAPI 3.1.1 contracts:
 
 The contracts describe endpoint definitions and middleware behavior. They also generate WebAdmin's TypeScript clients. Change endpoint metadata, DTO documentation, or OpenAPI transformers, then regenerate the JSON and TypeScript together. Editing generated files alone fails the CI drift check.
 
+The .NET 11 registrations and offline exporters explicitly select
+`OpenApiSpecVersion.OpenApi3_1`. Keep that selection when changing ASP.NET or
+OpenAPI.NET packages; a package upgrade must not silently change these contracts
+to OpenAPI 3.2.
+
 ## Using the API
 
 Replace the deployment URLs and credentials below with your own. List configured model aliases before making a billable request. The model listing includes enabled mappings; access to a model is checked when you make a billable request.
@@ -83,12 +88,20 @@ npm run validate:openapi
 npm run verify:offline
 ```
 
-Generation requires the .NET SDK selected by `global.json` and Node.js/npm, but does not require Docker, PostgreSQL, Redis, or provider services. The offline commands above replace the retired `tools/openapi/docker-compose.codegen.yml` stack and its `generate:docker`, `generate:admin:docker`, and `generate:gateway:docker` npm commands. To migrate an existing Docker codegen invocation, run these commands from the repository root:
+Generation requires the .NET 11 SDK selected by `global.json` and Node.js/npm, but does not require Docker, PostgreSQL, Redis, or provider services. The offline commands above replace the retired `tools/openapi/docker-compose.codegen.yml` stack and its `generate:docker`, `generate:admin:docker`, and `generate:gateway:docker` npm commands. To migrate an existing Docker codegen invocation, run these commands from the repository root:
 
 ```bash
 dotnet restore Conduit.slnx
 npm --prefix tools/openapi ci
 npm --prefix tools/openapi run generate:offline
+```
+
+The Node and .NET exporters resolve each built host through MSBuild's `TargetPath`,
+using the project's current framework and output settings. For a manual host-path
+check, use the same configuration as the build:
+
+```bash
+dotnet msbuild Services/ConduitLLM.Gateway/ConduitLLM.Gateway.csproj -nologo -getProperty:TargetPath -property:Configuration=Debug
 ```
 
 The legacy `bash tools/openapi/generate-openapi-from-build.sh` entry point now delegates to `generate:offline` and returns its exit status. It uses the same restore/install prerequisites above; it no longer starts a development stack, fetches running hosts, or installs Swashbuckle tooling.

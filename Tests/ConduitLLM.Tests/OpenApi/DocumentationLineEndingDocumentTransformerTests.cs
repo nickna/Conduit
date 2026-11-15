@@ -168,9 +168,9 @@ public sealed class DocumentationLineEndingDocumentTransformerTests
                         RequestBody = new OpenApiRequestBody
                         {
                             Description = documentation,
-                            Content = new Dictionary<string, OpenApiMediaType>
+                            Content = new Dictionary<string, IOpenApiMediaType>
                             {
-                                ["application/json"] = new()
+                                ["application/json"] = new OpenApiMediaType
                                 {
                                     Schema = new OpenApiSchemaReference("Node", document),
                                     Example = JsonValue.Create("literal\r\nvalue")

@@ -3,7 +3,7 @@
 [![CodeQL](https://github.com/nickna/Conduit/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/nickna/Conduit/actions/workflows/codeql-analysis.yml)
 [![Build & Test](https://github.com/nickna/Conduit/actions/workflows/ci.yml/badge.svg)](https://github.com/nickna/Conduit/actions/workflows/ci.yml)
 [![OpenAI Compatible](https://img.shields.io/badge/OpenAI-Compatible-brightgreen.svg)](https://platform.openai.com/docs/api-reference)
-[![Built with .NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
+[![Built with .NET](https://img.shields.io/badge/.NET-11.0-512BD4)](https://dotnet.microsoft.com/)
 [![Docker Ready](https://img.shields.io/badge/Docker-Ready-2496ED)](https://www.docker.com/)
 
 > An LLM gateway: one OpenAI-compatible API in front of many upstream providers, with central
@@ -116,7 +116,8 @@ single origin.
 ### Prerequisites
 
 - Docker Desktop (or a compatible engine) for the containerized stack
-- .NET 10.0 SDK if you want to build or run the services directly
+- The .NET 11 SDK selected by [`global.json`](global.json) if you want to build or run the services directly
+- A .NET 10 runtime alongside .NET 11 when using the retained `dotnet-ef` 10 tool; see [EF migration tools](scripts/migrations/README.md)
 
 ### Run with Docker Compose
 
@@ -152,6 +153,18 @@ Production deployments should terminate HTTPS in front of the stack and set
 
 ### Development environment
 
+The services target `net11.0`. Run CLI commands from the repository root so
+`global.json` selects the .NET 11 compiler and its stable SDK roll-forward policy.
+EF Core and Npgsql remain on their pinned 10.x versions in
+[`Directory.Packages.props`](Directory.Packages.props); the runtime upgrade does
+not upgrade the PostgreSQL provider to EF 11.
+
+```bash
+dotnet --version
+dotnet restore Conduit.slnx
+dotnet build Conduit.slnx -c Release --no-restore
+```
+
 For day-to-day development use the dev script, which runs the WebAdmin with hot reloading:
 
 ```powershell
@@ -181,6 +194,14 @@ docker build -f Services/ConduitLLM.Admin/Dockerfile -t conduit-admin:local .
 docker build -f Services/ConduitLLM.Gateway/Dockerfile -t conduit-http:local .
 docker build -f WebAdmin/Dockerfile -t conduit-webadmin:local .
 ```
+
+The managed API Dockerfiles pin .NET 11 SDK/ASP.NET images on Ubuntu 26.04
+(`resolute`). Build on native `linux/amd64` and `linux/arm64` hosts for the
+corresponding platform; add `--platform linux/arm64` when selecting an ARM64
+build explicitly. Qualify the final images on each architecture before rollout,
+including their business and browser flows. An emulated build does not establish
+native ARM64 performance. The separate NativeAOT images remain x64 canaries; see
+the [canary runbook](docs/operations/native-aot-canary.md).
 
 The obsolete combined .NET WebAdmin/SQLite root `Dockerfile` has been removed.
 Use the service Dockerfiles above instead of `docker build .` or `docker build -f Dockerfile .`.

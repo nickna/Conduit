@@ -139,13 +139,7 @@ internal static class Program
         Target target,
         string destinationDirectory)
     {
-        var assemblyPath = Path.Combine(
-            repositoryRoot,
-            target.ProjectDirectory,
-            "bin",
-            configuration,
-            "net10.0",
-            target.AssemblyName);
+        var assemblyPath = await GetTargetPathAsync(repositoryRoot, configuration, target);
         if (!File.Exists(assemblyPath))
         {
             throw new FileNotFoundException(
@@ -203,5 +197,38 @@ internal static class Program
         {
             Directory.Delete(temporaryDirectory, recursive: true);
         }
+    }
+
+    private static async Task<string> GetTargetPathAsync(string repositoryRoot, string configuration, Target target)
+    {
+        var projectPath = Path.Combine(repositoryRoot, target.ProjectDirectory,
+            Path.ChangeExtension(target.AssemblyName, ".csproj"));
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false,
+            WorkingDirectory = repositoryRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "msbuild", projectPath, "-nologo", "-verbosity:quiet",
+                     "-getProperty:TargetPath", $"-property:Configuration={configuration}" })
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(startInfo) ??
+            throw new InvalidOperationException($"Failed to resolve the {target.Name} host TargetPath.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        var targetPath = (await output).Trim();
+        var errorText = await error;
+        if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(targetPath) || !Path.IsPathFullyQualified(targetPath))
+        {
+            throw new InvalidOperationException(
+                $"Could not resolve the {target.Name} host TargetPath (exit {process.ExitCode}): {errorText}{targetPath}");
+        }
+
+        return targetPath;
     }
 }

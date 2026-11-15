@@ -10,11 +10,16 @@ namespace ConduitLLM.Tests.Functions.Services;
 
 public class FunctionCostCalculationServiceTieredTests
 {
+    public static TheoryData<int, decimal> OmittedMinimumCostCases => new()
+    {
+        { 100, 1.00m },
+        { 101, 1.008m },
+        { 1000, 8.20m },
+        { 1001, 8.205m }
+    };
+
     [Theory]
-    [InlineData(100, 1.00)]
-    [InlineData(101, 1.008)]
-    [InlineData(1000, 8.20)]
-    [InlineData(1001, 8.205)]
+    [MemberData(nameof(OmittedMinimumCostCases))]
     public async Task CalculateCostAsync_OmittedMinThresholds_InferContiguousRanges(
         int resultCount,
         decimal expectedCost)

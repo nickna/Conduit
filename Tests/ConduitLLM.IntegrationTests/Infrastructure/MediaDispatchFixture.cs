@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.Versioning;
 using ConduitLLM.Configuration;
 using ConduitLLM.Configuration.Entities;
 using ConduitLLM.Configuration.Enums;
@@ -306,8 +308,12 @@ public sealed class MediaDispatchFixture : IAsyncLifetime
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
         while (root != null && !File.Exists(Path.Combine(root.FullName, "Conduit.slnx"))) root = root.Parent;
+        if (root is null) throw new InvalidOperationException("Could not locate the media dispatch probe repository.");
         var configuration = AppContext.BaseDirectory.Contains("Release", StringComparison.Ordinal) ? "Release" : "Debug";
-        var dll = Path.Combine(root!.FullName, "tools", "ConduitLLM.MediaDispatchProbe", "bin", configuration, "net10.0", "ConduitLLM.MediaDispatchProbe.dll");
+        var framework = new FrameworkName(typeof(MediaDispatchFixture).Assembly
+            .GetCustomAttribute<TargetFrameworkAttribute>()!.FrameworkName);
+        var targetFramework = $"net{framework.Version.Major}.{framework.Version.Minor}";
+        var dll = Path.Combine(root.FullName, "tools", "ConduitLLM.MediaDispatchProbe", "bin", configuration, targetFramework, "ConduitLLM.MediaDispatchProbe.dll");
         var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
         start.ArgumentList.Add(dll);
         foreach (var arg in args) start.ArgumentList.Add(arg);

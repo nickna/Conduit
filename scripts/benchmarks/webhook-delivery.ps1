@@ -13,6 +13,12 @@ Copy-Item -LiteralPath (Join-Path $repoRoot "$toolRelative/Program.cs"), (Join-P
 if ($LASTEXITCODE) { throw "Baseline build failed" }
 & dotnet build "$repoRoot/$toolRelative/ConduitLLM.WebhookBenchmark.csproj" -c Release -m:2
 if ($LASTEXITCODE) { throw "Current build failed" }
+$targetPathOutput = & dotnet msbuild "$repoRoot/$toolRelative/ConduitLLM.WebhookBenchmark.csproj" -nologo -verbosity:quiet -getProperty:TargetPath -property:Configuration=Release 2>&1
+if ($LASTEXITCODE) { throw "Could not resolve current benchmark TargetPath: $targetPathOutput" }
+$currentAssembly = ($targetPathOutput | Out-String).Trim()
+if (-not [IO.Path]::IsPathFullyQualified($currentAssembly) -or -not (Test-Path -LiteralPath $currentAssembly -PathType Leaf)) {
+    throw "Current benchmark output not found at MSBuild TargetPath: $currentAssembly"
+}
 $containerName = "conduit-webhook-bench-" + [Guid]::NewGuid().ToString("N")
 $oldConnection = $env:CONDUIT_WEBHOOK_BENCH_POSTGRES
 try {
@@ -37,7 +43,7 @@ try {
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputPath "environment.json") -Encoding utf8
     & dotnet "$baselinePath/$toolRelative/bin/Release/net10.0/ConduitLLM.WebhookBenchmark.dll" (Join-Path $outputPath "baseline.json")
     if ($LASTEXITCODE) { throw "Baseline benchmark failed" }
-    & dotnet "$repoRoot/$toolRelative/bin/Release/net10.0/ConduitLLM.WebhookBenchmark.dll" (Join-Path $outputPath "current.json")
+    & dotnet $currentAssembly (Join-Path $outputPath "current.json")
     if ($LASTEXITCODE) { throw "Current benchmark failed" }
     $measurements = Get-Content -LiteralPath (Join-Path $outputPath 'current.json') -Raw | ConvertFrom-Json
     foreach ($case in $measurements) {

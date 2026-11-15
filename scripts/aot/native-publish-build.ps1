@@ -35,7 +35,7 @@ function Assert-NativePublishRegularFile {
 function Read-NativeToolchainCapture {
     param([string]$Path)
     $names = @(
-        "NETCoreSdkVersion", "RuntimeIdentifier", "PublishAot", "Configuration",
+        "NETCoreSdkVersion", "RuntimeIdentifier", "PublishAot", "UseOptimizedPublish", "_UseOptimizedPublish", "Configuration",
         "IlcHostPackagePath", "RuntimePackagePath", "IlcToolsPath", "ILCompilerTargetsPath",
         "CppCompilerAndLinker", "CppLinker", "LinkerFlavor", "ObjCopyName", "IlcUseEnvironmentalTools",
         "_hostOS", "_hostArchitecture", "_targetOS", "_targetArchitecture",
@@ -219,6 +219,7 @@ function Get-NativePublishToolchain {
     $expectedValues = @{
         RuntimeIdentifier = $Runtime; AssemblyName = $ExpectedAssembly; Configuration = "Release"
         PublishAot = "true"; SelfContained = "true"; StripSymbols = "true"
+        UseOptimizedPublish = "true"; _UseOptimizedPublish = "true"
         ConduitAotAudit = $ExpectedAudit.ToString().ToLowerInvariant(); UseSharedCompilation = "false"
     }
     foreach ($name in $expectedValues.Keys) {
@@ -269,6 +270,7 @@ function Get-NativePublishToolchain {
     $linkVersion = Get-NativeLinkerDriverVersion -Path $linkDriver.path -HostOs $hostOs
     return [ordered]@{
         sdkVersion = $Capture["NETCoreSdkVersion"]
+        optimizedPublish = $true
         ilCompilerPackage = [ordered]@{ id = $packageId; version = $packageVersion; path = $packagePath }
         ilCompiler = $compiler
         nativeLinkerDriver = [ordered]@{

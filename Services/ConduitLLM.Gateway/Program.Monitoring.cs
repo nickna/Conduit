@@ -117,6 +117,8 @@ public partial class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddOpenApi("v1", options =>
         {
+            // Keep runtime and offline documents on the published OpenAPI 3.1 contract.
+            options.OpenApiVersion = Microsoft.OpenApi.OpenApiSpecVersion.OpenApi3_1;
             options.AddDocumentTransformer<ConduitLLM.Gateway.OpenApi.CoreApiDocumentTransformer>();
             options.AddOperationTransformer<ConduitLLM.Core.OpenApi.OperationMetadataTransformer>();
             options.AddOperationTransformer<ConduitLLM.Gateway.OpenApi.VirtualKeySecurityOperationTransformer>();

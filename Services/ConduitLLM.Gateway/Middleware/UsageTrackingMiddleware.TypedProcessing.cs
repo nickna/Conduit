@@ -27,11 +27,14 @@ public partial class UsageTrackingMiddleware
     {
         var snapshot = context.GetRequestAccountingSnapshot();
         if (context.Response.StatusCode >= StatusCodes.Status400BadRequest &&
-            snapshot?.ProviderInvocations?.Count is not > 0)
+            !HasTypedAccountingEvidence(snapshot))
         {
             await LogBillingDecisionAsync(context, billingAuditService);
             return;
         }
+
+        // A provider can complete and publish aggregate usage before response conversion
+        // fails. The client status does not invalidate that evidence or require per-call IDs.
 
         if (snapshot is null || snapshot.Operation == RequestOperation.Unknown)
         {
@@ -91,7 +94,7 @@ public partial class UsageTrackingMiddleware
     {
         var endpointType = UsageExtractor.DetermineRequestType(context.Request.Path);
         var evidence = snapshot.ProviderUsage;
-        if (evidence is null && snapshot.ProviderInvocations?.Count is not > 0)
+        if (evidence is null && snapshot.ProviderCalls.Count == 0 && snapshot.ProviderInvocations?.Count is not > 0)
         {
             LogMissingUsageData(
                 context,
@@ -114,13 +117,13 @@ public partial class UsageTrackingMiddleware
         }
 
         var model = evidence?.Model ?? snapshot.RequestedModel ?? "unknown";
-        var usage = evidence?.Usage.CopyForBilling() ?? new Usage();
+        var usage = evidence?.Usage.CopyForBilling() ?? AggregateProviderCallTokens(snapshot.ProviderCalls);
         ApplyProviderBillingPolicy(context, usage);
         var providerType = context.Items.TryGetValue("ProviderType", out var providerTypeValue)
             ? providerTypeValue?.ToString() ?? "unknown"
             : "unknown";
         (decimal Cost, bool Failed) pricingResult;
-        if (evidence is null)
+        if (evidence is null && snapshot.ProviderCalls.Count == 0)
         {
             context.GetOrCreateRequestAccountingContext().MarkIndeterminate(
                 "Provider invocations ended without usage evidence");
@@ -268,6 +271,38 @@ public partial class UsageTrackingMiddleware
             totalCost,
             requestLogService,
             toolCallMetadata);
+    }
+
+    private static Usage AggregateProviderCallTokens(IReadOnlyList<ProviderCallUsage> calls)
+    {
+        // These totals describe known completed calls in logs and metrics. Pricing
+        // continues to use each original ProviderCallUsage, including its own policy.
+        int? Sum(Func<Usage, int?> select)
+        {
+            long total = 0;
+            var hasValue = false;
+            foreach (var call in calls)
+            {
+                if (select(call.Usage) is not int value) continue;
+                hasValue = true;
+                total += value;
+            }
+
+            // The nullable Int32 reporting schema cannot represent every sum of
+            // valid per-call counts. Leave that field unknown instead of allowing
+            // informational aggregation to abort pricing or reservation settlement.
+            return hasValue && total is >= int.MinValue and <= int.MaxValue ? (int)total : null;
+        }
+
+        return new Usage
+        {
+            PromptTokens = Sum(usage => usage.PromptTokens),
+            CompletionTokens = Sum(usage => usage.CompletionTokens),
+            TotalTokens = Sum(usage => usage.TotalTokens),
+            CachedInputTokens = Sum(usage => usage.CachedInputTokens),
+            CachedWriteTokens = Sum(usage => usage.CachedWriteTokens),
+            ReasoningTokens = Sum(usage => usage.ReasoningTokens)
+        };
     }
 
     private async Task ProcessTypedMediaResponseAsync(

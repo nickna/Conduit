@@ -90,18 +90,46 @@ skipped, or timed-out validation fails immediately. GitHub API errors fail close
 Production's environment policy permits only `v*` tags; ancestry/version/CI policy
 is enforced by the release job, with no added human approval requirement.
 
-The native SDK drift was already corrected to `10.0.401-noble` before this branch.
-The fast `native-sdk.mjs` guard now rejects incompatible pins on every PR, including
-the original `10.0.302` regression. Update global.json's minimum stable SDK first,
+The fast `native-sdk.mjs` guard rejects incompatible pins on every PR, including
+older regressions. The current native SDK image is pinned to
+`11.0.100-resolute`. Update global.json's minimum stable SDK first,
 then both native Docker SDK pins to that version or a newer patch/feature band of
 the same major/minor. Keep stable `latestFeature` roll-forward. Setup-dotnet selects
-the latest stable 10.0 SDK; global.json enforces the minimum on runners and in images.
+the stable 11.0 SDK family; global.json enforces the minimum on runners and in images.
+Migration/EF tooling lanes also install .NET 10 for the retained `dotnet-ef` 10
+runtime requirement. The compiler remains SDK 11; see
+[EF migration tools](../../scripts/migrations/README.md).
 Native linking and both image builds run on master pushes, weekly/manual runs, and
 PRs changing backend/shared code, native Dockerfiles, SDK/build policy, native
 scripts, or that workflow. The native path inventory also covers HealthProbe,
 integration test/build inputs, linked descriptors, embedded provider catalogs,
 Docker context policy, promotion policy, and the shared test/evidence harness. Analyzer checks remain
 required whenever the full CI plan is selected. Native images remain canaries.
+
+The required managed Docker job has native `linux/amd64` and `linux/arm64` matrix
+legs. Each builds the three service images and runs the real-infrastructure
+business and browser flows. The ARM64 leg also checks source-generated JSON,
+OpenAPI contracts, request-delegate generation, and all 39
+[duration billing compatibility cases](../architecture/billing-duration-precision.md)
+with no skips or optional failures. Those billing cases exercise pricing/refund
+services and spend-unit argument conversion with a mocked Redis backend; the
+packaged flows independently exercise real PostgreSQL and Redis. The host runners use Ubuntu
+24.04; the managed API containers explicitly use .NET 11 Resolute/Ubuntu 26.04.
+Runner OS and application image OS are separate inputs to qualification.
+
+Release builds produce architecture-specific children on native runners, then
+assemble one immutable index per service. Each candidate-validation leg resolves
+its exact child from that index, scans that child, and runs its packaged flows.
+Both architecture legs must succeed before the existing three-image index ledger
+can reach production. The
+[`managed-platforms.mjs`](../../scripts/ci/managed-platforms.mjs) helper verifies
+platform, source, child, and attestation bindings. Preserve the full required-job
+inventory and candidate gates when changing this matrix.
+
+These gates define the required evidence; their presence is not a record of a
+successful hosted ARM64 run. Retain exact source/image/runtime/architecture and
+actual job results for each release. ARM64 correctness and packaging do not
+establish production ARM64 performance; performance qualification is separate.
 
 The main test project owns self-contained tests irrespective of class names. Its
 ordinary selector excludes only explicitly owned `ReleaseMigration` traits. Release migrations belong to the mandatory migration

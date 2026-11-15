@@ -16727,6 +16727,7 @@
             }
           }
         },
+        "deprecated": true,
         "security": [
           {
             "MasterKey": [ ]
@@ -18481,42 +18482,6 @@
               }
             }
           },
-          "404": {
-            "description": "Not Found",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminProblemDetails"
-                }
-              }
-            }
-          },
           "401": {
             "description": "Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body.",
             "headers": {
@@ -18559,6 +18524,42 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SecurityErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
                 }
               }
             }
@@ -19303,8 +19304,8 @@
               }
             }
           },
-          "409": {
-            "description": "Conflict",
+          "400": {
+            "description": "Bad Request",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -19321,8 +19322,8 @@
               }
             }
           },
-          "400": {
-            "description": "Bad Request",
+          "409": {
+            "description": "Conflict",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -20615,24 +20616,6 @@
               }
             }
           },
-          "404": {
-            "description": "Not Found",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminProblemDetails"
-                }
-              }
-            }
-          },
           "401": {
             "description": "Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body.",
             "headers": {
@@ -20675,6 +20658,24 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SecurityErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
                 }
               }
             }
@@ -20817,24 +20818,6 @@
               }
             }
           },
-          "404": {
-            "description": "Not Found",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminProblemDetails"
-                }
-              }
-            }
-          },
           "401": {
             "description": "Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body.",
             "headers": {
@@ -20877,6 +20860,24 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SecurityErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
                 }
               }
             }
@@ -21692,44 +21693,8 @@
               }
             }
           },
-          "409": {
-            "description": "Conflict",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminProblemDetails"
-                }
-              }
-            }
-          },
           "400": {
             "description": "Bad Request",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -21788,6 +21753,42 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SecurityErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
                 }
               }
             }
@@ -33866,24 +33867,6 @@
               }
             }
           },
-          "404": {
-            "description": "Not Found",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminProblemDetails"
-                }
-              }
-            }
-          },
           "401": {
             "description": "Unauthorized Security middleware returns application/json; endpoint errors use application/problem+json. Authorization may return an empty body.",
             "headers": {
@@ -33926,6 +33909,24 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SecurityErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProblemDetails"
                 }
               }
             }
@@ -43176,8 +43177,8 @@
               }
             }
           },
-          "404": {
-            "description": "Not Found",
+          "400": {
+            "description": "Bad Request",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -43194,8 +43195,8 @@
               }
             }
           },
-          "400": {
-            "description": "Bad Request",
+          "404": {
+            "description": "Not Found",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -43387,8 +43388,8 @@
               }
             }
           },
-          "404": {
-            "description": "Not Found",
+          "400": {
+            "description": "Bad Request",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -43405,8 +43406,8 @@
               }
             }
           },
-          "400": {
-            "description": "Bad Request",
+          "404": {
+            "description": "Not Found",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -61575,7 +61576,8 @@
               "null",
               "integer"
             ],
-            "format": "int32"
+            "format": "int32",
+            "deprecated": true
           },
           "settings": {
             "type": "integer",
@@ -63938,7 +63940,8 @@
               "null",
               "string"
             ],
-            "format": "date-time"
+            "format": "date-time",
+            "deprecated": true
           }
         }
       },
@@ -64874,44 +64877,28 @@
   },
   "tags": [
     {
-      "name": "ModelAuthor",
-      "description": "Organizations and authors that publish models."
-    },
-    {
-      "name": "ModelSeries",
-      "description": "Model families and their associated models."
-    },
-    {
-      "name": "Notifications",
-      "description": "Administrative notifications and read status."
-    },
-    {
-      "name": "Tasks",
-      "description": "Task retention and operator resolution of indeterminate media jobs."
+      "name": "Analytics",
+      "description": "Request logs, costs, usage, exports, and analytics cache metrics."
     },
     {
       "name": "Auth",
       "description": "Short-lived credentials for administrative requests."
     },
     {
-      "name": "SystemInfo",
-      "description": "Deployment information, health, and discovery cache management."
-    },
-    {
-      "name": "Metrics",
-      "description": "Prometheus and OpenMetrics scrapes for monitoring the deployment."
-    },
-    {
-      "name": "Configuration",
-      "description": "Routing defaults and per-alias provider selection policies."
+      "name": "BatchSpending",
+      "description": "Flush requests and status for batched spending updates."
     },
     {
       "name": "BundledModelCatalog",
       "description": "Import of the model catalog bundled with Conduit."
     },
     {
-      "name": "FunctionExecutions",
-      "description": "Function execution history, leases, retries, and retention."
+      "name": "Configuration",
+      "description": "Routing defaults and per-alias provider selection policies."
+    },
+    {
+      "name": "Function Configurations",
+      "description": "Function definitions, execution policies, testing, and import/export."
     },
     {
       "name": "FunctionCosts",
@@ -64922,20 +64909,20 @@
       "description": "Credentials used by external function providers; returned API keys are masked."
     },
     {
-      "name": "BatchSpending",
-      "description": "Flush requests and status for batched spending updates."
-    },
-    {
-      "name": "PromptCaching",
-      "description": "Prompt cache configuration, capabilities, and analytics."
-    },
-    {
-      "name": "ProviderSync",
-      "description": "Provider synchronization runs and review of detected configuration drift."
+      "name": "FunctionExecutions",
+      "description": "Function execution history, leases, retries, and retention."
     },
     {
       "name": "GlobalSettings",
       "description": "Global setting definitions, values, and cache management."
+    },
+    {
+      "name": "Health Monitoring",
+      "description": "Service health, incident summaries, and historical measurements."
+    },
+    {
+      "name": "IP Filters",
+      "description": "IP access rules and their configuration."
     },
     {
       "name": "Media",
@@ -64946,16 +64933,68 @@
       "description": "Scheduled media cleanup settings and approval of large cleanup scopes."
     },
     {
-      "name": "Webhook recovery",
-      "description": "Webhook delivery inspection, dead letters, replay, and purge."
+      "name": "Media Retention",
+      "description": "Retention policies, group assignments, and cleanup availability."
+    },
+    {
+      "name": "Metrics",
+      "description": "Prometheus and OpenMetrics scrapes for monitoring the deployment."
+    },
+    {
+      "name": "Model Costs",
+      "description": "Model pricing records, pricing rules, and bulk import/export."
+    },
+    {
+      "name": "Model Provider Mappings",
+      "description": "Provider routing mappings for model aliases."
+    },
+    {
+      "name": "ModelAuthor",
+      "description": "Organizations and authors that publish models."
+    },
+    {
+      "name": "ModelSeries",
+      "description": "Model families and their associated models."
+    },
+    {
+      "name": "Models",
+      "description": "Model metadata, identifiers, capabilities, and provider associations."
+    },
+    {
+      "name": "Notifications",
+      "description": "Administrative notifications and read status."
+    },
+    {
+      "name": "Pricing",
+      "description": "Pricing evaluation, rule validation, and pricing audit records."
+    },
+    {
+      "name": "PromptCaching",
+      "description": "Prompt cache configuration, capabilities, and analytics."
     },
     {
       "name": "Provider Credentials",
       "description": "Provider accounts, credentials, and connection testing."
     },
     {
-      "name": "Models",
-      "description": "Model metadata, identifiers, capabilities, and provider associations."
+      "name": "Provider Errors",
+      "description": "Provider credential failures and error tracking."
+    },
+    {
+      "name": "Provider Tools",
+      "description": "Provider tool definitions, billing units, costs, and import/export."
+    },
+    {
+      "name": "ProviderSync",
+      "description": "Provider synchronization runs and review of detected configuration drift."
+    },
+    {
+      "name": "SystemInfo",
+      "description": "Deployment information, health, and discovery cache management."
+    },
+    {
+      "name": "Tasks",
+      "description": "Task retention and operator resolution of indeterminate media jobs."
     },
     {
       "name": "Virtual Key Groups",
@@ -64966,44 +65005,8 @@
       "description": "Virtual-key issuance, access policies, validation, and usage."
     },
     {
-      "name": "IP Filters",
-      "description": "IP access rules and their configuration."
-    },
-    {
-      "name": "Health Monitoring",
-      "description": "Service health, incident summaries, and historical measurements."
-    },
-    {
-      "name": "Analytics",
-      "description": "Request logs, costs, usage, exports, and analytics cache metrics."
-    },
-    {
-      "name": "Function Configurations",
-      "description": "Function definitions, execution policies, testing, and import/export."
-    },
-    {
-      "name": "Provider Errors",
-      "description": "Provider credential failures and error tracking."
-    },
-    {
-      "name": "Media Retention",
-      "description": "Retention policies, group assignments, and cleanup availability."
-    },
-    {
-      "name": "Provider Tools",
-      "description": "Provider tool definitions, billing units, costs, and import/export."
-    },
-    {
-      "name": "Pricing",
-      "description": "Pricing evaluation, rule validation, and pricing audit records."
-    },
-    {
-      "name": "Model Provider Mappings",
-      "description": "Provider routing mappings for model aliases."
-    },
-    {
-      "name": "Model Costs",
-      "description": "Model pricing records, pricing rules, and bulk import/export."
+      "name": "Webhook recovery",
+      "description": "Webhook delivery inspection, dead letters, replay, and purge."
     }
   ]
 }

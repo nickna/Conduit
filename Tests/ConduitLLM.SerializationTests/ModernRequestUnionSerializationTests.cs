@@ -55,7 +55,7 @@ public sealed class ModernRequestUnionSerializationTests
         using var handler = new RequestHandler(speech: false);
         var response = await CreateClient(handler).CreateChatCompletionAsync(gateway);
 
-        Assert.Equal("ok", Assert.IsType<JsonElement>(Assert.Single(response.Choices).Message.Content).GetString());
+        Assert.Equal("ok café 雪 🔎", Assert.IsType<string>(Assert.Single(response.Choices).Message.Content));
         Assert.Equal(2, response.Usage!.TotalTokens);
         Assert.Equal(HttpMethod.Post, handler.Method);
         Assert.Equal("/v1/chat/completions", handler.RequestUri!.AbsolutePath);
@@ -204,7 +204,7 @@ public sealed class ModernRequestUnionSerializationTests
             }
             return new(HttpStatusCode.OK)
             {
-                Content = new StringContent("""{"id":"chat-union","object":"chat.completion","created":1,"model":"fixture-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}""",
+                Content = new StringContent("""{"id":"chat-union","object":"chat.completion","created":1,"model":"fixture-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok café 雪 🔎"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}""",
                     Encoding.UTF8, "application/json")
             };
         }

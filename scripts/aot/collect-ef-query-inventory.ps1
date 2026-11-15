@@ -63,7 +63,7 @@ public static class ConduitEfInventoryJson
 }
 '@
 $helperPath = Join-Path $PSScriptRoot 'measure-native-container.ps1'
-$helperSha = 'c55d7c2750f2c5e6299eb35c659983b953c3c0c99c25d7f07b3508b59bf75501'
+$helperSha = '5df5b5bfe8fdc17c4d907a2ae173cc17b2cf8af44a4eb15857fb67e1821091e2'
 if ((Get-FileHash -LiteralPath $helperPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $helperSha) {
     throw 'The pinned bounded-process helper changed; review the collector derivation before collecting.'
 }

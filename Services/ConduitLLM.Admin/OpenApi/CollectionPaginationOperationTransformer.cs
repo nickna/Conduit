@@ -24,7 +24,9 @@ public sealed class CollectionPaginationOperationTransformer : IOpenApiOperation
             return Task.CompletedTask;
         }
 
-        mediaType.Schema = new OpenApiSchema
+        var responseMedia = ConduitLLM.Core.OpenApi.OpenApiMediaTypeNormalizer.CopyForMutation(mediaType);
+        response.Content["application/json"] = responseMedia;
+        responseMedia.Schema = new OpenApiSchema
         {
             Type = JsonSchemaType.Object,
             Properties = new Dictionary<string, IOpenApiSchema>

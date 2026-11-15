@@ -13,6 +13,7 @@ using JasperFx;
 #endif
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
+using ConduitLLM.OpenApi;
 
 using Scalar.AspNetCore;
 
@@ -93,7 +94,7 @@ public partial class Program
                     await using var output = File.Create(outputPath);
                     var provider = openApiApp.Services.GetRequiredKeyedService<IOpenApiDocumentProvider>("v1");
                     var document = await provider.GetOpenApiDocumentAsync(default);
-                    await document.SerializeAsJsonAsync(output, OpenApiSpecVersion.OpenApi3_1, default);
+                    await document.SerializeAsPublishedJsonAsync(output);
                 }
                 finally
                 {
@@ -134,7 +135,7 @@ public partial class Program
         // Configure the HTTP request pipeline
         if (app.Environment.IsDevelopment())
         {
-            app.MapOpenApi("/openapi/v1.json");
+            app.MapPublishedOpenApi("/openapi/v1.json");
             app.MapScalarApiReference();
             app.Logger.LogInformation("Scalar UI available at /scalar/v1");
         }

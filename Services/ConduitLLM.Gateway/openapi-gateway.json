@@ -1222,6 +1222,24 @@
               }
             }
           },
+          "402": {
+            "description": "Payment Required",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not Found",
             "headers": {
@@ -1242,24 +1260,6 @@
           },
           "500": {
             "description": "Internal Server Error",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OpenAIErrorResponse"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "Payment Required",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -1528,6 +1528,24 @@
               }
             }
           },
+          "402": {
+            "description": "Payment Required",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not Found",
             "headers": {
@@ -1548,24 +1566,6 @@
           },
           "500": {
             "description": "Internal Server Error",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OpenAIErrorResponse"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "Payment Required",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -1834,6 +1834,24 @@
               }
             }
           },
+          "402": {
+            "description": "Payment Required",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Not Found",
             "headers": {
@@ -1890,24 +1908,6 @@
           },
           "500": {
             "description": "Internal Server Error",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OpenAIErrorResponse"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "Payment Required",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -4199,6 +4199,24 @@
               }
             }
           },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Service Unavailable",
             "headers": {
@@ -4213,24 +4231,6 @@
                 "schema": {
                   "minimum": 1,
                   "type": "integer"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OpenAIErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
                 }
               }
             },
@@ -7962,6 +7962,24 @@
               }
             }
           },
+          "402": {
+            "description": "Payment Required",
+            "headers": {
+              "x-request-id": {
+                "description": "Request identifier for support and distributed tracing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIErrorResponse"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "headers": {
@@ -8041,24 +8059,6 @@
           },
           "500": {
             "description": "Internal Server Error",
-            "headers": {
-              "x-request-id": {
-                "description": "Request identifier for support and distributed tracing.",
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OpenAIErrorResponse"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "Payment Required",
             "headers": {
               "x-request-id": {
                 "description": "Request identifier for support and distributed tracing.",
@@ -13301,56 +13301,56 @@
   },
   "tags": [
     {
-      "name": "Models",
-      "description": "Model aliases and their metadata."
+      "name": "Audio",
+      "description": "Audio transcription and text-to-speech generation."
     },
     {
       "name": "Authentication",
       "description": "Short-lived virtual-key credentials."
     },
     {
-      "name": "Rerank",
-      "description": "Relevance ranking of documents against a query."
-    },
-    {
-      "name": "Embeddings",
-      "description": "Vector embeddings for text input."
-    },
-    {
       "name": "Chat",
       "description": "Chat completions, including streamed responses and function calling."
-    },
-    {
-      "name": "Responses",
-      "description": "Stateless OpenAI-compatible model responses and streamed events."
     },
     {
       "name": "Discovery",
       "description": "Available model and function capabilities and parameter definitions."
     },
     {
-      "name": "Tasks",
-      "description": "Status, polling, and cancellation of asynchronous tasks owned by the virtual key."
+      "name": "Downloads",
+      "description": "File downloads, metadata, and download URL generation."
+    },
+    {
+      "name": "Embeddings",
+      "description": "Vector embeddings for text input."
     },
     {
       "name": "Functions",
       "description": "Function execution and retrieval of execution results."
     },
     {
-      "name": "Audio",
-      "description": "Audio transcription and text-to-speech generation."
+      "name": "Images",
+      "description": "Synchronous and asynchronous image generation and task management."
     },
     {
       "name": "Media",
       "description": "Media uploads, metadata, and retrieval by storage key."
     },
     {
-      "name": "Downloads",
-      "description": "File downloads, metadata, and download URL generation."
+      "name": "Models",
+      "description": "Model aliases and their metadata."
     },
     {
-      "name": "Images",
-      "description": "Synchronous and asynchronous image generation and task management."
+      "name": "Rerank",
+      "description": "Relevance ranking of documents against a query."
+    },
+    {
+      "name": "Responses",
+      "description": "Stateless OpenAI-compatible model responses and streamed events."
+    },
+    {
+      "name": "Tasks",
+      "description": "Status, polling, and cancellation of asynchronous tasks owned by the virtual key."
     },
     {
       "name": "Videos",

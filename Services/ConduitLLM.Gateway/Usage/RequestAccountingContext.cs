@@ -19,7 +19,9 @@ public enum UsageEvidenceSource
 {
     None,
     Provider,
-    Estimated
+    Estimated,
+    /// <summary>Request parameters staged before asynchronous command submission; not incurred provider usage.</summary>
+    SubmissionEstimate
 }
 
 public enum StreamTransportOutcome

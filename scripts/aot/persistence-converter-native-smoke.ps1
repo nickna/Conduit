@@ -38,7 +38,7 @@ $arguments = @(
     'publish', (Join-Path $repository "Tests/$assembly/$assembly.csproj"),
     '--configuration', 'Release', '--runtime', 'linux-x64', '--self-contained', 'true',
     '--output', $runtime, '--nologo', '--tl:off', '--maxcpucount:1', '--verbosity', 'minimal',
-    '-p:PublishAot=true', '-p:ConduitAotAudit=true', '-p:StripSymbols=true', '-p:UseSharedCompilation=false', '-nr:false',
+    '-p:PublishAot=true', '-p:UseOptimizedPublish=true', '-p:ConduitAotAudit=true', '-p:StripSymbols=true', '-p:UseSharedCompilation=false', '-nr:false',
     "-p:NativeIntermediateOutputPath=$(ConvertTo-MSBuildPropertyValue $intermediate)",
     "-p:NativeOutputPath=$(ConvertTo-MSBuildPropertyValue $nativeOutput)",
     "-p:CustomAfterMicrosoftCommonTargets=$(ConvertTo-MSBuildPropertyValue $targets)",

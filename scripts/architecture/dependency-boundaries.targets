@@ -1,7 +1,7 @@
 <Project>
   <!-- These checks examine NuGet's resolved closure, including unused packages
        and PrivateAssets dependencies which assembly-reference tests cannot see.
-       SDK 10 ResolvePackageAssets emits PackageDependencies directly, even with
+       The SDK's ResolvePackageAssets emits PackageDependencies directly, even with
        EmitLegacyAssetsFileItems=false. The real-SDK fixture verifies that contract;
        this does not depend on the obsolete RunResolvePackageDependencies output. -->
   <PropertyGroup>

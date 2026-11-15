@@ -55,6 +55,8 @@ try {
             --verbosity minimal `
             --artifacts-path $artifactRoot `
             --maxcpucount:1 `
+            --disable-build-servers `
+            -nr:false `
             -p:ConduitWolverineCodegen=true `
             -p:UseSharedCompilation=false
 

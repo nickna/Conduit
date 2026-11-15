@@ -105,7 +105,7 @@ public sealed class UnusedSchemaPruningDocumentTransformer : IOpenApiDocumentTra
         CollectContent(header.Content, sink);
     }
 
-    private static void CollectContent(IDictionary<string, OpenApiMediaType>? content, ICollection<string> sink)
+    private static void CollectContent(IDictionary<string, IOpenApiMediaType>? content, ICollection<string> sink)
     {
         foreach (var mediaType in Values(content))
         {

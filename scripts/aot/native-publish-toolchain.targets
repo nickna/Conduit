@@ -29,6 +29,8 @@
       <_ConduitNativeToolchain Include="NETCoreSdkVersion"><Value>$(NETCoreSdkVersion)</Value></_ConduitNativeToolchain>
       <_ConduitNativeToolchain Include="RuntimeIdentifier"><Value>$(RuntimeIdentifier)</Value></_ConduitNativeToolchain>
       <_ConduitNativeToolchain Include="PublishAot"><Value>$(PublishAot)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="UseOptimizedPublish"><Value>$(UseOptimizedPublish)</Value></_ConduitNativeToolchain>
+      <_ConduitNativeToolchain Include="_UseOptimizedPublish"><Value>$(_UseOptimizedPublish)</Value></_ConduitNativeToolchain>
       <_ConduitNativeToolchain Include="Configuration"><Value>$(Configuration)</Value></_ConduitNativeToolchain>
       <_ConduitNativeToolchain Include="IlcHostPackagePath"><Value>$(IlcHostPackagePath)</Value></_ConduitNativeToolchain>
       <_ConduitNativeToolchain Include="RuntimePackagePath"><Value>$(RuntimePackagePath)</Value></_ConduitNativeToolchain>

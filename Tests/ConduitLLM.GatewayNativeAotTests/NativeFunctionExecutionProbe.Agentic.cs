@@ -308,22 +308,8 @@ internal static partial class NativeFunctionExecutionProbe
             "exactly four agentic chat logs across both aliases and all observed executions");
     }
 
-    private static void AssertAgenticProviderCounters(JsonElement before, JsonElement after)
-    {
-        var expected = new Dictionary<string, int>(StringComparer.Ordinal)
-        {
-            ["non_stream_requests"] = 0, ["stream_requests"] = 0, ["image_requests"] = 0,
-            ["error_requests"] = 0, ["authorization_failures"] = 0, ["active_cancellation_requests"] = 0,
-            ["cancellations_observed"] = 0, ["function_requests"] = 4, ["function_error_requests"] = 0,
-            ["function_authorization_failures"] = 0, ["function_chunked_requests"] = 4,
-            ["agentic_tool_call_requests"] = 4, ["agentic_final_requests"] = 4, ["agentic_contract_failures"] = 0
-        };
-        Properties(before, expected.Keys.ToArray());
-        Properties(after, expected.Keys.ToArray());
-        foreach (var (name, delta) in expected)
-            Require(after.GetProperty(name).GetInt32() - before.GetProperty(name).GetInt32() == delta,
-                "exact agentic provider counter delta for " + name);
-    }
+    private static void AssertAgenticProviderCounters(JsonElement before, JsonElement after) =>
+        NativeProviderStateAssertions.AssertAgenticDelta(before, after);
 
     private sealed record AgenticObservedExecution(Guid Id, string Path, Guid Marker, Guid BillingId, Guid CallerId);
 }

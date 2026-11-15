@@ -48,7 +48,7 @@ public partial class Program
         if (app.Environment.IsDevelopment())
         {
             // Map the OpenAPI endpoint
-            app.MapOpenApi("/openapi/v1.json");
+            ConduitLLM.OpenApi.PublishedOpenApiExtensions.MapPublishedOpenApi(app, "/openapi/v1.json");
 
             // Map Scalar UI for interactive API documentation
             app.MapScalarApiReference();

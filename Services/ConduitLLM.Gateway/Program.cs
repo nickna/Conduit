@@ -5,6 +5,7 @@ using ConduitLLM.Gateway.Endpoints;
 using ConduitLLM.Gateway.Extensions;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
+using ConduitLLM.OpenApi;
 
 // prometheus-net's Meter adapter owns the /metrics representation. Configure its
 // streaming histogram buckets before any application metrics can be initialized.
@@ -40,7 +41,7 @@ if (Environment.GetEnvironmentVariable("CONDUIT_OPENAPI_GENERATION") == "true")
             await using var output = File.Create(outputPath);
             var provider = openApiApp.Services.GetRequiredKeyedService<IOpenApiDocumentProvider>("v1");
             var document = await provider.GetOpenApiDocumentAsync(default);
-            await document.SerializeAsJsonAsync(output, OpenApiSpecVersion.OpenApi3_1, default);
+            await document.SerializeAsPublishedJsonAsync(output);
         }
         finally
         {

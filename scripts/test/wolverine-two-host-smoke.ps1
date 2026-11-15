@@ -101,6 +101,17 @@ New-Item -ItemType Directory -Force $logDir | Out-Null
 
 $script:failures = [System.Collections.Generic.List[string]]::new()
 
+function Get-ProjectTargetPath([string]$Project) {
+    $projectFile = Join-Path $Project ((Split-Path $Project -Leaf) + '.csproj')
+    $output = & dotnet msbuild $projectFile -nologo -verbosity:quiet -getProperty:TargetPath "-property:Configuration=$Configuration" 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Could not resolve TargetPath for ${projectFile}: $output" }
+    $targetPath = ($output | Out-String).Trim()
+    if (-not [IO.Path]::IsPathFullyQualified($targetPath) -or -not (Test-Path -LiteralPath $targetPath -PathType Leaf)) {
+        throw "Built output not found at MSBuild TargetPath: $targetPath"
+    }
+    return $targetPath
+}
+
 function Invoke-Sql([string]$Sql) {
     $tokens = $PsqlCommand -split ' '
     $rest = if ($tokens.Length -gt 1) { $tokens[1..($tokens.Length - 1)] } else { @() }
@@ -155,7 +166,7 @@ function Start-ServiceHost([string]$Project, [string]$Name, [int]$Port) {
         $hostPath = Join-Path $NativeArtifactDirectory 'runtime' $serviceSlug $executableName
         $hostArguments = @()
     } else {
-        $hostPath = Join-Path $Project 'bin' $Configuration 'net10.0' "$Name.dll"
+        $hostPath = Get-ProjectTargetPath $Project
         $hostArguments = @($hostPath)
     }
     if (-not (Test-Path $hostPath)) { throw "Host output not found: $hostPath (build/publish first)" }
@@ -213,7 +224,7 @@ if (-not $NoBuild) {
 }
 
 Write-Host '== Applying EF migrations (standalone migrator) =='
-dotnet (Join-Path $migratorProject 'bin' $Configuration 'net10.0' 'ConduitLLM.Migrator.dll')
+dotnet (Get-ProjectTargetPath $migratorProject)
 if ($LASTEXITCODE -ne 0) { Write-Error 'standalone migrator failed' }
 
 # Wolverine retains node records briefly after an ungraceful shutdown and may prune
@@ -243,7 +254,7 @@ SELECT CASE WHEN count(*) >= 2 THEN 1 ELSE 0 END FROM wolverine_conduit_gateway.
 
     Write-Host '== Publishing representative delivery probes =='
     $probeId = [Guid]::NewGuid().ToString('N')
-    dotnet (Join-Path $publisherProject 'bin' $Configuration 'net10.0' 'WolverineSmokePublisher.dll') $probeId
+    dotnet (Get-ProjectTargetPath $publisherProject) $probeId
     if ($LASTEXITCODE -ne 0) { Write-Error 'Wolverine delivery-probe publisher failed' }
 
     $spendPattern = 'Spend update request for non-existent virtual key 2147483647'

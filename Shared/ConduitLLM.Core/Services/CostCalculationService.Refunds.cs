@@ -250,7 +250,9 @@ public partial class CostCalculationService
         }
 
         if (originalUsage.VideoDurationSeconds is > 0)
-            return ClampRatio((decimal)(refundUsage.VideoDurationSeconds ?? 0), (decimal)originalUsage.VideoDurationSeconds.Value);
+            return ClampRatio(
+                BillingDurationConversion.ToDecimal(refundUsage.VideoDurationSeconds ?? 0),
+                BillingDurationConversion.ToDecimal(originalUsage.VideoDurationSeconds.Value));
 
         if (originalUsage.InferenceSteps is > 0)
             return ClampRatio(refundUsage.InferenceSteps ?? 0, originalUsage.InferenceSteps.Value);
@@ -262,7 +264,9 @@ public partial class CostCalculationService
             return ClampRatio(refundUsage.SearchUnits ?? 0, originalUsage.SearchUnits.Value);
 
         if (originalUsage.AudioDurationSeconds is > 0)
-            return ClampRatio((decimal)(refundUsage.AudioDurationSeconds ?? 0), (decimal)originalUsage.AudioDurationSeconds.Value);
+            return ClampRatio(
+                BillingDurationConversion.ToDecimal(refundUsage.AudioDurationSeconds ?? 0),
+                BillingDurationConversion.ToDecimal(originalUsage.AudioDurationSeconds.Value));
 
         if (originalUsage.TtsCharacters is > 0)
             return ClampRatio(refundUsage.TtsCharacters ?? 0, originalUsage.TtsCharacters.Value);

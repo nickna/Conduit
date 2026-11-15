@@ -168,13 +168,18 @@ public sealed class StreamingReservationReconciliationTests(BillingFaultFixture 
         if (notificationFailure == 1) responseStream.FailedNotifications.Should().Be(1);
     }
 
-    [Theory(Timeout = 90_000)]
-    [InlineData(0.07, SpendReconciliationDisposition.AuthoritativeProviderCost)]
-    [InlineData(0.0, SpendReconciliationDisposition.ProviderCostWaived)]
-    public async Task IndeterminateReservation_ServiceRecovery_AuditedResolutionReleasesHoldOnce(
-        double confirmedProviderCost, SpendReconciliationDisposition disposition)
+    public static TheoryData<decimal, SpendReconciliationDisposition> AuditedProviderCostCases => new()
     {
-        var providerCost = (decimal)confirmedProviderCost;
+        { 0.07m, SpendReconciliationDisposition.AuthoritativeProviderCost },
+        { 0.0m, SpendReconciliationDisposition.ProviderCostWaived }
+    };
+
+    [Theory(Timeout = 90_000)]
+    [MemberData(nameof(AuditedProviderCostCases))]
+    public async Task IndeterminateReservation_ServiceRecovery_AuditedResolutionReleasesHoldOnce(
+        decimal confirmedProviderCost, SpendReconciliationDisposition disposition)
+    {
+        var providerCost = confirmedProviderCost;
         var account = await fixture.SeedAccountAsync();
         var requestId = Guid.NewGuid().ToString("N");
         var billedAt = DateTime.UtcNow.AddDays(-1).Date.AddHours(23).AddMinutes(59);

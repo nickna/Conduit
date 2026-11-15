@@ -27,6 +27,47 @@ function Assert-Rejected([scriptblock] $Action, [string] $Message) {
     $script:cases++
 }
 
+function Assert-ProducerOptimizedPublish([string] $Source, [string] $Name) {
+    $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseInput($Source, [ref]$null, [ref]$parseErrors)
+    Assert-Contract ($parseErrors.Count -eq 0) "$Name has invalid producer syntax."
+    $nativeInvocations = @($ast.FindAll({ param($node)
+        $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -ceq 'dotnet'
+    }, $true))
+    Assert-Contract ($nativeInvocations.Count -gt 0) "$Name has no inspectable native publish invocation."
+    foreach ($invocation in $nativeInvocations) {
+        $splats = @($invocation.CommandElements | Where-Object {
+            $_ -is [Management.Automation.Language.VariableExpressionAst] -and $_.Splatted
+        })
+        Assert-Contract ($splats.Count -eq 1) "$Name must expose its native publish argument array."
+        $argumentName = $splats[0].VariablePath.UserPath
+        $assignments = @($ast.FindAll({ param($node)
+            $node -is [Management.Automation.Language.AssignmentStatementAst]
+        }, $true) | Where-Object {
+            $_.Left -is [Management.Automation.Language.VariableExpressionAst] -and
+            $_.Left.VariablePath.UserPath -ceq $argumentName -and
+            $_.Extent.EndOffset -lt $invocation.Extent.StartOffset
+        })
+        $initializer = $assignments | Where-Object Operator -eq Equals |
+            Sort-Object { $_.Extent.StartOffset } -Descending | Select-Object -First 1
+        Assert-Contract ($null -ne $initializer) "$Name has no native publish argument initializer."
+        $literals = @($initializer.Right.FindAll({ param($node)
+            $node -is [Management.Automation.Language.StringConstantExpressionAst]
+        }, $true) | ForEach-Object Value)
+        $optimizedFlags = @($literals | Where-Object { $_ -imatch '^-p:UseOptimizedPublish=' })
+        Assert-Contract ($literals -ccontains 'publish' -and $literals -ccontains '-p:PublishAot=true' -and
+            $optimizedFlags.Count -eq 1 -and $optimizedFlags[0] -ceq '-p:UseOptimizedPublish=true') `
+            "$Name must explicitly request optimized publish in the actual dotnet argument array."
+        foreach ($append in @($assignments | Where-Object { $_.Extent.StartOffset -gt $initializer.Extent.EndOffset })) {
+            $overrides = @($append.Right.FindAll({ param($node)
+                $node -is [Management.Automation.Language.StringConstantExpressionAst] -and
+                $node.Value -imatch '^-p:UseOptimizedPublish='
+            }, $true))
+            Assert-Contract ($overrides.Count -eq 0) "$Name overrides optimized publish after initialization."
+        }
+    }
+}
+
 function Get-IndependentHash([byte[]] $Bytes) {
     return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($Bytes)).ToLowerInvariant()
 }
@@ -278,6 +319,8 @@ function Invoke-PublisherCase([string] $Scenario, [bool] $ExpectSuccess, [string
             $intermediateDirectories.Add($expectedIntermediate) | Out-Null
             $nativeOutputDirectories.Add($expectedNativeOutput) | Out-Null
             Assert-Contract ($manifest.toolchain.ilCompiler.sha256 -ceq (Get-FileHashValue $script:compilerPath)) 'Publisher did not record the actual selected ILC bytes.'
+            Assert-Contract ($manifest.toolchain.optimizedPublish -is [bool] -and $manifest.toolchain.optimizedPublish) 'Publisher did not record effective optimized-publish evidence.'
+            Assert-Contract ($nativeRecord[0].arguments -ccontains '-p:UseOptimizedPublish=true') 'Publisher did not explicitly request SDK 11 optimized publish.'
             Assert-Contract ($manifest.toolchain.ilCompilerPackage.version -ceq '10.0.12') 'Publisher did not record the selected nuspec version.'
             Assert-Contract ($manifest.toolchain.nativeLinkerDriver.sha256 -ceq (Get-FileHashValue $script:pwshPath)) 'Publisher did not record the actual selected driver bytes.'
             Assert-Contract ($manifest.publishProperties.conduitAotAudit -eq ($service -cne 'probe')) 'Publisher audit property differs from actual invocation.'
@@ -311,6 +354,7 @@ function Invoke-PublisherCase([string] $Scenario, [bool] $ExpectSuccess, [string
                 'duplicate-capture' { 1 } 'invalid-base64' { 1 } 'invalid-utf8' { 1 } 'unexpected-capture' { 1 }
                 'linked-symbol-leaf' { 1 }
                 { $_ -clike 'native-*' } { 1 }
+                { $_ -clike 'optimized-publish-*' } { 1 }
                 default { 3 }
             }
             $actualPublishes = @($records | Where-Object { $_.arguments[0] -ceq 'publish' }).Count
@@ -322,9 +366,9 @@ function Invoke-PublisherCase([string] $Scenario, [bool] $ExpectSuccess, [string
                     [IO.File]::Exists((Join-Path $artifactRoot ('runtime/admin/' + (Get-ExecutableName 'admin')))) -and
                     [IO.File]::Exists((Join-Path $artifactRoot 'runtime/admin/ConduitLLM.Admin.dbg'))) 'Symbol-destination fixture did not complete admin publish before rejecting the move.'
             }
-            if ($Scenario -clike 'native-*') {
+            if ($Scenario -clike 'native-*' -or $Scenario -clike 'optimized-publish-*') {
                 Assert-Contract ($result.Stdout.Contains('Owned fake native publish complete.', [StringComparison]::Ordinal) -and
-                    $records[0].nativePaths.Count -eq 4) 'Native freshness rejection did not follow a completed fake compile/link operation.'
+                    $records[0].nativePaths.Count -eq 4) 'Native freshness/toolchain rejection did not follow a completed fake compile/link operation.'
             }
         }
         if ($null -ne $linkedTarget) {
@@ -338,6 +382,29 @@ function Invoke-PublisherCase([string] $Scenario, [bool] $ExpectSuccess, [string
 }
 
 try {
+    # Discover every real consumer of the shared capture guard. The auxiliary
+    # converter probe must obey the same opt-in as the service/image producers.
+    $producers = @(Get-ChildItem -LiteralPath (Join-Path $repositoryRoot 'scripts') -Filter '*.ps1' -File -Recurse |
+        Where-Object {
+            $producerAst = [Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$null)
+            @($producerAst.FindAll({ param($node)
+                $node -is [Management.Automation.Language.CommandAst] -and
+                $node.GetCommandName() -ceq 'Get-NativePublishToolchain'
+            }, $true)).Count -gt 0
+        } | Sort-Object FullName)
+    Assert-Contract ($producers.Count -ge 3) 'Shared native toolchain producer inventory is incomplete.'
+    foreach ($producer in $producers) {
+        $producerSource = [IO.File]::ReadAllText($producer.FullName)
+        Assert-ProducerOptimizedPublish $producerSource $producer.Name
+        $cases++
+        $missingOptIn = $producerSource.Replace('-p:UseOptimizedPublish=true', '-p:OptimizationSentinel=true')
+        Assert-Rejected { Assert-ProducerOptimizedPublish $missingOptIn $producer.Name } 'Producer accepted a missing optimized-publish opt-in.'
+        $falseOptIn = $producerSource.Replace('-p:UseOptimizedPublish=true', '-p:UseOptimizedPublish=false')
+        Assert-Rejected { Assert-ProducerOptimizedPublish $falseOptIn $producer.Name } 'Producer accepted an explicit optimized-publish opt-out.'
+        $decoyOptIn = "# -p:UseOptimizedPublish=true`n" + $missingOptIn + "`n`$unrelatedFlag = '-p:UseOptimizedPublish=true'`n"
+        Assert-Rejected { Assert-ProducerOptimizedPublish $decoyOptIn $producer.Name } 'A comment or unrelated string satisfied the producer opt-in contract.'
+    }
+    Write-Host ('PASS: ' + $producers.Count + ' shared native-toolchain producers; missing, false and decoy opt-in mutations rejected.')
     [IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
     $script:pwshPath = (Get-Command pwsh -CommandType Application | Select-Object -First 1).Source
     $script:toolRoot = New-OwnedDirectory
@@ -387,6 +454,14 @@ try {
     $manifest = Read-Json $reference.path
     Assert-Contract ($manifest.schemaVersion -eq 1 -and $manifest.kind -ceq 'conduit-native-publish' -and $manifest.runtimeFilesSha256 -ceq $expectedDigest) 'Manifest envelope/digest is invalid.'
     Assert-NativePublishManifestMatchesRuntime -ManifestPath $reference.path -RuntimeDirectory $runtime.Path | Out-Null
+    $cases++
+    # The original manifest above intentionally omits the new flag: historical
+    # evidence must remain readable while new evidence requires a true boolean.
+    $optimizedArguments = New-ManifestArguments $runtime
+    $optimizedArguments.Toolchain.optimizedPublish = $true
+    $optimizedReference = Write-NativePublishManifest @optimizedArguments
+    Assert-NativePublishManifestMatchesRuntime -ManifestPath $optimizedReference.path -RuntimeDirectory $runtime.Path | Out-Null
+    Assert-Contract ((Read-Json $optimizedReference.path).toolchain.optimizedPublish -is [bool]) 'Optimized-publish identity lost its boolean type.'
     $cases++
     $multilineVersion = "owned clang version 19.1.7`nTarget: x86_64-unknown-linux-gnu`nInstalledDir: /owned/toolchain"
     $multilineArguments = New-ManifestArguments $runtime
@@ -457,7 +532,8 @@ try {
         Assert-Rejected { Assert-NativePublishManifestMatchesRuntime -ManifestPath $path -RuntimeDirectory $runtime.Path } ('Malformed manifest was accepted: ' + $corruption)
     }
 
-    foreach ($invalid in @('source-unavailable-values', 'string-tool-bytes', 'nul-driver-version', 'extra-publish-property', 'reversed-timestamps', 'uppercase-build-id')) {
+    foreach ($invalid in @('source-unavailable-values', 'string-tool-bytes', 'nul-driver-version', 'extra-publish-property', 'reversed-timestamps', 'uppercase-build-id',
+        'string-optimized-publish', 'false-optimized-publish')) {
         $arguments = New-ManifestArguments $runtime
         switch ($invalid) {
             'source-unavailable-values' { $arguments.Source.dirty = $false }
@@ -466,6 +542,8 @@ try {
             'extra-publish-property' { $arguments.PublishProperties.unrecordedOverride = $true }
             'reversed-timestamps' { $arguments.CompletedAtUtc = $arguments.StartedAtUtc.AddSeconds(-1) }
             'uppercase-build-id' { $arguments.BuildId = 'ABCDEF0123456789ABCDEF0123456789' }
+            'string-optimized-publish' { $arguments.Toolchain.optimizedPublish = 'true' }
+            'false-optimized-publish' { $arguments.Toolchain.optimizedPublish = $false }
         }
         Assert-Rejected { Write-NativePublishManifest @arguments } ('Invalid manifest input was accepted: ' + $invalid)
         Assert-Contract (-not [IO.File]::Exists($arguments.DestinationPath)) 'Rejected manifest input created an evidence file.'
@@ -662,7 +740,8 @@ try {
     $toolRoot = $env:CONDUIT_PUBLISH_EVIDENCE_TEST_TOOLROOT
     $driver = $env:CONDUIT_PUBLISH_EVIDENCE_TEST_DRIVER
     $capture = [ordered]@{
-        NETCoreSdkVersion = '10.0.401'; RuntimeIdentifier = $rid; PublishAot = 'true'; Configuration = 'Release'
+        NETCoreSdkVersion = '11.0.100'; RuntimeIdentifier = $rid; PublishAot = 'true'; Configuration = 'Release'
+        UseOptimizedPublish = [string]$properties.UseOptimizedPublish; _UseOptimizedPublish = [string]$properties.UseOptimizedPublish
         IlcHostPackagePath = $toolRoot; RuntimePackagePath = (Join-Path $toolRoot 'target-runtime')
         IlcToolsPath = (Join-Path $toolRoot 'tools'); ILCompilerTargetsPath = (Join-Path $toolRoot 'actual-selected.targets')
         CppCompilerAndLinker = $driver; CppLinker = $driver; LinkerFlavor = ''; ObjCopyName = ''; IlcUseEnvironmentalTools = ''
@@ -681,6 +760,11 @@ try {
         NativeObject = $nativeObject; NativeBinary = $nativeBinary
     }
     [IO.File]::WriteAllText($recordPath, ($record | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
+    switch ($scenario) {
+        'optimized-publish-false' { $capture.UseOptimizedPublish = 'false' }
+        'optimized-publish-not-effective' { $capture._UseOptimizedPublish = 'false' }
+        'optimized-publish-effective-missing' { $capture.Remove('_UseOptimizedPublish') }
+    }
     $lines = [Collections.Generic.List[string]]::new()
     foreach ($name in $capture.Keys) {
         $lines.Add($name + '=' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$capture[$name])))
@@ -717,7 +801,8 @@ catch {
         'linked-symbol-directory', 'linked-log-leaf', 'linked-symbol-leaf', 'linked-native-intermediates', 'linked-native-outputs',
         'fail-admin', 'fail-gateway', 'fail-probe', 'linker-failure', 'duplicate-capture', 'unexpected-capture', 'invalid-base64', 'invalid-utf8',
         'native-object-missing', 'native-object-empty', 'native-object-wrong-path', 'native-binary-missing',
-        'native-binary-wrong-path', 'native-binary-mismatch', 'native-intermediate-wrong-path', 'native-output-wrong-path')) {
+        'native-binary-wrong-path', 'native-binary-mismatch', 'native-intermediate-wrong-path', 'native-output-wrong-path',
+        'optimized-publish-false', 'optimized-publish-not-effective', 'optimized-publish-effective-missing')) {
         Invoke-PublisherCase $scenario $false | Out-Null
     }
     $success = Invoke-PublisherCase 'success' $true

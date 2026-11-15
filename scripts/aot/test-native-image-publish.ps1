@@ -293,8 +293,10 @@ function Invoke-ImageCase([string] $Service, [string] $Scenario, [bool] $Success
         Assert-Contract ($healthComponentFiles.Count -eq 1) 'Health component retained a sidecar after symbol splitting.'
         foreach ($role in @('application', 'health-probe')) {
             $roleRecords = @($records | Where-Object { $_.role -ceq $role })
-            Assert-Contract ($roleRecords.Count -eq 1 -and $roleRecords[0].capture.Count -eq 30) 'Image producer did not capture both complete selected toolchains.'
+            Assert-Contract ($roleRecords.Count -eq 1 -and $roleRecords[0].capture.Count -eq 32) 'Image producer did not capture both complete selected toolchains.'
             $capture = $roleRecords[0].capture
+            Assert-Contract ($capture.UseOptimizedPublish -ceq 'true' -and $capture._UseOptimizedPublish -ceq 'true' -and
+                $roleRecords[0].arguments -ccontains '-p:UseOptimizedPublish=true') 'Each image component must request and capture effective optimized publish.'
             $suffixFlags = @($roleRecords[0].arguments | Where-Object { $_ -imatch '\A-p:IncludeSourceRevisionInInformationalVersion=' })
             Assert-Contract ($suffixFlags.Count -eq 1 -and $suffixFlags[0] -ceq '-p:IncludeSourceRevisionInInformationalVersion=false') 'Each image component must disable SDK informational-version suffixing exactly once.'
             $expectedIntermediate = Join-Path $artifact ('native-intermediates/' + $image.buildId + '/' + $role)
@@ -304,6 +306,7 @@ function Invoke-ImageCase([string] $Service, [string] $Scenario, [bool] $Success
                 [IO.Path]::GetFullPath($capture.NativeOutputPath).TrimEnd($trim) -ceq $expectedOutput -and
                 [IO.File]::Exists($capture.NativeObject) -and (Get-Item -LiteralPath $capture.NativeObject).Length -gt 0) 'Image producer reused or omitted a fresh native object directory.'
             $manifest = if ($role -ceq 'application') { $application } else { $health }
+            Assert-Contract ($manifest.toolchain.optimizedPublish -is [bool] -and $manifest.toolchain.optimizedPublish) 'Image component omitted effective optimized-publish identity.'
             $payloadExecutable = Join-Path $payload $manifest.executable.path
             Assert-Contract ((Get-FileDigest $capture.NativeBinary) -ceq (Get-FileDigest $payloadExecutable) -and
                 $manifest.toolchain.ilCompiler.sha256 -ceq (Get-FileDigest $script:compiler) -and
@@ -473,7 +476,8 @@ try {
         $informationalVersion += '+' + $sdkSourceRevision
     }
     $capture = [ordered]@{
-        NETCoreSdkVersion='10.0.401'; RuntimeIdentifier=$rid; PublishAot='true'; Configuration='Release'
+        NETCoreSdkVersion='11.0.100'; RuntimeIdentifier=$rid; PublishAot='true'; Configuration='Release'
+        UseOptimizedPublish=[string]$properties.UseOptimizedPublish; _UseOptimizedPublish=[string]$properties.UseOptimizedPublish
         IlcHostPackagePath=$toolRoot; RuntimePackagePath=(Join-Path $toolRoot 'runtime'); IlcToolsPath=(Join-Path $toolRoot 'tools'); ILCompilerTargetsPath=(Join-Path $toolRoot 'selected.targets')
         CppCompilerAndLinker=$driver; CppLinker=$driver; LinkerFlavor=''; ObjCopyName=''; IlcUseEnvironmentalTools=''
         _hostOS=$(if($IsWindows){'win'}else{'linux'}); _hostArchitecture='x64'; _targetOS=$(if($rid -ceq 'win-x64'){'win'}else{'linux'}); _targetArchitecture='x64'
@@ -481,6 +485,10 @@ try {
         SelfContained='true'; StripSymbols='true'; ConduitAotAudit=[string]$properties.ConduitAotAudit; UseSharedCompilation='false'
         Version=[string]$properties.Version; InformationalVersion=$informationalVersion; ConduitCommitSha=[string]$properties.ConduitCommitSha; ConduitBuildTimestamp=[string]$properties.ConduitBuildTimestamp
     }
+    if ($scenario -ceq 'optimized-publish-false') { $capture.UseOptimizedPublish='false' }
+    if (($scenario -ceq 'app-optimized-not-effective' -and $role -ceq 'application') -or
+        ($scenario -ceq 'health-optimized-not-effective' -and $role -ceq 'health-probe')) { $capture._UseOptimizedPublish='false' }
+    if ($scenario -ceq 'missing-optimized-capture') { $capture.Remove('_UseOptimizedPublish') }
     $record['role']=$role; $record['capture']=$capture
     $record['sdkSourceRevision']=$sdkSourceRevision; $record['sdkRevisionSuffixEnabled']=$sdkRevisionSuffixEnabled
     [IO.File]::WriteAllText($recordPath, (ConvertTo-Json -InputObject $record -Depth 8), [Text.UTF8Encoding]::new($false))
@@ -529,7 +537,9 @@ catch{[Console]::Error.WriteLine('Owned image dotnet failed; type='+$_.Exception
         @{Scenario='fail-main';Count=1}, @{Scenario='fail-health';Count=2}, @{Scenario='health-sidecar';Count=2},
         @{Scenario='payload-collision';Count=2}, @{Scenario='copied-binary-mismatch';Count=1},
         @{Scenario='capture-root-mismatch';Count=1}, @{Scenario='health-linker-warning';Count=2},
-        @{Scenario='linked-output';Count=0}, @{Scenario='nonempty-output';Count=0}
+        @{Scenario='linked-output';Count=0}, @{Scenario='nonempty-output';Count=0},
+        @{Scenario='optimized-publish-false';Count=1}, @{Scenario='app-optimized-not-effective';Count=1},
+        @{Scenario='health-optimized-not-effective';Count=2}, @{Scenario='missing-optimized-capture';Count=1}
     )) { Invoke-ImageCase 'gateway' $case.Scenario $false $case.Count | Out-Null }
     $application = Read-Json (Join-Path $gateway.Artifact 'evidence/application.json')
     Invoke-ImageCase 'gateway' 'commit-mismatch' $false 0 | Out-Null

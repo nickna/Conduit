@@ -3,8 +3,20 @@
 Use the repository-pinned .NET and EF tools from PowerShell 7+. Normal service
 builds exclude EF design tooling, so prepare the Configuration project first:
 
+`global.json` selects the .NET 11 SDK for builds, and application projects target
+`net11.0`. EF Core, the Npgsql EF provider/driver, and the EF health-check adapter
+retain their 10.x pins in [`Directory.Packages.props`](../../Directory.Packages.props).
+Restore the repository's `dotnet-ef` 10 tool from
+[`.config/dotnet-tools.json`](../../.config/dotnet-tools.json).
+It requires a .NET 10 runtime alongside .NET 11; installing a .NET 10 SDK also
+provides that runtime. Keep the tool's runtime roll-forward policy intact rather
+than forcing it onto a different major runtime.
+
 ```powershell
+dotnet --version
+dotnet --list-runtimes
 dotnet tool restore
+dotnet ef --version
 $env:ConduitEfTooling = 'true'
 dotnet build Shared/ConduitLLM.Configuration
 $env:DATABASE_URL = 'postgresql://conduit:conduitpass@localhost:5432/conduitdb'

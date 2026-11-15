@@ -9,11 +9,18 @@ namespace ConduitLLM.Tests.Core.Services
 {
     public partial class CostCalculationServiceBasicTests
     {
+        // Attribute numeric literals are doubles. Keep financial expectations
+        // decimal end to end instead of relying on test-runner coercion.
+        public static TheoryData<int, int, decimal, decimal, decimal> TokenCostCases => new()
+        {
+            { 1000, 500, 10.00m, 30.00m, 0.025m },
+            { 0, 100, 10.00m, 30.00m, 0.003m },
+            { 500, 0, 10.00m, 30.00m, 0.005m },
+            { 10000, 5000, 5.00m, 15.00m, 0.125m }
+        };
+
         [Theory]
-        [InlineData(1000, 500, 10.00, 30.00, 0.025)]
-        [InlineData(0, 100, 10.00, 30.00, 0.003)]
-        [InlineData(500, 0, 10.00, 30.00, 0.005)]
-        [InlineData(10000, 5000, 5.00, 15.00, 0.125)]
+        [MemberData(nameof(TokenCostCases))]
         public async Task CalculateCostAsync_WithVariousTokenCounts_CalculatesCorrectly(
             int promptTokens, int completionTokens, decimal inputCost, decimal outputCost, decimal expectedCost)
         {

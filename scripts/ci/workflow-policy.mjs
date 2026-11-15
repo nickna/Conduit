@@ -7,6 +7,15 @@ export function parseWorkflow(source) {
 }
 const array = value => Array.isArray(value) ? value : value ? [value] : [];
 function require(condition, message) { if (!condition) throw new Error(message); }
+const managedRunners = [
+  { arch: 'amd64', runner: 'ubuntu-24.04', platform: 'linux/amd64' },
+  { arch: 'arm64', runner: 'ubuntu-24.04-arm', platform: 'linux/arm64' },
+];
+function requireManagedMatrix(job, name) {
+  require(job['runs-on'] === '${{ matrix.runner }}' && job.strategy?.['fail-fast'] === false &&
+    !job['continue-on-error'] && JSON.stringify(job.strategy?.matrix) === JSON.stringify({ include: managedRunners }),
+    `${name}: require native amd64 and ARM64 validation without an optional matrix leg`);
+}
 export function validateWorkflows(workflows, required) {
   for (const [name, workflow] of Object.entries(workflows)) {
     require(workflow.name && workflow.on && workflow.jobs, `${name}: missing workflow structure`);
@@ -32,6 +41,27 @@ export function validateWorkflows(workflows, required) {
   const packagedCheckout = array(ci.jobs.docker.steps).filter(step => step.uses?.startsWith('actions/checkout@'));
   require(packagedCheckout.length === 1 && packagedCheckout[0].with?.['persist-credentials'] === false,
     'Packaged builds must not retain checkout credentials for dependency/build steps');
+  requireManagedMatrix(ci.jobs.docker, 'Packaged CI');
+  const packagedBuilds = array(ci.jobs.docker.steps).filter(s => s.uses?.startsWith('docker/build-push-action@'));
+  require(packagedBuilds.length === 3 && packagedBuilds.every(s => s.with?.platforms === '${{ matrix.platform }}' && s.with.load === true),
+    'Packaged CI must load all three services for the selected native platform');
+  const armContracts = array(ci.jobs.docker.steps).filter(s => s.uses === './.github/actions/run-tests');
+  require(armContracts.some(s => s.if === "matrix.arch == 'arm64'" && s.with?.suite === 'managed-arm64-serialization' &&
+    s.with?.project === 'Tests/ConduitLLM.SerializationTests/ConduitLLM.SerializationTests.csproj') &&
+    armContracts.some(s => s.if === "matrix.arch == 'arm64'" && s.with?.suite === 'managed-arm64-openapi' && s.with?.filter === 'Component=OpenApi'),
+    'Managed ARM64 must execute reflection-disabled serialization and OpenAPI contracts');
+  require(armContracts.some(s => s.if === "matrix.arch == 'arm64'" &&
+    !s['continue-on-error'] &&
+    s.with?.suite === 'managed-arm64-duration-billing' &&
+    s.with?.project === 'Tests/ConduitLLM.Tests/ConduitLLM.Tests.csproj' &&
+    s.with?.filter === 'FullyQualifiedName~BillingDurationCompatibilityTests' &&
+    s.with?.['no-build'] === 'true' && Number(s.with?.minimum) >= 39 &&
+    !s.with?.['maximum-skips']), 'Managed ARM64 must execute exact duration billing contracts without a skip allowance');
+  require(array(ci.jobs.docker.steps).some(s => s.if === "matrix.arch == 'arm64'" &&
+    s.run?.includes('verify-admin-media-rdg.ps1 -NoRestore') && s.run.includes('verify-gateway-rdg.ps1 -NoRestore')),
+    'Managed ARM64 must retain both request-delegate generation guards');
+  require(array(ci.jobs.docker.steps).some(s => s.run === 'node scripts/ci/container-smoke.mjs' &&
+    s.env?.CI_CONTAINER_PLATFORM === '${{ matrix.platform }}'), 'Packaged smoke must verify actual native image architecture');
   for (const event of ['push', 'pull_request']) {
     const trigger = ci.on[event];
     require(['master', 'dev'].every(b => trigger?.branches?.includes(b)) && !trigger.paths && !trigger['paths-ignore'],
@@ -91,6 +121,34 @@ export function validateWorkflows(workflows, required) {
     'CodeQL C# analysis must retain its instrumented manual build');
   const release = workflows['release.yml'];
   const production = release.jobs.production, candidates = release.jobs.candidates;
+  const build = release.jobs.docker, indexes = release.jobs.images;
+  const buildMatrix = {
+    service: ['webadmin', 'http', 'admin'], arch: ['amd64', 'arm64'],
+    include: [
+      { service: 'webadmin', context: '.', dockerfile: 'WebAdmin/Dockerfile' },
+      { service: 'http', context: '.', dockerfile: 'Services/ConduitLLM.Gateway/Dockerfile' },
+      { service: 'admin', context: '.', dockerfile: 'Services/ConduitLLM.Admin/Dockerfile' },
+      ...managedRunners,
+    ],
+  };
+  require(build['runs-on'] === '${{ matrix.runner }}' && build.strategy?.['fail-fast'] === false && !build['continue-on-error'] &&
+    JSON.stringify(build.strategy?.matrix) === JSON.stringify(buildMatrix), 'Release must build all six managed service/platform children natively');
+  require(array(build.steps).some(s => s.uses?.startsWith('docker/build-push-action@') && s.with?.platforms === '${{ matrix.platform }}') &&
+    array(build.steps).some(s => s.run?.includes('managed-platforms.mjs record') && s.env?.PLATFORM === '${{ matrix.platform }}'),
+    'Release must record actual immutable platform children');
+  require(indexes && !indexes.if && !indexes['continue-on-error'] &&
+    ['metadata', 'docker'].every(id => array(indexes.needs).includes(id)) &&
+    array(indexes.steps).some(s => s.run?.includes('managed-platforms.mjs assemble')),
+    'Managed index assembly must wait for every child build');
+  requireManagedMatrix(candidates, 'Release candidates');
+  require(array(candidates.needs).includes('images') && array(candidates.steps).some(s => s.id === 'images' &&
+    s.run?.includes('managed-platforms.mjs select') && s.env?.PLATFORM === '${{ matrix.platform }}'),
+    'Candidate proof must bind and select the exact index child for each platform');
+  require(array(candidates.steps).some(s => s.run === 'node scripts/ci/container-smoke.mjs' &&
+    s.env?.CI_CONTAINER_PLATFORM === '${{ matrix.platform }}'), 'Candidate smoke must verify actual native image architecture');
+  const validatedSet = array(candidates.steps).filter(s => s.with?.name === 'validated-image-set');
+  require(validatedSet.length === 1 && validatedSet[0].if === "matrix.arch == 'amd64'" &&
+    validatedSet[0].with.path === 'artifacts/release/image-set.json', 'Publish one canonical index set while production waits for both candidate legs');
   require(production?.concurrency?.group === 'conduit-production-release' && production.concurrency['cancel-in-progress'] === false && production.concurrency.queue === 'max',
     'Production must serialize across tags without cancelling a running release');
   require(production.environment === 'production' && !production.if && array(production.needs).includes('candidates') &&

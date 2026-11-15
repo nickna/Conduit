@@ -60,7 +60,11 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
                 _ => null
             };
             if (example is not null)
-                requestMedia.Example = JsonNode.Parse(example);
+            {
+                var media = OpenApiMediaTypeNormalizer.CopyForMutation(requestMedia);
+                media.Example = JsonNode.Parse(example);
+                operation.RequestBody!.Content!["application/json"] = media;
+            }
         }
 
         if (operation.OperationId == "Media_Upload" &&
@@ -175,9 +179,9 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
 
             if (int.TryParse(responseEntry.Key, out var status) && status >= 400)
             {
-                response.Content = new Dictionary<string, OpenApiMediaType>
+                response.Content = new Dictionary<string, IOpenApiMediaType>
                 {
-                    ["application/json"] = new() { Schema = errorReference }
+                    ["application/json"] = new OpenApiMediaType { Schema = errorReference }
                 };
 
                 if (status == 403)
@@ -186,9 +190,12 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
                     // endpoint failures return the OpenAI object error envelope.
                     var securitySchema = await context.GetOrCreateSchemaAsync(typeof(SecurityErrorResponse), null, cancellationToken);
                     components.Schemas["SecurityErrorResponse"] = securitySchema;
-                    response.Content["application/json"].Schema = new OpenApiSchema
+                    response.Content["application/json"] = new OpenApiMediaType
                     {
-                        OneOf = [errorReference, new OpenApiSchemaReference("SecurityErrorResponse", document)]
+                        Schema = new OpenApiSchema
+                        {
+                            OneOf = [errorReference, new OpenApiSchemaReference("SecurityErrorResponse", document)]
+                        }
                     };
                 }
 
@@ -249,7 +256,7 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
 
             if (status is 204 or 205 || string.Equals(httpMethod, "HEAD", StringComparison.OrdinalIgnoreCase))
             {
-                response.Content = new Dictionary<string, OpenApiMediaType>();
+                response.Content = new Dictionary<string, IOpenApiMediaType>();
                 continue;
             }
 
@@ -258,7 +265,7 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
             {
                 response.Content = contentTypes.ToDictionary(
                     contentType => contentType,
-                    _ => new OpenApiMediaType
+                    _ => (IOpenApiMediaType)new OpenApiMediaType
                     {
                         Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" }
                     });
@@ -298,9 +305,9 @@ public sealed class ResponseContractOperationTransformer : IOpenApiOperationTran
             operation.Responses[status] = new OpenApiResponse
             {
                 Description = description,
-                Content = new Dictionary<string, OpenApiMediaType>
+                Content = new Dictionary<string, IOpenApiMediaType>
                 {
-                    ["application/json"] = new() { Schema = errorReference }
+                    ["application/json"] = new OpenApiMediaType { Schema = errorReference }
                 }
             };
         }

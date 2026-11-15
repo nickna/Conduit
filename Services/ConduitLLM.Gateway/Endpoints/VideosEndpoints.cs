@@ -89,7 +89,7 @@ namespace ConduitLLM.Gateway.Endpoints
             accounting.RecordProviderUsage(
                 submissionUsage,
                 request.Model,
-                UsageEvidenceSource.Estimated);
+                UsageEvidenceSource.SubmissionEstimate);
 
             // Get provider info for usage tracking
             try

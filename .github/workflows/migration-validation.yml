@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 env:
-  DOTNET_VERSION: '10.0.x'
+  DOTNET_VERSION: '11.0.x'
 
 concurrency:
   group: migration-validation-${{ github.ref }}
@@ -43,7 +43,10 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          # dotnet-ef remains a net10 tool while the application targets net11.
+          dotnet-version: |
+            10.0.x
+            ${{ env.DOTNET_VERSION }}
 
       # The repo has a tool manifest (.config/dotnet-tools.json) pinning dotnet-ef;
       # newer SDKs resolve the local manifest first, so a global install is shadowed

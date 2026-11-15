@@ -19,9 +19,9 @@ test('the combined live alias generates types from both hosts', () => {
   assert.equal(scripts.generate, 'npm run generate:admin && npm run generate:gateway');
 });
 
-for (const [service, port, middleware] of [
-  ['admin', 5002, 'Services/ConduitLLM.Admin/Program.cs'],
-  ['gateway', 5000, 'Services/ConduitLLM.Gateway/Program.Middleware.cs'],
+for (const [service, port, middleware, routePattern] of [
+  ['admin', 5002, 'Services/ConduitLLM.Admin/Program.cs', /app\.MapPublishedOpenApi\("([^"]+)"\)/],
+  ['gateway', 5000, 'Services/ConduitLLM.Gateway/Program.Middleware.cs', /ConduitLLM\.OpenApi\.PublishedOpenApiExtensions\.MapPublishedOpenApi\(app,\s*"([^"]+)"\)/],
 ]) {
   test(`${service} live alias fetches the development route and generates only WebAdmin types`, async () => {
     const command = scripts[`generate:${service}`].match(/^openapi-typescript (\S+) -o (\S+)$/);
@@ -31,8 +31,8 @@ for (const [service, port, middleware] of [
     assert.equal(path.resolve(scriptsDir, command[2]),
       path.join(repoRoot, 'WebAdmin/src/generated', `${service}-api.ts`));
 
-    const route = readFileSync(path.join(repoRoot, middleware), 'utf8').match(/app\.MapOpenApi\("([^"]+)"\)/)?.[1];
-    assert(route, 'Expected the service to map its development OpenAPI route');
+    const route = readFileSync(path.join(repoRoot, middleware), 'utf8').match(routePattern)?.[1];
+    assert(route, 'Expected the service to map its development route with MapPublishedOpenApi');
     const requests = [];
     const server = createServer((request, response) => {
       requests.push(request.url);

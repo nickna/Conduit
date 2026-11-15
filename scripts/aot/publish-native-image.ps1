@@ -77,7 +77,7 @@ foreach ($definition in $definitions) {
         "publish", (Join-Path $repositoryRoot $definition.project), "--configuration", "Release",
         "--runtime", $Runtime, "--self-contained", "true", "--output", $component,
         "--nologo", "--tl:off", "--maxcpucount:1", "--verbosity", "minimal",
-        "-p:PublishAot=true", "-p:ConduitAotAudit=$($definition.audit.ToString().ToLowerInvariant())",
+        "-p:PublishAot=true", "-p:UseOptimizedPublish=true", "-p:ConduitAotAudit=$($definition.audit.ToString().ToLowerInvariant())",
         "-p:StripSymbols=true", "-p:UseSharedCompilation=false",
         "-p:Version=$(ConvertTo-MSBuildPropertyValue $Version)", "-p:InformationalVersion=$(ConvertTo-MSBuildPropertyValue $Version)",
         "-p:IncludeSourceRevisionInInformationalVersion=false",

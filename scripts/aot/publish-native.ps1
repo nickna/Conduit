@@ -77,7 +77,9 @@ foreach ($definition in @(
         "publish", (Join-Path $repoRoot $definition.project), "--configuration", "Release",
         "--runtime", $Runtime, "--self-contained", "true", "--output", $publishDirectory,
         "--nologo", "--tl:off", "--maxcpucount:1", "--verbosity", "minimal",
-        "-p:PublishAot=true", "-p:ConduitAotAudit=$($definition.audit.ToString().ToLowerInvariant())",
+        # SDK 11.0.100 keeps this optimization opt-in. Validate the effective
+        # SDK flag in the toolchain capture rather than assuming it follows PublishAot.
+        "-p:PublishAot=true", "-p:UseOptimizedPublish=true", "-p:ConduitAotAudit=$($definition.audit.ToString().ToLowerInvariant())",
         "-p:StripSymbols=true", "-p:UseSharedCompilation=false",
         "-p:NativeIntermediateOutputPath=$(ConvertTo-MSBuildPropertyValue $nativeIntermediateDirectory)",
         "-p:NativeOutputPath=$(ConvertTo-MSBuildPropertyValue $nativeOutputDirectory)",

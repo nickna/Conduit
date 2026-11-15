@@ -7,7 +7,7 @@ Gateway `Program.Caching` and Admin `MediaLifecycleExtensions` both call
 with no runtime backend flag or compatibility bridge. The configuration-owned
 `DATABASE_URL` is parsed by `ConnectionStringManager`; no scoped EF context or
 transaction owns a locking session. Pins: DistributedLock.Postgres 1.3.1 (MIT),
-DistributedLock.Core 1.0.9, Npgsql 10.0.3, .NET 10.
+DistributedLock.Core 1.0.9 and Npgsql 10.0.3; the application targets .NET 11.
 
 Each ownership retains one independently opened Npgsql session until all protected
 work completes/stops. Npgsql built-in keepalive is one second; connection/command

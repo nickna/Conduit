@@ -57,8 +57,11 @@ public partial class Program
         // Configure built-in OpenAPI support
         builder.Services.AddOpenApi("v1", options =>
         {
+            // Keep the published contract stable when the framework default advances.
+            options.OpenApiVersion = Microsoft.OpenApi.OpenApiSpecVersion.OpenApi3_1;
             options.AddDocumentTransformer<ConduitLLM.Admin.OpenApi.AdminApiDocumentTransformer>();
             options.AddOperationTransformer<ConduitLLM.Core.OpenApi.OperationMetadataTransformer>();
+            options.AddOperationTransformer<ConduitLLM.Admin.OpenApi.EnumQueryOperationTransformer>();
             options.AddOperationTransformer<ConduitLLM.Admin.OpenApi.ApiKeySecurityOperationTransformer>();
             options.AddOperationTransformer<ConduitLLM.Admin.OpenApi.ConditionalRequestOperationTransformer>();
             options.AddOperationTransformer<ConduitLLM.Admin.OpenApi.CollectionPaginationOperationTransformer>();
@@ -69,6 +72,7 @@ public partial class Program
             options.AddSchemaTransformer<ConduitLLM.Admin.OpenApi.NumericSchemaTransformer>();
             options.AddSchemaTransformer<ConduitLLM.Admin.OpenApi.TemporalSchemaTransformer>();
             options.AddSchemaTransformer<ConduitLLM.Admin.OpenApi.ModelCostResponseSchemaTransformer>();
+            options.AddSchemaTransformer<ConduitLLM.Admin.OpenApi.PricingValidationSchemaTransformer>();
             options.AddSchemaTransformer<ConduitLLM.Admin.OpenApi.GlobalSettingsResponseSchemaTransformer>();
             options.AddSchemaTransformer<ConduitLLM.Admin.OpenApi.IpFilterResponseSchemaTransformer>();
             options.AddSchemaTransformer<ConduitLLM.Admin.OpenApi.StructuredJsonSchemaTransformer>();

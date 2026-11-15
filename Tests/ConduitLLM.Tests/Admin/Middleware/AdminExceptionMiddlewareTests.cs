@@ -6,6 +6,7 @@ using ConduitLLM.Core.Exceptions;
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -258,17 +259,11 @@ namespace ConduitLLM.Tests.Admin.Middleware
             _mockNext.Setup(x => x(It.IsAny<HttpContext>()))
                 .ThrowsAsync(new Exception("test"));
 
-            // Use a mock response that reports HasStarted = true
-            var mockResponse = new Mock<HttpResponse>();
-            mockResponse.Setup(r => r.HasStarted).Returns(true);
-            var mockContext = new Mock<HttpContext>();
-            mockContext.Setup(c => c.Response).Returns(mockResponse.Object);
-            mockContext.Setup(c => c.TraceIdentifier).Returns("test-trace-id");
-            mockContext.Setup(c => c.Request.Method).Returns("GET");
-            mockContext.Setup(c => c.Request.Path).Returns(new PathString("/test"));
+            MarkResponseStarted("test-trace-id");
 
             // Act & Assert - should not throw
-            await _middleware.InvokeAsync(mockContext.Object);
+            await _middleware.InvokeAsync(_httpContext);
+            AssertStartedResponseUnchanged();
         }
 
         [Fact]
@@ -369,16 +364,10 @@ namespace ConduitLLM.Tests.Admin.Middleware
             _mockNext.Setup(x => x(It.IsAny<HttpContext>()))
                 .ThrowsAsync(new Exception("test"));
 
-            var mockResponse = new Mock<HttpResponse>();
-            mockResponse.Setup(r => r.HasStarted).Returns(true);
-            var mockContext = new Mock<HttpContext>();
-            mockContext.Setup(c => c.Response).Returns(mockResponse.Object);
-            mockContext.Setup(c => c.TraceIdentifier).Returns("started-trace-id");
-            mockContext.Setup(c => c.Request.Method).Returns("GET");
-            mockContext.Setup(c => c.Request.Path).Returns(new PathString("/test"));
+            MarkResponseStarted("started-trace-id");
 
             // Act
-            await _middleware.InvokeAsync(mockContext.Object);
+            await _middleware.InvokeAsync(_httpContext);
 
             // Assert — LogWarning was called about response already started
             _mockLogger.Verify(
@@ -389,6 +378,41 @@ namespace ConduitLLM.Tests.Admin.Middleware
                     It.IsAny<Exception?>(),
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.Once);
+            AssertStartedResponseUnchanged();
+        }
+
+        private void MarkResponseStarted(string traceIdentifier)
+        {
+            _httpContext.TraceIdentifier = traceIdentifier;
+            _httpContext.Request.Method = "GET";
+            _httpContext.Request.Path = "/test";
+            _httpContext.Response.Body.Write("already-sent"u8);
+            var headers = new HeaderDictionary
+            {
+                ["Content-Type"] = "application/json",
+                ["x-sent"] = "original"
+            };
+            _httpContext.Features.Set<IHttpResponseFeature>(new StartedResponseFeature
+            {
+                StatusCode = StatusCodes.Status200OK,
+                Headers = headers
+            });
+            headers.IsReadOnly = true;
+        }
+
+        private void AssertStartedResponseUnchanged()
+        {
+            Assert.Equal(StatusCodes.Status200OK, _httpContext.Response.StatusCode);
+            Assert.Equal("application/json", _httpContext.Response.ContentType);
+            Assert.Equal("original", _httpContext.Response.Headers["x-sent"]);
+            Assert.Equal(2, _httpContext.Response.Headers.Count);
+            Assert.False(_httpContext.Response.Headers.ContainsKey("x-request-id"));
+            Assert.Equal("already-sent"u8.ToArray(), ((MemoryStream)_httpContext.Response.Body).ToArray());
+        }
+
+        private sealed class StartedResponseFeature : HttpResponseFeature
+        {
+            public override bool HasStarted => true;
         }
 
         /// <summary>

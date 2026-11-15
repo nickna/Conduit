@@ -1075,7 +1075,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Get global settings cache statistics */
+    /**
+     * Get global settings cache statistics
+     * @deprecated
+     */
     get: operations["GlobalSettings_GetCacheStats"];
     put?: never;
     post?: never;
@@ -6699,7 +6702,10 @@ export interface components {
     RecordCountsDto: {
       /** Format: int32 */
       virtualKeys?: number;
-      /** Format: int32 */
+      /**
+       * Format: int32
+       * @deprecated
+       */
       requests?: null | number;
       /** Format: int32 */
       settings?: number;
@@ -7614,7 +7620,10 @@ export interface components {
       appVersion?: string;
       commitSha?: string;
       buildTimestamp?: string;
-      /** Format: date-time */
+      /**
+       * Format: date-time
+       * @deprecated
+       */
       buildDate?: null | string;
     };
     VirtualKeyCostBreakdownDto: {

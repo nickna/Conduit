@@ -1,11 +1,11 @@
 # Admin API Dockerfile - Optimized for selective cache invalidation
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0.100-resolute@sha256:65f3c7c6a25a239ab3e6719f2896147e7b68242ff2d8818dd70498bde6ef8bea AS build
 WORKDIR /src
 
 # ===== CACHED LAYERS (Keep these fast) =====
 # Copy solution-wide restore inputs before project files so package changes
 # invalidate the restore layer consistently.
-COPY Conduit.slnx Directory.Build.props Directory.Build.targets Directory.Packages.props NuGet.Config ./
+COPY global.json Conduit.slnx Directory.Build.props Directory.Build.targets Directory.Packages.props NuGet.Config ./
 COPY scripts/architecture/dependency-boundaries.targets ./scripts/architecture/
 
 # Copy project files to correct locations
@@ -56,8 +56,8 @@ RUN dotnet publish "tools/ConduitLLM.Migrator/ConduitLLM.Migrator.csproj" \
     -o /app/migrator \
     --no-restore
 
-# Runtime stage - Debian-based for reliability
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+# Runtime stage - explicit Ubuntu 26.04 image family
+FROM mcr.microsoft.com/dotnet/aspnet:11.0.0-resolute@sha256:bc0d6653979efba491ab3d6f589d691f96c309c3c3ef81325efa6978e7b7f242
 WORKDIR /app
 
 # Install curl for health checks
@@ -67,7 +67,7 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
 COPY --from=build /app/migrator ./migrator
 
-# Use the existing non-root user (ubuntu with UID 1000 in .NET 10.0 images)
+# Run with a fixed non-root UID; application directories are owned by this UID.
 RUN chown -R 1000:1000 /app
 USER 1000
 

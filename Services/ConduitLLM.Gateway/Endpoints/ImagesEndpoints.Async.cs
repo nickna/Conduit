@@ -88,7 +88,7 @@ namespace ConduitLLM.Gateway.Endpoints
                     ImageCount = request.N,
                     ImageQuality = request.Quality,
                     ImageResolution = request.Size
-                }, modelName, UsageEvidenceSource.Estimated);
+                }, modelName, UsageEvidenceSource.SubmissionEstimate);
 
                 // Get virtual key information from service
                 var virtualKey = await _virtualKeyService.GetVirtualKeyInfoForValidationAsync(virtualKeyId);

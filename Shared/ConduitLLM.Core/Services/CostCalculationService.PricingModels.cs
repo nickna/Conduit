@@ -116,7 +116,7 @@ public partial class CostCalculationService
             throw new InvalidOperationException($"No per-second video pricing configuration for model {modelId}");
         }
 
-        var baseCost = (decimal)usage.VideoDurationSeconds.Value * config.BaseRate;
+        var baseCost = BillingDurationConversion.ToDecimal(usage.VideoDurationSeconds.Value) * config.BaseRate;
 
         // Apply resolution multiplier if configured. Unknown supplied resolutions use the
         // highest multiplier so a provider response cannot silently bypass the premium.

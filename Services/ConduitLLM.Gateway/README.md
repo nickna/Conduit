@@ -54,7 +54,10 @@ and use the development script:
 
 ### Run directly with the .NET CLI
 
-Install the .NET 10 SDK and start PostgreSQL and Redis before running the service.
+Install the .NET 11 SDK selected by [`global.json`](../../global.json) and start
+PostgreSQL and Redis before running the service. The services target `net11.0`;
+EF Core/Npgsql stay on 10.x. The retained EF CLI also needs a .NET 10 runtime;
+see [migration tooling](../../scripts/migrations/README.md).
 Set environment variables in the invoking shell; `dotnet run` does not load the
 repository's `.env` file automatically. For local infrastructure using the
 reference database credentials and published ports:

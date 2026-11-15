@@ -10,9 +10,10 @@ Start with the root [architecture and quick start](../../README.md),
 
 ## Configuration and prerequisites
 
-- For a source checkout, install the .NET 10 SDK selected by
-  [`global.json`](../../global.json) (currently `10.0.400`, with the configured
-  roll-forward policy). The services target `net10.0`.
+- For a source checkout, install the .NET 11 SDK selected by
+  [`global.json`](../../global.json), with its configured stable roll-forward
+  policy. The services target `net11.0`. Keep a .NET 10 runtime installed when
+  using the retained EF 10 CLI; see [migration tooling](../../scripts/migrations/README.md).
 - Set `DATABASE_URL` to a reachable PostgreSQL database. PostgreSQL is the only
   supported database; Wolverine messaging also uses it.
 - Set `CONDUIT_API_TO_API_BACKEND_AUTH_KEY` to the shared backend/master secret.

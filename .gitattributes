@@ -2,6 +2,9 @@
 *.sh text eol=lf
 .husky/* text eol=lf
 
+# The EF inventory collector verifies this helper's exact byte hash.
+scripts/aot/measure-native-container.ps1 text eol=lf
+
 # Generated artifacts are compared byte-for-byte with isolated OpenAPI exports.
 Services/ConduitLLM.Admin/openapi-admin.json text eol=lf
 Services/ConduitLLM.Gateway/openapi-gateway.json text eol=lf

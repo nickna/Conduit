@@ -24,7 +24,8 @@ namespace ConduitLLM.Gateway.Middleware
                 return Task.CompletedTask;
 
             var path = context.Request.Path.Value?.ToLowerInvariant() ?? "";
-            var isTrackableEndpoint = path.Contains("/completions") || 
+            var isTrackableEndpoint = path.Contains("/completions") ||
+                                    path.Contains("/responses") ||
                                     path.Contains("/embeddings") || 
                                     path.Contains("/images/generations") ||
                                     path.Contains("/audio/transcriptions") ||

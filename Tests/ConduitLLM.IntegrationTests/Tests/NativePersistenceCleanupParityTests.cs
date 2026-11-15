@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
+using System.Runtime.Versioning;
 
 using AwesomeAssertions;
 
@@ -173,8 +175,11 @@ public sealed class NativePersistenceCleanupParityTests(PostgresLockTestContaine
             while (root is not null && !File.Exists(Path.Combine(root.FullName, "Conduit.slnx"))) root = root.Parent;
             if (root is null) throw new InvalidOperationException("Could not locate the persistence probe repository.");
             var configuration = AppContext.BaseDirectory.Contains("Release", StringComparison.Ordinal) ? "Release" : "Debug";
+            var framework = new FrameworkName(typeof(NativePersistenceCleanupParityTests).Assembly
+                .GetCustomAttribute<TargetFrameworkAttribute>()!.FrameworkName);
+            var targetFramework = $"net{framework.Version.Major}.{framework.Version.Minor}";
             start.ArgumentList.Add(Path.Combine(root.FullName, "Tests", "ConduitLLM.PersistenceAotTests", "bin",
-                configuration, "net10.0", "ConduitLLM.PersistenceAotTests.dll"));
+                configuration, targetFramework, "ConduitLLM.PersistenceAotTests.dll"));
         }
         else if (!File.Exists(native)) throw new FileNotFoundException("Configured published persistence probe is missing.", native);
         start.ArgumentList.Add("--cleanup-fixture");
