@@ -1,0 +1,130 @@
+name: Managed runtime qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_revision:
+        description: 'Full reviewed candidate commit SHA (ancestor of this checkout)'
+        required: true
+        type: string
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/runtime-qualification.yml'
+      - 'scripts/qualification/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-qualification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  matched:
+    name: Matched JIT runtime (${{ matrix.arch }}, ${{ matrix.profile }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: main
+          - arch: Arm64
+            runner: ubuntu-24.04-arm
+            profile: main
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: pressure
+          - arch: Arm64
+            runner: ubuntu-24.04-arm
+            profile: pressure
+          - arch: X64
+            runner: ubuntu-24.04
+            profile: admin-cache
+          - arch: Arm64
+            runner: ubuntu-24.04-arm
+            profile: admin-cache
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      # This qualification never accesses production environments or secrets.
+      CANDIDATE_REVISION: ${{ inputs.candidate_revision || github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            10.0.404
+            11.0.100
+      - name: Verify evidence-analysis failure boundaries
+        working-directory: scripts/qualification
+        run: python -m unittest -q test_qualification.py
+      - name: Verify frozen fixture bytes across checkouts
+        shell: pwsh
+        run: ./scripts/qualification/verify-frozen-inputs.ps1 -OutputPath '${{ runner.temp }}/runtime-input-integrity.json'
+      - name: Verify timeout rejection and owned process-tree cleanup
+        shell: pwsh
+        run: ./scripts/qualification/test-owned-processes.ps1 -OutputDirectory '${{ runner.temp }}/runtime-process-tests'
+      - name: Run three source cohorts on this same native runner
+        if: matrix.profile != 'admin-cache'
+        shell: pwsh
+        run: >-
+          ./scripts/qualification/run-runtime-matrix.ps1
+          -CandidateRevision $env:CANDIDATE_REVISION
+          -Architecture '${{ matrix.arch }}'
+          -Profile '${{ matrix.profile }}'
+          -OutputDirectory '${{ runner.temp }}/runtime-qualification'
+      - name: Verify supplemental Admin/cache/collector analysis
+        if: matrix.profile == 'admin-cache'
+        working-directory: scripts/qualification/AdminCache
+        run: python -m unittest -q test_summarize.py
+      - name: Run matched Admin/cache/collector cohorts
+        if: matrix.profile == 'admin-cache'
+        shell: pwsh
+        run: >-
+          ./scripts/qualification/AdminCache/run-admin-cache-matrix.ps1
+          -CandidateRevision $env:CANDIDATE_REVISION
+          -Architecture '${{ matrix.arch }}'
+          -OutputDirectory '${{ runner.temp }}/runtime-qualification'
+      - name: Retain exact identities, individual workloads and financial evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: runtime-qualification-${{ matrix.arch }}-${{ matrix.profile }}
+          path: |
+            ${{ runner.temp }}/runtime-qualification/*.json
+            ${{ runner.temp }}/runtime-input-integrity.json
+            ${{ runner.temp }}/runtime-process-tests
+            ${{ runner.temp }}/runtime-qualification/*.log
+            ${{ runner.temp }}/runtime-qualification/*.txt
+            ${{ runner.temp }}/runtime-qualification/*.sql
+            ${{ runner.temp }}/runtime-qualification/*.rdb
+            ${{ runner.temp }}/runtime-qualification/prepare
+            ${{ runner.temp }}/runtime-qualification/measure
+            ${{ runner.temp }}/runtime-qualification/core-measure
+            ${{ runner.temp }}/runtime-qualification/accounting
+            ${{ runner.temp }}/runtime-qualification/harness-source
+            ${{ runner.temp }}/runtime-qualification/work/*.tar
+            ${{ runner.temp }}/runtime-qualification/work/*-gateway
+            ${{ runner.temp }}/runtime-qualification/work/*-admin
+            ${{ runner.temp }}/runtime-qualification/work/*-cache
+            ${{ runner.temp }}/runtime-qualification/work/*-collector
+            ${{ runner.temp }}/runtime-qualification/work/*-cache-project
+            ${{ runner.temp }}/runtime-qualification/work/*-collector-project
+            ${{ runner.temp }}/runtime-qualification/work/*-migrator
+            ${{ runner.temp }}/runtime-qualification/work/seed
+            ${{ runner.temp }}/runtime-qualification/work/client
+            ${{ runner.temp }}/runtime-qualification/work/observer
+            ${{ runner.temp }}/runtime-qualification/work/observer-project
+            ${{ runner.temp }}/runtime-qualification/work/micro-observer
+            ${{ runner.temp }}/runtime-qualification/work/micro-observer-project
+            ${{ runner.temp }}/runtime-qualification/work/toolchains
+            ${{ runner.temp }}/runtime-qualification/work/drain
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "originSourceRevision": "f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa",
+  "files": [
+    {
+      "origin": "artifacts/dotnet11-phase0/extended/cache/project/Program.cs",
+      "copy": "Cache.Program.cs",
+      "sha256": "fafc4bcf436580c7eaaf17f415806bb9d32d766f43f8106da385387d5f9a8054"
+    },
+    {
+      "origin": "artifacts/dotnet11-phase0/extended/cache/collector/Program.cs",
+      "copy": "Collector.Program.cs",
+      "sha256": "c68109a1ea254d7720670d6537e55517956b27eb6c4faf29a2707d2eae5a4292"
+    },
+    {
+      "origin": "artifacts/dotnet11-phase0/primary/primary-baseline.ps1",
+      "copy": "primary-baseline.ps1",
+      "sha256": "299f20203b3e1fd03960aed19886deb0d00ddff7464c389f0744ec4dcd5cf911"
+    },
+    {
+      "origin": "artifacts/dotnet11-phase0/extended/cache/run-cache-measurements.ps1",
+      "copy": "run-cache-measurements.ps1",
+      "sha256": "f0d05ec700d4fd4b5b0518ea950650daba4dc4e28992245392413ec090ce78c2"
+    },
+    {
+      "origin": "artifacts/dotnet11-phase0/extended/cache/run-collector-measurements.ps1",
+      "copy": "run-collector-measurements.ps1",
+      "sha256": "320e3d9da5995d2fe0e8f94bbdad64084b3be1fa289f3c378622dffc4b818591"
+    }
+  ],
+  "interpretation": "Frozen C# source and embedded f68/Windows/noARM narrative remain byte-identical; actual cohort production references/compiler/runtime/native architecture are attributed by external per-run recipes and dynamic assembly identities."
+}

@@ -1,0 +1,13 @@
+# Frozen pressure fixture for phase2
+
+The parent `frozen-inputs.json` binds the four C# sources, project/build props and targets, original catalog and README byte-for-byte to phase0's separate pressure fixture. Those original files remain unchanged. The only SDK configuration added here is `global.json`, pinned exactly to 10.0.404. Phase2 builds one fixed net10 provider/client binary per native architecture; every source/runtime cohort on that runner uses that same binary and runtime. This is source continuity, not a claim that the newly built binary equals phase0's earlier compiler output. The original README retains its historical artifact names; current execution bindings come from the parent runner.
+
+Project: `Pressure.csproj`. Published entry: `published/Conduit.Phase0.Pressure.dll`. Commands are `dotnet <dll> --provider 18083` and `dotnet <dll> --run <case.json>`. The parent runner owns fresh providers, databases, Gateway processes and timing. There are no paid provider calls.
+
+The retained four-case catalog compares standard/enhanced SSE with fast reads versus 4096-byte reads paced by 2 ms, 10000 chunks of 1024 later-chunk characters, 8192-byte requested receive buffers, NoDelay and one request per case. Reported actual OS receive buffers are preserved; Linux can report 16384 for an 8192 request. Exact text/tools/usage/DONE/EOF validation stays in the frozen client. The parser additionally verifies socket observations, body-read timestamps and provider first-content-write-begin to last awaited application flush against raw monotonic ticks.
+
+The parent `summarize.py` emits cross-runtime per-case comparisons and `pressureContrasts` within each runtime. Provider spans, validated duration, window CPU/allocation and sampled memory contrasts remain separate. Fast/paced marker words differ, while other provider controls match; cross-runtime logical IDs match for each case. Unchanged or adverse contrasts remain in the output. These are exploratory single-request pairs, not production capacity, raw network-flush timestamps, pure live-memory measurements, stable p99 estimates or automatic proof of pressure propagation.
+
+Use a separate job/profile with fresh accounting state; all four endpoints are SSE and each settled request costs exactly .000075 in the synthetic fixture. A five-run cohort has 20 requests and .0015 recorded spend, with no Responses-JSON historical failure expected. The `knownResponsesFailure` source flag must not make an unrelated SSE failure acceptable.
+
+The parent runner retains actual SDK/runtime, source and binary hashes, host limits, individual execution reports and fixture cleanup. Build qualification, actual Gateway pressure behavior and financial closure remain distinct evidence.
