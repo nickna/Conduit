@@ -656,6 +656,7 @@ jobs:
       - name: Verify digest-preserving registry promotion
         run: node scripts/ci/registry-copy-smoke.mjs
       - name: Build admin production image
+        id: admin-image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -666,6 +667,7 @@ jobs:
           cache-from: type=gha,scope=admin-${{ matrix.arch }}
           cache-to: type=gha,scope=admin-${{ matrix.arch }},mode=max
       - name: Build http production image
+        id: http-image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -676,6 +678,7 @@ jobs:
           cache-from: type=gha,scope=http-${{ matrix.arch }}
           cache-to: type=gha,scope=http-${{ matrix.arch }},mode=max
       - name: Build webadmin production image
+        id: webadmin-image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -685,6 +688,14 @@ jobs:
           tags: conduit-webadmin:ci
           cache-from: type=gha,scope=webadmin-${{ matrix.arch }}
           cache-to: type=gha,scope=webadmin-${{ matrix.arch }},mode=max
+      - name: Export and bind exact packaged images
+        id: image-evidence
+        run: node scripts/ci/packaged-image-evidence.mjs prepare
+        env:
+          CI_CONTAINER_PLATFORM: ${{ matrix.platform }}
+          BUILD_OUTPUTS_ADMIN: ${{ toJSON(steps.admin-image.outputs) }}
+          BUILD_OUTPUTS_HTTP: ${{ toJSON(steps.http-image.outputs) }}
+          BUILD_OUTPUTS_WEBADMIN: ${{ toJSON(steps.webadmin-image.outputs) }}
       # The ordinary protected validation/contracts lanes cover x64. Execute the
       # source-generated contracts on physical ARM64 as well as final images.
       - name: Setup .NET for ARM64 contract checks
@@ -730,6 +741,52 @@ jobs:
         env:
           CI_BROWSER_MODULE: tools/ci/browser-smoke.mjs
           CI_CONTAINER_PLATFORM: ${{ matrix.platform }}
+      # Scan the genuine loopback-registry digest with the same pinned scanner
+      # and policy as release.yml. Remote-only mode never uses a Docker socket.
+      - name: Scan exact packaged admin image
+        if: ${{ always() && steps.image-evidence.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.75.0
+          image-ref: ${{ steps.image-evidence.outputs.admin }}
+          format: json
+          output: artifacts/image-evidence/security/admin.json
+          exit-code: '0'
+        env:
+          TRIVY_IMAGE_SRC: remote
+      - name: Scan exact packaged http image
+        if: ${{ always() && steps.image-evidence.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.75.0
+          image-ref: ${{ steps.image-evidence.outputs.http }}
+          format: json
+          output: artifacts/image-evidence/security/http.json
+          exit-code: '0'
+        env:
+          TRIVY_IMAGE_SRC: remote
+      - name: Scan exact packaged webadmin image
+        if: ${{ always() && steps.image-evidence.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.75.0
+          image-ref: ${{ steps.image-evidence.outputs.webadmin }}
+          format: json
+          output: artifacts/image-evidence/security/webadmin.json
+          exit-code: '0'
+        env:
+          TRIVY_IMAGE_SRC: remote
+      - name: Verify archive scan and native execution identities
+        if: ${{ always() && steps.image-evidence.outcome == 'success' }}
+        run: node scripts/ci/packaged-image-evidence.mjs verify
+      - name: Enforce unchanged release image security policy
+        if: ${{ always() && steps.image-evidence.outcome == 'success' }}
+        run: |
+          mkdir -p artifacts/security
+          node scripts/ci/security-check.mjs image artifacts/image-evidence/security/admin.json artifacts/image-evidence/security/http.json artifacts/image-evidence/security/webadmin.json
+      - name: Remove owned image scanning fixtures
+        if: always()
+        run: node scripts/ci/packaged-image-evidence.mjs cleanup
       - name: Retain packaged execution evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -738,4 +795,17 @@ jobs:
           path: |
             artifacts/container-smoke
             artifacts/registry-copy
+            artifacts/image-evidence/*.json
+            artifacts/image-evidence/*.log
+            artifacts/image-evidence/security
+            artifacts/security
+          retention-days: 30
+      - name: Retain exact packaged image archives
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: packaged-image-archives-${{ matrix.arch }}
+          path: artifacts/image-evidence/archives
+          if-no-files-found: warn
+          compression-level: 0
           retention-days: 30

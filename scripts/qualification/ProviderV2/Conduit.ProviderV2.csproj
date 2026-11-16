@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><AssemblyName>Conduit.Qualification.ProviderV2</AssemblyName><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
+ <ItemGroup><Compile Include="Program.cs" /><Compile Include="Provider.cs" /><Compile Include="Models.cs" /><Compile Include="CancellationEvidence.cs" />
+  <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute"><_Parameter1>SourceSdk</_Parameter1><_Parameter2>$(NETCoreSdkVersion)</_Parameter2></AssemblyAttribute>
+ </ItemGroup>
+</Project>

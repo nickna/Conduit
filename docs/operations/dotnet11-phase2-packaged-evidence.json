@@ -1,0 +1,369 @@
+{
+  "schemaVersion": 1,
+  "kind": "conduit-managed-jit-local-qualification-index",
+  "recordedAtUtc": "2026-11-15T22:29:30.7977476Z",
+  "evidenceScope": "Bounded local Linuxamd64 functional qualification; raw reports and image archives are retained separately. Logical bundle paths below are not public download URLs.",
+  "sources": {
+    "legacy": "f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa",
+    "responsesFixedNet10": "911d7b6bbe54b4a6b77058b75ee2a86bc2d59097",
+    "actualCandidate": "e04e87b073fac689e803b794c5957f02be84c1a0",
+    "mergedMaster": "66c5c3dad682d40d13ed7391b327ea2397553d58",
+    "candidateAndMergeGitTree": "39c5d3112336107c3006efb38a5f4a6e372368c7",
+    "fullGitTreesIndependentlyVerifiedEqual": true,
+    "identityBoundary": "Actual candidate binaries/OCI revision labels remain e04. Artifact WebAdmin recipes add the documented NodeFROM pins and final globalnpm/npx removal. Different phase2 source, layer grouping, labels or rebuilds need their own identities; these are not mergedmaster/production release images."
+  },
+  "toolchains": {
+    "net10": {
+      "sdk": "10.0.404",
+      "runtime": "10.0.15"
+    },
+    "net11": {
+      "sdk": "11.0.100",
+      "runtime": "11.0.0",
+      "efCore": "10.0.14",
+      "npgsql": "10.0.3"
+    },
+    "finalWebadmin": {
+      "node": "22.23.5",
+      "nodeBaseIndex": "sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a",
+      "amd64Child": "sha256:12f54cafa58d0e96554ae05871e29663ff7241836377dc9a7916449b8adb062c",
+      "arm64Child": "sha256:286344ef340c151df65af44a8c8cf2996c1783073d49b88fabcf90a56ea82023",
+      "alpine": "3.24.4",
+      "musl": "1.2.6-r3",
+      "muslUtils": "1.2.6-r3",
+      "zlib": "1.3.2-r1",
+      "npmGlobalAbsent": true
+    }
+  },
+  "imageIdentityKind": "OCI childmanifest digest and separate OCI config digest verified against exact bytes in retained Dockerarchives; Docker29/containerd local image IDs equal the childmanifest digests here.",
+  "images": [
+    {
+      "cohort": "legacy-f68",
+      "service": "admin",
+      "qualificationRole": "net10-control-api",
+      "sourceCommit": "f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa",
+      "sourceTree": "4d16b46bb66293913d0230de18c257a08003ebf7",
+      "sourceArchiveSha256": "fdab3f9316e0a12adbf62b2dd5bb3e240d51f13729c512aff5f27d4b418cfe30",
+      "platform": "linux/amd64",
+      "ociManifestDigest": "sha256:611c5bf5d24fa018cd8bbb94035305771d1ef9e004cbf8e42f4b2e9c264a802d",
+      "ociConfigDigest": "sha256:5eaa64c9bdb9b55859f2780e2a87574ec76520a369530edae9b0eb9fde9d5aaa",
+      "imageArchiveSha256": "8c25a4ff69117f6a5bed41eaebaf840da0a02d85df7f0b78e6578be0f269c03c"
+    },
+    {
+      "cohort": "legacy-f68",
+      "service": "gateway",
+      "qualificationRole": "net10-control-api",
+      "sourceCommit": "f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa",
+      "sourceTree": "4d16b46bb66293913d0230de18c257a08003ebf7",
+      "sourceArchiveSha256": "fdab3f9316e0a12adbf62b2dd5bb3e240d51f13729c512aff5f27d4b418cfe30",
+      "platform": "linux/amd64",
+      "ociManifestDigest": "sha256:5578ceb97200abe69597675a7d73c081a5acee44011fb42de5d89e53ebb786c1",
+      "ociConfigDigest": "sha256:01848aa0c48f2ec4df6d722a8db5214169f668625f7cbe682b45007df4f15bc0",
+      "imageArchiveSha256": "ea02d3f43a93ae36ca0f30e3f0fb66f45edb99f94bf1f3c26ac5c80d9d8c4b34"
+    },
+    {
+      "cohort": "fixed-911",
+      "service": "admin",
+      "qualificationRole": "net10-control-api",
+      "sourceCommit": "911d7b6bbe54b4a6b77058b75ee2a86bc2d59097",
+      "sourceTree": "cfd0d6a99ea308d7634f4fb8cbc78960b247e4a2",
+      "sourceArchiveSha256": "30a82f0816e5dc1e22a49599a15234c3e3c490517c2180c147c26748d87c59a5",
+      "platform": "linux/amd64",
+      "ociManifestDigest": "sha256:70689a741679001bf0556105b402e37f9bb409032cd18023f2de6242954bd487",
+      "ociConfigDigest": "sha256:baf59dec6e1f76ad258f6f2dce2a191cbc11a48e7be542040202239cd52567ed",
+      "imageArchiveSha256": "b4cb8d44ac58536a8cda3dc8d20013386d65cd271ee56d50ea80887f7280bbdf"
+    },
+    {
+      "cohort": "fixed-911",
+      "service": "gateway",
+      "qualificationRole": "net10-control-api",
+      "sourceCommit": "911d7b6bbe54b4a6b77058b75ee2a86bc2d59097",
+      "sourceTree": "cfd0d6a99ea308d7634f4fb8cbc78960b247e4a2",
+      "sourceArchiveSha256": "30a82f0816e5dc1e22a49599a15234c3e3c490517c2180c147c26748d87c59a5",
+      "platform": "linux/amd64",
+      "ociManifestDigest": "sha256:05e17c5cf47a959a42efebfc70f3249320e9336f2b4153dbc9f523b3100ab91b",
+      "ociConfigDigest": "sha256:9a322934d41026b638de027276cc4fb0e3dbdf28039792f71d38c4de035d3576",
+      "imageArchiveSha256": "c357e686dfaacacc0300cb8e26e2b3fd1f6907d053f23c87d59d39b66a7ab7f4"
+    },
+    {
+      "cohort": "candidate-e04e87b073fa",
+      "service": "admin",
+      "qualificationRole": "candidate-api",
+      "sourceCommit": "e04e87b073fac689e803b794c5957f02be84c1a0",
+      "sourceTree": "39c5d3112336107c3006efb38a5f4a6e372368c7",
+      "sourceArchiveSha256": "6fcb5dee3953cfdbb3daf0f4610436c29b5d91a13ce9492563511898f455851c",
+      "platform": "linux/amd64",
+      "ociManifestDigest": "sha256:2c42c6f2253b8b4c1940b78e661baabb6f127933d300176a35f2bdc32edcd991",
+      "ociConfigDigest": "sha256:abbafaba472eab3b3aab67eaea4536de4684ab4f13072e025fd1a94b529e3d13",
+      "imageArchiveSha256": "9162cb23627df8dbb48cc41e0a54e6f96db70d775644f36b55d317e7cb2f90ac"
+    },
+    {
+      "cohort": "candidate-e04e87b073fa",
+      "service": "gateway",
+      "qualificationRole": "candidate-api",
+      "sourceCommit": "e04e87b073fac689e803b794c5957f02be84c1a0",
+      "sourceTree": "39c5d3112336107c3006efb38a5f4a6e372368c7",
+      "sourceArchiveSha256": "6fcb5dee3953cfdbb3daf0f4610436c29b5d91a13ce9492563511898f455851c",
+      "platform": "linux/amd64",
+      "ociManifestDigest": "sha256:72d3a56fcaaa14c057492825358347e4b867d9e8296c9099dd1dc6e1a31ffb52",
+      "ociConfigDigest": "sha256:6f27c5827832cda0c76ab08fdb077cd47034430f84b7db793181922fe0a63205",
+      "imageArchiveSha256": "1e3e918091ee6012b6b6ec43a86abf89ad917fd22026b05c1b7c388005690203"
+    },
+    {
+      "cohort": "legacy-f68",
+      "service": "webadmin",
+      "qualificationRole": "rollback-webadmin",
+      "sourceCommit": "f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa",
+      "sourceTree": "4d16b46bb66293913d0230de18c257a08003ebf7",
+      "sourceArchiveSha256": "fdab3f9316e0a12adbf62b2dd5bb3e240d51f13729c512aff5f27d4b418cfe30",
+      "platform": "linux/amd64",
+      "ociManifestDigest": "sha256:4d55a1635d4965c4a1c387ce414b213a8b42a656ac6fef855be205a5bb4daf75",
+      "ociConfigDigest": "sha256:44ece8c093504f33d0433fc17a3eedf19ea13de939beb66061964cf3eb5618b4",
+      "imageArchiveSha256": "da0e4c4481778eafb82bddda1b7ccd090e05544c55ae70f10210775aae17f763",
+      "nodeVersion": "v22.23.3",
+      "nodeBase": "node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402",
+      "lockfileSha256": "b846548b0de74ad9aa50430e10430fdf0086441b97a50e67200474d58efdb62c",
+      "artifactRecipeSha256": "3e5e61799081c3561824f87b14a645934722d5d294276afc2741b609387da7f6"
+    },
+    {
+      "cohort": "candidate-e04e87b073fa",
+      "service": "webadmin",
+      "qualificationRole": "historical-cached-base-webadmin",
+      "sourceCommit": "e04e87b073fac689e803b794c5957f02be84c1a0",
+      "sourceTree": "39c5d3112336107c3006efb38a5f4a6e372368c7",
+      "sourceArchiveSha256": "6fcb5dee3953cfdbb3daf0f4610436c29b5d91a13ce9492563511898f455851c",
+      "platform": "linux/amd64",
+      "ociManifestDigest": "sha256:aceb7a9d67909ddcc03223677d5dbbd46eca8ee6bdb6198538551989f695b609",
+      "ociConfigDigest": "sha256:17b536a7f7e05a234b6af3a01a50923bc90b97e9276636d83cc6bc8fb5f9eeb0",
+      "imageArchiveSha256": "99c121f440dbf55bed78c589a1f958e1f75747d4c6a10f7d2f6c387e7eedb72c",
+      "nodeVersion": "v22.23.3",
+      "nodeBase": "node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402",
+      "lockfileSha256": "b846548b0de74ad9aa50430e10430fdf0086441b97a50e67200474d58efdb62c",
+      "artifactRecipeSha256": "3e5e61799081c3561824f87b14a645934722d5d294276afc2741b609387da7f6"
+    },
+    {
+      "cohort": "candidate-currentbase",
+      "service": "webadmin",
+      "qualificationRole": "historical-currentbase-with-npm",
+      "sourceCommit": "e04e87b073fac689e803b794c5957f02be84c1a0",
+      "sourceTree": "39c5d3112336107c3006efb38a5f4a6e372368c7",
+      "sourceArchiveSha256": "6fcb5dee3953cfdbb3daf0f4610436c29b5d91a13ce9492563511898f455851c",
+      "platform": "linux/amd64",
+      "ociManifestDigest": "sha256:bc6aea4b6b458755a498158dd5a15cbfa00dbfa111b27ea14c4a95638d563aad",
+      "ociConfigDigest": "sha256:845082dd32384e2907de4fa0f047408e7e606289425731d38744bb7ae9b38ef7",
+      "imageArchiveSha256": "c599fd02f158bdfafd0fc9e377823358a18b67f9d2837f06b76a9696c7f0301e",
+      "nodeVersion": "v22.23.5",
+      "nodeBase": "node:22.23.5-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a",
+      "lockfileSha256": "b846548b0de74ad9aa50430e10430fdf0086441b97a50e67200474d58efdb62c",
+      "artifactRecipeSha256": "d31efde812a2f2bc821fd05c96dfb68c8317aededb4679214d6ae7a31f4c7bb6",
+      "artifactRecipePatchSha256": "a9aa91f5b60fc971c42ecdcfe29deaeeb4c8ca7df82e5414fba560a326396024"
+    },
+    {
+      "cohort": "candidate-currentbase-npmtrim",
+      "service": "webadmin",
+      "qualificationRole": "final-qualified-webadmin",
+      "sourceCommit": "e04e87b073fac689e803b794c5957f02be84c1a0",
+      "sourceTree": "39c5d3112336107c3006efb38a5f4a6e372368c7",
+      "sourceArchiveSha256": "6fcb5dee3953cfdbb3daf0f4610436c29b5d91a13ce9492563511898f455851c",
+      "platform": "linux/amd64",
+      "ociManifestDigest": "sha256:9ace3786e8446f9a446259cb4f3f3908bda3856245b01d511b27f43a57365bd9",
+      "ociConfigDigest": "sha256:0762ab264e52ae6a72d2986a894862f13107f6e3d9b5135d5b66e51115739d7e",
+      "imageArchiveSha256": "5babe415fafcc2363acd52d6d6c7fd6c08b58428a14e2ae7aebd27bed7821973",
+      "nodeVersion": "v22.23.5",
+      "nodeBase": "node:22.23.5-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a",
+      "lockfileSha256": "b846548b0de74ad9aa50430e10430fdf0086441b97a50e67200474d58efdb62c",
+      "artifactRecipeSha256": "c479a8cff4e7601fa0c61401fe6e9edb60eae53f429059325a5e9f46f7dfa276",
+      "artifactRecipePatchSha256": "7be72334b90320b4da1e5572467a49d9f2ae1f7923669b9f37950b892fe05bc4"
+    }
+  ],
+  "finalThreeServiceRehearsal": {
+    "status": "passed",
+    "platform": "linux/amd64",
+    "sequence": [
+      "legacy-net10-and-cached-webadmin",
+      "candidate-net11-and-current-node-npmtrim-webadmin",
+      "legacy-net10-and-cached-webadmin"
+    ],
+    "assertions": {
+      "apiAndShutdown": 33,
+      "webadmin": 29,
+      "total": 62
+    },
+    "financial": {
+      "logs": {
+        "count": 12,
+        "cost": "0.00480000",
+        "wrongUsageOrStatus": 0
+      },
+      "requests": 12,
+      "group": {
+        "balance": "99.99520000",
+        "spent": "0.00480000",
+        "credits": "100.00000000"
+      },
+      "reservations": {
+        "active": 0,
+        "started": 0,
+        "indeterminate": 0,
+        "settledTombstones": 12,
+        "reservedSpend": "0",
+        "pendingSpend": "0",
+        "pendingUnits": "0",
+        "pendingWindowUnits": "0",
+        "windows": []
+      },
+      "ledger": {
+        "debit": "0.00480000",
+        "duplicateKeys": 0
+      },
+      "amount": "0.00480000"
+    },
+    "rollbackExercised": true,
+    "unchangedMigrationHistory": true,
+    "scope": "Twelve declared normal UnicodeJSON/SSE requests. Exact RequestLog/ledger/spent/balance closure is checked while hosts remain alive and again after shutdown. This does not establish complete cancellation/media/error-state parity or all possible queue-class emptiness.",
+    "browser": {
+      "engine": "Microsoft Edge Chromium",
+      "version": "157.0.4341.60",
+      "headless": true,
+      "stages": 3,
+      "pageErrors": 0,
+      "auth": "Same offline locally signed Clerk-compatible JWT/RSAverifier/publicorigin through production verification across swaps.",
+      "bff": "Unsigned/forged/nonadmin issuance denied; prior-version one-use Admin credentials accepted once on next backend and replay denied in both directions.",
+      "headerRemovalRejected": true,
+      "liveIdpSessionOrLogoutClaim": false
+    },
+    "shutdown": {
+      "managedExit": 0,
+      "webadminExit": 143,
+      "webadminContract": "Actual shipped Next16.4.5 cleanup(signal) explicitly exits143 afterSIGTERM cleanup; not an arbitrary tolerated code."
+    }
+  },
+  "security": {
+    "policy": "Unchanged repository release-image severity/exception policy; actual digest-addressed reports from owned isolated fixture registry. No Docker socket exposed or ArtifactName rewritten.",
+    "scanner": {
+      "version": "0.75.0",
+      "imageDigest": "sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa",
+      "database": {
+        "Version": 2,
+        "NextUpdate": "2026-11-16T18:56:37.733847354Z",
+        "UpdatedAt": "2026-11-15T18:56:37.733847835Z",
+        "DownloadedAt": "2026-11-15T21:35:53.535922215Z"
+      }
+    },
+    "sixApiImageScans": {
+      "reports": 6,
+      "findings": 300,
+      "critical": 0,
+      "high": 0,
+      "medium": 270,
+      "low": 24,
+      "unknown": 6,
+      "exceptions": 0
+    },
+    "finalWebadminScan": {
+      "reports": 1,
+      "findings": 1,
+      "critical": 0,
+      "high": 0,
+      "medium": 1,
+      "low": 0,
+      "unknown": 0,
+      "exceptions": 0,
+      "remaining": [
+        {
+          "scope": "release-image",
+          "package": "zlib",
+          "version": "1.3.2-r1",
+          "advisory": "CVE-2026-4738",
+          "severity": "medium",
+          "fixedVersion": "1.4-r0"
+        }
+      ]
+    },
+    "historicalDebt": "Cached September Nodebase WebAdmin images had13HIGH each. Refresh fixed3OS findings; currentbase-only retained10globalnpmHIGH. Final runtime-only npm/npx removal cleared those10. Historical reports remain unchanged.",
+    "appInvariant": {
+      "entries": 2144,
+      "allFileBytesLinksModesOwnersIdenticalToCurrentbaseOnly": true,
+      "removedPaths": [
+        "/usr/local/lib/node_modules/npm",
+        "/usr/local/bin/npm",
+        "/usr/local/bin/npx"
+      ],
+      "applicationDependenciesAndLockfileUnchanged": true
+    }
+  },
+  "cleanup": {
+    "runtimeAndRegistryScannerResourcesRemoved": true,
+    "independentOwnedContainerAndNetworkAbsenceVerified": true,
+    "outsideGlobalContainerInventoryUnchanged": false,
+    "outsideConcurrencyLimitation": "Parent/peer work changed the global container inventory. Operations/cleanup were restricted by exact task-owned IDs, names, labels and image identities; do not claim the entire outside inventory was unchanged.",
+    "buildkit": {
+      "stoppedAtUtc": "2026-11-15T22:29:33.3209250Z",
+      "ownedCacheRetained": true
+    },
+    "productionMutation": false
+  },
+  "rawEvidence": [
+    {
+      "bundlePath": "packaging/npmtrim-qualification-receipt.json",
+      "sha256": "1473d2fee186444ea0c4224763c65df67b698c5e2b01e94e712ce3a94a0b08e5"
+    },
+    {
+      "bundlePath": "packaging/rollback/conduit-phase2-1766-legacy-f68-1794781602784/report.json",
+      "sha256": "cc1014e35c6ec08c1068801dc8220d1647e4fa91679f44047dc1ed726a1b50b6"
+    },
+    {
+      "bundlePath": "packaging/rollback/conduit-phase2-1766-legacy-f68-1794781602784/rollback-after-shutdown-checkpoint.json",
+      "sha256": "718d2f21d275562d2c9d002ecd68c6d119c4b228da512df792624c67c6d77f48"
+    },
+    {
+      "bundlePath": "packaging/npmtrim-app-equivalence/receipt.json",
+      "sha256": "5ce9495cc67c131e057504d10315a549e4bf98d764cdd10b99ab849a7ed4a32f"
+    },
+    {
+      "bundlePath": "packaging/security/registry-addressed-r2/policy-result.json",
+      "sha256": "9828d4f496726069738e132cf2a3b45365be51cd6dcadefd96e19fd4d3dffe28"
+    },
+    {
+      "bundlePath": "packaging/security/registry-webadmin-npmtrim/policy-result.json",
+      "sha256": "f694fe658f328104ba58be6b3a20261aebf46d7af022424fe6fd09548282172b"
+    },
+    {
+      "bundlePath": "packaging/security/registry-webadmin-npmtrim/candidate-currentbase-npmtrim-webadmin.json",
+      "sha256": "aab58e0aff6651053f440c3c13c225eaf1aeb1fb266bbfb2b88e147525bb0e6d"
+    },
+    {
+      "bundlePath": "packaging/security/registry-webadmin-npmtrim/cleanup.json",
+      "sha256": "f85f04d2de5079c663d55507dfb48485b2ef1e8b9ac4dc1110b57ccf7f300d0f"
+    },
+    {
+      "bundlePath": "packaging/source-bound-images.json",
+      "sha256": "382f518ac50e3015df35cb5b95d12d7d18d979c89377c94f15a42b51f8065fc2"
+    },
+    {
+      "bundlePath": "packaging/webadmin-stop-classification/result.json",
+      "sha256": "f8d98462251bdb0061e458d1e1d4c23c03e8167662fd58d5a5585b347b7d4537"
+    },
+    {
+      "bundlePath": "packaging/security/base-triage/triage.json",
+      "sha256": "adbce4c5542055752b40eca7b0f97d8892b7cf076fe3da7ee800427b58a2924b"
+    }
+  ],
+  "openGates": {
+    "exactFinalPhase2SourceCiAndImages": true,
+    "nativeArmPerformance": true,
+    "performanceAndAllocationAcceptance": true,
+    "productionInventoryAndRolloutAuthorization": true,
+    "completeFaultUnderFinancialLoadAndBroaderWorkloads": true
+  },
+  "claimsNotMade": [
+    "Currently deployed production image identity",
+    "Production rollout or registry promotion",
+    "NativeARM performance or production capacity",
+    "LiveClerkIdP creation/revocation/logout",
+    "Forced cryptographic key renewal in the packaged rollback",
+    "Verified deployment backup/restore as part of this62check swap",
+    "All possible active/scheduled/outgoing/deadletter queue classes empty",
+    "NativeAOT production promotion or soak"
+  ]
+}

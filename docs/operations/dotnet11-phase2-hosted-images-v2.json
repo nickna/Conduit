@@ -1,0 +1,1103 @@
+{
+  "schemaVersion": 1,
+  "generatedAtUtc": "2026-11-16T00:56:44.600Z",
+  "scope": "Ordinary CI managed JIT images built and tested on native amd64/ARM64 hardware. Portable evidence index only.",
+  "productionDeploymentClaimed": false,
+  "releaseIdentityClaimed": false,
+  "performanceQualificationClaimed": false,
+  "source": {
+    "repository": "https://github.com/nickna/Conduit",
+    "pullRequest": 1772,
+    "apiHeadSha": "6e5bfc5343f2780ee52216945c208850da662c4b",
+    "actualCheckoutSha": "b73c57c85ae6326e25498b0ed13ccfed4fd7b342",
+    "parents": [
+      "66c5c3dad682d40d13ed7391b327ea2397553d58",
+      "6e5bfc5343f2780ee52216945c208850da662c4b"
+    ],
+    "headTree": "d49e7a91182626f98db65e955f3b10797a5665dd",
+    "checkoutTree": "d49e7a91182626f98db65e955f3b10797a5665dd",
+    "treesEqual": true,
+    "scope": "New source6e5 CI/ProviderV2 observations; previous336 image/index data remain separate.",
+    "apiBuildArguments": {
+      "COMMIT_SHA": "dev",
+      "VERSION": "3.0.0",
+      "BUILD_TIMESTAMP": "unknown"
+    },
+    "emittedRuntimeHeaderValuesObserved": false,
+    "note": "PR API head and actual synthetic merge checkout remain distinct; their Git trees were independently verified equal. Do not relabel as a later source head or released image."
+  },
+  "ordinaryCi": {
+    "runId": 43779951958,
+    "url": "https://github.com/nickna/Conduit/actions/runs/43779951958",
+    "event": "pull_request",
+    "conclusion": "success",
+    "expandedJobs": 21,
+    "everyJobSucceeded": true,
+    "rawStatusReceipt": {
+      "kind": "independent intake sidecar",
+      "file": "final-ci-status.json",
+      "sha256": "sha256:561a5aa188a9baaec4e36f0eb0354ebf3c330f599baf391f660254fd5354981e",
+      "bytes": 7662
+    }
+  },
+  "evidenceChain": [
+    "Buildx config digest and loaded native-platform image",
+    "Docker-exported archive config bytes and rootfs diff IDs",
+    "Exact registry manifest bytes/config digest after local transport",
+    "Genuine remote Trivy ArtifactName plus config ImageID; raw report SHA",
+    "Same loaded image ID in successful native business/browser execution",
+    "Unchanged release-image policy applied to all three raw reports on each architecture",
+    "Independent GitHub ZIP SHA and each actual inner tar SHA verification without duplicate image extraction",
+    "Exact-owner fixture cleanup"
+  ],
+  "independentReplay": {
+    "passed": true,
+    "rawReceipt": {
+      "kind": "independent intake sidecar",
+      "file": "hosted-image-evidence-replay.json",
+      "sha256": "sha256:249da669bad0f4f82eace4dbdb63437e00c485b19c5fd3508924f435e3c53c38",
+      "bytes": 9663
+    },
+    "allSixImageArchivesVerified": true
+  },
+  "sourceFiles": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "byteSource": "canonical Git blob at apiHeadSha",
+      "gitBlob": "1ce70210d3db674dc7950589439268fc8f2b0ce4",
+      "sha256": "sha256:f57cd849569865a5a113f4bc279fbb96e4588c809138e87e8dc24bcd45e0f58f",
+      "bytes": 33602
+    },
+    {
+      "path": "scripts/ci/packaged-image-evidence.mjs",
+      "byteSource": "canonical Git blob at apiHeadSha",
+      "gitBlob": "d9af5e806d12a98e5260bfab2556a997a30dacd9",
+      "sha256": "sha256:c23a1e4129871f6369dd9fac6d376b00c38fd69a0f36165bdfbbabfe7514edfe",
+      "bytes": 14602
+    },
+    {
+      "path": "scripts/ci/packaged-image-evidence.test.mjs",
+      "byteSource": "canonical Git blob at apiHeadSha",
+      "gitBlob": "ed63d730b33189e9835c156f2db96386f65f109a",
+      "sha256": "sha256:411b4af19e9be1a7a14df9d62c5177f1ab4d8effc45e989279f98ef391e4fdc1",
+      "bytes": 5534
+    },
+    {
+      "path": "scripts/ci/security-policy.mjs",
+      "byteSource": "canonical Git blob at apiHeadSha",
+      "gitBlob": "1019aac586f656024012daa48c3386175d52910e",
+      "sha256": "sha256:9ca30b132ed2e99e38a793e841948315e6d736e7c2ae3fc6b55f733d175481cc",
+      "bytes": 4256
+    },
+    {
+      "path": "scripts/ci/security-check.mjs",
+      "byteSource": "canonical Git blob at apiHeadSha",
+      "gitBlob": "f6653dfbfc334a7544513c0aee3facff88f675fa",
+      "sha256": "sha256:e70c0a11ccf47ad237cbb53a731d2979193ead92a79717e55b46bc31759f9c01",
+      "bytes": 970
+    },
+    {
+      "path": "scripts/ci/security-exceptions.json",
+      "byteSource": "canonical Git blob at apiHeadSha",
+      "gitBlob": "fe51488c7066f6687ef680d6bfaa4f7768ef205c",
+      "sha256": "sha256:37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "bytes": 3
+    },
+    {
+      "path": "Services/ConduitLLM.Admin/Dockerfile",
+      "byteSource": "canonical Git blob at apiHeadSha",
+      "gitBlob": "34afd5826d9fd8342254c5ebe753a75eab7ef10f",
+      "sha256": "sha256:7bdf99fd01332aff1601c7df64e5bd75dcd7c210733546cc21352d399b11822f",
+      "bytes": 3795
+    },
+    {
+      "path": "Services/ConduitLLM.Gateway/Dockerfile",
+      "byteSource": "canonical Git blob at apiHeadSha",
+      "gitBlob": "907d7925117504d099e9e5f2aa005c3c9863fdd5",
+      "sha256": "sha256:93437b68ef9099b67df80bbe8a0cecbed47b0574eef0672ae5062626a6f0d920",
+      "bytes": 3636
+    },
+    {
+      "path": "WebAdmin/Dockerfile",
+      "byteSource": "canonical Git blob at apiHeadSha",
+      "gitBlob": "c74d343e3fad52b3961bea0049873d010dfd214a",
+      "sha256": "sha256:b49746b30d9a5b96b1ad2e3f3f4e9929aa661acac448ec67471a772e12b81ed7",
+      "bytes": 2854
+    }
+  ],
+  "platforms": [
+    {
+      "platform": "linux/amd64",
+      "job": {
+        "id": 133014925952,
+        "name": "Packaged application business flows (amd64)",
+        "url": "https://github.com/nickna/Conduit/actions/runs/43779951958/job/133014925952",
+        "conclusion": "success",
+        "startedAt": "2026-11-16T00:26:04Z",
+        "completedAt": "2026-11-16T00:33:13Z"
+      },
+      "runner": {
+        "operatingSystem": "Linux",
+        "architecture": "X64",
+        "hostedEnvironment": "github-hosted",
+        "imageOs": "ubuntu24",
+        "imageVersion": "20261111.127.1"
+      },
+      "compactEvidenceArtifact": {
+        "id": 14187892624,
+        "name": "packaged-application-evidence-amd64",
+        "bytes": 4215836,
+        "zipSha256": "sha256:8abcd52bc047652d5b122493a1b194cbf5e7dc49befba677cf58772008d9963d",
+        "githubDeclaredDigestIndependentlyVerified": true,
+        "url": "https://github.com/nickna/Conduit/actions/runs/43779951958/artifacts/14187892624",
+        "retentionDays": 30
+      },
+      "imageArchiveArtifact": {
+        "id": 14188078341,
+        "name": "packaged-image-archives-amd64",
+        "bytes": 1121655140,
+        "zipSha256": "sha256:0449cbe3011fa84e92a6e4f057f7ef6bba9439406705a413b8c448420ed752fe",
+        "githubDeclaredDigestIndependentlyVerified": true,
+        "url": "https://github.com/nickna/Conduit/actions/runs/43779951958/artifacts/14188078341",
+        "retentionDays": 30,
+        "allThreeInnerTarDigestsIndependentlyVerified": true,
+        "verificationReceipt": {
+          "kind": "independent intake sidecar",
+          "file": "amd64-archive-integrity.json",
+          "sha256": "sha256:77018cff13b539546c3054cdb961a8f167caa642f5e4a81dbed66c64d8f12aea",
+          "bytes": 1039
+        }
+      },
+      "images": [
+        {
+          "service": "admin",
+          "localCiReference": "conduit-admin:ci",
+          "loadedImageId": "sha256:ce8e402c173a4ab3026d794a16913885a7af0d99b10ee185e943f86d0a6a8ac8",
+          "configDigest": "sha256:ce8e402c173a4ab3026d794a16913885a7af0d99b10ee185e943f86d0a6a8ac8",
+          "configBytes": 9030,
+          "rootfsDiffIds": [
+            "sha256:2a89eb4dbc78f8fe790775a4e807e1355ba2f6b145c8dd7a267a782df1605124",
+            "sha256:758b22fe15be2c330dcead0c1b50476c074e113ec507627c6430337ffc9daa5e",
+            "sha256:2bc7742f3451da0d64b7497edcad20dd68f617ce95c4c6d28acd0bc6de7cb0bd",
+            "sha256:4a4be31ad64af70bf697ad11b184e4dfede90853b8667c10107d22130347993f",
+            "sha256:c647a8f10e297873de3fa2b9ca64557ea2b02179c475358a1e078d099128d7a1",
+            "sha256:1e3ded8973a403a26892ecf1c6b9e607be8f56c9499a996ed307f51098536276",
+            "sha256:48c28cc82ce30dbccf8ff6e9939c40761c8d5d1d12ca69cfb8a9f8a9ac7cc775",
+            "sha256:095c41ddfe0a719c7fdd8912e1d190bfbd72c6cdf08d91efcac7acc672bd3bff",
+            "sha256:726cfcf70359c5ff96dc208f27a0c8cc669b675f33b13300a80bd31de9ef8fae",
+            "sha256:c963ccc52cc91dee3916f58b6fb2a9c354b5edf318c201cc1da61de7885b04ee",
+            "sha256:cd2d28d31689cde5b09f99a4d7c51690d4e661054b2532623b09baeb07774fc0",
+            "sha256:17d8357a5208be3263c644368fac512ba70dccc854a72e1ee7037eefb21ee68b"
+          ],
+          "buildx": {
+            "imageId": "sha256:ce8e402c173a4ab3026d794a16913885a7af0d99b10ee185e943f86d0a6a8ac8",
+            "exportedDigest": "sha256:5a4e20ce64fb57f16a03056d38426da2838f029e97d9709752afcd74e71d4d77",
+            "descriptor": {
+              "mediaType": "application/vnd.oci.image.manifest.v1+json",
+              "digest": "sha256:5a4e20ce64fb57f16a03056d38426da2838f029e97d9709752afcd74e71d4d77",
+              "size": 2584,
+              "annotations": {
+                "org.opencontainers.image.created": "2026-11-16T00:27:55Z"
+              },
+              "platform": {
+                "architecture": "amd64",
+                "os": "linux"
+              }
+            },
+            "rawMetadataRecord": {
+              "member": "image-evidence/admin.buildx.json",
+              "sha256": "sha256:62c2a243f6e20a398884e04f510fdf9ff7231bcdf71087144893d33e5f3639ba",
+              "bytes": 40955
+            },
+            "source": {
+              "revision": "b73c57c85ae6326e25498b0ed13ccfed4fd7b342",
+              "repository": "https://github.com/nickna/Conduit",
+              "contextRelativeDirectory": ".",
+              "dockerfileRelativeDirectory": "Services/ConduitLLM.Admin"
+            },
+            "buildType": "https://mobyproject.org/buildkit@v1",
+            "materials": [
+              {
+                "uri": "pkg:docker/mcr.microsoft.com/dotnet/aspnet@11.0.0-resolute?digest=sha256:bc0d6653979efba491ab3d6f589d691f96c309c3c3ef81325efa6978e7b7f242&platform=linux%2Famd64",
+                "digest": {
+                  "sha256": "bc0d6653979efba491ab3d6f589d691f96c309c3c3ef81325efa6978e7b7f242"
+                }
+              },
+              {
+                "uri": "pkg:docker/mcr.microsoft.com/dotnet/sdk@11.0.100-resolute?digest=sha256:65f3c7c6a25a239ab3e6719f2896147e7b68242ff2d8818dd70498bde6ef8bea&platform=linux%2Famd64",
+                "digest": {
+                  "sha256": "65f3c7c6a25a239ab3e6719f2896147e7b68242ff2d8818dd70498bde6ef8bea"
+                }
+              }
+            ]
+          },
+          "registryTransport": {
+            "manifestDigest": "sha256:84b9e05c27dd9311b38a9f9dbbfb260c6af2d96d83a310dceec39e66b31b1d02",
+            "manifestBytes": 2840,
+            "manifestSummary": {
+              "schemaVersion": 2,
+              "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+              "config": {
+                "mediaType": "application/vnd.docker.container.image.v1+json",
+                "size": 9030,
+                "digest": "sha256:ce8e402c173a4ab3026d794a16913885a7af0d99b10ee185e943f86d0a6a8ac8"
+              },
+              "layers": 12,
+              "totalCompressedLayerBytes": 177277976
+            },
+            "rawMember": "image-evidence/admin.registry-manifest.json",
+            "genuineTrivyReference": "127.0.0.1:32769/ci/admin@sha256:84b9e05c27dd9311b38a9f9dbbfb260c6af2d96d83a310dceec39e66b31b1d02",
+            "scope": "Ephemeral loopback registry removed after scanning. Not a pullable published release reference; transport compression/media type may differ from Buildx export."
+          },
+          "archive": {
+            "artifactId": 14188078341,
+            "entry": "admin.tar",
+            "bytes": 457985024,
+            "sha256": "sha256:1061d718f24ab8e111c92dd2e0defa3d46d72fd4e4450f99fc998b0a91d6473f",
+            "independentlyVerifiedInsideDownloadedZip": true,
+            "duplicateExtractionPerformed": false
+          },
+          "scan": {
+            "rawMember": "image-evidence/security/admin.json",
+            "sha256": "sha256:25f7d601a2bd70187fced8c258445183591cecd3f06c41a525843d5c543f682f",
+            "bytes": 949710,
+            "artifactName": "127.0.0.1:32769/ci/admin@sha256:84b9e05c27dd9311b38a9f9dbbfb260c6af2d96d83a310dceec39e66b31b1d02",
+            "imageId": "sha256:ce8e402c173a4ab3026d794a16913885a7af0d99b10ee185e943f86d0a6a8ac8",
+            "createdAt": "2026-11-16T00:32:15.730601095Z",
+            "severityCounts": {
+              "critical": 0,
+              "high": 0,
+              "medium": 45,
+              "low": 4,
+              "unknown": 1
+            },
+            "criticalAndHighCount": 0,
+            "reportIdentityRewritten": false
+          },
+          "boot": {
+            "loadedImageId": "sha256:ce8e402c173a4ab3026d794a16913885a7af0d99b10ee185e943f86d0a6a8ac8",
+            "os": "linux",
+            "architecture": "amd64",
+            "sameLoadedImageIdAsExportedAndScanned": true
+          }
+        },
+        {
+          "service": "http",
+          "localCiReference": "conduit-http:ci",
+          "loadedImageId": "sha256:cbd1017dc8fa1da0aea426acb2829b9cc31affd875f2e7b6ec964614968ce0d0",
+          "configDigest": "sha256:cbd1017dc8fa1da0aea426acb2829b9cc31affd875f2e7b6ec964614968ce0d0",
+          "configBytes": 8834,
+          "rootfsDiffIds": [
+            "sha256:2a89eb4dbc78f8fe790775a4e807e1355ba2f6b145c8dd7a267a782df1605124",
+            "sha256:758b22fe15be2c330dcead0c1b50476c074e113ec507627c6430337ffc9daa5e",
+            "sha256:2bc7742f3451da0d64b7497edcad20dd68f617ce95c4c6d28acd0bc6de7cb0bd",
+            "sha256:4a4be31ad64af70bf697ad11b184e4dfede90853b8667c10107d22130347993f",
+            "sha256:c647a8f10e297873de3fa2b9ca64557ea2b02179c475358a1e078d099128d7a1",
+            "sha256:1e3ded8973a403a26892ecf1c6b9e607be8f56c9499a996ed307f51098536276",
+            "sha256:48c28cc82ce30dbccf8ff6e9939c40761c8d5d1d12ca69cfb8a9f8a9ac7cc775",
+            "sha256:095c41ddfe0a719c7fdd8912e1d190bfbd72c6cdf08d91efcac7acc672bd3bff",
+            "sha256:726cfcf70359c5ff96dc208f27a0c8cc669b675f33b13300a80bd31de9ef8fae",
+            "sha256:fe76ef85510032fd7c8ac8334a98923b0e4bd458389f9dec60da25640240bd65",
+            "sha256:fba883c96aa699de32a28885cb49c024370e6d36e8a036dd55294a40f409e711"
+          ],
+          "buildx": {
+            "imageId": "sha256:cbd1017dc8fa1da0aea426acb2829b9cc31affd875f2e7b6ec964614968ce0d0",
+            "exportedDigest": "sha256:9254c7ce55564463f52172d7353e8768558fa16bee61c015c385375c6e762321",
+            "descriptor": {
+              "mediaType": "application/vnd.oci.image.manifest.v1+json",
+              "digest": "sha256:9254c7ce55564463f52172d7353e8768558fa16bee61c015c385375c6e762321",
+              "size": 2391,
+              "annotations": {
+                "org.opencontainers.image.created": "2026-11-16T00:29:29Z"
+              },
+              "platform": {
+                "architecture": "amd64",
+                "os": "linux"
+              }
+            },
+            "rawMetadataRecord": {
+              "member": "image-evidence/http.buildx.json",
+              "sha256": "sha256:64750a4b5d19a6fa5c9743f10f9864cdbc446054ae021a817c9cc2e0cbdc45a2",
+              "bytes": 40956
+            },
+            "source": {
+              "revision": "b73c57c85ae6326e25498b0ed13ccfed4fd7b342",
+              "repository": "https://github.com/nickna/Conduit",
+              "contextRelativeDirectory": ".",
+              "dockerfileRelativeDirectory": "Services/ConduitLLM.Gateway"
+            },
+            "buildType": "https://mobyproject.org/buildkit@v1",
+            "materials": [
+              {
+                "uri": "pkg:docker/mcr.microsoft.com/dotnet/aspnet@11.0.0-resolute?digest=sha256:bc0d6653979efba491ab3d6f589d691f96c309c3c3ef81325efa6978e7b7f242&platform=linux%2Famd64",
+                "digest": {
+                  "sha256": "bc0d6653979efba491ab3d6f589d691f96c309c3c3ef81325efa6978e7b7f242"
+                }
+              },
+              {
+                "uri": "pkg:docker/mcr.microsoft.com/dotnet/sdk@11.0.100-resolute?digest=sha256:65f3c7c6a25a239ab3e6719f2896147e7b68242ff2d8818dd70498bde6ef8bea&platform=linux%2Famd64",
+                "digest": {
+                  "sha256": "65f3c7c6a25a239ab3e6719f2896147e7b68242ff2d8818dd70498bde6ef8bea"
+                }
+              }
+            ]
+          },
+          "registryTransport": {
+            "manifestDigest": "sha256:72b3edb5d8072b6345f25d8a6bca907a8bbe2f9dcaa373f149f4642791304a0e",
+            "manifestBytes": 2628,
+            "manifestSummary": {
+              "schemaVersion": 2,
+              "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+              "config": {
+                "mediaType": "application/vnd.docker.container.image.v1+json",
+                "size": 8834,
+                "digest": "sha256:cbd1017dc8fa1da0aea426acb2829b9cc31affd875f2e7b6ec964614968ce0d0"
+              },
+              "layers": 11,
+              "totalCompressedLayerBytes": 157228850
+            },
+            "rawMember": "image-evidence/http.registry-manifest.json",
+            "genuineTrivyReference": "127.0.0.1:32769/ci/http@sha256:72b3edb5d8072b6345f25d8a6bca907a8bbe2f9dcaa373f149f4642791304a0e",
+            "scope": "Ephemeral loopback registry removed after scanning. Not a pullable published release reference; transport compression/media type may differ from Buildx export."
+          },
+          "archive": {
+            "artifactId": 14188078341,
+            "entry": "http.tar",
+            "bytes": 391049216,
+            "sha256": "sha256:1dd11a3bf71740a548f278cf369595b53af69ca8d7dc1547e4a732cca622661c",
+            "independentlyVerifiedInsideDownloadedZip": true,
+            "duplicateExtractionPerformed": false
+          },
+          "scan": {
+            "rawMember": "image-evidence/security/http.json",
+            "sha256": "sha256:e3fdd2858443519fef0ac1e4bad8cd322efd6a4c20b7ea31231b678d4ff93593",
+            "bytes": 932772,
+            "artifactName": "127.0.0.1:32769/ci/http@sha256:72b3edb5d8072b6345f25d8a6bca907a8bbe2f9dcaa373f149f4642791304a0e",
+            "imageId": "sha256:cbd1017dc8fa1da0aea426acb2829b9cc31affd875f2e7b6ec964614968ce0d0",
+            "createdAt": "2026-11-16T00:32:23.337271749Z",
+            "severityCounts": {
+              "critical": 0,
+              "high": 0,
+              "medium": 45,
+              "low": 4,
+              "unknown": 1
+            },
+            "criticalAndHighCount": 0,
+            "reportIdentityRewritten": false
+          },
+          "boot": {
+            "loadedImageId": "sha256:cbd1017dc8fa1da0aea426acb2829b9cc31affd875f2e7b6ec964614968ce0d0",
+            "os": "linux",
+            "architecture": "amd64",
+            "sameLoadedImageIdAsExportedAndScanned": true
+          }
+        },
+        {
+          "service": "webadmin",
+          "localCiReference": "conduit-webadmin:ci",
+          "loadedImageId": "sha256:26dbfc6d500833673c3a53f441be9661d8e299f44c56df3b7a1004c5581071b8",
+          "configDigest": "sha256:26dbfc6d500833673c3a53f441be9661d8e299f44c56df3b7a1004c5581071b8",
+          "configBytes": 9782,
+          "rootfsDiffIds": [
+            "sha256:75f1d9657d880da5f75298e8f40e9928bb6e260c50d26f97af196845307e3064",
+            "sha256:313a78c90b21a75531eacc3998f28ac7cf2f95060c1974a257ed80bd7a7a062c",
+            "sha256:acb510a1dd0f941dce95b097dde9780de168f02b6a85102c39d920d4eb0b9d26",
+            "sha256:f06a70e4735f2521407da491d35f156f89ead52d32bba35a30186f9111b5052d",
+            "sha256:3bc5275941164dfce177bacec70d659ac95ce9411ead44f12f8fd8c68cec791d",
+            "sha256:8333b806777896e2a9fe355121dfb895ac2385dd174e7601d6c8b069c976c632",
+            "sha256:499f7a5d343f5c998f020c8b0b9dd5a93982fe6cf81a62ae73a63a9ba6fd5cdb",
+            "sha256:3979e0024a6a1563c4cd10be4499e5678fd534c1251ed0650fbc6a15ae1828b6",
+            "sha256:3825939028736403b3dd0653c7387be019e0731421a5ef70f554bb62ba3fb6d7",
+            "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+          ],
+          "buildx": {
+            "imageId": "sha256:26dbfc6d500833673c3a53f441be9661d8e299f44c56df3b7a1004c5581071b8",
+            "exportedDigest": "sha256:65418616fe0ad2beb72588fd5d0b1f9873c17969af9479d7f26cdf7102489f2c",
+            "descriptor": {
+              "mediaType": "application/vnd.oci.image.manifest.v1+json",
+              "digest": "sha256:65418616fe0ad2beb72588fd5d0b1f9873c17969af9479d7f26cdf7102489f2c",
+              "size": 2190,
+              "annotations": {
+                "org.opencontainers.image.created": "2026-11-16T00:30:15Z"
+              },
+              "platform": {
+                "architecture": "amd64",
+                "os": "linux"
+              }
+            },
+            "rawMetadataRecord": {
+              "member": "image-evidence/webadmin.buildx.json",
+              "sha256": "sha256:7a64aa20715dd3cf674ee1546f24df2084a56ace7802a5ac733180619e7c2084",
+              "bytes": 40866
+            },
+            "source": {
+              "revision": "b73c57c85ae6326e25498b0ed13ccfed4fd7b342",
+              "repository": "https://github.com/nickna/Conduit",
+              "contextRelativeDirectory": ".",
+              "dockerfileRelativeDirectory": "WebAdmin"
+            },
+            "buildType": "https://mobyproject.org/buildkit@v1",
+            "materials": [
+              {
+                "uri": "pkg:docker/docker/dockerfile@1",
+                "digest": {
+                  "sha256": "4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e"
+                }
+              },
+              {
+                "uri": "pkg:docker/node@22.23.5-alpine?digest=sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a&platform=linux%2Famd64",
+                "digest": {
+                  "sha256": "1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a"
+                }
+              }
+            ]
+          },
+          "registryTransport": {
+            "manifestDigest": "sha256:4ead74b1b2dbf8ff703f5892f61e9ef3bdf8a5fa0006be5e4b531134a8131ac1",
+            "manifestBytes": 2408,
+            "manifestSummary": {
+              "schemaVersion": 2,
+              "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+              "config": {
+                "mediaType": "application/vnd.docker.container.image.v1+json",
+                "size": 9782,
+                "digest": "sha256:26dbfc6d500833673c3a53f441be9661d8e299f44c56df3b7a1004c5581071b8"
+              },
+              "layers": 10,
+              "totalCompressedLayerBytes": 93563897
+            },
+            "rawMember": "image-evidence/webadmin.registry-manifest.json",
+            "genuineTrivyReference": "127.0.0.1:32769/ci/webadmin@sha256:4ead74b1b2dbf8ff703f5892f61e9ef3bdf8a5fa0006be5e4b531134a8131ac1",
+            "scope": "Ephemeral loopback registry removed after scanning. Not a pullable published release reference; transport compression/media type may differ from Buildx export."
+          },
+          "archive": {
+            "artifactId": 14188078341,
+            "entry": "webadmin.tar",
+            "bytes": 272620544,
+            "sha256": "sha256:fd1bcd10d07642a204de78c219bea2e34754a37d4814b6102d1967864b31ca8c",
+            "independentlyVerifiedInsideDownloadedZip": true,
+            "duplicateExtractionPerformed": false
+          },
+          "scan": {
+            "rawMember": "image-evidence/security/webadmin.json",
+            "sha256": "sha256:23daa76a934460ae4fda16b97de6415ee2a8160fe42dc75f0c1e2590b2c903a5",
+            "bytes": 60443,
+            "artifactName": "127.0.0.1:32769/ci/webadmin@sha256:4ead74b1b2dbf8ff703f5892f61e9ef3bdf8a5fa0006be5e4b531134a8131ac1",
+            "imageId": "sha256:26dbfc6d500833673c3a53f441be9661d8e299f44c56df3b7a1004c5581071b8",
+            "createdAt": "2026-11-16T00:32:30.298172395Z",
+            "severityCounts": {
+              "critical": 0,
+              "high": 0,
+              "medium": 1,
+              "low": 0,
+              "unknown": 0
+            },
+            "criticalAndHighCount": 0,
+            "reportIdentityRewritten": false,
+            "remainingWebAdminFindings": [
+              {
+                "id": "CVE-2026-4738",
+                "package": "zlib",
+                "installedVersion": "1.3.2-r1",
+                "fixedVersion": "1.4-r0",
+                "severity": "MEDIUM"
+              }
+            ]
+          },
+          "boot": {
+            "loadedImageId": "sha256:26dbfc6d500833673c3a53f441be9661d8e299f44c56df3b7a1004c5581071b8",
+            "os": "linux",
+            "architecture": "amd64",
+            "sameLoadedImageIdAsExportedAndScanned": true
+          }
+        }
+      ],
+      "nativeBusinessExecution": {
+        "succeeded": true,
+        "hostPlatform": "linux/amd64",
+        "expectedPlatform": "linux/amd64",
+        "checkCount": 26,
+        "checks": [
+          "PostgreSQL ready",
+          "Admin readiness",
+          "Gateway readiness",
+          "Missing and invalid authentication rejected",
+          "Exactly 1 successful requests billed",
+          "Provider 401 failure is non-billable",
+          "Provider 429 failure is non-billable",
+          "Provider 500 failure is non-billable",
+          "Exactly 2 successful requests billed",
+          "Disabled key invalidates authentication cache",
+          "Re-enabled key restores authentication",
+          "rateLimitRpm rejects excess requests",
+          "rateLimitRpd rejects excess requests",
+          "Exactly 4 successful requests billed",
+          "Authentication state persisted in Redis without EF navigation cycles",
+          "Model discovery reads the seeded route",
+          "Admin mutation invalidates Gateway discovery cache",
+          "Disabled routing is rejected after invalidation",
+          "Route recovers after cache invalidation",
+          "Exactly 6 successful requests billed",
+          "Unsigned, forged, and non-admin sessions rejected",
+          "Packaged browser renders real keys and opens creation flow",
+          "Browser uses single-use Admin credential",
+          "admin packaged Docker healthcheck",
+          "gateway packaged Docker healthcheck",
+          "webadmin packaged Docker healthcheck"
+        ],
+        "rawReceipt": {
+          "member": "container-smoke/evidence.json",
+          "sha256": "sha256:416d0d3d1ad85ed2dd8bb26eec2e0487bc85fce7a54fb8a2ee5641bd94e778cd",
+          "bytes": 6899
+        }
+      },
+      "imagePolicy": {
+        "mode": "image",
+        "scope": "release-image",
+        "changed": false,
+        "blockedSeverity": "CRITICAL",
+        "result": {
+          "checked": 101,
+          "exceptions": 0
+        },
+        "allThreeGenuineDigestAddressedReportsReplayed": true,
+        "savedFindings": {
+          "member": "security/image-findings.json",
+          "sha256": "sha256:501c4d10b5208ed0596f7754c42c74b1c4cdac769c31d6a3e9a2221a422da579",
+          "bytes": 18073
+        }
+      },
+      "scanner": {
+        "version": "0.75.0",
+        "actionCommit": "ed142fd0673e97e23eac54620cfb913e5ce36c25",
+        "source": "remote",
+        "globalInsecureMode": false,
+        "externalTlsVerification": "default",
+        "database": {
+          "kind": "Trivy vulnerability DB",
+          "metadata": {
+            "Version": 2,
+            "NextUpdate": "2026-11-16T18:56:37.733847354Z",
+            "UpdatedAt": "2026-11-15T18:56:37.733847835Z",
+            "DownloadedAt": "2026-11-15T23:29:05.2602967Z"
+          },
+          "rawMetadataSha256": "sha256:0a06112cd56a17e324e593509699087a9d02370204fc523f51133387b27ba961",
+          "binaryDatabaseSha256Claimed": false,
+          "rawMember": "image-evidence/db-metadata.json"
+        },
+        "rawVersionOutput": "Version: 0.75.0\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-11-15 18:56:37.733847835 +0000 UTC\n  NextUpdate: 2026-11-16 18:56:37.733847354 +0000 UTC\n  DownloadedAt: 2026-11-15 23:29:05.2602967 +0000 UTC"
+      },
+      "ownedFixture": {
+        "registryImageId": "sha256:39a2a88344598be51c03d6829b40dd29fcda04ce1e01ef1f7596b5af744276ce",
+        "registryRepositoryDigests": [
+          "registry@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c"
+        ],
+        "dockerSocketExposedToScanner": false,
+        "scannerContainerCreated": false,
+        "publication": "127.0.0.1 only; fresh owned container and network; no production registry writes"
+      },
+      "cleanup": {
+        "allRemoved": true,
+        "resourcesRecorded": 5,
+        "everyRecordedResourceRemoved": true,
+        "completedAt": "2026-11-16T00:32:37.410Z",
+        "rawReceipt": {
+          "member": "image-evidence/cleanup.json",
+          "sha256": "sha256:5a4d2870eeeb2d7c14eca6301f4f5724aabe30003e1946c48e3956996880efb1",
+          "bytes": 880
+        },
+        "scope": "Exact-owned fixture containers/networks and temporary local registry tags; no global container inventory claim."
+      }
+    },
+    {
+      "platform": "linux/arm64",
+      "job": {
+        "id": 133014926072,
+        "name": "Packaged application business flows (arm64)",
+        "url": "https://github.com/nickna/Conduit/actions/runs/43779951958/job/133014926072",
+        "conclusion": "success",
+        "startedAt": "2026-11-16T00:24:04Z",
+        "completedAt": "2026-11-16T00:38:02Z"
+      },
+      "runner": {
+        "operatingSystem": "Linux",
+        "architecture": "ARM64",
+        "hostedEnvironment": "github-hosted",
+        "imageOs": "ubuntu24-arm64",
+        "imageVersion": "20261111.182.1"
+      },
+      "compactEvidenceArtifact": {
+        "id": 14187509655,
+        "name": "packaged-application-evidence-arm64",
+        "bytes": 4659664,
+        "zipSha256": "sha256:d1efa89c77f16d44634cdedd6dab285f3c36783968594ba45e5359420de2dc34",
+        "githubDeclaredDigestIndependentlyVerified": true,
+        "url": "https://github.com/nickna/Conduit/actions/runs/43779951958/artifacts/14187509655",
+        "retentionDays": 30
+      },
+      "imageArchiveArtifact": {
+        "id": 14188632313,
+        "name": "packaged-image-archives-arm64",
+        "bytes": 1176690020,
+        "zipSha256": "sha256:e2ccdd5ad85bd0b64b7a3d8a0fe5d53c6ad4dd8551041a9872a007f67c563309",
+        "githubDeclaredDigestIndependentlyVerified": true,
+        "url": "https://github.com/nickna/Conduit/actions/runs/43779951958/artifacts/14188632313",
+        "retentionDays": 30,
+        "allThreeInnerTarDigestsIndependentlyVerified": true,
+        "verificationReceipt": {
+          "kind": "independent intake sidecar",
+          "file": "arm64-archive-integrity.json",
+          "sha256": "sha256:ccd3c42b6f59f49ea30c3e6a2274f906e30d81e03a38be1f48756b61c7155eb8",
+          "bytes": 1065
+        }
+      },
+      "images": [
+        {
+          "service": "admin",
+          "localCiReference": "conduit-admin:ci",
+          "loadedImageId": "sha256:47cf0244f1d8f07a190c85ee10a6c0823a2286f8920e7d7f20a055a60b73ca9c",
+          "configDigest": "sha256:47cf0244f1d8f07a190c85ee10a6c0823a2286f8920e7d7f20a055a60b73ca9c",
+          "configBytes": 9041,
+          "rootfsDiffIds": [
+            "sha256:82881da986b65e966fc8e5b188d6f77319708e9dd562cf737320bb977a0cf69c",
+            "sha256:60777d6993de0b528f7aeb99530a1e67283666bc5224b46a8df4bcb2f9703512",
+            "sha256:711c53978e3b0a3c05410042785b704c905fbf8a470843353e107b5407c126b3",
+            "sha256:fd9ff8231f661a04ec6a62fd41fa693afa66860d8cbb6f689022c61247cafbf3",
+            "sha256:ca41656481920e0bcb6a8003759c01020d4bd415864096178d49409968d284d4",
+            "sha256:f6b489478cf4ba6a2a067b05388eb0e5293763eba3487f49bfb6c768d89828e6",
+            "sha256:df7a73da236c7fc194d7f0ae008160f8cf3ab253d58caae4a0bb494aa4a9246e",
+            "sha256:6f1f35885b3d5fe64957ebbbe21654f8b58bbf3aa58f6d0a78df14e8795257bd",
+            "sha256:1e4eeb0f10810a4d06a11d11e3842f143ebbe6408343a3ecad081ac5b5bbcfb1",
+            "sha256:6c6afc490d768bc62c48e7d8526c42c9e25d8ecb142d8c34cd4a7017c77bcf7a",
+            "sha256:a695e09a11182b84b1412012d52f5ab66dba79e84e2be13b67598e21b7c6bce4",
+            "sha256:38e9a4c60d458d2bc2944966043157158622729683e546013b3a0dcfb163887a"
+          ],
+          "buildx": {
+            "imageId": "sha256:47cf0244f1d8f07a190c85ee10a6c0823a2286f8920e7d7f20a055a60b73ca9c",
+            "exportedDigest": "sha256:19b6187691898f46d79b4a44545f5fcdd7b1e0228c0bbd8f93691be9cdbf0e26",
+            "descriptor": {
+              "mediaType": "application/vnd.oci.image.manifest.v1+json",
+              "digest": "sha256:19b6187691898f46d79b4a44545f5fcdd7b1e0228c0bbd8f93691be9cdbf0e26",
+              "size": 2584,
+              "annotations": {
+                "org.opencontainers.image.created": "2026-11-16T00:26:17Z"
+              },
+              "platform": {
+                "architecture": "arm64",
+                "os": "linux"
+              }
+            },
+            "rawMetadataRecord": {
+              "member": "image-evidence/admin.buildx.json",
+              "sha256": "sha256:4d0a9b677d73a38b21c864877de5741646d29a983db879e1217b2751d9b1d036",
+              "bytes": 40963
+            },
+            "source": {
+              "revision": "b73c57c85ae6326e25498b0ed13ccfed4fd7b342",
+              "repository": "https://github.com/nickna/Conduit",
+              "contextRelativeDirectory": ".",
+              "dockerfileRelativeDirectory": "Services/ConduitLLM.Admin"
+            },
+            "buildType": "https://mobyproject.org/buildkit@v1",
+            "materials": [
+              {
+                "uri": "pkg:docker/mcr.microsoft.com/dotnet/aspnet@11.0.0-resolute?digest=sha256:bc0d6653979efba491ab3d6f589d691f96c309c3c3ef81325efa6978e7b7f242&platform=linux%2Farm64",
+                "digest": {
+                  "sha256": "bc0d6653979efba491ab3d6f589d691f96c309c3c3ef81325efa6978e7b7f242"
+                }
+              },
+              {
+                "uri": "pkg:docker/mcr.microsoft.com/dotnet/sdk@11.0.100-resolute?digest=sha256:65f3c7c6a25a239ab3e6719f2896147e7b68242ff2d8818dd70498bde6ef8bea&platform=linux%2Farm64",
+                "digest": {
+                  "sha256": "65f3c7c6a25a239ab3e6719f2896147e7b68242ff2d8818dd70498bde6ef8bea"
+                }
+              }
+            ]
+          },
+          "registryTransport": {
+            "manifestDigest": "sha256:466dbbea774e63e869ab77836963b7582e2c52b5b427720cf1d9e895bc672481",
+            "manifestBytes": 2840,
+            "manifestSummary": {
+              "schemaVersion": 2,
+              "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+              "config": {
+                "mediaType": "application/vnd.docker.container.image.v1+json",
+                "size": 9041,
+                "digest": "sha256:47cf0244f1d8f07a190c85ee10a6c0823a2286f8920e7d7f20a055a60b73ca9c"
+              },
+              "layers": 12,
+              "totalCompressedLayerBytes": 173646196
+            },
+            "rawMember": "image-evidence/admin.registry-manifest.json",
+            "genuineTrivyReference": "127.0.0.1:32769/ci/admin@sha256:466dbbea774e63e869ab77836963b7582e2c52b5b427720cf1d9e895bc672481",
+            "scope": "Ephemeral loopback registry removed after scanning. Not a pullable published release reference; transport compression/media type may differ from Buildx export."
+          },
+          "archive": {
+            "artifactId": 14188632313,
+            "entry": "admin.tar",
+            "bytes": 487966208,
+            "sha256": "sha256:c32de9724266fe947bceee6817c1a42164971ed08a96ae39ef8f6a67eae11190",
+            "independentlyVerifiedInsideDownloadedZip": true,
+            "duplicateExtractionPerformed": false
+          },
+          "scan": {
+            "rawMember": "image-evidence/security/admin.json",
+            "sha256": "sha256:bf2099be1cc7fe2af118ac11dd1a58f1488ea5f3ef27a674ee9a3b471026b6ea",
+            "bytes": 950696,
+            "artifactName": "127.0.0.1:32769/ci/admin@sha256:466dbbea774e63e869ab77836963b7582e2c52b5b427720cf1d9e895bc672481",
+            "imageId": "sha256:47cf0244f1d8f07a190c85ee10a6c0823a2286f8920e7d7f20a055a60b73ca9c",
+            "createdAt": "2026-11-16T00:36:53.944993442Z",
+            "severityCounts": {
+              "critical": 0,
+              "high": 0,
+              "medium": 45,
+              "low": 4,
+              "unknown": 1
+            },
+            "criticalAndHighCount": 0,
+            "reportIdentityRewritten": false
+          },
+          "boot": {
+            "loadedImageId": "sha256:47cf0244f1d8f07a190c85ee10a6c0823a2286f8920e7d7f20a055a60b73ca9c",
+            "os": "linux",
+            "architecture": "arm64",
+            "sameLoadedImageIdAsExportedAndScanned": true
+          }
+        },
+        {
+          "service": "http",
+          "localCiReference": "conduit-http:ci",
+          "loadedImageId": "sha256:8e1400361ebb18af7d55825a1e16bf5a2bbc91d87f09b3ff7a8562d9c619db65",
+          "configDigest": "sha256:8e1400361ebb18af7d55825a1e16bf5a2bbc91d87f09b3ff7a8562d9c619db65",
+          "configBytes": 8835,
+          "rootfsDiffIds": [
+            "sha256:82881da986b65e966fc8e5b188d6f77319708e9dd562cf737320bb977a0cf69c",
+            "sha256:60777d6993de0b528f7aeb99530a1e67283666bc5224b46a8df4bcb2f9703512",
+            "sha256:711c53978e3b0a3c05410042785b704c905fbf8a470843353e107b5407c126b3",
+            "sha256:fd9ff8231f661a04ec6a62fd41fa693afa66860d8cbb6f689022c61247cafbf3",
+            "sha256:ca41656481920e0bcb6a8003759c01020d4bd415864096178d49409968d284d4",
+            "sha256:f6b489478cf4ba6a2a067b05388eb0e5293763eba3487f49bfb6c768d89828e6",
+            "sha256:df7a73da236c7fc194d7f0ae008160f8cf3ab253d58caae4a0bb494aa4a9246e",
+            "sha256:6f1f35885b3d5fe64957ebbbe21654f8b58bbf3aa58f6d0a78df14e8795257bd",
+            "sha256:1e4eeb0f10810a4d06a11d11e3842f143ebbe6408343a3ecad081ac5b5bbcfb1",
+            "sha256:9d7b86b23dfb83e229a8f4b6934e37b2ed1f32d24d33a2acdc369b3479e0a3ed",
+            "sha256:c3849a6261c66a196d54a5f1d229e77734ea921ed0ef57d71395689f98dc9c6f"
+          ],
+          "buildx": {
+            "imageId": "sha256:8e1400361ebb18af7d55825a1e16bf5a2bbc91d87f09b3ff7a8562d9c619db65",
+            "exportedDigest": "sha256:4b1a09009e7f77644f67cfefdd39e9273fb66fcc2e23937a7df5e0e99a53f303",
+            "descriptor": {
+              "mediaType": "application/vnd.oci.image.manifest.v1+json",
+              "digest": "sha256:4b1a09009e7f77644f67cfefdd39e9273fb66fcc2e23937a7df5e0e99a53f303",
+              "size": 2391,
+              "annotations": {
+                "org.opencontainers.image.created": "2026-11-16T00:28:25Z"
+              },
+              "platform": {
+                "architecture": "arm64",
+                "os": "linux"
+              }
+            },
+            "rawMetadataRecord": {
+              "member": "image-evidence/http.buildx.json",
+              "sha256": "sha256:d2bb3baaa3e8f42ec2c6fdd7cf2944e630d8cc2268208d749d98ef5f0b200753",
+              "bytes": 40964
+            },
+            "source": {
+              "revision": "b73c57c85ae6326e25498b0ed13ccfed4fd7b342",
+              "repository": "https://github.com/nickna/Conduit",
+              "contextRelativeDirectory": ".",
+              "dockerfileRelativeDirectory": "Services/ConduitLLM.Gateway"
+            },
+            "buildType": "https://mobyproject.org/buildkit@v1",
+            "materials": [
+              {
+                "uri": "pkg:docker/mcr.microsoft.com/dotnet/aspnet@11.0.0-resolute?digest=sha256:bc0d6653979efba491ab3d6f589d691f96c309c3c3ef81325efa6978e7b7f242&platform=linux%2Farm64",
+                "digest": {
+                  "sha256": "bc0d6653979efba491ab3d6f589d691f96c309c3c3ef81325efa6978e7b7f242"
+                }
+              },
+              {
+                "uri": "pkg:docker/mcr.microsoft.com/dotnet/sdk@11.0.100-resolute?digest=sha256:65f3c7c6a25a239ab3e6719f2896147e7b68242ff2d8818dd70498bde6ef8bea&platform=linux%2Farm64",
+                "digest": {
+                  "sha256": "65f3c7c6a25a239ab3e6719f2896147e7b68242ff2d8818dd70498bde6ef8bea"
+                }
+              }
+            ]
+          },
+          "registryTransport": {
+            "manifestDigest": "sha256:4c6e628d966d2b9725900767766ce38793d0b2b084c5654f2e97432aa1eeac14",
+            "manifestBytes": 2628,
+            "manifestSummary": {
+              "schemaVersion": 2,
+              "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+              "config": {
+                "mediaType": "application/vnd.docker.container.image.v1+json",
+                "size": 8835,
+                "digest": "sha256:8e1400361ebb18af7d55825a1e16bf5a2bbc91d87f09b3ff7a8562d9c619db65"
+              },
+              "layers": 11,
+              "totalCompressedLayerBytes": 153600758
+            },
+            "rawMember": "image-evidence/http.registry-manifest.json",
+            "genuineTrivyReference": "127.0.0.1:32769/ci/http@sha256:4c6e628d966d2b9725900767766ce38793d0b2b084c5654f2e97432aa1eeac14",
+            "scope": "Ephemeral loopback registry removed after scanning. Not a pullable published release reference; transport compression/media type may differ from Buildx export."
+          },
+          "archive": {
+            "artifactId": 14188632313,
+            "entry": "http.tar",
+            "bytes": 421030400,
+            "sha256": "sha256:9627feb9d257b0c5b6373a4634b13303b354bc1cd5b901c6c4498225afa4b89a",
+            "independentlyVerifiedInsideDownloadedZip": true,
+            "duplicateExtractionPerformed": false
+          },
+          "scan": {
+            "rawMember": "image-evidence/security/http.json",
+            "sha256": "sha256:dfeeaaa381c3bc4f5a6245827ded6e27f189302b36f4b7b05ec5ee96b41ec499",
+            "bytes": 933748,
+            "artifactName": "127.0.0.1:32769/ci/http@sha256:4c6e628d966d2b9725900767766ce38793d0b2b084c5654f2e97432aa1eeac14",
+            "imageId": "sha256:8e1400361ebb18af7d55825a1e16bf5a2bbc91d87f09b3ff7a8562d9c619db65",
+            "createdAt": "2026-11-16T00:37:01.913147157Z",
+            "severityCounts": {
+              "critical": 0,
+              "high": 0,
+              "medium": 45,
+              "low": 4,
+              "unknown": 1
+            },
+            "criticalAndHighCount": 0,
+            "reportIdentityRewritten": false
+          },
+          "boot": {
+            "loadedImageId": "sha256:8e1400361ebb18af7d55825a1e16bf5a2bbc91d87f09b3ff7a8562d9c619db65",
+            "os": "linux",
+            "architecture": "arm64",
+            "sameLoadedImageIdAsExportedAndScanned": true
+          }
+        },
+        {
+          "service": "webadmin",
+          "localCiReference": "conduit-webadmin:ci",
+          "loadedImageId": "sha256:23b3935c84900054789ca992f727486d75b7f5ac889633baf3314a6b50829460",
+          "configDigest": "sha256:23b3935c84900054789ca992f727486d75b7f5ac889633baf3314a6b50829460",
+          "configBytes": 9790,
+          "rootfsDiffIds": [
+            "sha256:3d971ddbca237031066ab6609a11ae2e9e5b109da24d5c5d94d2e584dd94bd54",
+            "sha256:0698ab4858c6dfd7d2bda150efbec0a76ea1092a011c6877a308b3c3675f6cbc",
+            "sha256:a4e663b7a36b36abb7b1f01024f3d0e8c0fd11792c292a53e24f39328dda0d71",
+            "sha256:cc4181e57ecae333035f26fe187463f2b516ef15fe551920369b2d183d4b03da",
+            "sha256:d7868281b2e7388a00513debb73284f8048aaf7f88aaa347608f88e86901435e",
+            "sha256:8bc82e81be47f479602358711ae513f8cbbfb7a3689848f97f669837ffe1c91c",
+            "sha256:da9819c06caff81543bc601e7d0789ddd28a8cc553e1956efad6bdea46cae048",
+            "sha256:20f469a00bdf58a1044bc5f2b3c587180a817eff9db31b0d5e4ce8c99d1b3d33",
+            "sha256:44f8f1d1de6cc1439b649be8ad1ed22e8738180de451e71c64a2fae34ef9e1c1",
+            "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+          ],
+          "buildx": {
+            "imageId": "sha256:23b3935c84900054789ca992f727486d75b7f5ac889633baf3314a6b50829460",
+            "exportedDigest": "sha256:08b08e89265cb25ded3b52e8927b210cb5f6befbbaa6b5ca52c05b0d53c71614",
+            "descriptor": {
+              "mediaType": "application/vnd.oci.image.manifest.v1+json",
+              "digest": "sha256:08b08e89265cb25ded3b52e8927b210cb5f6befbbaa6b5ca52c05b0d53c71614",
+              "size": 2190,
+              "annotations": {
+                "org.opencontainers.image.created": "2026-11-16T00:29:12Z"
+              },
+              "platform": {
+                "architecture": "arm64",
+                "os": "linux"
+              }
+            },
+            "rawMetadataRecord": {
+              "member": "image-evidence/webadmin.buildx.json",
+              "sha256": "sha256:705a47034bdc1ff58b10a260593d5314e8185b8396d13036faf9e3bf8a8db1aa",
+              "bytes": 40874
+            },
+            "source": {
+              "revision": "b73c57c85ae6326e25498b0ed13ccfed4fd7b342",
+              "repository": "https://github.com/nickna/Conduit",
+              "contextRelativeDirectory": ".",
+              "dockerfileRelativeDirectory": "WebAdmin"
+            },
+            "buildType": "https://mobyproject.org/buildkit@v1",
+            "materials": [
+              {
+                "uri": "pkg:docker/docker/dockerfile@1",
+                "digest": {
+                  "sha256": "4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e"
+                }
+              },
+              {
+                "uri": "pkg:docker/node@22.23.5-alpine?digest=sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a&platform=linux%2Farm64",
+                "digest": {
+                  "sha256": "1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a"
+                }
+              }
+            ]
+          },
+          "registryTransport": {
+            "manifestDigest": "sha256:a283b55cc3df1334997b9498e3c7d5542d89c7b300a33c46b754c1c5194b3db4",
+            "manifestBytes": 2408,
+            "manifestSummary": {
+              "schemaVersion": 2,
+              "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+              "config": {
+                "mediaType": "application/vnd.docker.container.image.v1+json",
+                "size": 9790,
+                "digest": "sha256:23b3935c84900054789ca992f727486d75b7f5ac889633baf3314a6b50829460"
+              },
+              "layers": 10,
+              "totalCompressedLayerBytes": 93889687
+            },
+            "rawMember": "image-evidence/webadmin.registry-manifest.json",
+            "genuineTrivyReference": "127.0.0.1:32769/ci/webadmin@sha256:a283b55cc3df1334997b9498e3c7d5542d89c7b300a33c46b754c1c5194b3db4",
+            "scope": "Ephemeral loopback registry removed after scanning. Not a pullable published release reference; transport compression/media type may differ from Buildx export."
+          },
+          "archive": {
+            "artifactId": 14188632313,
+            "entry": "webadmin.tar",
+            "bytes": 267693056,
+            "sha256": "sha256:9ecd7362f1ed8f17d1fbc36ba0761f8a0e2ce1838d80bfc735146a33cf98f8ed",
+            "independentlyVerifiedInsideDownloadedZip": true,
+            "duplicateExtractionPerformed": false
+          },
+          "scan": {
+            "rawMember": "image-evidence/security/webadmin.json",
+            "sha256": "sha256:9c664670106ef4bc2a571312e820820ee186e004bbf89145556fa9375d6b5810",
+            "bytes": 60443,
+            "artifactName": "127.0.0.1:32769/ci/webadmin@sha256:a283b55cc3df1334997b9498e3c7d5542d89c7b300a33c46b754c1c5194b3db4",
+            "imageId": "sha256:23b3935c84900054789ca992f727486d75b7f5ac889633baf3314a6b50829460",
+            "createdAt": "2026-11-16T00:37:10.305098638Z",
+            "severityCounts": {
+              "critical": 0,
+              "high": 0,
+              "medium": 1,
+              "low": 0,
+              "unknown": 0
+            },
+            "criticalAndHighCount": 0,
+            "reportIdentityRewritten": false,
+            "remainingWebAdminFindings": [
+              {
+                "id": "CVE-2026-4738",
+                "package": "zlib",
+                "installedVersion": "1.3.2-r1",
+                "fixedVersion": "1.4-r0",
+                "severity": "MEDIUM"
+              }
+            ]
+          },
+          "boot": {
+            "loadedImageId": "sha256:23b3935c84900054789ca992f727486d75b7f5ac889633baf3314a6b50829460",
+            "os": "linux",
+            "architecture": "arm64",
+            "sameLoadedImageIdAsExportedAndScanned": true
+          }
+        }
+      ],
+      "nativeBusinessExecution": {
+        "succeeded": true,
+        "hostPlatform": "linux/arm64",
+        "expectedPlatform": "linux/arm64",
+        "checkCount": 26,
+        "checks": [
+          "PostgreSQL ready",
+          "Admin readiness",
+          "Gateway readiness",
+          "Missing and invalid authentication rejected",
+          "Exactly 1 successful requests billed",
+          "Provider 401 failure is non-billable",
+          "Provider 429 failure is non-billable",
+          "Provider 500 failure is non-billable",
+          "Exactly 2 successful requests billed",
+          "Disabled key invalidates authentication cache",
+          "Re-enabled key restores authentication",
+          "rateLimitRpm rejects excess requests",
+          "rateLimitRpd rejects excess requests",
+          "Exactly 4 successful requests billed",
+          "Authentication state persisted in Redis without EF navigation cycles",
+          "Model discovery reads the seeded route",
+          "Admin mutation invalidates Gateway discovery cache",
+          "Disabled routing is rejected after invalidation",
+          "Route recovers after cache invalidation",
+          "Exactly 6 successful requests billed",
+          "Unsigned, forged, and non-admin sessions rejected",
+          "Packaged browser renders real keys and opens creation flow",
+          "Browser uses single-use Admin credential",
+          "admin packaged Docker healthcheck",
+          "gateway packaged Docker healthcheck",
+          "webadmin packaged Docker healthcheck"
+        ],
+        "rawReceipt": {
+          "member": "container-smoke/evidence.json",
+          "sha256": "sha256:929d7f475012c101a9cacf116b37700544b778ba52f037b56c4b58129c5fda8f",
+          "bytes": 6932
+        }
+      },
+      "imagePolicy": {
+        "mode": "image",
+        "scope": "release-image",
+        "changed": false,
+        "blockedSeverity": "CRITICAL",
+        "result": {
+          "checked": 101,
+          "exceptions": 0
+        },
+        "allThreeGenuineDigestAddressedReportsReplayed": true,
+        "savedFindings": {
+          "member": "security/image-findings.json",
+          "sha256": "sha256:501c4d10b5208ed0596f7754c42c74b1c4cdac769c31d6a3e9a2221a422da579",
+          "bytes": 18073
+        }
+      },
+      "scanner": {
+        "version": "0.75.0",
+        "actionCommit": "ed142fd0673e97e23eac54620cfb913e5ce36c25",
+        "source": "remote",
+        "globalInsecureMode": false,
+        "externalTlsVerification": "default",
+        "database": {
+          "kind": "Trivy vulnerability DB",
+          "metadata": {
+            "Version": 2,
+            "NextUpdate": "2026-11-16T18:56:37.733847354Z",
+            "UpdatedAt": "2026-11-15T18:56:37.733847835Z",
+            "DownloadedAt": "2026-11-15T23:29:05.2602967Z"
+          },
+          "rawMetadataSha256": "sha256:0a06112cd56a17e324e593509699087a9d02370204fc523f51133387b27ba961",
+          "binaryDatabaseSha256Claimed": false,
+          "rawMember": "image-evidence/db-metadata.json"
+        },
+        "rawVersionOutput": "Version: 0.75.0\nVulnerability DB:\n  Version: 2\n  UpdatedAt: 2026-11-15 18:56:37.733847835 +0000 UTC\n  NextUpdate: 2026-11-16 18:56:37.733847354 +0000 UTC\n  DownloadedAt: 2026-11-15 23:29:05.2602967 +0000 UTC"
+      },
+      "ownedFixture": {
+        "registryImageId": "sha256:4f303374c1a09ef0f84555981da3b20cf9dd1530de5d86d58ac850f509ae57c8",
+        "registryRepositoryDigests": [
+          "registry@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c"
+        ],
+        "dockerSocketExposedToScanner": false,
+        "scannerContainerCreated": false,
+        "publication": "127.0.0.1 only; fresh owned container and network; no production registry writes"
+      },
+      "cleanup": {
+        "allRemoved": true,
+        "resourcesRecorded": 5,
+        "everyRecordedResourceRemoved": true,
+        "completedAt": "2026-11-16T00:37:16.209Z",
+        "rawReceipt": {
+          "member": "image-evidence/cleanup.json",
+          "sha256": "sha256:0d79b82f8e1027a290534a3eb03723044bd9d1b2baf15ac3e5dcbb81629b27ba",
+          "bytes": 880
+        },
+        "scope": "Exact-owned fixture containers/networks and temporary local registry tags; no global container inventory claim."
+      }
+    }
+  ],
+  "limits": [
+    "Image IDs, config digests, Buildx export digests and registry transport manifest digests are separate identities.",
+    "Loopback registry references are evidence identifiers; their registries have been removed.",
+    "Lower-severity and UNKNOWN findings remain visible; zero HIGH/CRITICAL is not a vulnerability-free claim.",
+    "Native architecture execution is not NativeAOT qualification or a performance comparison.",
+    "No production release, deployment, shared-state rollback, production host matrix, or future source revision is qualified by this CI index."
+  ]
+}

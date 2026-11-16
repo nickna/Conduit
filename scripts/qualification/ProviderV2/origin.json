@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "frozenProviderSourceSha256": "bbc62e48a773fca87f8adae8ce423282e433b06bde470bb23ee9238a9501d15b",
+  "workloadAndPressureProviderBytesIdentical": true,
+  "frozenFilesChanged": false,
+  "methodologyVersion": 2,
+  "scope": "Wire payloads and pacing preserved; new explicit cancellation observation provenance. Previous cohorts are not remapped."
+}

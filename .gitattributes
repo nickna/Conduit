@@ -10,3 +10,9 @@ Services/ConduitLLM.Admin/openapi-admin.json text eol=lf
 Services/ConduitLLM.Gateway/openapi-gateway.json text eol=lf
 WebAdmin/src/generated/admin-api.ts text eol=lf
 WebAdmin/src/generated/gateway-api.ts text eol=lf
+
+# Qualification replays retain the frozen phase-0 fixture's exact source bytes.
+scripts/qualification/Workload/** -text whitespace=cr-at-eol
+scripts/qualification/Pressure/** -text whitespace=cr-at-eol
+scripts/qualification/Observer/** -text whitespace=cr-at-eol
+scripts/qualification/AdminCache/frozen/** -text whitespace=cr-at-eol
