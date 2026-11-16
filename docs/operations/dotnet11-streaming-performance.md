@@ -13,7 +13,7 @@ sources and datasets are unchanged.
 | Experiment | Change and compatibility boundary | Disposition |
 | --- | --- | --- |
 | Enhanced metrics | Replace retained timestamp/interval lists with first/last/count aggregates. Adjacent intervals telescope to `(last - first) / (count - 1)`. The Gateway reads first-token state directly. Preserve the historical distinction between timestamp count and reported token count, including a late `RecordFirstToken`. | Implemented in #1778; focused behavior and allocation-scale checks pass. Native evidence/adoption status is tracked in #1767. |
-| SSE UTF-8 framing | Serialize using the existing generated `JsonTypeInfo` directly to UTF-8, then copy into a private, exactly sized frame. Remove intermediate UTF-16 JSON/framed strings. Two owned byte arrays remain; this is not zero-allocation output. | Candidate in #1778; retain only with paired measurements and protocol/accounting gates recorded in #1767. |
+| SSE UTF-8 framing | Prototype commit `483f50eec` serialized through generated metadata directly to UTF-8, then copied into a private frame. It reduced intermediate allocations and retained two byte arrays. | Deferred from production: all four original/repeat architecture blocks exceeded the standard-slow process CPU budget. Attribution remains unresolved; the production writer is restored to the before implementation. Prototype/evidence remain available in [#1781](https://github.com/nickna/Conduit/issues/1781). |
 | Groq metadata | Lazily create immutable generated metadata once for the stable client policy, rather than reconstructing options/context per frame. Keep the public options-taking converter independent and retain its custom/mutable policy behavior. | Candidate in #1778; retain only with paired measurements and protocol/accounting gates recorded in #1767. |
 | General provider parsing | Benchmark controls characterize DOM/string/typed alternatives. Existing virtual transform/mapping hooks, malformed-frame exceptions and multiline handling make a generic replacement a compatibility change. | Defer to #1779 until those behaviors are specified and qualified. Micro controls alone do not prove compatibility. |
 | BodyWriter / flush coalescing | The UTF-8 candidate keeps the existing `Body.WriteAsync` followed by `Body.FlushAsync` for each event. Complete serialization before writing protects the wire from converter failure. | Defer to #1780; no benchmark establishes a gain or an acceptable latency/backpressure policy for that alternative. |
@@ -25,11 +25,12 @@ the generic provider stub in the Gateway matrix does not measure Groq's metadata
 optimization. Micro warmups exclude cold metadata initialization and cannot
 establish first-request improvement.
 
-The writer preserves content/DONE LF framing and named-event platform newlines,
+The writer compatibility tests preserve content/DONE LF framing and named-event platform newlines,
 serializer/encoder policy, cancellation checks, per-event flush completion,
 error dialects, counters and DONE idempotence. Each call owns its frame through
 the asynchronous write. This ownership check does not promise ordering for
 concurrent calls on an HTTP response. No reusable mutable writer buffer is shared.
+The UTF-8 prototype is preserved in history, rather than active production code.
 
 ## Reproduction and evidence
 
@@ -122,7 +123,7 @@ writer at 10,000 frames. Median allocation per frame was approximately
 1,393 -> 769 bytes for 32-character payloads and 6,353 -> 2,753 bytes for
 1,024-character payloads, in both standard and enhanced modes. Wire digests,
 event/byte counters, exact flush counts and one DONE frame matched. These are
-writer-only workstation-GC diagnostics. Both binaries already contained the
+writer-only workstation-GC prototype diagnostics, not evidence of adoption. Both binaries already contained the
 optimized collector, and other uncalled Gateway code differed; they are not an
 exact whole-commit native comparison or network/financial qualification.
 
