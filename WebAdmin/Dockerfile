@@ -38,7 +38,11 @@ CMD ["npm", "run", "dev"]
 FROM webadmin-deps AS builder
 COPY --chown=node:node WebAdmin /app/WebAdmin
 WORKDIR /app/WebAdmin
-RUN mkdir -p public && npm run build
+RUN node --test scripts/check-static-assets.test.mjs && \
+    mkdir -p public && npm run build && \
+    cp -a .next/static .next/standalone/.next/ && \
+    cp -a public .next/standalone/ && \
+    node scripts/check-static-assets.mjs .next/standalone
 
 # Production stage - minimal image using Next.js standalone output.
 FROM node:22.23.5-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a AS runner
@@ -51,12 +55,12 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=builder --chown=nextjs:nodejs /app/WebAdmin/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/WebAdmin/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/WebAdmin/public ./public
 USER nextjs
 # Enforce #1467's development-only exception against the final shipped tree.
 RUN --mount=type=bind,source=WebAdmin/scripts/check-runtime-dependencies.mjs,target=/tmp/check-runtime-dependencies.mjs \
-    node /tmp/check-runtime-dependencies.mjs /app
+    --mount=type=bind,source=WebAdmin/scripts/check-static-assets.mjs,target=/tmp/check-static-assets.mjs \
+    node /tmp/check-runtime-dependencies.mjs /app && \
+    node /tmp/check-static-assets.mjs /app
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1
