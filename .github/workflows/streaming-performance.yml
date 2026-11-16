@@ -83,6 +83,10 @@ jobs:
         if: matrix.profile == 'micro-queue'
         working-directory: scripts/performance/phase3
         run: python -m unittest -q test_analyze_micros.py
+      - name: Verify hidden source inventories
+        if: matrix.profile == 'micro-queue'
+        shell: pwsh
+        run: ./scripts/performance/phase3/test-micro-inventory.ps1 -OutputDirectory '${{ runner.temp }}/phase3-micro-inventory-tests'
       - name: Verify queue evidence rejection
         if: matrix.profile == 'micro-queue'
         shell: pwsh
@@ -95,6 +99,17 @@ jobs:
           -CandidateRevision $env:CANDIDATE_REVISION
           -Architecture '${{ matrix.arch }}'
           -OutputDirectory '${{ runner.temp }}/phase3-micros'
+      - name: Retain micro evidence before the queue sweep
+        if: always() && matrix.profile == 'micro-queue'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase3-${{ matrix.arch }}-micros
+          path: |
+            ${{ runner.temp }}/phase3-micros
+            !${{ runner.temp }}/phase3-micros/work/source/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
       - name: Run isolated queue batch and PostgreSQL latency sweep
         if: matrix.profile == 'micro-queue'
         shell: pwsh
@@ -111,12 +126,12 @@ jobs:
           path: |
             ${{ runner.temp }}/phase3-input-integrity.json
             ${{ runner.temp }}/phase3-gateway
-            ${{ runner.temp }}/phase3-micros
             ${{ runner.temp }}/phase3-queue
             ${{ runner.temp }}/phase3-queue-policy
+            ${{ runner.temp }}/phase3-micro-inventory-tests
             !${{ runner.temp }}/phase3-gateway/work/fixed/**
             !${{ runner.temp }}/phase3-gateway/work/candidate/**
             !${{ runner.temp }}/phase3-gateway/work/seed-source/**
-            !${{ runner.temp }}/phase3-micros/work/source/**
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 30

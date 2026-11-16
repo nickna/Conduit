@@ -12,11 +12,11 @@ sources and datasets are unchanged.
 
 | Experiment | Change and compatibility boundary | Disposition |
 | --- | --- | --- |
-| Enhanced metrics | Replace retained timestamp/interval lists with first/last/count aggregates. Adjacent intervals telescope to `(last - first) / (count - 1)`. The Gateway reads first-token state directly. Preserve the historical distinction between timestamp count and reported token count, including a late `RecordFirstToken`. | Required algorithm fix; focused behavior and allocation-scale checks pass. Native workload measurements pending. |
-| SSE UTF-8 framing | Serialize using the existing generated `JsonTypeInfo` directly to UTF-8, then copy into a private, exactly sized frame. Remove intermediate UTF-16 JSON/framed strings. Two owned byte arrays remain; this is not zero-allocation output. | Candidate pending paired measurements and workload gates. |
-| Groq metadata | Lazily create immutable generated metadata once for the stable client policy, rather than reconstructing options/context per frame. Keep the public options-taking converter independent and retain its custom/mutable policy behavior. | Candidate pending paired measurements and workload gates. |
-| General provider parsing | Benchmark controls characterize DOM/string/typed alternatives. Existing virtual transform/mapping hooks, malformed-frame exceptions and multiline handling make a generic replacement a compatibility change. | Defer production parser replacement until those behaviors are specified and qualified. Micro controls alone do not prove compatibility. |
-| BodyWriter / flush coalescing | The UTF-8 candidate keeps the existing `Body.WriteAsync` followed by `Body.FlushAsync` for each event. Complete serialization before writing protects the wire from converter failure. | Defer direct BodyWriter/coalescing; no benchmark establishes a gain or an acceptable latency/backpressure policy for that alternative. |
+| Enhanced metrics | Replace retained timestamp/interval lists with first/last/count aggregates. Adjacent intervals telescope to `(last - first) / (count - 1)`. The Gateway reads first-token state directly. Preserve the historical distinction between timestamp count and reported token count, including a late `RecordFirstToken`. | Implemented in #1778; focused behavior and allocation-scale checks pass. Native evidence/adoption status is tracked in #1767. |
+| SSE UTF-8 framing | Serialize using the existing generated `JsonTypeInfo` directly to UTF-8, then copy into a private, exactly sized frame. Remove intermediate UTF-16 JSON/framed strings. Two owned byte arrays remain; this is not zero-allocation output. | Candidate in #1778; retain only with paired measurements and protocol/accounting gates recorded in #1767. |
+| Groq metadata | Lazily create immutable generated metadata once for the stable client policy, rather than reconstructing options/context per frame. Keep the public options-taking converter independent and retain its custom/mutable policy behavior. | Candidate in #1778; retain only with paired measurements and protocol/accounting gates recorded in #1767. |
+| General provider parsing | Benchmark controls characterize DOM/string/typed alternatives. Existing virtual transform/mapping hooks, malformed-frame exceptions and multiline handling make a generic replacement a compatibility change. | Defer to #1779 until those behaviors are specified and qualified. Micro controls alone do not prove compatibility. |
+| BodyWriter / flush coalescing | The UTF-8 candidate keeps the existing `Body.WriteAsync` followed by `Body.FlushAsync` for each event. Complete serialization before writing protects the wire from converter failure. | Defer to #1780; no benchmark establishes a gain or an acceptable latency/backpressure policy for that alternative. |
 | Spend receive batch | Measure 10/25/50/100 with concurrency one, strict ordering and 250 ms polling. Distinguish handler entry, handler completion and independently observed SQL settlement. | Production policy remains batch 10 pending measured results and a separate adoption decision. No partitioning, handler concurrency or transport change. |
 
 Standard streams already bypass enhanced metrics. Metrics gains therefore must
@@ -126,5 +126,7 @@ writer-only workstation-GC diagnostics. Both binaries already contained the
 optimized collector, and other uncalled Gateway code differed; they are not an
 exact whole-commit native comparison or network/financial qualification.
 
-Final native results, source revisions, per-experiment adoption decisions and
-follow-ups will be added after collection. No overall percentage gain is promised.
+Consult [phase 3](https://github.com/nickna/Conduit/issues/1767) for current native
+results, exact measured revisions, per-experiment decisions and follow-ups. The
+workflow retains individual runs; collection success alone does not accept a
+performance tradeoff. No overall percentage gain is promised.

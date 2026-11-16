@@ -20,7 +20,7 @@ if((Test-Path -LiteralPath $OutputDirectory) -and @(Get-ChildItem -LiteralPath $
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $out=(Resolve-Path $OutputDirectory).Path
 $harnessSource=Join-Path $out 'harness-source';New-Item -ItemType Directory -Path $harnessSource|Out-Null
-$sourceFiles=@(Get-ChildItem $qualificationRoot -Recurse -File|Where-Object{
+$sourceFiles=@(Get-ChildItem $qualificationRoot -Recurse -File -Force|Where-Object{
  $_.FullName -notmatch '[\\/](bin|obj|published|__pycache__)[\\/]' -and $_.Extension -in @('.ps1','.py','.cs','.csproj','.props','.targets','.json','.sql','.md')
 })
 $harnessBindings=@(foreach($file in $sourceFiles){
@@ -56,7 +56,7 @@ function Get-PublishedInputDelta {
  foreach($folder in @($expected.Keys|ForEach-Object{$_.Split('/')[0]}|Sort-Object -Unique)){
   $directory=Join-Path $work $folder
   if(Test-Path -LiteralPath $directory -PathType Container){
-   foreach($file in @(Get-ChildItem -LiteralPath $directory -Recurse -File)){
+   foreach($file in @(Get-ChildItem -LiteralPath $directory -Recurse -File -Force)){
     $relative=[IO.Path]::GetRelativePath($work,$file.FullName).Replace([char]92,[char]47)
     $actual.Add($relative,$file)
    }
@@ -96,7 +96,7 @@ foreach($definition in $cohortDefinitions){
  $sourceBindings.Add([ordered]@{id=$definition.id;sourceSha=$definition.sha;sourceSdk=$definition.sdk;sourceTree=(& git rev-parse "$($definition.sha)^{tree}").Trim();
   archiveSha256=(Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant();
   files=@(foreach($directory in @($gateway,$migrator)){
-   Get-ChildItem $directory -Recurse -File|ForEach-Object{
+   Get-ChildItem $directory -Recurse -File -Force|ForEach-Object{
     [ordered]@{path=$_.FullName.Substring($work.Length+1);sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant();bytes=$_.Length}
    }
   })})
@@ -118,7 +118,7 @@ Publish-Project (Join-Path $qualificationRoot 'ObserverV2') 'Conduit.ServerObser
 Publish-Project (Join-Path $qualificationRoot 'Drain') 'DrainProbe.csproj' (Join-Path $work 'drain') "$out/drain-build.log" '10.0.404'
 $sourceBindings.Add([ordered]@{id='fixed-tools';sourceSdk='10.0.404';files=@(
  foreach($name in @('seed','client','provider','observer','drain')){
-  Get-ChildItem (Join-Path $work $name) -Recurse -File|ForEach-Object{
+  Get-ChildItem (Join-Path $work $name) -Recurse -File -Force|ForEach-Object{
    [ordered]@{path=[IO.Path]::GetRelativePath($work,$_.FullName);sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant();bytes=$_.Length}
   }
  }

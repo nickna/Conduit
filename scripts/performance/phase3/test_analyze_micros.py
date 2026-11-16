@@ -155,6 +155,10 @@ class MicroEvidenceTests(unittest.TestCase):
             file.unlink(); self.assertNotEqual(before, subject.file_inventory(root))
             file.write_bytes(b"one"); (root / "extra.dll").write_bytes(b"extra")
             self.assertNotEqual(before, subject.file_inventory(root))
+            (root / "extra.dll").unlink()
+            (root / ".hidden.dll").write_bytes(b"hidden")
+            self.assertNotEqual(before, subject.file_inventory(root))
+            self.assertIn(".hidden.dll", subject.file_inventory(root))
 
     def test_archive_cannot_escape_or_replace_unrelated_source(self):
         with tempfile.TemporaryDirectory() as directory:

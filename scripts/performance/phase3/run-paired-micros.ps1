@@ -24,6 +24,7 @@ $out=Join-Path $rootOut 'processes';New-Item -ItemType Directory -Path $out|Out-
 $configuration=[pscustomobject]@{workingDirectory=$repository}
 $helper=Join-Path $repository 'scripts/qualification/owned-process.ps1'
 . $helper
+. (Join-Path $PSScriptRoot 'micro-inventory.ps1')
 $dotnet=(Get-Command dotnet -CommandType Application -ErrorAction Stop|Select-Object -First 1).Source
 $python=(Get-Command python3 -CommandType Application -ErrorAction Stop|Select-Object -First 1).Source
 $bindings=[Collections.Generic.List[object]]::new()
@@ -35,12 +36,6 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments,[string]$Worki
     $configuration.workingDirectory=$WorkingDirectory
     Invoke-Owned $Name $Program $Arguments $Timeout
 }
-function Files([string]$Directory){
-    @(Get-ChildItem -LiteralPath $Directory -Recurse -File|Sort-Object FullName|ForEach-Object{
-        [ordered]@{path=[IO.Path]::GetRelativePath($Directory,$_.FullName).Replace([char]92,[char]47);bytes=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}
-    })
-}
-function Source-Files([string]$Directory){@(Files $Directory|Where-Object{$_.path -notmatch '(^|/)(bin|obj)/'})}
 function Inventory-Delta([object[]]$Expected,[object[]]$Actual){
     $before=[Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
     $after=[Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
@@ -63,7 +58,7 @@ function Remove-MeasurementSubtree([string]$Source){
 
 try{
     $sourceSnapshot=Join-Path $rootOut 'driver-source';New-Item -ItemType Directory -Path $sourceSnapshot|Out-Null
-    foreach($path in @($PSCommandPath,$helper,(Join-Path $PSScriptRoot 'analyze_micros.py'))){Copy-Item -LiteralPath $path -Destination (Join-Path $sourceSnapshot (Split-Path $path -Leaf))}
+    foreach($path in @($PSCommandPath,$helper,(Join-Path $PSScriptRoot 'micro-inventory.ps1'),(Join-Path $PSScriptRoot 'analyze_micros.py'))){Copy-Item -LiteralPath $path -Destination (Join-Path $sourceSnapshot (Split-Path $path -Leaf))}
     Write-Json @(Files $sourceSnapshot) (Join-Path $rootOut 'driver-source-bindings.json')
     $gcEnvironment=@(Get-ChildItem Env:|Where-Object{$_.Name -match '^(DOTNET|COMPlus)_(GC|Heap|ServerGC|ConcurrentGC)'}|ForEach-Object{[ordered]@{name=$_.Name;value=$_.Value}})
     $context=[ordered]@{schemaVersion=1;architecture=$Architecture;processorCount=[Environment]::ProcessorCount;kernel=(& uname -a);osRelease=@(Get-Content /etc/os-release);gcEnvironment=$gcEnvironment;
