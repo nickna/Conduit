@@ -4,7 +4,7 @@ from collections import Counter
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
-from qualification import EvidenceError, loads, money, register_scoped_ids, report_rows, validate_drain_report, validate_provider_instances
+from qualification import EvidenceError, loads, money, register_scoped_ids, report_rows, validate_drain_report, validate_provider_instances, validate_provider_v2_report
 from reconcile import reconcile
 from summarize import allocation_evidence, compare_runs, pressure_contrasts, quantile, run_statistics, stream_metric_deltas
 
@@ -274,6 +274,85 @@ class FrozenValidatorTests(unittest.TestCase):
         report = client_report("before-usage")
         report["measured"]["requests"][0]["usageEvents"] = 1
         with self.assertRaises(EvidenceError): report_rows(report)
+
+
+class ProviderV2EvidenceTests(unittest.TestCase):
+    @staticmethod
+    def report(cancel="before-usage", source="request-aborted-callback", callback=5):
+        report = client_report(cancel)
+        report["providerObservations"]["providerObservationVersion"] = 2
+        provider = report["providerObservations"]["observations"][0]
+        provider.update(providerObservationVersion=2, requestAcceptedTicks=1, handlerEndTicks=10,
+                        cancellationEvidence={"observedTicks": provider["cancellationTicks"],
+                                              "source": source, "rawCallbackTicks": callback})
+        if cancel == "none":
+            provider["cancellationEvidence"].update(source=None, rawCallbackTicks=0)
+        return report
+
+    def test_callback_catch_and_nonrequested_zero_provenance(self):
+        for cancel, source, callback in (("before-usage", "request-aborted-callback", 5),
+                                        ("before-usage", "request-aborted-observed-at-catch", 0),
+                                        ("before-usage", "request-aborted-observed-at-catch", 3),
+                                        ("before-usage", "request-aborted-observed-at-catch", 7),
+                                        ("none", None, 0)):
+            with self.subTest(cancel=cancel, source=source, callback=callback):
+                self.assertEqual(1, len(report_rows(self.report(cancel, source, callback))))
+
+    def test_corrupted_provenance_or_version_cannot_pass(self):
+        for mutation in ("root-version", "row-version", "timestamp", "source", "callback", "clock-before",
+                         "clock-after", "callback-after-end", "missing", "wrong-type", "fabricated-zero"):
+            report = self.report()
+            provider = report["providerObservations"]["observations"][0]
+            evidence = provider["cancellationEvidence"]
+            if mutation == "root-version": report["providerObservations"]["providerObservationVersion"] = 1
+            elif mutation == "row-version": provider["providerObservationVersion"] = 1
+            elif mutation == "timestamp": evidence["observedTicks"] = 6
+            elif mutation == "source": evidence["source"] = "inferred-from-exception"
+            elif mutation == "callback": evidence["rawCallbackTicks"] = 4
+            elif mutation == "clock-before": provider["requestAcceptedTicks"] = 6
+            elif mutation == "clock-after": provider["handlerEndTicks"] = 4
+            elif mutation == "callback-after-end":
+                evidence.update(source="request-aborted-observed-at-catch", rawCallbackTicks=11)
+            elif mutation == "missing": del provider["cancellationEvidence"]
+            elif mutation == "wrong-type": evidence["observedTicks"] = "5"
+            else: provider["cancellationTicks"] = 0; evidence["observedTicks"] = 0
+            with self.subTest(mutation=mutation), self.assertRaises(EvidenceError): report_rows(report)
+        report = self.report()
+        provider = report["providerObservations"]["observations"][0]
+        provider["cancellationTicks"] = 0
+        provider["cancellationEvidence"].update(observedTicks=0, source=None, rawCallbackTicks=0)
+        # Coherent absence still cannot prove a cancellation workload.
+        with self.assertRaises(EvidenceError): report_rows(report)
+
+    def test_configuration_bound_identity_and_binary_corruptions_fail(self):
+        prefix = "phase0-fixed------------r1"
+        config = {"profile": "phase0", "architecture": "X64", "providerObservationVersion": 2, "provider": "/fixed/provider.dll"}
+        entry = {"cohort": "fixed", "run": 1, "providerInstanceId": prefix, "providerProcessId": 105,
+                 "gatewayProcessId": 106, "caseId": prefix + "-short", "result": "result.json", "warmups": 0}
+        identity = {"schemaVersion": 1, "providerObservationVersion": 2, "processId": 105,
+                    "actualRuntime": "10.0.15", "sourceSdk": "10.0.404", "architecture": "X64", "assemblySha256": "a" * 64}
+        for changed in (None, "processId", "actualRuntime", "sourceSdk", "architecture", "assemblySha256", "providerObservationVersion", "root-version", "retained-mismatch"):
+            current = copy.deepcopy(identity); report = self.report()
+            if changed == "root-version": del report["providerObservations"]["providerObservationVersion"]
+            elif changed == "processId": current[changed] = 107
+            elif changed == "providerObservationVersion": current[changed] = 1
+            elif changed: current[changed] = "invalid"
+            def reader(path):
+                if path.name == "bindings.json": return {"files": [{"path": config["provider"], "sha256": "a" * 64}]}
+                if path.name == "result.json": return report
+                if path.name.endswith("-provider.json"):
+                    value = copy.deepcopy(report["providerObservations"])
+                    if changed == "retained-mismatch": value["stopwatchFrequency"] += 1
+                    return value
+                if path.name.endswith("-provider-identity.json"): return current
+                return {"processId": 105, "exitCode": 0, "graceful": True}
+            with self.subTest(changed=changed), patch("qualification.read", side_effect=reader), patch("qualification.sha256", return_value="b" * 64):
+                if changed:
+                    with self.assertRaises(EvidenceError): validate_provider_instances("evidence", [entry], config)
+                else:
+                    result = validate_provider_instances("evidence", [entry], config)
+                    self.assertEqual(identity, result["instances"][0]["identity"])
+        with self.assertRaises(EvidenceError): validate_provider_instances("evidence", [{"cohort": "fixed"}], config)
 
 
 class ProviderIdentityScopeTests(unittest.TestCase):

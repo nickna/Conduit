@@ -43,6 +43,13 @@ The merged candidate's
 also passed all three declared linux-x64 publication/image jobs. This preserves
 its existing feature matrix; it does not qualify native ARM64 AOT or production
 promotion.
+The phase-2 PR at `33637e19e1424032313f5d243b0bc972c7488d16` also passed its
+[complete ordinary CI](https://github.com/nickna/Conduit/actions/runs/43774398777).
+The [hosted image index](dotnet11-phase2-hosted-images.json) independently binds
+all six native-CI images to archive/config/registry/raw-scan and native boot
+evidence. Each platform passed 26 business/browser checks; all six scans reported
+zero HIGH/CRITICAL findings and zero exceptions under the unchanged policy.
+These ordinary CI identities remain distinct from production release images.
 
 ## Recommended reference deployment
 
@@ -84,7 +91,7 @@ They do not establish native ARM64 acceptance or production capacity.
 | Durable spend recovery | A restored copy of an earlier failed smoke had two actual queued audio spends. Both settled once across 11→10→11, adding exactly `0.00250000`. Original failed SQL/RDB evidence and unrelated historical holds were preserved. |
 | API image rollback | PostgreSQL 17.12 legacy→candidate→legacy and PostgreSQL 16.16 fixed-control→candidate→fixed-control passed. Each retained 12 request logs, `0.00480000` exact spend, no duplicate debits, unchanged migrations, protected credentials, cache restart/invalidation and queued message compatibility. |
 | Complete three-service rollback | Admin/Gateway/WebAdmin 10→11→10 passed 62 checks: 33 API/shutdown and 29 WebAdmin checks, with 12 financial requests. Actual headless Edge exercised the browser/BFF and one-use credentials across swaps. |
-| WebAdmin image maintenance | Pinning Node 22.23.5 and removing the unused global npm/npx bundle only from the production stage passed another complete 62-check rollback. All 2,144 `/app` entries retained identical hashes/links/modes/owners versus the base-update-only image. Its actual digest-addressed scan reported zero HIGH/CRITICAL and one MEDIUM finding; no exception or policy change was used. The tracked recipe's different layer grouping still needs its own exact source/image identities. |
+| WebAdmin image maintenance | Pinning Node 22.23.5 and removing the unused global npm/npx bundle only from the production stage passed another complete 62-check rollback. All 2,144 `/app` entries retained identical hashes/links/modes/owners versus the base-update-only image. Its actual digest-addressed scan reported zero HIGH/CRITICAL and one MEDIUM finding; no exception or policy change was used. The tracked recipe's different layer grouping has separately verified native image/scan/boot identities in the hosted image index above. |
 | Authentication limits | Locally signed Clerk-compatible JWTs went through the production verifier. Unsigned, forged and non-admin issuance was denied; cross-version one-use credentials were accepted once and replay denied. This does not exercise a live identity provider, revocation or logout. |
 | Data Protection | Actual production protector and file keyring worked across 10→11 and rotated 11→10; a different application name failed closed. Packaged rollback retained the same keyring. |
 | Lifecycle and configuration | Eight packaged lifecycle and four actual-host configuration cases passed. Both applications clear JSON/CLI providers and use environment variables. Invalid environment values failed before readiness; valid environment values won over conflicting JSON/CLI inputs. |
@@ -151,7 +158,63 @@ The collector's 10,000-chunk snapshot pattern still allocates approximately
 replacement remains [phase 3](https://github.com/nickna/Conduit/issues/1767).
 No result in this section grants performance acceptance.
 
+A [second independent native cohort](dotnet11-phase2-native-cache-repeat.json)
+at harness head `33637e19` repeated the ARM64 throughput breach: paired fixed→11
+ratio 0.8833, versus 0.9189 previously. Its x64 ratio was 0.9979, versus 0.9641
+previously. Pricing-cache p50 increases repeated in all three states on both
+architectures. Keep the cohorts and their variability separate; do not pool
+their request quantiles or accept a tradeoff automatically.
+
 ## Matched measurement method
+
+The first complete native Gateway cohort at harness `873587a3` passed independent
+source/binary/artifact and exact financial replay on both architectures. Its
+[portable main index](dotnet11-phase2-native-main.json) retains the 23-case
+primary profile, seven expanded core cases, first-content/relay/server-flush
+metrics, GC/memory, readiness/drain/shutdown and all working-budget statuses.
+Each architecture has 345 primary case/run observations and 70 expanded core
+observations. Core cases have 1,000 measured requests per run and five process
+pairs; primary small-sample tails retain their diagnostic limits.
+
+For each fixed/candidate cohort, all 44,110 measured/warmup requests reconcile
+exactly to `3.76443750` in logs, ledger debit and lifetime spend, with balance
+`96.23556250`. Legitimate unresolved holds total `2.2768000`, with known
+indeterminate cost `0.004125` already included in spend; fully reconciled remains
+false. All 25 live drains per architecture passed. Legacy retains exactly five
+Responses failures and `0.000375` missing known charges, so it remains unqualified.
+
+A [separate x64 repeat](dotnet11-phase2-native-main-repeat-x64.json) at harness
+`33637e19` passed the same strict source/artifact/analyzer and exact financial
+replay, with identical request counts and spend. Its 1,000/10,000-chunk standard
+stream CPU ratios were 1.474/1.407, versus 1.515/1.343 initially. The enhanced
+10,000-chunk CPU ratio was 0.963 in the repeat. This repeated contrast points
+toward standard-stream per-chunk processing as a profiling target; the standard
+path already skips the shared collector, so that collector is not a demonstrated
+explanation. CPU stacks are still needed to distinguish JSON/UTF-8, writes,
+flushes and scheduling. Core chat-JSON throughput was 0.955 in the repeat, so the
+initial five-percent breach was not stable even though the direction repeated.
+Keep all individual budgets and cohorts; do not pool requests. The ARM64 repeat
+failed provider observation integrity and is not qualified by this x64 result.
+
+Working performance breaches include core chat-JSON throughput ratios
+0.9353/0.9407 on x64/ARM64; x64 core Responses-JSON 0.9202 (ARM64 1.0137).
+Core x64 standard-short p95 and ARM64 chat/enhanced-short p99 also breach their
+working rules. In the small-sample 10,000-chunk standard stream, throughput
+ratios are 0.7213/0.6908, with CPU ratios 1.3426/1.4211. Those long-stream
+observations support a focused cost investigation, not a population-p99 claim.
+Some checks improve or pass, but the dataset does not support a universal
+performance improvement or an accepted rollout tradeoff.
+
+The separately collected
+[64 KiB pressure index](dotnet11-phase2-native-pressure.json) contains 60 fully
+validated observations and 15 live drains per architecture. Each source cohort
+settles exactly 20 requests for `0.00150000`, with no unresolved holds. Enhanced
+fast-reader throughput ratios 0.9017/0.8813 and duration ratios 1.1124/1.1355
+breach working diagnostics on x64/ARM64; several CPU comparisons also breach.
+All sampled peak-memory checks fit +10%. Paced-reader provider-write spans
+increase materially, supporting pressure propagation within this fixture.
+These single-request case/run samples do not establish population tails or
+production saturation capacity. The original 8 KiB failures remain separate.
 
 The [qualification fixture](../../scripts/qualification/README.md) runs default-GC
 JIT services from clean source archives. The workflow runs x64 and ARM64 on native
@@ -186,6 +249,15 @@ infrastructure identities, raw individual reports, metrics, financial SQL/RDB
 and failed attempts are retained. Gateway windows exclude separate warmups but
 include client startup/finalization and server background work. No idle CPU is
 subtracted. A sampled working-set maximum is not an instantaneous allocation peak.
+
+The original provider fixture is preserved. A later main-profile rerun exposed
+a timestamp-registration race: disposing its request-aborted registration before
+the catch can leave the marker zero despite a caught cancellation. The versioned
+`ProviderV2` records only an actually cancelled public token observed at catch,
+with current time, explicit provenance and raw callback evidence. Deterministic
+registration-disposal/negative/concurrency tests cover the helper. The strict
+validator continues to reject zero cancellation evidence. This changes the
+observation cohort; successful older datasets and failed reruns are not rewritten.
 
 Working phase-0 budgets remain diagnostic proposals: throughput at least 95% of
 baseline; full-response p50/p95/p99 at most `max(1.05 × baseline, baseline + 2 ms)`;

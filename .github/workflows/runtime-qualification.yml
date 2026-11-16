@@ -80,6 +80,9 @@ jobs:
       - name: Verify diagnostic deadline scope and rejection cases
         shell: pwsh
         run: ./scripts/qualification/test-pressure-diagnostic-policy.ps1 -OutputPath '${{ runner.temp }}/runtime-deadline-policy-tests.json'
+      - name: Verify versioned provider cancellation observations
+        working-directory: scripts/qualification/ProviderV2
+        run: dotnet run --project Tests/Conduit.ProviderV2.Tests.csproj -c Release -p:UseSharedCompilation=false -- '${{ runner.temp }}/runtime-provider-tests.json'
       - name: Run three source cohorts on this same native runner
         if: matrix.profile != 'admin-cache'
         shell: pwsh
@@ -111,6 +114,7 @@ jobs:
             ${{ runner.temp }}/runtime-input-integrity.json
             ${{ runner.temp }}/runtime-process-tests
             ${{ runner.temp }}/runtime-deadline-policy-tests.json
+            ${{ runner.temp }}/runtime-provider-tests.json
             ${{ runner.temp }}/runtime-qualification/*.log
             ${{ runner.temp }}/runtime-qualification/*.txt
             ${{ runner.temp }}/runtime-qualification/*.sql
@@ -133,6 +137,7 @@ jobs:
             ${{ runner.temp }}/runtime-qualification/work/*-migrator
             ${{ runner.temp }}/runtime-qualification/work/seed
             ${{ runner.temp }}/runtime-qualification/work/client
+            ${{ runner.temp }}/runtime-qualification/work/provider
             ${{ runner.temp }}/runtime-qualification/work/observer
             ${{ runner.temp }}/runtime-qualification/work/observer-project
             ${{ runner.temp }}/runtime-qualification/work/micro-observer

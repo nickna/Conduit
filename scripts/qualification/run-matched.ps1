@@ -38,7 +38,7 @@ $bindings=[ordered]@{schemaVersion=1;stage=$Stage;configurationSha256=(Get-FileH
  tcpConfiguration=@(foreach($name in @('net.ipv4.tcp_rmem','net.ipv4.tcp_wmem','net.ipv4.tcp_adv_win_scale','net.ipv4.tcp_moderate_rcvbuf','net.ipv4.tcp_congestion_control','net.ipv4.tcp_autocorking','net.ipv4.tcp_rto_min_us','net.core.rmem_max','net.core.wmem_max')){$path='/proc/sys/'+$name.Replace('.','/');[ordered]@{name=$name;available=(Test-Path $path);value=$(if(Test-Path $path){(Get-Content $path)}else{$null})}});
  kernel=(& uname -a);glibc=(& ldd --version|Select-Object -First 1);cpu=@(Get-Content /proc/cpuinfo|Select-Object -First 35);
  cgroup=@(foreach($file in @('/sys/fs/cgroup/cpu.max','/sys/fs/cgroup/memory.max','/sys/fs/cgroup/cpuset.cpus.effective')){if(Test-Path $file){[ordered]@{path=$file;value=(Get-Content $file)}}});
- files=@(foreach($path in @($configuration.workload,$configuration.observer,$configuration.catalog,$PSCommandPath)+@($cohorts|ForEach-Object{$_.gateway})+@($configuration.drainProbe|Where-Object{$_})){[ordered]@{path=$path;sha256=(Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()}});
+ files=@(foreach($path in @($configuration.workload,$configuration.provider,$configuration.observer,$configuration.catalog,$PSCommandPath)+@($cohorts|ForEach-Object{$_.gateway})+@($configuration.drainProbe|Where-Object{$_})){[ordered]@{path=$path;sha256=(Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()}});
   cohorts=@($cohorts|ForEach-Object{[ordered]@{id=$_.id;sourceSha=$_.sourceSha;sourceSdk=$_.sourceSdk;expectedRuntime=$_.expectedRuntime;dotnet=$_.dotnet}});
  gcEnvironment=@(Get-ChildItem Env:|Where-Object{$_.Name -match '^(DOTNET|COMPlus)_(GC|Heap|ServerGC|ConcurrentGC)' }|ForEach-Object{[ordered]@{name=$_.Name;value=$_.Value}});
  scope='Matched JIT diagnostic fixture; provider/client fixed on .NET 10 with a fresh provider per cohort/run and identical logical payload IDs across source pairs; same Linux kernel/monotonic clock and infrastructure; no production capacity or deployment claim'}
@@ -111,8 +111,11 @@ try{
    # Provider observation IDs are scoped to this fresh process. Logical payload
    # IDs match exactly across runtimes; artifact paths remain cohort-specific.
    # Equal-width but different cohort words change BPE admission estimates.
-   $provider=Start-Owned "$prefix-provider" $configuration.clientDotnet @($configuration.workload,'--provider','18083')
+   $provider=Start-Owned "$prefix-provider" $configuration.clientDotnet @($configuration.provider,'--provider','18083')
    [void](Await-Ready 'http://127.0.0.1:18083/health' $provider 30)
+   $providerIdentity=Read-Json 'http://127.0.0.1:18083/identity' "$out/$prefix-provider-identity.json"
+   $providerHash=(Get-FileHash -LiteralPath $configuration.provider -Algorithm SHA256).Hash.ToLowerInvariant()
+   if($configuration.providerObservationVersion -ne 2 -or $providerIdentity.providerObservationVersion -ne 2 -or $providerIdentity.processId -ne $provider.Process.Id -or $providerIdentity.actualRuntime -cne '10.0.15' -or $providerIdentity.architecture -cne $configuration.architecture -or $providerIdentity.sourceSdk -cne '10.0.404' -or $providerIdentity.assemblySha256 -cne $providerHash){throw 'Fixed ProviderV2 identity/runtime/compiler/binary differs'}
    $hostOwned=Start-Owned "$prefix-gateway" $cohort.dotnet @($cohort.gateway) $true
    $ready=Await-Ready 'http://127.0.0.1:18080/health/ready' $hostOwned 120
    $identity=Read-Json 'http://127.0.0.1:18084/snapshot' "$out/$prefix-identity.json"

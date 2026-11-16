@@ -118,9 +118,37 @@ def validate_pressure_report(report, rows):
         require(math.isclose(number(row["providerFirstContentToLastFlushMilliseconds"]), derived, rel_tol=1e-12, abs_tol=1e-9), "Pressure reported provider span differs from monotonic timestamps")
 
 
+def validate_provider_v2_report(report):
+    raw = report.get("providerObservations", {})
+    require(raw.get("providerObservationVersion") == 2, "ProviderV2 root observation version missing")
+    observations = raw.get("observations", [])
+    embedded = report.get("warmup", {}).get("requests", []) + report.get("measured", {}).get("requests", [])
+    for provider in observations + [row.get("provider", {}) for row in embedded]:
+        require(provider.get("providerObservationVersion") == 2, "ProviderV2 per-request version missing")
+        evidence = provider.get("cancellationEvidence")
+        require(isinstance(evidence, dict), "ProviderV2 cancellation provenance missing")
+        values = [provider.get("cancellationTicks"), evidence.get("observedTicks"), evidence.get("rawCallbackTicks"),
+                  provider.get("requestAcceptedTicks"), provider.get("handlerEndTicks")]
+        require(all(type(value) is int and value >= 0 for value in values), "ProviderV2 timestamp shape invalid")
+        ticks, observed, callback, accepted, ended = values
+        require(ticks == observed, "ProviderV2 cancellation timestamp/provenance differ")
+        source = evidence.get("source")
+        if ticks == 0:
+            require(source is None and callback == 0, "ProviderV2 zero timestamp claims cancellation")
+        else:
+            require(source in ("request-aborted-callback", "request-aborted-observed-at-catch"), "ProviderV2 cancellation source invalid")
+            require(accepted > 0 and ended >= ticks >= accepted, "ProviderV2 observed clock lies outside completed handler")
+            if source == "request-aborted-callback":
+                require(callback == ticks, "ProviderV2 raw callback clock differs")
+            if callback:
+                require(accepted <= callback <= ended, "ProviderV2 raw callback lies outside completed handler")
+    return observations
+
+
 def validate_provider_instances(directory, manifest, configuration):
     directory = Path(directory)
     if not any("providerInstanceId" in entry for entry in manifest):
+        require(configuration.get("providerObservationVersion") != 2, "ProviderV2 requires explicit provider process identity")
         return {"freshPerCohortRun": False, "scope": "Historical collection used its declared shared provider process", "instances": []}
     require(all("providerInstanceId" in entry and "providerProcessId" in entry for entry in manifest), "Provider identity contract is mixed/incomplete")
     instances = {}
@@ -131,12 +159,37 @@ def validate_provider_instances(directory, manifest, configuration):
         require(owner[2] > 0 and owner[2] != entry["gatewayProcessId"], "Provider must be a separate actual process")
         require(prefix not in instances or instances[prefix] == owner, "Provider identity changed within one cohort/run")
         instances[prefix] = owner
+    provider_v2 = configuration.get("providerObservationVersion") == 2
+    provider_hash = None
+    if provider_v2:
+        matches = [item for item in read(directory / "bindings.json")["files"] if item["path"] == configuration.get("provider")]
+        require(len(matches) == 1, "ProviderV2 binary binding missing/duplicated")
+        provider_hash = matches[0]["sha256"]
+        for entry in manifest:
+            names = [entry["result"]]
+            if entry["warmups"]:
+                names.append(entry["caseId"] + "-warm.stdout.log")
+            for name in names:
+                validate_provider_v2_report(read(directory / name))
+            report = read(directory / entry["result"])
+            retained = read(directory / (entry["caseId"] + "-provider.json"))
+            validate_provider_v2_report({"providerObservations": retained})
+            require(retained == report["providerObservations"], "ProviderV2 retained/embedded observations differ")
     output = []
     for prefix, (cohort, run, process) in sorted(instances.items()):
         path = directory / (prefix + "-provider.exit.json")
         record = read(path)
         require(record["processId"] == process and record["exitCode"] == 0 and record["graceful"] is True, "Fresh provider did not exit gracefully with its declared process identity")
-        output.append({"providerInstanceId": prefix, "cohort": cohort, "run": run, "processId": process, "exitSha256": sha256(path)})
+        identity = None
+        if provider_v2:
+            identity_path = directory / (prefix + "-provider-identity.json")
+            identity = read(identity_path)
+            require(identity.get("schemaVersion") == 1 and identity.get("providerObservationVersion") == 2, "ProviderV2 identity version missing")
+            require(identity.get("processId") == process and identity.get("actualRuntime") == "10.0.15" and
+                    identity.get("sourceSdk") == "10.0.404" and identity.get("architecture") == configuration["architecture"] and
+                    identity.get("assemblySha256") == provider_hash, "ProviderV2 identity/runtime/compiler/binary differs")
+        output.append({"providerInstanceId": prefix, "cohort": cohort, "run": run, "processId": process, "exitSha256": sha256(path),
+                       **({"identity": identity, "identitySha256": sha256(identity_path)} if provider_v2 else {})})
     return {"freshPerCohortRun": True, "scope": "Fixed frozen provider/client binary and.NET10runtime; one owned provider process per cohort/run", "instances": output}
 
 
@@ -196,6 +249,8 @@ def validate_drains(directory, manifest, configuration, client_runtime="10.0.15"
 def report_rows(report, expected_count=None, allow_legacy=False):
     require(report.get("schemaVersion") == 1, "Unknown frozen client schema")
     config = report["configuration"]
+    if report.get("providerObservations", {}).get("providerObservationVersion") is not None:
+        validate_provider_v2_report(report)
     rows = report["warmup"]["requests"] + report["measured"]["requests"]
     require(len(rows) == (expected_count if expected_count is not None else config["requests"] + config["warmupRequests"]), "Client request count mismatch")
     require(len({row["id"] for row in rows}) == len(rows), "Duplicate client request IDs")

@@ -41,6 +41,28 @@ function Invoke-Docker([string[]]$Arguments){
  if($LASTEXITCODE -ne 0){throw "Docker command failed: $($Arguments[0])"}
  return $value
 }
+function Get-PublishedInputDelta {
+ $expected=[Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
+ foreach($binding in $sourceBindings){foreach($file in $binding.files){$expected.Add($file.path.Replace([char]92,[char]47),$file)}}
+ $actual=[Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
+ $errors=[Collections.Generic.List[string]]::new()
+ foreach($folder in @($expected.Keys|ForEach-Object{$_.Split('/')[0]}|Sort-Object -Unique)){
+  $directory=Join-Path $work $folder
+  if(Test-Path -LiteralPath $directory -PathType Container){
+   foreach($file in @(Get-ChildItem -LiteralPath $directory -Recurse -File)){
+    $relative=[IO.Path]::GetRelativePath($work,$file.FullName).Replace([char]92,[char]47)
+    $actual.Add($relative,$file)
+   }
+  }
+ }
+ $added=@($actual.Keys|Where-Object{!$expected.ContainsKey($_)})
+ $missing=@($expected.Keys|Where-Object{!$actual.ContainsKey($_)})
+ $modified=@(foreach($path in $expected.Keys){if($actual.ContainsKey($path)){
+  try{if($actual[$path].Length -ne $expected[$path].bytes -or (Get-FileHash -LiteralPath $actual[$path].FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expected[$path].sha256){$path}}
+  catch{$errors.Add("Cannot verify published input: $path")}
+ }})
+ return [pscustomobject]@{passed=(!$added.Count -and !$missing.Count -and !$modified.Count -and !$errors.Count);addedFiles=$added;missingFiles=$missing;modifiedFiles=$modified;errors=$errors.ToArray();expectedFiles=$expected.Count;actualFiles=$actual.Count}
+}
 function Publish-Project([string]$Source,[string]$Project,[string]$Destination,[string]$Log,[string]$ExpectedSdk,[string]$Revision=''){
  $toolchain=Join-Path $work "toolchains/$ExpectedSdk"
  New-Item -ItemType Directory -Force -Path $toolchain|Out-Null
@@ -80,10 +102,11 @@ $sourceBindings.ToArray()|ConvertTo-Json -Depth 8|Set-Content "$out/source-bindi
 Publish-Project (Join-Path $work 'legacy') 'Tests/ConduitLLM.GatewayNativeAotTests/ConduitLLM.GatewayNativeAotTests.csproj' (Join-Path $work 'seed') "$out/seed-build.log" '10.0.404' 'f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa'
 $clientProject=if($Profile -in 'pressure','pressure-diagnostic'){'Pressure'}else{'Workload'}
 Publish-Project (Join-Path $PSScriptRoot $clientProject) "$clientProject.csproj" (Join-Path $work 'client') "$out/client-build.log" '10.0.404'
+Publish-Project (Join-Path $PSScriptRoot 'ProviderV2') 'Conduit.ProviderV2.csproj' (Join-Path $work 'provider') "$out/provider-build.log" '10.0.404'
 Publish-Project (Join-Path $PSScriptRoot 'ObserverV2') 'Conduit.ServerObserver.csproj' (Join-Path $work 'observer') "$out/observer-build.log" '10.0.404'
 Publish-Project (Join-Path $PSScriptRoot 'Drain') 'DrainProbe.csproj' (Join-Path $work 'drain') "$out/drain-build.log" '10.0.404'
 $sourceBindings.Add([ordered]@{id='fixed-tools';sourceSdk='10.0.404';files=@(
- foreach($name in @('seed','client','observer','drain')){
+ foreach($name in @('seed','client','provider','observer','drain')){
   Get-ChildItem (Join-Path $work $name) -Recurse -File|ForEach-Object{
    [ordered]@{path=[IO.Path]::GetRelativePath($work,$_.FullName);sha256=(Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant();bytes=$_.Length}
   }
@@ -101,6 +124,7 @@ $diagnosticRuns=[Collections.Generic.List[object]]::new()
 $config=[ordered]@{schemaVersion=1;profile=$(if($Profile -eq 'pressure-diagnostic'){'pressure8'}elseif($Profile -eq 'pressure'){'pressure64'}else{'phase0'});diagnostic=($Profile -eq 'pressure-diagnostic');runs=$(if($Profile -eq 'pressure-diagnostic'){1}else{$Runs});architecture=$Architecture;workingDirectory=$repository;infrastructurePrepared=$false;
  scope='Native Ubuntu host-published JIT processes on one runner; not packaged Resolute image performance; source/compiler/runtime migration effects remain attributable';
  clientDotnet=(Get-Command dotnet).Source;workload=(Join-Path $work "client/Conduit.Phase0.$clientProject.dll");
+ provider=(Join-Path $work 'provider/Conduit.Qualification.ProviderV2.dll');providerObservationVersion=2;
  observer=(Join-Path $work 'observer/Conduit.ServerObserver.dll');drainProbe=(Join-Path $work 'drain/DrainProbe.dll');catalog=$primaryCatalog;cohorts=$cohorts.ToArray()}
 $configPath=Join-Path $out 'configuration.json';$config|ConvertTo-Json -Depth 8|Set-Content $configPath -Encoding utf8NoBOM
 $before=Invoke-Docker @('ps','-aq');$before|Set-Content "$out/outside-containers-before.txt" -Encoding utf8NoBOM
@@ -193,9 +217,9 @@ try{
 if($Profile -eq 'pressure-diagnostic'){
  $diagnosticRows=@(foreach($run in $diagnosticRuns){$manifestPath=Join-Path $run.directory 'manifest.json';if(Test-Path $manifestPath){Get-Content -Raw $manifestPath|ConvertFrom-Json}})
  $unexpected=@($diagnosticRuns|Where-Object{!$_.executionCompleted})
- $mutated=@(foreach($binding in $sourceBindings){foreach($file in $binding.files){if((Get-FileHash (Join-Path $work $file.path) -Algorithm SHA256).Hash.ToLowerInvariant() -cne $file.sha256){$file.path}}})
- [ordered]@{passed=($mutated.Count -eq 0);mutatedFiles=$mutated}|ConvertTo-Json -Depth 4|Set-Content "$out/published-input-integrity.json" -Encoding utf8NoBOM
- $complete=$diagnosticRuns.Count -eq 3 -and $diagnosticRows.Count -eq 3 -and !$unexpected.Count -and !$mutated.Count
+ $inputDelta=Get-PublishedInputDelta
+ $inputDelta|ConvertTo-Json -Depth 4|Set-Content "$out/published-input-integrity.json" -Encoding utf8NoBOM
+ $complete=$diagnosticRuns.Count -eq 3 -and $diagnosticRows.Count -eq 3 -and !$unexpected.Count -and $inputDelta.passed
  [ordered]@{schemaVersion=1;profile='pressure8';diagnosticCollectionCompleted=$complete;protocolPassed=@($diagnosticRows|Where-Object{$_.passed}).Count;deadlineFailures=@($diagnosticRows|Where-Object{$_.diagnosticDeadlineFailure}).Count;runs=$diagnosticRuns.ToArray();rows=$diagnosticRows;candidateRevision=$CandidateRevision;qualificationCheckout=(& git rev-parse HEAD).Trim();architecture=$Architecture;performanceAcceptanceGranted=$false;allocationGateSatisfied=$false;financialQualification=$false;knownPersistedSpendDrainExecuted=$false;scope='Original8KiB diagnostic; deadline observations remain failed protocols, arbitrary failures remain errors; SQL/Redis snapshots are captured state without live drain qualification.'}|ConvertTo-Json -Depth 9|Set-Content "$out/qualification-state.json" -Encoding utf8NoBOM
  if(!$complete){throw 'Diagnostic collection incomplete, unexpected failure, or published input changed'}
  return
@@ -245,13 +269,9 @@ foreach($definition in $cohortDefinitions){
   recordedSpendConservationPassed=$financial.recordedSpendConservationPassed;fullyReconciled=$financial.fullyReconciled;receipt=$financialPath;
   knownPersistedSpendDrain='Each cohort/run separately passed live read-only SQL and known-spend queue drain before shutdown; snapshots do not fabricate a cross-store atomic transaction'})
 }
-$mutated=[Collections.Generic.List[string]]::new()
-foreach($binding in $sourceBindings){foreach($file in $binding.files){
- $actual=(Get-FileHash (Join-Path $work $file.path) -Algorithm SHA256).Hash.ToLowerInvariant()
- if($actual -cne $file.sha256){$mutated.Add($file.path)}
-}}
-[ordered]@{passed=($mutated.Count -eq 0);mutatedFiles=$mutated.ToArray()}|ConvertTo-Json -Depth 4|Set-Content "$out/published-input-integrity.json" -Encoding utf8NoBOM
-if($mutated.Count){throw 'A published application input changed during qualification'}
+$inputDelta=Get-PublishedInputDelta
+$inputDelta|ConvertTo-Json -Depth 4|Set-Content "$out/published-input-integrity.json" -Encoding utf8NoBOM
+if(!$inputDelta.passed){throw 'Published input file set or content changed during qualification'}
 [ordered]@{schemaVersion=1;profile=$Profile;candidateRevision=$CandidateRevision;qualificationCheckout=(& git rev-parse HEAD).Trim();architecture=$Architecture;
  primaryCollectionValidated=$summary.collectionValidated;coreCollectionValidated=$coreSummary.collectionValidated;coreAllWorkloadsPassed=$coreSummary.allWorkloadsPassed;
  allocationGateSatisfied=$false;allocationGateStatus=$summary.allocationGateStatus;
