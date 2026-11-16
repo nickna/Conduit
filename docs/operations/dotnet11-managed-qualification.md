@@ -50,6 +50,12 @@ all six native-CI images to archive/config/registry/raw-scan and native boot
 evidence. Each platform passed 26 business/browser checks; all six scans reported
 zero HIGH/CRITICAL findings and zero exceptions under the unchanged policy.
 These ordinary CI identities remain distinct from production release images.
+The latest harness head `6e5bfc5343f2780ee52216945c208850da662c4b` passed
+[all 21 ordinary CI jobs](https://github.com/nickna/Conduit/actions/runs/43779951958)
+as well. Its [separate six-image index](dotnet11-phase2-hosted-images-v2.json)
+independently verifies both artifact ZIPs, all six image TAR hashes, genuine scan
+and configuration identities, native 26-check business flows and cleanup. These
+new API image bytes are not relabelled as the older `33637e19` archives.
 
 ## Recommended reference deployment
 
@@ -165,16 +171,41 @@ previously. Pricing-cache p50 increases repeated in all three states on both
 architectures. Keep the cohorts and their variability separate; do not pool
 their request quantiles or accept a tradeoff automatically.
 
+The [third cohort](dotnet11-phase2-native-cache-v2.json), at harness `6e5bfc53`,
+passed independent artifact/source/analyzer replay and unchanged financial-table
+checks. Its ARM64 Admin throughput ratio was 1.0045, so the earlier ARM breach
+did not repeat. Its x64 ratio was 0.8995 with CPU/call 1.0726, both outside the
+working thresholds; sampled memory fit on both architectures. These shifting
+results require diagnosis of cohort variability rather than an ARM-only causal
+claim. Pricing-cache cold/L1/L2 p50 ratios remained higher: x64
+1.114/1.491/1.190 and ARM64 1.206/1.527/1.225. No requests or cohorts are pooled.
+
 ## Matched measurement method
 
 The first complete native Gateway cohort at harness `873587a3` passed independent
 source/binary/artifact and exact financial replay on both architectures. Its
 [portable main index](dotnet11-phase2-native-main.json) retains the 23-case
 primary profile, seven expanded core cases, first-content/relay/server-flush
-metrics, GC/memory, readiness/drain/shutdown and all working-budget statuses.
+metrics, GC/memory, readiness/drain/shutdown and fixed-control-to-candidate
+working-budget statuses. Additional control comparisons remain in the artifacts.
 Each architecture has 345 primary case/run observations and 70 expanded core
 observations. Core cases have 1,000 measured requests per run and five process
 pairs; primary small-sample tails retain their diagnostic limits.
+
+The [new ProviderV2 main cohort](dotnet11-phase2-native-main-v2.json) at harness
+`6e5bfc53` also completed on both native architectures. Independent replay checks
+all three source archives, 578 published files and 86 harness files per artifact,
+345 primary/70 core observations and all 25 live drains. Each architecture has
+330 genuine callback cancellation observations, including 30 external warmups;
+all final clocks are coherent. The catch fallback did not occur in these runs;
+its registration-disposal case is covered by deterministic framework tests.
+Fixed/candidate request counts and exact financial totals below are unchanged.
+This remains a separate cohort with no allocation or performance acceptance.
+
+Standard 10,000-chunk CPU increased again: paired ratios 1.309 on x64 and 1.622
+on ARM64, with every pair above 1.0. Full-response p50 ratios were 1.483/1.607.
+The new x64 VM uses AMD 7763/Azure rather than the older Intel/AWS host; compare
+within-VM pairs and repeat directions, without pooling absolute rates.
 
 For each fixed/candidate cohort, all 44,110 measured/warmup requests reconcile
 exactly to `3.76443750` in logs, ledger debit and lifetime spend, with balance
@@ -195,6 +226,10 @@ flushes and scheduling. Core chat-JSON throughput was 0.955 in the repeat, so th
 initial five-percent breach was not stable even though the direction repeated.
 Keep all individual budgets and cohorts; do not pool requests. The ARM64 repeat
 failed provider observation integrity and is not qualified by this x64 result.
+Standard/enhanced protocols have different wire and collector work; this contrast
+does not isolate a cost center. In the two older x64 cohorts, enhanced long
+streams used more absolute CPU; the newer AMD cohort changes that comparison.
+Compare runtime pairs within each protocol.
 
 Working performance breaches include core chat-JSON throughput ratios
 0.9353/0.9407 on x64/ARM64; x64 core Responses-JSON 0.9202 (ARM64 1.0137).
@@ -215,6 +250,18 @@ All sampled peak-memory checks fit +10%. Paced-reader provider-write spans
 increase materially, supporting pressure propagation within this fixture.
 These single-request case/run samples do not establish population tails or
 production saturation capacity. The original 8 KiB failures remain separate.
+
+The [ProviderV2 pressure repeat](dotnet11-phase2-native-pressure-v2.json) also
+passed whole-artifact, source/binary, complete-response and exact financial
+replay on both architectures: 60 validated observations, 15 live drains and
+20 requests for `0.00150000` per source, with no holds. Enhanced-fast throughput
+ratios 0.9074/0.8807 and duration ratios 1.1073/1.1365 repeat the x64/ARM64
+working breaches; standard-paced CPU ratios 1.1280/1.0788 also breach. Sampled
+memory fits, while allocation comparison and population tails remain unavailable.
+The first ARM64 attempt lost its runner before upload. After seven siblings
+finished, normal cancellation settled that stale run record and a single ARM64
+retry completed. Attempt 2 aliases retain the seven original execution times;
+the interruption and successful retry are distinct, and no partial data is used.
 
 The [qualification fixture](../../scripts/qualification/README.md) runs default-GC
 JIT services from clean source archives. The workflow runs x64 and ARM64 on native
@@ -242,6 +289,15 @@ backpressure. Admin/cache/collector measurements use a
 separate profile. A list-based streaming-metrics microbenchmark is not evidence
 of durable queue throughput.
 
+The [new ProviderV2 8 KiB cohort](dotnet11-phase2-native-pressure8-v2.json) passed
+independent ZIP/source/binary/identity and strict-policy replay on both native
+architectures. Four of six source/architecture observations remain failed 120-second deadlines; x64
+fixed and ARM64 candidate completed in 1.754/2.761 seconds. The collection's green
+status grants no protocol/financial/performance acceptance. Failed transfers were
+99.8–100% receive-window limited, but a successful case also briefly queued
+2.47 MB. Queue size alone is not a failure classifier or a causal explanation.
+This remains separate from the 64 KiB financial/complete-response cohort.
+
 Workload/provider binaries remain on .NET 10. Each source/run gets a fresh provider
 with identical logical payload identifiers across runtime pairs. Exact sources,
 SDKs, published binaries, observer versions, CPU/OS/kernel/glibc/cgroup data,
@@ -258,6 +314,20 @@ with current time, explicit provenance and raw callback evidence. Deterministic
 registration-disposal/negative/concurrency tests cover the helper. The strict
 validator continues to reject zero cancellation evidence. This changes the
 observation cohort; successful older datasets and failed reruns are not rewritten.
+
+A [retrospective V1 clock audit](dotnet11-phase2-historical-provider-audit.json)
+found one external before-usage warmup in the
+original ARM64 main cohort with a genuine positive cancellation callback but a
+zero handler-end field and no error yet. The mutable snapshot was not finalized;
+the original client accepted cancellation evidence without requiring finalization.
+That warmup stays outside the timed Gateway window and is not relabelled as a
+final provider snapshot. Measured cancellation rows in both original main
+artifacts and the x64 repeat have coherent positive handler-end clocks. Exact
+financial replay remains separately recorded. V2's detached progress/final DTOs
+and strict provenance checks close this observation gap in new cohorts.
+That request has a retained settled tombstone for a bounded estimate of
+`0.00134750`; it is not one of the 55 unresolved holds. The audit does not claim a
+unique per-request SQL join or independently replay the tokenizer.
 
 Working phase-0 budgets remain diagnostic proposals: throughput at least 95% of
 baseline; full-response p50/p95/p99 at most `max(1.05 × baseline, baseline + 2 ms)`;
@@ -286,6 +356,28 @@ standalone reproducer recorded heap-count transitions without a sampled counter
 decrease; asynchronously dispatched heap events cannot establish exact retirement
 boundaries. This does not exonerate the real workload failure. Latency, CPU, sampled memory, protocol and exact financial
 collection can proceed while allocation qualification remains open.
+
+### Budget-breach profiling handoff
+
+Use a separate instrumented cohort for the fixed/candidate standard 1,000 and
+10,000-chunk cases and enhanced 10,000-chunk control, on each native architecture.
+Keep exact payloads, provider/runtime identities, default GC, live financial drain
+and alternating order. Trace overhead does not become a new release baseline.
+
+Pin and retain the diagnostic tool's version, package/hash and actual arguments.
+Prefer kernel on-CPU and scheduler stacks with `dotnet-trace collect-linux`
+profiles `dotnet-common,cpu-sampling,thread-time`, explicitly scoped to the Gateway
+PID. The [official tool prerequisites](https://learn.microsoft.com/en-us/dotnet/core/diagnostics/dotnet-trace#dotnet-trace-collect-linux)
+include native Linux x64/ARM64, kernel 6.4+ with `CONFIG_USER_EVENTS`, mounted
+tracefs and root access. Check those capabilities before collection. Ordinary
+`collect` with `dotnet-sampled-thread-time` estimates thread wall time; it cannot
+substitute for on-CPU attribution. Retain event-loss/unresolved-stack limits and
+separate concurrent-GC, serializer/UTF-8, write/flush and scheduling costs.
+
+No such CPU-stack collection has executed in these cohorts. Native ARM64 tracing
+still requires an ARM64 runner with those capabilities; Windows/x64 or emulation
+cannot close that investigation. The completed native ARM64 fixture measurements
+and image checks do not require a new local ARM64 machine.
 
 ## Managed rollout and rollback procedure
 

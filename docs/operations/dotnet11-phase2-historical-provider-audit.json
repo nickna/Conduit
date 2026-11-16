@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "scope": "Supplemental read-only interpretation of one historical V1 ARM external-warmup progress snapshot; no raw or prior receipt rewritten and no final handler state inferred",
+  "artifactId": 14185873402,
+  "artifactSha256": "0538f135d049ece2f629873414b01dc8e904069bd84afa0e98d80cbc5616d473",
+  "sourceFiles": [
+    {
+      "artifactEntry": "measure/phase0-candidate--------r1-cancel-before-usage-warm.stdout.log",
+      "sha256": "07c262b942f4484fcba7d6565f526124c0aa49fd40413a46057a62dca74a0bdc"
+    },
+    {
+      "artifactEntry": "accounting/candidate/snapshot.json",
+      "sha256": "6e0f40044079f69c05377603e1a33ebed4886d034b8d2f57c0202131a97767ba"
+    },
+    {
+      "artifactEntry": "candidate-financial.json",
+      "sha256": "2ac4e644a544e8b50cfbe015ded54d544ab55694e43fa7f560c13cde38155024"
+    }
+  ],
+  "request": {
+    "logicalId": "phase0-r1-cancel-before-usage-warm-m0000",
+    "providerInstanceId": "phase0-candidate--------r1",
+    "externalWarmup": true,
+    "actualCancellationCallbackTicks": 802954406073,
+    "handlerEndTicks": 0,
+    "handlerFinalizationProved": false,
+    "usageEvents": 0,
+    "usageWriteTicks": 0,
+    "doneWriteTicks": 0,
+    "clientCorrelationHeader": "396dacffc62a4f4491e0388d939ad8da",
+    "thisHeaderFoundInRedisBillingKey": true
+  },
+  "persistedState": {
+    "state": "settled-bounded-estimate",
+    "settledUnits": "134750",
+    "spendUnitScale": "100000000",
+    "cost": "0.0013475",
+    "owner": "1",
+    "reservationBound": "0.041485",
+    "unresolvedHoldForThisRequest": false,
+    "estimateFormula": {
+      "inputTokens": 219,
+      "outputTokens": 80,
+      "inputPerMillion": "2.5",
+      "outputPerMillion": "10",
+      "exactCost": "0.0013475"
+    },
+    "joinLimitation": "Redis correlation/settled tombstone and persisted token/cost cohort support this bounded estimate. RequestLogs lack its unique billing ID; no unique per-request SQL join or independently replayed tokenizer is claimed."
+  },
+  "remainingUnresolvedHolds": {
+    "count": 55,
+    "heldAmount": "2.2768000",
+    "knownIndeterminateCost": "0.004125",
+    "fullyReconciled": false
+  },
+  "currentV2Audit": {
+    "positiveCancellationRequiresFinalHandler": true,
+    "mechanism": "Progress DTO exposes cancellation0; frozen client waits nonzero; release-published final DTO acquired once; current analyzer requires handlerEnd>=observedCancellation>0",
+    "sourceAnchors": [
+      "scripts/qualification/ProviderV2/Models.cs:68",
+      "scripts/qualification/ProviderV2/Models.cs:79",
+      "scripts/qualification/Workload/Client.cs:68",
+      "scripts/qualification/qualification.py:139"
+    ]
+  },
+  "rawAuditReceipt": {
+    "path": "artifacts/dotnet11-phase2/hosted-6e5bfc53-main/historical-warmup-financial-followup.json",
+    "sha256": "e8eb811227ab360c063c5b4e05e07494776e2a93f559a90ba05ae6165e3f99d9"
+  }
+}
