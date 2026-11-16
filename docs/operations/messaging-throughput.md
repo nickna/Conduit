@@ -10,6 +10,13 @@ This page explains where the ceiling comes from, which queue binds first, and wh
 about it. It does not restate the tuning values — those live in
 `ConduitEndpointPolicies` and are the source of truth.
 
+The measured rates below, including roughly 39/s at batch 10 and 200/s at batch 50,
+are preserved historical local-fixture observations from the earlier handler-entry
+collector ([baseline source](https://github.com/nickna/Conduit/blob/f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa/docs/operations/messaging-throughput.md)).
+They are not new .NET 11 results or production capacity forecasts. The current
+schema 2 harness separately records handler completion and SQL-observed durable
+inbox settlement; its rates are not interchangeable with those historical figures.
+
 ## What sets the ceiling
 
 Two independent limits apply to every listener, and the lower one wins:
@@ -142,21 +149,45 @@ The harness lives in `Tests/ConduitLLM.Benchmarks` and drives a real Wolverine h
 the harness reports, and no figure here can silently drift from the code that produces it.
 
 ```bash
+# Set this to an explicitly owned private PostgreSQL fixture, targeting its postgres
+# maintenance database. Never use an application database or implicit localhost:5432.
+: "${PHASE3_QUEUE_ADMIN_CONNECTION:?Set the private fixture maintenance connection first}"
+
 # Ceiling for one queue, sweeping simulated handler cost
 dotnet run -c Release --project Tests/ConduitLLM.Benchmarks -- transport-throughput \
-    --queue spend --messages 600 --handler-cost-ms 0,5,15,30,60
+    --queue spend --messages 600 --handler-cost-ms 0,5,15,30,60 \
+    --admin-connection "$PHASE3_QUEUE_ADMIN_CONNECTION" \
+    --database "conduit_msgbench_$(date +%s%N)" \
+    --output "artifacts/queue-$(date +%s%N).json"
 
 # Latency at a fixed offered load (the only way to get a meaningful latency figure)
 dotnet run -c Release --project Tests/ConduitLLM.Benchmarks -- transport-throughput \
-    --queue spend --messages 400 --handler-cost-ms 15 --rate 20
+    --queue spend --messages 400 --handler-cost-ms 15 --rate 20 \
+    --admin-connection "$PHASE3_QUEUE_ADMIN_CONNECTION" \
+    --database "conduit_msgbench_$(date +%s%N)" \
+    --output "artifacts/queue-$(date +%s%N).json"
 
 # Effect of a proposed retune, before committing it to ConduitEndpointPolicies
 dotnet run -c Release --project Tests/ConduitLLM.Benchmarks -- transport-throughput \
-    --queue spend --messages 800 --receive-batch 50
+    --queue spend --messages 800 --receive-batch 50 \
+    --admin-connection "$PHASE3_QUEUE_ADMIN_CONNECTION" \
+    --database "conduit_msgbench_$(date +%s%N)" \
+    --output "artifacts/queue-$(date +%s%N).json"
 ```
 
 Queues: `spend`, `webhook`, `image`, `video`, `gateway-default`.
 
-The harness creates and uses its own database (`conduit_msgbench`). This is deliberate — the
+Each invocation creates fresh databases with an owned name prefix and a fresh JSON report;
+existing databases or report files are rejected. The schema 2 completion gate requires a successful
+warmup, exact unique message IDs, preserved sequential spend handling, finished handlers,
+SQL-observed `Handled` inbox rows and empty active transport/inbox/outbox/dead-letter state.
+Settlement timestamps include the polling observer's delay and database work. These
+synthetic handlers do not debit real group balances or prove financial closure. See the
+[phase 3 queue driver](../../scripts/performance/phase3/README-queue.md) for matched sweeps,
+runtime/GC identity and report-policy checks. No production batch/concurrency change is
+adopted by running the experiment.
+The default publisher parallelism is1; preserve it for the strict spend-order check.
+
+The harness creates and uses its own databases. This is deliberate — the
 queue names are the production ones, so pointing it at the application database would inject
 synthetic spend and webhook events into queues a running Gateway is listening on.
