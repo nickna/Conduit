@@ -19,7 +19,13 @@ public static class GroqChunkConverter
     {
         var transformedJson = ExtractGroqUsageJson(providerChunk);
         var context = new CoreHttpJsonContext(new JsonSerializerOptions(options));
-        return DeserializeChunk(providerChunk, transformedJson, context.ChatCompletionChunk);
+        var chunk = JsonSerializer.Deserialize(transformedJson, context.ChatCompletionChunk);
+        if (chunk != null)
+        {
+            chunk.ProviderToolUsage = ExtractHostedToolUsage(providerChunk);
+        }
+
+        return chunk;
     }
 
     // The Groq client owns immutable metadata for its stable serializer policy.
