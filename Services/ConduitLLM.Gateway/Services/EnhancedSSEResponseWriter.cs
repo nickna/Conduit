@@ -16,6 +16,7 @@ namespace ConduitLLM.Gateway.Services
     /// </summary>
     public class EnhancedSSEResponseWriter
     {
+        private static readonly byte[] NamedEventNewline = Encoding.UTF8.GetBytes(Environment.NewLine);
         private readonly HttpResponse _response;
         private readonly JsonSerializerOptions _jsonOptions;
         public bool EnhancedEventsEnabled { get; }
@@ -66,10 +67,9 @@ namespace ConduitLLM.Gateway.Services
             
             await EnsureHeadersWrittenAsync(cancellationToken);
             
-            // OpenAI format uses just "data:" without event type
-            var json = JsonSerializer.Serialize(data, GatewayJsonTypeInfo.Require<T>(_jsonOptions));
-            var eventData = $"data: {json}\n\n";
-            var bytes = Encoding.UTF8.GetBytes(eventData);
+            // Keep the entire frame private until serialization succeeds. A converter
+            // failure must not leave a partial JSON frame in the response body.
+            var bytes = CreateFrame(data, null, "\n"u8);
             await _response.Body.WriteAsync(bytes, cancellationToken);
             await _response.Body.FlushAsync(cancellationToken);
             RecordSuccessfulEvent(bytes.Length);
@@ -195,25 +195,38 @@ namespace ConduitLLM.Gateway.Services
             
             await EnsureHeadersWrittenAsync(cancellationToken);
             
-            var json = JsonSerializer.Serialize(data, GatewayJsonTypeInfo.Require<T>(_jsonOptions));
-            var eventData = new StringBuilder();
-            
-            // Add event type if specified
-            if (!string.IsNullOrEmpty(eventType))
-            {
-                eventData.AppendLine($"event: {eventType}");
-            }
-            
-            // Add data field
-            eventData.AppendLine($"data: {json}");
-            
-            // Add empty line to signal end of event
-            eventData.AppendLine();
-            
-            var bytes = Encoding.UTF8.GetBytes(eventData.ToString());
+            // Preserve the named-event dialect's existing platform newline bytes.
+            var bytes = CreateFrame(data, eventType, NamedEventNewline);
             await _response.Body.WriteAsync(bytes, cancellationToken);
             await _response.Body.FlushAsync(cancellationToken);
             RecordSuccessfulEvent(bytes.Length);
+        }
+
+        private byte[] CreateFrame<T>(T data, string? eventType, ReadOnlySpan<byte> newline)
+        {
+            var json = JsonSerializer.SerializeToUtf8Bytes(data, GatewayJsonTypeInfo.Require<T>(_jsonOptions));
+            var hasEventType = !string.IsNullOrEmpty(eventType);
+            var eventTypeBytes = hasEventType ? Encoding.UTF8.GetByteCount(eventType!) : 0;
+            var prefixLength = hasEventType ? checked(7 + eventTypeBytes + newline.Length) : 0;
+            // Each invocation owns its frame through the asynchronous write and flush;
+            // overlapping content/tool events cannot overwrite an in-flight buffer.
+            var frame = new byte[checked(prefixLength + 6 + json.Length + newline.Length * 2)];
+            var position = 0;
+            if (hasEventType)
+            {
+                "event: "u8.CopyTo(frame);
+                position = 7;
+                position += Encoding.UTF8.GetBytes(eventType!, frame.AsSpan(position));
+                newline.CopyTo(frame.AsSpan(position));
+                position += newline.Length;
+            }
+            "data: "u8.CopyTo(frame.AsSpan(position));
+            position += 6;
+            json.CopyTo(frame, position);
+            position += json.Length;
+            newline.CopyTo(frame.AsSpan(position));
+            newline.CopyTo(frame.AsSpan(position + newline.Length));
+            return frame;
         }
 
         /// <summary>
