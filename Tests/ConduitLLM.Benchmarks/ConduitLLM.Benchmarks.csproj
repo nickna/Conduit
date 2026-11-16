@@ -16,7 +16,9 @@
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
-    <PackageReference Include="WolverineFx.RuntimeCompilation" PrivateAssets="all" />
+    <!-- The synthetic queue host compiles handlers at runtime. PrivateAssets also
+         excludes publishing by default, so retain this fixture-only closure. -->
+    <PackageReference Include="WolverineFx.RuntimeCompilation" PrivateAssets="all" Publish="true" />
   </ItemGroup>
 
   <ItemGroup>

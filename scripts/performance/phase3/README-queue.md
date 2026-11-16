@@ -7,6 +7,19 @@ database, creates any Docker/netem fixtures, and removes them afterward. The dri
 creates fresh `conduit_phase3_queue_*` databases and never drops or reuses a database.
 Redis is not used by the synthetic transport cohort.
 
+The benchmark host deliberately compiles synthetic handlers at runtime. Its private
+compiler package explicitly participates in publishing; production service
+dependency guards remain unchanged. Verify a published folder before connecting
+to a fixture:
+
+```powershell
+dotnet /tmp/published-benchmarks/ConduitLLM.Benchmarks.dll transport-runtime-smoke
+```
+
+This database-free probe uses the queue host's compiler configuration to compile
+and execute a constant C# method. A successful build alone cannot establish that
+the published folder contains its complete runtime dependency closure.
+
 ```powershell
 pwsh ./scripts/performance/phase3/run-queue-matrix.ps1 `
   -BenchmarkDll /tmp/published-benchmarks/ConduitLLM.Benchmarks.dll `

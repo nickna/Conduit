@@ -39,6 +39,15 @@ public class Program
             return await ProviderMicroHarness.RunAsync(args[1..]).ConfigureAwait(false);
         }
 #if !STREAMING_MICRO_ONLY
+        if (args.Length == 1 && args[0].Equals("transport-runtime-smoke", StringComparison.Ordinal))
+        {
+            try { return TransportThroughputHarness.VerifyRuntimeCompilation(); }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine(exception);
+                return 1;
+            }
+        }
         if (args.Length > 0 && args[0].Equals("transport-throughput", StringComparison.OrdinalIgnoreCase))
         {
             return await TransportThroughputHarness.RunAsync(args[1..]).ConfigureAwait(false);

@@ -13,6 +13,12 @@ namespace ConduitLLM.Tests.Messaging;
 
 public class TransportThroughputHarnessTests
 {
+    [Fact]
+    public void RuntimeCompilationSmoke_CompilesAndExecutesWithoutDatabaseConfiguration()
+    {
+        Assert.Equal(0, TransportThroughputHarness.VerifyRuntimeCompilation());
+    }
+
     private static SpendUpdateRequested Publish(DeliveryCollector collector, int sequence = 0, decimal amount = .01m)
     {
         var message = new SpendUpdateRequested { KeyId = 1, RequestId = Guid.NewGuid().ToString("N"),

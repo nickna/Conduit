@@ -123,6 +123,43 @@ namespace ConduitLLM.Benchmarks.Messaging
                 }),
         };
 
+        /// <summary>
+        /// Verifies the published benchmark's dynamic compiler closure without opening a database.
+        /// A normal build can contain dependencies that a publish excludes, so CI runs this
+        /// from the same published directory used by the queue sweep.
+        /// </summary>
+        public static int VerifyRuntimeCompilation()
+        {
+            var options = new WolverineOptions();
+            ConfigureRuntimeCompilation(options);
+            using var services = options.Services.BuildServiceProvider();
+            var compiler = services.GetRequiredService<IAssemblyGenerator>();
+            var assembly = compiler.Generate("""
+                namespace ConduitLLM.Benchmarks.Generated;
+                public static class TransportRuntimeCompilationProbe
+                {
+                    public static int Run() => 6 * 7;
+                }
+                """);
+            var type = assembly.GetType(
+                "ConduitLLM.Benchmarks.Generated.TransportRuntimeCompilationProbe", throwOnError: true)!;
+            var run = type.GetMethod("Run", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+                ?? throw new InvalidOperationException("The runtime compiler did not emit the expected probe method.");
+            var value = run.CreateDelegate<Func<int>>()();
+            if (value != 42)
+                throw new InvalidOperationException("The runtime-compiled probe returned an unexpected value.");
+
+            Console.WriteLine($"Runtime compilation smoke passed: mode={options.CodeGeneration.TypeLoadMode}; " +
+                $"compiler={compiler.GetType().Assembly.GetName().Name}; generatedValue={value}.");
+            return 0;
+        }
+
+        private static void ConfigureRuntimeCompilation(WolverineOptions options)
+        {
+            options.CodeGeneration.TypeLoadMode = TypeLoadMode.Dynamic;
+            options.UseRuntimeCompilation();
+        }
+
         public static async Task<int> RunAsync(string[] args)
         {
             var options = HarnessOptions.Parse(args);
@@ -422,8 +459,7 @@ namespace ConduitLLM.Benchmarks.Messaging
                     {
                         // Benchmark-only event sets are selected at runtime and therefore
                         // cannot use either production host's committed adapter registry.
-                        opts.CodeGeneration.TypeLoadMode = TypeLoadMode.Dynamic;
-                        opts.UseRuntimeCompilation();
+                        ConfigureRuntimeCompilation(opts);
 
                         AddBenchmarkBridges(opts, target.EventTypes);
 

@@ -64,6 +64,13 @@ try {
  $identity=Get-OwnedContainer
  $identity|ConvertTo-Json -Depth 30|Set-Content "$out/postgres-container.json" -Encoding utf8NoBOM
  Invoke-Checked docker @('exec',$containerId,'psql','-X','-U','phase3','-d','postgres','-Atc','SELECT version()')|Set-Content "$out/postgres-version.txt" -Encoding utf8NoBOM
+ # Prove the actual durable transport/Handled witness on a tiny fresh database
+ # before attempting the full capacity/latency matrix. This is not timing data.
+ & (Join-Path $PSScriptRoot 'run-queue-matrix.ps1') -BenchmarkDll $BenchmarkDll `
+  -AdminConnection 'Host=127.0.0.1;Port=15486;Username=phase3;Password=isolated-phase3-fixture;Database=postgres;Pooling=true' `
+  -OutputDirectory "$out/preflight" -LatencyLabel 'functional preflight, no injected latency' `
+  -Batches @(10) -HandlerCostMs @(0) -Repeats 1 -Messages 2 -Warmup 2 -TimeoutSeconds 30
+ if($LASTEXITCODE -ne 0){throw 'Real PostgreSQL transport preflight failed'}
  # Enter only this labelled container's network namespace. The host filesystem
  # supplies tc; no host network interface or existing container is reconfigured.
  [void](Invoke-Checked sudo @('-n','tc','-V'))
