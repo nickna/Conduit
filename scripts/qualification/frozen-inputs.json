@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "phase0SourceRevision": "f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa",
+  "scope": "Exact frozen source bytes only. global.json pins and new observer instrumentation are versioned separately; rebuilt binaries differ from historical binaries.",
+  "files": [
+    {
+      "path": "Workload/Client.cs",
+      "phase0Path": "extended/workload/Client.cs",
+      "bytes": 29037,
+      "sha256": "13579da22bddb07aa0d1d2fcd74185158b219aed8491f726d72ddf869e33d10e"
+    },
+    {
+      "path": "Workload/Directory.Build.props",
+      "phase0Path": "extended/workload/Directory.Build.props",
+      "bytes": 229,
+      "sha256": "4d135466be687093ba0f3b09d7244bb5ef80e02feb5e7232f8cf9fe6ce8f15b1"
+    },
+    {
+      "path": "Workload/Directory.Build.targets",
+      "phase0Path": "extended/workload/Directory.Build.targets",
+      "bytes": 12,
+      "sha256": "17284cb74605517cbec8a8153505da71a685b28694b67b5ef80608cd79b1c0ea"
+    },
+    {
+      "path": "Workload/Models.cs",
+      "phase0Path": "extended/workload/Models.cs",
+      "bytes": 7015,
+      "sha256": "2448bdff01705b78cf31224c705fb207128069dcdd2f64185d626d84d1de2e15"
+    },
+    {
+      "path": "Workload/Program.cs",
+      "phase0Path": "extended/workload/Program.cs",
+      "bytes": 756,
+      "sha256": "9631cc942e3a531f920dd4b4b0881ecf10183304884155adf2ab433ee3f79023"
+    },
+    {
+      "path": "Workload/Provider.cs",
+      "phase0Path": "extended/workload/Provider.cs",
+      "bytes": 10335,
+      "sha256": "bbc62e48a773fca87f8adae8ce423282e433b06bde470bb23ee9238a9501d15b"
+    },
+    {
+      "path": "Workload/Workload.csproj",
+      "phase0Path": "extended/workload/Workload.csproj",
+      "bytes": 213,
+      "sha256": "4be507dc3f6d9b4d3bbe0753e28da16204d403d47be3987ebbcc11cf1c404997"
+    },
+    {
+      "path": "Pressure/catalog.json",
+      "phase0Path": "extended/pressure/catalog.json",
+      "bytes": 3283,
+      "sha256": "0624e2bc2cc033db75e6d8ee8f0caee3d0698857a92f6214b958feb2c6317ae0"
+    },
+    {
+      "path": "Pressure/Client.cs",
+      "phase0Path": "extended/pressure/Client.cs",
+      "bytes": 30803,
+      "sha256": "cd439a9ee0dda18a23648ec3e8810ed254971540fb2ff2023fd5aa80e1f3eee6"
+    },
+    {
+      "path": "Pressure/Directory.Build.props",
+      "phase0Path": "extended/pressure/Directory.Build.props",
+      "bytes": 229,
+      "sha256": "4d135466be687093ba0f3b09d7244bb5ef80e02feb5e7232f8cf9fe6ce8f15b1"
+    },
+    {
+      "path": "Pressure/Directory.Build.targets",
+      "phase0Path": "extended/pressure/Directory.Build.targets",
+      "bytes": 12,
+      "sha256": "17284cb74605517cbec8a8153505da71a685b28694b67b5ef80608cd79b1c0ea"
+    },
+    {
+      "path": "Pressure/Models.cs",
+      "phase0Path": "extended/pressure/Models.cs",
+      "bytes": 7202,
+      "sha256": "0dbf74e6c7322954735e0c854d1cb1dfa17e87ac7883fa2859ddb70dc900cd30"
+    },
+    {
+      "path": "Pressure/Pressure.csproj",
+      "phase0Path": "extended/pressure/Pressure.csproj",
+      "bytes": 213,
+      "sha256": "6a141dfbd47c435c270f1fd48743b62593109beca87a0da2a53075ce4252baf3"
+    },
+    {
+      "path": "Pressure/Program.cs",
+      "phase0Path": "extended/pressure/Program.cs",
+      "bytes": 756,
+      "sha256": "9631cc942e3a531f920dd4b4b0881ecf10183304884155adf2ab433ee3f79023"
+    },
+    {
+      "path": "Pressure/Provider.cs",
+      "phase0Path": "extended/pressure/Provider.cs",
+      "bytes": 10335,
+      "sha256": "bbc62e48a773fca87f8adae8ce423282e433b06bde470bb23ee9238a9501d15b"
+    },
+    {
+      "path": "Pressure/README.md",
+      "phase0Path": "extended/pressure/README.md",
+      "bytes": 3187,
+      "sha256": "fe9bbe2605040a3ab44bc8b48dafddc58b5aa7c2719803c10b8b4d9b36adce84"
+    },
+    {
+      "path": "Observer/Conduit.ServerObserver.csproj",
+      "phase0Path": "extended/observer/Conduit.ServerObserver.csproj",
+      "bytes": 487,
+      "sha256": "a3aa3255ffb55ddeaeef162045f31d1e4ca04dea997c81d36282c53ba1b7f482"
+    },
+    {
+      "path": "Observer/Directory.Build.props",
+      "phase0Path": "extended/observer/Directory.Build.props",
+      "bytes": 121,
+      "sha256": "2d5bfd4d93d6ed857b76d40c1de99f10f316c0cd5d5cf8cf241f9f9790d12648"
+    },
+    {
+      "path": "Observer/Directory.Build.targets",
+      "phase0Path": "extended/observer/Directory.Build.targets",
+      "bytes": 12,
+      "sha256": "17284cb74605517cbec8a8153505da71a685b28694b67b5ef80608cd79b1c0ea"
+    },
+    {
+      "path": "Observer/Directory.Packages.props",
+      "phase0Path": "extended/observer/Directory.Packages.props",
+      "bytes": 121,
+      "sha256": "2d5bfd4d93d6ed857b76d40c1de99f10f316c0cd5d5cf8cf241f9f9790d12648"
+    },
+    {
+      "path": "Observer/StartupHook.cs",
+      "phase0Path": "extended/observer/StartupHook.cs",
+      "bytes": 17938,
+      "sha256": "5e9aff7a738ebb58e7a789161c5b3b5f7f069d0b45a500593f8dcafb16d0921c"
+    }
+  ]
+}

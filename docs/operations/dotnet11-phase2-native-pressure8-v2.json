@@ -1,0 +1,1027 @@
+{
+  "schemaVersion": 1,
+  "profile": "pressure8-diagnostic",
+  "workflow": {
+    "id": 43779951909,
+    "head": "6e5bfc5343f2780ee52216945c208850da662c4b",
+    "testedMerge": "b73c57c85ae6326e25498b0ed13ccfed4fd7b342",
+    "tree": "d49e7a91182626f98db65e955f3b10797a5665dd",
+    "candidateApp": "66c5c3dad682d40d13ed7391b327ea2397553d58"
+  },
+  "architectures": {
+    "x64": {
+      "artifact": {
+        "id": 14187912304,
+        "sha256": "sha256:7de7e444c0b4449ce5981efd4e9feabc8b92b1cf3710d73f9acb7c53daba22a6",
+        "bytes": 120927233,
+        "url": "https://github.com/nickna/Conduit/actions/runs/43779951909/artifacts/14187912304"
+      },
+      "jobId": 133014640753,
+      "runnerName": "GitHub Actions 1000035767",
+      "runnerLabels": [
+        "ubuntu-24.04"
+      ],
+      "canonicalHarnessFilesVerified": 86,
+      "publishedFilesRehashed": 579,
+      "sourceBindings": [
+        {
+          "id": "legacy",
+          "sourceSha": "f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa",
+          "sourceSdk": "10.0.404",
+          "sourceTree": "4d16b46bb66293913d0230de18c257a08003ebf7",
+          "archiveSha256": "b76fb111b39027a8049774c0224e3dedd83ae1458e62601e3fad4b29df264196"
+        },
+        {
+          "id": "fixed",
+          "sourceSha": "911d7b6bbe54b4a6b77058b75ee2a86bc2d59097",
+          "sourceSdk": "10.0.404",
+          "sourceTree": "cfd0d6a99ea308d7634f4fb8cbc78960b247e4a2",
+          "archiveSha256": "0aca796eb41fac505bb07b7ece8aa13dd2b6249fdc0eb270faec07f84f57f783"
+        },
+        {
+          "id": "candidate",
+          "sourceSha": "66c5c3dad682d40d13ed7391b327ea2397553d58",
+          "sourceSdk": "11.0.100",
+          "sourceTree": "39c5d3112336107c3006efb38a5f4a6e372368c7",
+          "archiveSha256": "cceff7fc6fc316c16671afd3037aad43eef986ad71857c33743696a8492390e2"
+        },
+        {
+          "id": "fixed-tools",
+          "sourceSdk": "10.0.404"
+        }
+      ],
+      "protocolPassed": 1,
+      "deadlineFailures": 2,
+      "hardware": {
+        "nativeArchitecture": "X64",
+        "processorCount": 4,
+        "kernel": "Linux ip-10-0-129-17 7.0.0-1014-aws #14~24.04.1-Ubuntu SMP PREEMPT Fri Sep 18 21:24:59 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux",
+        "glibc": "ldd (Ubuntu GLIBC 2.39-0ubuntu8.9) 2.39",
+        "osRelease": [
+          "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"",
+          "NAME=\"Ubuntu\"",
+          "VERSION_ID=\"24.04\"",
+          "VERSION=\"24.04.5 LTS (Noble Numbat)\"",
+          "VERSION_CODENAME=noble",
+          "ID=ubuntu",
+          "ID_LIKE=debian",
+          "HOME_URL=\"https://www.ubuntu.com/\"",
+          "SUPPORT_URL=\"https://help.ubuntu.com/\"",
+          "BUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"",
+          "PRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"",
+          "UBUNTU_CODENAME=noble",
+          "LOGO=ubuntu-logo"
+        ],
+        "tcpConfiguration": [
+          {
+            "name": "net.ipv4.tcp_rmem",
+            "available": true,
+            "value": "4096\t131072\t33554432"
+          },
+          {
+            "name": "net.ipv4.tcp_wmem",
+            "available": true,
+            "value": "4096\t16384\t4194304"
+          },
+          {
+            "name": "net.ipv4.tcp_adv_win_scale",
+            "available": true,
+            "value": "1"
+          },
+          {
+            "name": "net.ipv4.tcp_moderate_rcvbuf",
+            "available": true,
+            "value": "1"
+          },
+          {
+            "name": "net.ipv4.tcp_congestion_control",
+            "available": true,
+            "value": "cubic"
+          },
+          {
+            "name": "net.ipv4.tcp_autocorking",
+            "available": true,
+            "value": "1"
+          },
+          {
+            "name": "net.ipv4.tcp_rto_min_us",
+            "available": true,
+            "value": "200000"
+          },
+          {
+            "name": "net.core.rmem_max",
+            "available": true,
+            "value": "4194304"
+          },
+          {
+            "name": "net.core.wmem_max",
+            "available": true,
+            "value": "4194304"
+          }
+        ],
+        "cpuModel": "Intel(R) Xeon(R) 6975P-C"
+      },
+      "providerIdentityAndCancellationStrictReplay": true
+    },
+    "arm64": {
+      "artifact": {
+        "id": 14188362513,
+        "sha256": "sha256:8df95291bf9a66327a0c5842234ac55abcd1f7ce695fbf3b05f391779523c358",
+        "bytes": 120921900,
+        "url": "https://github.com/nickna/Conduit/actions/runs/43779951909/artifacts/14188362513"
+      },
+      "jobId": 133014640757,
+      "runnerName": "GitHub Actions 1000035764",
+      "runnerLabels": [
+        "ubuntu-24.04-arm"
+      ],
+      "canonicalHarnessFilesVerified": 86,
+      "publishedFilesRehashed": 579,
+      "sourceBindings": [
+        {
+          "id": "legacy",
+          "sourceSha": "f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa",
+          "sourceSdk": "10.0.404",
+          "sourceTree": "4d16b46bb66293913d0230de18c257a08003ebf7",
+          "archiveSha256": "b76fb111b39027a8049774c0224e3dedd83ae1458e62601e3fad4b29df264196"
+        },
+        {
+          "id": "fixed",
+          "sourceSha": "911d7b6bbe54b4a6b77058b75ee2a86bc2d59097",
+          "sourceSdk": "10.0.404",
+          "sourceTree": "cfd0d6a99ea308d7634f4fb8cbc78960b247e4a2",
+          "archiveSha256": "0aca796eb41fac505bb07b7ece8aa13dd2b6249fdc0eb270faec07f84f57f783"
+        },
+        {
+          "id": "candidate",
+          "sourceSha": "66c5c3dad682d40d13ed7391b327ea2397553d58",
+          "sourceSdk": "11.0.100",
+          "sourceTree": "39c5d3112336107c3006efb38a5f4a6e372368c7",
+          "archiveSha256": "cceff7fc6fc316c16671afd3037aad43eef986ad71857c33743696a8492390e2"
+        },
+        {
+          "id": "fixed-tools",
+          "sourceSdk": "10.0.404"
+        }
+      ],
+      "protocolPassed": 1,
+      "deadlineFailures": 2,
+      "hardware": {
+        "nativeArchitecture": "Arm64",
+        "processorCount": 4,
+        "kernel": "Linux runnervm1x7cq 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 19:06:39 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux",
+        "glibc": "ldd (Ubuntu GLIBC 2.39-0ubuntu8.9) 2.39",
+        "osRelease": [
+          "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"",
+          "NAME=\"Ubuntu\"",
+          "VERSION_ID=\"24.04\"",
+          "VERSION=\"24.04.5 LTS (Noble Numbat)\"",
+          "VERSION_CODENAME=noble",
+          "ID=ubuntu",
+          "ID_LIKE=debian",
+          "HOME_URL=\"https://www.ubuntu.com/\"",
+          "SUPPORT_URL=\"https://help.ubuntu.com/\"",
+          "BUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"",
+          "PRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"",
+          "UBUNTU_CODENAME=noble",
+          "LOGO=ubuntu-logo"
+        ],
+        "tcpConfiguration": [
+          {
+            "name": "net.ipv4.tcp_rmem",
+            "available": true,
+            "value": "4096\t131072\t33554432"
+          },
+          {
+            "name": "net.ipv4.tcp_wmem",
+            "available": true,
+            "value": "4096\t16384\t4194304"
+          },
+          {
+            "name": "net.ipv4.tcp_adv_win_scale",
+            "available": true,
+            "value": "1"
+          },
+          {
+            "name": "net.ipv4.tcp_moderate_rcvbuf",
+            "available": true,
+            "value": "1"
+          },
+          {
+            "name": "net.ipv4.tcp_congestion_control",
+            "available": true,
+            "value": "cubic"
+          },
+          {
+            "name": "net.ipv4.tcp_autocorking",
+            "available": true,
+            "value": "1"
+          },
+          {
+            "name": "net.ipv4.tcp_rto_min_us",
+            "available": true,
+            "value": "200000"
+          },
+          {
+            "name": "net.core.rmem_max",
+            "available": true,
+            "value": "1048576"
+          },
+          {
+            "name": "net.core.wmem_max",
+            "available": true,
+            "value": "4194304"
+          }
+        ],
+        "cpuModel": "Neoverse-N2"
+      },
+      "providerIdentityAndCancellationStrictReplay": true
+    }
+  },
+  "cases": [
+    {
+      "architecture": "x64",
+      "cohort": "legacy",
+      "clientValidated": false,
+      "classification": "failed120s deadline",
+      "clientSeconds": 119.992115264,
+      "firstContentSeconds": 0.7718903749999999,
+      "clientContentChunks": 7257,
+      "providerCompleted": true,
+      "providerError": null,
+      "providerChunksFlushed": 10000,
+      "providerFirstContentToLastFlushSeconds": 35.550411902,
+      "providerCancellationSecondsFromClientStart": null,
+      "providerCancellationEvidence": {
+        "observedTicks": 0,
+        "source": null,
+        "rawCallbackTicks": 0
+      },
+      "identity": {
+        "sourceSha": "f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa",
+        "sourceTree": "4d16b46bb66293913d0230de18c257a08003ebf7",
+        "sourceSdk": "10.0.404",
+        "actualGatewayRuntime": "10.0.15",
+        "actualClientRuntime": "10.0.15",
+        "gatewayDllSha256": "1d1dd0e74141b52617a9d5bb5c59dc9a53b91bdb9687b43a67ab499a09a00d74",
+        "fixedClientDllSha256": "2624b189455c6434c6d390e531bebf9838ccd00b8ff7445fcd4cfc9a28705b5a",
+        "providerDllSha256": "1dc01285be932551d40f2200e1e83e6395096c5fb7e04cf133ceb86d3bd2fec6",
+        "providerObservationVersion": 2,
+        "catalogSha256": "b1b0179c79e77c7ff124baa486264e35f41b121d90e9f745bfcbe6b80b461df5"
+      },
+      "rawEntries": {
+        "client": {
+          "entry": "runtime-qualification/diagnostic-legacy/pressure8-legacy-----------r1-pressure-standard-fast.stdout.log",
+          "sha256": "c0983420de7a23f8b9afc821ff4cf18bbee569af701e2bd88849d4fd672d863a"
+        },
+        "tcp": {
+          "entry": "runtime-qualification/diagnostic-legacy/pressure8-legacy-----------r1-pressure-standard-fast-tcp.stdout.log",
+          "sha256": "bd1b670facf8c84bf825778c42a3e77106ab69e75c2beddc6b1f00042501dc56"
+        },
+        "beginObserverSha256": "72d9484eabdec0315d8cffdf2eb1e147ee4658c6e7dc3dd4058377e125c7632b",
+        "endObserverSha256": "5dbe3245fdc09849600b0e9c4891e5d219a741ed27de849757f33b2815764b78"
+      },
+      "tcp": {
+        "requestedReceiveBufferBytes": 8192,
+        "actualReceiveBufferBytes": 16384,
+        "serverSamples": 119,
+        "rwndAtLeast95PercentSamples": 117,
+        "finalBusyMilliseconds": 118563.0,
+        "finalRwndLimitedMilliseconds": 118485.0,
+        "finalRwndPercent": 99.9,
+        "serverStatistics": {
+          "recvQ": {
+            "min": 0,
+            "median": 0,
+            "max": 0
+          },
+          "sendQ": {
+            "min": 0,
+            "median": 3026754,
+            "max": 3673201
+          },
+          "notsent": {
+            "min": 2293709.0,
+            "median": 3030389.5,
+            "max": 3673201.0
+          },
+          "rto": {
+            "min": 200.0,
+            "median": 201.0,
+            "max": 201.0
+          },
+          "rtt": {
+            "min": 0.016,
+            "median": 0.038,
+            "max": 0.281
+          },
+          "rcv_rtt": {
+            "min": 8.0,
+            "median": 8.0,
+            "max": 8.0
+          },
+          "snd_wnd": {
+            "min": 6135.0,
+            "median": 6135.0,
+            "max": 8192.0
+          },
+          "rcv_space": {
+            "min": 51200.0,
+            "median": 51200.0,
+            "max": 51200.0
+          },
+          "bytes_retrans": null,
+          "busy": {
+            "min": 682.0,
+            "median": 59623.5,
+            "max": 118563.0
+          },
+          "rwnd_limited": {
+            "min": 604.0,
+            "median": 59545.5,
+            "max": 118485.0
+          },
+          "rwndPercent": {
+            "min": 88.6,
+            "median": 99.9,
+            "max": 99.9
+          }
+        },
+        "clientRcvRtt": {
+          "min": 48.691,
+          "median": 207.967,
+          "max": 208.098
+        },
+        "clientReceiveQueue": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "architecture": "x64",
+      "cohort": "fixed",
+      "clientValidated": true,
+      "classification": "complete protocol",
+      "clientSeconds": 1.754444697,
+      "firstContentSeconds": 0.79155296,
+      "clientContentChunks": 10000,
+      "providerCompleted": true,
+      "providerError": null,
+      "providerChunksFlushed": 10000,
+      "providerFirstContentToLastFlushSeconds": 0.572270351,
+      "providerCancellationSecondsFromClientStart": null,
+      "providerCancellationEvidence": {
+        "observedTicks": 0,
+        "source": null,
+        "rawCallbackTicks": 0
+      },
+      "identity": {
+        "sourceSha": "911d7b6bbe54b4a6b77058b75ee2a86bc2d59097",
+        "sourceTree": "cfd0d6a99ea308d7634f4fb8cbc78960b247e4a2",
+        "sourceSdk": "10.0.404",
+        "actualGatewayRuntime": "10.0.15",
+        "actualClientRuntime": "10.0.15",
+        "gatewayDllSha256": "766a849745ca9124901bc6aed57da7cfb6a906bf76232c38c6b4c47685f9ea46",
+        "fixedClientDllSha256": "2624b189455c6434c6d390e531bebf9838ccd00b8ff7445fcd4cfc9a28705b5a",
+        "providerDllSha256": "1dc01285be932551d40f2200e1e83e6395096c5fb7e04cf133ceb86d3bd2fec6",
+        "providerObservationVersion": 2,
+        "catalogSha256": "b1b0179c79e77c7ff124baa486264e35f41b121d90e9f745bfcbe6b80b461df5"
+      },
+      "rawEntries": {
+        "client": {
+          "entry": "runtime-qualification/diagnostic-fixed/pressure8-fixed------------r1-pressure-standard-fast.stdout.log",
+          "sha256": "13cc1c892b1d6d67afc64db995e572092f1957ee3e2718990f0baec8182885d3"
+        },
+        "tcp": {
+          "entry": "runtime-qualification/diagnostic-fixed/pressure8-fixed------------r1-pressure-standard-fast-tcp.stdout.log",
+          "sha256": "45f5604a578037a1389d8074ee058e1979efe7759ba15b728f802f494c117a8e"
+        },
+        "beginObserverSha256": "f4c2ccb658865be4df7a6510c498c4ce25844c01665b7c552325ec259161756f",
+        "endObserverSha256": "25380c38a307d4cefe4c2d4344db925ace4a9d7ff7831cf33237dccf8dd3de26"
+      },
+      "tcp": {
+        "requestedReceiveBufferBytes": 8192,
+        "actualReceiveBufferBytes": 16384,
+        "serverSamples": 2,
+        "rwndAtLeast95PercentSamples": 0,
+        "finalBusyMilliseconds": 595.0,
+        "finalRwndLimitedMilliseconds": 520.0,
+        "finalRwndPercent": 87.4,
+        "serverStatistics": {
+          "recvQ": {
+            "min": 0,
+            "median": 0.0,
+            "max": 0
+          },
+          "sendQ": {
+            "min": 0,
+            "median": 1232755.0,
+            "max": 2465510
+          },
+          "notsent": {
+            "min": 2465510.0,
+            "median": 2465510.0,
+            "max": 2465510.0
+          },
+          "rto": {
+            "min": 200.0,
+            "median": 200.5,
+            "max": 201.0
+          },
+          "rtt": {
+            "min": 0.019,
+            "median": 0.0215,
+            "max": 0.024
+          },
+          "rcv_rtt": {
+            "min": 6.0,
+            "median": 6.0,
+            "max": 6.0
+          },
+          "snd_wnd": {
+            "min": 3681.0,
+            "median": 5936.5,
+            "max": 8192.0
+          },
+          "rcv_space": {
+            "min": 51200.0,
+            "median": 51200.0,
+            "max": 51200.0
+          },
+          "bytes_retrans": {
+            "min": 1227.0,
+            "median": 1227.0,
+            "max": 1227.0
+          },
+          "busy": {
+            "min": 595.0,
+            "median": 595.0,
+            "max": 595.0
+          },
+          "rwnd_limited": {
+            "min": 520.0,
+            "median": 520.0,
+            "max": 520.0
+          },
+          "rwndPercent": {
+            "min": 87.4,
+            "median": 87.4,
+            "max": 87.4
+          }
+        },
+        "clientRcvRtt": {
+          "min": 0.037,
+          "median": 0.037,
+          "max": 0.037
+        },
+        "clientReceiveQueue": {
+          "min": 0,
+          "median": 0.0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "architecture": "x64",
+      "cohort": "candidate",
+      "clientValidated": false,
+      "classification": "failed120s deadline",
+      "clientSeconds": 119.997546492,
+      "firstContentSeconds": 0.8423655059999999,
+      "clientContentChunks": 3716,
+      "providerCompleted": false,
+      "providerError": "OperationCanceledException",
+      "providerChunksFlushed": 8788,
+      "providerFirstContentToLastFlushSeconds": 119.182085483,
+      "providerCancellationSecondsFromClientStart": 119.989829853,
+      "providerCancellationEvidence": {
+        "observedTicks": 1401194960375,
+        "source": "request-aborted-callback",
+        "rawCallbackTicks": 1401194960375
+      },
+      "identity": {
+        "sourceSha": "66c5c3dad682d40d13ed7391b327ea2397553d58",
+        "sourceTree": "39c5d3112336107c3006efb38a5f4a6e372368c7",
+        "sourceSdk": "11.0.100",
+        "actualGatewayRuntime": "11.0.0",
+        "actualClientRuntime": "10.0.15",
+        "gatewayDllSha256": "59501a50b53a484db4b0443907c677b8c4749f759b812a1d8af680625b78b78d",
+        "fixedClientDllSha256": "2624b189455c6434c6d390e531bebf9838ccd00b8ff7445fcd4cfc9a28705b5a",
+        "providerDllSha256": "1dc01285be932551d40f2200e1e83e6395096c5fb7e04cf133ceb86d3bd2fec6",
+        "providerObservationVersion": 2,
+        "catalogSha256": "b1b0179c79e77c7ff124baa486264e35f41b121d90e9f745bfcbe6b80b461df5"
+      },
+      "rawEntries": {
+        "client": {
+          "entry": "runtime-qualification/diagnostic-candidate/pressure8-candidate--------r1-pressure-standard-fast.stdout.log",
+          "sha256": "db21fe8206e5ca46db93ed23ae1758d26c2f43ee0ebca27e96b148c1c9783f24"
+        },
+        "tcp": {
+          "entry": "runtime-qualification/diagnostic-candidate/pressure8-candidate--------r1-pressure-standard-fast-tcp.stdout.log",
+          "sha256": "cb05e26f65d8800754a4d9d8f36201c5f606a65376fe702901704c337bd3a72e"
+        },
+        "beginObserverSha256": "0ca8a3a46cc577af0390f26f7cc8d81212340b5bb71e8b6ba24d4108127858c7",
+        "endObserverSha256": "a3a9504a784b4a8230a48ce2d3149752db689966d02c34af88bd12ba79d4192e"
+      },
+      "tcp": {
+        "requestedReceiveBufferBytes": 8192,
+        "actualReceiveBufferBytes": 16384,
+        "serverSamples": 119,
+        "rwndAtLeast95PercentSamples": 118,
+        "finalBusyMilliseconds": 118734.0,
+        "finalRwndLimitedMilliseconds": 118729.0,
+        "finalRwndPercent": 100.0,
+        "serverStatistics": {
+          "recvQ": {
+            "min": 0,
+            "median": 0,
+            "max": 0
+          },
+          "sendQ": {
+            "min": 0,
+            "median": 3101583,
+            "max": 3673274
+          },
+          "notsent": {
+            "min": 2475813.0,
+            "median": 3105218.5,
+            "max": 3673274.0
+          },
+          "rto": {
+            "min": 200.0,
+            "median": 201.0,
+            "max": 201.0
+          },
+          "rtt": {
+            "min": 0.019,
+            "median": 0.036,
+            "max": 0.091
+          },
+          "rcv_rtt": {
+            "min": 7.0,
+            "median": 7.0,
+            "max": 7.0
+          },
+          "snd_wnd": {
+            "min": 6135.0,
+            "median": 6135.0,
+            "max": 8192.0
+          },
+          "rcv_space": {
+            "min": 51200.0,
+            "median": 51200.0,
+            "max": 51200.0
+          },
+          "bytes_retrans": null,
+          "busy": {
+            "min": 853.0,
+            "median": 59792.0,
+            "max": 118734.0
+          },
+          "rwnd_limited": {
+            "min": 848.0,
+            "median": 59787.0,
+            "max": 118729.0
+          },
+          "rwndPercent": {
+            "min": 99.4,
+            "median": 100.0,
+            "max": 100.0
+          }
+        },
+        "clientRcvRtt": {
+          "min": 48.891,
+          "median": 207.954,
+          "max": 208.112
+        },
+        "clientReceiveQueue": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "architecture": "arm64",
+      "cohort": "legacy",
+      "clientValidated": false,
+      "classification": "failed120s deadline",
+      "clientSeconds": 120.001927552,
+      "firstContentSeconds": 1.221417724,
+      "clientContentChunks": 9077,
+      "providerCompleted": true,
+      "providerError": null,
+      "providerChunksFlushed": 10000,
+      "providerFirstContentToLastFlushSeconds": 0.878769377,
+      "providerCancellationSecondsFromClientStart": null,
+      "providerCancellationEvidence": {
+        "observedTicks": 0,
+        "source": null,
+        "rawCallbackTicks": 0
+      },
+      "identity": {
+        "sourceSha": "f68cb5fae1130bbe1ef4fc30aca7a3266094dbaa",
+        "sourceTree": "4d16b46bb66293913d0230de18c257a08003ebf7",
+        "sourceSdk": "10.0.404",
+        "actualGatewayRuntime": "10.0.15",
+        "actualClientRuntime": "10.0.15",
+        "gatewayDllSha256": "1d1dd0e74141b52617a9d5bb5c59dc9a53b91bdb9687b43a67ab499a09a00d74",
+        "fixedClientDllSha256": "2624b189455c6434c6d390e531bebf9838ccd00b8ff7445fcd4cfc9a28705b5a",
+        "providerDllSha256": "1dc01285be932551d40f2200e1e83e6395096c5fb7e04cf133ceb86d3bd2fec6",
+        "providerObservationVersion": 2,
+        "catalogSha256": "b1b0179c79e77c7ff124baa486264e35f41b121d90e9f745bfcbe6b80b461df5"
+      },
+      "rawEntries": {
+        "client": {
+          "entry": "runtime-qualification/diagnostic-legacy/pressure8-legacy-----------r1-pressure-standard-fast.stdout.log",
+          "sha256": "1ebd79254d66e0353e4079d9bd72d28c67402b5a2a35990ea17c997215d97678"
+        },
+        "tcp": {
+          "entry": "runtime-qualification/diagnostic-legacy/pressure8-legacy-----------r1-pressure-standard-fast-tcp.stdout.log",
+          "sha256": "d33f49f34468b62d9d331d80fa591161277a4566176c7a1b7d5fd69350f5f611"
+        },
+        "beginObserverSha256": "573b8dd36a9d989c45655bfc1e89f473991b9e53630b016626e9b8fa74a33344",
+        "endObserverSha256": "ef2a101b609665ac406b3ee3cf8e16a2d75bb73b21637d53a503e42fee925567"
+      },
+      "tcp": {
+        "requestedReceiveBufferBytes": 8192,
+        "actualReceiveBufferBytes": 16384,
+        "serverSamples": 119,
+        "rwndAtLeast95PercentSamples": 112,
+        "finalBusyMilliseconds": 117553.0,
+        "finalRwndLimitedMilliseconds": 117290.0,
+        "finalRwndPercent": 99.8,
+        "serverStatistics": {
+          "recvQ": {
+            "min": 0,
+            "median": 0,
+            "max": 0
+          },
+          "sendQ": {
+            "min": 0,
+            "median": 2666743,
+            "max": 3712902
+          },
+          "notsent": {
+            "min": 1157533.0,
+            "median": 2676087.0,
+            "max": 3712902.0
+          },
+          "rto": {
+            "min": 200.0,
+            "median": 201.0,
+            "max": 201.0
+          },
+          "rtt": {
+            "min": 0.03,
+            "median": 0.044,
+            "max": 0.355
+          },
+          "rcv_rtt": {
+            "min": 10.0,
+            "median": 10.0,
+            "max": 10.0
+          },
+          "snd_wnd": {
+            "min": 6135.0,
+            "median": 6135.0,
+            "max": 11043.0
+          },
+          "rcv_space": {
+            "min": 51200.0,
+            "median": 51200.0,
+            "max": 51200.0
+          },
+          "bytes_retrans": {
+            "min": 1227.0,
+            "median": 2454.0,
+            "max": 2454.0
+          },
+          "busy": {
+            "min": 149.0,
+            "median": 58727.0,
+            "max": 117553.0
+          },
+          "rwnd_limited": {
+            "min": 30.0,
+            "median": 58464.0,
+            "max": 117290.0
+          },
+          "rwndPercent": {
+            "min": 20.1,
+            "median": 99.55,
+            "max": 99.8
+          }
+        },
+        "clientRcvRtt": {
+          "min": 0.291,
+          "median": 207.7535,
+          "max": 208.117
+        },
+        "clientReceiveQueue": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "architecture": "arm64",
+      "cohort": "fixed",
+      "clientValidated": false,
+      "classification": "failed120s deadline",
+      "clientSeconds": 119.995039051,
+      "firstContentSeconds": 1.257795494,
+      "clientContentChunks": 3110,
+      "providerCompleted": false,
+      "providerError": "OperationCanceledException",
+      "providerChunksFlushed": 9587,
+      "providerFirstContentToLastFlushSeconds": 118.772264514,
+      "providerCancellationSecondsFromClientStart": 119.990989537,
+      "providerCancellationEvidence": {
+        "observedTicks": 1097839569183,
+        "source": "request-aborted-callback",
+        "rawCallbackTicks": 1097839569183
+      },
+      "identity": {
+        "sourceSha": "911d7b6bbe54b4a6b77058b75ee2a86bc2d59097",
+        "sourceTree": "cfd0d6a99ea308d7634f4fb8cbc78960b247e4a2",
+        "sourceSdk": "10.0.404",
+        "actualGatewayRuntime": "10.0.15",
+        "actualClientRuntime": "10.0.15",
+        "gatewayDllSha256": "766a849745ca9124901bc6aed57da7cfb6a906bf76232c38c6b4c47685f9ea46",
+        "fixedClientDllSha256": "2624b189455c6434c6d390e531bebf9838ccd00b8ff7445fcd4cfc9a28705b5a",
+        "providerDllSha256": "1dc01285be932551d40f2200e1e83e6395096c5fb7e04cf133ceb86d3bd2fec6",
+        "providerObservationVersion": 2,
+        "catalogSha256": "b1b0179c79e77c7ff124baa486264e35f41b121d90e9f745bfcbe6b80b461df5"
+      },
+      "rawEntries": {
+        "client": {
+          "entry": "runtime-qualification/diagnostic-fixed/pressure8-fixed------------r1-pressure-standard-fast.stdout.log",
+          "sha256": "077e7fac9bca4acabad4bd22368440db3f576e0b8b5ff710c0a16dc55e968df8"
+        },
+        "tcp": {
+          "entry": "runtime-qualification/diagnostic-fixed/pressure8-fixed------------r1-pressure-standard-fast-tcp.stdout.log",
+          "sha256": "64fdc30d04776258ee749c29953494ce22fcb17069856228bd5536e5e3bfedf3"
+        },
+        "beginObserverSha256": "ec5a7a073d5bc4b59a919698e04562d8c2b6aab0b79d26e775505e1678847e21",
+        "endObserverSha256": "b307212bc0856c75cc3d36bff74818c4e937ec0ba8c886e4776586e1ea882512"
+      },
+      "tcp": {
+        "requestedReceiveBufferBytes": 8192,
+        "actualReceiveBufferBytes": 16384,
+        "serverSamples": 119,
+        "rwndAtLeast95PercentSamples": 118,
+        "finalBusyMilliseconds": 117964.0,
+        "finalRwndLimitedMilliseconds": 117956.0,
+        "finalRwndPercent": 100.0,
+        "serverStatistics": {
+          "recvQ": {
+            "min": 0,
+            "median": 0,
+            "max": 0
+          },
+          "sendQ": {
+            "min": 0,
+            "median": 3023592,
+            "max": 3673902
+          },
+          "notsent": {
+            "min": 1950930.0,
+            "median": 3027227.5,
+            "max": 3673902.0
+          },
+          "rto": {
+            "min": 200.0,
+            "median": 201.0,
+            "max": 201.0
+          },
+          "rtt": {
+            "min": 0.031,
+            "median": 0.046,
+            "max": 0.524
+          },
+          "rcv_rtt": {
+            "min": 11.0,
+            "median": 11.0,
+            "max": 11.0
+          },
+          "snd_wnd": {
+            "min": 6135.0,
+            "median": 6135.0,
+            "max": 8192.0
+          },
+          "rcv_space": {
+            "min": 51200.0,
+            "median": 51200.0,
+            "max": 51200.0
+          },
+          "bytes_retrans": {
+            "min": 4096.0,
+            "median": 4096.0,
+            "max": 4096.0
+          },
+          "busy": {
+            "min": 309.0,
+            "median": 59139.0,
+            "max": 117964.0
+          },
+          "rwnd_limited": {
+            "min": 301.0,
+            "median": 59131.0,
+            "max": 117956.0
+          },
+          "rwndPercent": {
+            "min": 97.4,
+            "median": 100.0,
+            "max": 100.0
+          }
+        },
+        "clientRcvRtt": {
+          "min": 26.139,
+          "median": 207.77,
+          "max": 208.113
+        },
+        "clientReceiveQueue": {
+          "min": 0,
+          "median": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "architecture": "arm64",
+      "cohort": "candidate",
+      "clientValidated": true,
+      "classification": "complete protocol",
+      "clientSeconds": 2.761437487,
+      "firstContentSeconds": 1.36104427,
+      "clientContentChunks": 10000,
+      "providerCompleted": true,
+      "providerError": null,
+      "providerChunksFlushed": 10000,
+      "providerFirstContentToLastFlushSeconds": 0.896683873,
+      "providerCancellationSecondsFromClientStart": null,
+      "providerCancellationEvidence": {
+        "observedTicks": 0,
+        "source": null,
+        "rawCallbackTicks": 0
+      },
+      "identity": {
+        "sourceSha": "66c5c3dad682d40d13ed7391b327ea2397553d58",
+        "sourceTree": "39c5d3112336107c3006efb38a5f4a6e372368c7",
+        "sourceSdk": "11.0.100",
+        "actualGatewayRuntime": "11.0.0",
+        "actualClientRuntime": "10.0.15",
+        "gatewayDllSha256": "59501a50b53a484db4b0443907c677b8c4749f759b812a1d8af680625b78b78d",
+        "fixedClientDllSha256": "2624b189455c6434c6d390e531bebf9838ccd00b8ff7445fcd4cfc9a28705b5a",
+        "providerDllSha256": "1dc01285be932551d40f2200e1e83e6395096c5fb7e04cf133ceb86d3bd2fec6",
+        "providerObservationVersion": 2,
+        "catalogSha256": "b1b0179c79e77c7ff124baa486264e35f41b121d90e9f745bfcbe6b80b461df5"
+      },
+      "rawEntries": {
+        "client": {
+          "entry": "runtime-qualification/diagnostic-candidate/pressure8-candidate--------r1-pressure-standard-fast.stdout.log",
+          "sha256": "0a0d84aa40a04ddcb96e6df69711900e20dd650035d7057c7a05b7c9b14c215d"
+        },
+        "tcp": {
+          "entry": "runtime-qualification/diagnostic-candidate/pressure8-candidate--------r1-pressure-standard-fast-tcp.stdout.log",
+          "sha256": "e95a81cbe0b6b24ff4bf718db8ff00fe131d22587dd09f11eca1c75301a5fe5c"
+        },
+        "beginObserverSha256": "ef24fda18ea351c0af905fc60e946d2ee7e73a69b21fb8d208b00e86fe7e2af3",
+        "endObserverSha256": "167885f2e19ad370beb5e6322cd1485e8e861507af898dd1eca2715cd2abee3e"
+      },
+      "tcp": {
+        "requestedReceiveBufferBytes": 8192,
+        "actualReceiveBufferBytes": 16384,
+        "serverSamples": 3,
+        "rwndAtLeast95PercentSamples": 0,
+        "finalBusyMilliseconds": 575.0,
+        "finalRwndLimitedMilliseconds": 166.0,
+        "finalRwndPercent": 28.9,
+        "serverStatistics": {
+          "recvQ": {
+            "min": 0,
+            "median": 0,
+            "max": 0
+          },
+          "sendQ": {
+            "min": 0,
+            "median": 0,
+            "max": 12482
+          },
+          "notsent": {
+            "min": 5734.0,
+            "median": 5734.0,
+            "max": 5734.0
+          },
+          "rto": {
+            "min": 200.0,
+            "median": 201.0,
+            "max": 201.0
+          },
+          "rtt": {
+            "min": 0.026,
+            "median": 0.142,
+            "max": 0.162
+          },
+          "rcv_rtt": {
+            "min": 9.0,
+            "median": 9.0,
+            "max": 9.0
+          },
+          "snd_wnd": {
+            "min": 8192.0,
+            "median": 11043.0,
+            "max": 11043.0
+          },
+          "rcv_space": {
+            "min": 51200.0,
+            "median": 51200.0,
+            "max": 51200.0
+          },
+          "bytes_retrans": {
+            "min": 5521.0,
+            "median": 5521.0,
+            "max": 5521.0
+          },
+          "busy": {
+            "min": 98.0,
+            "median": 336.5,
+            "max": 575.0
+          },
+          "rwnd_limited": {
+            "min": 23.0,
+            "median": 94.5,
+            "max": 166.0
+          },
+          "rwndPercent": {
+            "min": 23.5,
+            "median": 26.2,
+            "max": 28.9
+          }
+        },
+        "clientRcvRtt": {
+          "min": 0.182,
+          "median": 0.2585,
+          "max": 0.335
+        },
+        "clientReceiveQueue": {
+          "min": 0,
+          "median": 0,
+          "max": 2454
+        }
+      }
+    }
+  ],
+  "interpretation": {
+    "supported": "Long failed transfers show persistent downstream receive-window limitation and queued unsent Gateway data; compatible with constrained receive-buffer/flow-control effects and propagated provider backpressure.",
+    "notEstablished": [
+      "No kernel defect or isolated CLR regression is proven.",
+      "ss samples cover only Gateway:18080 toclient,not provider:18083.",
+      "One case/cohort and one VM/architecture cannot rank runtime performance or establish causality.",
+      "1second sampling misses transients; RTO~200ms alone does not prove retransmission/persist timer caused the stalls.",
+      "ClientRecv-Q often0 atsampletime does not prove that the application drains continuously; no scheduler/packet trace was recorded.",
+      "ProviderFlushAsync completion is not proof of downstream delivery; provider and Gateway framing bytes differ.",
+      "No financial drain or performance budget acceptance is granted. All deadline protocols stayfailed."
+    ]
+  },
+  "method": {
+    "sampling": "Retained ss -tinm sport/dport18080,once/second; parser walks everyretained frame.",
+    "socketSelection": "Unique client socket to18080 with rb16384,matching observedrequested8192\u00e2\u2020\u2019actual16384; matching reverse server peer tuple. Control/readiness sockets kept separate; noPID/cookie captured.",
+    "providerObservationWait": "Frozen client may poll for7seconds after the measured phase when provider.completed remainsfalse;127TCP samplerframes are not127seconds of client request latency. This wait lies in the server-observer processwindow, not request validatedEndTicks.",
+    "clockAlignment": "ss UTCmapped approximately viaobserver UTC/Stopwatch anchor; retainstart/end offsetdrift andcapture duration. Provider/client ticks sharekernelclock; samplerresolution1second is the practical bound."
+  },
+  "counterSources": [
+    {
+      "url": "https://man7.org/linux/man-pages/man8/ss.8.html",
+      "supports": "skmem/rb is socket receive capacity; rto/rtt units aremilliseconds."
+    },
+    {
+      "url": "https://man7.org/linux/man-pages/man7/socket.7.html",
+      "supports": "SO_RCVBUF is doubled byLinux andreturned doubled bygetsockopt."
+    },
+    {
+      "url": "https://docs.kernel.org/networking/ip-sysctl.html#tcp-rmem",
+      "supports": "ExplicitSO_RCVBUF disables thatsocket receive-bufferautotuning; tcp_moderate_rcvbuf=1 does not override the explicitlimit."
+    },
+    {
+      "url": "https://github.com/iproute2/iproute2/blob/main/misc/ss.c",
+      "supports": "ss formats kernelTCP busy/rwnd_limited andqueued/notsent fields; printed ratios are observations,not causal attribution."
+    }
+  ],
+  "performanceAcceptanceGranted": false,
+  "financialQualification": false,
+  "knownPersistedSpendDrainExecuted": false,
+  "noCrossVmPooling": true,
+  "replaySources": {
+    "analyze.py": "d337c4452ab093d74a7a059257b7781d4662c4b2554d77a716e0dd6171efebf2",
+    "replay.py": "59d7b10076fda264865d831dddcbc4f33ec8bfa2f4fdd9f3433bc2afaf60478f",
+    "classify.ps1": "897fd949f6dbf0e544bf36b7e134d13d219cc4a8abe74a58ec51ba850f76c2b5",
+    "strict-replay.json": "2ec8f1391867422907222da15442a5ed00377e3126f1dfb03d762f4f0a14e68d",
+    "tcp-receipt.json": "60d6b7b7bf7ab45628d5c259f5ef27cd5c193f7045132009eafba7ee8ce01c32",
+    "all-timelines.json": "1cc260edf0cb9ef7e101c95b66eb18df29d1f17288d80ca8272ac9e9faff2c0e"
+  }
+}

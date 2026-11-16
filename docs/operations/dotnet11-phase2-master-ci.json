@@ -1,0 +1,369 @@
+{
+  "schemaVersion": 1,
+  "scope": "Independent authenticated exact-run CI discovery/TRX/component-coverage intake; no performance or production qualification",
+  "ciRunId": 43768423253,
+  "event": "push",
+  "runHead": "66c5c3dad682d40d13ed7391b327ea2397553d58",
+  "actualCheckout": "66c5c3dad682d40d13ed7391b327ea2397553d58",
+  "treeSha": "39c5d3112336107c3006efb38a5f4a6e372368c7",
+  "treeEquivalentToReviewedE04": true,
+  "commitMetadataEquivalent": false,
+  "jobs": [
+    {
+      "id": 132978650996,
+      "name": "Dependency security policy",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978651216,
+      "name": "Select PR validation",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978651236,
+      "name": "Source ignore guard",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978756828,
+      "name": "Billing invariants",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978756834,
+      "name": "SignalR integration",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978756846,
+      "name": "S3 video operations",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978756862,
+      "name": "Media dispatch and function transport",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978756863,
+      "name": "WebAdmin correctness and coverage",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978756864,
+      "name": "Billing fault injection",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978756866,
+      "name": "Validate",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978756883,
+      "name": "Packaged application business flows (amd64)",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978756919,
+      "name": "NativeAOT analyzer ratchet",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978756920,
+      "name": "Wolverine Two-Host Smoke",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978756936,
+      "name": "Contracts and official SDK clients",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978757034,
+      "name": "Packaged application business flows (arm64)",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978757212,
+      "name": "Distributed lock validation / PostgreSQL 17 JIT and linux-x64 native",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978757256,
+      "name": "Distributed lock validation / PostgreSQL 16 JIT and linux-x64 native",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978757264,
+      "name": "Migration validation / Validate migrations",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978757269,
+      "name": "Security analysis / Analyze (javascript)",
+      "conclusion": "success"
+    },
+    {
+      "id": 132978757333,
+      "name": "Security analysis / Analyze (csharp)",
+      "conclusion": "success"
+    },
+    {
+      "id": 132983578374,
+      "name": "CI required",
+      "conclusion": "success"
+    }
+  ],
+  "jobCount": 21,
+  "allJobsSuccess": true,
+  "selectionPlan": {
+    "version": 1,
+    "event": "push",
+    "mode": "full",
+    "jobs": {
+      "select": true,
+      "source-ignore-guard": true,
+      "media-dispatch-integration": true,
+      "billing-fault-injection": true,
+      "billing-invariants": true,
+      "signalr-integration": true,
+      "aot-analyzers": true,
+      "validate": true,
+      "wolverine-two-host": true,
+      "docker": true,
+      "migrations": true,
+      "distributed-lock": true,
+      "codeql": true,
+      "s3-storage": true,
+      "contracts": true,
+      "webadmin": true,
+      "dependencies": true
+    },
+    "codeqlLanguages": [
+      "csharp",
+      "javascript"
+    ],
+    "reasons": [
+      "push requires complete validation"
+    ],
+    "base": null,
+    "head": null,
+    "files": []
+  },
+  "suiteEvidence": [
+    {
+      "artifactId": 14183925822,
+      "file": "managed-arm64-duration-billing.json",
+      "discovered": 39,
+      "executed": 39,
+      "passed": 39,
+      "failed": 0,
+      "skipped": 0,
+      "individualTrxOutcomesVerified": true
+    },
+    {
+      "artifactId": 14183009735,
+      "file": "managed-arm64-openapi.json",
+      "discovered": 109,
+      "executed": 109,
+      "passed": 109,
+      "failed": 0,
+      "skipped": 0,
+      "individualTrxOutcomesVerified": true
+    },
+    {
+      "artifactId": 14183327317,
+      "file": "managed-arm64-serialization.json",
+      "discovered": 290,
+      "executed": 290,
+      "passed": 290,
+      "failed": 0,
+      "skipped": 0,
+      "individualTrxOutcomesVerified": true
+    },
+    {
+      "artifactId": 14183421255,
+      "file": "billing-fault-injection.json",
+      "discovered": 105,
+      "executed": 105,
+      "passed": 105,
+      "failed": 0,
+      "skipped": 0,
+      "individualTrxOutcomesVerified": true
+    },
+    {
+      "artifactId": 14183790071,
+      "file": "billing-invariants.json",
+      "discovered": 124,
+      "executed": 123,
+      "passed": 123,
+      "failed": 0,
+      "skipped": 1,
+      "individualTrxOutcomesVerified": true
+    },
+    {
+      "artifactId": 14183416344,
+      "file": "billing-persistence.json",
+      "discovered": 3,
+      "executed": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "individualTrxOutcomesVerified": true
+    },
+    {
+      "artifactId": 14183396818,
+      "file": "core.json",
+      "discovered": 6340,
+      "executed": 6337,
+      "passed": 6337,
+      "failed": 0,
+      "skipped": 3,
+      "individualTrxOutcomesVerified": true,
+      "focusedPassed": {
+        "BillingDurationCompatibilityTests": 39,
+        "OpenAICompatibleResponseContentTests": 18,
+        "UsageTrackingErrorResponseTests": 32,
+        "RequestExceptionMappingTests": 3,
+        "LeaderElectedServiceWrapperTests": 19
+      },
+      "skippedTests": [
+        "ConduitLLM.Tests.Core.Services.PerformanceMetricsServiceTests.StreamingTracker_ConcurrentRecording_NotThreadSafe",
+        "ConduitLLM.Tests.Core.Services.TiktokenCounterGoldenTests.EmitBaseline",
+        "ConduitLLM.Tests.Core.Services.StreamingMetricsCollectorTests.ConcurrentTokenRecording_ThreadSafe"
+      ]
+    },
+    {
+      "artifactId": 14183396844,
+      "file": "serialization.json",
+      "discovered": 290,
+      "executed": 290,
+      "passed": 290,
+      "failed": 0,
+      "skipped": 0,
+      "individualTrxOutcomesVerified": true
+    }
+  ],
+  "coverageScope": "Six executable component ratchets only, not whole-repository or financial-branch completeness",
+  "coverage": [
+    {
+      "component": "ConduitLLM.Core.Services.PerformanceMetricsService",
+      "measuredPercent": 100.0,
+      "minimumPercent": 100,
+      "passed": true
+    },
+    {
+      "component": "ConduitLLM.Core.Services.PerformanceMetricsService/StreamingMetricsTracker",
+      "measuredPercent": 92.20779220779221,
+      "minimumPercent": 92,
+      "passed": true
+    },
+    {
+      "component": "ConduitLLM.Admin.Services.RefundService/<ProcessRefundCoreAsync>d__8",
+      "measuredPercent": 95.23809523809524,
+      "minimumPercent": 95,
+      "passed": true
+    },
+    {
+      "component": "ConduitLLM.Admin.Services.RefundService/<ExecuteRefundTransactionAsync>d__9",
+      "measuredPercent": 100.0,
+      "minimumPercent": 62,
+      "passed": true
+    },
+    {
+      "component": "ConduitLLM.Admin.Services.EphemeralMasterKeyService/<ValidateAndConsumeKeyAsync>d__13",
+      "measuredPercent": 100.0,
+      "minimumPercent": 100,
+      "passed": true
+    },
+    {
+      "component": "ConduitLLM.Admin.Security.MasterKeyAuthenticationHandler/<HandleAuthenticateAsync>d__4",
+      "measuredPercent": 93.25842696629213,
+      "minimumPercent": 87,
+      "passed": true
+    }
+  ],
+  "verifiedArtifactDownloads": [
+    {
+      "file": "arm-duration.zip",
+      "artifactId": 14183925822,
+      "artifactName": "tests-managed-arm64-duration-billing",
+      "bytes": 8484,
+      "sha256": "sha256:8fe375460834657a412fe146c1b02293ec2cb57af495175d550dad8d87826184",
+      "fullZipDigestVerified": true
+    },
+    {
+      "file": "arm-openapi.zip",
+      "artifactId": 14183009735,
+      "artifactName": "tests-managed-arm64-openapi",
+      "bytes": 100311,
+      "sha256": "sha256:e8ef021fe492b94d57033cda26334a204e96b1fbc393fb9be364d4c3c091f25a",
+      "fullZipDigestVerified": true
+    },
+    {
+      "file": "arm-serialization.zip",
+      "artifactId": 14183327317,
+      "artifactName": "tests-managed-arm64-serialization",
+      "bytes": 266027,
+      "sha256": "sha256:1e997734793f5ab085e18a38252320c963f26484c49bf4669f5bf1eb9e1fa648",
+      "fullZipDigestVerified": true
+    },
+    {
+      "file": "billing-fault.zip",
+      "artifactId": 14183421255,
+      "artifactName": "tests-billing-fault-injection",
+      "bytes": 207752,
+      "sha256": "sha256:9c3e3e8ab465be688cb905f7d7f8c38fc2ce38cb6998c78f785bdd8a823bc771",
+      "fullZipDigestVerified": true
+    },
+    {
+      "file": "billing-invariants.zip",
+      "artifactId": 14183790071,
+      "artifactName": "tests-billing-invariants",
+      "bytes": 201519,
+      "sha256": "sha256:bdd6e8597a363586236e2db6d92d4f61ec65b85c2897dacb5b965048c358df71",
+      "fullZipDigestVerified": true
+    },
+    {
+      "file": "billing-persistence.zip",
+      "artifactId": 14183416344,
+      "artifactName": "tests-billing-persistence",
+      "bytes": 73547,
+      "sha256": "sha256:d5391a291a4f1691b6a2074e8aca36d254bb1f5cdbb8b110847171d2cd505364",
+      "fullZipDigestVerified": true
+    },
+    {
+      "file": "core.zip",
+      "artifactId": 14183396818,
+      "artifactName": "tests-core",
+      "bytes": 9191447,
+      "sha256": "sha256:625b56496c8e45ac933b2e44a0a115680b7d10e4d960d0ef434f0096f618d193",
+      "fullZipDigestVerified": true
+    },
+    {
+      "file": "selection.zip",
+      "artifactId": 14183171706,
+      "artifactName": "ci-selection",
+      "bytes": 442,
+      "sha256": "sha256:fa34c063bbcf5314b53cd6d2acede2300ba457446849c4899df30d1855c87f83",
+      "fullZipDigestVerified": true
+    },
+    {
+      "file": "serialization.zip",
+      "artifactId": 14183396844,
+      "artifactName": "tests-serialization",
+      "bytes": 76807,
+      "sha256": "sha256:309b0cc520b997f58309d6358d1e8e597f03c7a181b1f9fed452a1db47ebec5d",
+      "fullZipDigestVerified": true
+    }
+  ],
+  "executionGuards": {
+    "adminRdgHandlers": 9,
+    "gatewayRdgHandlers": 33,
+    "wolverineDriftGuardPassed": true
+  },
+  "earlierFailedCohortsPreserved": true,
+  "performanceAcceptanceGranted": false,
+  "productionRolloutPerformed": false
+}
